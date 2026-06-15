@@ -56,3 +56,58 @@ Notebook 与 repository module 的跨边界数据
 | example_state_intermediate | intermediate | _intermediate | true | false | true | 跨步骤保存的示例中间状态字段, 正式产物生成前需要清理或迁移。 |
 | example_artifact_temporary | temporary | _temporary | false | false | true | 可清理的示例临时产物标记。 |
 | example_result_cache | cache | _cache | false | false | false | 可由输入、配置和代码重建的示例缓存标记。 |
+| record_version | protocol | none | true | false | false | B1 event record schema version. |
+| sample_id | protocol | none | true | false | false | Synthetic sample identifier. |
+| sample_role | protocol | none | true | false | false | Sample role. |
+| method_variant | protocol | none | true | false | false | Controlled method or baseline variant. |
+| attack_name | protocol | none | true | false | false | Synthetic attack name. |
+| attack_strength | protocol | none | true | false | false | Synthetic attack strength parameter. |
+| key_id | protocol | none | true | false | false | Watermark key identifier. |
+| content_id | protocol | none | true | false | false | Synthetic content identifier. |
+| prompt_id_placeholder | placeholder | _placeholder | true | false | true | B1 placeholder for later prompt identifier. |
+| seed_id | protocol | none | true | false | false | Deterministic synthetic seed identifier. |
+| generation_model_id_placeholder | placeholder | _placeholder | true | false | true | B1 placeholder for later generation model identifier. |
+| backend_id | protocol | none | true | false | false | Runtime backend identifier. |
+| tubelet_length | method | none | true | false | false | Tubelet temporal length. |
+| tubelet_spatial_patch | method | none | true | false | false | Tubelet spatial patch size. |
+| tubelet_stride_t | method | none | true | false | false | Tubelet temporal stride. |
+| tubelet_stride_xy | method | none | true | false | false | Tubelet spatial stride. |
+| watermark_alpha | method | none | true | false | false | Projection margin used by B1 synthetic embedding proxy. |
+| payload_code_id | method | none | true | false | false | Payload code configuration identifier. |
+| sync_code_id | method | none | true | false | false | Synchronization code configuration identifier. |
+| joint_code_mode | method | none | true | false | false | Joint payload and synchronization code mode. |
+| embedding_mode | method | none | true | false | false | Embedding mode identifier. |
+| state_model_id | method | none | true | false | false | State model identifier. |
+| state_dim | method | none | true | false | false | State vector dimension. |
+| key_condition_mode | method | none | true | false | false | How key conditioning is injected. |
+| filter_mode | method | none | true | false | false | State filtering mode. |
+| smoother_enabled | method | none | true | false | false | Whether smoother is enabled. |
+| phase_state_proxy | method | none | true | false | false | B1 proxy for phase state. |
+| evidence_state_proxy | method | none | true | false | false | B1 proxy for evidence state. |
+| confidence_state_proxy | method | none | true | false | false | B1 proxy for confidence state. |
+| disturbance_state_proxy | method | none | true | false | false | B1 proxy for disturbance state. |
+| state_entropy | metric | none | true | false | false | State uncertainty score. |
+| state_coverage_ratio | metric | none | true | false | false | State coverage ratio. |
+| state_matched_count | metric | none | true | false | false | Number of matched state elements. |
+| state_transition_residual | metric | none | true | false | false | State transition residual. |
+| S_payload_raw | metric | none | true | false | false | Raw payload score. |
+| S_payload_state | metric | none | true | false | false | State-aligned payload score. |
+| S_state_posterior | metric | none | true | false | false | State posterior score. |
+| S_trajectory_observation_placeholder | placeholder | _placeholder | true | false | true | B1 placeholder for trajectory observation score. |
+| S_final | metric | none | true | false | false | Final detector statistic. |
+| payload_state_gain | metric | none | true | false | false | Difference between state payload and raw payload score. |
+| key_state_admissibility_status | metric | none | true | false | false | Admissibility gate status. |
+| negative_state_over_threshold_count | metric | none | true | false | false | Negative state rescue count above threshold. |
+| target_fpr | protocol | none | true | false | false | Fixed low-FPR target. |
+| threshold_id | protocol | none | true | false | false | Threshold identifier. |
+| threshold_source_split | protocol | none | true | false | false | Split used to calibrate threshold. |
+| threshold_value | protocol | none | true | false | false | Calibrated threshold value. |
+| decision | protocol | none | true | false | false | Detector decision. |
+| decision_reason | protocol | none | true | false | false | Decision provenance reason. |
+| test_time_threshold_update_blocked | protocol | none | true | false | false | Whether test-time threshold update is blocked. |
+| trajectory_trace_placeholder | placeholder | _placeholder | true | false | true | B1 placeholder for trajectory trace. |
+| real_video_quality_metrics_placeholder | placeholder | _placeholder | true | false | true | B1 placeholder for real-video quality metrics. |
+| semantic_consistency_placeholder | placeholder | _placeholder | true | false | true | B1 placeholder for semantic consistency metric. |
+| placeholder_reason | protocol | none | true | false | false | Reason explaining placeholder presence. |
+| replacement_stage | protocol | none | true | false | false | Stage expected to replace placeholder. |
+| replacement_field_name | protocol | none | true | false | false | Concrete field expected to replace placeholder. |

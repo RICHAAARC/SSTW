@@ -1,0 +1,9 @@
+{
+  "schema_id": "fixed_low_fpr_threshold",
+  "required_fields": [
+    "method_variant",
+    "threshold_source_split",
+    "threshold_value",
+    "target_fpr"
+  ]
+}

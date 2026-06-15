@@ -1,0 +1,9 @@
+{
+  "schema_id": "synthetic_state_trace",
+  "required_fields": [
+    "sample_id",
+    "method_variant",
+    "state_entropy",
+    "state_coverage_ratio"
+  ]
+}

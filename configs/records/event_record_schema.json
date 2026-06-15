@@ -1,0 +1,12 @@
+{
+  "schema_id": "synthetic_state_event_record",
+  "required_fields": [
+    "sample_id",
+    "split",
+    "sample_role",
+    "method_variant",
+    "attack_name",
+    "S_final",
+    "decision"
+  ]
+}

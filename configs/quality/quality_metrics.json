@@ -1,0 +1,10 @@
+{
+  "quality_metric_status": "enabled",
+  "metrics": [
+    "quality_psnr",
+    "quality_ssim",
+    "quality_lpips"
+  ],
+  "quality_lpips_status": "disabled",
+  "quality_metric_failure_reason": "lpips is disabled in lightweight B2 proxy"
+}

@@ -1,0 +1,9 @@
+{
+  "vae_backend_id": "proxy_video_vae_latent_v1",
+  "vae_model_name": "deterministic_proxy_vae",
+  "vae_model_version": "local_proxy_v1",
+  "vae_encode_dtype": "float32",
+  "vae_decode_dtype": "float32",
+  "vae_reconstruction_lpips_status": "disabled",
+  "vae_reconstruction_lpips_status_reason": "lpips dependency is not required in B2 lightweight proxy"
+}

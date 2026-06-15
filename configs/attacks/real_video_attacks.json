@@ -1,0 +1,94 @@
+{
+  "attacks": [
+    {
+      "attack_name": "no_attack",
+      "attack_strength": "none",
+      "severity": 0.0,
+      "attack_family": "identity"
+    },
+    {
+      "attack_name": "vae_reconstruction",
+      "attack_strength": "medium",
+      "severity": 0.06,
+      "attack_family": "vae"
+    },
+    {
+      "attack_name": "h264_compression",
+      "attack_strength": "medium",
+      "severity": 0.1,
+      "attack_family": "compression"
+    },
+    {
+      "attack_name": "h265_compression",
+      "attack_strength": "medium",
+      "severity": 0.1,
+      "attack_family": "compression"
+    },
+    {
+      "attack_name": "spatial_resize",
+      "attack_strength": "medium",
+      "severity": 0.08,
+      "attack_family": "spatial"
+    },
+    {
+      "attack_name": "crop_resize",
+      "attack_strength": "medium",
+      "severity": 0.12,
+      "attack_family": "spatial"
+    },
+    {
+      "attack_name": "gaussian_noise",
+      "attack_strength": "medium",
+      "severity": 0.09,
+      "attack_family": "corruption"
+    },
+    {
+      "attack_name": "blur",
+      "attack_strength": "medium",
+      "severity": 0.08,
+      "attack_family": "corruption"
+    },
+    {
+      "attack_name": "temporal_crop",
+      "attack_strength": "medium",
+      "severity": 0.2,
+      "attack_family": "temporal_non_uniform"
+    },
+    {
+      "attack_name": "local_clip",
+      "attack_strength": "medium",
+      "severity": 0.2,
+      "attack_family": "temporal_non_uniform"
+    },
+    {
+      "attack_name": "regular_frame_dropping",
+      "attack_strength": "medium",
+      "severity": 0.16,
+      "attack_family": "temporal_uniform"
+    },
+    {
+      "attack_name": "irregular_frame_dropping",
+      "attack_strength": "medium",
+      "severity": 0.24,
+      "attack_family": "temporal_non_uniform"
+    },
+    {
+      "attack_name": "frame_duplication",
+      "attack_strength": "medium",
+      "severity": 0.2,
+      "attack_family": "temporal_non_uniform"
+    },
+    {
+      "attack_name": "speed_change",
+      "attack_strength": "medium",
+      "severity": 0.22,
+      "attack_family": "temporal_non_uniform"
+    },
+    {
+      "attack_name": "frame_rate_resampling",
+      "attack_strength": "medium",
+      "severity": 0.2,
+      "attack_family": "temporal_non_uniform"
+    }
+  ]
+}

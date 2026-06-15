@@ -1,0 +1,13 @@
+{
+  "protocol_id": "real_video_latent_transfer_check",
+  "source_stage": "synthetic_state_protocol",
+  "sample_count_per_cell": 2,
+  "dataset_id": "real_video_proxy_dataset_v1",
+  "video_fps": 8,
+  "video_num_frames": 32,
+  "video_resolution": "128x128",
+  "video_duration_sec": 4.0,
+  "quality_psnr_floor": 28.0,
+  "quality_ssim_floor": 0.85,
+  "temporal_flicker_ceiling": 0.25
+}

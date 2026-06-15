@@ -111,3 +111,37 @@ Notebook 与 repository module 的跨边界数据
 | placeholder_reason | protocol | none | true | false | false | Reason explaining placeholder presence. |
 | replacement_stage | protocol | none | true | false | false | Stage expected to replace placeholder. |
 | replacement_field_name | protocol | none | true | false | false | Concrete field expected to replace placeholder. |
+| source_video_id | protocol | none | true | false | false | B2 source video identifier. |
+| dataset_id | protocol | none | true | false | false | B2 dataset identifier. |
+| video_fps | protocol | none | true | false | false | Processed video fps. |
+| video_num_frames | protocol | none | true | false | false | Processed video frame count. |
+| video_resolution | protocol | none | true | false | false | Processed video resolution. |
+| video_duration_sec | protocol | none | true | false | false | Processed video duration. |
+| frame_sample_status | protocol | none | true | false | false | Frame sampling status. |
+| fps_normalizer_status | protocol | none | true | false | false | FPS normalization status. |
+| vae_chain_status | protocol | none | true | false | false | VAE encode-decode-reencode chain status. |
+| vae_backend_id | protocol | none | true | false | false | VAE backend identifier. |
+| vae_model_name | protocol | none | true | false | false | VAE model name. |
+| vae_model_version | protocol | none | true | false | false | VAE model version. |
+| vae_encode_dtype | protocol | none | true | false | false | VAE encode dtype. |
+| vae_decode_dtype | protocol | none | true | false | false | VAE decode dtype. |
+| vae_reconstruction_psnr | metric | none | true | false | false | VAE reconstruction PSNR proxy. |
+| vae_reconstruction_ssim | metric | none | true | false | false | VAE reconstruction SSIM proxy. |
+| vae_reconstruction_lpips_status | metric | none | true | false | false | VAE reconstruction LPIPS status. |
+| vae_reconstruction_lpips_status_reason | protocol | none | true | false | false | Reason for VAE LPIPS status. |
+| attack_config_id | protocol | none | true | false | false | Attack configuration identifier. |
+| attack_seed | protocol | none | true | false | false | Attack seed identifier. |
+| attack_runtime_sec | metric | none | true | false | false | Attack runtime in seconds. |
+| attack_failure_status | protocol | none | true | false | false | Attack failure status. |
+| attack_failure_reason | protocol | none | true | false | false | Attack failure reason. |
+| quality_psnr | metric | none | true | false | false | B2 quality PSNR proxy. |
+| quality_ssim | metric | none | true | false | false | B2 quality SSIM proxy. |
+| quality_lpips | metric | none | true | false | false | B2 quality LPIPS value or null. |
+| quality_metric_status | metric | none | true | false | false | Quality metric status. |
+| quality_metric_failure_reason | protocol | none | true | false | false | Quality metric failure reason. |
+| quality_not_collapsed | metric | none | true | false | false | Quality gate decision. |
+| temporal_flicker_score | metric | none | true | false | false | Temporal flicker proxy score. |
+| temporal_consistency_not_collapsed | metric | none | true | false | false | Temporal consistency gate decision. |
+| motion_consistency_score_placeholder | placeholder | _placeholder | true | false | true | B2 placeholder for motion consistency score. |
+| motion_consistency_status | protocol | none | true | false | false | Motion consistency metric status. |
+| motion_consistency_reason | protocol | none | true | false | false | Motion consistency status reason. |

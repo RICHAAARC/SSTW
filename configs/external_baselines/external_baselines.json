@@ -1,0 +1,14 @@
+{
+  "baselines": [
+    {
+      "external_baseline_name": "classical_temporal_registration",
+      "external_baseline_protocol_gap": "not a learned video watermark baseline",
+      "external_baseline_version": "local_reference"
+    },
+    {
+      "external_baseline_name": "external_video_watermark_adapter",
+      "external_baseline_protocol_gap": "requires third party model or weights",
+      "external_baseline_version": "pending_installation"
+    }
+  ]
+}

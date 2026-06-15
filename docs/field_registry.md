@@ -204,3 +204,61 @@ Notebook 与 repository module 的跨边界数据
 | correlation_threshold | metric | none | true | false | false | B4 correlation threshold. |
 | correlation_status | metric | none | true | false | false | B4 correlation audit status. |
 | top_conference_trajectory_gate | governance | none | true | false | false | B4 top conference trajectory gate decision. |
+| generation_model_id | protocol | none | true | false | false | B5 generation model identifier. |
+| generation_model_name | protocol | none | true | false | false | B5 generation model name. |
+| generation_model_family | protocol | none | true | false | false | B5 generation model family. |
+| generation_model_version | protocol | none | true | false | false | B5 generation model version. |
+| generation_model_commit_or_hash | protocol | none | true | false | false | B5 generation model commit or hash. |
+| generation_model_license_status | protocol | none | true | false | false | B5 generation model license audit status. |
+| generation_backend_id | protocol | none | true | false | false | B5 generation backend identifier. |
+| generation_backend_status | protocol | none | true | false | false | B5 generation backend status. |
+| generation_backend_reason | protocol | none | true | false | false | B5 generation backend status reason. |
+| trajectory_capture_mode | trajectory | none | true | false | false | B5 trajectory capture mode. |
+| trajectory_availability_status | trajectory | none | true | false | false | B5 trajectory availability status. |
+| trajectory_capture_status | trajectory | none | true | false | false | B5 trajectory capture status. |
+| trajectory_capture_failure_reason | trajectory | none | true | false | false | B5 trajectory capture failure reason. |
+| latent_capture_status | protocol | none | true | false | false | B5 latent capture status. |
+| latent_capture_failure_reason | protocol | none | true | false | false | B5 latent capture failure reason. |
+| prompt_id | protocol | none | true | false | false | B5 prompt identifier. |
+| prompt_text_hash | protocol | none | true | false | false | B5 prompt text digest. |
+| prompt_category | protocol | none | true | false | false | B5 prompt category. |
+| scheduler_id | protocol | none | true | false | false | B5 scheduler identifier. |
+| trajectory_scheduler_id | trajectory | none | true | false | false | B5 trajectory scheduler identifier. |
+| num_inference_steps | protocol | none | true | false | false | B5 inference step count. |
+| guidance_scale | protocol | none | true | false | false | B5 guidance scale. |
+| video_length_frames | protocol | none | true | false | false | B5 generated video length in frames. |
+| fps | protocol | none | true | false | false | B5 generated video fps. |
+| heldout_prompt_status | generalization | none | true | false | false | B5 heldout prompt status. |
+| heldout_seed_status | generalization | none | true | false | false | B5 heldout seed status. |
+| gpu_validation_status | governance | none | true | false | false | B5 local GPU validation status. |
+| gpu_validation_reason | governance | none | true | false | false | B5 local GPU validation reason. |
+| generation_model_runnable_status | governance | none | true | false | false | B5 generation model runnable status. |
+| generation_model_not_run_reason | governance | none | true | false | false | B5 generation model not run reason. |
+| visual_quality_score | metric | none | true | false | false | B5 visual quality score. |
+| motion_consistency_score | metric | none | true | false | false | B5 motion consistency score. |
+| motion_artifact_score | metric | none | true | false | false | B5 motion artifact score. |
+| motion_metric_status | metric | none | true | false | false | B5 motion metric status. |
+| semantic_consistency_score | metric | none | true | false | false | B5 semantic consistency score. |
+| semantic_metric_name | metric | none | true | false | false | B5 semantic metric name. |
+| semantic_metric_status | metric | none | true | false | false | B5 semantic metric status. |
+| metric_failure_reason | protocol | none | true | false | false | B5 metric failure reason. |
+| external_baseline_name | protocol | none | true | false | false | B5 external baseline name. |
+| external_baseline_version | protocol | none | true | false | false | B5 external baseline version. |
+| external_baseline_runnable_status | governance | none | true | false | false | B5 external baseline runnable status. |
+| external_baseline_not_run_reason | governance | none | true | false | false | B5 external baseline not run reason. |
+| external_baseline_protocol_gap | governance | none | true | false | false | B5 external baseline protocol gap. |
+| external_baseline_result_used_for_claim | claim | none | true | true | false | Whether B5 external baseline is used for a claim. |
+| generation_model_main_table_ready | governance | none | true | false | false | B5 main table readiness status. |
+| trajectory_observation_gain_confirmed | metric | none | true | false | false | B5 trajectory gain confirmation status. |
+| fixed_low_fpr_audit_pass | metric | none | true | false | false | B5 fixed low-FPR audit status. |
+| quality_motion_semantic_consistency_pass | metric | none | true | false | false | B5 quality motion semantic gate status. |
+| cross_prompt_generalization_pass | generalization | none | true | false | false | B5 cross prompt generalization status. |
+| cross_seed_generalization_pass | generalization | none | true | false | false | B5 cross seed generalization status. |
+| cross_motion_generalization_pass | generalization | none | true | false | false | B5 cross motion generalization status. |
+| cross_length_generalization_pass | generalization | none | true | false | false | B5 cross length generalization status. |
+| cross_prompt_seed_generalization_pass | generalization | none | true | false | false | B5 combined prompt seed generalization status. |
+| generalization_failure_reason | generalization | none | true | false | false | B5 generalization failure reason. |
+| formal_claim_status | claim | none | true | true | false | B5 formal claim status. |
+| top_conference_b5_gate | governance | none | true | false | false | B5 top conference gate decision. |
+| threshold_status | protocol | none | true | false | false | B5 threshold computation status. |
+| threshold_not_run_reason | protocol | none | true | false | false | B5 threshold not run reason. |

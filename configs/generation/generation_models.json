@@ -1,0 +1,16 @@
+{
+  "models": [
+    {
+      "generation_backend_id": "local_gpu_generation_backend",
+      "generation_model_commit_or_hash": null,
+      "generation_model_family": "open_video_generation_model_family",
+      "generation_model_id": "candidate_generation_model",
+      "generation_model_license_status": "not_audited",
+      "generation_model_name": "candidate_public_video_generation_model",
+      "generation_model_version": "selection_pending",
+      "trajectory_availability_status": "not_verified",
+      "trajectory_capture_mode": "latent_or_scheduler_trace",
+      "vae_backend_id": "candidate_video_vae"
+    }
+  ]
+}

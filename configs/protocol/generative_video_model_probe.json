@@ -1,0 +1,10 @@
+{
+  "blocked_claim_status": "blocked_until_gpu_generation_run",
+  "fixed_low_fpr_required": true,
+  "requires_external_baseline_record": true,
+  "requires_gpu_validation": true,
+  "requires_runnable_generation_model": true,
+  "requires_trajectory_capture_or_reconstruction": true,
+  "stage_id": "generative_video_model_probe",
+  "target_fpr_tolerance": 0.01
+}

@@ -1,0 +1,13 @@
+{
+  "ablation_family": "temporal_model",
+  "variants": [
+    "no_state_inference",
+    "generic_temporal_mean_pooling",
+    "conv1d_temporal_aggregator",
+    "gru_temporal_aggregator",
+    "transformer_temporal_aggregator",
+    "generic_state_space_model",
+    "key_agnostic_state_space_model",
+    "key_conditioned_state_space_inference"
+  ]
+}

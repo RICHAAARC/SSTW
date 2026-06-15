@@ -145,3 +145,29 @@ Notebook 与 repository module 的跨边界数据
 | motion_consistency_score_placeholder | placeholder | _placeholder | true | false | true | B2 placeholder for motion consistency score. |
 | motion_consistency_status | protocol | none | true | false | false | Motion consistency metric status. |
 | motion_consistency_reason | protocol | none | true | false | false | Motion consistency status reason. |
+| formal_state_schema_version | protocol | none | true | false | false | B3 formal state schema version. |
+| state_transition_model_id | method | none | true | false | false | B3 transition model identifier. |
+| state_observation_model_id | method | none | true | false | false | B3 observation model identifier. |
+| key_conditioner_id | method | none | true | false | false | B3 key conditioner identifier. |
+| smoother_mode | method | none | true | false | false | B3 smoother mode. |
+| state_entropy_gate_threshold | method | none | true | false | false | B3 entropy gate threshold. |
+| state_entropy_gate_status | metric | none | true | false | false | B3 entropy gate status. |
+| state_allowed_to_affect_final_score | metric | none | true | false | false | Whether state may affect final score. |
+| trajectory_enabled | protocol | none | true | false | false | Whether trajectory observation is enabled. |
+| trajectory_status | protocol | none | true | false | false | Trajectory status, explicit disabled in B3. |
+| trajectory_state_adapter_placeholder | placeholder | _placeholder | true | false | true | B3 placeholder for trajectory state adapter. |
+| ablation_family | ablation | none | true | false | false | Ablation family. |
+| ablation_name | ablation | none | true | false | false | Ablation variant name. |
+| ablation_removed_component | ablation | none | true | false | false | Removed component in ablation. |
+| ablation_expected_effect | ablation | none | true | false | false | Expected ablation effect. |
+| ablation_observed_delta_tpr | ablation | none | true | false | false | Observed TPR delta or lightweight proxy delta. |
+| ablation_observed_delta_fpr | ablation | none | true | false | false | Observed FPR delta. |
+| ablation_status | ablation | none | true | false | false | Ablation status. |
+| ablation_failure_reason | ablation | none | true | false | false | Ablation failure reason. |
+| generalization_axis | generalization | none | true | false | false | Generalization axis. |
+| train_condition_id | generalization | none | true | false | false | Training or calibration condition. |
+| test_condition_id | generalization | none | true | false | false | Test condition. |
+| unseen_key_status | generalization | none | true | false | false | Unseen key status. |
+| unseen_attack_status | generalization | none | true | false | false | Unseen attack status. |
+| generalization_delta_tpr | generalization | none | true | false | false | Generalization TPR delta. |
+| generalization_delta_fpr | generalization | none | true | false | false | Generalization FPR delta. |

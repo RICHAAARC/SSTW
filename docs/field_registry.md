@@ -294,3 +294,4 @@ Notebook 与 repository module 的跨边界数据
 | created_at | protocol | none | true | false | false | Creation timestamp for package manifest. |
 | decision_summary | governance | none | true | false | false | Summary of stage decision embedded in package manifest. |
 | generation_manifest_status | governance | none | true | false | false | Status showing whether generation manifest was present during packaging. |
+| hf_token_status | governance | none | true | false | false | Whether HF_TOKEN was provided to Colab runtime; token value is never recorded. |

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import time
 from hashlib import sha256
 from pathlib import Path
@@ -45,10 +46,11 @@ def _tensor_stats(value: Any) -> dict:
 
 
 def _load_ltx_pipeline(model_id: str, torch_dtype: Any) -> Any:
-    """加载 LTX-Video Diffusers pipeline。"""
+    """加载 LTX-Video Diffusers pipeline, 可选使用 HF_TOKEN 访问 Hugging Face。"""
     from diffusers import LTXPipeline
 
-    pipe = LTXPipeline.from_pretrained(model_id, torch_dtype=torch_dtype)
+    hf_token = os.environ.get("HF_TOKEN") or None
+    pipe = LTXPipeline.from_pretrained(model_id, torch_dtype=torch_dtype, token=hf_token)
     if hasattr(pipe, "enable_model_cpu_offload"):
         pipe.enable_model_cpu_offload()
     else:
@@ -101,6 +103,7 @@ def run_colab_probe(output_root: str | Path, prompt_suite_path: str | Path, prof
     prompt_suite = _read_json(prompt_suite_path)
     settings = PROFILE_SETTINGS[profile]
     dtype = _select_dtype(torch)
+    hf_token_status = "provided" if os.environ.get("HF_TOKEN") else "not_provided"
     plan = _build_generation_plan(prompt_suite, profile, model_id, cross_model_id)
 
     generation_records: list[dict] = []
@@ -162,6 +165,7 @@ def run_colab_probe(output_root: str | Path, prompt_suite_path: str | Path, prof
             "generation_model_version": "from_pretrained_runtime_resolution",
             "generation_model_commit_or_hash": None,
             "generation_model_license_status": "model_card_required",
+            "hf_token_status": hf_token_status,
             "cross_model_role": item["cross_model_role"],
             "prompt_id": item["prompt_id"],
             "prompt_text_hash": sha256(item["prompt_text"].encode("utf-8")).hexdigest()[:16],

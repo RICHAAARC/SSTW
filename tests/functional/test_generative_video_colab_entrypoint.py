@@ -42,6 +42,9 @@ def test_generative_video_colab_notebook_calls_repository_modules() -> None:
 
     assert "/content/drive/MyDrive/SSTW" in source
     assert "drive.mount('/content/drive')" in source
+    assert "HF_TOKEN" in source
+    assert "getpass" in source
+    assert "add_to_git_credential=False" in source
     assert "generative_video_model_probe_workflow" in source
     assert "scripts/prepare_generative_video_prompt_suite.py" in Path("paper_workflow/notebook_utils/generative_video_model_probe_workflow.py").read_text(encoding="utf-8")
     assert "experiments.generative_video_model_probe.colab_runtime" in Path("paper_workflow/notebook_utils/generative_video_model_probe_workflow.py").read_text(encoding="utf-8")
@@ -81,3 +84,14 @@ def test_generative_video_drive_packager_creates_archive_and_manifest(tmp_path: 
     with zipfile.ZipFile(archive_path) as archive:
         names = archive.namelist()
     assert any(name.endswith("records/generation_records.jsonl") for name in names)
+
+
+@pytest.mark.quick
+def test_generative_video_colab_runtime_uses_optional_hf_token_without_recording_secret() -> None:
+    """模型加载应支持 HF_TOKEN, 但只能记录 provided / not_provided 状态。"""
+    runtime_text = Path("experiments/generative_video_model_probe/colab_runtime.py").read_text(encoding="utf-8")
+    assert "os.environ.get(\"HF_TOKEN\")" in runtime_text
+    assert "token=hf_token" in runtime_text
+    assert "hf_token_status" in runtime_text
+    assert "provided" in runtime_text
+    assert "not_provided" in runtime_text

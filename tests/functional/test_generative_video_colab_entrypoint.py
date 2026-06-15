@@ -46,6 +46,7 @@ def test_generative_video_colab_notebook_calls_repository_modules() -> None:
     assert "getpass" in source
     assert "add_to_git_credential=False" in source
     assert "generative_video_model_probe_workflow" in source
+    assert "PROFILE = 'recommended'" in source
     assert "scripts/prepare_generative_video_prompt_suite.py" in Path("paper_workflow/notebook_utils/generative_video_model_probe_workflow.py").read_text(encoding="utf-8")
     assert "experiments.generative_video_model_probe.colab_runtime" in Path("paper_workflow/notebook_utils/generative_video_model_probe_workflow.py").read_text(encoding="utf-8")
     assert "scripts/package_results/generative_video_drive_packager.py" in Path("paper_workflow/notebook_utils/generative_video_model_probe_workflow.py").read_text(encoding="utf-8")
@@ -95,3 +96,4 @@ def test_generative_video_colab_runtime_uses_optional_hf_token_without_recording
     assert "hf_token_status" in runtime_text
     assert "provided" in runtime_text
     assert "not_provided" in runtime_text
+    assert 'default="recommended"' in runtime_text

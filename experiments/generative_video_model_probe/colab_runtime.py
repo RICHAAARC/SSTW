@@ -246,7 +246,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="在 Colab GPU 环境中运行 B5 生成式视频模型探测。")
     parser.add_argument("--output-root", default="outputs/runs/generative_video_model_probe_colab")
     parser.add_argument("--prompt-suite-path", default="outputs/datasets/generative_video_prompt_suite/prompt_seed_suite.json")
-    parser.add_argument("--profile", choices=sorted(PROFILE_SETTINGS), default="smoke")
+    parser.add_argument("--profile", choices=sorted(PROFILE_SETTINGS), default="recommended")
     parser.add_argument("--model-id", default="Lightricks/LTX-Video")
     parser.add_argument("--cross-model-id", default="")
     args = parser.parse_args()

@@ -1,0 +1,14 @@
+{
+  "trajectory_time_grid_id": "uniform_replay_grid_v1",
+  "trajectory_num_steps": 8,
+  "trajectory_time_points": [
+    0.05,
+    0.18,
+    0.31,
+    0.44,
+    0.57,
+    0.7,
+    0.83,
+    0.96
+  ]
+}

@@ -1,0 +1,19 @@
+{
+  "protocol_id": "trajectory_observation_core_probe",
+  "source_stage": "state_space_inference_formalization",
+  "target_fpr": 0.01,
+  "correlation_threshold": 0.35,
+  "negative_leakage_tolerance": 0.0,
+  "runtime_overhead_blocking_sec": 1.0,
+  "allowed_trajectory_sources": [
+    "recorded_sampling_trace",
+    "approximate_inversion_trace",
+    "latent_replay_trace",
+    "synthetic_surrogate_trace"
+  ],
+  "mechanism_evidence_sources": [
+    "recorded_sampling_trace",
+    "approximate_inversion_trace",
+    "latent_replay_trace"
+  ]
+}

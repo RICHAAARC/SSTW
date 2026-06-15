@@ -1,0 +1,16 @@
+{
+  "controls": [
+    {
+      "control_type": "random_key",
+      "control_expected_effect": "suppressed"
+    },
+    {
+      "control_type": "time_shuffle",
+      "control_expected_effect": "suppressed"
+    },
+    {
+      "control_type": "direction_shuffle",
+      "control_expected_effect": "suppressed"
+    }
+  ]
+}

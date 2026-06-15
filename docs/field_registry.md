@@ -171,3 +171,36 @@ Notebook 与 repository module 的跨边界数据
 | unseen_attack_status | generalization | none | true | false | false | Unseen attack status. |
 | generalization_delta_tpr | generalization | none | true | false | false | Generalization TPR delta. |
 | generalization_delta_fpr | generalization | none | true | false | false | Generalization FPR delta. |
+| trajectory_source | trajectory | none | true | false | false | Trajectory trace source. |
+| trajectory_source_status | trajectory | none | true | false | false | Trajectory source status. |
+| trajectory_status_reason | trajectory | none | true | false | false | Trajectory source status reason. |
+| trajectory_trace_id | trajectory | none | true | false | false | Trajectory trace identifier. |
+| trajectory_time_grid_id | trajectory | none | true | false | false | Trajectory time grid identifier. |
+| trajectory_num_steps | trajectory | none | true | false | false | Number of trajectory steps. |
+| trajectory_time_points | trajectory | none | true | false | false | Trajectory time point summary. |
+| trajectory_scheduler_id_placeholder | placeholder | _placeholder | true | false | true | B4 placeholder for scheduler identifier. |
+| velocity_estimator_id | trajectory | none | true | false | false | Velocity estimator identifier. |
+| velocity_projection_operator_id | trajectory | none | true | false | false | Velocity projection operator identifier. |
+| trajectory_runtime_sec | metric | none | true | false | false | Trajectory runtime in seconds. |
+| trajectory_runtime_status | metric | none | true | false | false | Trajectory runtime status. |
+| trajectory_reconstruction_status | trajectory | none | true | false | false | Trajectory reconstruction status. |
+| trajectory_state_adapter_status | trajectory | none | true | false | false | Trajectory-state adapter status. |
+| S_trajectory_observation | metric | none | true | false | false | Trajectory observation score. |
+| S_traj_state | metric | none | true | false | false | State score after trajectory observation. |
+| trajectory_state_gain | metric | none | true | false | false | Score gain from trajectory-state adapter. |
+| trajectory_gain_over_state_space | metric | none | true | false | false | Gain over state-space inference. |
+| trajectory_negative_leakage_delta | metric | none | true | false | false | Negative tail leakage delta after trajectory. |
+| trajectory_payload_correlation | metric | none | true | false | false | Correlation between trajectory and payload evidence. |
+| trajectory_state_correlation | metric | none | true | false | false | Correlation between trajectory and state posterior. |
+| trajectory_control_suppression_status | metric | none | true | false | false | Trajectory control suppression status. |
+| trajectory_control_failure_reason | metric | none | true | false | false | Trajectory control failure reason. |
+| control_type | trajectory_control | none | true | false | false | Trajectory control type. |
+| control_expected_effect | trajectory_control | none | true | false | false | Expected control effect. |
+| control_observed_score | trajectory_control | none | true | false | false | Observed control score. |
+| control_delta_vs_main | trajectory_control | none | true | false | false | Control score delta versus main trajectory. |
+| control_status | trajectory_control | none | true | false | false | Control suppression status. |
+| control_not_run_reason | trajectory_control | none | true | false | false | Control not-run reason. |
+| sampling_constraint_placeholder | placeholder | _placeholder | true | false | true | B4 placeholder for B6 sampling constraint config. |
+| correlation_threshold | metric | none | true | false | false | B4 correlation threshold. |
+| correlation_status | metric | none | true | false | false | B4 correlation audit status. |
+| top_conference_trajectory_gate | governance | none | true | false | false | B4 top conference trajectory gate decision. |

@@ -295,3 +295,28 @@ Notebook 与 repository module 的跨边界数据
 | decision_summary | governance | none | true | false | false | Summary of stage decision embedded in package manifest. |
 | generation_manifest_status | governance | none | true | false | false | Status showing whether generation manifest was present during packaging. |
 | hf_token_status | governance | none | true | false | false | Whether HF_TOKEN was provided to Colab runtime; token value is never recorded. |
+| implementation_evidence_status | governance | none | true | false | false | B5 Colab result checker implementation evidence status. |
+| mechanism_evidence_status | governance | none | true | false | false | B5 Colab result checker mechanism evidence status. |
+| missing_mechanism_requirements | governance | none | true | false | false | B5 missing mechanism requirements list. |
+| successful_generation_count | metric | none | true | false | false | Number of successful generation records. |
+| external_baseline_runnable_count | metric | none | true | false | false | Number of runnable external baselines. |
+| quality_metric_ready_count | metric | none | true | false | false | Number of ready quality metric records. |
+| video_checks | artifact | none | true | false | false | Video integrity check records. |
+| video_exists | artifact | none | true | false | false | Whether generated video exists. |
+| video_size_bytes | artifact | none | true | false | false | Generated video size in bytes. |
+| video_sha256_match | artifact | none | true | false | false | Whether generated video hash matches record. |
+| expected_video_sha256 | artifact | none | true | false | false | Expected generated video hash from records. |
+| actual_video_sha256 | artifact | none | true | false | false | Actual generated video hash from file. |
+| next_recommended_profile | governance | none | true | false | false | Recommended next Colab profile after result checking. |
+| external_baseline_family | protocol | none | true | false | false | B5 external baseline method family. |
+| external_baseline_source_url | protocol | none | true | false | false | B5 external baseline source URL or local source marker. |
+| external_baseline_recommended_priority | governance | none | true | false | false | B5 external baseline recommendation priority. |
+| external_baseline_selection_role | governance | none | true | false | false | B5 role assigned to the external baseline. |
+| external_baseline_integration_status | governance | none | true | false | false | B5 external baseline integration status. |
+| selection_policy | governance | none | true | false | false | B5 external baseline selection policy block. |
+| primary_selection_rule | governance | none | true | false | false | B5 external baseline primary selection rule. |
+| claim_rule | claim | none | true | true | false | B5 external baseline claim usage rule. |
+| fallback_rule | governance | none | true | false | false | B5 external baseline fallback rule. |
+| internal_mechanism_baselines | protocol | none | true | false | false | B5 internal mechanism baseline list paired with external explicit synchronization baselines. |
+| gpu_name | governance | none | true | false | false | GPU name captured by Colab runtime. |
+| gpu_memory_mb | governance | none | true | false | false | GPU memory in MB captured by Colab runtime. |

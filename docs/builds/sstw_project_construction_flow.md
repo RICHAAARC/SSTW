@@ -560,12 +560,9 @@ external_video_watermark_baselines
 优先考虑:
 
 ```text
-VideoMark_style_temporal_matching
-VideoMark
-RivaGAN
-VIDSTAMP
-VideoShield
-SIGMark
+Explicit_DTW_temporal_alignment
+Explicit_frame_matching_temporal_registration
+internal_mechanism_baselines
 classical_temporal_registration
 ```
 

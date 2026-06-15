@@ -79,9 +79,8 @@ main/
   backends/
     generative_video_backend.py
   external_baselines/
-    videomark_style_temporal_matching.py
-    rivagan_adapter.py
-    vidstamp_adapter.py
+    explicit_dtw_temporal_alignment.py
+    frame_matching_temporal_registration.py
     baseline_registry.py
   analysis/
     semantic_consistency_audit.py
@@ -186,12 +185,9 @@ keyed_state_trajectory_constraint_status_until_sampling_constraint
 优先级：
 
 ```text
-VideoMark_style_temporal_matching
-VideoMark
-RivaGAN
-VIDSTAMP
-VideoShield
-SIGMark
+Explicit_DTW_temporal_alignment
+Explicit_frame_matching_temporal_registration
+internal_mechanism_baselines
 classical_temporal_registration
 ```
 

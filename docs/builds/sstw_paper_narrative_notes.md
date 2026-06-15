@@ -378,12 +378,9 @@ Keyed state trajectory constraint
 
 ```text
 Classical temporal registration
-VideoMark-style temporal matching
-VideoMark
-RivaGAN
-VIDSTAMP
-VideoShield
-SIGMark
+Explicit-DTW temporal alignment
+Explicit frame-matching temporal registration
+Internal mechanism baselines
 ```
 
 外部 baseline 只能在有可记录代码来源、权重来源、许可证状态、模型 digest、adapter 版本和固定 FPR 校准 records 时支撑正向 claim。

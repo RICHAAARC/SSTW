@@ -1,14 +1,45 @@
 {
   "baselines": [
     {
-      "external_baseline_name": "classical_temporal_registration",
-      "external_baseline_protocol_gap": "not a learned video watermark baseline",
-      "external_baseline_version": "local_reference"
+      "external_baseline_family": "explicit_temporal_alignment",
+      "external_baseline_integration_status": "repository_local_adapter_ready",
+      "external_baseline_name": "explicit_dtw_temporal_alignment",
+      "external_baseline_not_run_reason": "none",
+      "external_baseline_protocol_gap": "requires_reference_or_anchor_sequence_and_recovers_a_temporal_alignment_path_instead_of_key_conditioned_hidden_state_inference",
+      "external_baseline_recommended_priority": 1,
+      "external_baseline_result_used_for_claim": false,
+      "external_baseline_runnable_status": "runnable",
+      "external_baseline_selection_role": "primary_explicit_synchronization_external_baseline",
+      "external_baseline_source_url": "repository_local_explicit_dtw_adapter",
+      "external_baseline_version": "explicit_dtw_temporal_alignment_v1"
     },
     {
-      "external_baseline_name": "external_video_watermark_adapter",
-      "external_baseline_protocol_gap": "requires third party model or weights",
-      "external_baseline_version": "pending_installation"
+      "external_baseline_family": "reference_guided_temporal_registration",
+      "external_baseline_integration_status": "repository_local_adapter_ready",
+      "external_baseline_name": "explicit_frame_matching_temporal_registration",
+      "external_baseline_not_run_reason": "none",
+      "external_baseline_protocol_gap": "requires_reference_embeddings_or_anchor_frames_and_performs_explicit_nearest_neighbor_temporal_registration",
+      "external_baseline_recommended_priority": 2,
+      "external_baseline_result_used_for_claim": false,
+      "external_baseline_runnable_status": "runnable",
+      "external_baseline_selection_role": "secondary_explicit_synchronization_external_baseline",
+      "external_baseline_source_url": "repository_local_frame_matching_adapter",
+      "external_baseline_version": "explicit_frame_matching_temporal_registration_v1"
     }
-  ]
+  ],
+  "internal_mechanism_baselines": [
+    "frame_prc",
+    "tubelet_only",
+    "explicit_temporal_alignment",
+    "generic_temporal_mean_pooling",
+    "generic_state_space_model",
+    "key_agnostic_state_space_model",
+    "key_conditioned_state_space_inference"
+  ],
+  "selection_policy": {
+    "claim_rule": "only runnable baselines with protocol-compatible governed records may support positive comparison claims",
+    "fallback_rule": "runnable adapters without formal comparison records must remain implementation evidence and must not support positive claims",
+    "primary_selection_rule": "prefer explicit synchronization mechanisms that recover or approximate a temporal alignment path, while excluding video watermark systems already used by related SSTW work",
+    "stage_id": "generative_video_model_probe"
+  }
 }

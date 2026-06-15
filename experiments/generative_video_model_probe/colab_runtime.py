@@ -98,6 +98,8 @@ def run_colab_probe(output_root: str | Path, prompt_suite_path: str | Path, prof
 
     if not torch.cuda.is_available():
         raise RuntimeError("Colab runtime does not expose CUDA GPU")
+    gpu_name = str(torch.cuda.get_device_name(0))
+    gpu_memory_mb = int(torch.cuda.get_device_properties(0).total_memory // (1024 * 1024))
 
     output_root = Path(output_root)
     prompt_suite = _read_json(prompt_suite_path)
@@ -166,6 +168,8 @@ def run_colab_probe(output_root: str | Path, prompt_suite_path: str | Path, prof
             "generation_model_commit_or_hash": None,
             "generation_model_license_status": "model_card_required",
             "hf_token_status": hf_token_status,
+            "gpu_name": gpu_name,
+            "gpu_memory_mb": gpu_memory_mb,
             "cross_model_role": item["cross_model_role"],
             "prompt_id": item["prompt_id"],
             "prompt_text_hash": sha256(item["prompt_text"].encode("utf-8")).hexdigest()[:16],
@@ -220,6 +224,8 @@ def run_colab_probe(output_root: str | Path, prompt_suite_path: str | Path, prof
             "quality_motion_semantic_consistency_pass": False,
             "cross_model_validation_status": "run" if cross_model_id else "not_configured",
             "external_baseline_comparison_status": "limitation_records_written",
+            "gpu_name": gpu_name,
+            "gpu_memory_mb": gpu_memory_mb,
         },
     }
     write_json(output_root / "artifacts" / "generative_video_colab_runtime_decision.json", decision)
@@ -230,6 +236,8 @@ def run_colab_probe(output_root: str | Path, prompt_suite_path: str | Path, prof
         "output_paths": [str(output_root / "records" / "generation_records.jsonl"), str(output_root / "records" / "trajectory_trace.jsonl")],
         "rebuild_command": "python -m experiments.generative_video_model_probe.colab_runtime",
         "colab_runtime_profile": profile,
+        "gpu_name": gpu_name,
+        "gpu_memory_mb": gpu_memory_mb,
     })
     return {"output_root": str(output_root), "generation_record_count": len(generation_records), "trajectory_record_count": len(trajectory_records), "decision": decision}
 

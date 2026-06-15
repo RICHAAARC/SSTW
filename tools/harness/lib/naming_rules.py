@@ -9,7 +9,7 @@ SNAKE_CASE_PATTERN = re.compile(r"^[a-z][a-z0-9_]*$")
 FORBIDDEN_WEAK_TOKEN_PATTERN = re.compile(r"(?:^|[_-])(new|old|best|final)(?:$|[_-])", re.IGNORECASE)
 ALLOWED_LITERAL_FILE_NAMES = {"README.md", "AGENTS.md", ".gitignore", "pyproject.toml", "__init__.py"}
 ALLOWED_DIRECTORY_NAMES = {".codex", ".git", ".pytest_cache", "__pycache__"}
-ALLOWED_FILE_SUFFIXES = {".md", ".py", ".json", ".toml", ".txt", ".yml", ".yaml"}
+ALLOWED_FILE_SUFFIXES = {".md", ".py", ".json", ".toml", ".txt", ".yml", ".yaml", ".ipynb"}
 
 
 def is_snake_case_name(name: str) -> bool:

@@ -262,3 +262,35 @@ Notebook 与 repository module 的跨边界数据
 | top_conference_b5_gate | governance | none | true | false | false | B5 top conference gate decision. |
 | threshold_status | protocol | none | true | false | false | B5 threshold computation status. |
 | threshold_not_run_reason | protocol | none | true | false | false | B5 threshold not run reason. |
+| prompt_suite_id | protocol | none | true | false | false | B5 Colab prompt suite identifier. |
+| prompt_suite_role | protocol | none | true | false | false | B5 prompt or seed role inside prompt suite. |
+| prompt_suite_digest | artifact | none | true | false | false | B5 prompt suite digest. |
+| dataset_construction_status | governance | none | true | false | false | B5 input dataset construction status. |
+| dataset_source | protocol | none | true | false | false | B5 input dataset source description. |
+| prompt_negative_text | protocol | none | false | false | false | B5 prompt negative text kept in input dataset, not formal result records. |
+| colab_runtime_profile | protocol | none | true | false | false | B5 Colab runtime profile. |
+| cross_model_role | generalization | none | true | false | false | B5 model role for cross-model validation. |
+| generation_status | protocol | none | true | false | false | B5 generation execution status. |
+| generation_failure_reason | protocol | none | true | false | false | B5 generation failure reason. |
+| generation_runtime_sec | metric | none | true | false | false | B5 generation runtime in seconds. |
+| video_path | artifact | none | true | false | false | B5 generated video path. |
+| video_sha256 | artifact | none | true | false | false | B5 generated video hash. |
+| trajectory_step_index | trajectory | none | true | false | false | B5 trajectory callback step index. |
+| trajectory_timestep | trajectory | none | true | false | false | B5 trajectory callback timestep. |
+| latent_norm | metric | none | true | false | false | B5 latent tensor norm from trajectory callback. |
+| latent_mean | metric | none | true | false | false | B5 latent tensor mean from trajectory callback. |
+| latent_std | metric | none | true | false | false | B5 latent tensor standard deviation from trajectory callback. |
+| cross_model_validation_status | generalization | none | true | false | false | B5 cross model validation status. |
+| external_baseline_comparison_status | governance | none | true | false | false | B5 external baseline comparison status. |
+| drive_project_root | artifact | none | true | false | false | Google Drive SSTW project root used by Colab workflow. |
+| drive_dataset_root | artifact | none | true | false | false | Google Drive dataset output directory for B5 Colab workflow. |
+| drive_run_root | artifact | none | true | false | false | Google Drive run output directory for B5 Colab workflow. |
+| drive_package_dir | artifact | none | true | false | false | Google Drive package output directory for B5 Colab workflow. |
+| drive_log_dir | artifact | none | true | false | false | Google Drive log output directory for B5 Colab workflow. |
+| run_root | artifact | none | true | false | false | Run root packaged by Drive packager. |
+| archive_path | artifact | none | true | false | false | Archive path created by Drive packager. |
+| package_manifest_path | artifact | none | true | false | false | Package manifest path created by Drive packager. |
+| include_videos | protocol | none | true | false | false | Whether generated videos are included in Drive package. |
+| created_at | protocol | none | true | false | false | Creation timestamp for package manifest. |
+| decision_summary | governance | none | true | false | false | Summary of stage decision embedded in package manifest. |
+| generation_manifest_status | governance | none | true | false | false | Status showing whether generation manifest was present during packaging. |

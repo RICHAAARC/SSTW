@@ -1,0 +1,246 @@
+"""在 Colab GPU 环境中运行 B5 生成式视频模型探测。"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import time
+from hashlib import sha256
+from pathlib import Path
+from typing import Any
+
+from experiments.generative_video_model_probe.external_baseline_runner import run_external_baseline_status
+from main.protocol.record_writer import write_json, write_jsonl
+from main.protocol.table_builder import write_csv
+
+
+PROFILE_SETTINGS = {
+    "smoke": {"prompt_limit": 1, "seed_limit": 1, "num_inference_steps": 8, "num_frames": 33, "height": 320, "width": 512, "run_cross_model": False},
+    "recommended": {"prompt_limit": 2, "seed_limit": 2, "num_inference_steps": 16, "num_frames": 49, "height": 320, "width": 512, "run_cross_model": True},
+    "extended": {"prompt_limit": 3, "seed_limit": 3, "num_inference_steps": 24, "num_frames": 65, "height": 384, "width": 640, "run_cross_model": True},
+}
+
+
+def _read_json(path: str | Path) -> dict:
+    return json.loads(Path(path).read_text(encoding="utf-8"))
+
+
+def _select_dtype(torch_module: Any) -> Any:
+    """根据 Colab GPU 能力选择 dtype, T4 默认使用 float16。"""
+    major, _minor = torch_module.cuda.get_device_capability(0)
+    return torch_module.bfloat16 if major >= 8 else torch_module.float16
+
+
+def _tensor_stats(value: Any) -> dict:
+    """从 latent tensor 中提取轻量 trajectory 统计量。"""
+    try:
+        detached = value.detach().float()
+        return {
+            "latent_norm": round(float(detached.norm().item()), 6),
+            "latent_mean": round(float(detached.mean().item()), 6),
+            "latent_std": round(float(detached.std().item()), 6),
+        }
+    except Exception as exc:  # pragma: no cover - 仅在 Colab pipeline callback 中触发
+        return {"latent_norm": None, "latent_mean": None, "latent_std": None, "trajectory_capture_failure_reason": str(exc)}
+
+
+def _load_ltx_pipeline(model_id: str, torch_dtype: Any) -> Any:
+    """加载 LTX-Video Diffusers pipeline。"""
+    from diffusers import LTXPipeline
+
+    pipe = LTXPipeline.from_pretrained(model_id, torch_dtype=torch_dtype)
+    if hasattr(pipe, "enable_model_cpu_offload"):
+        pipe.enable_model_cpu_offload()
+    else:
+        pipe.to("cuda")
+    if hasattr(pipe, "vae") and hasattr(pipe.vae, "enable_tiling"):
+        pipe.vae.enable_tiling()
+    return pipe
+
+
+def _export_video(frames: Any, path: Path, fps: int) -> None:
+    """使用 Diffusers 工具导出视频文件。"""
+    from diffusers.utils import export_to_video
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    export_to_video(frames, str(path), fps=fps)
+
+
+def _sha256_file(path: Path) -> str:
+    digest = sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _build_generation_plan(prompt_suite: dict, profile: str, model_id: str, cross_model_id: str | None) -> list[dict]:
+    """根据 profile 构建主模型与可选跨模型运行计划。"""
+    settings = PROFILE_SETTINGS[profile]
+    prompts = prompt_suite["prompts"][: settings["prompt_limit"]]
+    seeds = prompt_suite["seeds"][: settings["seed_limit"]]
+    model_items = [{"generation_model_id": model_id, "cross_model_role": "main_generation_model"}]
+    if settings["run_cross_model"] and cross_model_id:
+        model_items.append({"generation_model_id": cross_model_id, "cross_model_role": "cross_model_validation_model"})
+    plan = []
+    for model_item in model_items:
+        for prompt in prompts:
+            for seed in seeds:
+                plan.append({**model_item, **prompt, **seed})
+    return plan
+
+
+def run_colab_probe(output_root: str | Path, prompt_suite_path: str | Path, profile: str, model_id: str, cross_model_id: str | None = None) -> dict:
+    """执行真实 Colab GPU 生成测试并写出 governed records。"""
+    import torch
+
+    if not torch.cuda.is_available():
+        raise RuntimeError("Colab runtime does not expose CUDA GPU")
+
+    output_root = Path(output_root)
+    prompt_suite = _read_json(prompt_suite_path)
+    settings = PROFILE_SETTINGS[profile]
+    dtype = _select_dtype(torch)
+    plan = _build_generation_plan(prompt_suite, profile, model_id, cross_model_id)
+
+    generation_records: list[dict] = []
+    trajectory_records: list[dict] = []
+    quality_records: list[dict] = []
+    active_pipe_by_model: dict[str, Any] = {}
+
+    for index, item in enumerate(plan):
+        model_for_item = item["generation_model_id"]
+        if model_for_item not in active_pipe_by_model:
+            active_pipe_by_model[model_for_item] = _load_ltx_pipeline(model_for_item, dtype)
+        pipe = active_pipe_by_model[model_for_item]
+        generator = torch.Generator(device="cuda").manual_seed(int(item["seed_value"]))
+        trace_id = f"trace_{index:04d}"
+        step_stats: list[dict] = []
+
+        def capture_step(pipe_instance: Any, step_index: int, timestep: Any, callback_kwargs: dict) -> dict:  # pragma: no cover - Colab GPU path
+            latents = callback_kwargs.get("latents")
+            stats = _tensor_stats(latents) if latents is not None else {"latent_norm": None, "latent_mean": None, "latent_std": None}
+            step_stats.append({
+                "trajectory_trace_id": trace_id,
+                "trajectory_step_index": int(step_index),
+                "trajectory_timestep": float(timestep) if hasattr(timestep, "__float__") else str(timestep),
+                **stats,
+            })
+            return callback_kwargs
+
+        video_path = output_root / "videos" / f"{item['generation_model_id'].replace('/', '_')}_{item['prompt_id']}_{item['seed_id']}.mp4"
+        started = time.time()
+        try:
+            result = pipe(
+                prompt=item["prompt_text"],
+                negative_prompt=item.get("prompt_negative_text"),
+                width=settings["width"],
+                height=settings["height"],
+                num_frames=settings["num_frames"],
+                num_inference_steps=settings["num_inference_steps"],
+                generator=generator,
+                callback_on_step_end=capture_step,
+                callback_on_step_end_tensor_inputs=["latents"],
+            )
+            frames = result.frames[0]
+            _export_video(frames, video_path, fps=8)
+            generation_status = "success"
+            failure_reason = "none"
+            video_sha256 = _sha256_file(video_path)
+        except Exception as exc:  # pragma: no cover - Colab GPU path
+            generation_status = "failed"
+            failure_reason = str(exc)
+            video_sha256 = None
+        runtime_sec = round(time.time() - started, 3)
+
+        generation_records.append({
+            "prompt_suite_id": prompt_suite["prompt_suite_id"],
+            "colab_runtime_profile": profile,
+            "generation_model_id": item["generation_model_id"],
+            "generation_model_name": item["generation_model_id"],
+            "generation_model_family": "diffusers_ltx_video",
+            "generation_model_version": "from_pretrained_runtime_resolution",
+            "generation_model_commit_or_hash": None,
+            "generation_model_license_status": "model_card_required",
+            "cross_model_role": item["cross_model_role"],
+            "prompt_id": item["prompt_id"],
+            "prompt_text_hash": sha256(item["prompt_text"].encode("utf-8")).hexdigest()[:16],
+            "prompt_category": item["prompt_category"],
+            "prompt_suite_role": item["prompt_suite_role"],
+            "motion_pattern_id": item["motion_pattern_id"],
+            "seed_id": item["seed_id"],
+            "scheduler_id": "ltx_pipeline_default_scheduler",
+            "trajectory_scheduler_id": "ltx_pipeline_default_scheduler",
+            "trajectory_time_grid_id": "callback_on_step_end_grid",
+            "num_inference_steps": settings["num_inference_steps"],
+            "guidance_scale": None,
+            "video_length_frames": settings["num_frames"],
+            "video_resolution": f"{settings['width']}x{settings['height']}",
+            "fps": 8,
+            "generation_status": generation_status,
+            "generation_failure_reason": failure_reason,
+            "generation_runtime_sec": runtime_sec,
+            "video_path": str(video_path),
+            "video_sha256": video_sha256,
+            "trajectory_capture_status": "captured" if step_stats else "not_captured",
+            "trajectory_capture_failure_reason": "none" if step_stats else failure_reason,
+            "trajectory_trace_id": trace_id,
+            "trajectory_num_steps": len(step_stats),
+        })
+        trajectory_records.extend(step_stats)
+        quality_records.append({
+            "generation_model_id": item["generation_model_id"],
+            "prompt_id": item["prompt_id"],
+            "seed_id": item["seed_id"],
+            "quality_metric_status": "not_run",
+            "motion_metric_status": "not_run",
+            "semantic_metric_status": "not_run",
+            "metric_failure_reason": "optional_metric_dependencies_not_configured",
+        })
+
+    external_records = run_external_baseline_status("configs/external_baselines/external_baselines.json")
+    write_jsonl(output_root / "records" / "generation_records.jsonl", generation_records)
+    write_jsonl(output_root / "records" / "trajectory_trace.jsonl", trajectory_records)
+    write_jsonl(output_root / "records" / "quality_motion_semantic_records.jsonl", quality_records)
+    write_jsonl(output_root / "records" / "external_baseline_records.jsonl", external_records)
+    write_csv(output_root / "tables" / "generation_runtime_table.csv", generation_records)
+    decision = {
+        "stage_id": "generative_video_model_probe_colab_runtime",
+        "implementation_decision": "PASS" if any(record["generation_status"] == "success" for record in generation_records) else "FAIL",
+        "mechanism_decision": "FAIL",
+        "details": {
+            "formal_claim_status": "generation_evidence_ready_detection_gate_pending",
+            "generation_model_main_table_ready": any(record["generation_status"] == "success" for record in generation_records),
+            "trajectory_observation_gain_confirmed": False,
+            "fixed_low_fpr_audit_pass": False,
+            "quality_motion_semantic_consistency_pass": False,
+            "cross_model_validation_status": "run" if cross_model_id else "not_configured",
+            "external_baseline_comparison_status": "limitation_records_written",
+        },
+    }
+    write_json(output_root / "artifacts" / "generative_video_colab_runtime_decision.json", decision)
+    write_json(output_root / "artifacts" / "generation_manifest.json", {
+        "artifact_id": "generative_video_colab_runtime_manifest",
+        "artifact_type": "manifest",
+        "input_paths": [str(prompt_suite_path)],
+        "output_paths": [str(output_root / "records" / "generation_records.jsonl"), str(output_root / "records" / "trajectory_trace.jsonl")],
+        "rebuild_command": "python -m experiments.generative_video_model_probe.colab_runtime",
+        "colab_runtime_profile": profile,
+    })
+    return {"output_root": str(output_root), "generation_record_count": len(generation_records), "trajectory_record_count": len(trajectory_records), "decision": decision}
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description="在 Colab GPU 环境中运行 B5 生成式视频模型探测。")
+    parser.add_argument("--output-root", default="outputs/runs/generative_video_model_probe_colab")
+    parser.add_argument("--prompt-suite-path", default="outputs/datasets/generative_video_prompt_suite/prompt_seed_suite.json")
+    parser.add_argument("--profile", choices=sorted(PROFILE_SETTINGS), default="smoke")
+    parser.add_argument("--model-id", default="Lightricks/LTX-Video")
+    parser.add_argument("--cross-model-id", default="")
+    args = parser.parse_args()
+    cross_model_id = args.cross_model_id or None
+    print(json.dumps(run_colab_probe(args.output_root, args.prompt_suite_path, args.profile, args.model_id, cross_model_id), ensure_ascii=False, indent=2, sort_keys=True))
+
+
+if __name__ == "__main__":
+    main()

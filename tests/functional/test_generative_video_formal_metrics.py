@@ -8,6 +8,7 @@ from pathlib import Path
 import pytest
 
 import experiments.generative_video_model_probe.formal_metric_runner as formal_metric_runner
+import main.analysis.semantic_video_metrics as semantic_video_metrics
 from experiments.generative_video_model_probe.formal_metric_runner import run_formal_metric_audit
 from experiments.generative_video_model_probe.postprocess_runner import postprocess_colab_run
 from main.protocol.record_writer import read_jsonl, write_json, write_jsonl
@@ -111,6 +112,59 @@ def test_formal_metric_runner_accepts_clip_semantic_metric(tmp_path: Path, monke
     assert records[0]["semantic_model_id"] == "openai/clip-vit-base-patch32"
     assert records[0]["formal_semantic_consistency_ready"] is True
     assert records[0]["formal_metric_result_used_for_claim"] is True
+
+
+@pytest.mark.quick
+def test_clip_semantic_metric_accepts_plain_processor_dict(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """CLIP 语义 metric 不应依赖 processor batch 自带 `.to` 方法。"""
+    import numpy as np
+    import torch
+
+    video_path = tmp_path / "placeholder.mp4"
+    video_path.write_bytes(b"not_used_by_monkeypatch")
+
+    class FakeProcessor:
+        """模拟较旧或差异化 Transformers 环境中返回普通 dict 的 processor。"""
+
+        def __call__(self, text=None, images=None, **kwargs):
+            if text is not None:
+                return {
+                    "input_ids": torch.tensor([[1, 2, 3]], dtype=torch.long),
+                    "attention_mask": torch.tensor([[1, 1, 1]], dtype=torch.long),
+                }
+            return {
+                "pixel_values": torch.zeros((2, 3, 4, 4), dtype=torch.float32),
+            }
+
+    class FakeModel:
+        """模拟 CLIP 模型的最小 embedding 接口。"""
+
+        def get_text_features(self, **kwargs):
+            return torch.tensor([[1.0, 0.0, 0.0]], dtype=torch.float32)
+
+        def get_image_features(self, **kwargs):
+            return torch.tensor([[1.0, 0.0, 0.0], [0.8, 0.2, 0.0]], dtype=torch.float32)
+
+    monkeypatch.setattr(
+        semantic_video_metrics,
+        "_load_sampled_rgb_frames",
+        lambda path, frame_limit: [np.zeros((4, 4, 3), dtype=np.uint8) for _ in range(2)],
+    )
+    monkeypatch.setattr(
+        semantic_video_metrics,
+        "_load_clip_model_and_processor",
+        lambda model_id, device: (FakeModel(), FakeProcessor()),
+    )
+
+    result = semantic_video_metrics.compute_clip_text_video_similarity(
+        video_path,
+        "A small object moves across the frame.",
+        device="cpu",
+    )
+
+    assert result["semantic_metric_status"] == "ready"
+    assert result["semantic_consistency_score"] is not None
+    assert result["semantic_sampled_frame_count"] == 2
 
 
 @pytest.mark.quick

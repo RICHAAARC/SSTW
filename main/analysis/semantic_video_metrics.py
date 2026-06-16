@@ -11,6 +11,32 @@ DEFAULT_CLIP_MODEL_ID = "openai/clip-vit-base-patch32"
 DEFAULT_SEMANTIC_THRESHOLD = 0.18
 
 
+def _format_exception(prefix: str, exc: Exception, max_length: int = 240) -> str:
+    """格式化异常原因, 使正式 records 能保留可诊断信息且避免写入过长堆栈。
+
+    该函数属于通用工程写法。它不会吞掉失败状态, 只把异常类型和短消息写入 governed records, 便于 Colab
+    远程运行后在本地审阅失败原因。
+    """
+    message = str(exc).replace("\n", " ").replace("\r", " ").strip()
+    if len(message) > max_length:
+        message = message[:max_length] + "...truncated"
+    return f"{prefix}:{type(exc).__name__}:{message}" if message else f"{prefix}:{type(exc).__name__}"
+
+
+def _move_batch_to_device(batch: Any, device: str) -> dict:
+    """将 processor 产出的 batch 显式移动到目标设备。
+
+    这一实现属于通用工程写法。不同 Transformers 版本中 processor 返回对象可能是 BatchEncoding、
+    BatchFeature 或普通 dict。显式遍历 tensor 字段比直接调用 `batch.to(device)` 更稳健, 可避免
+    Colab 环境中出现 `AttributeError`。
+    """
+    items = batch.items() if hasattr(batch, "items") else dict(batch).items()
+    return {
+        key: value.to(device) if hasattr(value, "to") else value
+        for key, value in items
+    }
+
+
 def _load_sampled_rgb_frames(video_path: Path, frame_limit: int) -> list[Any]:
     """从视频中采样 RGB 帧。
 
@@ -94,7 +120,7 @@ def compute_clip_text_video_similarity(
             "semantic_metric_name": "clip_text_video_similarity",
             "semantic_model_id": model_id,
             "semantic_metric_status": "dependency_missing",
-            "semantic_metric_failure_reason": f"clip_dependency_missing:{type(exc).__name__}",
+            "semantic_metric_failure_reason": _format_exception("clip_dependency_missing", exc),
             "semantic_consistency_score": None,
             "semantic_consistency_mean_score": None,
             "semantic_consistency_max_score": None,
@@ -110,7 +136,7 @@ def compute_clip_text_video_similarity(
             "semantic_metric_name": "clip_text_video_similarity",
             "semantic_model_id": model_id,
             "semantic_metric_status": "video_decode_failed",
-            "semantic_metric_failure_reason": f"video_decode_failed:{type(exc).__name__}",
+            "semantic_metric_failure_reason": _format_exception("video_decode_failed", exc),
             "semantic_consistency_score": None,
             "semantic_consistency_mean_score": None,
             "semantic_consistency_max_score": None,
@@ -140,7 +166,7 @@ def compute_clip_text_video_similarity(
             "semantic_metric_name": "clip_text_video_similarity",
             "semantic_model_id": model_id,
             "semantic_metric_status": "model_load_failed",
-            "semantic_metric_failure_reason": f"model_load_failed:{type(exc).__name__}",
+            "semantic_metric_failure_reason": _format_exception("model_load_failed", exc),
             "semantic_consistency_score": None,
             "semantic_consistency_mean_score": None,
             "semantic_consistency_max_score": None,
@@ -150,8 +176,14 @@ def compute_clip_text_video_similarity(
         }
 
     try:
-        text_inputs = processor(text=[prompt_text], return_tensors="pt", padding=True, truncation=True).to(resolved_device)
-        image_inputs = processor(images=frames, return_tensors="pt", padding=True).to(resolved_device)
+        text_inputs = _move_batch_to_device(
+            processor(text=[prompt_text], return_tensors="pt", padding=True, truncation=True),
+            resolved_device,
+        )
+        image_inputs = _move_batch_to_device(
+            processor(images=frames, return_tensors="pt", padding=True),
+            resolved_device,
+        )
         with torch.no_grad():
             text_features = model.get_text_features(**text_inputs)
             image_features = model.get_image_features(**image_inputs)
@@ -165,7 +197,7 @@ def compute_clip_text_video_similarity(
             "semantic_metric_name": "clip_text_video_similarity",
             "semantic_model_id": model_id,
             "semantic_metric_status": "inference_failed",
-            "semantic_metric_failure_reason": f"clip_inference_failed:{type(exc).__name__}",
+            "semantic_metric_failure_reason": _format_exception("clip_inference_failed", exc),
             "semantic_consistency_score": None,
             "semantic_consistency_mean_score": None,
             "semantic_consistency_max_score": None,

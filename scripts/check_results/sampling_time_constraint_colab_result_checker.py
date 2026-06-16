@@ -108,6 +108,19 @@ def _inspect_archive_members(archive_path: Path) -> dict:
     }
 
 
+def _resolve_colab_drive_path(path_text: str, local_project_root: Path) -> Path:
+    """将 Colab Drive 绝对路径映射到本地同步的 SSTW 项目目录。
+
+    该函数属于项目特定写法。Colab package manifest 会记录 `/content/drive/MyDrive/SSTW/...` 路径, 但 Windows 本地审阅时对应目录通常是 `G:\\我的云端硬盘\\SSTW`。因此检查器需要在不修改 manifest 的前提下, 将 Colab 路径映射为当前 package_dir 推断出的本地项目根目录。
+    """
+    normalized = path_text.replace("\\", "/")
+    colab_root = "/content/drive/MyDrive/SSTW"
+    if normalized.startswith(colab_root):
+        relative_text = normalized[len(colab_root):].lstrip("/")
+        return local_project_root / Path(relative_text)
+    return Path(path_text)
+
+
 def _variant_names(records: list[dict]) -> set[str]:
     """提取 records 中存在的 method_variant 名称。"""
     return {str(record.get("method_variant")) for record in records if record.get("method_variant")}
@@ -226,6 +239,7 @@ def check_sampling_time_constraint_colab_results(run_root: str | Path) -> dict:
 def check_latest_sampling_time_constraint_package(package_dir: str | Path) -> dict:
     """检查 B6 package 目录中的最新 manifest, 并在可访问 run_root 时联动检查 run 目录。"""
     package_dir = Path(package_dir)
+    local_project_root = package_dir.parent.parent
     manifest_path = _latest_package_manifest(package_dir)
     if manifest_path is None:
         return {
@@ -237,10 +251,10 @@ def check_latest_sampling_time_constraint_package(package_dir: str | Path) -> di
             "next_recommended_action": "run_colab_notebook_and_package_results",
         }
     package_manifest = _read_json(manifest_path)
-    archive_path = Path(str(package_manifest.get("archive_path") or ""))
+    archive_path = _resolve_colab_drive_path(str(package_manifest.get("archive_path") or ""), local_project_root)
     archive_inspection = _inspect_archive_members(archive_path)
     run_root_text = str(package_manifest.get("run_root") or "")
-    run_root = Path(run_root_text) if run_root_text else None
+    run_root = _resolve_colab_drive_path(run_root_text, local_project_root) if run_root_text else None
     run_check = check_sampling_time_constraint_colab_results(run_root) if run_root and run_root.exists() else {}
     return {
         "package_dir": str(package_dir),

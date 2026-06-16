@@ -60,7 +60,7 @@ def test_sampling_time_constraint_colab_workflow_uses_drive_layout() -> None:
     assert layout["drive_run_root"] == "/content/drive/MyDrive/SSTW/runs/sampling_time_constraint_colab"
     assert layout["drive_package_dir"] == "/content/drive/MyDrive/SSTW/packages/sampling_time_constraint"
 
-    runtime_command = build_sampling_constraint_colab_runtime_command(layout, "smoke", "Lightricks/LTX-Video")
+    runtime_command = build_sampling_constraint_colab_runtime_command(layout, "recommended", "Lightricks/LTX-Video")
     formal_command = build_formal_metric_command(layout)
     postprocess_command = build_postprocess_command(layout)
     result_check_command = build_result_check_command(layout)
@@ -84,7 +84,7 @@ def test_sampling_time_constraint_colab_notebook_calls_repository_modules() -> N
     assert "/content/drive/MyDrive/SSTW" in source
     assert "drive.mount('/content/drive')" in source
     assert "sampling_time_constraint_workflow" in source
-    assert "PROFILE = 'smoke'" in source
+    assert "PROFILE = 'recommended'" in source
     assert "HF_TOKEN" in source
     assert "pytest -q" in source
     assert "tools/harness/run_all_audits.py" in source

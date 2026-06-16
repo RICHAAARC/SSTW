@@ -478,3 +478,35 @@ SSTW 项目完成不是指代码能跑完，而是指：
 6. 失败模块被正确降级，而不是混入主贡献。
 7. release package 可复现。
 ```
+---
+
+## 13. 当前工程推进状态
+
+在 B5 recommended profile 已通过后, B6 已进入 `sampling_time_constraint_preflight` 工程阶段。当前阶段已经建立以下最小闭环:
+
+```text
+main/generation/lambda_schedule.py
+main/generation/velocity_projection_constraint.py
+main/generation/constraint_controller.py
+experiments/sampling_time_constraint/runner.py
+configs/generation/lambda_schedules.json
+configs/generation/sampling_constraint.json
+configs/protocol/sampling_time_constraint_preflight.json
+```
+
+当前 preflight 只验证 sampling-time weak constraint 的工程可行性、lambda schedule 消融、质量/运动/语义代理 gate 和 governed artifact 生成。它不等价于最终 B6 论文 claim, records 中必须保留:
+
+```text
+constraint_main_claim_status = preflight_only_not_final_b6_claim
+submission_claim_policy = preflight_records_do_not_support_final_b6_claim
+```
+
+当前可复现命令:
+
+```bash
+python -m experiments.sampling_time_constraint.runner \
+  --output-root outputs/runs/sampling_time_constraint_preflight
+```
+
+下一步应将 constraint controller 接入 Colab L4 的真实生成 sampling callback, 并复用 B5 的质量、运动和 CLIP 语义 metric 重新生成正式 records。只有真实生成链路通过后, 才能把 SSTW-TC 从 preflight / exploratory 推进到正式 B6 mechanism claim。
+

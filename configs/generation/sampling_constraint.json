@@ -1,0 +1,11 @@
+{
+  "sampling_constraint_config_id": "sampling_time_weak_constraint_preflight_v1",
+  "sampling_constraint_enabled": true,
+  "constraint_projection_operator_id": "velocity_direction_weak_projection_v1",
+  "constraint_key_id": "deterministic_preflight_key",
+  "constraint_payload_code_id": "preflight_payload_code_v1",
+  "constraint_tubelet_selector_id": "trajectory_mid_window_selector_v1",
+  "constraint_norm_budget": 0.06,
+  "constraint_direction": [1.0, 0.5, 0.25],
+  "default_num_steps": 16
+}

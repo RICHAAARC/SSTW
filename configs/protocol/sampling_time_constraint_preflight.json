@@ -1,0 +1,11 @@
+{
+  "stage_id": "sampling_time_constraint_preflight",
+  "target_fpr": 0.01,
+  "trajectory_constraint_gain_min": 0.01,
+  "attacked_positive_tpr_gain_min": 0.01,
+  "quality_delta_limit": 0.05,
+  "motion_delta_limit": 0.05,
+  "semantic_delta_limit": 0.05,
+  "runtime_overhead_blocking_sec": 0.5,
+  "submission_claim_policy": "preflight_records_do_not_support_final_b6_claim"
+}

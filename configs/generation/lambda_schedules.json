@@ -1,0 +1,45 @@
+{
+  "default_schedule_id": "mid_window_weak_constraint",
+  "schedules": [
+    {
+      "lambda_max": 0.12,
+      "lambda_schedule_id": "mid_window_weak_constraint",
+      "lambda_time_window": [
+        0.25,
+        0.75
+      ]
+    },
+    {
+      "lambda_max": 0.04,
+      "lambda_schedule_id": "early_only_constraint",
+      "lambda_time_window": [
+        0.0,
+        0.35
+      ]
+    },
+    {
+      "lambda_max": 0.04,
+      "lambda_schedule_id": "late_only_constraint",
+      "lambda_time_window": [
+        0.65,
+        1.0
+      ]
+    },
+    {
+      "lambda_max": 0.05,
+      "lambda_schedule_id": "constant_weak_constraint",
+      "lambda_time_window": [
+        0.25,
+        0.75
+      ]
+    },
+    {
+      "lambda_max": 0.12,
+      "lambda_schedule_id": "strong_lambda_constraint",
+      "lambda_time_window": [
+        0.25,
+        0.75
+      ]
+    }
+  ]
+}

@@ -384,3 +384,41 @@ Notebook 与 repository module 的跨边界数据
 | formal_metric_claim_status | claim | none | true | true | false | Claim readiness status for formal quality motion semantic metrics. |
 | gpu_name | governance | none | true | false | false | GPU name captured by Colab runtime. |
 | gpu_memory_mb | governance | none | true | false | false | GPU memory in MB captured by Colab runtime. |
+| sampling_constraint_enabled | protocol | none | true | false | false | Whether sampling-time weak constraint is enabled. |
+| sampling_constraint_config_id | protocol | none | true | false | false | Sampling-time weak constraint configuration identifier. |
+| constraint_projection_operator_id | protocol | none | true | false | false | Projection operator used by sampling-time constraint. |
+| constraint_key_id | protocol | none | true | false | false | Key identifier used by sampling-time constraint. |
+| constraint_payload_code_id | protocol | none | true | false | false | Payload code identifier used by sampling-time constraint. |
+| constraint_tubelet_selector_id | protocol | none | true | false | false | Tubelet selector used by sampling-time constraint. |
+| constraint_admissibility_enabled | protocol | none | true | false | false | Whether admissibility filtering is enabled for constraint variant. |
+| constraint_key_condition_enabled | protocol | none | true | false | false | Whether key conditioning is enabled for constraint variant. |
+| lambda_schedule_id | protocol | none | true | false | false | Lambda schedule identifier for sampling-time constraint. |
+| lambda_max | protocol | none | true | false | false | Maximum lambda value for sampling-time constraint. |
+| lambda_time_window | protocol | none | true | false | false | Normalized time window where sampling-time constraint is active. |
+| lambda_values | protocol | none | true | false | false | Bounded lambda values used by preflight sampling-time constraint. |
+| constraint_apply_steps | metric | none | true | false | false | Number of sampling steps where constraint is active. |
+| constraint_norm_budget | protocol | none | true | false | false | Norm budget for weak velocity projection. |
+| constraint_runtime_overhead_sec | metric | none | true | false | false | Runtime overhead proxy for sampling-time constraint. |
+| S_trajectory_observation_before_constraint | metric | none | true | false | false | Trajectory observation score before sampling-time constraint. |
+| S_trajectory_observation_after_constraint | metric | none | true | false | false | Trajectory observation score after sampling-time constraint. |
+| trajectory_constraint_gain | metric | none | true | false | false | Trajectory observation gain caused by sampling-time constraint. |
+| attacked_positive_TPR_before_constraint | metric | none | true | false | false | Attacked positive TPR before sampling-time constraint. |
+| attacked_positive_TPR_after_constraint | metric | none | true | false | false | Attacked positive TPR after sampling-time constraint. |
+| attacked_negative_FPR_before_constraint | metric | none | true | false | false | Attacked negative FPR before sampling-time constraint. |
+| attacked_negative_FPR_after_constraint | metric | none | true | false | false | Attacked negative FPR after sampling-time constraint. |
+| quality_delta_after_constraint | metric | none | true | false | false | Visual quality delta after sampling-time constraint. |
+| motion_delta_after_constraint | metric | none | true | false | false | Motion consistency delta after sampling-time constraint. |
+| semantic_delta_after_constraint | metric | none | true | false | false | Semantic consistency delta after sampling-time constraint. |
+| constraint_quality_status | governance | none | true | false | false | Quality gate status for sampling-time constraint. |
+| constraint_motion_status | governance | none | true | false | false | Motion gate status for sampling-time constraint. |
+| constraint_semantic_status | governance | none | true | false | false | Semantic gate status for sampling-time constraint. |
+| constraint_main_claim_status | claim | none | true | true | false | Claim scope status for sampling-time constraint evidence. |
+| constraint_threshold_value | metric | none | true | false | false | Decision threshold used by sampling-time constraint preflight. |
+| sampling_time_constraint_preflight_decision | governance | none | true | false | false | B6 sampling-time constraint preflight decision. |
+| trajectory_constraint_gain_mean | metric | none | true | false | false | Mean trajectory constraint gain across preflight records. |
+| trajectory_constraint_gain_over_unconstrained | metric | none | true | false | false | Constraint gain compared with unconstrained trajectory baseline. |
+| attacked_positive_tpr_gain | metric | none | true | false | false | TPR gain after sampling-time constraint. |
+| quality_motion_semantic_constraint_gate | governance | none | true | false | false | Joint quality, motion, and semantic gate for sampling-time constraint. |
+| lambda_schedule_ablation_supports_mid_stage | governance | none | true | false | false | Whether lambda schedule ablation supports mid-stage constraint. |
+| strong_lambda_quality_block_detected | governance | none | true | false | false | Whether strong lambda ablation is blocked by quality or consistency gates. |
+| submission_claim_policy | governance | none | true | false | false | Policy describing whether preflight records support final submission claims. |

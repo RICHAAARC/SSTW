@@ -37,6 +37,35 @@ def _move_batch_to_device(batch: Any, device: str) -> dict:
     }
 
 
+def _extract_feature_tensor(output: Any):
+    """从不同 Transformers 返回结构中提取 embedding tensor。
+
+    该函数属于通用工程写法。不同版本或不同模型类可能返回 tensor, 也可能返回带 `pooler_output`、
+    `text_embeds` 或 `image_embeds` 的 dataclass 对象。正式语义 metric 只需要最终 embedding tensor,
+    因此这里显式兼容这些常见返回结构。
+    """
+    if hasattr(output, "norm"):
+        return output
+    for attribute_name in ("pooler_output", "text_embeds", "image_embeds"):
+        value = getattr(output, attribute_name, None)
+        if value is not None and hasattr(value, "norm"):
+            return value
+    if isinstance(output, dict):
+        for key in ("pooler_output", "text_embeds", "image_embeds", "last_hidden_state"):
+            value = output.get(key)
+            if value is not None and hasattr(value, "norm"):
+                if key == "last_hidden_state" and getattr(value, "ndim", 0) >= 3:
+                    return value[:, 0, :]
+                return value
+    if isinstance(output, (tuple, list)) and output:
+        first_value = output[0]
+        if hasattr(first_value, "norm"):
+            if getattr(first_value, "ndim", 0) >= 3:
+                return first_value[:, 0, :]
+            return first_value
+    raise TypeError(f"unsupported_clip_feature_output:{type(output).__name__}")
+
+
 def _load_sampled_rgb_frames(video_path: Path, frame_limit: int) -> list[Any]:
     """从视频中采样 RGB 帧。
 
@@ -185,8 +214,8 @@ def compute_clip_text_video_similarity(
             resolved_device,
         )
         with torch.no_grad():
-            text_features = model.get_text_features(**text_inputs)
-            image_features = model.get_image_features(**image_inputs)
+            text_features = _extract_feature_tensor(model.get_text_features(**text_inputs))
+            image_features = _extract_feature_tensor(model.get_image_features(**image_inputs))
             text_features = text_features / text_features.norm(dim=-1, keepdim=True)
             image_features = image_features / image_features.norm(dim=-1, keepdim=True)
             similarities = (image_features @ text_features.T).squeeze(-1).detach().cpu()

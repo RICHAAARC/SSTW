@@ -168,6 +168,60 @@ def test_clip_semantic_metric_accepts_plain_processor_dict(tmp_path: Path, monke
 
 
 @pytest.mark.quick
+def test_clip_semantic_metric_accepts_pooling_output(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """CLIP 语义 metric 应兼容带 pooler_output 的模型输出对象。"""
+    import numpy as np
+    import torch
+
+    video_path = tmp_path / "placeholder.mp4"
+    video_path.write_bytes(b"not_used_by_monkeypatch")
+
+    class FakeOutputWithPooling:
+        """模拟 Transformers 中 BaseModelOutputWithPooling 的关键字段。"""
+
+        def __init__(self, values: torch.Tensor) -> None:
+            self.pooler_output = values
+
+    class FakeProcessor:
+        """返回普通 dict, 与真实 processor 的 tensor 字段形态一致。"""
+
+        def __call__(self, text=None, images=None, **kwargs):
+            if text is not None:
+                return {"input_ids": torch.tensor([[1, 2, 3]], dtype=torch.long)}
+            return {"pixel_values": torch.zeros((2, 3, 4, 4), dtype=torch.float32)}
+
+    class FakeModel:
+        """模拟返回带 pooler_output 对象的 CLIP 变体。"""
+
+        def get_text_features(self, **kwargs):
+            return FakeOutputWithPooling(torch.tensor([[1.0, 0.0, 0.0]], dtype=torch.float32))
+
+        def get_image_features(self, **kwargs):
+            return FakeOutputWithPooling(torch.tensor([[1.0, 0.0, 0.0], [0.7, 0.3, 0.0]], dtype=torch.float32))
+
+    monkeypatch.setattr(
+        semantic_video_metrics,
+        "_load_sampled_rgb_frames",
+        lambda path, frame_limit: [np.zeros((4, 4, 3), dtype=np.uint8) for _ in range(2)],
+    )
+    monkeypatch.setattr(
+        semantic_video_metrics,
+        "_load_clip_model_and_processor",
+        lambda model_id, device: (FakeModel(), FakeProcessor()),
+    )
+
+    result = semantic_video_metrics.compute_clip_text_video_similarity(
+        video_path,
+        "A small object moves across the frame.",
+        device="cpu",
+    )
+
+    assert result["semantic_metric_status"] == "ready"
+    assert result["semantic_metric_failure_reason"] == "none"
+    assert result["semantic_consistency_score"] is not None
+
+
+@pytest.mark.quick
 def test_checker_reports_semantic_only_block_after_formal_visual_motion_metrics(tmp_path: Path) -> None:
     """补齐正式质量/运动 metric 后, checker 应只保留正式语义 metric 阻断。"""
     run_root = tmp_path / "generative_video_model_probe_colab"

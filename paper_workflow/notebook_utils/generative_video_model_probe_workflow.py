@@ -57,15 +57,29 @@ def build_colab_runtime_command(layout: dict[str, str], profile: str, model_id: 
     return command
 
 
-def build_formal_metric_command(layout: dict[str, str]) -> list[str]:
-    """构造 B5 正式质量与运动 metric 命令, 从实际 mp4 文件生成 governed records。"""
-    return [
+def build_formal_metric_command(
+    layout: dict[str, str],
+    semantic_model_id: str = "openai/clip-vit-base-patch32",
+    semantic_frame_limit: int = 8,
+    disable_semantic_metric: bool = False,
+) -> list[str]:
+    """构造 B5 正式质量、运动与语义 metric 命令, 从实际 mp4 文件生成 governed records。"""
+    command = [
         sys.executable,
         "-m",
         "experiments.generative_video_model_probe.formal_metric_runner",
         "--run-root",
         layout["drive_run_root"],
+        "--prompt-suite-path",
+        layout["prompt_suite_path"],
+        "--semantic-model-id",
+        semantic_model_id,
+        "--semantic-frame-limit",
+        str(semantic_frame_limit),
     ]
+    if disable_semantic_metric:
+        command.append("--disable-semantic-metric")
+    return command
 
 
 def build_mechanism_postprocess_command(layout: dict[str, str]) -> list[str]:

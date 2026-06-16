@@ -363,6 +363,14 @@ Notebook 与 repository module 的跨边界数据
 | motion_consistency_metric_status | governance | none | true | false | false | Status of formal video file motion consistency metric. |
 | formal_visual_quality_ready | governance | none | true | false | false | Whether formal video file visual quality metric is ready. |
 | formal_motion_consistency_ready | governance | none | true | false | false | Whether formal video file motion consistency metric is ready. |
+| semantic_model_id | metric | none | true | false | false | CLIP or VLM model identifier used for formal semantic consistency metric. |
+| semantic_prompt_source | artifact | none | true | false | false | Prompt suite path or source status used by formal semantic metric. |
+| semantic_consistency_mean_score | metric | none | true | false | false | Mean CLIP text-video similarity across sampled frames. |
+| semantic_consistency_max_score | metric | none | true | false | false | Maximum CLIP text-video similarity across sampled frames. |
+| semantic_consistency_threshold | metric | none | true | false | false | Threshold used to decide formal semantic consistency readiness. |
+| semantic_sampled_frame_count | metric | none | true | false | false | Number of video frames sampled by formal semantic metric. |
+| semantic_frame_limit | protocol | none | true | false | false | Maximum number of frames requested for formal semantic metric. |
+| semantic_metric_device | governance | none | true | false | false | Device used by formal semantic metric inference. |
 | semantic_metric_failure_reason | governance | none | true | false | false | Failure reason for semantic consistency metric. |
 | formal_semantic_consistency_ready | governance | none | true | false | false | Whether formal semantic consistency metric is ready. |
 | formal_metric_result_used_for_claim | claim | none | true | true | false | Whether formal quality motion semantic metrics are used for a positive claim. |

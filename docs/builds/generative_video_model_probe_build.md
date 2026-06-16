@@ -452,3 +452,38 @@ quality metric failures
 attack pipeline
 fixed-FPR negative calibration
 ```
+---
+
+## 13. 当前落地状态与 Colab L4 接续步骤
+
+当前 B5 推荐 profile 已补齐正式质量、运动与语义 metric 链路。语义一致性 metric 使用 `openai/clip-vit-base-patch32`, 通过 Transformers `CLIPModel` / `CLIPProcessor` 计算 prompt 文本与采样视频帧的 CLIP 余弦相似度。该步骤属于正式 metric, 不再使用 `semantic_consistency_placeholder` 支撑 claim。
+
+本地无 GPU 或 Hugging Face 下载较慢时, 不应在本地 CPU 上强行完成该步骤。推荐在 Colab L4 中执行 notebook 的正式 metric 单元, 输出仍落盘到:
+
+```text
+/content/drive/MyDrive/SSTW/runs/generative_video_model_probe_colab
+/content/drive/MyDrive/SSTW/packages/generative_video_model_probe
+```
+
+接续命令由 notebook helper 生成, 等价于:
+
+```bash
+python -m experiments.generative_video_model_probe.formal_metric_runner \
+  --run-root /content/drive/MyDrive/SSTW/runs/generative_video_model_probe_colab \
+  --prompt-suite-path /content/drive/MyDrive/SSTW/datasets/generative_video_prompt_suite/prompt_seed_suite.json \
+  --semantic-model-id openai/clip-vit-base-patch32 \
+  --semantic-frame-limit 8
+
+python -m experiments.generative_video_model_probe.postprocess_runner \
+  --run-root /content/drive/MyDrive/SSTW/runs/generative_video_model_probe_colab
+
+python scripts/check_results/generative_video_colab_result_checker.py \
+  --run-root /content/drive/MyDrive/SSTW/runs/generative_video_model_probe_colab
+
+python scripts/package_results/generative_video_drive_packager.py \
+  --run-root /content/drive/MyDrive/SSTW/runs/generative_video_model_probe_colab \
+  --drive-package-dir /content/drive/MyDrive/SSTW/packages/generative_video_model_probe
+```
+
+只有当 `formal_semantic_ready = true` 且后处理 decision 中 `formal_quality_semantic_ready = true` 时, 才能解除 `formal_semantic_metric_missing` 阻断。
+

@@ -1,4 +1,4 @@
-"""对 B5 Colab 生成视频执行文件级正式质量与运动度量。"""
+"""对 B5 Colab 生成视频执行文件级质量、运动与语义度量。"""
 
 from __future__ import annotations
 
@@ -6,9 +6,17 @@ import argparse
 import json
 from pathlib import Path
 
+from main.analysis.semantic_video_metrics import DEFAULT_CLIP_MODEL_ID, DEFAULT_SEMANTIC_THRESHOLD, compute_clip_text_video_similarity
 from main.analysis.video_file_metrics import compute_video_file_metrics
 from main.protocol.record_writer import write_json, write_jsonl
 from main.protocol.table_builder import write_csv
+
+
+def _read_json(path: Path) -> dict:
+    """读取 JSON 文件, 文件不存在或为空时返回空对象。"""
+    if not path.exists():
+        return {}
+    return json.loads(path.read_text(encoding="utf-8"))
 
 
 def _read_jsonl(path: Path) -> list[dict]:
@@ -27,16 +35,133 @@ def _resolve_video_path(run_root: Path, record: dict) -> Path:
     return run_root / "videos" / direct_path.name
 
 
-def build_formal_metric_records(run_root: str | Path) -> list[dict]:
-    """从 generation records 与实际 mp4 文件构造正式质量/运动 metric records。"""
+def _candidate_project_roots(run_root: Path) -> list[Path]:
+    """从 run_root 推断可能的 SSTW 项目落盘根目录。"""
+    candidates: list[Path] = []
+    parents = list(run_root.parents)
+    if len(parents) >= 2:
+        candidates.append(parents[1])
+    if len(parents) >= 1:
+        candidates.append(parents[0])
+    candidates.extend([
+        Path("/content/drive/MyDrive/SSTW"),
+        Path(r"G:\我的云端硬盘\SSTW"),
+    ])
+    unique: list[Path] = []
+    for candidate in candidates:
+        if candidate not in unique:
+            unique.append(candidate)
+    return unique
+
+
+def _resolve_prompt_suite_path(run_root: Path, prompt_suite_path: str | Path | None = None) -> Path | None:
+    """解析 prompt suite 路径。
+
+    该函数属于项目特定写法。Colab 记录的 manifest 可能包含云端绝对路径, 本地 Windows 审阅时该路径不一定存在, 因此需要按 SSTW Drive 目录约定进行回退解析。
+    """
+    candidates: list[Path] = []
+    if prompt_suite_path:
+        candidates.append(Path(prompt_suite_path))
+
+    manifest = _read_json(run_root / "artifacts" / "generation_manifest.json")
+    for input_path in manifest.get("input_paths", []):
+        if input_path:
+            candidates.append(Path(str(input_path)))
+
+    for project_root in _candidate_project_roots(run_root):
+        candidates.append(project_root / "datasets" / "generative_video_prompt_suite" / "prompt_seed_suite.json")
+
+    for candidate in candidates:
+        if candidate.exists():
+            return candidate
+    return None
+
+
+def _load_prompt_texts(prompt_suite_path: Path | None) -> tuple[dict[str, str], str]:
+    """读取 prompt_id 到 prompt_text 的映射, 同时返回 prompt 来源状态。"""
+    if prompt_suite_path is None:
+        return {}, "prompt_suite_missing"
+    payload = _read_json(prompt_suite_path)
+    prompts = payload.get("prompts", [])
+    prompt_texts = {
+        str(item.get("prompt_id")): str(item.get("prompt_text"))
+        for item in prompts
+        if item.get("prompt_id") and item.get("prompt_text")
+    }
+    return prompt_texts, str(prompt_suite_path)
+
+
+def _build_disabled_semantic_metrics(model_id: str, frame_limit: int, reason: str) -> dict:
+    """构造语义 metric 未运行时的显式状态字段。"""
+    return {
+        "semantic_metric_name": "clip_text_video_similarity",
+        "semantic_model_id": model_id,
+        "semantic_metric_status": "disabled" if reason == "semantic_metric_disabled" else reason,
+        "semantic_metric_failure_reason": reason,
+        "semantic_consistency_score": None,
+        "semantic_consistency_mean_score": None,
+        "semantic_consistency_max_score": None,
+        "semantic_sampled_frame_count": 0,
+        "semantic_frame_limit": frame_limit,
+        "semantic_metric_device": "not_run",
+    }
+
+
+def _build_prompt_missing_semantic_metrics(model_id: str, frame_limit: int) -> dict:
+    """构造缺少 prompt 文本时的语义 metric 状态字段。"""
+    return {
+        "semantic_metric_name": "clip_text_video_similarity",
+        "semantic_model_id": model_id,
+        "semantic_metric_status": "prompt_text_missing",
+        "semantic_metric_failure_reason": "prompt_text_missing",
+        "semantic_consistency_score": None,
+        "semantic_consistency_mean_score": None,
+        "semantic_consistency_max_score": None,
+        "semantic_sampled_frame_count": 0,
+        "semantic_frame_limit": frame_limit,
+        "semantic_metric_device": "not_run",
+    }
+
+
+def build_formal_metric_records(
+    run_root: str | Path,
+    prompt_suite_path: str | Path | None = None,
+    semantic_model_id: str = DEFAULT_CLIP_MODEL_ID,
+    semantic_frame_limit: int = 8,
+    semantic_consistency_threshold: float = DEFAULT_SEMANTIC_THRESHOLD,
+    enable_semantic_metric: bool = True,
+) -> list[dict]:
+    """从 generation records 与实际 mp4 文件构造正式质量、运动和语义 metric records。"""
     run_root = Path(run_root)
     generation_records = _read_jsonl(run_root / "records" / "generation_records.jsonl")
+    resolved_prompt_suite_path = _resolve_prompt_suite_path(run_root, prompt_suite_path)
+    prompt_texts, semantic_prompt_source = _load_prompt_texts(resolved_prompt_suite_path)
     records: list[dict] = []
     for generation_record in generation_records:
         video_path = _resolve_video_path(run_root, generation_record)
         metrics = compute_video_file_metrics(video_path)
         visual_ready = metrics.get("visual_quality_metric_status") == "ready"
         motion_ready = metrics.get("motion_consistency_metric_status") == "ready"
+        prompt_id = str(generation_record.get("prompt_id") or "")
+        prompt_text = prompt_texts.get(prompt_id, "")
+        if not enable_semantic_metric:
+            semantic_metrics = _build_disabled_semantic_metrics(semantic_model_id, semantic_frame_limit, "semantic_metric_disabled")
+        elif not prompt_text:
+            semantic_metrics = _build_prompt_missing_semantic_metrics(semantic_model_id, semantic_frame_limit)
+        else:
+            semantic_metrics = compute_clip_text_video_similarity(
+                video_path,
+                prompt_text,
+                model_id=semantic_model_id,
+                frame_limit=semantic_frame_limit,
+            )
+        semantic_score = semantic_metrics.get("semantic_consistency_score")
+        semantic_ready = (
+            semantic_metrics.get("semantic_metric_status") == "ready"
+            and semantic_score is not None
+            and float(semantic_score) >= semantic_consistency_threshold
+        )
+        formal_metric_ready = bool(visual_ready and motion_ready and semantic_ready)
         records.append({
             "record_version": "generative_video_formal_quality_motion_semantic_v1",
             "generation_model_id": generation_record.get("generation_model_id"),
@@ -49,12 +174,11 @@ def build_formal_metric_records(run_root: str | Path) -> list[dict]:
             **{key: value for key, value in metrics.items() if key not in {"video_decode_status", "video_metric_failure_reason"}},
             "formal_visual_quality_ready": visual_ready,
             "formal_motion_consistency_ready": motion_ready,
-            "semantic_metric_name": "not_configured",
-            "semantic_metric_status": "not_configured",
-            "semantic_consistency_score": None,
-            "semantic_metric_failure_reason": "clip_or_vlm_text_video_metric_not_configured",
-            "formal_semantic_consistency_ready": False,
-            "formal_metric_result_used_for_claim": False,
+            "semantic_prompt_source": semantic_prompt_source,
+            "semantic_consistency_threshold": semantic_consistency_threshold,
+            **semantic_metrics,
+            "formal_semantic_consistency_ready": semantic_ready,
+            "formal_metric_result_used_for_claim": formal_metric_ready,
         })
     return records
 
@@ -75,22 +199,36 @@ def audit_formal_metrics(records: list[dict]) -> dict:
         "formal_visual_motion_ready": all_visual_motion_ready,
         "formal_semantic_ready": all_semantic_ready,
         "formal_quality_motion_semantic_ready": all_visual_motion_ready and all_semantic_ready,
-        "formal_metric_claim_status": "blocked_until_semantic_metric_configured" if not all_semantic_ready else "ready",
+        "formal_metric_claim_status": "ready" if all_visual_motion_ready and all_semantic_ready else "blocked_until_semantic_metric_ready",
     }
 
 
-def run_formal_metric_audit(run_root: str | Path) -> dict:
+def run_formal_metric_audit(
+    run_root: str | Path,
+    prompt_suite_path: str | Path | None = None,
+    semantic_model_id: str = DEFAULT_CLIP_MODEL_ID,
+    semantic_frame_limit: int = 8,
+    semantic_consistency_threshold: float = DEFAULT_SEMANTIC_THRESHOLD,
+    enable_semantic_metric: bool = True,
+) -> dict:
     """执行 B5 文件级正式 metric 计算并写出 governed artifacts。"""
     run_root = Path(run_root)
-    records = build_formal_metric_records(run_root)
+    records = build_formal_metric_records(
+        run_root,
+        prompt_suite_path=prompt_suite_path,
+        semantic_model_id=semantic_model_id,
+        semantic_frame_limit=semantic_frame_limit,
+        semantic_consistency_threshold=semantic_consistency_threshold,
+        enable_semantic_metric=enable_semantic_metric,
+    )
     audit = audit_formal_metrics(records)
     write_jsonl(run_root / "records" / "formal_quality_motion_semantic_records.jsonl", records)
     write_csv(run_root / "tables" / "formal_quality_motion_semantic_table.csv", records)
     write_json(run_root / "artifacts" / "formal_quality_motion_semantic_decision.json", audit)
     report = (
         "# Formal Quality Motion Semantic Metrics Report\n\n"
-        "该报告基于实际 mp4 文件解码结果生成质量与运动指标。语义一致性指标尚未配置 "
-        "CLIP / VLM text-video metric, 因此不能支撑正式机制 claim。\n\n"
+        "该报告基于实际 mp4 文件解码结果生成质量、运动与 CLIP 文本-视频语义一致性指标。"
+        "若语义模型依赖、prompt suite 或模型权重不可用, records 会显式记录阻断原因, 不会伪造 positive claim。\n\n"
         f"- formal_visual_motion_ready: {audit['formal_visual_motion_ready']}\n"
         f"- formal_semantic_ready: {audit['formal_semantic_ready']}\n"
         f"- formal_metric_claim_status: {audit['formal_metric_claim_status']}\n"
@@ -102,10 +240,22 @@ def run_formal_metric_audit(run_root: str | Path) -> dict:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="对 B5 Colab 生成视频执行文件级正式质量与运动度量。")
+    parser = argparse.ArgumentParser(description="对 B5 Colab 生成视频执行文件级质量、运动与语义度量。")
     parser.add_argument("--run-root", required=True)
+    parser.add_argument("--prompt-suite-path", default="")
+    parser.add_argument("--semantic-model-id", default=DEFAULT_CLIP_MODEL_ID)
+    parser.add_argument("--semantic-frame-limit", type=int, default=8)
+    parser.add_argument("--semantic-consistency-threshold", type=float, default=DEFAULT_SEMANTIC_THRESHOLD)
+    parser.add_argument("--disable-semantic-metric", action="store_true")
     args = parser.parse_args()
-    payload = run_formal_metric_audit(args.run_root)
+    payload = run_formal_metric_audit(
+        args.run_root,
+        prompt_suite_path=args.prompt_suite_path or None,
+        semantic_model_id=args.semantic_model_id,
+        semantic_frame_limit=args.semantic_frame_limit,
+        semantic_consistency_threshold=args.semantic_consistency_threshold,
+        enable_semantic_metric=not args.disable_semantic_metric,
+    )
     print(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True))
 
 

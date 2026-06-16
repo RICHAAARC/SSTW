@@ -7,6 +7,7 @@ from pathlib import Path
 
 import pytest
 
+import experiments.generative_video_model_probe.formal_metric_runner as formal_metric_runner
 from experiments.generative_video_model_probe.formal_metric_runner import run_formal_metric_audit
 from experiments.generative_video_model_probe.postprocess_runner import postprocess_colab_run
 from main.protocol.record_writer import read_jsonl, write_json, write_jsonl
@@ -51,11 +52,65 @@ def test_formal_metric_runner_builds_video_file_metrics(tmp_path: Path) -> None:
     assert audit["formal_metric_record_count"] == 1
     assert audit["formal_visual_motion_ready"] is True
     assert audit["formal_semantic_ready"] is False
-    assert audit["formal_metric_claim_status"] == "blocked_until_semantic_metric_configured"
+    assert audit["formal_metric_claim_status"] == "blocked_until_semantic_metric_ready"
     assert records[0]["video_decode_status"] == "ready"
     assert records[0]["formal_visual_quality_ready"] is True
     assert records[0]["formal_motion_consistency_ready"] is True
     assert records[0]["formal_semantic_consistency_ready"] is False
+    assert records[0]["semantic_metric_status"] == "prompt_text_missing"
+
+
+@pytest.mark.quick
+def test_formal_metric_runner_accepts_clip_semantic_metric(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """formal metric runner 在 CLIP 语义分数达阈值时应解除语义 metric 阻断。"""
+    run_root = tmp_path / "generative_video_model_probe_colab"
+    dataset_root = tmp_path / "datasets" / "generative_video_prompt_suite"
+    prompt_suite_path = dataset_root / "prompt_seed_suite.json"
+    video_path = run_root / "videos" / "tiny.mp4"
+    _write_tiny_video(video_path)
+    digest = hashlib.sha256(video_path.read_bytes()).hexdigest()
+    write_json(prompt_suite_path, {
+        "prompts": [{
+            "prompt_id": "prompt",
+            "prompt_text": "A small colored square moves across the frame.",
+        }],
+    })
+    write_jsonl(run_root / "records" / "generation_records.jsonl", [{
+        "generation_model_id": "model",
+        "prompt_id": "prompt",
+        "seed_id": "seed",
+        "generation_status": "success",
+        "video_path": str(video_path),
+        "video_sha256": digest,
+        "trajectory_trace_id": "trace_0000",
+    }])
+
+    def fake_clip_metric(video_path: Path, prompt_text: str, model_id: str, frame_limit: int) -> dict:
+        return {
+            "semantic_metric_name": "clip_text_video_similarity",
+            "semantic_model_id": model_id,
+            "semantic_metric_status": "ready",
+            "semantic_metric_failure_reason": "none",
+            "semantic_consistency_score": 0.31,
+            "semantic_consistency_mean_score": 0.31,
+            "semantic_consistency_max_score": 0.34,
+            "semantic_sampled_frame_count": frame_limit,
+            "semantic_frame_limit": frame_limit,
+            "semantic_metric_device": "cpu",
+        }
+
+    monkeypatch.setattr(formal_metric_runner, "compute_clip_text_video_similarity", fake_clip_metric)
+
+    audit = run_formal_metric_audit(run_root, prompt_suite_path=prompt_suite_path)
+    records = read_jsonl(run_root / "records" / "formal_quality_motion_semantic_records.jsonl")
+
+    assert audit["formal_semantic_ready"] is True
+    assert audit["formal_quality_motion_semantic_ready"] is True
+    assert audit["formal_metric_claim_status"] == "ready"
+    assert records[0]["semantic_metric_status"] == "ready"
+    assert records[0]["semantic_model_id"] == "openai/clip-vit-base-patch32"
+    assert records[0]["formal_semantic_consistency_ready"] is True
+    assert records[0]["formal_metric_result_used_for_claim"] is True
 
 
 @pytest.mark.quick

@@ -57,6 +57,17 @@ def build_colab_runtime_command(layout: dict[str, str], profile: str, model_id: 
     return command
 
 
+def build_formal_metric_command(layout: dict[str, str]) -> list[str]:
+    """构造 B5 正式质量与运动 metric 命令, 从实际 mp4 文件生成 governed records。"""
+    return [
+        sys.executable,
+        "-m",
+        "experiments.generative_video_model_probe.formal_metric_runner",
+        "--run-root",
+        layout["drive_run_root"],
+    ]
+
+
 def build_mechanism_postprocess_command(layout: dict[str, str]) -> list[str]:
     """构造 B5 Colab 机制后处理命令, 从已有 governed records 重建后处理 artifacts。"""
     return [

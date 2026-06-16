@@ -350,5 +350,29 @@ Notebook 与 repository module 的跨边界数据
 | mechanism_postprocess_status | governance | none | true | false | false | Result checker status for B5 mechanism postprocess artifacts. |
 | postprocess_stage_id | governance | none | true | false | false | Stage id reported by B5 mechanism postprocess decision. |
 | postprocess_mechanism_decision | governance | none | true | false | false | Formal mechanism decision reported by postprocess artifacts. |
+| video_decode_status | governance | none | true | false | false | Decode status for generated mp4 files used by B5 formal metrics. |
+| video_metric_failure_reason | governance | none | true | false | false | Failure reason for generated video file metric extraction. |
+| decoded_frame_count | metric | none | true | false | false | Number of decoded frames sampled from a generated video. |
+| sampled_frame_count | metric | none | true | false | false | Number of frames sampled for B5 video file metrics. |
+| mean_brightness | metric | none | true | false | false | Mean brightness over sampled generated video frames. |
+| mean_contrast | metric | none | true | false | false | Mean contrast over sampled generated video frames. |
+| dark_pixel_ratio | metric | none | true | false | false | Ratio of near-black pixels over sampled generated video frames. |
+| bright_pixel_ratio | metric | none | true | false | false | Ratio of near-white pixels over sampled generated video frames. |
+| motion_delta_score | metric | none | true | false | false | Mean adjacent-frame absolute difference over sampled generated frames. |
+| visual_quality_metric_status | governance | none | true | false | false | Status of formal video file visual quality metric. |
+| motion_consistency_metric_status | governance | none | true | false | false | Status of formal video file motion consistency metric. |
+| formal_visual_quality_ready | governance | none | true | false | false | Whether formal video file visual quality metric is ready. |
+| formal_motion_consistency_ready | governance | none | true | false | false | Whether formal video file motion consistency metric is ready. |
+| semantic_metric_failure_reason | governance | none | true | false | false | Failure reason for semantic consistency metric. |
+| formal_semantic_consistency_ready | governance | none | true | false | false | Whether formal semantic consistency metric is ready. |
+| formal_metric_result_used_for_claim | claim | none | true | true | false | Whether formal quality motion semantic metrics are used for a positive claim. |
+| formal_metric_record_count | metric | none | true | false | false | Number of formal quality motion semantic metric records. |
+| formal_visual_quality_ready_count | metric | none | true | false | false | Count of records with ready formal visual quality metrics. |
+| formal_motion_consistency_ready_count | metric | none | true | false | false | Count of records with ready formal motion consistency metrics. |
+| formal_semantic_consistency_ready_count | metric | none | true | false | false | Count of records with ready formal semantic consistency metrics. |
+| formal_visual_motion_ready | governance | none | true | false | false | Whether formal visual and motion metrics are ready for all records. |
+| formal_semantic_ready | governance | none | true | false | false | Whether formal semantic metrics are ready for all records. |
+| formal_quality_motion_semantic_ready | governance | none | true | false | false | Whether all formal quality, motion, and semantic metrics are ready. |
+| formal_metric_claim_status | claim | none | true | true | false | Claim readiness status for formal quality motion semantic metrics. |
 | gpu_name | governance | none | true | false | false | GPU name captured by Colab runtime. |
 | gpu_memory_mb | governance | none | true | false | false | GPU memory in MB captured by Colab runtime. |

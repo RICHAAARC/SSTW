@@ -78,6 +78,7 @@ def check_generative_video_colab_results(run_root: str | Path) -> dict:
     mechanism_records = _read_jsonl(run_root / "records" / "mechanism_score_records.jsonl")
     controlled_negative_records = _read_jsonl(run_root / "records" / "controlled_negative_records.jsonl")
     quality_proxy_records = _read_jsonl(run_root / "records" / "quality_motion_semantic_proxy_records.jsonl")
+    formal_metric_records = _read_jsonl(run_root / "records" / "formal_quality_motion_semantic_records.jsonl")
     video_checks = _video_integrity_records(run_root, generation_records)
 
     successful_generation_count = _count_successful_generations(generation_records)
@@ -87,6 +88,11 @@ def check_generative_video_colab_results(run_root: str | Path) -> dict:
     trajectory_capture_ready = bool(trajectory_records) and generation_trace_ids.issubset(captured_trace_ids)
     external_baseline_runnable_count = sum(1 for record in external_records if record.get("external_baseline_runnable_status") == "runnable")
     quality_metric_ready_count = sum(1 for record in quality_records if record.get("quality_metric_status") not in {"not_run", "disabled", None})
+    formal_visual_motion_ready_count = sum(
+        1 for record in formal_metric_records
+        if record.get("formal_visual_quality_ready") is True and record.get("formal_motion_consistency_ready") is True
+    )
+    formal_semantic_ready_count = sum(1 for record in formal_metric_records if record.get("formal_semantic_consistency_ready") is True)
 
     implementation_evidence_status = "PASS" if all([
         run_root.exists(),
@@ -111,6 +117,8 @@ def check_generative_video_colab_results(run_root: str | Path) -> dict:
     if decision.get("details", {}).get("quality_motion_semantic_consistency_pass") is not True:
         if postprocess_details.get("formal_quality_semantic_ready") is True:
             pass
+        elif postprocess_details.get("formal_visual_motion_ready") is True and postprocess_details.get("formal_semantic_ready") is not True:
+            missing_mechanism_requirements.append("formal_semantic_metric_missing")
         elif postprocess_details.get("quality_motion_semantic_proxy_pass") is True:
             missing_mechanism_requirements.append("formal_quality_semantic_metrics_missing")
         else:
@@ -136,6 +144,9 @@ def check_generative_video_colab_results(run_root: str | Path) -> dict:
         "mechanism_score_record_count": len(mechanism_records),
         "controlled_negative_record_count": len(controlled_negative_records),
         "quality_proxy_record_count": len(quality_proxy_records),
+        "formal_metric_record_count": len(formal_metric_records),
+        "formal_visual_motion_ready_count": formal_visual_motion_ready_count,
+        "formal_semantic_ready_count": formal_semantic_ready_count,
         "mechanism_postprocess_status": postprocess_decision.get("mechanism_postprocess_decision", "missing"),
         "quality_metric_ready_count": quality_metric_ready_count,
         "video_checks": video_checks,

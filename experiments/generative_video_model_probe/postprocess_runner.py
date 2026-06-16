@@ -197,6 +197,7 @@ def _build_decision(
     control_records: list[dict],
     quality_proxy_records: list[dict],
     threshold_payload: dict,
+    formal_metric_records: list[dict],
 ) -> dict:
     """构造后处理 decision, 明确区分 proxy 通过与正式机制 claim。"""
     key_records = [
@@ -219,10 +220,16 @@ def _build_decision(
         record["visual_quality_proxy_status"] == "ready" and record["motion_consistency_proxy_status"] == "ready"
         for record in quality_proxy_records
     ) and bool(quality_proxy_records)
-    formal_quality_semantic_ready = all(
-        record["semantic_consistency_proxy_status"] == "formal_metric_ready"
-        for record in quality_proxy_records
-    ) and bool(quality_proxy_records)
+    formal_visual_motion_ready = all(
+        record.get("formal_visual_quality_ready") is True
+        and record.get("formal_motion_consistency_ready") is True
+        for record in formal_metric_records
+    ) and bool(formal_metric_records)
+    formal_semantic_ready = all(
+        record.get("formal_semantic_consistency_ready") is True
+        for record in formal_metric_records
+    ) and bool(formal_metric_records)
+    formal_quality_semantic_ready = formal_visual_motion_ready and formal_semantic_ready
     mechanism_postprocess_pass = all([
         bool(key_records),
         trajectory_gain_confirmed_by_proxy,
@@ -230,12 +237,18 @@ def _build_decision(
         quality_motion_semantic_proxy_pass,
     ])
     formal_claim_ready = mechanism_postprocess_pass and formal_quality_semantic_ready
+    if formal_claim_ready:
+        formal_claim_status = "supported_by_governed_generation_records"
+    elif formal_visual_motion_ready and not formal_semantic_ready:
+        formal_claim_status = "blocked_until_formal_semantic_metric"
+    else:
+        formal_claim_status = "blocked_until_formal_quality_semantic_metrics"
     return {
         "stage_id": "generative_video_mechanism_postprocess",
         "mechanism_postprocess_decision": "PASS" if mechanism_postprocess_pass else "FAIL",
         "mechanism_decision": "PASS" if formal_claim_ready else "FAIL",
         "details": {
-            "formal_claim_status": "blocked_until_formal_quality_semantic_metrics" if not formal_claim_ready else "supported_by_governed_generation_records",
+            "formal_claim_status": formal_claim_status,
             "mechanism_score_record_count": len(mechanism_records),
             "controlled_negative_count": threshold_payload["controlled_negative_count"],
             "quality_proxy_record_count": len(quality_proxy_records),
@@ -245,6 +258,8 @@ def _build_decision(
             "trajectory_gain_confirmed_by_proxy": trajectory_gain_confirmed_by_proxy,
             "fixed_low_fpr_proxy_pass": threshold_payload["fixed_low_fpr_proxy_pass"],
             "quality_motion_semantic_proxy_pass": quality_motion_semantic_proxy_pass,
+            "formal_visual_motion_ready": formal_visual_motion_ready,
+            "formal_semantic_ready": formal_semantic_ready,
             "formal_quality_semantic_ready": formal_quality_semantic_ready,
             "claim_limitation": "proxy records are sufficient for workflow progression but not for final paper claim",
         },
@@ -263,8 +278,9 @@ def postprocess_colab_run(run_root: str | Path, target_fpr: float = 0.01) -> dic
     mechanism_records = _build_mechanism_score_records(successful_generation_records, trajectory_features)
     control_records = _build_control_records(successful_generation_records, trajectory_features)
     quality_proxy_records = _build_quality_proxy_records(successful_generation_records, trajectory_features)
+    formal_metric_records = _read_jsonl(run_root / "records" / "formal_quality_motion_semantic_records.jsonl")
     threshold_payload = _build_threshold_payload(control_records, target_fpr)
-    decision = _build_decision(mechanism_records, control_records, quality_proxy_records, threshold_payload)
+    decision = _build_decision(mechanism_records, control_records, quality_proxy_records, threshold_payload, formal_metric_records)
 
     write_jsonl(run_root / "records" / "mechanism_score_records.jsonl", mechanism_records)
     write_jsonl(run_root / "records" / "controlled_negative_records.jsonl", control_records)

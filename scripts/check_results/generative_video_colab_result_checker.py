@@ -73,7 +73,11 @@ def check_generative_video_colab_results(run_root: str | Path) -> dict:
     quality_records = _read_jsonl(run_root / "records" / "quality_motion_semantic_records.jsonl")
     external_records = _read_jsonl(run_root / "records" / "external_baseline_records.jsonl")
     decision = _read_json(run_root / "artifacts" / "generative_video_colab_runtime_decision.json")
+    postprocess_decision = _read_json(run_root / "artifacts" / "generative_video_mechanism_postprocess_decision.json")
     manifest = _read_json(run_root / "artifacts" / "generation_manifest.json")
+    mechanism_records = _read_jsonl(run_root / "records" / "mechanism_score_records.jsonl")
+    controlled_negative_records = _read_jsonl(run_root / "records" / "controlled_negative_records.jsonl")
+    quality_proxy_records = _read_jsonl(run_root / "records" / "quality_motion_semantic_proxy_records.jsonl")
     video_checks = _video_integrity_records(run_root, generation_records)
 
     successful_generation_count = _count_successful_generations(generation_records)
@@ -93,18 +97,34 @@ def check_generative_video_colab_results(run_root: str | Path) -> dict:
     ]) else "FAIL"
 
     missing_mechanism_requirements = []
-    if decision.get("details", {}).get("fixed_low_fpr_audit_pass") is not True:
+    postprocess_details = postprocess_decision.get("details", {})
+    if (
+        decision.get("details", {}).get("fixed_low_fpr_audit_pass") is not True
+        and postprocess_details.get("fixed_low_fpr_proxy_pass") is not True
+    ):
         missing_mechanism_requirements.append("fixed_low_fpr_audit_not_passed")
-    if decision.get("details", {}).get("trajectory_observation_gain_confirmed") is not True:
+    if (
+        decision.get("details", {}).get("trajectory_observation_gain_confirmed") is not True
+        and postprocess_details.get("trajectory_gain_confirmed_by_proxy") is not True
+    ):
         missing_mechanism_requirements.append("trajectory_observation_gain_not_confirmed")
     if decision.get("details", {}).get("quality_motion_semantic_consistency_pass") is not True:
-        missing_mechanism_requirements.append("quality_motion_semantic_consistency_not_passed")
+        if postprocess_details.get("formal_quality_semantic_ready") is True:
+            pass
+        elif postprocess_details.get("quality_motion_semantic_proxy_pass") is True:
+            missing_mechanism_requirements.append("formal_quality_semantic_metrics_missing")
+        else:
+            missing_mechanism_requirements.append("quality_motion_semantic_consistency_not_passed")
     if external_baseline_runnable_count < 1:
         missing_mechanism_requirements.append("external_baseline_not_runnable")
     if successful_generation_count < 4:
         missing_mechanism_requirements.append("insufficient_prompt_seed_coverage_for_b5")
 
-    mechanism_evidence_status = "PASS" if not missing_mechanism_requirements else "FAIL"
+    formal_mechanism_pass = (
+        decision.get("mechanism_decision") == "PASS"
+        or postprocess_decision.get("mechanism_decision") == "PASS"
+    )
+    mechanism_evidence_status = "PASS" if formal_mechanism_pass and not missing_mechanism_requirements else "FAIL"
     return {
         "run_root": str(run_root),
         "generation_record_count": len(generation_records),
@@ -113,6 +133,10 @@ def check_generative_video_colab_results(run_root: str | Path) -> dict:
         "quality_record_count": len(quality_records),
         "external_baseline_record_count": len(external_records),
         "external_baseline_runnable_count": external_baseline_runnable_count,
+        "mechanism_score_record_count": len(mechanism_records),
+        "controlled_negative_record_count": len(controlled_negative_records),
+        "quality_proxy_record_count": len(quality_proxy_records),
+        "mechanism_postprocess_status": postprocess_decision.get("mechanism_postprocess_decision", "missing"),
         "quality_metric_ready_count": quality_metric_ready_count,
         "video_checks": video_checks,
         "implementation_evidence_status": implementation_evidence_status,
@@ -122,6 +146,9 @@ def check_generative_video_colab_results(run_root: str | Path) -> dict:
             "stage_id": decision.get("stage_id"),
             "implementation_decision": decision.get("implementation_decision"),
             "mechanism_decision": decision.get("mechanism_decision"),
+            "postprocess_stage_id": postprocess_decision.get("stage_id"),
+            "mechanism_postprocess_decision": postprocess_decision.get("mechanism_postprocess_decision"),
+            "postprocess_mechanism_decision": postprocess_decision.get("mechanism_decision"),
         },
         "next_recommended_profile": "recommended_on_l4_or_a100" if implementation_evidence_status == "PASS" else "rerun_smoke_after_fixing_outputs",
     }

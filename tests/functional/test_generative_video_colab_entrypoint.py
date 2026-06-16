@@ -47,8 +47,10 @@ def test_generative_video_colab_notebook_calls_repository_modules() -> None:
     assert "add_to_git_credential=False" in source
     assert "generative_video_model_probe_workflow" in source
     assert "PROFILE = 'recommended'" in source
+    assert "build_mechanism_postprocess_command" in source
     assert "scripts/prepare_generative_video_prompt_suite.py" in Path("paper_workflow/notebook_utils/generative_video_model_probe_workflow.py").read_text(encoding="utf-8")
     assert "experiments.generative_video_model_probe.colab_runtime" in Path("paper_workflow/notebook_utils/generative_video_model_probe_workflow.py").read_text(encoding="utf-8")
+    assert "experiments.generative_video_model_probe.postprocess_runner" in Path("paper_workflow/notebook_utils/generative_video_model_probe_workflow.py").read_text(encoding="utf-8")
     assert "scripts/package_results/generative_video_drive_packager.py" in Path("paper_workflow/notebook_utils/generative_video_model_probe_workflow.py").read_text(encoding="utf-8")
     assert "pytest -q" in source
     assert "tools/harness/run_all_audits.py" in source

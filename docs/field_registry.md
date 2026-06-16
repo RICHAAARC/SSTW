@@ -318,5 +318,37 @@ Notebook 与 repository module 的跨边界数据
 | claim_rule | claim | none | true | true | false | B5 external baseline claim usage rule. |
 | fallback_rule | governance | none | true | false | false | B5 external baseline fallback rule. |
 | internal_mechanism_baselines | protocol | none | true | false | false | B5 internal mechanism baseline list paired with external explicit synchronization baselines. |
+| mechanism_score_source | protocol | none | true | false | false | Source used for B5 mechanism postprocess score records. |
+| baseline_score_margin | metric | none | true | false | false | Score margin between key-conditioned trajectory score and the compared baseline score. |
+| latent_norm_range | metric | none | true | false | false | Range of latent norm values in a captured generation trajectory. |
+| latent_norm_total_variation | metric | none | true | false | false | Total variation of latent norm values across a captured generation trajectory. |
+| latent_directed_norm_drop | metric | none | true | false | false | Directed latent norm drop used by B5 trajectory proxy scoring. |
+| latent_mean_range | metric | none | true | false | false | Range of latent mean values in a captured generation trajectory. |
+| latent_std_range | metric | none | true | false | false | Range of latent standard deviation values in a captured generation trajectory. |
+| trajectory_observation_proxy_score | metric | none | true | false | false | Proxy trajectory observation score derived from Colab latent callback records. |
+| control_name | protocol | none | true | false | false | Controlled negative trajectory control name used by B5 postprocess. |
+| controlled_negative_count | metric | none | true | false | false | Number of controlled negative records used by B5 postprocess thresholding. |
+| controlled_negative_false_positive_count | metric | none | true | false | false | Number of controlled negatives above the postprocess threshold. |
+| controlled_negative_fpr | metric | none | true | false | false | Controlled negative false positive rate for B5 postprocess. |
+| fixed_low_fpr_proxy_pass | metric | none | true | false | false | Whether B5 postprocess controlled negative FPR satisfies target FPR. |
+| visual_quality_proxy_score | metric | none | true | false | false | Lightweight visual quality proxy score for generated video outputs. |
+| visual_quality_proxy_status | governance | none | true | false | false | Status for lightweight visual quality proxy records. |
+| motion_consistency_proxy_score | metric | none | true | false | false | Lightweight motion consistency proxy score from trajectory statistics. |
+| motion_consistency_proxy_status | governance | none | true | false | false | Status for lightweight motion consistency proxy records. |
+| semantic_consistency_proxy_status | governance | none | true | false | false | Status for semantic consistency proxy records. |
+| video_file_local_status | artifact | none | true | false | false | Whether a generated video path is locally available during postprocess. |
+| mechanism_postprocess_decision | governance | none | true | false | false | B5 mechanism postprocess decision based on proxy records. |
+| mechanism_score_record_count | metric | none | true | false | false | Number of B5 mechanism score records produced by postprocess. |
+| controlled_negative_record_count | metric | none | true | false | false | Number of controlled negative records produced by postprocess. |
+| quality_proxy_record_count | metric | none | true | false | false | Number of quality motion semantic proxy records produced by postprocess. |
+| key_conditioned_score_mean | metric | none | true | false | false | Mean key-conditioned trajectory proxy score across generated positives. |
+| best_baseline_score_mean | metric | none | true | false | false | Best mean baseline proxy score across compared B5 baselines. |
+| trajectory_gain_over_best_baseline | metric | none | true | false | false | Mean proxy gain over the strongest compared baseline. |
+| trajectory_gain_confirmed_by_proxy | metric | none | true | false | false | Whether B5 postprocess proxy scores show trajectory gain. |
+| quality_motion_semantic_proxy_pass | metric | none | true | false | false | Whether lightweight quality and motion proxies are ready; semantic remains proxy status. |
+| formal_quality_semantic_ready | governance | none | true | false | false | Whether formal quality and semantic metrics are ready for positive claim use. |
+| mechanism_postprocess_status | governance | none | true | false | false | Result checker status for B5 mechanism postprocess artifacts. |
+| postprocess_stage_id | governance | none | true | false | false | Stage id reported by B5 mechanism postprocess decision. |
+| postprocess_mechanism_decision | governance | none | true | false | false | Formal mechanism decision reported by postprocess artifacts. |
 | gpu_name | governance | none | true | false | false | GPU name captured by Colab runtime. |
 | gpu_memory_mb | governance | none | true | false | false | GPU memory in MB captured by Colab runtime. |

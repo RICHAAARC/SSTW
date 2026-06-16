@@ -57,6 +57,17 @@ def build_colab_runtime_command(layout: dict[str, str], profile: str, model_id: 
     return command
 
 
+def build_mechanism_postprocess_command(layout: dict[str, str]) -> list[str]:
+    """构造 B5 Colab 机制后处理命令, 从已有 governed records 重建后处理 artifacts。"""
+    return [
+        sys.executable,
+        "-m",
+        "experiments.generative_video_model_probe.postprocess_runner",
+        "--run-root",
+        layout["drive_run_root"],
+    ]
+
+
 def build_drive_packaging_command(layout: dict[str, str], include_videos: bool = True) -> list[str]:
     """构造 Google Drive 打包命令。"""
     command = [

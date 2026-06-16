@@ -165,6 +165,7 @@ def build_formal_metric_records(
         records.append({
             "record_version": "generative_video_formal_quality_motion_semantic_v1",
             "generation_model_id": generation_record.get("generation_model_id"),
+            "method_variant": generation_record.get("method_variant"),
             "prompt_id": generation_record.get("prompt_id"),
             "seed_id": generation_record.get("seed_id"),
             "trajectory_trace_id": generation_record.get("trajectory_trace_id"),

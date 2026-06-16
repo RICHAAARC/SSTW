@@ -510,3 +510,77 @@ python -m experiments.sampling_time_constraint.runner \
 
 下一步应将 constraint controller 接入 Colab L4 的真实生成 sampling callback, 并复用 B5 的质量、运动和 CLIP 语义 metric 重新生成正式 records。只有真实生成链路通过后, 才能把 SSTW-TC 从 preflight / exploratory 推进到正式 B6 mechanism claim。
 
+### 13.1 Colab L4 real sampling probe 入口
+
+在 preflight 通过后, 已补齐 B6 Colab 真实 sampling callback probe 入口。新增文件包括:
+
+```text
+main/generation/sampling_constraint_adapter.py
+experiments/sampling_time_constraint/colab_runtime.py
+experiments/sampling_time_constraint/postprocess_runner.py
+paper_workflow/notebook_utils/sampling_time_constraint_workflow.py
+paper_workflow/colab_utils/sampling_time_constraint_colab.ipynb
+scripts/package_results/sampling_time_constraint_drive_packager.py
+```
+
+Notebook 默认落盘到:
+
+```text
+/content/drive/MyDrive/SSTW/runs/sampling_time_constraint_colab
+/content/drive/MyDrive/SSTW/packages/sampling_time_constraint
+```
+
+推荐首轮使用 `PROFILE = 'smoke'`, 因为该阶段首先验证 LTX callback 中修改 `latents` 是否被当前 Diffusers 版本接受。首轮通过后再切换 `recommended`。
+
+Colab 中的执行顺序为:
+
+```text
+1. 构造 prompt suite
+2. 运行 experiments.sampling_time_constraint.colab_runtime
+3. 运行 formal quality / motion / CLIP semantic metric
+4. 运行 experiments.sampling_time_constraint.postprocess_runner
+5. 运行 pytest 与 harness
+6. 打包到 packages/sampling_time_constraint
+```
+
+该 Colab probe 的正向结果只能支持:
+
+```text
+real_sampling_probe_supported_by_governed_records_not_submission_freeze
+```
+
+它仍不等同于最终 `SSTW-TC` submission freeze claim。最终 B6 claim 还需要更完整的攻击矩阵、跨 prompt / seed / model 覆盖和最终 claim audit。
+
+
+
+---
+
+## 14. B6 Colab 结果检查器
+
+当前工程阶段新增了 B6 Colab 结果检查器:
+
+```text
+scripts/check_results/sampling_time_constraint_colab_result_checker.py
+```
+
+该检查器用于在 Colab L4 运行完成后显式区分三类状态:
+
+```text
+implementation_evidence_status
+mechanism_evidence_status
+claim_boundary
+```
+
+检查 run 目录:
+
+```bash
+python scripts/check_results/sampling_time_constraint_colab_result_checker.py   --run-root /content/drive/MyDrive/SSTW/runs/sampling_time_constraint_colab
+```
+
+检查 package 目录中的最新打包结果:
+
+```bash
+python scripts/check_results/sampling_time_constraint_colab_result_checker.py   --package-dir /content/drive/MyDrive/SSTW/packages/sampling_time_constraint
+```
+
+该检查器只允许输出 `real_sampling_probe_not_final_b6_submission_claim` 这一边界判断, 不得把 smoke / recommended probe 伪装为最终 `SSTW-TC` submission freeze claim。

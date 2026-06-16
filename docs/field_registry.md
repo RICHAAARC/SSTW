@@ -422,3 +422,18 @@ Notebook 与 repository module 的跨边界数据
 | lambda_schedule_ablation_supports_mid_stage | governance | none | true | false | false | Whether lambda schedule ablation supports mid-stage constraint. |
 | strong_lambda_quality_block_detected | governance | none | true | false | false | Whether strong lambda ablation is blocked by quality or consistency gates. |
 | submission_claim_policy | governance | none | true | false | false | Policy describing whether preflight records support final submission claims. |
+| constraint_trace_id | protocol | none | true | false | false | Trace identifier for sampling-time constraint callback records. |
+| constraint_apply_status | governance | none | true | false | false | Whether sampling-time constraint was applied at a callback step. |
+| constraint_apply_reason | governance | none | true | false | false | Reason describing why sampling-time constraint was or was not applied. |
+| lambda_value | metric | none | true | false | false | Lambda value used at one sampling callback step. |
+| latent_alignment_before_constraint | metric | none | true | false | false | Latent alignment with constraint direction before callback update. |
+| latent_alignment_after_constraint | metric | none | true | false | false | Latent alignment with constraint direction after callback update. |
+| latent_alignment_gain | metric | none | true | false | false | Alignment gain caused by one sampling-time callback update. |
+| latent_norm_before_constraint | metric | none | true | false | false | Latent norm before sampling-time callback update. |
+| latent_norm_after_constraint | metric | none | true | false | false | Latent norm after sampling-time callback update. |
+| latent_constraint_delta_norm | metric | none | true | false | false | Absolute latent norm delta after sampling-time callback update. |
+| constraint_variant_summary_records | artifact | none | true | false | false | Aggregated B6 Colab constraint variant summary records. |
+| keyed_constraint_alignment_gain_mean | metric | none | true | false | false | Mean alignment gain for keyed sampling constraint variant. |
+| baseline_alignment_gain_mean | metric | none | true | false | false | Mean alignment gain for unconstrained trajectory baseline. |
+| sampling_time_constraint_colab_probe | governance | none | true | false | false | Stage identifier for B6 real sampling callback probe. |
+| sampling_time_constraint_colab_postprocess | governance | none | true | false | false | Stage identifier for B6 Colab postprocess artifacts. |

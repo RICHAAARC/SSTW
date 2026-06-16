@@ -1,0 +1,118 @@
+﻿"""后处理 B6 sampling-time constraint Colab probe 输出。"""
+
+from __future__ import annotations
+
+import argparse
+import json
+from pathlib import Path
+from statistics import mean
+
+from main.protocol.record_writer import write_json, write_jsonl
+from main.protocol.table_builder import write_csv
+
+
+def _read_json(path: Path) -> dict:
+    """读取 JSON 文件, 文件不存在时返回空对象。"""
+    if not path.exists():
+        return {}
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def _read_jsonl(path: Path) -> list[dict]:
+    """读取 JSONL records, 文件不存在时返回空列表。"""
+    if not path.exists():
+        return []
+    return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
+
+
+def _mean(records: list[dict], field: str) -> float:
+    """计算字段均值, 空列表返回 0。"""
+    values = [float(record[field]) for record in records if record.get(field) is not None]
+    return mean(values) if values else 0.0
+
+
+def _variant_rows(constraint_records: list[dict], formal_records: list[dict]) -> list[dict]:
+    """按 method_variant 聚合 constraint 与 formal metric records。"""
+    variants = sorted({record.get("method_variant") for record in constraint_records if record.get("method_variant")})
+    rows: list[dict] = []
+    for variant in variants:
+        constraint_group = [record for record in constraint_records if record.get("method_variant") == variant]
+        formal_group = [record for record in formal_records if record.get("method_variant") == variant]
+        rows.append({
+            "method_variant": variant,
+            "constraint_record_count": len(constraint_group),
+            "formal_metric_record_count": len(formal_group),
+            "latent_alignment_gain_mean": round(_mean(constraint_group, "latent_alignment_gain"), 6),
+            "constraint_applied_step_count": sum(1 for record in constraint_group if record.get("constraint_apply_status") == "applied"),
+            "formal_visual_motion_ready": bool(formal_group) and all(record.get("formal_visual_quality_ready") is True and record.get("formal_motion_consistency_ready") is True for record in formal_group),
+            "formal_semantic_ready": bool(formal_group) and all(record.get("formal_semantic_consistency_ready") is True for record in formal_group),
+        })
+    return rows
+
+
+def postprocess_sampling_constraint_colab_run(run_root: str | Path) -> dict:
+    """读取 B6 Colab records 并写出 postprocess artifacts。"""
+    run_root = Path(run_root)
+    runtime_decision = _read_json(run_root / "artifacts" / "sampling_time_constraint_colab_runtime_decision.json")
+    constraint_records = _read_jsonl(run_root / "records" / "constraint_records.jsonl")
+    formal_records = _read_jsonl(run_root / "records" / "formal_quality_motion_semantic_records.jsonl")
+    rows = _variant_rows(constraint_records, formal_records)
+    keyed_row = next((row for row in rows if row["method_variant"] == "keyed_state_trajectory_constraint"), {})
+    baseline_row = next((row for row in rows if row["method_variant"] == "key_conditioned_state_space_with_trajectory"), {})
+    keyed_gain = float(keyed_row.get("latent_alignment_gain_mean", 0.0))
+    baseline_gain = float(baseline_row.get("latent_alignment_gain_mean", 0.0))
+    gain_over_baseline = round(keyed_gain - baseline_gain, 6)
+    formal_ready = bool(keyed_row) and keyed_row.get("formal_visual_motion_ready") is True and keyed_row.get("formal_semantic_ready") is True
+    implementation_pass = runtime_decision.get("implementation_decision") == "PASS" and bool(constraint_records)
+    probe_pass = all([
+        implementation_pass,
+        keyed_row.get("constraint_applied_step_count", 0) > 0,
+        gain_over_baseline > 0.0,
+        formal_ready,
+    ])
+    decision = {
+        "stage_id": "sampling_time_constraint_colab_postprocess",
+        "mechanism_postprocess_decision": "PASS" if probe_pass else "FAIL",
+        "mechanism_decision": "PASS" if probe_pass else "FAIL",
+        "details": {
+            "formal_claim_status": "real_sampling_probe_supported_by_governed_records_not_submission_freeze" if probe_pass else "blocked_until_sampling_constraint_colab_probe_ready",
+            "constraint_record_count": len(constraint_records),
+            "formal_metric_record_count": len(formal_records),
+            "keyed_constraint_alignment_gain_mean": keyed_gain,
+            "baseline_alignment_gain_mean": baseline_gain,
+            "trajectory_constraint_gain_over_unconstrained": gain_over_baseline,
+            "formal_quality_semantic_ready": formal_ready,
+            "constraint_main_claim_status": "real_sampling_probe_not_final_b6_submission_claim",
+        },
+    }
+    write_jsonl(run_root / "records" / "constraint_variant_summary_records.jsonl", rows)
+    write_csv(run_root / "tables" / "sampling_constraint_colab_summary_table.csv", rows)
+    write_json(run_root / "artifacts" / "sampling_time_constraint_colab_postprocess_decision.json", decision)
+    report_path = run_root / "reports" / "sampling_time_constraint_colab_postprocess_report.md"
+    report_path.parent.mkdir(parents=True, exist_ok=True)
+    report_path.write_text(
+        "# Sampling-Time Constraint Colab Postprocess Report\n\n"
+        "该报告基于真实 Colab sampling callback records 与 formal quality/motion/semantic records 生成。"
+        "它支持 B6 real sampling probe, 但不等同于最终 submission freeze claim。\n\n"
+        + json.dumps(decision, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+    return {
+        "run_root": str(run_root),
+        "constraint_record_count": len(constraint_records),
+        "formal_metric_record_count": len(formal_records),
+        "mechanism_postprocess_decision": decision["mechanism_postprocess_decision"],
+        "mechanism_decision": decision["mechanism_decision"],
+        "formal_claim_status": decision["details"]["formal_claim_status"],
+    }
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description="后处理 B6 sampling-time constraint Colab probe。")
+    parser.add_argument("--run-root", required=True)
+    args = parser.parse_args()
+    print(json.dumps(postprocess_sampling_constraint_colab_run(args.run_root), ensure_ascii=False, indent=2, sort_keys=True))
+
+
+if __name__ == "__main__":
+    main()

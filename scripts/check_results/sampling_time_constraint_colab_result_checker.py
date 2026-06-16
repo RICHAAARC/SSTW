@@ -126,6 +126,16 @@ def _variant_names(records: list[dict]) -> set[str]:
     return {str(record.get("method_variant")) for record in records if record.get("method_variant")}
 
 
+def _next_recommended_action(mechanism_evidence_status: str, generation_records: list[dict]) -> str:
+    """根据 profile 与机制证据状态给出下一步建议。"""
+    if mechanism_evidence_status != "PASS":
+        return "rerun_current_profile_after_fixing_outputs"
+    profiles = {str(record.get("colab_runtime_profile")) for record in generation_records if record.get("colab_runtime_profile")}
+    if "recommended" in profiles:
+        return "proceed_to_b6_claim_audit_and_submission_freeze_preparation"
+    return "run_recommended_profile_on_l4"
+
+
 def check_sampling_time_constraint_colab_results(run_root: str | Path) -> dict:
     """检查 B6 Colab run 目录, 并区分实现证据、机制证据和最终 claim 边界。"""
     run_root = Path(run_root)
@@ -232,7 +242,7 @@ def check_sampling_time_constraint_colab_results(run_root: str | Path) -> dict:
             "formal_metric_claim_status": formal_metric_decision.get("formal_metric_claim_status"),
         },
         "claim_boundary": "real_sampling_probe_not_final_b6_submission_claim",
-        "next_recommended_action": "run_recommended_profile_on_l4" if mechanism_evidence_status == "PASS" else "rerun_smoke_after_fixing_outputs",
+        "next_recommended_action": _next_recommended_action(mechanism_evidence_status, generation_records),
     }
 
 

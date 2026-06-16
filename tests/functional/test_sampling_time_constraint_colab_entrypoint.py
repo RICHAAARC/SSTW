@@ -123,6 +123,7 @@ def test_sampling_time_constraint_result_checker_accepts_governed_probe_records(
         trace_id = f"trace_{index}"
         constraint_trace_id = f"constraint_{index}"
         generation_records.append({
+            "colab_runtime_profile": "recommended",
             "generation_status": "success",
             "generation_model_id": "test_model",
             "method_variant": variant,
@@ -192,3 +193,4 @@ def test_sampling_time_constraint_result_checker_accepts_governed_probe_records(
     assert payload["implementation_evidence_status"] == "PASS"
     assert payload["mechanism_evidence_status"] == "PASS"
     assert payload["claim_boundary"] == "real_sampling_probe_not_final_b6_submission_claim"
+    assert payload["next_recommended_action"] == "proceed_to_b6_claim_audit_and_submission_freeze_preparation"

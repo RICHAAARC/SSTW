@@ -508,3 +508,29 @@ Notebook 与 repository module 的跨边界数据
 | table_rebuild_status | governance | none | true | false | false | Whether submission main tables were rebuilt from governed records. |
 | main_tables_rebuild_status | governance | none | true | false | false | Main tables rebuild status copied into submission preparation decision. |
 | allowed_paper_location | governance | none | true | false | false | Allowed paper location for an exploratory or downgraded claim. |
+
+| negative_family | protocol | none | true | false | false | Negative sample family or calibration tail family used for fixed-FPR and replay controls. |
+| sampler_signature_placeholder | placeholder | _placeholder | true | false | true | Placeholder for governed sampler signature hash before preflight validates stable sampler metadata capture. |
+| trajectory_source_level | protocol | none | true | false | false | Evidence level for trajectory source, such as synthetic proxy, callback latent trace, replay trace, or unavailable. |
+| S_path_inv | metric | none | true | false | false | Time reparameterization invariant path evidence score derived from trajectory records. |
+| S_velocity | metric | none | true | false | false | Velocity or latent displacement trajectory evidence score. |
+| S_final_conservative | metric | none | true | false | false | Conservative final score combining endpoint, path, and velocity evidence without allowing a single evidence layer to dominate. |
+| path_marginal_gain_at_fixed_fpr | metric | none | true | false | false | Marginal gain from path evidence measured at fixed false positive rate. |
+| replay_uncertainty_mean | metric | none | true | false | false | Mean replay uncertainty used to down-weight or block uncertain reconstructed trajectories. |
+| flow_state_admissibility_status | governance | none | true | false | false | Status showing whether flow trajectory state evidence passed admissibility constraints. |
+| claim_support_status | claim | none | true | true | false | Claim support boundary status mapped to governed records, tables, figures, reports, or manifests. |
+| sampler_signature_id | protocol | none | true | false | false | Governed sampler signature identifier derived from model and scheduler metadata. |
+| sampler_signature_sha256 | artifact | none | true | false | false | SHA256 digest of governed sampler signature metadata. |
+| sampler_class_name | protocol | none | true | false | false | Scheduler or sampler class name recorded during adapter preflight. |
+| l4_memory_sufficient | governance | none | true | false | false | Whether detected GPU memory satisfies the minimum L4 smoke preflight requirement. |
+| adapter_preflight_decision | governance | none | true | false | false | PASS or FAIL decision for Wan2.1 Flow adapter preflight. |
+| adapter_preflight_failure_reason | governance | none | true | false | false | Failure reason for Wan2.1 Flow adapter preflight. |
+| model_load_status | governance | none | true | false | false | Whether the Wan2.1 pipeline loaded during adapter preflight. |
+| callback_latent_capture_status | governance | none | true | false | false | Whether callback latents were captured during adapter preflight. |
+| callback_latent_count | metric | none | true | false | false | Number of callback steps with available latents during adapter preflight. |
+| time_grid_capture_status | governance | none | true | false | false | Whether the sampler time grid was captured during adapter preflight. |
+| time_grid | protocol | none | true | false | false | Bounded sampler timestep grid captured during adapter preflight. |
+| sampler_signature_status | governance | none | true | false | false | Whether governed sampler signature metadata was captured. |
+| velocity_proxy_status | governance | none | true | false | false | Whether velocity or latent displacement proxy was captured. |
+| velocity_proxy_count | metric | none | true | false | false | Number of callback steps with velocity proxy records. |
+| runtime_sec | metric | none | true | false | false | Wall-clock runtime in seconds for a governed stage. |

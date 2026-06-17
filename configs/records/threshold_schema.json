@@ -4,6 +4,8 @@
     "method_variant",
     "threshold_source_split",
     "threshold_value",
-    "target_fpr"
+    "target_fpr",
+    "negative_family",
+    "path_marginal_gain_at_fixed_fpr"
   ]
 }

@@ -16,7 +16,7 @@ def calibrate_thresholds(records: Iterable[dict], target_fpr: float) -> dict[str
     for method_variant, scores in scores_by_method.items():
         if not scores:
             raise ValueError(f"missing calibration negative scores for {method_variant}")
-        thresholds[method_variant] = {"threshold_id": f"threshold_{method_variant}_calibration_negative", "method_variant": method_variant, "target_fpr": target_fpr, "threshold_source_split": "calibration", "threshold_value": round(max(scores) + 1e-6, 6), "calibration_negative_count": len(scores)}
+        thresholds[method_variant] = {"threshold_id": f"threshold_{method_variant}_calibration_negative", "method_variant": method_variant, "target_fpr": target_fpr, "threshold_source_split": "calibration", "threshold_value": round(max(scores) + 1e-6, 6), "calibration_negative_count": len(scores), "negative_family": "calibration_negative", "path_marginal_gain_at_fixed_fpr": None}
     return thresholds
 
 

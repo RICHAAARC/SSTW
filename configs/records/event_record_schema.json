@@ -7,6 +7,16 @@
     "method_variant",
     "attack_name",
     "S_final",
-    "decision"
+    "decision",
+    "negative_family",
+    "sampler_signature_placeholder",
+    "trajectory_source_level",
+    "S_path_inv",
+    "S_velocity",
+    "S_final_conservative",
+    "path_marginal_gain_at_fixed_fpr",
+    "replay_uncertainty_mean",
+    "flow_state_admissibility_status",
+    "claim_support_status"
   ]
 }

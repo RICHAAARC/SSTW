@@ -12,6 +12,7 @@ from typing import Any
 
 from experiments.generative_video_model_probe.colab_runtime import _export_video, _select_dtype, _sha256_file, _tensor_stats
 from main.generation.sampling_constraint_adapter import apply_latent_sampling_constraint
+from main.protocol.flow_evidence_fields import conservative_flow_score, flow_evidence_protocol_defaults
 from main.protocol.record_writer import write_json, write_jsonl
 from main.protocol.table_builder import write_csv
 
@@ -85,6 +86,17 @@ def _scheduler_id_for_model(model_id: str) -> str:
     return "ltx_pipeline_default_scheduler"
 
 
+def _sampler_signature_placeholder(pipe: Any, scheduler_id: str) -> str:
+    """记录可替换的 sampler signature 占位值。
+
+    该函数属于项目特定写法。preflight 阶段会进一步验证真实 scheduler 配置能否被稳定
+    hash 化; 在 Colab runtime 未完成该验证前, records 只写入 `_placeholder` 字段,
+    避免把未审计的采样器描述误用为正式证据。
+    """
+    scheduler_name = type(getattr(pipe, "scheduler", None)).__name__
+    return f"pending_preflight_hash::{scheduler_id}::{scheduler_name}"
+
+
 def _load_video_generation_pipeline(model_id: str, torch_dtype: Any) -> Any:
     """加载 B6 / SSTW-TC 主线视频生成 pipeline。
 
@@ -137,6 +149,7 @@ def run_sampling_constraint_colab_probe(
     plan = _build_generation_plan(prompt_suite, profile, model_id)
     model_family = _model_family_from_id(model_id)
     scheduler_id = _scheduler_id_for_model(model_id)
+    sampler_signature_placeholder = _sampler_signature_placeholder(pipe, scheduler_id)
 
     generation_records: list[dict] = []
     trajectory_records: list[dict] = []
@@ -181,9 +194,16 @@ def run_sampling_constraint_colab_probe(
                 "trajectory_trace_id": trace_id,
                 "trajectory_step_index": int(step_index),
                 "trajectory_timestep": float(timestep) if hasattr(timestep, "__float__") else str(timestep),
+                **flow_evidence_protocol_defaults(
+                    negative_family="not_applicable_callback_trace",
+                    trajectory_source_level="callback_latent_trace",
+                    sampler_signature_placeholder=sampler_signature_placeholder,
+                    flow_state_admissibility_status="callback_trace_captured_not_scored",
+                    claim_support_status="not_supported_step_trace_only",
+                ),
                 **stats,
             })
-            step_constraint_records.append({
+            constraint_output_record = {
                 "record_version": "sampling_time_constraint_colab_probe_v1",
                 "stage_id": "sampling_time_constraint_colab_probe",
                 "constraint_trace_id": constraint_trace_id,
@@ -200,8 +220,19 @@ def run_sampling_constraint_colab_probe(
                 "constraint_tubelet_selector_id": constraint_config["constraint_tubelet_selector_id"],
                 "constraint_main_claim_status": "real_sampling_probe_pending_full_claim",
                 "flow_matching_backbone_claim_status": "wan21_primary_flow_matching_claim" if model_family == "diffusers_wan21_flow_matching_dit" else "non_primary_mechanism_probe",
+                **flow_evidence_protocol_defaults(
+                    negative_family="not_applicable_positive_generation",
+                    trajectory_source_level="callback_latent_trace",
+                    sampler_signature_placeholder=sampler_signature_placeholder,
+                    flow_state_admissibility_status="enabled" if constraint_record.get("constraint_admissibility_enabled") else "disabled_by_method_variant",
+                    claim_support_status="not_supported_until_postprocess_and_quality_guards_pass",
+                ),
                 **constraint_record,
-            })
+            }
+            constraint_output_record["S_path_inv"] = constraint_output_record.get("latent_alignment_after_constraint")
+            constraint_output_record["S_velocity"] = constraint_output_record.get("flow_velocity_alignment_after_constraint")
+            constraint_output_record["S_final_conservative"] = conservative_flow_score(constraint_output_record)
+            step_constraint_records.append(constraint_output_record)
             return callback_kwargs
 
         video_path = output_root / "videos" / f"{item['generation_model_id'].replace('/', '_')}_{item['method_variant']}_{item['prompt_id']}_{item['seed_id']}.mp4"
@@ -251,6 +282,13 @@ def run_sampling_constraint_colab_probe(
             "trajectory_scheduler_id": scheduler_id,
             "trajectory_time_grid_id": "flow_matching_callback_on_step_end_grid" if model_family == "diffusers_wan21_flow_matching_dit" else "callback_on_step_end_grid",
             "flow_matching_backbone_claim_status": "wan21_primary_flow_matching_claim" if model_family == "diffusers_wan21_flow_matching_dit" else "non_primary_mechanism_probe",
+            **flow_evidence_protocol_defaults(
+                negative_family="not_applicable_positive_generation",
+                trajectory_source_level="callback_latent_trace" if step_stats else "not_captured",
+                sampler_signature_placeholder=sampler_signature_placeholder,
+                flow_state_admissibility_status="runtime_records_pending_postprocess",
+                claim_support_status="not_supported_runtime_record_only",
+            ),
             "num_inference_steps": settings["num_inference_steps"],
             "video_length_frames": settings["num_frames"],
             "video_resolution": f"{settings['width']}x{settings['height']}",

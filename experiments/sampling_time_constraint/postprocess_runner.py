@@ -7,6 +7,7 @@ import json
 from pathlib import Path
 from statistics import mean
 
+from main.protocol.flow_evidence_fields import flow_evidence_protocol_defaults
 from main.protocol.record_writer import write_json, write_jsonl
 from main.protocol.table_builder import write_csv
 
@@ -40,6 +41,13 @@ def _variant_rows(constraint_records: list[dict], formal_records: list[dict]) ->
         formal_group = [record for record in formal_records if record.get("method_variant") == variant]
         rows.append({
             "method_variant": variant,
+            **flow_evidence_protocol_defaults(
+                negative_family="aggregated_by_method_variant",
+                trajectory_source_level="callback_latent_trace",
+                sampler_signature_placeholder=next((record.get("sampler_signature_placeholder") for record in constraint_group if record.get("sampler_signature_placeholder")), None),
+                flow_state_admissibility_status="all_enabled" if all(record.get("flow_state_admissibility_status") == "enabled" for record in constraint_group) else "mixed_or_disabled",
+                claim_support_status="pending_postprocess_gate",
+            ),
             "constraint_record_count": len(constraint_group),
             "formal_metric_record_count": len(formal_group),
             "latent_alignment_gain_mean": round(_mean(constraint_group, "latent_alignment_gain"), 6),
@@ -78,6 +86,13 @@ def postprocess_sampling_constraint_colab_run(run_root: str | Path) -> dict:
         flow_velocity_gain_over_baseline > 0.0,
         formal_ready,
     ])
+    for row in rows:
+        row["path_marginal_gain_at_fixed_fpr"] = gain_over_baseline if row["method_variant"] == "keyed_state_trajectory_constraint" else 0.0
+        row["replay_uncertainty_mean"] = None
+        row["S_path_inv"] = row["latent_alignment_gain_mean"]
+        row["S_velocity"] = row["flow_velocity_alignment_gain_mean"]
+        row["S_final_conservative"] = round(min(float(row["S_path_inv"]), float(row["S_velocity"])), 6)
+        row["claim_support_status"] = "supported_by_probe_records_not_submission_freeze" if probe_pass and row["method_variant"] == "keyed_state_trajectory_constraint" else "not_supported_or_control_variant"
     decision = {
         "stage_id": "sampling_time_constraint_colab_postprocess",
         "mechanism_postprocess_decision": "PASS" if probe_pass else "FAIL",

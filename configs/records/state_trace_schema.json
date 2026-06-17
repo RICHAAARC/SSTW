@@ -4,6 +4,8 @@
     "sample_id",
     "method_variant",
     "state_entropy",
-    "state_coverage_ratio"
+    "state_coverage_ratio",
+    "trajectory_source_level",
+    "flow_state_admissibility_status"
   ]
 }

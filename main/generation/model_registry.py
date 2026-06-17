@@ -21,6 +21,7 @@ class GenerationModelSpec:
     vae_backend_id: str
     trajectory_capture_mode: str
     trajectory_availability_status: str
+    generation_model_role: str = "unspecified_generation_model_role"
 
 
 def load_generation_models(path: str | Path) -> list[GenerationModelSpec]:

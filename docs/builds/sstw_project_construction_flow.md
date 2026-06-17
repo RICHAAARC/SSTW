@@ -732,3 +732,16 @@ unseen_key_attack_prompt_generalization = PASS
 failure_case_taxonomy_ready = true
 release_package_rebuildable = true
 ```
+
+---
+
+## Wan2.1 SSTW-TC 主线补充约束
+
+当前 SSTW-TC 主线模型固定为:
+
+```text
+Wan-AI/Wan2.1-T2V-1.3B-Diffusers
+```
+
+该选择用于支撑 “Flow Matching 生成轨迹中的状态空间水印” 叙事。LTX-Video 仅保留为工程预验证和回退 probe, 不作为 Flow Matching 主线 claim 的唯一证据。主线结果必须记录 `flow_velocity_alignment_gain` 并通过 `primary_flow_matching_model_ready` 与 `flow_velocity_proxy_ready` 检查。
+

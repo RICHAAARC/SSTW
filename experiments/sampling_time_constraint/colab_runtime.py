@@ -10,7 +10,7 @@ from hashlib import sha256
 from pathlib import Path
 from typing import Any
 
-from experiments.generative_video_model_probe.colab_runtime import _export_video, _load_ltx_pipeline, _select_dtype, _sha256_file, _tensor_stats
+from experiments.generative_video_model_probe.colab_runtime import _export_video, _select_dtype, _sha256_file, _tensor_stats
 from main.generation.sampling_constraint_adapter import apply_latent_sampling_constraint
 from main.protocol.record_writer import write_json, write_jsonl
 from main.protocol.table_builder import write_csv
@@ -19,6 +19,8 @@ PROFILE_SETTINGS = {
     "smoke": {"prompt_limit": 1, "seed_limit": 1, "num_inference_steps": 8, "num_frames": 33, "height": 320, "width": 512},
     "recommended": {"prompt_limit": 2, "seed_limit": 2, "num_inference_steps": 16, "num_frames": 49, "height": 320, "width": 512},
 }
+
+WAN21_PRIMARY_MODEL_ID = "Wan-AI/Wan2.1-T2V-1.3B-Diffusers"
 
 METHOD_VARIANTS = (
     "key_conditioned_state_space_with_trajectory",
@@ -66,6 +68,48 @@ def _build_generation_plan(prompt_suite: dict, profile: str, model_id: str) -> l
     return plan
 
 
+def _model_family_from_id(model_id: str) -> str:
+    """根据模型 ID 选择生成主干家族标签。"""
+    normalized = model_id.lower()
+    if "wan2.1" in normalized or "wan2_1" in normalized or "wan-ai" in normalized:
+        return "diffusers_wan21_flow_matching_dit"
+    if "ltx" in normalized:
+        return "diffusers_ltx_video"
+    return "diffusers_video_generation"
+
+
+def _scheduler_id_for_model(model_id: str) -> str:
+    """为不同视频生成 pipeline 记录 scheduler 语义。"""
+    if _model_family_from_id(model_id) == "diffusers_wan21_flow_matching_dit":
+        return "wan21_flow_matching_pipeline_default_scheduler"
+    return "ltx_pipeline_default_scheduler"
+
+
+def _load_video_generation_pipeline(model_id: str, torch_dtype: Any) -> Any:
+    """加载 B6 / SSTW-TC 主线视频生成 pipeline。
+
+    该函数属于通用工程封装。Wan2.1 被设置为 SSTW-TC 主线 Flow Matching DiT 模型;
+    LTX-Video 保留为前置机制验证和回退测试入口。Notebook 仍然只调用仓库模块,
+    不在 Notebook 中手写正式 records。
+    """
+    hf_token = os.environ.get("HF_TOKEN") or None
+    if _model_family_from_id(model_id) == "diffusers_wan21_flow_matching_dit":
+        from diffusers import WanPipeline
+
+        pipe = WanPipeline.from_pretrained(model_id, torch_dtype=torch_dtype, token=hf_token)
+    else:
+        from diffusers import LTXPipeline
+
+        pipe = LTXPipeline.from_pretrained(model_id, torch_dtype=torch_dtype, token=hf_token)
+    if hasattr(pipe, "enable_model_cpu_offload"):
+        pipe.enable_model_cpu_offload()
+    else:
+        pipe.to("cuda")
+    if hasattr(pipe, "vae") and hasattr(pipe.vae, "enable_tiling"):
+        pipe.vae.enable_tiling()
+    return pipe
+
+
 def run_sampling_constraint_colab_probe(
     output_root: str | Path,
     prompt_suite_path: str | Path,
@@ -89,8 +133,10 @@ def run_sampling_constraint_colab_probe(
     settings = PROFILE_SETTINGS[profile]
     dtype = _select_dtype(torch)
     hf_token_status = "provided" if os.environ.get("HF_TOKEN") else "not_provided"
-    pipe = _load_ltx_pipeline(model_id, dtype)
+    pipe = _load_video_generation_pipeline(model_id, dtype)
     plan = _build_generation_plan(prompt_suite, profile, model_id)
+    model_family = _model_family_from_id(model_id)
+    scheduler_id = _scheduler_id_for_model(model_id)
 
     generation_records: list[dict] = []
     trajectory_records: list[dict] = []
@@ -102,10 +148,12 @@ def run_sampling_constraint_colab_probe(
         constraint_trace_id = f"b6_constraint_{index:04d}"
         step_stats: list[dict] = []
         step_constraint_records: list[dict] = []
+        previous_callback_latents: Any | None = None
         schedule = _schedule_by_id(lambda_schedules, _variant_schedule_id(item["method_variant"]))
         key_text = f"{constraint_config['constraint_key_id']}::{item['prompt_id']}::{item['seed_id']}::{item['method_variant']}"
 
         def constraint_callback(pipe_instance: Any, step_index: int, timestep: Any, callback_kwargs: dict) -> dict:  # pragma: no cover - Colab GPU path
+            nonlocal previous_callback_latents
             latents = callback_kwargs.get("latents")
             stats = _tensor_stats(latents) if latents is not None else {"latent_norm": None, "latent_mean": None, "latent_std": None}
             if latents is not None:
@@ -117,13 +165,17 @@ def run_sampling_constraint_colab_probe(
                     schedule,
                     item["method_variant"],
                     key_text,
+                    previous_callback_latents,
                 )
                 callback_kwargs["latents"] = constrained_latents
+                previous_callback_latents = constrained_latents.detach().clone()
             else:
                 constraint_record = {
                     "constraint_apply_status": "not_applied",
                     "constraint_apply_reason": "missing_latents",
                     "latent_alignment_gain": 0.0,
+                    "flow_velocity_proxy_available": False,
+                    "flow_velocity_proxy_source": "missing_current_callback_latents",
                 }
             step_stats.append({
                 "trajectory_trace_id": trace_id,
@@ -147,6 +199,7 @@ def run_sampling_constraint_colab_probe(
                 "constraint_payload_code_id": constraint_config["constraint_payload_code_id"],
                 "constraint_tubelet_selector_id": constraint_config["constraint_tubelet_selector_id"],
                 "constraint_main_claim_status": "real_sampling_probe_pending_full_claim",
+                "flow_matching_backbone_claim_status": "wan21_primary_flow_matching_claim" if model_family == "diffusers_wan21_flow_matching_dit" else "non_primary_mechanism_probe",
                 **constraint_record,
             })
             return callback_kwargs
@@ -181,7 +234,7 @@ def run_sampling_constraint_colab_probe(
             "colab_runtime_profile": profile,
             "generation_model_id": item["generation_model_id"],
             "generation_model_name": item["generation_model_id"],
-            "generation_model_family": "diffusers_ltx_video",
+            "generation_model_family": model_family,
             "generation_model_version": "from_pretrained_runtime_resolution",
             "generation_model_license_status": "model_card_required",
             "hf_token_status": hf_token_status,
@@ -194,9 +247,10 @@ def run_sampling_constraint_colab_probe(
             "prompt_suite_role": item["prompt_suite_role"],
             "motion_pattern_id": item["motion_pattern_id"],
             "seed_id": item["seed_id"],
-            "scheduler_id": "ltx_pipeline_default_scheduler",
-            "trajectory_scheduler_id": "ltx_pipeline_default_scheduler",
-            "trajectory_time_grid_id": "callback_on_step_end_grid",
+            "scheduler_id": scheduler_id,
+            "trajectory_scheduler_id": scheduler_id,
+            "trajectory_time_grid_id": "flow_matching_callback_on_step_end_grid" if model_family == "diffusers_wan21_flow_matching_dit" else "callback_on_step_end_grid",
+            "flow_matching_backbone_claim_status": "wan21_primary_flow_matching_claim" if model_family == "diffusers_wan21_flow_matching_dit" else "non_primary_mechanism_probe",
             "num_inference_steps": settings["num_inference_steps"],
             "video_length_frames": settings["num_frames"],
             "video_resolution": f"{settings['width']}x{settings['height']}",
@@ -230,6 +284,8 @@ def run_sampling_constraint_colab_probe(
             "successful_generation_count": successful_count,
             "constraint_record_count": len(constraint_records),
             "constraint_main_claim_status": "real_sampling_probe_pending_full_claim",
+            "primary_sstw_tc_model_id": WAN21_PRIMARY_MODEL_ID,
+            "primary_sstw_tc_model_status": "matched" if model_id == WAN21_PRIMARY_MODEL_ID else "not_matched",
             "gpu_name": gpu_name,
             "gpu_memory_mb": gpu_memory_mb,
         },
@@ -241,6 +297,8 @@ def run_sampling_constraint_colab_probe(
         "input_paths": [str(prompt_suite_path), str(constraint_config_path), str(lambda_schedules_path)],
         "output_paths": [str(output_root / "records" / "generation_records.jsonl"), str(output_root / "records" / "constraint_records.jsonl")],
         "rebuild_command": "python -m experiments.sampling_time_constraint.colab_runtime",
+        "primary_sstw_tc_model_id": WAN21_PRIMARY_MODEL_ID,
+        "generation_model_family": model_family,
         "colab_runtime_profile": profile,
         "gpu_name": gpu_name,
         "gpu_memory_mb": gpu_memory_mb,
@@ -260,7 +318,7 @@ def main() -> None:
     parser.add_argument("--output-root", default="outputs/runs/sampling_time_constraint_colab")
     parser.add_argument("--prompt-suite-path", default="outputs/datasets/generative_video_prompt_suite/prompt_seed_suite.json")
     parser.add_argument("--profile", choices=sorted(PROFILE_SETTINGS), default="smoke")
-    parser.add_argument("--model-id", default="Lightricks/LTX-Video")
+    parser.add_argument("--model-id", default=WAN21_PRIMARY_MODEL_ID)
     parser.add_argument("--constraint-config-path", default="configs/generation/sampling_constraint.json")
     parser.add_argument("--lambda-schedules-path", default="configs/generation/lambda_schedules.json")
     args = parser.parse_args()

@@ -7,6 +7,7 @@ import subprocess
 import sys
 
 DEFAULT_DRIVE_PROJECT_ROOT = "/content/drive/MyDrive/SSTW"
+DEFAULT_SSTW_TC_PRIMARY_MODEL_ID = "Wan-AI/Wan2.1-T2V-1.3B-Diffusers"
 
 
 def build_drive_layout(drive_project_root: str = DEFAULT_DRIVE_PROJECT_ROOT) -> dict[str, str]:
@@ -36,7 +37,11 @@ def build_prompt_suite_command(layout: dict[str, str]) -> list[str]:
     return [sys.executable, "scripts/prepare_generative_video_prompt_suite.py", "--output-root", layout["drive_dataset_root"]]
 
 
-def build_sampling_constraint_colab_runtime_command(layout: dict[str, str], profile: str, model_id: str) -> list[str]:
+def build_sampling_constraint_colab_runtime_command(
+    layout: dict[str, str],
+    profile: str,
+    model_id: str = DEFAULT_SSTW_TC_PRIMARY_MODEL_ID,
+) -> list[str]:
     """构造 B6 Colab GPU runtime 命令。"""
     return [
         sys.executable,

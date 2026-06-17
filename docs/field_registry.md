@@ -207,7 +207,10 @@ Notebook 与 repository module 的跨边界数据
 | generation_model_id | protocol | none | true | false | false | B5 generation model identifier. |
 | generation_model_name | protocol | none | true | false | false | B5 generation model name. |
 | generation_model_family | protocol | none | true | false | false | B5 generation model family. |
+| primary_sstw_tc_model_id | protocol | none | true | false | false | Primary model identifier for SSTW-TC Flow Matching evaluation. |
+| primary_sstw_tc_model_status | governance | none | true | false | false | Whether the runtime model matches the configured SSTW-TC primary model. |
 | generation_model_version | protocol | none | true | false | false | B5 generation model version. |
+| generation_model_role | protocol | none | true | false | false | Role assigned to a generation model in the SSTW-TC evaluation plan. |
 | generation_model_commit_or_hash | protocol | none | true | false | false | B5 generation model commit or hash. |
 | generation_model_license_status | protocol | none | true | false | false | B5 generation model license audit status. |
 | generation_backend_id | protocol | none | true | false | false | B5 generation backend identifier. |
@@ -432,6 +435,21 @@ Notebook 与 repository module 的跨边界数据
 | latent_norm_before_constraint | metric | none | true | false | false | Latent norm before sampling-time callback update. |
 | latent_norm_after_constraint | metric | none | true | false | false | Latent norm after sampling-time callback update. |
 | latent_constraint_delta_norm | metric | none | true | false | false | Absolute latent norm delta after sampling-time callback update. |
+| flow_matching_backbone_claim_status | claim | none | true | true | false | Claim boundary status for Wan2.1 Flow Matching backbone evidence. |
+| flow_velocity_proxy_available | governance | none | true | false | false | Whether adjacent callback latent displacement is available as a flow velocity proxy. |
+| flow_velocity_proxy_source | protocol | none | true | false | false | Source used to derive flow velocity proxy records. |
+| flow_velocity_proxy_norm_before_constraint | metric | none | true | false | false | Flow velocity proxy norm before sampling-time callback update. |
+| flow_velocity_proxy_norm_after_constraint | metric | none | true | false | false | Flow velocity proxy norm after sampling-time callback update. |
+| flow_velocity_alignment_before_constraint | metric | none | true | false | false | Alignment between flow velocity proxy and keyed constraint direction before callback update. |
+| flow_velocity_alignment_after_constraint | metric | none | true | false | false | Alignment between flow velocity proxy and keyed constraint direction after callback update. |
+| flow_velocity_alignment_gain | metric | none | true | false | false | Alignment gain showing whether velocity / flow trajectory participates in watermark synchronization. |
+| flow_velocity_alignment_gain_mean | metric | none | true | false | false | Mean flow velocity alignment gain for one method variant. |
+| flow_velocity_proxy_record_count | metric | none | true | false | false | Number of constraint records with available flow velocity proxy. |
+| keyed_flow_velocity_alignment_gain_mean | metric | none | true | false | false | Mean flow velocity alignment gain for keyed SSTW-TC constraint records. |
+| baseline_flow_velocity_alignment_gain_mean | metric | none | true | false | false | Mean flow velocity alignment gain for the unconstrained baseline. |
+| flow_velocity_gain_over_unconstrained | metric | none | true | false | false | Flow velocity alignment gain of keyed constraint over the unconstrained baseline. |
+| flow_velocity_proxy_ready | governance | none | true | false | false | Whether flow velocity proxy evidence is ready for mechanism audit. |
+| primary_flow_matching_model_ready | governance | none | true | false | false | Whether the checked run uses Wan2.1 as the primary Flow Matching backbone. |
 | constraint_variant_summary_records | artifact | none | true | false | false | Aggregated B6 Colab constraint variant summary records. |
 | keyed_constraint_alignment_gain_mean | metric | none | true | false | false | Mean alignment gain for keyed sampling constraint variant. |
 | baseline_alignment_gain_mean | metric | none | true | false | false | Mean alignment gain for unconstrained trajectory baseline. |
@@ -467,3 +485,26 @@ Notebook 与 repository module 的跨边界数据
 | archive_name | artifact | none | true | false | false | File path inside a package archive. |
 | size_bytes | metric | none | true | false | false | File size in bytes recorded by package manifest. |
 | sha256 | artifact | none | true | false | false | File sha256 digest recorded by package manifest. |
+
+| submission_readiness_decision | governance | none | true | false | false | Overall submission readiness decision derived from claim audit records. |
+| main_submission_variant | governance | none | true | false | false | Method variant currently eligible for main submission narrative. |
+| exploratory_variants | governance | none | true | false | false | Method variants allowed only as exploratory or appendix content. |
+| main_text_ready_claim_count | metric | none | true | false | false | Number of supported claims ready for main text. |
+| exploratory_ready_claim_count | metric | none | true | false | false | Number of supported exploratory claims. |
+| downgraded_claim_count | metric | none | true | false | false | Number of claims downgraded from main claim status. |
+| blocked_claim_count | metric | none | true | false | false | Number of blocked claims in readiness summary. |
+| package_ready | governance | none | true | false | false | Whether package digest and package artifacts are available. |
+| remaining_submission_tasks | governance | none | true | false | false | Remaining governed tasks before paper submission. |
+| claim_boundary_statement | claim | none | true | true | false | Reader-facing statement of allowed claim boundary. |
+| readiness_bucket | governance | none | true | false | false | Claim readiness bucket used in submission readiness claim table. |
+
+| table_id | artifact | none | true | false | false | Semantic identifier of a rebuilt submission table. |
+| stage_label | governance | none | true | false | false | Human-readable stage label used in submission tables. |
+| primary_metrics | metric | none | true | false | false | Bounded key metrics serialized from governed stage evidence details. |
+| output_tables | artifact | none | true | false | false | Table paths generated by a table manifest. |
+| stage_evidence_row_count | metric | none | true | false | false | Number of rows in the stage evidence main table. |
+| main_claim_row_count | metric | none | true | false | false | Number of rows in the main claim table. |
+| exploratory_boundary_row_count | metric | none | true | false | false | Number of rows in the exploratory boundary table. |
+| table_rebuild_status | governance | none | true | false | false | Whether submission main tables were rebuilt from governed records. |
+| main_tables_rebuild_status | governance | none | true | false | false | Main tables rebuild status copied into submission preparation decision. |
+| allowed_paper_location | governance | none | true | false | false | Allowed paper location for an exploratory or downgraded claim. |

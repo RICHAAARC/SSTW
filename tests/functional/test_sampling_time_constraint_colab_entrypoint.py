@@ -9,6 +9,7 @@ import pytest
 
 from main.generation.sampling_constraint_adapter import apply_latent_sampling_constraint
 from paper_workflow.notebook_utils.sampling_time_constraint_workflow import (
+    DEFAULT_SSTW_TC_PRIMARY_MODEL_ID,
     build_drive_layout,
     build_drive_packaging_command,
     build_formal_metric_command,
@@ -52,6 +53,39 @@ def test_sampling_constraint_adapter_updates_latents_on_active_step() -> None:
 
 
 @pytest.mark.quick
+def test_sampling_constraint_adapter_records_flow_velocity_proxy() -> None:
+    """sampling constraint adapter 必须记录相邻 latent 位移形成的 flow velocity proxy。"""
+    import torch
+
+    previous_latents = torch.zeros((1, 2, 4, 4), dtype=torch.float32)
+    latents = torch.ones((1, 2, 4, 4), dtype=torch.float32) * 0.01
+    constraint_config = {
+        "constraint_norm_budget": 0.06,
+        "constraint_key_id": "test_key",
+    }
+    schedule_config = {
+        "lambda_schedule_id": "constant_weak_constraint",
+        "lambda_max": 0.1,
+        "lambda_time_window": [0.0, 1.0],
+    }
+
+    _constrained, record = apply_latent_sampling_constraint(
+        latents,
+        step_index=1,
+        num_steps=4,
+        constraint_config=constraint_config,
+        schedule_config=schedule_config,
+        method_variant="keyed_state_trajectory_constraint",
+        key_text="test_key::prompt::seed",
+        previous_latents=previous_latents,
+    )
+
+    assert record["flow_velocity_proxy_available"] is True
+    assert record["flow_velocity_proxy_source"] == "adjacent_callback_latent_displacement"
+    assert record["flow_velocity_alignment_gain"] is not None
+
+
+@pytest.mark.quick
 def test_sampling_time_constraint_colab_workflow_uses_drive_layout() -> None:
     """B6 Colab workflow 必须落盘到 MyDrive/SSTW 的 sampling_time_constraint 子目录。"""
     layout = build_drive_layout()
@@ -60,17 +94,32 @@ def test_sampling_time_constraint_colab_workflow_uses_drive_layout() -> None:
     assert layout["drive_run_root"] == "/content/drive/MyDrive/SSTW/runs/sampling_time_constraint_colab"
     assert layout["drive_package_dir"] == "/content/drive/MyDrive/SSTW/packages/sampling_time_constraint"
 
-    runtime_command = build_sampling_constraint_colab_runtime_command(layout, "recommended", "Lightricks/LTX-Video")
+    runtime_command = build_sampling_constraint_colab_runtime_command(layout, "recommended")
     formal_command = build_formal_metric_command(layout)
     postprocess_command = build_postprocess_command(layout)
     result_check_command = build_result_check_command(layout)
     package_command = build_drive_packaging_command(layout)
 
     assert "experiments.sampling_time_constraint.colab_runtime" in runtime_command
+    assert DEFAULT_SSTW_TC_PRIMARY_MODEL_ID in runtime_command
     assert "experiments.generative_video_model_probe.formal_metric_runner" in formal_command
     assert "experiments.sampling_time_constraint.postprocess_runner" in postprocess_command
     assert "scripts/check_results/sampling_time_constraint_colab_result_checker.py" in result_check_command
     assert "scripts/package_results/sampling_time_constraint_drive_packager.py" in package_command
+
+
+@pytest.mark.quick
+def test_generation_model_config_uses_wan21_as_sstw_tc_primary() -> None:
+    """generation model 配置必须把 Wan2.1 作为 SSTW-TC Flow Matching 主线模型。"""
+    config = json.loads(Path("configs/generation/generation_models.json").read_text(encoding="utf-8"))
+    primary = next(
+        item for item in config["models"]
+        if item.get("generation_model_role") == "sstw_tc_primary_flow_matching_model"
+    )
+
+    assert primary["generation_model_id"] == DEFAULT_SSTW_TC_PRIMARY_MODEL_ID
+    assert primary["generation_model_family"] == "diffusers_wan21_flow_matching_dit"
+    assert primary["trajectory_capture_mode"] == "callback_latents_and_adjacent_callback_velocity_proxy"
 
 
 @pytest.mark.quick
@@ -85,6 +134,7 @@ def test_sampling_time_constraint_colab_notebook_calls_repository_modules() -> N
     assert "drive.mount('/content/drive')" in source
     assert "sampling_time_constraint_workflow" in source
     assert "PROFILE = 'recommended'" in source
+    assert "Wan-AI/Wan2.1-T2V-1.3B-Diffusers" in source
     assert "HF_TOKEN" in source
     assert "pytest -q" in source
     assert "tools/harness/run_all_audits.py" in source
@@ -126,6 +176,8 @@ def test_sampling_time_constraint_result_checker_accepts_governed_probe_records(
             "colab_runtime_profile": "recommended",
             "generation_status": "success",
             "generation_model_id": "test_model",
+            "generation_model_family": "diffusers_wan21_flow_matching_dit",
+            "flow_matching_backbone_claim_status": "wan21_primary_flow_matching_claim",
             "method_variant": variant,
             "prompt_id": "prompt_001",
             "seed_id": "seed_001",
@@ -142,6 +194,8 @@ def test_sampling_time_constraint_result_checker_accepts_governed_probe_records(
             "method_variant": variant,
             "constraint_apply_status": "applied" if applied else "not_applied",
             "latent_alignment_gain": 0.1 if applied else 0.0,
+            "flow_velocity_proxy_available": True,
+            "flow_velocity_alignment_gain": 0.1 if applied else 0.0,
         })
         formal_records.append({
             "method_variant": variant,
@@ -178,6 +232,9 @@ def test_sampling_time_constraint_result_checker_accepts_governed_probe_records(
             "details": {
                 "keyed_constraint_alignment_gain_mean": 0.1,
                 "baseline_alignment_gain_mean": 0.0,
+                "keyed_flow_velocity_alignment_gain_mean": 0.1,
+                "baseline_flow_velocity_alignment_gain_mean": 0.0,
+                "flow_velocity_proxy_ready": True,
                 "formal_quality_semantic_ready": True,
             },
         }),
@@ -192,5 +249,7 @@ def test_sampling_time_constraint_result_checker_accepts_governed_probe_records(
 
     assert payload["implementation_evidence_status"] == "PASS"
     assert payload["mechanism_evidence_status"] == "PASS"
+    assert payload["primary_flow_matching_model_ready"] is True
+    assert payload["flow_velocity_proxy_ready"] is True
     assert payload["claim_boundary"] == "real_sampling_probe_not_final_b6_submission_claim"
     assert payload["next_recommended_action"] == "proceed_to_b6_claim_audit_and_submission_freeze_preparation"

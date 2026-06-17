@@ -43,6 +43,8 @@ def _variant_rows(constraint_records: list[dict], formal_records: list[dict]) ->
             "constraint_record_count": len(constraint_group),
             "formal_metric_record_count": len(formal_group),
             "latent_alignment_gain_mean": round(_mean(constraint_group, "latent_alignment_gain"), 6),
+            "flow_velocity_alignment_gain_mean": round(_mean(constraint_group, "flow_velocity_alignment_gain"), 6),
+            "flow_velocity_proxy_record_count": sum(1 for record in constraint_group if record.get("flow_velocity_proxy_available") is True),
             "constraint_applied_step_count": sum(1 for record in constraint_group if record.get("constraint_apply_status") == "applied"),
             "formal_visual_motion_ready": bool(formal_group) and all(record.get("formal_visual_quality_ready") is True and record.get("formal_motion_consistency_ready") is True for record in formal_group),
             "formal_semantic_ready": bool(formal_group) and all(record.get("formal_semantic_consistency_ready") is True for record in formal_group),
@@ -61,6 +63,10 @@ def postprocess_sampling_constraint_colab_run(run_root: str | Path) -> dict:
     baseline_row = next((row for row in rows if row["method_variant"] == "key_conditioned_state_space_with_trajectory"), {})
     keyed_gain = float(keyed_row.get("latent_alignment_gain_mean", 0.0))
     baseline_gain = float(baseline_row.get("latent_alignment_gain_mean", 0.0))
+    keyed_flow_velocity_gain = float(keyed_row.get("flow_velocity_alignment_gain_mean", 0.0))
+    baseline_flow_velocity_gain = float(baseline_row.get("flow_velocity_alignment_gain_mean", 0.0))
+    flow_velocity_gain_over_baseline = round(keyed_flow_velocity_gain - baseline_flow_velocity_gain, 6)
+    flow_velocity_proxy_ready = bool(keyed_row) and int(keyed_row.get("flow_velocity_proxy_record_count", 0)) > 0
     gain_over_baseline = round(keyed_gain - baseline_gain, 6)
     formal_ready = bool(keyed_row) and keyed_row.get("formal_visual_motion_ready") is True and keyed_row.get("formal_semantic_ready") is True
     implementation_pass = runtime_decision.get("implementation_decision") == "PASS" and bool(constraint_records)
@@ -68,6 +74,8 @@ def postprocess_sampling_constraint_colab_run(run_root: str | Path) -> dict:
         implementation_pass,
         keyed_row.get("constraint_applied_step_count", 0) > 0,
         gain_over_baseline > 0.0,
+        flow_velocity_proxy_ready,
+        flow_velocity_gain_over_baseline > 0.0,
         formal_ready,
     ])
     decision = {
@@ -81,6 +89,10 @@ def postprocess_sampling_constraint_colab_run(run_root: str | Path) -> dict:
             "keyed_constraint_alignment_gain_mean": keyed_gain,
             "baseline_alignment_gain_mean": baseline_gain,
             "trajectory_constraint_gain_over_unconstrained": gain_over_baseline,
+            "keyed_flow_velocity_alignment_gain_mean": keyed_flow_velocity_gain,
+            "baseline_flow_velocity_alignment_gain_mean": baseline_flow_velocity_gain,
+            "flow_velocity_gain_over_unconstrained": flow_velocity_gain_over_baseline,
+            "flow_velocity_proxy_ready": flow_velocity_proxy_ready,
             "formal_quality_semantic_ready": formal_ready,
             "constraint_main_claim_status": "real_sampling_probe_not_final_b6_submission_claim",
         },

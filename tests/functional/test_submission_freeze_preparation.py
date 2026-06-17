@@ -111,6 +111,8 @@ def test_submission_freeze_preparation_downgrades_sstw_tc_claim(tmp_path: Path) 
             "colab_runtime_profile": "recommended",
             "generation_status": "success",
             "generation_model_id": "test_model",
+            "generation_model_family": "diffusers_wan21_flow_matching_dit",
+            "flow_matching_backbone_claim_status": "wan21_primary_flow_matching_claim",
             "method_variant": variant,
             "prompt_id": "prompt_001",
             "seed_id": "seed_001",
@@ -127,6 +129,8 @@ def test_submission_freeze_preparation_downgrades_sstw_tc_claim(tmp_path: Path) 
             "method_variant": variant,
             "constraint_apply_status": "applied" if applied else "not_applied",
             "latent_alignment_gain": 0.1 if applied else 0.0,
+            "flow_velocity_proxy_available": True,
+            "flow_velocity_alignment_gain": 0.1 if applied else 0.0,
         })
         formal_records.append({
             "method_variant": variant,
@@ -153,6 +157,9 @@ def test_submission_freeze_preparation_downgrades_sstw_tc_claim(tmp_path: Path) 
         "details": {
             "keyed_constraint_alignment_gain_mean": 0.1,
             "baseline_alignment_gain_mean": 0.0,
+            "keyed_flow_velocity_alignment_gain_mean": 0.1,
+            "baseline_flow_velocity_alignment_gain_mean": 0.0,
+            "flow_velocity_proxy_ready": True,
             "formal_quality_semantic_ready": True,
         },
     })
@@ -176,6 +183,7 @@ def test_submission_freeze_preparation_downgrades_sstw_tc_claim(tmp_path: Path) 
     assert decision["details"]["package_digest"]
     assert Path(decision["details"]["archive_path"]).exists()
     assert Path(decision["details"]["package_manifest_path"]).exists()
+    assert payload["submission_readiness_decision"] == "PASS"
 
     claim_records = [
         json.loads(line)
@@ -185,3 +193,21 @@ def test_submission_freeze_preparation_downgrades_sstw_tc_claim(tmp_path: Path) 
     sstw_tc = next(record for record in claim_records if record["claim_id"] == "claim_sstw_tc_submission_freeze")
     assert sstw_tc["claim_status"] == "needs_downgrade"
     assert sstw_tc["claim_scope"] == "exploratory"
+
+    readiness_summary = json.loads(
+        (tmp_path / "submission_freeze_preparation" / "artifacts" / "submission_readiness_summary.json").read_text(encoding="utf-8")
+    )
+    assert readiness_summary["submission_readiness_decision"] == "PASS"
+    assert readiness_summary["main_submission_variant"] == "SSTW-T"
+    assert readiness_summary["exploratory_variants"] == ["SSTW-TC"]
+    assert "submission-freeze evidence" in readiness_summary["claim_boundary_statement"]
+
+    main_tables_manifest = json.loads(
+        (tmp_path / "submission_freeze_preparation" / "artifacts" / "submission_main_tables_manifest.json").read_text(encoding="utf-8")
+    )
+    assert main_tables_manifest["table_rebuild_status"] == "PASS"
+    assert main_tables_manifest["main_submission_variant"] == "SSTW-T"
+    assert main_tables_manifest["main_claim_row_count"] >= 1
+    assert (tmp_path / "submission_freeze_preparation" / "tables" / "submission_stage_evidence_main_table.csv").exists()
+    assert (tmp_path / "submission_freeze_preparation" / "tables" / "submission_main_claim_table.csv").exists()
+    assert (tmp_path / "submission_freeze_preparation" / "tables" / "submission_exploratory_boundary_table.csv").exists()

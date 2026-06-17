@@ -173,6 +173,14 @@ def check_sampling_time_constraint_colab_results(run_root: str | Path) -> dict:
     baseline_applied_count = sum(1 for record in baseline_records if record.get("constraint_apply_status") == "applied")
     keyed_gain = float(postprocess_decision.get("details", {}).get("keyed_constraint_alignment_gain_mean", 0.0) or 0.0)
     baseline_gain = float(postprocess_decision.get("details", {}).get("baseline_alignment_gain_mean", 0.0) or 0.0)
+    keyed_flow_velocity_gain = float(postprocess_decision.get("details", {}).get("keyed_flow_velocity_alignment_gain_mean", 0.0) or 0.0)
+    baseline_flow_velocity_gain = float(postprocess_decision.get("details", {}).get("baseline_flow_velocity_alignment_gain_mean", 0.0) or 0.0)
+    flow_velocity_proxy_ready = postprocess_decision.get("details", {}).get("flow_velocity_proxy_ready") is True
+    primary_flow_matching_model_ready = any(
+        record.get("generation_model_family") == "diffusers_wan21_flow_matching_dit"
+        and record.get("flow_matching_backbone_claim_status") == "wan21_primary_flow_matching_claim"
+        for record in generation_records
+    )
     formal_visual_motion_ready_count = sum(
         1 for record in formal_metric_records
         if record.get("formal_visual_quality_ready") is True and record.get("formal_motion_consistency_ready") is True
@@ -198,6 +206,12 @@ def check_sampling_time_constraint_colab_results(run_root: str | Path) -> dict:
         missing_mechanism_requirements.append("unconstrained_baseline_should_not_apply_constraint")
     if keyed_gain <= baseline_gain:
         missing_mechanism_requirements.append("keyed_constraint_gain_not_above_baseline")
+    if not primary_flow_matching_model_ready:
+        missing_mechanism_requirements.append("wan21_primary_flow_matching_model_not_confirmed")
+    if not flow_velocity_proxy_ready:
+        missing_mechanism_requirements.append("flow_velocity_proxy_not_ready")
+    if keyed_flow_velocity_gain <= baseline_flow_velocity_gain:
+        missing_mechanism_requirements.append("keyed_flow_velocity_gain_not_above_baseline")
     if postprocess_decision.get("details", {}).get("formal_quality_semantic_ready") is not True:
         missing_mechanism_requirements.append("formal_quality_semantic_not_ready")
     if formal_metric_decision.get("formal_quality_motion_semantic_ready") is not True:
@@ -223,6 +237,10 @@ def check_sampling_time_constraint_colab_results(run_root: str | Path) -> dict:
         "baseline_constraint_applied_step_count": baseline_applied_count,
         "keyed_constraint_alignment_gain_mean": keyed_gain,
         "baseline_alignment_gain_mean": baseline_gain,
+        "keyed_flow_velocity_alignment_gain_mean": keyed_flow_velocity_gain,
+        "baseline_flow_velocity_alignment_gain_mean": baseline_flow_velocity_gain,
+        "flow_velocity_proxy_ready": flow_velocity_proxy_ready,
+        "primary_flow_matching_model_ready": primary_flow_matching_model_ready,
         "formal_visual_motion_ready_count": formal_visual_motion_ready_count,
         "formal_semantic_ready_count": formal_semantic_ready_count,
         "trajectory_capture_ready": trajectory_capture_ready,

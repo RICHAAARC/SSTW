@@ -44,6 +44,7 @@ def apply_latent_sampling_constraint(
     schedule_config: dict,
     method_variant: str,
     key_text: str,
+    previous_latents: Any | None = None,
 ) -> tuple[Any, dict]:
     """在采样 callback 中对 latent 施加弱约束并返回记录字段。
 
@@ -74,6 +75,7 @@ def apply_latent_sampling_constraint(
         constrained_latents = latents
     after_alignment = _cosine_alignment(constrained_latents, direction)
     after_norm = float(constrained_latents.detach().float().norm().item())
+    flow_record = _flow_velocity_proxy_record(previous_latents, latents, constrained_latents, direction)
     record = {
         "sampling_constraint_enabled": enabled,
         "constraint_apply_status": "applied" if applied else "not_applied",
@@ -91,5 +93,41 @@ def apply_latent_sampling_constraint(
         "latent_norm_before_constraint": round(before_norm, 6),
         "latent_norm_after_constraint": round(after_norm, 6),
         "latent_constraint_delta_norm": round(abs(after_norm - before_norm), 6),
+        **flow_record,
     }
     return constrained_latents, record
+
+
+def _flow_velocity_proxy_record(previous_latents: Any | None, latents: Any, constrained_latents: Any, direction: Any) -> dict:
+    """记录 callback 相邻 latent 位移所形成的 flow / velocity proxy。
+
+    该函数属于项目特定写法。Wan2.1 的 Flow Matching 采样链路在 Diffusers callback 中通常暴露的是当前 latent,
+    而不是模型内部完整 velocity 预测张量。因此这里使用相邻 callback latent 位移作为可审计的 flow trajectory proxy,
+    并同时记录约束前后该 proxy 与 key-conditioned 方向的对齐变化。该记录用于证明水印同步不是只作用在最终视频,
+    而是实际进入生成轨迹的状态更新过程。
+    """
+    if previous_latents is None:
+        return {
+            "flow_velocity_proxy_available": False,
+            "flow_velocity_proxy_source": "missing_previous_callback_latents",
+            "flow_velocity_proxy_norm_before_constraint": None,
+            "flow_velocity_proxy_norm_after_constraint": None,
+            "flow_velocity_alignment_before_constraint": None,
+            "flow_velocity_alignment_after_constraint": None,
+            "flow_velocity_alignment_gain": None,
+        }
+    velocity_before = latents - previous_latents.to(device=latents.device, dtype=latents.dtype)
+    velocity_after = constrained_latents - previous_latents.to(device=constrained_latents.device, dtype=constrained_latents.dtype)
+    before_norm = float(velocity_before.detach().float().norm().item())
+    after_norm = float(velocity_after.detach().float().norm().item())
+    before_alignment = _cosine_alignment(velocity_before, direction)
+    after_alignment = _cosine_alignment(velocity_after, direction)
+    return {
+        "flow_velocity_proxy_available": True,
+        "flow_velocity_proxy_source": "adjacent_callback_latent_displacement",
+        "flow_velocity_proxy_norm_before_constraint": round(before_norm, 6),
+        "flow_velocity_proxy_norm_after_constraint": round(after_norm, 6),
+        "flow_velocity_alignment_before_constraint": before_alignment,
+        "flow_velocity_alignment_after_constraint": after_alignment,
+        "flow_velocity_alignment_gain": round(after_alignment - before_alignment, 6),
+    }

@@ -12,6 +12,8 @@ from main.protocol.table_builder import write_csv
 from scripts.check_results.generative_video_colab_result_checker import check_generative_video_colab_results
 from scripts.check_results.sampling_time_constraint_colab_result_checker import check_sampling_time_constraint_colab_results
 from scripts.package_results.submission_freeze_preparation_packager import build_submission_freeze_preparation_package
+from experiments.submission_freeze_preparation.readiness_summary import build_submission_readiness_summary
+from experiments.submission_freeze_preparation.main_tables import build_submission_main_tables
 
 
 DEFAULT_STAGE_DECISION_PATHS = {
@@ -319,11 +321,14 @@ def run_submission_freeze_preparation(
         + json.dumps(decision, ensure_ascii=False, indent=2),
         encoding="utf-8",
     )
+    main_tables_manifest = build_submission_main_tables(output_root)
     package_manifest = build_submission_freeze_preparation_package(output_root, package_dir)
     decision["details"]["package_digest"] = package_manifest["package_digest"]
     decision["details"]["archive_path"] = package_manifest["archive_path"]
     decision["details"]["package_manifest_path"] = package_manifest["package_manifest_path"]
+    decision["details"]["main_tables_rebuild_status"] = main_tables_manifest["table_rebuild_status"]
     write_json(output_root / "artifacts" / "submission_freeze_preparation_decision.json", decision)
+    readiness_summary = build_submission_readiness_summary(output_root)
     report_path.write_text(
         "# Submission Freeze Preparation Report\n\n"
         "该报告由 B1-B6 governed records 和 decision artifacts 重建。"
@@ -338,6 +343,7 @@ def run_submission_freeze_preparation(
         "supported_claim_count": supported_claim_count,
         "needs_downgrade_claim_count": needs_downgrade_count,
         "unsupported_claim_count": unsupported_claim_count,
+        "submission_readiness_decision": readiness_summary["submission_readiness_decision"],
         "decision": decision,
     }
 

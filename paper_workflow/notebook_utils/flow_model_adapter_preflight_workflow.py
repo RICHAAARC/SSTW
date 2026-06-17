@@ -21,6 +21,7 @@ def build_drive_layout(drive_project_root: str = DEFAULT_DRIVE_PROJECT_ROOT) -> 
     return {
         "drive_project_root": root.as_posix(),
         "drive_run_root": (root / "runs" / "wan21_flow_adapter_preflight").as_posix(),
+        "drive_package_dir": (root / "packages" / "wan21_flow_adapter_preflight").as_posix(),
         "drive_log_dir": (root / "logs" / "wan21_flow_adapter_preflight").as_posix(),
     }
 
@@ -63,6 +64,21 @@ def build_wan21_flow_adapter_preflight_command(
         str(height),
         "--width",
         str(width),
+    ]
+
+
+def build_drive_packaging_command(layout: dict[str, str]) -> list[str]:
+    """构造真实 Wan2.1 GPU preflight 的 Google Drive 打包命令。
+
+    该命令只打包已生成的 governed outputs, 不补写实验结果。
+    """
+    return [
+        sys.executable,
+        "scripts/package_results/wan21_flow_adapter_preflight_drive_packager.py",
+        "--run-root",
+        layout["drive_run_root"],
+        "--drive-package-dir",
+        layout["drive_package_dir"],
     ]
 
 

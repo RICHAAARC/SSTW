@@ -584,3 +584,34 @@ python scripts/check_results/sampling_time_constraint_colab_result_checker.py   
 ```
 
 该检查器只允许输出 `real_sampling_probe_not_final_b6_submission_claim` 这一边界判断, 不得把 smoke / recommended probe 伪装为最终 `SSTW-TC` submission freeze claim。
+
+
+---
+
+## 15. Submission freeze preparation claim audit 入口
+
+在 B6 recommended real sampling callback probe 通过后, 项目进入 `submission_freeze_preparation` 阶段。该阶段新增入口:
+
+```bash
+python -m experiments.submission_freeze_preparation.runner   --output-root outputs/runs/submission_freeze_preparation
+```
+
+该入口会汇总 B1-B6 的 governed decisions 与 Drive Colab result checker 输出, 并生成:
+
+```text
+records/submission_stage_evidence_records.jsonl
+records/claim_audit_records.jsonl
+tables/claim_audit_table.csv
+artifacts/submission_freeze_preparation_decision.json
+artifacts/submission_freeze_preparation_manifest.json
+reports/submission_freeze_preparation_report.md
+```
+
+当前 claim 边界为:
+
+```text
+SSTW-T: 可进入 submission preparation
+SSTW-TC: 只能作为 exploratory sampling-time constraint probe, 不作为最终 submission-freeze main claim
+```
+
+因此该阶段的正确通过条件不是把 SSTW-TC 强行升级为主 claim, 而是明确生成 `needs_downgrade` claim audit record, 并保留 downgrade reason。

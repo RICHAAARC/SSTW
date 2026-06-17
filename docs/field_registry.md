@@ -437,3 +437,33 @@ Notebook 与 repository module 的跨边界数据
 | baseline_alignment_gain_mean | metric | none | true | false | false | Mean alignment gain for unconstrained trajectory baseline. |
 | sampling_time_constraint_colab_probe | governance | none | true | false | false | Stage identifier for B6 real sampling callback probe. |
 | sampling_time_constraint_colab_postprocess | governance | none | true | false | false | Stage identifier for B6 Colab postprocess artifacts. |
+
+| evidence_stage_id | governance | none | true | false | false | Stage identifier summarized by submission freeze preparation evidence records. |
+| evidence_decision | governance | none | true | false | false | PASS or FAIL decision summarized for one evidence stage. |
+| supporting_artifact_paths | artifact | none | true | false | false | Governed artifact paths supporting a claim or evidence record. |
+| evidence_details | governance | none | true | false | false | Bounded details copied from stage evidence for submission preparation. |
+| claim_text | claim | none | true | true | false | Human-readable claim text audited against governed artifacts. |
+| claim_scope | claim | none | true | true | false | Claim scope such as main or exploratory. |
+| claim_status | claim | none | true | true | false | Claim audit status such as supported, unsupported, or needs_downgrade. |
+| downgrade_reason | claim | none | true | true | false | Reason a claim is downgraded instead of used as a main claim. |
+| supporting_stage_ids | claim | none | true | true | false | Evidence stage identifiers supporting a claim audit record. |
+| supported_by_governed_artifacts | claim | none | true | true | false | Whether a claim maps to governed artifacts. |
+| claim_audit_record_count | metric | none | true | false | false | Number of claim audit records in submission freeze preparation. |
+| supported_claim_count | metric | none | true | false | false | Number of supported claims in submission freeze preparation. |
+| needs_downgrade_claim_count | metric | none | true | false | false | Number of downgraded claims in submission freeze preparation. |
+| unsupported_claim_count | metric | none | true | false | false | Number of unsupported claims in submission freeze preparation. |
+| sstw_t_submission_preparation_status | governance | none | true | false | false | Whether SSTW-T can enter submission preparation. |
+| sstw_tc_submission_freeze_status | governance | none | true | false | false | Whether SSTW-TC can be used as a final submission-freeze claim. |
+| claim_boundary_status | governance | none | true | false | false | Whether claim boundary and downgrade policy pass. |
+| release_package_rebuildable | governance | none | true | false | false | Release package rebuildability status for submission freeze preparation. |
+
+| package_dir | artifact | none | true | false | false | Directory where a governed package is written. |
+| package_file_count | metric | none | true | false | false | Number of files included in a governed package. |
+| package_size_bytes | metric | none | true | false | false | Size of a governed package archive in bytes. |
+| included_subdirs | artifact | none | true | false | false | Governed subdirectories included in a package. |
+| excluded_asset_policy | governance | none | true | false | false | Policy describing assets intentionally excluded from a package. |
+| file_records | artifact | none | true | false | false | File-level package manifest records. |
+| relative_path | artifact | none | true | false | false | File path relative to the packaged run root. |
+| archive_name | artifact | none | true | false | false | File path inside a package archive. |
+| size_bytes | metric | none | true | false | false | File size in bytes recorded by package manifest. |
+| sha256 | artifact | none | true | false | false | File sha256 digest recorded by package manifest. |

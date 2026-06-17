@@ -1,747 +1,1061 @@
-# SSTW 项目构建流程：面向生成式视频轨迹的密钥条件状态空间水印推断
+# SSTW 项目整体构建流程指引：状态空间同步 Flow Matching 轨迹水印
 
 ## 0. 文档定位
 
-本文档用于指导 SSTW 从零构建为一篇可独立投稿 CVPR / ICCV / ECCV 等顶级会议的生成式视频水印论文。本文档的核心目标不是复现或扩展任何已有真实视频同步水印工程, 而是构建一个独立问题、独立方法、独立实验主线的研究项目。
+本文档定义 SSTW 项目的整体构建流程。它的职责不是记录项目进度, 也不是列出某一轮实验的执行状态, 而是规定从方法机制到实验产物、论文证据和投稿判断之间的固定构建顺序。
 
-SSTW 的正式研究对象定义为:
+本文档依赖的核心方法机制为:
 
-\[
-\boxed{
-\text{Key-conditioned state-space watermark inference over generative video trajectories}
-}
-\]
+```text
+velocity_field_weak_watermark_constraint
++ endpoint_aware_minimum_energy_flow_control
++ time_reparameterization_invariant_path_observation
++ replay_uncertainty_aware_flow_state_inference
++ flow_state_evidence_admissibility
++ fixed_low_fpr_calibrated_detection
+```
 
-中文表述为:
+因此, SSTW 的项目构建必须围绕以下问题展开:
 
-> 面向生成式视频轨迹的密钥条件状态空间水印推断。
+```text
+密钥条件速度场弱约束是否真实参与 Flow Matching 生成轨迹;
+路径积分轨迹证据是否在 fixed-FPR 条件下提供独立增益;
+状态空间后验推断是否优于普通时序聚合器、显式时间对齐和通用状态模型;
+真实 Flow Matching 模型是否能暴露、记录和复现可审计 trajectory proxy;
+小规模真实模型 pilot 是否显示 Claim-1、Claim-2 和受限 Claim-3 有成立迹象;
+该机制在真实视频生成链路、真实 VAE 链路和攻击协议下是否保持低误报;
+所有可支持论文主张的结果是否来自 governed records、tables、figures、reports 和 manifests。
+```
 
-项目最终应证明: 视频生成水印中的时间失同步不是简单的 offset / scale 对齐问题, 而是攻击扰动、生成轨迹、密钥编码和水印证据共同作用下的隐状态估计问题。
+本文档属于整体流程指引。具体阶段构建文档、Colab notebook、runner、checker 和 packager 必须服从本文档, 但不得把某次运行结果、临时输出或人工结论写入本文档。
+
+分阶段构建文档统一放置于:
+
+```text
+docs/builds/phases/
+```
+
+阶段完成情况汇总记录放置于:
+
+```text
+docs/builds/sstw_phase_completion_status.md
+```
+
+分阶段构建文档可以记录该阶段的当前工程状态; 本整体流程文档只记录流程规范, 不记录执行进度。
 
 ---
 
 ## 1. 顶会投稿版本的最低定义
 
-SSTW 只有在满足以下条件后, 才进入 CVPR / ICCV / ECCV 主会投稿路径。
+### 1.1 方法贡献最低定义
 
-### 1.1 必须成立的主贡献
-
-```text
-key_conditioned_tubelet_code
-key_conditioned_state_space_inference
-generative_trajectory_observation
-key_state_evidence_admissibility
-fixed_low_fpr_detector
-```
-
-其中, `generative_trajectory_observation` 必须是主贡献之一, 不能只是附加增强模块。
-
-### 1.2 必须完成的主实验
+SSTW 的主贡献必须被定义为:
 
 ```text
-generative_video_model_probe
-trajectory_observation_ablation
-state_space_model_ablation
-key_condition_ablation
-fixed_low_fpr_audit
-cross_prompt_seed_motion_generalization
-quality_motion_semantic_consistency
+面向 Flow Matching 视频生成轨迹的密钥条件状态空间同步水印。
 ```
 
-真实视频 VAE latent 和 synthetic latent 只能作为机制 sanity check 或附录证据, 不能作为 SSTW 的主实验支撑。
-
-### 1.3 强接收版本建议
-
-若目标是强接收级别, 建议额外完成:
+不能将主贡献写成以下内容:
 
 ```text
-cross_generation_model_validation
-sampling_time_weak_constraint
-unseen_attack_type_generalization
-unseen_key_generalization
-trajectory_control_experiments
-failure_case_taxonomy
+显式时间对齐水印
+普通视频后处理水印
+endpoint-only latent watermark
+通用 temporal aggregator
+通用 SSM 检测器
+服务端日志审计系统
+只依赖最终视频帧的 black-box watermark detector
 ```
 
-其中 `sampling_time_weak_constraint` 可以作为上限模块, 但只有在质量、运动一致性和语义一致性均不崩溃时才能写入主贡献。
+这些内容可以作为 baseline、control、部署组件或降级解释, 但不能成为 SSTW 的方法主体。
+
+### 1.2 必须成立的机制条件
+
+SSTW 作为主论文方法时, 至少需要满足以下机制条件:
+
+1. `velocity_field_weak_watermark_constraint` 必须在采样阶段改变与密钥相关的 flow / velocity trajectory 统计量。
+2. `endpoint_aware_minimum_energy_flow_control` 必须说明速度场扰动不是只存在于中间日志, 而是与 endpoint payload 或 endpoint evidence 保持一致。
+3. `time_reparameterization_invariant_path_observation` 必须避免把路径证据退化为固定 step index 对齐。
+4. `replay_uncertainty_aware_flow_state_inference` 必须显式处理 replay 与原始生成轨迹之间的不确定性。
+5. `flow_state_evidence_admissibility` 必须限制状态搜索空间, 避免 negative sample 中的伪轨迹抬高 false positive tail。
+6. `fixed_low_fpr_calibrated_detection` 必须使用 calibration negative 固定阈值, 不能在 test split 上更新阈值。
+
+### 1.3 最低论文证据
+
+最低论文证据必须来自以下 governed artifacts:
+
+```text
+records/event_scores.jsonl
+records/trajectory_traces.jsonl
+records/thresholds.jsonl
+tables/*.csv
+figures/*.json 或 figures/*.png
+reports/*.json 或 reports/*.md
+manifests/*.json
+```
+
+人工整理的表格、手工截图、未绑定 provenance 的结论不能支撑 supported claims。
 
 ---
 
-## 2. 与其他视频同步水印工作的非重叠边界
+## 2. 方法边界与非重叠规则
 
-SSTW 必须遵守以下边界, 以降低实质性重叠风险。
+### 2.1 与显式同步水印的边界
 
-### 2.1 不能作为主贡献的内容
+SSTW 可以比较显式同步水印或时间对齐方法, 但主方法不能依赖显式 temporal matching、DTW、edit-distance matching、segment ordering 或 frame-wise sequence matching。
 
-以下内容不能单独支撑 SSTW 的主贡献:
-
-```text
-real_video_vae_latent_probe
-explicit_temporal_alignment
-explicit_alignment_payload_safety
-frame_prc_vs_tubelet_only_vs_explicit_sync_family
-h264_h265_real_video_robustness_only
-external_video_watermark_baseline_only
-```
-
-这些内容可以作为受控 baseline、sanity check 或补充实验, 但不得成为主论文的中心叙事。
-
-### 2.2 必须成为中心的内容
-
-SSTW 的主表、主图和摘要结论必须围绕以下内容展开:
+项目流程中必须保留以下对照:
 
 ```text
-state_space_hidden_state_estimation
-generative_trajectory_observation
-key_conditioned_state_transition
-posterior_state_smoothing
-key_state_evidence_admissibility
-trajectory_control_suppression
-cross_prompt_seed_model_generalization
+explicit_temporal_alignment_baseline
+frame_matching_temporal_registration_baseline
+wrong_sampler_replay_control
+trajectory_time_shuffled_control
 ```
 
-如果主表仍然主要展示真实视频 VAE latent 下的显式同步收益, 则 SSTW 不应按顶会主论文投稿。
+这些对照用于证明 SSTW 的增益来自 Flow Matching 轨迹状态空间机制, 而不是普通同步或普通序列匹配。
 
-### 2.3 并行投稿安全规则
+### 2.2 与普通视频水印的边界
 
-如果另一篇相关真实视频同步水印论文仍处于审稿中, SSTW 的投稿包必须满足:
+普通视频水印 baseline 可以用于证明 SSTW 在时间扰动、重采样和生成式攻击下的优势, 但不能使用已经在相关并行论文中作为主 baseline 的方法作为 SSTW 的唯一外部 baseline。
 
-1. 方法章节不描述另一篇工作的完整机制。
+项目流程中推荐的外部 baseline 类型为:
 
-2. 主表不复用另一篇工作的主表结构。
+```text
+explicit_dtw_temporal_alignment
+frame_matching_temporal_registration
+```
 
-3. 主图不复用另一篇工作的同步机制图。
+不保留 VideoSeal、RivaGAN、VidStamp 作为本项目默认外部 baseline, 以降低与并行论文或既有实验叙事的重复风险。
 
-4. 主实验不以真实视频 VAE latent 对齐攻击为核心。
+### 2.3 与服务端日志审计的边界
 
-5. 若会议要求披露 concurrent submission, 需按会议匿名政策在补充材料中说明差异。
+`authenticated_trajectory_sketch` 可作为 owner-side trajectory audit 的可信证据来源, 但不能把 SSTW 叙述成单纯的日志审计系统。
+
+认证 sketch 的作用是:
+
+```text
+证明轨迹证据来源可信;
+限制 replay 轨迹被伪造或替换的风险;
+为 model-side replay verification 提供校验锚点。
+```
+
+它不是水印本体, 也不能替代 velocity-field watermark constraint。
 
 ---
 
-## 3. 总体构建里程碑
+## 3. 全局治理规则
 
-建议将 SSTW 项目拆分为以下语义里程碑。每个里程碑必须产出 records、thresholds、tables、reports 和 mechanism decision。所有正式表格必须从 records / thresholds 重建, 不允许手工拼表。
+### 3.1 必须固定的 split
 
 ```text
-protocol_freeze
+calibration
+test
+stress
+ablation
+pilot
+```
+
+其中:
+
+- `calibration` 只能用于阈值、标准化统计量和 gate 参数冻结;
+- `test` 用于主表结果;
+- `stress` 用于强攻击、错配 replay 和 adaptive attack;
+- `ablation` 用于机制消融;
+- `pilot` 用于 small-scale claim pilot, 不得直接进入主论文表格。
+
+### 3.2 必须固定的 sample role
+
+```text
+clean_positive
+attacked_positive
+clean_negative
+attacked_negative
+replay_negative
+sampler_mismatch_negative
+wrong_prompt_replay_negative
+wrong_time_grid_replay_negative
+wrong_key_negative
+wrong_key_positive
+endpoint_only_control
+trajectory_only_control
+trajectory_time_shuffled_control
+trajectory_key_shuffled_control
+wrong_sampler_replay_control
+wrong_prompt_replay_control
+video_only_proxy_control
+```
+
+### 3.3 negative family
+
+`calibration_negative` 不应作为单一 sample role 使用, 而应由多个 negative family 组成。必须新增或映射字段:
+
+```text
+negative_family
+```
+
+允许取值为:
+
+```text
+none
+clean_negative
+attacked_negative
+replay_negative
+sampler_mismatch_negative
+wrong_prompt_negative
+wrong_time_grid_negative
+wrong_key_negative
+trajectory_shuffle_negative
+```
+
+其中, `none` 仅用于 positive 或非负样本 control。
+
+### 3.4 字段闭包原则
+
+所有 event-level records 应逐步闭包以下字段族。若某字段在当前阶段不可用, 必须显式写入 placeholder 状态、unavailable reason 或在阶段文档中说明尚未进入该阶段字段闭包, 不得静默缺失。
+
+```text
+sample_id
+content_id
+prompt_id_placeholder
+seed_id_placeholder
+generation_model_id_placeholder
+sampler_id_placeholder
+sampler_signature_placeholder
+method_variant
+key_id
+sample_role
+negative_family
+split
+attack_name
+attack_strength
+attack_family
+trajectory_source_level
+trajectory_source_status
+trajectory_source_unavailable_reason
+threshold_id
+threshold_value
+threshold_source_split
+target_fpr
+test_time_threshold_update_blocked
+S_endpoint_raw
+S_end_state
+S_velocity
+S_path_raw
+S_path_inv
+S_path_endpoint_consistency
+S_replay
+S_state_posterior
+S_final_conservative
+S_final_weighted_optional
+flow_velocity_proxy_available
+flow_velocity_alignment_gain
+path_marginal_gain_at_fixed_fpr
+trajectory_payload_redundancy
+replay_uncertainty_mean
+replay_uncertainty_curve_id_placeholder
+replay_scheduler_id_placeholder
+replay_time_grid_id_placeholder
+time_grid_reliability
+flow_state_admissibility_status
+admissibility_failure_reason
+negative_tail_status
+quality_guard_status
+semantic_projection_status
+endpoint_controllability_status
+authenticated_trajectory_sketch_status
+trajectory_sketch_verification_status
+decision
+decision_reason
+claim_support_status
+```
+
+### 3.5 旧字段兼容映射
+
+旧字段可在兼容层保留, 但正式表格和新阶段记录应逐步映射为新语义字段:
+
+| 旧字段 | 新字段或新字段族 |
+|---|---|
+| `key_state_admissibility_status` | `flow_state_admissibility_status` |
+| `S_payload_raw` | `S_endpoint_raw` |
+| `S_trajectory_observation` | `S_path_inv` 或 `S_velocity` |
+| `S_final` | `S_final_conservative` |
+
+字段迁移必须遵守 `docs/field_registry.md` 与 record schema 治理。placeholder 字段必须以 `_placeholder` 结尾, random trace 字段必须以 `_random` 或 `_digest_random` 结尾。
+
+---
+
+## 4. 总体构建里程碑
+
+SSTW 项目采用以下语义阶段。阶段名称表达构建职责, 不表达完成状态。编号只表示推荐阅读与执行顺序, 不作为正式阶段名称的一部分。
+
+```text
+protocol_governance_foundation
 synthetic_state_inference_sanity
 real_video_latent_transfer_check
 state_space_inference_formalization
 trajectory_observation_core_probe
-generative_video_model_probe
+flow_model_adapter_preflight
 sampling_time_constraint_probe
+small_scale_claim_pilot_gate
+generative_video_model_probe
+replay_and_authenticated_sketch_gate
+flow_specific_adaptive_attack_gate
 submission_package_freeze
 ```
 
----
-
-## 4. protocol_freeze
-
-### 4.1 目标
-
-冻结 SSTW 的独立协议框架, 包括 sample role、split、record schema、state trace schema、trajectory trace schema、threshold protocol、attack matrix 和 output layout。
-
-本里程碑只验证协议是否可运行、可审计、可复现, 不验证方法性能。
-
-### 4.2 必须实现
+核心原则是:
 
 ```text
-configs/protocol/state_space_watermark_protocol.json
-configs/protocol/fixed_low_fpr.json
-configs/records/state_space_event_record_schema.json
-configs/records/state_trace_schema.json
-configs/records/trajectory_trace_schema.json
-main/protocol/calibrator.py
-main/protocol/record_writer.py
-main/protocol/table_builder.py
-experiments/state_space_watermark_protocol_probe/runner.py
+先闭合协议, 再闭合状态推断;
+先验证路径证据, 再接入真实 Flow sampler;
+先验证 Flow 模型接口能记录轨迹, 再验证 velocity constraint 进入采样过程;
+先做 pilot gate, 再做 full generation;
+先控制 negative tail, 再写论文主张;
+所有 supported claims 必须由 frozen records 自动重建。
 ```
 
-### 4.3 必须固定的 sample role
+每个阶段必须满足三类约束:
 
-```text
-clean_negative
-attacked_negative
-watermarked_positive
-attacked_positive
-```
-
-### 4.4 必须固定的 split
-
-```text
-dev
-calibration
-test
-```
-
-### 4.5 必须记录的核心字段
-
-```text
-sample_id
-split
-sample_role
-method_variant
-attack_name
-attack_strength
-key_id
-content_id
-prompt_id
-seed_id
-generation_model_id
-S_payload_raw
-S_payload_state
-S_state_posterior
-S_trajectory_observation
-S_final
-state_entropy
-state_coverage_ratio
-state_matched_count
-state_posterior_confidence
-state_transition_residual
-trajectory_consistency_score
-key_state_admissibility_status
-negative_state_over_threshold_count
-threshold_source_split
-decision
-```
-
-### 4.6 通过标准
-
-```text
-threshold 只由 calibration negative 得到
-test split 不写 threshold, 不更新融合权重, 不更新 gate 参数
-每条 record 包含 split、sample_role、method_variant、attack_name 和 evidence scores
-删除 tables 后可由 records 和 thresholds 重建
-所有 gate 参数均写入 config 和 manifest
-```
-
-### 4.7 产物
-
-```text
-records/event_scores.jsonl
-thresholds/thresholds.json
-artifacts/run_manifest.json
-artifacts/runtime_config.json
-tables/protocol_smoke_table.csv
-reports/protocol_skeleton_report.md
-```
+1. 方法约束: 与 `sstw_method_mechanism_design.md` 中的算法原语一致。
+2. 工程约束: 由 repository modules、runner、checker 和 packager 产生可复现产物。
+3. 论文约束: supported claims 必须映射到 governed records、tables、figures、reports 或 manifests。
 
 ---
 
-## 5. synthetic_state_inference_sanity
+## 5. protocol_governance_foundation
 
 ### 5.1 目标
 
-在 synthetic video latent 上验证 key-conditioned tubelet code 和 state-space inference 是否具有最基本机制有效性。
+建立全项目共享的协议、字段、命名、输出、测试和 artifact rebuild 规则。
 
-该里程碑只能回答一个问题:
-
-\[
-\text{密钥条件状态估计是否能在受控时间扰动下优于普通时序聚合器?}
-\]
-
-### 5.2 实验对象
-
-\[
-z\sim\mathcal{N}(0,I),\quad z\in\mathbb{R}^{F\times C\times H\times W}。
-\]
-
-### 5.3 必须实现
+### 5.2 必须实现
 
 ```text
-main/backends/synthetic_video_latent.py
-main/methods/state_space_watermark/tubelet_code.py
-main/methods/state_space_watermark/state_observation.py
-main/methods/state_space_watermark/state_synchronizer.py
-main/methods/state_space_watermark/key_state_admissibility.py
-main/attacks/synthetic_temporal_attacks.py
-experiments/synthetic_state_inference_sanity/runner.py
-experiments/synthetic_state_inference_sanity/mechanism_audit.py
+configs/protocol/sstw_protocol.json
+configs/protocol/fixed_low_fpr.json
+configs/records/event_record_schema.json
+configs/records/state_trace_schema.json
+configs/records/threshold_schema.json
+docs/field_registry.md
+tools/harness/run_all_audits.py
 ```
 
-### 5.4 必须比较的内部 baseline
+### 5.3 必须冻结的协议
 
 ```text
-frame_prc
-tubelet_only
-explicit_temporal_alignment
-generic_temporal_mean_pooling
-conv1d_temporal_aggregator
-gru_temporal_aggregator
-transformer_temporal_aggregator
-generic_state_space_model
-key_agnostic_state_space_model
-key_conditioned_state_space_inference
+split 定义
+sample role 定义
+negative family 定义
+target_fpr
+threshold_source_split
+test_time_threshold_update_blocked
+baseline 与 control 命名
+placeholder 与 random 字段命名
 ```
 
-### 5.5 必须攻击
+### 5.4 通过标准
 
-```text
-no_attack
-temporal_crop
-local_clip
-regular_frame_dropping
-irregular_frame_dropping
-frame_duplication
-speed_change
-frame_rate_resampling
-segment_jump
-latent_gaussian_noise
-```
-
-### 5.6 必须证明
-
-1. `tubelet_only` 优于 `frame_prc`, 用于确认 tubelet 结构有基本价值。
-
-2. `key_conditioned_state_space_inference` 优于普通时序聚合器。
-
-3. `key_conditioned_state_space_inference` 优于 `generic_state_space_model` 和 `key_agnostic_state_space_model`。
-
-4. 状态搜索不会导致 attacked negative FPR 失控。
-
-5. state entropy 与失败样本存在可解释关系。
-
-### 5.7 通过标准
-
-```text
-synthetic_state_inference_implementation_decision = PASS
-synthetic_state_inference_mechanism_decision = PASS
-key_conditioned_state_space_inference 在至少两类复杂时间攻击上优于 key_agnostic_state_space_model
-attacked_negative_FPR <= target_fpr_tolerance
-negative_state_over_threshold_count == 0
-```
-
-### 5.8 论文使用边界
-
-本里程碑只能作为机制 sanity check 或附录实验, 不能作为顶会主贡献。
+1. 默认 `pytest -q` 不运行重型 GPU 测试。
+2. `python tools/harness/run_all_audits.py` 不报告命名、字段、依赖边界或 artifact 治理违规。
+3. 正式 claims 均能映射到 governed artifacts。
 
 ---
 
-## 6. real_video_latent_transfer_check
+## 6. synthetic_state_inference_sanity
 
 ### 6.1 目标
 
-检查 synthetic 中成立的状态估计机制在真实视频 VAE latent 中是否仍然不崩溃。
+在可控 synthetic latent 中验证密钥条件状态空间推断是否优于普通时序聚合器与显式时间对齐 baseline。
 
-该里程碑的定位是 transfer check, 不是 SSTW 主实验。
-
-### 6.2 实验流程
+### 6.2 必须实现
 
 ```text
-source video
--> VAE encode
--> key-conditioned tubelet watermark embedding
--> VAE decode
--> video attack
--> VAE re-encode
--> state-space inference
--> fixed-FPR decision
+key_conditioned_state_inference
+state_transition_model
+state_observation_model
+fixed_low_fpr_calibration
+wrong_key_control
+state_shuffle_control
+negative_family_calibration
 ```
 
-### 6.3 必须实现
+### 6.3 必须比较
 
 ```text
-main/backends/real_video_vae_latent.py
-main/vae/vae_backend.py
-main/video/video_io.py
-main/attacks/real_video_temporal_attacks.py
-main/attacks/compression.py
-main/attacks/spatial.py
-main/analysis/quality_metrics.py
-main/analysis/temporal_metrics.py
-experiments/real_video_latent_transfer_check/runner.py
-experiments/real_video_latent_transfer_check/artifact_builder.py
-experiments/real_video_latent_transfer_check/mechanism_audit.py
+mean_temporal_aggregator
+max_temporal_aggregator
+conv1d_temporal_aggregator
+explicit_temporal_alignment_baseline
+generic_ssm_baseline
+key_agnostic_ssm_baseline
 ```
 
-### 6.4 必须比较
+### 6.4 必须证明
 
-```text
-frame_prc
-tubelet_only
-explicit_temporal_alignment
-key_agnostic_state_space_model
-generic_state_space_model
-key_conditioned_state_space_inference
-```
+1. key-conditioned posterior 在 `TPR@FPR=0.01` 下优于普通 aggregator。
+2. wrong-key score 分布不能接近 correct-key positive 分布。
+3. 状态模型不能通过扩大搜索空间显著抬高 negative score tail。
 
-### 6.5 必须攻击
+### 6.5 论文使用边界
 
-```text
-no_attack
-h264_compression
-h265_compression
-spatial_resize
-crop_resize
-gaussian_noise
-blur
-temporal_crop
-local_clip
-regular_frame_dropping
-irregular_frame_dropping
-frame_duplication
-speed_change
-frame_rate_resampling
-vae_reconstruction
-```
-
-### 6.6 通过标准
-
-```text
-real_video_latent_transfer_implementation_decision = PASS
-real_video_latent_transfer_mechanism_decision = PASS
-negative_state_over_threshold_count == 0
-key_state_admissibility_status = PASS
-quality_not_collapsed = PASS
-temporal_consistency_not_collapsed = PASS
-```
-
-### 6.7 论文使用边界
-
-该里程碑只用于证明方法不会在真实视频 latent 中失效。若没有后续 trajectory / generation 实验, 不得以该里程碑作为顶会主论文的核心结果。
+该阶段只能支撑方法合理性和机制 sanity, 不能单独支撑真实视频生成模型主 claim。
 
 ---
 
-## 7. state_space_inference_formalization
+## 7. real_video_latent_transfer_check
 
 ### 7.1 目标
 
-把状态空间推断从工程模块提升为可审计算法, 明确 transition、observation、key condition、filtering / smoothing、admissibility 和 fixed-FPR detector 的关系。
+验证 synthetic 阶段成立的密钥条件状态空间推断在真实视频 VAE encode-decode-reencode 链路中是否仍然有效并保持低误报。
 
-### 7.2 必须实现
-
-```text
-main/methods/state_space_watermark/state_transition.py
-main/methods/state_space_watermark/state_observation_model.py
-main/methods/state_space_watermark/key_conditioner.py
-main/methods/state_space_watermark/state_filter.py
-main/methods/state_space_watermark/state_smoother.py
-main/methods/state_space_watermark/key_state_admissibility.py
-experiments/state_space_inference_formalization/runner.py
-experiments/state_space_inference_formalization/ablation_builder.py
-```
-
-### 7.3 必须比较
+### 7.2 实验流程
 
 ```text
-no_state_inference
-generic_temporal_mean_pooling
-conv1d_temporal_aggregator
-gru_temporal_aggregator
-transformer_temporal_aggregator
-generic_state_space_model
-key_agnostic_state_space_model
-key_conditioned_state_space_inference
-key_conditioned_state_space_without_admissibility
-key_conditioned_state_space_without_key_condition
+video frames
+-> VAE encode
+-> latent watermark or latent trace construction
+-> VAE decode
+-> video attack
+-> VAE re-encode
+-> state-space detection
 ```
 
-### 7.4 必须证明
-
-1. 状态空间推断不是普通 temporal aggregator。
-
-2. key condition 是必要的。
-
-3. key-state admissibility 是必要的。
-
-4. phase state、evidence state、confidence state、disturbance state 分别有贡献。
-
-5. unseen key、unseen attack strength、unseen attack type 泛化成立。
-
-### 7.5 通过标准
+### 7.3 必须实现
 
 ```text
-state_space_inference_formal_decision = PASS
-key_condition_ablation_gain > 0
-admissibility_negative_tail_status = PASS
-state_variable_ablation_all_nontrivial = PASS
-unseen_key_generalization_status = PASS
+vae_backend_adapter
+encode_decode_reencode_runner
+reconstruction_quality_audit
+fixed_low_fpr_threshold_reuse
+endpoint_consistency_score
 ```
+
+### 7.4 必须比较
+
+```text
+endpoint_only_latent_score
+frame_prc_baseline
+explicit_temporal_alignment_baseline
+generic_ssm_baseline
+key_conditioned_state_space_method
+```
+
+### 7.5 必须证明
+
+1. VAE 重建误差不会破坏低 FPR 校准。
+2. state-space evidence 在 attacked positive 中仍有有效增益。
+3. endpoint-only 方法不足以解释 SSTW 的整体分数提升。
 
 ---
 
-## 8. trajectory_observation_core_probe
+## 8. state_space_inference_formalization
 
 ### 8.1 目标
 
-验证生成轨迹是否能作为状态空间推断的独立观测项, 而不是后验分数堆叠。
-
-该里程碑是 SSTW 进入顶会投稿路径的最低门槛。
+将密钥条件状态空间推断整理为可审计、可消融、可复现实验模块。
 
 ### 8.2 必须实现
 
 ```text
-main/trajectory/trajectory_observation.py
-main/trajectory/trajectory_reconstruction.py
-main/trajectory/trajectory_statistic.py
-main/trajectory/trajectory_controls.py
-main/methods/state_space_watermark/trajectory_state_observation.py
-experiments/trajectory_observation_core_probe/runner.py
-experiments/trajectory_observation_core_probe/mechanism_audit.py
+formal_state_variable_definition
+key_conditioned_transition
+key_conditioned_observation_likelihood
+filtering_and_smoothing
+state_posterior_score
+flow_state_evidence_admissibility
+negative_tail_audit
 ```
 
 ### 8.3 必须比较
 
 ```text
-key_conditioned_state_space_inference
-key_conditioned_state_space_with_trajectory
-trajectory_only
-trajectory_observation_without_key_condition
-generic_state_space_with_trajectory
-explicit_temporal_alignment_with_trajectory_fusion
+without_key_condition
+without_state_transition
+without_observation_likelihood
+without_admissibility
+generic_ssm
+mamba_style_temporal_fusion_control
 ```
 
 ### 8.4 必须证明
 
-1. trajectory response 在 \(H_0\) 与 \(H_1\) 之间存在统计分离。
-
-2. trajectory response 与 static tubelet evidence 不高度冗余。
-
-3. `key_conditioned_state_space_with_trajectory` 在 fixed-FPR 下优于不含 trajectory 的状态空间推断。
-
-4. trajectory controls 不能复现主增益。
-
-5. runtime overhead 可接受。
-
-### 8.5 通过标准
-
-```text
-trajectory_observation_implementation_decision = PASS
-trajectory_observation_mechanism_decision = PASS
-trajectory_gain_over_state_space > 0
-trajectory_negative_leakage_delta <= 0
-abs(correlation(S_trajectory_observation, S_payload_state)) < correlation_threshold
-control_suppression_status = PASS
-```
-
-### 8.6 顶会 gate
-
-若该里程碑未通过, SSTW 不应以 CVPR / ICCV / ECCV 主会论文投稿。
+1. 状态变量不是普通后处理特征堆叠。
+2. key conditioning 对检测有独立贡献。
+3. admissibility 降低 false positive tail。
 
 ---
 
-## 9. generative_video_model_probe
+## 9. trajectory_observation_core_probe
 
 ### 9.1 目标
 
-把 SSTW 从 latent transfer check 推进到真实 DiT / Flow Matching 视频生成模型, 证明方法确实解决生成式视频水印轨迹中的隐状态推断问题。
+验证轨迹观测是否提供与 endpoint evidence 不同源的路径证据。
 
-该里程碑应成为 SSTW 的主实验核心。
-
-### 9.2 推荐模型路线
+### 9.2 必须实现
 
 ```text
-first_runnable_model: CogVideoX 或同类公开视频 DiT 模型
-main_generation_model: 具有明确 DiT 或 Flow Matching 属性的视频生成模型
-cross_model_validation: Open-Sora / HunyuanVideo / 其他可运行开放模型
+trajectory_trace_capture
+velocity_projection_operator
+path_integral_statistic
+time_reparameterization_invariant_path_observation
+trajectory_state_adapter
+endpoint_consistency_score
+path_marginal_gain_at_fixed_fpr
+trajectory_payload_redundancy
 ```
-
-具体模型选择应以可复现、可记录模型版本、可导出中间轨迹或可重建近似轨迹为前提。
 
 ### 9.3 必须比较
 
 ```text
-no_watermark_or_clean_negative
-frame_prc
-tubelet_only
-explicit_temporal_alignment
-generic_state_space_model
-key_agnostic_state_space_model
-key_conditioned_state_space_inference
-key_conditioned_state_space_with_trajectory
-keyed_state_trajectory_constraint
-external_video_watermark_baselines
+endpoint_only_control
+trajectory_only_score
+trajectory_time_shuffled_control
+wrong_key_trajectory_control
+wrong_sampler_replay_control
+explicit_temporal_alignment_baseline
 ```
 
-注意: `keyed_state_trajectory_constraint` 只能在 sampling-time weak constraint 通过质量审计后进入主表。
+### 9.4 必须证明
 
-### 9.4 外部 baseline
+1. path evidence 与 endpoint evidence 不能高度冗余。
+2. time-reparameterization-invariant path score 在不同 scheduler / time grid 下保持可比。
+3. wrong sampler replay 不能获得与 correct replay 等价的路径证据。
+4. trajectory-only score 不能绕过 fixed-FPR 和 admissibility 直接支撑最终判定。
 
-优先考虑:
+### 9.5 顶会 gate
 
-```text
-Explicit_DTW_temporal_alignment
-Explicit_frame_matching_temporal_registration
-internal_mechanism_baselines
-classical_temporal_registration
-```
-
-若某个 baseline 不可运行或许可证 / 权重不可复现, 只能进入 limitation report, 不得支撑正向优越性 claim。
-
-### 9.5 必须证明
-
-1. 真实生成视频中仍可保持 fixed low-FPR 检测。
-
-2. key-conditioned state-space inference 优于 explicit temporal alignment。
-
-3. trajectory observation 在生成模型上提供独立增益。
-
-4. prompt、seed、motion pattern、video length 泛化稳定。
-
-5. 质量、motion consistency、semantic consistency 可控。
-
-6. 跨生成模型验证至少存在一个可复现实验包。
-
-### 9.6 通过标准
-
-```text
-generative_video_model_implementation_decision = PASS
-generative_video_model_mechanism_decision = PASS
-generation_model_main_table_ready = true
-trajectory_observation_gain_confirmed = true
-fixed_low_fpr_audit_pass = true
-quality_motion_semantic_consistency_pass = true
-cross_prompt_seed_generalization_pass = true
-```
+若路径证据无法在 fixed-FPR 条件下提供独立边际增益, 项目应降级为状态空间同步视频水印或 endpoint-aware Flow latent watermark, 不应宣称完整的 Flow Matching 轨迹水印。
 
 ---
 
-## 10. sampling_time_constraint_probe
+## 10. flow_model_adapter_preflight
 
 ### 10.1 目标
 
-在生成采样过程中加入弱水印约束, 验证其是否能增强 trajectory-aware state observation, 同时保持视觉质量、运动一致性和语义一致性。
+在进入昂贵的真实生成模型实验前, 确认目标 Flow Matching / Rectified Flow 视频生成模型是否能够暴露、记录和复现 SSTW 所需的 trajectory proxy。
 
-该里程碑是强接收版本的上限模块, 不是顶会投稿的最低门槛。
+### 10.2 主线模型
 
-### 10.2 必须实现
-
-```text
-main/generation/sampling_hook.py
-main/generation/lambda_schedule.py
-main/generation/velocity_projection_constraint.py
-main/analysis/motion_artifact_audit.py
-main/analysis/semantic_consistency_audit.py
-experiments/sampling_time_constraint_probe/runner.py
-```
-
-### 10.3 必须比较
-
-```text
-key_conditioned_state_space_with_trajectory
-keyed_state_trajectory_constraint
-trajectory_constraint_without_admissibility
-trajectory_constraint_without_key_condition
-trajectory_constraint_with_lambda_schedule_ablation
-```
-
-### 10.4 必须证明
-
-1. 提升 \(S_{\mathrm{trajectory\_observation}}\)。
-
-2. 提升 attacked positive TPR。
-
-3. 不破坏 target FPR。
-
-4. 视频质量下降可控。
-
-5. motion artifact 不明显。
-
-6. prompt / semantic consistency 不明显下降。
-
-### 10.5 失败处理
-
-若该模块失败, 应降级为探索性附录或 future work, 不影响 SSTW 以 state-space inference + trajectory observation 为主线投稿。
-
----
-
-## 11. submission_package_freeze
-
-### 11.1 目标
-
-冻结完整论文协议, 生成投稿所需主表、消融表、攻击曲线、质量表、runtime 表、failure analysis、claim audit 和 release package。
-
-### 11.2 必须产物
-
-```text
-records/event_scores.jsonl
-thresholds/thresholds.json
-artifacts/run_manifest.json
-artifacts/state_space_method_manifest.json
-artifacts/claim_audit.json
-tables/main_fixed_fpr_table.csv
-tables/temporal_attack_breakdown_table.csv
-tables/state_space_ablation_table.csv
-tables/key_condition_ablation_table.csv
-tables/trajectory_observation_ablation_table.csv
-tables/trajectory_control_table.csv
-tables/generation_model_main_table.csv
-tables/cross_prompt_seed_generalization_table.csv
-tables/cross_model_generalization_table.csv
-tables/external_baseline_comparison_table.csv
-tables/quality_motion_semantic_table.csv
-tables/runtime_efficiency_table.csv
-figures/method_overview.pdf
-figures/state_inference_diagram.pdf
-figures/trajectory_observation_diagram.pdf
-figures/temporal_attack_curve.pdf
-figures/trajectory_score_distribution.pdf
-figures/quality_robustness_tradeoff.pdf
-figures/generated_video_case_grid.pdf
-reports/protocol_report.md
-reports/mechanism_ablation_report.md
-reports/failure_case_report.md
-reports/claim_audit_report.md
-packages/state_space_trajectory_watermarking_release.tar.zst
-```
-
-### 11.3 最终通过标准
-
-```text
-所有 supported claim 均映射到具体表格、曲线、报告或 manifest
-所有阈值只来自 calibration negative
-attacked negative 进入 calibration negative
-state-space inference 相比 explicit temporal alignment 与 generic temporal aggregator 具有机制优势
-trajectory observation 具有独立增益
-sampling-time weak constraint 若写成贡献, 必须通过质量、运动和语义一致性审计
-删除 tables / figures / reports 后可由 records 重建全部论文产物
-```
-
----
-
-## 12. 最终投稿判断
-
-### 12.1 不建议投稿顶会的情况
-
-```text
-只完成 synthetic_state_inference_sanity
-只完成 real_video_latent_transfer_check
-主结果仍然围绕 explicit_temporal_alignment 的改进
-trajectory_observation_core_probe 未通过
-generative_video_model_probe 未通过
-fixed_low_fpr_audit 未通过
-```
-
-### 12.2 可以投稿顶会的最低情况
-
-```text
-state_space_inference_formalization = PASS
-trajectory_observation_core_probe = PASS
-generative_video_model_probe = PASS
-fixed_low_fpr_audit = PASS
-claim_audit = PASS
-```
-
-### 12.3 强接收版本建议
-
-```text
-cross_generation_model_validation = PASS
-sampling_time_constraint_probe = PASS
-trajectory_control_experiments = PASS
-unseen_key_attack_prompt_generalization = PASS
-failure_case_taxonomy_ready = true
-release_package_rebuildable = true
-```
-
----
-
-## Wan2.1 SSTW-TC 主线补充约束
-
-当前 SSTW-TC 主线模型固定为:
+主线模型应优先使用 velocity-field sampler 或 Flow Matching 机制清晰的 DiT 视频生成模型。项目主线模型配置为:
 
 ```text
 Wan-AI/Wan2.1-T2V-1.3B-Diffusers
 ```
 
-该选择用于支撑 “Flow Matching 生成轨迹中的状态空间水印” 叙事。LTX-Video 仅保留为工程预验证和回退 probe, 不作为 Flow Matching 主线 claim 的唯一证据。主线结果必须记录 `flow_velocity_alignment_gain` 并通过 `primary_flow_matching_model_ready` 与 `flow_velocity_proxy_ready` 检查。
+轻量模型可以作为接口预验证或 fallback probe, 但不能单独支撑完整 Flow Matching trajectory watermark 主 claim。
 
+### 10.3 必须实现
+
+```text
+flow_model_backend_adapter
+sampler_callback_adapter
+latent_state_capture
+velocity_or_displacement_proxy_capture
+sampler_signature_recorder
+time_grid_recorder
+prompt_seed_manifest_reader
+generation_reproducibility_check
+trajectory_trace_schema_writer
+```
+
+### 10.4 必须检查
+
+```text
+model_load_success
+single_prompt_generation_success
+callback_latent_capture_success
+velocity_proxy_available
+latent_displacement_available
+sampler_signature_available
+time_grid_available
+replay_adapter_feasibility
+gpu_memory_budget_status
+colab_runtime_budget_status
+```
+
+### 10.5 通过标准
+
+1. `trajectory_trace_capture_success_rate >= 0.95`。
+2. 每个样本均能记录 sampler signature 与 time grid。
+3. 至少一种 velocity proxy 或 latent displacement proxy 可用。
+4. 生成结果可由 prompt、seed、model id、sampler id 与 config 复现。
+5. 若 velocity field 原始值不可访问, 必须记录 `flow_velocity_proxy_available=false` 与 proxy 类型, 不得伪称拥有真实 velocity field。
+
+### 10.6 失败处理
+
+若该阶段失败, 不得进入 sampling-time constraint 与 full generation 主实验。应优先修复 backend adapter、callback、scheduler hook 或选择替代 Flow Matching / velocity-field 模型。
+
+---
+
+## 11. sampling_time_constraint_probe
+
+### 11.1 目标
+
+验证 sampling-time weak constraint 是否真正进入 Flow Matching 采样动力学, 而不是只在后处理阶段改变最终视频。
+
+### 11.2 必须实现
+
+```text
+velocity_field_weak_watermark_constraint
+endpoint_aware_minimum_energy_flow_control
+lambda_schedule
+quality_guard
+semantic_projection
+flow_velocity_proxy_record
+callback_latent_displacement_record
+```
+
+### 11.3 必须比较
+
+```text
+no_constraint_control
+endpoint_only_constraint
+constant_lambda_constraint
+no_endpoint_aware_control
+no_semantic_projection
+wrong_key_constraint
+```
+
+### 11.4 必须证明
+
+1. keyed flow velocity alignment gain 大于 baseline。
+2. endpoint payload 或 endpoint evidence 与路径证据一致。
+3. 质量保护约束没有被关闭或绕过。
+4. semantic projection 不只是注释, 必须有可审计字段或可替代的 placeholder 字段边界。
+
+### 11.5 失败处理
+
+若 velocity constraint 不能提供有效增益, 不得宣称 SSTW 是 Flow Matching trajectory watermark。可降级为 endpoint-aware latent watermark 或 state-space synchronized video watermark。
+
+---
+
+## 12. small_scale_claim_pilot_gate
+
+### 12.1 目标
+
+在进入大规模真实生成实验前, 以较小成本验证 Claim-1、Claim-2 和部分 Claim-3 是否有成立迹象。该阶段不产生主论文表格, 但决定是否进入 full generation 主实验。
+
+### 12.2 推荐规模
+
+```text
+N_prompt >= 8
+N_seed_per_prompt >= 2
+N_attack >= 3
+N_calibration_negative_family >= 4
+N_method_variant >= 6
+```
+
+### 12.3 必须覆盖的 method variant
+
+```text
+sstw_full_method
+endpoint_only_control
+trajectory_only_score
+without_velocity_constraint
+without_endpoint_aware_control
+without_replay_uncertainty_weighting
+generic_ssm_baseline
+explicit_dtw_temporal_alignment
+```
+
+### 12.4 必须覆盖的攻击和错配
+
+```text
+video_compression
+temporal_crop
+frame_rate_resampling
+vae_reencode_attack
+wrong_sampler_replay
+wrong_key_control
+```
+
+### 12.5 通过标准
+
+```text
+trajectory_trace_capture_success_rate >= 0.95
+flow_velocity_alignment_gain > 0
+path_marginal_gain_at_fixed_fpr > 0
+trajectory_payload_redundancy <= preset_limit
+quality_guard_violation_rate <= preset_limit
+negative_tail_inflation_not_detected = true
+wrong_key_score_separation_passed = true
+wrong_sampler_replay_control_not_equivalent = true
+```
+
+### 12.6 失败处理
+
+若 pilot gate 失败, 不应进入 full generation 主实验。应根据失败原因回退:
+
+```text
+flow_velocity_alignment_gain <= 0 -> 回退 sampling_time_constraint_probe;
+path_marginal_gain_at_fixed_fpr <= 0 -> 回退 trajectory_observation_core_probe;
+negative tail inflation -> 回退 protocol_governance_foundation / state_space_inference_formalization / replay_and_authenticated_sketch_gate;
+quality_guard_violation -> 回退 sampling_time_constraint_probe;
+replay failure -> 回退 replay_and_authenticated_sketch_gate 或将 Claim-3 降级。
+```
+
+---
+
+## 13. generative_video_model_probe
+
+### 13.1 目标
+
+在真实生成式视频模型上验证 SSTW 的轨迹观测、状态空间推断和检测协议是否可运行。该阶段应在 flow model adapter preflight、sampling-time constraint 和 small-scale pilot gate 之后进行。
+
+### 13.2 数据集构造
+
+真实数据集构造应与测试运行流程分离。数据集准备步骤应产生:
+
+```text
+prompt_suite.json
+seed_plan.json
+content_manifest.json
+generation_manifest.json
+```
+
+测试运行流程只能读取这些 manifest, 不应在正式实验中临时改变 prompt、seed 或 split。
+
+### 13.3 必须比较
+
+```text
+sstw_full_method
+endpoint_only_control
+trajectory_only_score
+without_velocity_constraint
+without_endpoint_aware_control
+without_replay_uncertainty_weighting
+explicit_dtw_temporal_alignment
+frame_matching_temporal_registration
+generic_ssm_baseline
+```
+
+### 13.4 外部 baseline
+
+默认外部 baseline 为:
+
+```text
+explicit_dtw_temporal_alignment
+frame_matching_temporal_registration
+```
+
+### 13.5 必须证明
+
+1. Wan2.1 主线记录必须标记为 Flow Matching / velocity-field sampler 相关模型。
+2. velocity / flow trajectory proxy 必须参与水印同步证据。
+3. SSTW full method 在 `TPR@FPR=0.01` 下优于外部 baseline 与内部机制 baseline。
+4. 质量、运动和语义指标不能显示不可接受退化。
+
+---
+
+## 14. replay_and_authenticated_sketch_gate
+
+### 14.1 目标
+
+规范 owner-side trajectory audit、model-side replay verification 和 video-only proxy observation 的证据等级。
+
+### 14.2 证据等级
+
+```text
+level_1_authenticated_cached_trajectory
+level_2_model_side_replay_with_uncertainty
+level_3_video_only_proxy_observation
+```
+
+### 14.3 必须实现
+
+```text
+authenticated_trajectory_sketch_status
+trajectory_sketch_digest_random
+trajectory_sketch_verification_status
+replay_uncertainty_weight
+replay_scheduler_id_placeholder
+replay_time_grid_id_placeholder
+wrong_sampler_replay_control
+wrong_prompt_replay_control
+```
+
+### 14.4 判定规则
+
+1. level 1 可以支撑高置信 owner-side trajectory audit。
+2. level 2 可以支撑受限 model-side replay verification, 但必须记录 replay uncertainty。
+3. level 3 只能作为补充证据, 除非在 fixed-FPR 下经过独立验证。
+4. 未认证 trajectory logging 只能作为 control, 不能支撑主 claim。
+
+---
+
+## 15. flow_specific_adaptive_attack_gate
+
+### 15.1 目标
+
+验证方法不是依赖容易被破坏的固定采样步或固定 endpoint pattern。
+
+### 15.2 常规 Flow mismatch 攻击
+
+```text
+scheduler_change
+step_count_change
+time_grid_jitter
+wrong_sampler_replay
+latent_noise_perturbation
+vae_reencode_attack
+video_compression
+frame_rate_resampling
+temporal_crop
+local_clip
+```
+
+### 15.3 Flow-specific 自适应攻击
+
+```text
+velocity_projection_suppression
+path_response_cancellation
+endpoint_path_decoupling
+replay_signature_mismatch
+trajectory_sketch_replacement_attempt
+```
+
+### 15.4 必须证明
+
+1. 时间重参数化不变路径证据优于固定 step-index 路径证据。
+2. replay uncertainty weighting 能降低错误 replay 带来的误报风险。
+3. admissibility gate 能限制 adaptive attack 下的 negative score tail。
+
+---
+
+## 16. submission_package_freeze
+
+### 16.1 目标
+
+将 governed records 转换为论文可使用的 tables、figures、reports 和 manifests。
+
+### 16.2 必须产物
+
+```text
+records/event_scores.jsonl
+records/thresholds.jsonl
+records/trajectory_traces.jsonl
+tables/main_detection_table.csv
+tables/baseline_comparison_table.csv
+tables/ablation_table.csv
+figures/roc_or_tpr_at_fpr_figure.json
+figures/trajectory_evidence_figure.json
+reports/claim_audit_report.json
+reports/readiness_summary.json
+manifests/submission_package_manifest.json
+```
+
+### 16.3 禁止事项
+
+1. 不得手工改写正式表格数值。
+2. 不得从 test split 反向更新 calibration threshold。
+3. 不得用 placeholder 字段支撑 supported claims。
+4. 不得把临时 Colab 输出直接当成论文 artifact。
+
+---
+
+## 17. 三层论文主张策略
+
+### 17.1 Claim-1: Flow velocity watermarking
+
+主张内容:
+
+```text
+密钥条件弱约束进入 Flow Matching velocity / flow trajectory, 并形成可检测的轨迹响应。
+```
+
+必须证据:
+
+```text
+flow_velocity_alignment_gain
+velocity_projection_operator_id
+sampling_constraint_variant
+quality_guard_status
+```
+
+### 17.2 Claim-2: Path-posterior trajectory inference
+
+主张内容:
+
+```text
+时间重参数化不变路径证据与密钥条件状态空间后验推断在 fixed-FPR 下提供独立增益。
+```
+
+必须证据:
+
+```text
+S_path_inv
+S_state_posterior
+S_final_conservative
+threshold_value
+target_fpr
+path_marginal_gain_at_fixed_fpr
+flow_state_admissibility_status
+```
+
+### 17.3 Claim-3: Robust replay verification
+
+主张内容:
+
+```text
+在 owner-side trajectory audit 和受限 model-side replay verification 中, SSTW 能保持低误报并优于 baseline。
+```
+
+必须证据:
+
+```text
+authenticated_trajectory_sketch_status
+replay_uncertainty_weight
+wrong_sampler_replay_control
+baseline_comparison_table
+claim_audit_report
+```
+
+### 17.4 Claim 降级规则
+
+如果 Claim-1 或 Claim-2 不成立, 不应宣称 Flow Matching trajectory watermark。
+
+如果 Claim-3 只在部分攻击下成立, 论文应把 owner-side audit 作为高置信设定, 把 replay verification 作为受限但有效的半白盒验证, 不应宣称完全 video-only black-box detection。
+
+---
+
+## 18. 投稿 gate
+
+### 18.1 Gate A: 机制成立
+
+```text
+flow_velocity_alignment_gain > 0
+endpoint evidence 可检测
+path evidence 与 endpoint evidence 不高度冗余
+path_marginal_gain_at_fixed_fpr > 0
+wrong_key_score_separation_passed = true
+wrong_sampler_replay_control_not_equivalent = true
+```
+
+### 18.2 Gate B: 检测成立
+
+```text
+TPR@FPR=0.01 达到预设目标
+clean_negative_fpr_controlled = true
+attacked_negative_fpr_controlled = true
+replay_negative_fpr_controlled = true
+sampler_mismatch_negative_fpr_controlled = true
+threshold_freeze_passed = true
+```
+
+### 18.3 Gate C: 论文成立
+
+```text
+sstw_full_method_beats_internal_baselines = true
+sstw_full_method_beats_temporal_alignment_baselines = true
+quality_degradation_within_limit = true
+motion_degradation_within_limit = true
+semantic_degradation_within_limit = true
+claim_audit_passed = true
+artifact_rebuild_passed = true
+submission_manifest_complete = true
+```
+
+### 18.4 投稿判断
+
+若 Gate A 或 Gate B 失败, 不建议作为完整 SSTW 投稿。
+
+若 Gate A 与 Gate B 成立, 但 Gate C 不完整, 可作为技术报告、workshop 或降级论文继续完善。
+
+若 Gate A、Gate B 与 Gate C 全部通过, 可以按完整 SSTW 主论文准备投稿。
+
+若 Claim-3 也在中等强度攻击下稳定成立, 则该版本具备更高水平会议投稿潜力。
+
+---
+
+## 19. Notebook 与 Colab 构建规则
+
+### 19.1 Notebook 职责
+
+Notebook 是远程 GPU 实验入口, 不是正式协议逻辑的唯一实现。
+
+Notebook 必须调用:
+
+```text
+main/
+experiments/
+scripts/check_results/
+scripts/package_results/
+paper_workflow/notebook_utils/
+```
+
+Notebook 不得直接手写正式 records、thresholds、tables、figures 或 reports。
+
+### 19.2 Google Drive 输出规则
+
+Colab 输出应落盘到:
+
+```text
+/content/drive/MyDrive/SSTW
+```
+
+建议目录结构为:
+
+```text
+/content/drive/MyDrive/SSTW/datasets
+/content/drive/MyDrive/SSTW/runs
+/content/drive/MyDrive/SSTW/packages
+/content/drive/MyDrive/SSTW/manifests
+```
+
+数据集构造、模型运行、结果检查和打包下载应分离为不同步骤。
+
+### 19.3 Notebook 必须包含的步骤
+
+```text
+mount_google_drive
+install_repository_dependencies
+prepare_or_read_dataset_manifests
+run_preflight_or_generation
+run_detection_and_baselines
+run_result_checker
+package_to_google_drive
+print_next_step_and_evidence_gap
+```
+
+### 19.4 Notebook 禁止事项
+
+1. 不得在 Notebook 中手工生成正式论文表格。
+2. 不得在 Notebook 中重写 threshold。
+3. 不得将 pilot split 结果直接写入主表。
+4. 不得将未认证 trajectory logging 当作高置信证据。
+
+---
+
+## 20. 最终投稿判断
+
+### 20.1 不建议作为完整 SSTW 投稿的情况
+
+出现以下任一情况时, 不应将论文主张写成完整 Flow Matching 轨迹水印:
+
+1. velocity / flow trajectory 没有参与水印同步证据。
+2. path evidence 与 endpoint evidence 高度冗余且无独立边际增益。
+3. fixed-FPR 条件下无法达到目标 TPR。
+4. wrong key、wrong sampler 或 negative replay 产生高误报。
+5. 质量、运动或语义退化超过可接受边界。
+6. supported claims 无法映射到 governed artifacts。
+
+### 20.2 可以作为主论文的最低情况
+
+最低情况需要同时满足:
+
+1. Wan2.1 主线模型运行链路可复现。
+2. `TPR@FPR=0.01` 达到论文预设目标。
+3. SSTW full method 优于内部机制 baseline 和外部 baseline。
+4. trajectory evidence、state posterior 和 endpoint evidence 形成互补。
+5. claim audit、artifact rebuild 和 harness 全部通过。
+
+### 20.3 强接收版本建议
+
+强接收版本应进一步满足:
+
+1. 跨 prompt、seed、attack 和 negative family 的泛化结果稳定。
+2. 至少一个额外 Flow Matching / velocity-field 视频模型作为补充验证。
+3. Flow-specific adaptive attacks 下仍保持低 FPR。
+4. authenticated trajectory sketch 与 replay uncertainty 形成完整证据链。
+5. 所有主表、主图和 claim audit 可由 records 与 manifests 自动重建。

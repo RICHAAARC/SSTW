@@ -1,48 +1,26 @@
 # sampling_time_constraint_probe 分阶段构建流程
 
-本文档是 SSTW 分阶段构建流程文档。文档结构固定为: 先说明本阶段构建流程, 再说明当前阶段具体完成情况。
-
-本阶段文档服从 `docs/builds/sstw_project_construction_flow.md` 与 `docs/builds/sstw_method_mechanism_design.md`。阶段完成情况只描述仓库当前可观察的工程、配置、测试和文档状态, 不把临时实验输出写成论文结论。
+本文档记录 `sampling_time_constraint_probe` 阶段的构建流程与当前完成情况。本文档只描述工程、协议、records 和 artifact 状态, 不直接支撑论文最终 claim。
 
 ## 1. 本阶段构建流程
 
 ### 1.1 阶段目标
 
-该阶段验证 sampling-time weak constraint 是否真正进入 Flow Matching 采样动力学, 并与 endpoint-aware minimum-energy control、quality guard、semantic projection 和 flow velocity proxy 形成可审计证据链。该阶段应在 `flow_model_adapter_preflight` 确认模型 callback、time grid 和 velocity / displacement proxy 可用之后进行。
+该阶段验证 sampling-time weak constraint 是否真正进入 Flow Matching 采样动力学, 并与 endpoint evidence、quality guard、semantic guard 和 flow velocity proxy 形成可审计证据链。该阶段应在 `flow_model_adapter_preflight` 确认模型 callback、time grid 与 velocity / displacement proxy 可用之后进行。
 
-### 1.2 输入
-
-```text
-configs/protocol/sampling_time_constraint_preflight.json
-configs/generation/sampling_constraint.json
-configs/generation/lambda_schedules.json
-configs/generation/generation_models.json
-main/generation/
-experiments/sampling_time_constraint/
-paper_workflow/colab_utils/sampling_time_constraint_colab.ipynb
-```
-
-### 1.3 构建任务
-
-1. 在采样 callback 或 scheduler adapter 中接入 velocity-field weak watermark constraint。
-2. 记录 callback latent displacement 或 velocity proxy。
-3. 执行 endpoint-aware minimum-energy flow control。
-4. 执行 quality guard 和 semantic projection。
-5. 比较 no constraint、endpoint-only、constant lambda、wrong key 和 without semantic projection 等 control。
-6. 将结果打包到 Google Drive 目录, 供 checker 与 submission freeze 使用。
-
-### 1.4 必须比较
+### 1.2 当前 probe 的核心比较
 
 ```text
-no_constraint_control
-endpoint_only_constraint
-constant_lambda_constraint
-no_endpoint_aware_control
-no_semantic_projection
-wrong_key_constraint
+key_conditioned_state_space_with_trajectory
+keyed_state_trajectory_constraint
+trajectory_constraint_without_admissibility
+trajectory_constraint_without_key_condition
+trajectory_constraint_wrong_key_control
 ```
 
-### 1.5 必须记录字段
+后续 pilot 和 full experiment 还需要扩展到更多 method variant, 例如 endpoint-only、trajectory-only、without-velocity、without-replay-uncertainty 与 external baseline。
+
+### 1.3 必须记录字段
 
 ```text
 flow_velocity_proxy_available
@@ -50,50 +28,108 @@ flow_velocity_proxy_source
 flow_velocity_alignment_before_constraint
 flow_velocity_alignment_after_constraint
 flow_velocity_alignment_gain
-endpoint_consistency_score
-quality_guard_status
-semantic_projection_status
+application_evidence_direction_cosine
+constraint_application_direction_status
+constraint_evidence_direction_status
+latent_constraint_delta_norm
+latent_norm_change
 lambda_schedule_id
-sampling_constraint_variant
+sampler_signature_id
+sampler_signature_sha256
+trajectory_source_level
 ```
 
-### 1.6 通过标准
+### 1.4 通过标准
 
-1. keyed flow velocity alignment gain 大于 baseline。
-2. endpoint payload 或 endpoint evidence 与路径证据一致。
-3. quality guard 没有被关闭或绕过。
-4. semantic projection 有可审计字段或明确 placeholder 边界。
+1. keyed path evidence gain 大于 unconstrained baseline。
+2. keyed flow velocity alignment gain 大于 unconstrained baseline。
+3. wrong-key control 不能伪造 matched-key trajectory evidence。
+4. without-key control 不能伪造 matched-key trajectory evidence。
+5. quality / motion / semantic guard 通过。
+6. Google Drive package 可复核, 并使用 `<utc_time>_<short_commit>` 命名。
 
-## 2. 当前阶段具体完成情况
+## 2. 当前阶段完成情况
 
-### 2.1 已有工程文件
+### 2.1 当前阶段判定
 
-当前仓库已有 sampling-time constraint 相关模块:
+`sampling_time_constraint_probe` 当前判定为:
 
 ```text
-main/generation/sampling_constraint_adapter.py
-main/generation/velocity_projection_constraint.py
-main/generation/lambda_schedule.py
-main/generation/scheduler_adapter.py
-main/generation/trajectory_capture.py
-experiments/sampling_time_constraint/colab_runtime.py
-experiments/sampling_time_constraint/runner.py
-experiments/sampling_time_constraint/postprocess_runner.py
-scripts/check_results/sampling_time_constraint_colab_result_checker.py
-scripts/package_results/sampling_time_constraint_drive_packager.py
-paper_workflow/colab_utils/sampling_time_constraint_colab.ipynb
+structure_ready / mechanism_ready / protocol_ready / artifact_ready
 ```
 
-### 2.2 当前阶段补充要求
-
-按照新的整体流程, 本阶段需要显式覆盖:
+该判定基于最新 recommended 批次:
 
 ```text
-endpoint_aware_minimum_energy_flow_control
-flow_velocity_proxy_record
-callback_latent_displacement_record
-quality_guard_status
-semantic_projection_status
+package_batch_id: 20260618_023447_f325e2a5
+profile: recommended
+primary_model: Wan-AI/Wan2.1-T2V-1.3B-Diffusers
+generation_record_count: 20
+constraint_record_count: 320
 ```
 
-如果 velocity constraint 不能提供有效增益, 不能宣称 SSTW 是 Flow Matching trajectory watermark。
+当前 checker 输出:
+
+```text
+implementation_evidence_status: PASS
+mechanism_evidence_status: PASS
+missing_mechanism_requirements: []
+```
+
+### 2.2 机制层面已经完成的内容
+
+本阶段已经完成以下机制验证:
+
+```text
+callback latent trajectory 能被捕获
+sampler signature 能随 records 落盘
+velocity / latent displacement proxy 能被记录
+keyed sampling-time constraint 能提升 matched-key path evidence
+keyed flow velocity alignment gain 大于 baseline
+wrong-key control 不能伪造 matched-key trajectory evidence
+without-key control 不能伪造 matched-key trajectory evidence
+quality / motion / semantic guard 在 recommended 批次通过
+Google Drive package 使用 <utc_time>_<short_commit> 命名并可复核
+```
+
+关键指标:
+
+```text
+keyed_constraint_alignment_gain_mean: 0.001680
+keyed_flow_velocity_alignment_gain_mean: 0.020683
+key_separation_gain_over_control: 0.001680
+key_separation_flow_velocity_gain_over_control: 0.020685
+minimum_key_separation_gain: 0.0005
+minimum_key_separation_flow_velocity_gain: 0.0005
+```
+
+### 2.3 重要修复记录
+
+本阶段曾发现 wrong-key / without-key 与 matched-key 方向不可分的问题。原因是旧方向构造使用单一正弦相位平移, 会使不同 key 的方向高度相关。当前实现已改为基于 `SHA-256(key)` 派生高维伪随机方向, 并记录:
+
+```text
+application_evidence_direction_cosine
+latent_constraint_delta_norm
+latent_norm_change
+minimum_key_separation_gain
+minimum_key_separation_flow_velocity_gain
+```
+
+recommended 批次的方向审计结果为:
+
+```text
+keyed application_evidence_direction_cosine: 1.0
+without-key application_evidence_direction_cosine mean: -0.000548
+wrong-key application_evidence_direction_cosine mean: -0.000084
+```
+
+### 2.4 阶段边界
+
+本阶段可以说明 sampling-time trajectory synchronization 机制在 Wan2.1 recommended profile 上通过前置验证。它仍不能替代 small-scale claim pilot, 因为本阶段尚未覆盖完整 attack matrix、negative family、fixed-FPR path marginal gain 与 wrong-sampler replay。
+
+下一步应进入:
+
+```text
+small_scale_claim_pilot_gate
+```
+

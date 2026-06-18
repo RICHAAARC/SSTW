@@ -1,30 +1,14 @@
 # small_scale_claim_pilot_gate 分阶段构建流程
 
-本文档是 SSTW 分阶段构建流程文档。文档结构固定为: 先说明本阶段构建流程, 再说明当前阶段具体完成情况。
-
-本阶段文档服从 `docs/builds/sstw_project_construction_flow.md` 与 `docs/builds/sstw_method_mechanism_design.md`。阶段完成情况只描述仓库当前可观察的工程、配置、测试和文档状态, 不把临时实验输出写成论文结论。
+本文档记录 `small_scale_claim_pilot_gate` 阶段的构建流程与当前完成情况。本文档只描述工程、协议、records 和 artifact 状态, 不直接支撑论文最终 claim。
 
 ## 1. 本阶段构建流程
 
 ### 1.1 阶段目标
 
-该阶段在进入大规模真实生成实验前, 以较小成本验证 Claim-1、Claim-2 和部分 Claim-3 是否有成立迹象。该阶段不产生主论文表格, 但决定是否进入 full generation 主实验。
+该阶段在进入大规模真实生成实验前, 以较小成本验证主要 claim 是否有成立迹象。该阶段不产生主论文最终表格, 但决定是否进入 full generation 主实验。
 
-### 1.2 输入
-
-```text
-configs/protocol/generative_video_model_probe.json
-configs/protocol/sampling_time_constraint_preflight.json
-configs/external_baselines/external_baselines.json
-configs/generation/prompts.json
-configs/generation/seeds.json
-experiments/sampling_time_constraint/
-experiments/generative_video_model_probe/
-scripts/check_results/
-scripts/package_results/
-```
-
-### 1.3 推荐规模
+### 1.2 建议规模
 
 ```text
 N_prompt >= 8
@@ -34,20 +18,7 @@ N_calibration_negative_family >= 4
 N_method_variant >= 6
 ```
 
-### 1.4 必须覆盖的 method variant
-
-```text
-sstw_full_method
-endpoint_only_control
-trajectory_only_score
-without_velocity_constraint
-without_endpoint_aware_control
-without_replay_uncertainty_weighting
-generic_ssm_baseline
-explicit_dtw_temporal_alignment
-```
-
-### 1.5 必须覆盖的攻击和错配
+### 1.3 必须覆盖的攻击和错配
 
 ```text
 video_compression
@@ -58,7 +29,7 @@ wrong_sampler_replay
 wrong_key_control
 ```
 
-### 1.6 必须记录字段
+### 1.4 必须记录字段
 
 ```text
 negative_family
@@ -72,7 +43,7 @@ wrong_sampler_replay_control_not_equivalent
 claim_support_status
 ```
 
-### 1.7 通过标准
+### 1.5 通过标准
 
 ```text
 trajectory_trace_capture_success_rate >= 0.95
@@ -85,28 +56,57 @@ wrong_key_score_separation_passed = true
 wrong_sampler_replay_control_not_equivalent = true
 ```
 
-### 1.8 失败处理
+## 2. 当前阶段完成情况
 
-若本阶段失败, 不应进入 `generative_video_model_probe` 的 full experiment。应根据失败原因回退:
+### 2.1 当前阶段判定
+
+`small_scale_claim_pilot_gate` 当前判定为:
 
 ```text
-flow_velocity_alignment_gain <= 0 -> 回退 sampling_time_constraint_probe
-path_marginal_gain_at_fixed_fpr <= 0 -> 回退 trajectory_observation_core_probe
-negative tail inflation -> 回退 protocol_governance_foundation / state_space_inference_formalization / replay_and_authenticated_sketch_gate
-quality_guard_violation -> 回退 sampling_time_constraint_probe
-replay failure -> 回退 replay_and_authenticated_sketch_gate 或将 Claim-3 降级
+structure_ready / protocol_ready / external_validation_required
 ```
 
-## 2. 当前阶段具体完成情况
+该阶段现在已经满足进入条件, 因为前置阶段已经完成:
 
-### 2.1 已有工程基础
+```text
+flow_model_adapter_preflight: PASS
+sampling_time_constraint_probe smoke: PASS
+sampling_time_constraint_probe recommended: PASS
+```
 
-当前仓库已经存在 sampling-time constraint、generative video probe、external baseline runner、checker 与 packager 基础模块, 可组合形成小规模 pilot。
+最新 sampling-time recommended 证据:
 
-### 2.2 当前阶段缺口
+```text
+package_batch_id: 20260618_023447_f325e2a5
+implementation_evidence_status: PASS
+mechanism_evidence_status: PASS
+missing_mechanism_requirements: []
+```
 
-当前仍需要将 pilot split、negative family、pilot-only package 和 gate 判断写入明确 runner 或 checker, 避免 pilot 结果被误用为主论文 test split 结果。
+### 2.2 pilot 必须回答的问题
 
-### 2.3 当前阶段使用边界
+pilot 不能重复证明 callback 是否能工作, 而应验证 claim 是否值得扩展到 full experiment。必须重点检查:
 
-该阶段只能说明是否值得进入 full generation 主实验。它不能直接支撑主论文表格, 也不能替代 full test split 上的 fixed-FPR baseline 对比。
+```text
+path_marginal_gain_at_fixed_fpr > 0
+negative tail 没有膨胀
+wrong_sampler_replay 不能伪造正确轨迹
+wrong_key / without-key control 保持分离
+quality_guard 通过
+attack 后 trajectory evidence 与 endpoint evidence 不发生系统性冲突
+```
+
+### 2.3 下一步建议
+
+下一步建议按以下规模运行 pilot:
+
+```text
+8 prompts
+2 seeds per prompt
+3 attacks
+4 negative families
+6 method variants
+```
+
+pilot 失败时不得进入 full experiment。pilot 通过后, 才允许进入 `generative_video_model_probe` 的完整真实模型实验。
+

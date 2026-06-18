@@ -50,6 +50,7 @@ def test_generative_video_colab_notebook_calls_repository_modules() -> None:
     assert "PROFILE = 'pilot'" in source
     assert "MODEL_ID = 'Wan-AI/Wan2.1-T2V-1.3B-Diffusers'" in source
     assert "build_formal_metric_command" in source
+    assert "build_motion_threshold_calibration_command" in source
     assert "build_mechanism_postprocess_command" in source
     assert "build_pilot_matrix_postprocess_command" in source
     assert "build_runtime_attack_command" in source
@@ -58,6 +59,7 @@ def test_generative_video_colab_notebook_calls_repository_modules() -> None:
     assert "scripts/prepare_generative_video_prompt_suite.py" in Path("paper_workflow/notebook_utils/generative_video_model_probe_workflow.py").read_text(encoding="utf-8")
     assert "experiments.generative_video_model_probe.colab_runtime" in Path("paper_workflow/notebook_utils/generative_video_model_probe_workflow.py").read_text(encoding="utf-8")
     assert "experiments.generative_video_model_probe.formal_metric_runner" in Path("paper_workflow/notebook_utils/generative_video_model_probe_workflow.py").read_text(encoding="utf-8")
+    assert "experiments.generative_video_model_probe.motion_threshold_calibration" in Path("paper_workflow/notebook_utils/generative_video_model_probe_workflow.py").read_text(encoding="utf-8")
     assert "experiments.generative_video_model_probe.postprocess_runner" in Path("paper_workflow/notebook_utils/generative_video_model_probe_workflow.py").read_text(encoding="utf-8")
     assert "experiments.generative_video_model_probe.pilot_matrix_postprocess" in Path("paper_workflow/notebook_utils/generative_video_model_probe_workflow.py").read_text(encoding="utf-8")
     assert "experiments.generative_video_model_probe.attack_runner" in Path("paper_workflow/notebook_utils/generative_video_model_probe_workflow.py").read_text(encoding="utf-8")
@@ -106,6 +108,12 @@ def test_generative_video_drive_packager_creates_archive_and_manifest(tmp_path: 
         "runtime_detection_record_count": 48,
         "runtime_detection_ready_count": 48,
     })
+    write_json(run_root / "artifacts" / "motion_threshold_calibration_decision.json", {
+        "motion_threshold_calibration_decision": "INSUFFICIENT_SAMPLE",
+        "motion_threshold_id": "motion_delta_heuristic_v1",
+        "motion_threshold_source_split": "heuristic_precalibration",
+        "motion_threshold_calibration_required": True,
+    })
 
     payload = package_generative_video_colab_run(run_root, package_dir, include_videos=False)
     archive_path = Path(payload["archive_path"])
@@ -125,6 +133,10 @@ def test_generative_video_drive_packager_creates_archive_and_manifest(tmp_path: 
     assert manifest["decision_summary"]["runtime_detection_decision"] == "PASS"
     assert manifest["decision_summary"]["runtime_detection_record_count"] == 48
     assert manifest["decision_summary"]["runtime_detection_ready_count"] == 48
+    assert manifest["decision_summary"]["motion_threshold_calibration_decision"] == "INSUFFICIENT_SAMPLE"
+    assert manifest["decision_summary"]["motion_threshold_id"] == "motion_delta_heuristic_v1"
+    assert manifest["decision_summary"]["motion_threshold_source_split"] == "heuristic_precalibration"
+    assert manifest["decision_summary"]["motion_threshold_calibration_required"] is True
     assert re.match(r"generative_video_model_probe_colab_\d{8}_\d{6}_[a-z0-9_\-]+\.zip", archive_path.name)
     assert manifest["package_batch_id"] == f"{manifest['package_utc_time']}_{manifest['package_short_commit']}"
     assert archive_path.stem.endswith(manifest["package_batch_id"])

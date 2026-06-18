@@ -281,3 +281,33 @@ motion_threshold_calibration_required: true
 工程层面: generation / attack / detection / package 已闭合。
 claim 层面: 仍阻塞于 motion_threshold_calibration, 不得进入 final claim 或 full experiment 结论冻结。
 ```
+
+## 6. 2026-06-19 阶段状态更新: motion threshold calibration 已执行但未通过
+
+### 6.1 当前 calibration artifact 状态
+
+已新增并运行 `motion_threshold_calibration` 工程入口。最新 Google Drive package 为:
+
+```text
+G:\我的云端硬盘\SSTW\packages\generative_video_model_probe\generative_video_model_probe_colab_20260618_162447_882754a4.zip
+G:\我的云端硬盘\SSTW\packages\generative_video_model_probe\generative_video_model_probe_colab_20260618_162447_882754a4_package_manifest.json
+```
+
+package manifest 已包含 calibration summary:
+
+```text
+motion_threshold_calibration_decision: INSUFFICIENT_SAMPLE
+motion_threshold_id: motion_delta_heuristic_v1
+motion_threshold_source_split: heuristic_precalibration
+motion_threshold_calibration_required: true
+```
+
+### 6.2 当前总体状态
+
+```text
+工程层面: motion threshold calibration runner / records / threshold artifact / report / package summary 已闭合。
+统计层面: 当前 pilot run 样本不足, 不能冻结 calibrated threshold。
+claim 层面: small_scale_claim_pilot_gate 仍为 FAIL, 阻塞原因仍是 motion_threshold_calibration。
+```
+
+该状态是预期的治理结果, 因为当前 16 条 pilot main records 不能替代独立 calibration split。

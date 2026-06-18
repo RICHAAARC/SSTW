@@ -616,3 +616,27 @@ Notebook 与 repository module 的跨边界数据
 | decoded_to_source_frame_ratio | metric | none | true | false | false | Ratio between decoded attacked frame count and source frame count. |
 | attack_score_delta | metric | none | true | false | false | Runtime attacked video score delta against trajectory observation proxy. |
 | S_runtime_attack_detection | metric | none | true | false | false | Runtime attacked video detection proxy score. |
+
+| motion_threshold_calibration_decision | governance | none | true | false | false | Decision for formal motion threshold calibration stage. |
+| motion_threshold_calibration_ready | governance | none | true | false | false | Whether calibrated motion threshold is ready for claim gating. |
+| motion_delta_threshold | metric | none | true | false | false | Motion delta threshold selected by calibration or heuristic fallback. |
+| target_static_fpr | protocol | none | true | false | false | Target false positive rate for static negative motion tail calibration. |
+| estimated_static_fpr | metric | none | true | false | false | Estimated false positive rate on calibration negative static tail. |
+| negative_static_calibration_count | metric | none | true | false | false | Number of negative static calibration records used for motion threshold calibration. |
+| positive_motion_calibration_count | metric | none | true | false | false | Number of positive motion calibration records used for threshold sanity check. |
+| usable_motion_calibration_record_count | metric | none | true | false | false | Number of usable formal motion records available to calibration. |
+| motion_calibration_record_count | metric | none | true | false | false | Total number of motion calibration records emitted. |
+| negative_static_motion_delta_max | metric | none | true | false | false | Maximum motion delta score among negative static calibration records. |
+| negative_static_motion_delta_mean | metric | none | true | false | false | Mean motion delta score among negative static calibration records. |
+| positive_motion_delta_min | metric | none | true | false | false | Minimum motion delta score among positive motion calibration records. |
+| positive_motion_delta_mean | metric | none | true | false | false | Mean motion delta score among positive motion calibration records. |
+| positive_motion_pass_rate_at_threshold | metric | none | true | false | false | Positive motion pass rate under the calibrated or fallback motion threshold. |
+| minimum_negative_static_calibration_count | protocol | none | true | false | false | Minimum required negative static calibration record count. |
+| minimum_positive_motion_calibration_count | protocol | none | true | false | false | Minimum required positive motion calibration record count. |
+| motion_threshold_calibration_missing_reasons | governance | none | true | false | false | Missing reasons blocking formal motion threshold calibration. |
+| motion_calibration_source_split | protocol | none | true | false | false | Source split used by a motion calibration record. |
+| motion_calibration_role | protocol | none | true | false | false | Role of a calibration sample, such as negative_static or positive_motion. |
+| motion_calibration_record_status | governance | none | true | false | false | Usability status of one motion calibration record. |
+| motion_calibration_record_failure_reason | governance | none | true | false | false | Failure reason for a motion calibration record. |
+| previous_motion_threshold_id | protocol | none | true | false | false | Previous motion threshold identifier before calibration. |
+| previous_motion_delta_threshold | metric | none | true | false | false | Previous heuristic motion delta threshold before calibration. |

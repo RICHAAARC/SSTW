@@ -150,6 +150,7 @@ def build_small_scale_claim_pilot_audit(run_root: str | Path) -> dict:
     formal_metric_records = _read_jsonl(run_root / "records" / "formal_quality_motion_semantic_records.jsonl")
     postprocess_decision = _read_json(run_root / "artifacts" / "generative_video_mechanism_postprocess_decision.json")
     formal_decision = _read_json(run_root / "artifacts" / "formal_quality_motion_semantic_decision.json")
+    motion_calibration_decision = _read_json(run_root / "artifacts" / "motion_threshold_calibration_decision.json")
 
     successful_generation_records = [record for record in generation_records if record.get("generation_status") == "success"]
     prompt_ids = _unique_nonempty(successful_generation_records, "prompt_id")
@@ -186,7 +187,10 @@ def build_small_scale_claim_pilot_audit(run_root: str | Path) -> dict:
     wrong_sampler_not_equivalent = _wrong_sampler_replay_not_equivalent(matrix_source_records)
 
     formal_motion_claim_status = _formal_motion_claim_status(formal_metric_records, formal_decision, postprocess_decision)
-    formal_motion_uses_heuristic_threshold = True
+    motion_threshold_calibration_ready = motion_calibration_decision.get("motion_threshold_calibration_ready") is True
+    motion_threshold_id = motion_calibration_decision.get("motion_threshold_id") or HEURISTIC_MOTION_THRESHOLD_ID
+    motion_threshold_source_split = motion_calibration_decision.get("motion_threshold_source_split") or HEURISTIC_MOTION_THRESHOLD_SOURCE_SPLIT
+    formal_motion_uses_heuristic_threshold = not motion_threshold_calibration_ready
 
     requirement_checks: dict[str, bool] = {
         "prompt_coverage_ready": len(prompt_ids) >= MIN_PROMPT_COUNT,
@@ -242,9 +246,10 @@ def build_small_scale_claim_pilot_audit(run_root: str | Path) -> dict:
         "fixed_low_fpr_proxy_pass": fixed_low_fpr_proxy_pass,
         "controlled_negative_fpr": controlled_negative_fpr,
         "formal_motion_claim_status": formal_motion_claim_status,
-        "motion_threshold_id": HEURISTIC_MOTION_THRESHOLD_ID,
-        "motion_threshold_source_split": HEURISTIC_MOTION_THRESHOLD_SOURCE_SPLIT,
-        "motion_threshold_calibration_required": True,
+        "motion_threshold_id": motion_threshold_id,
+        "motion_threshold_source_split": motion_threshold_source_split,
+        "motion_threshold_calibration_decision": motion_calibration_decision.get("motion_threshold_calibration_decision"),
+        "motion_threshold_calibration_required": not motion_threshold_calibration_ready,
         "test_time_threshold_update_blocked": True,
     }
 

@@ -362,8 +362,16 @@ Notebook 与 repository module 的跨边界数据
 | dark_pixel_ratio | metric | none | true | false | false | Ratio of near-black pixels over sampled generated video frames. |
 | bright_pixel_ratio | metric | none | true | false | false | Ratio of near-white pixels over sampled generated video frames. |
 | motion_delta_score | metric | none | true | false | false | Mean adjacent-frame absolute difference over sampled generated frames. |
+| visual_brightness_min | metric | none | true | false | false | Minimum mean brightness threshold used by formal visual quality gate. |
+| visual_brightness_max | metric | none | true | false | false | Maximum mean brightness threshold used by formal visual quality gate. |
+| visual_contrast_min | metric | none | true | false | false | Minimum mean contrast threshold used by formal visual quality gate. |
+| visual_extreme_pixel_ratio_max | metric | none | true | false | false | Maximum near-black or near-white pixel ratio used by formal visual quality gate. |
+| motion_delta_threshold | metric | none | true | false | false | Minimum adjacent-frame delta threshold used by formal motion consistency gate. |
+| temporal_flicker_threshold | metric | none | true | false | false | Maximum temporal flicker threshold used by formal motion consistency gate. |
 | visual_quality_metric_status | governance | none | true | false | false | Status of formal video file visual quality metric. |
 | motion_consistency_metric_status | governance | none | true | false | false | Status of formal video file motion consistency metric. |
+| visual_quality_failure_reason | governance | none | true | false | false | Explicit visual quality gate failure reason for generated video file metrics. |
+| motion_consistency_failure_reason | governance | none | true | false | false | Explicit motion consistency gate failure reason for generated video file metrics. |
 | formal_visual_quality_ready | governance | none | true | false | false | Whether formal video file visual quality metric is ready. |
 | formal_motion_consistency_ready | governance | none | true | false | false | Whether formal video file motion consistency metric is ready. |
 | semantic_model_id | metric | none | true | false | false | CLIP or VLM model identifier used for formal semantic consistency metric. |
@@ -377,10 +385,14 @@ Notebook 与 repository module 的跨边界数据
 | semantic_metric_failure_reason | governance | none | true | false | false | Failure reason for semantic consistency metric. |
 | formal_semantic_consistency_ready | governance | none | true | false | false | Whether formal semantic consistency metric is ready. |
 | formal_metric_result_used_for_claim | claim | none | true | true | false | Whether formal quality motion semantic metrics are used for a positive claim. |
+| formal_metric_blocking_reason | governance | none | true | false | false | Per-record blocking reason for formal quality motion semantic claim gate. |
 | formal_metric_record_count | metric | none | true | false | false | Number of formal quality motion semantic metric records. |
 | formal_visual_quality_ready_count | metric | none | true | false | false | Count of records with ready formal visual quality metrics. |
 | formal_motion_consistency_ready_count | metric | none | true | false | false | Count of records with ready formal motion consistency metrics. |
 | formal_semantic_consistency_ready_count | metric | none | true | false | false | Count of records with ready formal semantic consistency metrics. |
+| formal_visual_quality_blocked_count | metric | none | true | false | false | Count of records blocked by formal visual quality metrics. |
+| formal_motion_consistency_blocked_count | metric | none | true | false | false | Count of records blocked by formal motion consistency metrics. |
+| formal_semantic_consistency_blocked_count | metric | none | true | false | false | Count of records blocked by formal semantic consistency metrics. |
 | formal_visual_motion_ready | governance | none | true | false | false | Whether formal visual and motion metrics are ready for all records. |
 | formal_semantic_ready | governance | none | true | false | false | Whether formal semantic metrics are ready for all records. |
 | formal_quality_motion_semantic_ready | governance | none | true | false | false | Whether all formal quality, motion, and semantic metrics are ready. |

@@ -127,3 +127,25 @@ run_cross_model: false
 ```
 
 pilot 失败时不得进入 full experiment。pilot 通过后, 才允许进入 `generative_video_model_probe` 的完整真实模型实验。
+
+### 2.4 motion threshold calibration 后置策略
+
+当前 small-scale claim pilot 可以继续推进, 但 formal motion gate 使用的阈值必须按 heuristic guardrail 处理:
+
+```text
+motion_delta_threshold: 0.0005
+threshold_id: motion_delta_heuristic_v1
+threshold_source_split: heuristic_precalibration
+usage: pilot_guardrail
+```
+
+该阈值用于 pilot 阶段阻止明显低运动视频支撑 motion-related claim, 但尚未通过大量样本统计测算。当前 pilot 的 attack、negative family、wrong-sampler replay、path marginal gain 和 replay uncertainty 可以继续推进; 但最终 paper claim 前必须补齐 `motion_threshold_calibration` 阶段。
+
+pilot 报告中应使用以下边界表达:
+
+```text
+mechanism proxy evidence can support workflow progression.
+formal motion gate currently uses heuristic_precalibration threshold.
+calibrated motion threshold remains required before final paper claim.
+```
+

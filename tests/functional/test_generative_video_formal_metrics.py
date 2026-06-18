@@ -30,6 +30,18 @@ def _write_tiny_video(path: Path) -> None:
     iio.imwrite(path, frames, fps=4)
 
 
+def _write_low_motion_video(path: Path) -> None:
+    """写出低运动 mp4, 用于验证 formal motion gate 的失败原因可审计。"""
+    import imageio.v3 as iio
+    import numpy as np
+
+    frame = np.full((32, 32, 3), 120, dtype=np.uint8)
+    frame[8:24, 8:24, :] = 180
+    frames = [frame.copy() for _ in range(6)]
+    path.parent.mkdir(parents=True, exist_ok=True)
+    iio.imwrite(path, frames, fps=4)
+
+
 @pytest.mark.quick
 def test_formal_metric_runner_builds_video_file_metrics(tmp_path: Path) -> None:
     """formal metric runner 必须读取真实 mp4 并记录语义 metric 未配置。"""
@@ -55,10 +67,63 @@ def test_formal_metric_runner_builds_video_file_metrics(tmp_path: Path) -> None:
     assert audit["formal_semantic_ready"] is False
     assert audit["formal_metric_claim_status"] == "blocked_until_semantic_metric_ready"
     assert records[0]["video_decode_status"] == "ready"
+    assert records[0]["motion_delta_threshold"] == 0.0005
+    assert records[0]["motion_consistency_failure_reason"] == "none"
     assert records[0]["formal_visual_quality_ready"] is True
     assert records[0]["formal_motion_consistency_ready"] is True
     assert records[0]["formal_semantic_consistency_ready"] is False
     assert records[0]["semantic_metric_status"] == "prompt_text_missing"
+
+
+@pytest.mark.quick
+def test_formal_metric_runner_reports_motion_gate_blocking_reason(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """低运动视频应明确记录 motion gate 阻塞原因, 不能笼统归因到 semantic metric。"""
+    run_root = tmp_path / "generative_video_model_probe_colab"
+    dataset_root = tmp_path / "datasets" / "generative_video_prompt_suite"
+    prompt_suite_path = dataset_root / "prompt_seed_suite.json"
+    video_path = run_root / "videos" / "low_motion.mp4"
+    _write_low_motion_video(video_path)
+    digest = hashlib.sha256(video_path.read_bytes()).hexdigest()
+    write_json(prompt_suite_path, {
+        "prompts": [{
+            "prompt_id": "prompt",
+            "prompt_text": "A mostly static object with subtle rotation.",
+        }],
+    })
+    write_jsonl(run_root / "records" / "generation_records.jsonl", [{
+        "generation_model_id": "model",
+        "prompt_id": "prompt",
+        "seed_id": "seed",
+        "generation_status": "success",
+        "video_path": str(video_path),
+        "video_sha256": digest,
+        "trajectory_trace_id": "trace_0000",
+    }])
+
+    def fake_clip_metric(video_path: Path, prompt_text: str, model_id: str, frame_limit: int) -> dict:
+        return {
+            "semantic_metric_name": "clip_text_video_similarity",
+            "semantic_model_id": model_id,
+            "semantic_metric_status": "ready",
+            "semantic_metric_failure_reason": "none",
+            "semantic_consistency_score": 0.31,
+            "semantic_consistency_mean_score": 0.31,
+            "semantic_consistency_max_score": 0.31,
+            "semantic_sampled_frame_count": frame_limit,
+            "semantic_frame_limit": frame_limit,
+            "semantic_metric_device": "cpu",
+        }
+
+    monkeypatch.setattr(formal_metric_runner, "compute_clip_text_video_similarity", fake_clip_metric)
+
+    audit = run_formal_metric_audit(run_root, prompt_suite_path=prompt_suite_path)
+    records = read_jsonl(run_root / "records" / "formal_quality_motion_semantic_records.jsonl")
+
+    assert audit["formal_metric_claim_status"] == "blocked_by_formal_motion_consistency"
+    assert audit["formal_motion_consistency_blocked_count"] == 1
+    assert records[0]["formal_metric_blocking_reason"] == "formal_motion_consistency_not_ready"
+    assert records[0]["motion_consistency_failure_reason"] == "motion_delta_below_min"
+    assert records[0]["formal_semantic_consistency_ready"] is True
 
 
 @pytest.mark.quick

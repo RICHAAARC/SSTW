@@ -117,10 +117,14 @@ def check_generative_video_colab_results(run_root: str | Path) -> dict:
     if decision.get("details", {}).get("quality_motion_semantic_consistency_pass") is not True:
         if postprocess_details.get("formal_quality_semantic_ready") is True:
             pass
+        elif postprocess_details.get("formal_claim_status") == "blocked_by_formal_visual_quality":
+            missing_mechanism_requirements.append("formal_visual_quality_metric_missing")
+        elif postprocess_details.get("formal_claim_status") == "blocked_by_formal_motion_consistency":
+            missing_mechanism_requirements.append("formal_motion_consistency_metric_missing")
         elif postprocess_details.get("formal_visual_motion_ready") is True and postprocess_details.get("formal_semantic_ready") is not True:
             missing_mechanism_requirements.append("formal_semantic_metric_missing")
         elif postprocess_details.get("quality_motion_semantic_proxy_pass") is True:
-            missing_mechanism_requirements.append("formal_quality_semantic_metrics_missing")
+            missing_mechanism_requirements.append("formal_quality_motion_semantic_metrics_missing")
         else:
             missing_mechanism_requirements.append("quality_motion_semantic_consistency_not_passed")
     if external_baseline_runnable_count < 1:

@@ -1,4 +1,4 @@
-"""对 Colab recommended 生成结果进行 B5 机制后处理。"""
+"""对 Colab 生成结果进行 B5 机制后处理。"""
 
 from __future__ import annotations
 
@@ -32,15 +32,15 @@ def _safe_divide(numerator: float, denominator: float) -> float:
 
 
 def _clip(value: float, lower: float = 0.0, upper: float = 1.0) -> float:
-    """把 proxy 分数裁剪到固定区间, 使不同记录的分数可比较。"""
+    """将 proxy 分数裁剪到固定区间, 使不同记录的分数可比较。"""
     return max(lower, min(upper, value))
 
 
 def _trace_features(trajectory_records: list[dict]) -> dict[str, dict]:
     """从 trajectory records 提取每个 trace 的轻量机制特征。
 
-    该函数属于项目特定写法。它不读取视频像素, 而是使用 Colab pipeline callback
-    记录的 latent 统计量构造机制后处理证据, 用于判断是否值得进入更重的正式检测流程。
+    该函数属于项目特定写法。它不读取视频像素, 而是使用 Colab pipeline callback 记录的 latent 统计量构造
+    机制后处理证据, 用于判断是否值得进入更重的正式检测流程。
     """
     grouped: dict[str, list[dict]] = {}
     for record in trajectory_records:
@@ -121,7 +121,7 @@ def _build_control_records(generation_records: list[dict], trajectory_features: 
     """构造受控负样本 records, 用于 fixed low-FPR proxy 审计。
 
     此处的负样本不是外部真实负样本, 而是从同一 latent trace 中构造的方向破坏控制。
-    因此它只能支持 postprocess gate, 不能单独支持论文正式 claim。
+    因此它只能支持 postprocess gate, 不能单独支撑论文正式 claim。
     """
     records: list[dict] = []
     for generation_record in generation_records:
@@ -199,7 +199,11 @@ def _build_decision(
     threshold_payload: dict,
     formal_metric_records: list[dict],
 ) -> dict:
-    """构造后处理 decision, 明确区分 proxy 通过与正式机制 claim。"""
+    """构造后处理 decision, 明确区分 proxy 通过与正式机制 claim。
+
+    该函数属于项目特定写法。它把 latent trajectory proxy、受控负样本、正式视频质量指标共同汇总为
+    claim gate 状态, 但不会把 proxy-only 证据伪装成论文级正式 claim。
+    """
     key_records = [
         record for record in mechanism_records
         if record["method_variant"] == "key_conditioned_state_space_with_trajectory"
@@ -230,6 +234,8 @@ def _build_decision(
         for record in formal_metric_records
     ) and bool(formal_metric_records)
     formal_quality_semantic_ready = formal_visual_motion_ready and formal_semantic_ready
+    formal_visual_blocked = any(record.get("formal_visual_quality_ready") is not True for record in formal_metric_records)
+    formal_motion_blocked = any(record.get("formal_motion_consistency_ready") is not True for record in formal_metric_records)
     mechanism_postprocess_pass = all([
         bool(key_records),
         trajectory_gain_confirmed_by_proxy,
@@ -239,10 +245,14 @@ def _build_decision(
     formal_claim_ready = mechanism_postprocess_pass and formal_quality_semantic_ready
     if formal_claim_ready:
         formal_claim_status = "supported_by_governed_generation_records"
+    elif formal_visual_blocked:
+        formal_claim_status = "blocked_by_formal_visual_quality"
+    elif formal_motion_blocked:
+        formal_claim_status = "blocked_by_formal_motion_consistency"
     elif formal_visual_motion_ready and not formal_semantic_ready:
         formal_claim_status = "blocked_until_formal_semantic_metric"
     else:
-        formal_claim_status = "blocked_until_formal_quality_semantic_metrics"
+        formal_claim_status = "blocked_until_formal_quality_motion_semantic_metrics"
     return {
         "stage_id": "generative_video_mechanism_postprocess",
         "mechanism_postprocess_decision": "PASS" if mechanism_postprocess_pass else "FAIL",
@@ -291,7 +301,7 @@ def postprocess_colab_run(run_root: str | Path, target_fpr: float = 0.01) -> dic
 
     report = (
         "# Generative Video Mechanism Postprocess Report\n\n"
-        "该报告由 Colab recommended records 后处理生成。当前后处理只使用 latent trajectory proxy 与受控负样本, "
+        "该报告由 Colab records 后处理生成。当前后处理只使用 latent trajectory proxy 与受控负样本, "
         "可用于推进工作流, 但不能单独支撑论文正式机制 claim。\n\n"
         f"- mechanism_postprocess_decision: {decision['mechanism_postprocess_decision']}\n"
         f"- formal mechanism_decision: {decision['mechanism_decision']}\n"
@@ -314,7 +324,7 @@ def postprocess_colab_run(run_root: str | Path, target_fpr: float = 0.01) -> dic
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="对 B5 Colab recommended 输出进行机制后处理。")
+    parser = argparse.ArgumentParser(description="对 B5 Colab 输出进行机制后处理。")
     parser.add_argument("--run-root", required=True)
     parser.add_argument("--target-fpr", type=float, default=0.01)
     args = parser.parse_args()

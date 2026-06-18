@@ -64,7 +64,7 @@ def test_generative_video_postprocess_builds_proxy_records(tmp_path: Path) -> No
     assert summary["quality_proxy_record_count"] == 4
     assert summary["mechanism_postprocess_decision"] == "PASS"
     assert summary["mechanism_decision"] == "FAIL"
-    assert summary["formal_claim_status"] == "blocked_until_formal_quality_semantic_metrics"
+    assert summary["formal_claim_status"] == "blocked_until_formal_quality_motion_semantic_metrics"
 
     decision = json.loads((run_root / "artifacts" / "generative_video_mechanism_postprocess_decision.json").read_text(encoding="utf-8"))
     assert decision["details"]["fixed_low_fpr_proxy_pass"] is True
@@ -74,7 +74,7 @@ def test_generative_video_postprocess_builds_proxy_records(tmp_path: Path) -> No
 
 @pytest.mark.quick
 def test_colab_checker_reports_postprocess_progress_without_formal_claim(tmp_path: Path) -> None:
-    """结果检查器应识别后处理进展, 但正式机制证据仍需 formal quality semantic metrics。"""
+    """结果检查器应识别后处理进展, 但正式机制证据仍需 formal quality motion semantic metrics。"""
     run_root = tmp_path / "generative_video_model_probe_colab"
     video_path = run_root / "videos" / "sample.mp4"
     video_path.parent.mkdir(parents=True)
@@ -112,4 +112,4 @@ def test_colab_checker_reports_postprocess_progress_without_formal_claim(tmp_pat
     summary = check_generative_video_colab_results(run_root)
     assert summary["mechanism_postprocess_status"] == "PASS"
     assert summary["mechanism_evidence_status"] == "FAIL"
-    assert "formal_quality_semantic_metrics_missing" in summary["missing_mechanism_requirements"]
+    assert "formal_quality_motion_semantic_metrics_missing" in summary["missing_mechanism_requirements"]

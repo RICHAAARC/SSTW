@@ -23,6 +23,7 @@
 | `sampling_time_constraint_probe` | `structure_ready / mechanism_ready / protocol_ready / artifact_ready` | Wan2.1 recommended profile、constraint records、postprocess checker、Drive package | 已完成机制前置验证, 下一步进入 small-scale claim pilot。 |
 | `small_scale_claim_pilot_gate` | `structure_ready / protocol_ready / external_validation_required` | sampling-time recommended 已通过, generative probe 与 checker 入口已存在 | 运行 pilot split, 验证 attack、negative family、wrong-sampler replay 与 fixed-FPR path marginal gain。 |
 | `generative_video_model_probe` | `structure_ready / protocol_ready / external_validation_required` | generative probe runner、external baseline runner、Colab 入口 | 仅在 pilot gate 通过后进入 full experiment。 |
+| `motion_threshold_calibration` | `structure_planned / protocol_required / external_validation_required` | 当前 formal motion gate 已显式记录 heuristic threshold 与阻塞原因 | 使用独立 calibration split 统计测算并冻结 motion threshold。 |
 | `replay_and_authenticated_sketch_gate` | `structure_ready` | digest、manifest、trajectory trace 基础模块 | 补齐 authenticated sketch、replay uncertainty、wrong prompt replay 与 checker。 |
 | `submission_package_freeze` | `structure_ready / artifact_ready` | submission freeze runner、main tables、readiness summary | 等待 pilot / full experiment governed records 后再冻结最终 artifacts。 |
 
@@ -125,5 +126,54 @@ negative tail 没有膨胀
 wrong_sampler_replay 不能伪造正确轨迹
 quality_guard 通过
 wrong_key / without-key control 保持分离
+```
+
+## 4. 2026-06-18 阶段状态更新: motion threshold calibration 后置化
+
+### 4.1 当前推进决策
+
+当前项目允许继续推进 small-scale claim pilot 的其他步骤, 但 formal motion gate 的阈值边界必须显式降级为 pilot guardrail。当前阈值:
+
+```text
+motion_delta_threshold: 0.0005
+threshold_id: motion_delta_heuristic_v1
+threshold_source_split: heuristic_precalibration
+usage: pilot_guardrail
+```
+
+该阈值不是通过大量样本统计校准得到的正式阈值, 不得用于支撑最终论文级 motion claim。
+
+### 4.2 当前 pilot 可继续推进的内容
+
+在保留上述限制的情况下, 可以继续推进:
+
+```text
+attack matrix
+negative family
+wrong_sampler_replay
+wrong_key / without-key control
+path_marginal_gain_at_fixed_fpr
+replay_uncertainty_mean
+claim_support_status governance
+```
+
+### 4.3 后续必须补齐的 calibration gate
+
+`motion_threshold_calibration` 已被登记为后续必须进行步骤。正式 claim 或 submission package 前必须完成:
+
+```text
+独立 calibration split
+negative_static tail 统计
+frozen threshold artifact
+threshold_source_split 记录
+test_time_threshold_update_blocked = true
+heldout evaluation split 复核
+```
+
+在该 gate 完成前, 阶段状态应保持:
+
+```text
+small_scale_claim_pilot_gate: 可继续推进, 但 formal motion claim 不完全闭合
+generative_video_model_probe: 可工程探索, 但不得冻结最终 motion-threshold claim
 ```
 

@@ -57,7 +57,8 @@ def _candidate_project_roots(run_root: Path) -> list[Path]:
 def _resolve_prompt_suite_path(run_root: Path, prompt_suite_path: str | Path | None = None) -> Path | None:
     """解析 prompt suite 路径。
 
-    该函数属于项目特定写法。Colab 记录的 manifest 可能包含云端绝对路径, 本地 Windows 审阅时该路径不一定存在, 因此需要按 SSTW Drive 目录约定进行回退解析。
+    该函数属于项目特定写法。Colab 记录的 manifest 可能包含云端绝对路径, 本地 Windows 审计时该路径不一定存在,
+    因此需要按 SSTW Drive 目录约定进行回退解析。
     """
     candidates: list[Path] = []
     if prompt_suite_path:
@@ -123,6 +124,18 @@ def _build_prompt_missing_semantic_metrics(model_id: str, frame_limit: int) -> d
     }
 
 
+def _formal_metric_blocking_reason(visual_ready: bool, motion_ready: bool, semantic_ready: bool) -> str:
+    """把 formal gate 的阻塞来源压缩成一个稳定字符串。"""
+    reasons: list[str] = []
+    if not visual_ready:
+        reasons.append("formal_visual_quality_not_ready")
+    if not motion_ready:
+        reasons.append("formal_motion_consistency_not_ready")
+    if not semantic_ready:
+        reasons.append("formal_semantic_consistency_not_ready")
+    return "none" if not reasons else ";".join(reasons)
+
+
 def build_formal_metric_records(
     run_root: str | Path,
     prompt_suite_path: str | Path | None = None,
@@ -179,6 +192,7 @@ def build_formal_metric_records(
             "semantic_consistency_threshold": semantic_consistency_threshold,
             **semantic_metrics,
             "formal_semantic_consistency_ready": semantic_ready,
+            "formal_metric_blocking_reason": _formal_metric_blocking_reason(visual_ready, motion_ready, semantic_ready),
             "formal_metric_result_used_for_claim": formal_metric_ready,
         })
     return records
@@ -189,18 +203,35 @@ def audit_formal_metrics(records: list[dict]) -> dict:
     visual_ready_count = sum(1 for record in records if record.get("formal_visual_quality_ready") is True)
     motion_ready_count = sum(1 for record in records if record.get("formal_motion_consistency_ready") is True)
     semantic_ready_count = sum(1 for record in records if record.get("formal_semantic_consistency_ready") is True)
+    visual_blocked_count = len(records) - visual_ready_count
+    motion_blocked_count = len(records) - motion_ready_count
+    semantic_blocked_count = len(records) - semantic_ready_count
     all_visual_motion_ready = bool(records) and visual_ready_count == len(records) and motion_ready_count == len(records)
     all_semantic_ready = bool(records) and semantic_ready_count == len(records)
+    formal_ready = all_visual_motion_ready and all_semantic_ready
+    if formal_ready:
+        claim_status = "ready"
+    elif visual_blocked_count > 0:
+        claim_status = "blocked_by_formal_visual_quality"
+    elif motion_blocked_count > 0:
+        claim_status = "blocked_by_formal_motion_consistency"
+    elif semantic_blocked_count > 0:
+        claim_status = "blocked_until_semantic_metric_ready"
+    else:
+        claim_status = "blocked_until_formal_quality_motion_semantic_metrics"
     return {
         "stage_id": "generative_video_formal_quality_motion_semantic_metrics",
         "formal_metric_record_count": len(records),
         "formal_visual_quality_ready_count": visual_ready_count,
         "formal_motion_consistency_ready_count": motion_ready_count,
         "formal_semantic_consistency_ready_count": semantic_ready_count,
+        "formal_visual_quality_blocked_count": visual_blocked_count,
+        "formal_motion_consistency_blocked_count": motion_blocked_count,
+        "formal_semantic_consistency_blocked_count": semantic_blocked_count,
         "formal_visual_motion_ready": all_visual_motion_ready,
         "formal_semantic_ready": all_semantic_ready,
-        "formal_quality_motion_semantic_ready": all_visual_motion_ready and all_semantic_ready,
-        "formal_metric_claim_status": "ready" if all_visual_motion_ready and all_semantic_ready else "blocked_until_semantic_metric_ready",
+        "formal_quality_motion_semantic_ready": formal_ready,
+        "formal_metric_claim_status": claim_status,
     }
 
 
@@ -233,6 +264,9 @@ def run_formal_metric_audit(
         f"- formal_visual_motion_ready: {audit['formal_visual_motion_ready']}\n"
         f"- formal_semantic_ready: {audit['formal_semantic_ready']}\n"
         f"- formal_metric_claim_status: {audit['formal_metric_claim_status']}\n"
+        f"- formal_visual_quality_blocked_count: {audit['formal_visual_quality_blocked_count']}\n"
+        f"- formal_motion_consistency_blocked_count: {audit['formal_motion_consistency_blocked_count']}\n"
+        f"- formal_semantic_consistency_blocked_count: {audit['formal_semantic_consistency_blocked_count']}\n"
     )
     report_path = run_root / "reports" / "formal_quality_motion_semantic_report.md"
     report_path.parent.mkdir(parents=True, exist_ok=True)

@@ -90,3 +90,18 @@ scripts/package_results/generative_video_drive_packager.py
 ### 2.2 当前阶段补充要求
 
 按照新的整体流程, 本阶段需要继续强化 Wan2.1 主线、外部 baseline、内部机制 baseline 和 Google Drive package 的一致性。数据集构造必须与模型测试运行分离。
+
+### 2.3 motion threshold calibration 前置要求
+
+本阶段可以在工程上继续验证 Wan2.1 生成、trajectory capture、attack matrix、negative family 和 external baseline。但如果结果将用于最终论文 claim 或 submission package, 必须先完成或引用冻结的 `motion_threshold_calibration` artifact。
+
+未完成 calibration 时, 当前 formal motion gate 只能解释为:
+
+```text
+threshold_id: motion_delta_heuristic_v1
+threshold_source_split: heuristic_precalibration
+usage: pilot_guardrail
+```
+
+禁止将 evaluation split 或每次生成后的结果反向用于动态调整阈值。正式实验必须使用预先校准并冻结的 threshold artifact。
+

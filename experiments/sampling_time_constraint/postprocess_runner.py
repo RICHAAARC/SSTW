@@ -73,6 +73,16 @@ def postprocess_sampling_constraint_colab_run(run_root: str | Path) -> dict:
     baseline_gain = float(baseline_row.get("latent_alignment_gain_mean", 0.0))
     keyed_flow_velocity_gain = float(keyed_row.get("flow_velocity_alignment_gain_mean", 0.0))
     baseline_flow_velocity_gain = float(baseline_row.get("flow_velocity_alignment_gain_mean", 0.0))
+    without_key_row = next((row for row in rows if row["method_variant"] == "trajectory_constraint_without_key_condition"), {})
+    wrong_key_row = next((row for row in rows if row["method_variant"] == "trajectory_constraint_wrong_key_control"), {})
+    without_key_gain = float(without_key_row.get("latent_alignment_gain_mean", 0.0))
+    wrong_key_gain = float(wrong_key_row.get("latent_alignment_gain_mean", 0.0))
+    without_key_flow_velocity_gain = float(without_key_row.get("flow_velocity_alignment_gain_mean", 0.0))
+    wrong_key_flow_velocity_gain = float(wrong_key_row.get("flow_velocity_alignment_gain_mean", 0.0))
+    control_gain_ceiling = max(without_key_gain, wrong_key_gain)
+    control_flow_velocity_gain_ceiling = max(without_key_flow_velocity_gain, wrong_key_flow_velocity_gain)
+    key_separation_gain_over_control = round(keyed_gain - control_gain_ceiling, 6)
+    key_separation_flow_velocity_gain_over_control = round(keyed_flow_velocity_gain - control_flow_velocity_gain_ceiling, 6)
     flow_velocity_gain_over_baseline = round(keyed_flow_velocity_gain - baseline_flow_velocity_gain, 6)
     flow_velocity_proxy_ready = bool(keyed_row) and int(keyed_row.get("flow_velocity_proxy_record_count", 0)) > 0
     gain_over_baseline = round(keyed_gain - baseline_gain, 6)
@@ -84,6 +94,8 @@ def postprocess_sampling_constraint_colab_run(run_root: str | Path) -> dict:
         gain_over_baseline > 0.0,
         flow_velocity_proxy_ready,
         flow_velocity_gain_over_baseline > 0.0,
+        key_separation_gain_over_control > 0.0,
+        key_separation_flow_velocity_gain_over_control > 0.0,
         formal_ready,
     ])
     for row in rows:
@@ -92,6 +104,8 @@ def postprocess_sampling_constraint_colab_run(run_root: str | Path) -> dict:
         row["S_path_inv"] = row["latent_alignment_gain_mean"]
         row["S_velocity"] = row["flow_velocity_alignment_gain_mean"]
         row["S_final_conservative"] = round(min(float(row["S_path_inv"]), float(row["S_velocity"])), 6)
+        row["key_separation_gain_over_control"] = key_separation_gain_over_control if row["method_variant"] == "keyed_state_trajectory_constraint" else 0.0
+        row["key_separation_flow_velocity_gain_over_control"] = key_separation_flow_velocity_gain_over_control if row["method_variant"] == "keyed_state_trajectory_constraint" else 0.0
         row["claim_support_status"] = "supported_by_probe_records_not_submission_freeze" if probe_pass and row["method_variant"] == "keyed_state_trajectory_constraint" else "not_supported_or_control_variant"
     decision = {
         "stage_id": "sampling_time_constraint_colab_postprocess",
@@ -106,6 +120,12 @@ def postprocess_sampling_constraint_colab_run(run_root: str | Path) -> dict:
             "trajectory_constraint_gain_over_unconstrained": gain_over_baseline,
             "keyed_flow_velocity_alignment_gain_mean": keyed_flow_velocity_gain,
             "baseline_flow_velocity_alignment_gain_mean": baseline_flow_velocity_gain,
+            "without_key_alignment_gain_mean": without_key_gain,
+            "wrong_key_alignment_gain_mean": wrong_key_gain,
+            "without_key_flow_velocity_alignment_gain_mean": without_key_flow_velocity_gain,
+            "wrong_key_flow_velocity_alignment_gain_mean": wrong_key_flow_velocity_gain,
+            "key_separation_gain_over_control": key_separation_gain_over_control,
+            "key_separation_flow_velocity_gain_over_control": key_separation_flow_velocity_gain_over_control,
             "flow_velocity_gain_over_unconstrained": flow_velocity_gain_over_baseline,
             "flow_velocity_proxy_ready": flow_velocity_proxy_ready,
             "formal_quality_semantic_ready": formal_ready,

@@ -175,6 +175,8 @@ def check_sampling_time_constraint_colab_results(run_root: str | Path) -> dict:
     baseline_gain = float(postprocess_decision.get("details", {}).get("baseline_alignment_gain_mean", 0.0) or 0.0)
     keyed_flow_velocity_gain = float(postprocess_decision.get("details", {}).get("keyed_flow_velocity_alignment_gain_mean", 0.0) or 0.0)
     baseline_flow_velocity_gain = float(postprocess_decision.get("details", {}).get("baseline_flow_velocity_alignment_gain_mean", 0.0) or 0.0)
+    key_separation_gain = float(postprocess_decision.get("details", {}).get("key_separation_gain_over_control", 0.0) or 0.0)
+    key_separation_flow_velocity_gain = float(postprocess_decision.get("details", {}).get("key_separation_flow_velocity_gain_over_control", 0.0) or 0.0)
     flow_velocity_proxy_ready = postprocess_decision.get("details", {}).get("flow_velocity_proxy_ready") is True
     primary_flow_matching_model_ready = any(
         record.get("generation_model_family") == "diffusers_wan21_flow_matching_dit"
@@ -212,6 +214,10 @@ def check_sampling_time_constraint_colab_results(run_root: str | Path) -> dict:
         missing_mechanism_requirements.append("flow_velocity_proxy_not_ready")
     if keyed_flow_velocity_gain <= baseline_flow_velocity_gain:
         missing_mechanism_requirements.append("keyed_flow_velocity_gain_not_above_baseline")
+    if key_separation_gain <= 0.0:
+        missing_mechanism_requirements.append("keyed_gain_not_separated_from_wrong_or_without_key_control")
+    if key_separation_flow_velocity_gain <= 0.0:
+        missing_mechanism_requirements.append("keyed_flow_velocity_gain_not_separated_from_wrong_or_without_key_control")
     if postprocess_decision.get("details", {}).get("formal_quality_semantic_ready") is not True:
         missing_mechanism_requirements.append("formal_quality_semantic_not_ready")
     if formal_metric_decision.get("formal_quality_motion_semantic_ready") is not True:
@@ -239,6 +245,8 @@ def check_sampling_time_constraint_colab_results(run_root: str | Path) -> dict:
         "baseline_alignment_gain_mean": baseline_gain,
         "keyed_flow_velocity_alignment_gain_mean": keyed_flow_velocity_gain,
         "baseline_flow_velocity_alignment_gain_mean": baseline_flow_velocity_gain,
+        "key_separation_gain_over_control": key_separation_gain,
+        "key_separation_flow_velocity_gain_over_control": key_separation_flow_velocity_gain,
         "flow_velocity_proxy_ready": flow_velocity_proxy_ready,
         "primary_flow_matching_model_ready": primary_flow_matching_model_ready,
         "formal_visual_motion_ready_count": formal_visual_motion_ready_count,

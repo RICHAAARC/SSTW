@@ -86,6 +86,61 @@ def test_sampling_constraint_adapter_records_flow_velocity_proxy() -> None:
 
 
 @pytest.mark.quick
+def test_sampling_constraint_adapter_scores_controls_against_matched_key() -> None:
+    """without-key / wrong-key control 必须按正确 key 证据方向评分, 不能用控制方向自证增益。"""
+    import torch
+
+    previous_latents = torch.zeros((1, 2, 4, 4), dtype=torch.float32)
+    latents = torch.ones((1, 2, 4, 4), dtype=torch.float32) * 0.01
+    constraint_config = {
+        "constraint_norm_budget": 0.06,
+        "constraint_key_id": "test_key",
+    }
+    schedule_config = {
+        "lambda_schedule_id": "constant_weak_constraint",
+        "lambda_max": 0.1,
+        "lambda_time_window": [0.0, 1.0],
+    }
+
+    _keyed_latents, keyed_record = apply_latent_sampling_constraint(
+        latents,
+        step_index=1,
+        num_steps=4,
+        constraint_config=constraint_config,
+        schedule_config=schedule_config,
+        method_variant="keyed_state_trajectory_constraint",
+        key_text="test_key::prompt::seed",
+        previous_latents=previous_latents,
+    )
+    _control_latents, control_record = apply_latent_sampling_constraint(
+        latents,
+        step_index=1,
+        num_steps=4,
+        constraint_config=constraint_config,
+        schedule_config=schedule_config,
+        method_variant="trajectory_constraint_without_key_condition",
+        key_text="test_key::prompt::seed",
+        previous_latents=previous_latents,
+    )
+    _wrong_latents, wrong_record = apply_latent_sampling_constraint(
+        latents,
+        step_index=1,
+        num_steps=4,
+        constraint_config=constraint_config,
+        schedule_config=schedule_config,
+        method_variant="trajectory_constraint_wrong_key_control",
+        key_text="test_key::prompt::seed",
+        previous_latents=previous_latents,
+    )
+
+    assert keyed_record["constraint_application_direction_status"] == "matched_key_direction"
+    assert control_record["constraint_application_direction_status"] == "key_agnostic_control_direction"
+    assert wrong_record["constraint_application_direction_status"] == "wrong_key_control_direction"
+    assert keyed_record["latent_alignment_gain"] > control_record["latent_alignment_gain"]
+    assert keyed_record["latent_alignment_gain"] > wrong_record["latent_alignment_gain"]
+
+
+@pytest.mark.quick
 def test_sampling_time_constraint_colab_workflow_uses_drive_layout() -> None:
     """B6 Colab workflow 必须落盘到 MyDrive/SSTW 的 sampling_time_constraint 子目录。"""
     layout = build_drive_layout()
@@ -163,6 +218,7 @@ def test_sampling_time_constraint_result_checker_accepts_governed_probe_records(
         "keyed_state_trajectory_constraint",
         "trajectory_constraint_without_admissibility",
         "trajectory_constraint_without_key_condition",
+        "trajectory_constraint_wrong_key_control",
     ]
     generation_records = []
     trajectory_records = []
@@ -236,6 +292,8 @@ def test_sampling_time_constraint_result_checker_accepts_governed_probe_records(
                 "baseline_flow_velocity_alignment_gain_mean": 0.0,
                 "flow_velocity_proxy_ready": True,
                 "formal_quality_semantic_ready": True,
+                "key_separation_gain_over_control": 0.1,
+                "key_separation_flow_velocity_gain_over_control": 0.1,
             },
         }),
         encoding="utf-8",

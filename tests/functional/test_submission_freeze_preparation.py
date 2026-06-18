@@ -98,6 +98,7 @@ def test_submission_freeze_preparation_downgrades_sstw_tc_claim(tmp_path: Path) 
         "keyed_state_trajectory_constraint",
         "trajectory_constraint_without_admissibility",
         "trajectory_constraint_without_key_condition",
+        "trajectory_constraint_wrong_key_control",
     ]
     generation_records = []
     trajectory_records = []
@@ -157,11 +158,17 @@ def test_submission_freeze_preparation_downgrades_sstw_tc_claim(tmp_path: Path) 
         "details": {
             "keyed_constraint_alignment_gain_mean": 0.1,
             "baseline_alignment_gain_mean": 0.0,
-            "keyed_flow_velocity_alignment_gain_mean": 0.1,
-            "baseline_flow_velocity_alignment_gain_mean": 0.0,
-            "flow_velocity_proxy_ready": True,
-            "formal_quality_semantic_ready": True,
-        },
+                "keyed_flow_velocity_alignment_gain_mean": 0.1,
+                "baseline_flow_velocity_alignment_gain_mean": 0.0,
+                "without_key_alignment_gain_mean": 0.0,
+                "wrong_key_alignment_gain_mean": 0.0,
+                "without_key_flow_velocity_alignment_gain_mean": 0.0,
+                "wrong_key_flow_velocity_alignment_gain_mean": 0.0,
+                "key_separation_gain_over_control": 0.1,
+                "key_separation_flow_velocity_gain_over_control": 0.1,
+                "flow_velocity_proxy_ready": True,
+                "formal_quality_semantic_ready": True,
+            },
     })
     _write_json(b6_run / "artifacts" / "formal_quality_motion_semantic_decision.json", {
         "formal_quality_motion_semantic_ready": True,

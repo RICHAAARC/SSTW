@@ -53,8 +53,19 @@ def apply_latent_sampling_constraint(
     enabled = method_variant != "key_conditioned_state_space_with_trajectory"
     key_conditioned = method_variant != "trajectory_constraint_without_key_condition"
     admissibility_enabled = method_variant != "trajectory_constraint_without_admissibility"
-    direction_key = key_text if key_conditioned else f"key_agnostic::{key_text}"
-    direction = _deterministic_direction_like(latents, direction_key)
+    wrong_key_control = method_variant == "trajectory_constraint_wrong_key_control"
+    if wrong_key_control:
+        application_direction_key = f"wrong_key_control::{key_text}"
+        application_direction_status = "wrong_key_control_direction"
+    elif key_conditioned:
+        application_direction_key = key_text
+        application_direction_status = "matched_key_direction"
+    else:
+        application_direction_key = f"key_agnostic::{key_text}"
+        application_direction_status = "key_agnostic_control_direction"
+    evidence_direction_key = key_text
+    application_direction = _deterministic_direction_like(latents, application_direction_key)
+    evidence_direction = _deterministic_direction_like(latents, evidence_direction_key)
     lambda_values = build_lambda_schedule(
         str(schedule_config["lambda_schedule_id"]),
         num_steps,
@@ -62,25 +73,28 @@ def apply_latent_sampling_constraint(
         (float(schedule_config["lambda_time_window"][0]), float(schedule_config["lambda_time_window"][1])),
     )
     lambda_value = float(lambda_values[min(step_index, len(lambda_values) - 1)]) if lambda_values else 0.0
-    before_alignment = _cosine_alignment(latents, direction)
+    before_alignment = _cosine_alignment(latents, evidence_direction)
     before_norm = float(latents.detach().float().norm().item())
     applied = bool(enabled and admissibility_enabled and lambda_value > 0.0)
     if applied:
         # 约束强度按 latent norm 的小比例缩放, 避免在真实生成链路中产生强制覆盖式扰动。
         norm_budget = float(constraint_config["constraint_norm_budget"])
         delta_norm = before_norm * norm_budget * lambda_value
-        delta = direction.to(dtype=latents.dtype) * delta_norm
+        delta = application_direction.to(dtype=latents.dtype) * delta_norm
         constrained_latents = latents + delta
     else:
         constrained_latents = latents
-    after_alignment = _cosine_alignment(constrained_latents, direction)
+    after_alignment = _cosine_alignment(constrained_latents, evidence_direction)
     after_norm = float(constrained_latents.detach().float().norm().item())
-    flow_record = _flow_velocity_proxy_record(previous_latents, latents, constrained_latents, direction)
+    flow_record = _flow_velocity_proxy_record(previous_latents, latents, constrained_latents, evidence_direction)
     record = {
         "sampling_constraint_enabled": enabled,
         "constraint_apply_status": "applied" if applied else "not_applied",
         "constraint_apply_reason": "active_lambda_step" if applied else "disabled_or_inactive_lambda_step",
         "constraint_key_condition_enabled": key_conditioned,
+        "wrong_key_control_enabled": wrong_key_control,
+        "constraint_application_direction_status": application_direction_status,
+        "constraint_evidence_direction_status": "matched_key_evidence_direction",
         "constraint_admissibility_enabled": admissibility_enabled,
         "lambda_schedule_id": schedule_config["lambda_schedule_id"],
         "lambda_max": float(schedule_config["lambda_max"]),

@@ -538,3 +538,13 @@ Notebook 与 repository module 的跨边界数据
 | package_batch_id | artifact | none | true | false | false | Package batch identifier in <utc_time>_<short_commit> format shared by archive and manifest files. |
 | package_utc_time | artifact | none | true | false | false | UTC timestamp token used in package file names. |
 | package_short_commit | artifact | none | true | false | false | Short Git commit token used in package file names. |
+
+| wrong_key_control_enabled | protocol | none | true | false | false | Whether the sampling constraint record is a wrong-key trajectory control. |
+| constraint_application_direction_status | protocol | none | true | false | false | Direction used to perturb latents during sampling-time constraint callback. |
+| constraint_evidence_direction_status | protocol | none | true | false | false | Direction used to score keyed evidence after applying or skipping the constraint. |
+| key_separation_gain_over_control | metric | none | true | false | false | Keyed path gain over the strongest without-key or wrong-key control. |
+| key_separation_flow_velocity_gain_over_control | metric | none | true | false | false | Keyed velocity gain over the strongest without-key or wrong-key control. |
+| without_key_alignment_gain_mean | metric | none | true | false | false | Mean alignment gain for the without-key control variant. |
+| wrong_key_alignment_gain_mean | metric | none | true | false | false | Mean alignment gain for the wrong-key control variant. |
+| without_key_flow_velocity_alignment_gain_mean | metric | none | true | false | false | Mean flow velocity alignment gain for the without-key control variant. |
+| wrong_key_flow_velocity_alignment_gain_mean | metric | none | true | false | false | Mean flow velocity alignment gain for the wrong-key control variant. |

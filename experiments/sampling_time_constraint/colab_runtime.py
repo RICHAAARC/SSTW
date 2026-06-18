@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import shutil
 import time
 from hashlib import sha256
 from pathlib import Path
@@ -28,6 +29,7 @@ METHOD_VARIANTS = (
     "keyed_state_trajectory_constraint",
     "trajectory_constraint_without_admissibility",
     "trajectory_constraint_without_key_condition",
+    "trajectory_constraint_wrong_key_control",
 )
 
 
@@ -86,15 +88,51 @@ def _scheduler_id_for_model(model_id: str) -> str:
     return "ltx_pipeline_default_scheduler"
 
 
-def _sampler_signature_placeholder(pipe: Any, scheduler_id: str) -> str:
-    """记录可替换的 sampler signature 占位值。
+def _clean_run_output_dirs(output_root: Path) -> None:
+    """清理当前 Colab run_root 下会被本次运行重建的输出子目录。
 
-    该函数属于项目特定写法。preflight 阶段会进一步验证真实 scheduler 配置能否被稳定
-    hash 化; 在 Colab runtime 未完成该验证前, records 只写入 `_placeholder` 字段,
-    避免把未审计的采样器描述误用为正式证据。
+    该函数属于通用工程写法。Colab 和 Google Drive 会保留上一次运行的视频和表格,
+    因此 runtime 在写入新 records 前必须清理本 stage 自己管理的子目录, 避免旧文件混入 package。
+    它只删除 `output_root` 下的固定 governed output 子目录, 不递归删除任意用户路径。
+    """
+    for subdir_name in ("records", "tables", "reports", "artifacts", "videos"):
+        subdir = output_root / subdir_name
+        if subdir.exists():
+            shutil.rmtree(subdir)
+
+
+def _jsonable_scheduler_config(pipe: Any) -> dict[str, Any]:
+    """提取 scheduler 中可稳定序列化的配置。"""
+    scheduler = getattr(pipe, "scheduler", None)
+    config = getattr(scheduler, "config", {})
+    if hasattr(config, "to_dict"):
+        config = config.to_dict()
+    if not isinstance(config, dict):
+        config = dict(config) if config else {}
+    return {str(key): value for key, value in config.items() if isinstance(value, (str, int, float, bool, type(None), list, tuple))}
+
+
+def _sampler_signature_record(pipe: Any, model_id: str, scheduler_id: str) -> dict[str, str | None]:
+    """记录真实 sampler signature 摘要。
+
+    该函数属于项目特定写法。它和 preflight 使用同类 hash 逻辑, 只记录 scheduler
+    元数据摘要, 不记录模型权重或访问 token。这样 sampling-time records 可以和 preflight
+    records 对齐, 并为 wrong-sampler replay 检查保留证据。
     """
     scheduler_name = type(getattr(pipe, "scheduler", None)).__name__
-    return f"pending_preflight_hash::{scheduler_id}::{scheduler_name}"
+    payload = {
+        "generation_model_id": model_id,
+        "scheduler_id": scheduler_id,
+        "scheduler_class": scheduler_name,
+        "scheduler_config": _jsonable_scheduler_config(pipe),
+    }
+    digest = sha256(json.dumps(payload, ensure_ascii=False, sort_keys=True, default=str).encode("utf-8")).hexdigest()
+    return {
+        "sampler_signature_id": f"sampler_signature_{digest[:16]}",
+        "sampler_signature_sha256": digest,
+        "sampler_class_name": scheduler_name,
+        "sampler_signature_placeholder": None,
+    }
 
 
 def _load_video_generation_pipeline(model_id: str, torch_dtype: Any) -> Any:
@@ -139,6 +177,7 @@ def run_sampling_constraint_colab_probe(
     gpu_memory_mb = int(torch.cuda.get_device_properties(0).total_memory // (1024 * 1024))
 
     output_root = Path(output_root)
+    _clean_run_output_dirs(output_root)
     prompt_suite = _read_json(prompt_suite_path)
     constraint_config = _read_json(constraint_config_path)
     lambda_schedules = _read_json(lambda_schedules_path)
@@ -149,7 +188,7 @@ def run_sampling_constraint_colab_probe(
     plan = _build_generation_plan(prompt_suite, profile, model_id)
     model_family = _model_family_from_id(model_id)
     scheduler_id = _scheduler_id_for_model(model_id)
-    sampler_signature_placeholder = _sampler_signature_placeholder(pipe, scheduler_id)
+    sampler_signature = _sampler_signature_record(pipe, model_id, scheduler_id)
 
     generation_records: list[dict] = []
     trajectory_records: list[dict] = []
@@ -163,7 +202,7 @@ def run_sampling_constraint_colab_probe(
         step_constraint_records: list[dict] = []
         previous_callback_latents: Any | None = None
         schedule = _schedule_by_id(lambda_schedules, _variant_schedule_id(item["method_variant"]))
-        key_text = f"{constraint_config['constraint_key_id']}::{item['prompt_id']}::{item['seed_id']}::{item['method_variant']}"
+        key_text = f"{constraint_config['constraint_key_id']}::{item['prompt_id']}::{item['seed_id']}"
 
         def constraint_callback(pipe_instance: Any, step_index: int, timestep: Any, callback_kwargs: dict) -> dict:  # pragma: no cover - Colab GPU path
             nonlocal previous_callback_latents
@@ -197,11 +236,12 @@ def run_sampling_constraint_colab_probe(
                 **flow_evidence_protocol_defaults(
                     negative_family="not_applicable_callback_trace",
                     trajectory_source_level="callback_latent_trace",
-                    sampler_signature_placeholder=sampler_signature_placeholder,
+                    sampler_signature_placeholder=sampler_signature.get("sampler_signature_placeholder"),
                     flow_state_admissibility_status="callback_trace_captured_not_scored",
                     claim_support_status="not_supported_step_trace_only",
                 ),
                 **stats,
+                **sampler_signature,
             })
             constraint_output_record = {
                 "record_version": "sampling_time_constraint_colab_probe_v1",
@@ -223,11 +263,12 @@ def run_sampling_constraint_colab_probe(
                 **flow_evidence_protocol_defaults(
                     negative_family="not_applicable_positive_generation",
                     trajectory_source_level="callback_latent_trace",
-                    sampler_signature_placeholder=sampler_signature_placeholder,
+                    sampler_signature_placeholder=sampler_signature.get("sampler_signature_placeholder"),
                     flow_state_admissibility_status="enabled" if constraint_record.get("constraint_admissibility_enabled") else "disabled_by_method_variant",
                     claim_support_status="not_supported_until_postprocess_and_quality_guards_pass",
                 ),
                 **constraint_record,
+                **sampler_signature,
             }
             constraint_output_record["S_path_inv"] = constraint_output_record.get("latent_alignment_after_constraint")
             constraint_output_record["S_velocity"] = constraint_output_record.get("flow_velocity_alignment_after_constraint")
@@ -285,7 +326,7 @@ def run_sampling_constraint_colab_probe(
             **flow_evidence_protocol_defaults(
                 negative_family="not_applicable_positive_generation",
                 trajectory_source_level="callback_latent_trace" if step_stats else "not_captured",
-                sampler_signature_placeholder=sampler_signature_placeholder,
+                sampler_signature_placeholder=sampler_signature.get("sampler_signature_placeholder"),
                 flow_state_admissibility_status="runtime_records_pending_postprocess",
                 claim_support_status="not_supported_runtime_record_only",
             ),
@@ -303,6 +344,7 @@ def run_sampling_constraint_colab_probe(
             "trajectory_trace_id": trace_id,
             "trajectory_num_steps": len(step_stats),
             "constraint_trace_id": constraint_trace_id,
+            **sampler_signature,
         })
         trajectory_records.extend(step_stats)
         constraint_records.extend(step_constraint_records)
@@ -340,6 +382,7 @@ def run_sampling_constraint_colab_probe(
         "colab_runtime_profile": profile,
         "gpu_name": gpu_name,
         "gpu_memory_mb": gpu_memory_mb,
+        **sampler_signature,
     })
     return {
         "output_root": str(output_root),

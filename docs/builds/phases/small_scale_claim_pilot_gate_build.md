@@ -248,3 +248,45 @@ pilot_gate_decision: FAIL
 
 该结果表示 pilot 矩阵的 proxy 后处理记录已经补齐, 但仍不能进入 full experiment 或 final paper claim。阻塞原因不再是矩阵缺失, 而是 formal motion gate 仍使用 `heuristic_precalibration` 阈值, 需要后续 `motion_threshold_calibration` 阶段。
 
+### 2.7 runtime video-file attack runner 状态
+
+已新增并运行真实文件级 runtime attack runner:
+
+```text
+experiments/generative_video_model_probe/attack_runner.py
+```
+
+该 runner 对已有 Wan2.1 pilot 生成视频执行实际 mp4 文件级攻击, 并写出 attacked videos 与 governed records:
+
+```text
+records/runtime_attack_records.jsonl
+tables/runtime_attack_table.csv
+artifacts/runtime_attack_decision.json
+reports/runtime_attack_report.md
+attacked_videos/
+```
+
+当前 Google Drive pilot run 的 runtime attack 结果为:
+
+```text
+runtime_attack_decision: PASS
+runtime_attack_record_count: 48
+runtime_attack_ready_count: 48
+runtime_attack_count: 3
+attack_matrix_evidence_level: runtime_video_file
+claim_support_status: runtime_attack_evidence_only
+```
+
+当前 small-scale pilot gate 更新为:
+
+```text
+missing_pilot_requirements: []
+attack_count: 6
+runtime_attack_record_count: 48
+runtime_attack_ready_count: 48
+pilot_gate_decision: FAIL
+claim_support_status: blocked_until_motion_threshold_calibration
+```
+
+该结果表示工程层面的 runtime attack 链路已经闭合, 但仍不能进入 final claim。剩余阻塞是 `motion_threshold_calibration`, 以及后续如需论文级攻击结论, 仍需要把 runtime attacked videos 接入正式 detection / scoring, 而不是只依赖 proxy matrix score。
+

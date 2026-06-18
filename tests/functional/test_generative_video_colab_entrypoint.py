@@ -88,6 +88,11 @@ def test_generative_video_drive_packager_creates_archive_and_manifest(tmp_path: 
         "pilot_matrix_postprocess_decision": "PASS",
         "pilot_matrix_record_count": 480,
     })
+    write_json(run_root / "artifacts" / "runtime_attack_decision.json", {
+        "runtime_attack_decision": "PASS",
+        "runtime_attack_record_count": 48,
+        "runtime_attack_ready_count": 48,
+    })
 
     payload = package_generative_video_colab_run(run_root, package_dir, include_videos=False)
     archive_path = Path(payload["archive_path"])
@@ -101,6 +106,9 @@ def test_generative_video_drive_packager_creates_archive_and_manifest(tmp_path: 
     assert manifest["decision_summary"]["small_scale_pilot_claim_support_status"] == "blocked_until_motion_threshold_calibration"
     assert manifest["decision_summary"]["small_scale_pilot_matrix_postprocess_decision"] == "PASS"
     assert manifest["decision_summary"]["small_scale_pilot_matrix_record_count"] == 480
+    assert manifest["decision_summary"]["runtime_attack_decision"] == "PASS"
+    assert manifest["decision_summary"]["runtime_attack_record_count"] == 48
+    assert manifest["decision_summary"]["runtime_attack_ready_count"] == 48
     assert re.match(r"generative_video_model_probe_colab_\d{8}_\d{6}_[a-z0-9_\-]+\.zip", archive_path.name)
     assert manifest["package_batch_id"] == f"{manifest['package_utc_time']}_{manifest['package_short_commit']}"
     assert archive_path.stem.endswith(manifest["package_batch_id"])

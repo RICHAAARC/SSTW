@@ -217,3 +217,18 @@ claim_support_status: blocked_until_motion_threshold_calibration
 
 该状态是预期的治理结果: 当前矩阵证据级别为 `proxy_postprocess`, 可以支撑 workflow progression, 但不得替代真实攻击运行和 calibrated motion threshold。
 
+### 4.6 runtime video-file attack runner 状态
+
+已对当前 Google Drive Wan2.1 pilot run 执行 runtime video-file attack runner。当前状态:
+
+```text
+runtime_attack_decision: PASS
+runtime_attack_record_count: 48
+runtime_attack_ready_count: 48
+runtime_attack_count: 3
+small_scale_pilot_missing_requirement_count: 0
+small_scale_pilot_claim_support_status: blocked_until_motion_threshold_calibration
+```
+
+该结果说明真实文件级 attack runner 与 attacked video 落盘链路已经具备工程可运行性。当前仍不应进入 full experiment, 因为 formal motion threshold 仍为 heuristic guardrail, 且 runtime attacked videos 尚未接入正式 detection / scoring 表。
+

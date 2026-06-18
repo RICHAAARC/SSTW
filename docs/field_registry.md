@@ -132,6 +132,19 @@ Notebook 与 repository module 的跨边界数据
 | attack_config_id | protocol | none | true | false | false | Attack configuration identifier. |
 | attack_seed | protocol | none | true | false | false | Attack seed identifier. |
 | attack_runtime_sec | metric | none | true | false | false | Attack runtime in seconds. |
+| runtime_attack_decision | governance | none | true | false | false | Runtime video-file attack runner decision. |
+| runtime_attack_record_count | metric | none | true | false | false | Number of runtime attack records. |
+| runtime_attack_ready_count | metric | none | true | false | false | Number of runtime attack records that produced attacked videos. |
+| runtime_attack_count | metric | none | true | false | false | Number of distinct runtime attacks that produced attacked videos. |
+| source_video_path | artifact | none | true | false | false | Source generated video path used by runtime attack runner. |
+| source_video_sha256 | artifact | none | true | false | false | Source generated video sha256 used by runtime attack runner. |
+| attacked_video_path | artifact | none | true | false | false | Attacked video path produced by runtime attack runner. |
+| attacked_video_sha256 | artifact | none | true | false | false | Attacked video sha256 produced by runtime attack runner. |
+| source_frame_count | metric | none | true | false | false | Number of decoded source frames used by runtime attack runner. |
+| attacked_frame_count | metric | none | true | false | false | Number of frames written to attacked video. |
+| attack_transform | protocol | none | true | false | false | Runtime attack transform description. |
+| attack_strength | protocol | none | true | false | false | Runtime attack strength descriptor. |
+| runtime_attack_expected_effect | protocol | none | true | false | false | Expected effect of a runtime attack transform. |
 | attack_failure_status | protocol | none | true | false | false | Attack failure status. |
 | attack_failure_reason | protocol | none | true | false | false | Attack failure reason. |
 | quality_psnr | metric | none | true | false | false | B2 quality PSNR proxy. |

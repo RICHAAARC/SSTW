@@ -144,6 +144,7 @@ def build_small_scale_claim_pilot_audit(run_root: str | Path) -> dict:
     mechanism_records = _read_jsonl(run_root / "records" / "mechanism_score_records.jsonl")
     controlled_negative_records = _read_jsonl(run_root / "records" / "controlled_negative_records.jsonl")
     pilot_matrix_records = _read_jsonl(run_root / "records" / "small_scale_claim_pilot_matrix_records.jsonl")
+    runtime_attack_records = _read_jsonl(run_root / "records" / "runtime_attack_records.jsonl")
     quality_proxy_records = _read_jsonl(run_root / "records" / "quality_motion_semantic_proxy_records.jsonl")
     formal_metric_records = _read_jsonl(run_root / "records" / "formal_quality_motion_semantic_records.jsonl")
     postprocess_decision = _read_json(run_root / "artifacts" / "generative_video_mechanism_postprocess_decision.json")
@@ -153,7 +154,11 @@ def build_small_scale_claim_pilot_audit(run_root: str | Path) -> dict:
     prompt_ids = _unique_nonempty(successful_generation_records, "prompt_id")
     seed_per_prompt_min = _seed_per_prompt_min(successful_generation_records)
     matrix_source_records = mechanism_records + controlled_negative_records + pilot_matrix_records
-    attack_names = _attack_names(mechanism_records, controlled_negative_records, pilot_matrix_records)
+    ready_runtime_attack_records = [
+        record for record in runtime_attack_records
+        if record.get("attack_runtime_status") == "ready"
+    ]
+    attack_names = _attack_names(mechanism_records, controlled_negative_records, pilot_matrix_records, ready_runtime_attack_records)
     negative_families = _negative_families(mechanism_records, controlled_negative_records, pilot_matrix_records)
     method_variants = _unique_nonempty(mechanism_records + pilot_matrix_records, "method_variant")
 
@@ -218,6 +223,8 @@ def build_small_scale_claim_pilot_audit(run_root: str | Path) -> dict:
         "negative_family_count": len(negative_families),
         "method_variant_count": len(method_variants),
         "pilot_matrix_record_count": len(pilot_matrix_records),
+        "runtime_attack_record_count": len(runtime_attack_records),
+        "runtime_attack_ready_count": len(ready_runtime_attack_records),
         "path_marginal_gain_at_fixed_fpr": path_gain,
         "negative_tail_status": "not_inflated" if negative_tail_not_inflated else "missing_or_not_ready",
         "wrong_key_score_separation_passed": wrong_key_score_separation_passed,

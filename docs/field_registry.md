@@ -531,6 +531,19 @@ Notebook 与 repository module 的跨边界数据
 | replay_uncertainty_mean | metric | none | true | false | false | Mean replay uncertainty used to down-weight or block uncertain reconstructed trajectories. |
 | flow_state_admissibility_status | governance | none | true | false | false | Status showing whether flow trajectory state evidence passed admissibility constraints. |
 | claim_support_status | claim | none | true | true | false | Claim support boundary status mapped to governed records, tables, figures, reports, or manifests. |
+| pilot_gate_decision | governance | none | true | false | false | Small-scale claim pilot gate decision. |
+| missing_pilot_requirements | governance | none | true | false | false | List of missing requirements blocking small-scale claim pilot progression. |
+| pilot_missing_requirement_count | metric | none | true | false | false | Count of missing small-scale claim pilot requirements. |
+| prompt_count | metric | none | true | false | false | Number of unique successful prompts observed by a pilot gate. |
+| seed_per_prompt_min | metric | none | true | false | false | Minimum number of successful seeds per prompt. |
+| attack_count | metric | none | true | false | false | Number of distinct non-no-op attacks observed by a pilot gate. |
+| negative_family_count | metric | none | true | false | false | Number of distinct negative families observed by a pilot gate. |
+| method_variant_count | metric | none | true | false | false | Number of distinct method variants observed by a pilot gate. |
+| wrong_key_score_separation_passed | metric | none | true | false | false | Whether wrong-key controls are separated from the matched-key trajectory score. |
+| wrong_sampler_replay_control_not_equivalent | metric | none | true | false | false | Whether wrong-sampler replay control cannot forge the matched sampler trajectory. |
+| motion_threshold_id | protocol | none | true | false | false | Identifier for the motion threshold used by formal motion gate. |
+| motion_threshold_source_split | protocol | none | true | false | false | Source split or heuristic source used to define the motion threshold. |
+| motion_threshold_calibration_required | governance | none | true | false | false | Whether motion threshold calibration remains required before final claim use. |
 | sampler_signature_id | protocol | none | true | false | false | Governed sampler signature identifier derived from model and scheduler metadata. |
 | sampler_signature_sha256 | artifact | none | true | false | false | SHA256 digest of governed sampler signature metadata. |
 | sampler_class_name | protocol | none | true | false | false | Scheduler or sampler class name recorded during adapter preflight. |

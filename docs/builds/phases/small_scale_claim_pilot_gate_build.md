@@ -149,3 +149,55 @@ formal motion gate currently uses heuristic_precalibration threshold.
 calibrated motion threshold remains required before final paper claim.
 ```
 
+### 2.5 pilot gate 自动审计器
+
+当前已新增 small-scale claim pilot gate 自动审计入口:
+
+```text
+experiments/generative_video_model_probe/pilot_claim_gate.py
+scripts/check_results/small_scale_claim_pilot_result_checker.py
+```
+
+该 checker 会从已有 governed records 中自动审计:
+
+```text
+prompt_count
+seed_per_prompt_min
+attack_count
+negative_family_count
+method_variant_count
+path_marginal_gain_at_fixed_fpr
+negative_tail_status
+wrong_key_score_separation_passed
+wrong_sampler_replay_control_not_equivalent
+replay_uncertainty_mean
+motion_threshold_calibration_required
+```
+
+当前 Google Drive pilot run 的 dry-run 结论为:
+
+```text
+pilot_gate_decision: FAIL
+claim_support_status: workflow_progression_only
+prompt_count: 8
+seed_per_prompt_min: 2
+quality_motion_semantic_proxy_pass: true
+formal_motion_claim_status: blocked_by_formal_motion_consistency
+motion_threshold_source_split: heuristic_precalibration
+```
+
+当前缺口由 checker 自动报告为:
+
+```text
+attack_matrix_ready
+negative_family_ready
+method_variant_ready
+path_marginal_gain_ready
+negative_tail_ready
+wrong_key_separation_ready
+wrong_sampler_replay_ready
+replay_uncertainty_ready
+```
+
+这说明当前 Wan2.1 pilot 生成链路和 proxy 后处理可继续支撑 workflow progression, 但仍不能进入 full experiment 或 final paper claim。下一步应补齐 pilot postprocess / runner, 产生 attack、negative family、wrong-sampler replay 和 replay uncertainty governed records。
+

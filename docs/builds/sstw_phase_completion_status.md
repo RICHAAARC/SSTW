@@ -177,3 +177,17 @@ small_scale_claim_pilot_gate: 可继续推进, 但 formal motion claim 不完全
 generative_video_model_probe: 可工程探索, 但不得冻结最终 motion-threshold claim
 ```
 
+### 4.4 small-scale claim pilot gate checker 状态
+
+已新增 small-scale claim pilot gate 自动审计器。该 checker 对当前 Google Drive pilot run 的结论是:
+
+```text
+pilot_gate_decision: FAIL
+claim_support_status: workflow_progression_only
+prompt_count: 8
+seed_per_prompt_min: 2
+missing_pilot_requirements: 8
+```
+
+已满足的部分是 Wan2.1 pilot 生成覆盖和 proxy workflow progression。尚未满足的部分是 attack matrix、negative family、method variant、path marginal gain、negative tail、wrong-key separation、wrong-sampler replay 和 replay uncertainty。因此下一步应实现 pilot postprocess / runner, 不应进入 full experiment。
+

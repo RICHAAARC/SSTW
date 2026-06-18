@@ -29,8 +29,8 @@ def test_prepare_generative_video_prompt_suite_is_separate_from_runtime(tmp_path
     suite = json.loads(suite_path.read_text(encoding="utf-8"))
     assert suite["dataset_construction_status"] == "constructed"
     assert suite["dataset_source"] == "repository_deterministic_prompt_seed_spec"
-    assert suite["prompts"]
-    assert suite["seeds"]
+    assert len(suite["prompts"]) >= 8
+    assert len(suite["seeds"]) >= 2
 
 
 @pytest.mark.quick
@@ -47,7 +47,8 @@ def test_generative_video_colab_notebook_calls_repository_modules() -> None:
     assert "getpass" in source
     assert "add_to_git_credential=False" in source
     assert "generative_video_model_probe_workflow" in source
-    assert "PROFILE = 'recommended'" in source
+    assert "PROFILE = 'pilot'" in source
+    assert "MODEL_ID = 'Wan-AI/Wan2.1-T2V-1.3B-Diffusers'" in source
     assert "build_formal_metric_command" in source
     assert "build_mechanism_postprocess_command" in source
     assert "scripts/prepare_generative_video_prompt_suite.py" in Path("paper_workflow/notebook_utils/generative_video_model_probe_workflow.py").read_text(encoding="utf-8")
@@ -102,7 +103,11 @@ def test_generative_video_colab_runtime_uses_optional_hf_token_without_recording
     runtime_text = Path("experiments/generative_video_model_probe/colab_runtime.py").read_text(encoding="utf-8")
     assert "os.environ.get(\"HF_TOKEN\")" in runtime_text
     assert "token=hf_token" in runtime_text
+    assert "WanPipeline" in runtime_text
+    assert "WAN21_PRIMARY_MODEL_ID" in runtime_text
     assert "hf_token_status" in runtime_text
     assert "provided" in runtime_text
     assert "not_provided" in runtime_text
-    assert 'default="recommended"' in runtime_text
+    assert '"pilot": {"prompt_limit": 8, "seed_limit": 2' in runtime_text
+    assert 'default="pilot"' in runtime_text
+    assert 'default=WAN21_PRIMARY_MODEL_ID' in runtime_text

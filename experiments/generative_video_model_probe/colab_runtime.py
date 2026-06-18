@@ -15,9 +15,13 @@ from main.protocol.record_writer import write_json, write_jsonl
 from main.protocol.table_builder import write_csv
 
 
+WAN21_PRIMARY_MODEL_ID = "Wan-AI/Wan2.1-T2V-1.3B-Diffusers"
+
+
 PROFILE_SETTINGS = {
     "smoke": {"prompt_limit": 1, "seed_limit": 1, "num_inference_steps": 8, "num_frames": 33, "height": 320, "width": 512, "run_cross_model": False},
     "recommended": {"prompt_limit": 2, "seed_limit": 2, "num_inference_steps": 16, "num_frames": 49, "height": 320, "width": 512, "run_cross_model": True},
+    "pilot": {"prompt_limit": 8, "seed_limit": 2, "num_inference_steps": 16, "num_frames": 49, "height": 320, "width": 512, "run_cross_model": False},
     "extended": {"prompt_limit": 3, "seed_limit": 3, "num_inference_steps": 24, "num_frames": 65, "height": 384, "width": 640, "run_cross_model": True},
 }
 
@@ -45,12 +49,38 @@ def _tensor_stats(value: Any) -> dict:
         return {"latent_norm": None, "latent_mean": None, "latent_std": None, "trajectory_capture_failure_reason": str(exc)}
 
 
-def _load_ltx_pipeline(model_id: str, torch_dtype: Any) -> Any:
-    """加载 LTX-Video Diffusers pipeline, 可选使用 HF_TOKEN 访问 Hugging Face。"""
-    from diffusers import LTXPipeline
+def _model_family_from_id(model_id: str) -> str:
+    """???? ID ???????????"""
+    normalized = model_id.lower()
+    if "wan2.1" in normalized or "wan2_1" in normalized or "wan-ai" in normalized:
+        return "diffusers_wan21_flow_matching_dit"
+    if "ltx" in normalized:
+        return "diffusers_ltx_video"
+    return "diffusers_video_generation"
 
+
+def _scheduler_id_for_model(model_id: str) -> str:
+    """??????? pipeline ?? scheduler ???"""
+    if _model_family_from_id(model_id) == "diffusers_wan21_flow_matching_dit":
+        return "wan21_flow_matching_pipeline_default_scheduler"
+    return "ltx_pipeline_default_scheduler"
+
+
+def _load_video_generation_pipeline(model_id: str, torch_dtype: Any) -> Any:
+    """?????????????? pipeline?
+
+    ????????????small-scale claim pilot ???? Wan2.1 ?? Flow
+    Matching DiT ??; LTX-Video ???? fallback ?????????
+    """
     hf_token = os.environ.get("HF_TOKEN") or None
-    pipe = LTXPipeline.from_pretrained(model_id, torch_dtype=torch_dtype, token=hf_token)
+    if _model_family_from_id(model_id) == "diffusers_wan21_flow_matching_dit":
+        from diffusers import WanPipeline
+
+        pipe = WanPipeline.from_pretrained(model_id, torch_dtype=torch_dtype, token=hf_token)
+    else:
+        from diffusers import LTXPipeline
+
+        pipe = LTXPipeline.from_pretrained(model_id, torch_dtype=torch_dtype, token=hf_token)
     if hasattr(pipe, "enable_model_cpu_offload"):
         pipe.enable_model_cpu_offload()
     else:
@@ -116,7 +146,7 @@ def run_colab_probe(output_root: str | Path, prompt_suite_path: str | Path, prof
     for index, item in enumerate(plan):
         model_for_item = item["generation_model_id"]
         if model_for_item not in active_pipe_by_model:
-            active_pipe_by_model[model_for_item] = _load_ltx_pipeline(model_for_item, dtype)
+            active_pipe_by_model[model_for_item] = _load_video_generation_pipeline(model_for_item, dtype)
         pipe = active_pipe_by_model[model_for_item]
         generator = torch.Generator(device="cuda").manual_seed(int(item["seed_value"]))
         trace_id = f"trace_{index:04d}"
@@ -163,7 +193,7 @@ def run_colab_probe(output_root: str | Path, prompt_suite_path: str | Path, prof
             "colab_runtime_profile": profile,
             "generation_model_id": item["generation_model_id"],
             "generation_model_name": item["generation_model_id"],
-            "generation_model_family": "diffusers_ltx_video",
+            "generation_model_family": _model_family_from_id(item["generation_model_id"]),
             "generation_model_version": "from_pretrained_runtime_resolution",
             "generation_model_commit_or_hash": None,
             "generation_model_license_status": "model_card_required",
@@ -177,9 +207,9 @@ def run_colab_probe(output_root: str | Path, prompt_suite_path: str | Path, prof
             "prompt_suite_role": item["prompt_suite_role"],
             "motion_pattern_id": item["motion_pattern_id"],
             "seed_id": item["seed_id"],
-            "scheduler_id": "ltx_pipeline_default_scheduler",
-            "trajectory_scheduler_id": "ltx_pipeline_default_scheduler",
-            "trajectory_time_grid_id": "callback_on_step_end_grid",
+            "scheduler_id": _scheduler_id_for_model(item["generation_model_id"]),
+            "trajectory_scheduler_id": _scheduler_id_for_model(item["generation_model_id"]),
+            "trajectory_time_grid_id": "flow_matching_callback_on_step_end_grid" if _model_family_from_id(item["generation_model_id"]) == "diffusers_wan21_flow_matching_dit" else "callback_on_step_end_grid",
             "num_inference_steps": settings["num_inference_steps"],
             "guidance_scale": None,
             "video_length_frames": settings["num_frames"],
@@ -246,8 +276,8 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="在 Colab GPU 环境中运行 B5 生成式视频模型探测。")
     parser.add_argument("--output-root", default="outputs/runs/generative_video_model_probe_colab")
     parser.add_argument("--prompt-suite-path", default="outputs/datasets/generative_video_prompt_suite/prompt_seed_suite.json")
-    parser.add_argument("--profile", choices=sorted(PROFILE_SETTINGS), default="recommended")
-    parser.add_argument("--model-id", default="Lightricks/LTX-Video")
+    parser.add_argument("--profile", choices=sorted(PROFILE_SETTINGS), default="pilot")
+    parser.add_argument("--model-id", default=WAN21_PRIMARY_MODEL_ID)
     parser.add_argument("--cross-model-id", default="")
     args = parser.parse_args()
     cross_model_id = args.cross_model_id or None

@@ -33,6 +33,46 @@ PROMPT_ITEMS = [
         "motion_pattern_id": "gentle_rotation",
         "prompt_suite_role": "heldout_prompt",
     },
+    {
+        "prompt_id": "liquid_pour_closeup",
+        "prompt_text": "Clear water pours from a glass pitcher into a small cup on a kitchen counter with steady camera framing.",
+        "prompt_negative_text": "worst quality, inconsistent motion, blurry, jittery, distorted",
+        "prompt_category": "fluid_motion",
+        "motion_pattern_id": "continuous_pour",
+        "prompt_suite_role": "pilot_main",
+    },
+    {
+        "prompt_id": "walking_robot_sideview",
+        "prompt_text": "A small toy robot walks slowly from right to left across a clean desk while the camera remains fixed.",
+        "prompt_negative_text": "worst quality, inconsistent motion, blurry, jittery, distorted",
+        "prompt_category": "articulated_motion",
+        "motion_pattern_id": "sideways_walk",
+        "prompt_suite_role": "pilot_main",
+    },
+    {
+        "prompt_id": "falling_leaves_static_camera",
+        "prompt_text": "Several yellow leaves fall gently in front of a park bench while the camera stays still.",
+        "prompt_negative_text": "worst quality, inconsistent motion, blurry, jittery, distorted",
+        "prompt_category": "natural_motion",
+        "motion_pattern_id": "downward_fall",
+        "prompt_suite_role": "pilot_main",
+    },
+    {
+        "prompt_id": "turntable_product_orbit",
+        "prompt_text": "A white ceramic mug rotates on a small turntable under soft studio lighting with a fixed camera.",
+        "prompt_negative_text": "worst quality, inconsistent motion, blurry, jittery, distorted",
+        "prompt_category": "object_rotation",
+        "motion_pattern_id": "turntable_rotation",
+        "prompt_suite_role": "pilot_main",
+    },
+    {
+        "prompt_id": "train_window_lateral_motion",
+        "prompt_text": "A landscape moves laterally outside a train window while the interior frame remains stable.",
+        "prompt_negative_text": "worst quality, inconsistent motion, blurry, jittery, distorted",
+        "prompt_category": "background_motion",
+        "motion_pattern_id": "lateral_background_shift",
+        "prompt_suite_role": "pilot_main",
+    },
 ]
 
 SEED_ITEMS = [

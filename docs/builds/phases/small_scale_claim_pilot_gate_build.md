@@ -98,7 +98,25 @@ attack 后 trajectory evidence 与 endpoint evidence 不发生系统性冲突
 
 ### 2.3 下一步建议
 
-下一步建议按以下规模运行 pilot:
+当前 Colab 入口已经切换到 small-scale pilot 参数:
+
+```text
+notebook: paper_workflow/colab_utils/generative_video_model_probe_colab.ipynb
+PROFILE: pilot
+MODEL_ID: Wan-AI/Wan2.1-T2V-1.3B-Diffusers
+CROSS_MODEL_ID: empty
+prompt_limit: 8
+seed_limit: 2
+num_inference_steps: 16
+num_frames: 49
+height: 320
+width: 512
+run_cross_model: false
+```
+
+该设置会优先验证主模型上的 pilot 规模生成链路。attack matrix、negative family 和 wrong-sampler replay 仍需要由后续 pilot postprocess / checker 或专门 runner 继续闭合。
+
+下一步建议按以下目标规模补齐 pilot:
 
 ```text
 8 prompts
@@ -109,4 +127,3 @@ attack 后 trajectory evidence 与 endpoint evidence 不发生系统性冲突
 ```
 
 pilot 失败时不得进入 full experiment。pilot 通过后, 才允许进入 `generative_video_model_probe` 的完整真实模型实验。
-

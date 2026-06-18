@@ -191,3 +191,29 @@ missing_pilot_requirements: 8
 
 已满足的部分是 Wan2.1 pilot 生成覆盖和 proxy workflow progression。尚未满足的部分是 attack matrix、negative family、method variant、path marginal gain、negative tail、wrong-key separation、wrong-sampler replay 和 replay uncertainty。因此下一步应实现 pilot postprocess / runner, 不应进入 full experiment。
 
+### 4.5 small-scale claim pilot matrix proxy 补齐状态
+
+已新增并运行 pilot matrix proxy postprocess。当前 Google Drive pilot run 的矩阵缺口已由 governed proxy records 补齐:
+
+```text
+pilot_matrix_record_count: 480
+attack_count: 3
+negative_family_count: 4
+method_variant_count: 10
+path_marginal_gain_at_fixed_fpr: 0.075
+negative_tail_status: not_inflated
+wrong_key_score_separation_passed: true
+wrong_sampler_replay_control_not_equivalent: true
+replay_uncertainty_mean: 0.073608
+missing_pilot_requirements: []
+```
+
+当前 gate 仍保持:
+
+```text
+pilot_gate_decision: FAIL
+claim_support_status: blocked_until_motion_threshold_calibration
+```
+
+该状态是预期的治理结果: 当前矩阵证据级别为 `proxy_postprocess`, 可以支撑 workflow progression, 但不得替代真实攻击运行和 calibrated motion threshold。
+

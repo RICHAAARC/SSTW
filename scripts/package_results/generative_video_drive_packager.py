@@ -57,6 +57,8 @@ def package_generative_video_colab_run(
     decision_path = run_root_path / "artifacts" / "generative_video_colab_runtime_decision.json"
     postprocess_decision_path = run_root_path / "artifacts" / "generative_video_mechanism_postprocess_decision.json"
     formal_metric_decision_path = run_root_path / "artifacts" / "formal_quality_motion_semantic_decision.json"
+    pilot_gate_decision_path = run_root_path / "artifacts" / "small_scale_claim_pilot_gate_decision.json"
+    pilot_matrix_decision_path = run_root_path / "artifacts" / "small_scale_claim_pilot_matrix_decision.json"
     generation_manifest_path = run_root_path / "artifacts" / "generation_manifest.json"
 
     with zipfile.ZipFile(archive_path, mode="w", compression=zipfile.ZIP_DEFLATED) as archive:
@@ -68,6 +70,8 @@ def package_generative_video_colab_run(
     decision = _read_json_if_exists(decision_path)
     postprocess_decision = _read_json_if_exists(postprocess_decision_path)
     formal_metric_decision = _read_json_if_exists(formal_metric_decision_path)
+    pilot_gate_decision = _read_json_if_exists(pilot_gate_decision_path)
+    pilot_matrix_decision = _read_json_if_exists(pilot_matrix_decision_path)
     generation_manifest = _read_json_if_exists(generation_manifest_path)
     package_manifest = {
         "artifact_id": "generative_video_colab_drive_package",
@@ -93,6 +97,11 @@ def package_generative_video_colab_run(
             "formal_visual_motion_ready": formal_metric_decision.get("formal_visual_motion_ready"),
             "formal_semantic_ready": formal_metric_decision.get("formal_semantic_ready"),
             "formal_metric_claim_status": formal_metric_decision.get("formal_metric_claim_status"),
+            "small_scale_pilot_gate_decision": pilot_gate_decision.get("pilot_gate_decision"),
+            "small_scale_pilot_claim_support_status": pilot_gate_decision.get("claim_support_status"),
+            "small_scale_pilot_missing_requirement_count": pilot_gate_decision.get("pilot_missing_requirement_count"),
+            "small_scale_pilot_matrix_postprocess_decision": pilot_matrix_decision.get("pilot_matrix_postprocess_decision"),
+            "small_scale_pilot_matrix_record_count": pilot_matrix_decision.get("pilot_matrix_record_count"),
         },
         "generation_manifest_status": "present" if generation_manifest else "missing",
     }

@@ -534,6 +534,14 @@ Notebook 与 repository module 的跨边界数据
 | pilot_gate_decision | governance | none | true | false | false | Small-scale claim pilot gate decision. |
 | missing_pilot_requirements | governance | none | true | false | false | List of missing requirements blocking small-scale claim pilot progression. |
 | pilot_missing_requirement_count | metric | none | true | false | false | Count of missing small-scale claim pilot requirements. |
+| pilot_matrix_record_count | metric | none | true | false | false | Number of small-scale claim pilot matrix proxy records. |
+| pilot_matrix_attack_count | metric | none | true | false | false | Number of attacks covered by small-scale claim pilot matrix proxy records. |
+| pilot_matrix_method_variant_count | metric | none | true | false | false | Number of method variants covered by small-scale claim pilot matrix proxy records. |
+| pilot_matrix_negative_family_count | metric | none | true | false | false | Number of negative families covered by small-scale claim pilot matrix proxy records. |
+| pilot_matrix_postprocess_decision | governance | none | true | false | false | Postprocess decision for small-scale claim pilot matrix proxy records. |
+| pilot_evidence_level | governance | none | true | false | false | Evidence level of pilot records, such as proxy postprocess or runtime attack. |
+| attack_matrix_evidence_level | governance | none | true | false | false | Evidence level used to support attack matrix coverage. |
+| negative_family_evidence_level | governance | none | true | false | false | Evidence level used to support negative family coverage. |
 | prompt_count | metric | none | true | false | false | Number of unique successful prompts observed by a pilot gate. |
 | seed_per_prompt_min | metric | none | true | false | false | Minimum number of successful seeds per prompt. |
 | attack_count | metric | none | true | false | false | Number of distinct non-no-op attacks observed by a pilot gate. |

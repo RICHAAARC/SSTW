@@ -143,6 +143,7 @@ def build_small_scale_claim_pilot_audit(run_root: str | Path) -> dict:
     generation_records = _read_jsonl(run_root / "records" / "generation_records.jsonl")
     mechanism_records = _read_jsonl(run_root / "records" / "mechanism_score_records.jsonl")
     controlled_negative_records = _read_jsonl(run_root / "records" / "controlled_negative_records.jsonl")
+    pilot_matrix_records = _read_jsonl(run_root / "records" / "small_scale_claim_pilot_matrix_records.jsonl")
     quality_proxy_records = _read_jsonl(run_root / "records" / "quality_motion_semantic_proxy_records.jsonl")
     formal_metric_records = _read_jsonl(run_root / "records" / "formal_quality_motion_semantic_records.jsonl")
     postprocess_decision = _read_json(run_root / "artifacts" / "generative_video_mechanism_postprocess_decision.json")
@@ -151,27 +152,28 @@ def build_small_scale_claim_pilot_audit(run_root: str | Path) -> dict:
     successful_generation_records = [record for record in generation_records if record.get("generation_status") == "success"]
     prompt_ids = _unique_nonempty(successful_generation_records, "prompt_id")
     seed_per_prompt_min = _seed_per_prompt_min(successful_generation_records)
-    attack_names = _attack_names(mechanism_records, controlled_negative_records)
-    negative_families = _negative_families(mechanism_records, controlled_negative_records)
-    method_variants = _unique_nonempty(mechanism_records, "method_variant")
+    matrix_source_records = mechanism_records + controlled_negative_records + pilot_matrix_records
+    attack_names = _attack_names(mechanism_records, controlled_negative_records, pilot_matrix_records)
+    negative_families = _negative_families(mechanism_records, controlled_negative_records, pilot_matrix_records)
+    method_variants = _unique_nonempty(mechanism_records + pilot_matrix_records, "method_variant")
 
-    path_gain_values = _numeric_values(mechanism_records + controlled_negative_records, "path_marginal_gain_at_fixed_fpr")
+    path_gain_values = _numeric_values(matrix_source_records, "path_marginal_gain_at_fixed_fpr")
     path_gain = round(mean(path_gain_values), 6) if path_gain_values else None
     path_gain_pass = path_gain is not None and path_gain > 0
 
-    replay_uncertainty_values = _numeric_values(mechanism_records + controlled_negative_records, "replay_uncertainty_mean")
+    replay_uncertainty_values = _numeric_values(matrix_source_records, "replay_uncertainty_mean")
     replay_uncertainty_mean = round(mean(replay_uncertainty_values), 6) if replay_uncertainty_values else None
     replay_uncertainty_recorded = replay_uncertainty_mean is not None
 
-    negative_tail_statuses = _unique_nonempty(mechanism_records + controlled_negative_records, "negative_tail_status")
+    negative_tail_statuses = _unique_nonempty(matrix_source_records, "negative_tail_status")
     negative_tail_not_inflated = bool(negative_tail_statuses & {"not_inflated", "pass", "negative_tail_not_inflated"})
     threshold_details = _read_json(run_root / "thresholds" / "mechanism_proxy_thresholds.json")
     fixed_low_fpr_proxy_pass = postprocess_decision.get("details", {}).get("fixed_low_fpr_proxy_pass") is True
     controlled_negative_fpr = threshold_details.get("controlled_negative_fpr")
 
-    wrong_key_score_separation_passed = _boolean_any(mechanism_records + controlled_negative_records, "wrong_key_score_separation_passed")
-    wrong_sampler_present = _has_wrong_sampler_replay(mechanism_records + controlled_negative_records)
-    wrong_sampler_not_equivalent = _wrong_sampler_replay_not_equivalent(mechanism_records + controlled_negative_records)
+    wrong_key_score_separation_passed = _boolean_any(matrix_source_records, "wrong_key_score_separation_passed")
+    wrong_sampler_present = _has_wrong_sampler_replay(matrix_source_records)
+    wrong_sampler_not_equivalent = _wrong_sampler_replay_not_equivalent(matrix_source_records)
 
     formal_motion_claim_status = _formal_motion_claim_status(formal_metric_records, formal_decision, postprocess_decision)
     formal_motion_uses_heuristic_threshold = True
@@ -215,6 +217,7 @@ def build_small_scale_claim_pilot_audit(run_root: str | Path) -> dict:
         "attack_count": len(attack_names),
         "negative_family_count": len(negative_families),
         "method_variant_count": len(method_variants),
+        "pilot_matrix_record_count": len(pilot_matrix_records),
         "path_marginal_gain_at_fixed_fpr": path_gain,
         "negative_tail_status": "not_inflated" if negative_tail_not_inflated else "missing_or_not_ready",
         "wrong_key_score_separation_passed": wrong_key_score_separation_passed,

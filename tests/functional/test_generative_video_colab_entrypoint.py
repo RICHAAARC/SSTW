@@ -79,6 +79,15 @@ def test_generative_video_drive_packager_creates_archive_and_manifest(tmp_path: 
     write_jsonl(run_root / "records" / "generation_records.jsonl", [{"generation_model_id": "model", "prompt_id": "prompt"}])
     write_json(run_root / "artifacts" / "generative_video_colab_runtime_decision.json", {"stage_id": "generative_video_model_probe_colab_runtime", "implementation_decision": "PASS", "mechanism_decision": "FAIL"})
     write_json(run_root / "artifacts" / "generation_manifest.json", {"artifact_id": "manifest"})
+    write_json(run_root / "artifacts" / "small_scale_claim_pilot_gate_decision.json", {
+        "pilot_gate_decision": "FAIL",
+        "claim_support_status": "blocked_until_motion_threshold_calibration",
+        "pilot_missing_requirement_count": 0,
+    })
+    write_json(run_root / "artifacts" / "small_scale_claim_pilot_matrix_decision.json", {
+        "pilot_matrix_postprocess_decision": "PASS",
+        "pilot_matrix_record_count": 480,
+    })
 
     payload = package_generative_video_colab_run(run_root, package_dir, include_videos=False)
     archive_path = Path(payload["archive_path"])
@@ -88,6 +97,10 @@ def test_generative_video_drive_packager_creates_archive_and_manifest(tmp_path: 
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     assert manifest["generation_manifest_status"] == "present"
     assert manifest["decision_summary"]["implementation_decision"] == "PASS"
+    assert manifest["decision_summary"]["small_scale_pilot_gate_decision"] == "FAIL"
+    assert manifest["decision_summary"]["small_scale_pilot_claim_support_status"] == "blocked_until_motion_threshold_calibration"
+    assert manifest["decision_summary"]["small_scale_pilot_matrix_postprocess_decision"] == "PASS"
+    assert manifest["decision_summary"]["small_scale_pilot_matrix_record_count"] == 480
     assert re.match(r"generative_video_model_probe_colab_\d{8}_\d{6}_[a-z0-9_\-]+\.zip", archive_path.name)
     assert manifest["package_batch_id"] == f"{manifest['package_utc_time']}_{manifest['package_short_commit']}"
     assert archive_path.stem.endswith(manifest["package_batch_id"])

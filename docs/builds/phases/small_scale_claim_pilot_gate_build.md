@@ -201,3 +201,50 @@ replay_uncertainty_ready
 
 这说明当前 Wan2.1 pilot 生成链路和 proxy 后处理可继续支撑 workflow progression, 但仍不能进入 full experiment 或 final paper claim。下一步应补齐 pilot postprocess / runner, 产生 attack、negative family、wrong-sampler replay 和 replay uncertainty governed records。
 
+### 2.6 pilot matrix proxy postprocess 状态
+
+已新增 small-scale claim pilot matrix proxy 后处理入口:
+
+```text
+experiments/generative_video_model_probe/pilot_matrix_postprocess.py
+```
+
+该 runner 基于现有 generation records 与 trajectory records 构造受治理的 proxy matrix records, 覆盖:
+
+```text
+3 attacks
+4 negative families
+6 method variants
+wrong_key separation
+wrong_sampler_replay control
+path_marginal_gain_at_fixed_fpr
+negative_tail_status
+replay_uncertainty_mean
+```
+
+当前 Google Drive pilot run 已写出:
+
+```text
+records/small_scale_claim_pilot_matrix_records.jsonl
+tables/small_scale_claim_pilot_matrix_table.csv
+artifacts/small_scale_claim_pilot_matrix_decision.json
+reports/small_scale_claim_pilot_matrix_report.md
+```
+
+当前自动审计结果更新为:
+
+```text
+pilot_matrix_postprocess_decision: PASS
+pilot_matrix_record_count: 480
+pilot_matrix_attack_count: 3
+pilot_matrix_method_variant_count: 6
+pilot_matrix_negative_family_count: 4
+path_marginal_gain_at_fixed_fpr: 0.075
+replay_uncertainty_mean: 0.073608
+missing_pilot_requirements: []
+claim_support_status: blocked_until_motion_threshold_calibration
+pilot_gate_decision: FAIL
+```
+
+该结果表示 pilot 矩阵的 proxy 后处理记录已经补齐, 但仍不能进入 full experiment 或 final paper claim。阻塞原因不再是矩阵缺失, 而是 formal motion gate 仍使用 `heuristic_precalibration` 阈值, 需要后续 `motion_threshold_calibration` 阶段。
+

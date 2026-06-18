@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 
 from experiments.generative_video_model_probe.pilot_claim_gate import build_small_scale_claim_pilot_audit, write_small_scale_claim_pilot_audit
+from experiments.generative_video_model_probe.pilot_matrix_postprocess import write_pilot_matrix_postprocess
 from main.protocol.record_writer import write_json, write_jsonl
 from scripts.check_results.small_scale_claim_pilot_result_checker import check_small_scale_claim_pilot_results
 
@@ -52,6 +53,23 @@ def _write_proxy_postprocess(run_root: Path) -> None:
         "visual_quality_proxy_status": "ready",
         "motion_consistency_proxy_status": "ready",
     }])
+
+
+def _write_trajectory_records(run_root: Path, prompt_count: int = 8, seed_count: int = 2) -> None:
+    """写出可支撑 pilot matrix proxy 的轻量 trajectory records。"""
+    rows = []
+    for prompt_index in range(prompt_count):
+        for seed_index in range(seed_count):
+            trace_id = f"trace_{prompt_index}_{seed_index}"
+            for step_index in range(4):
+                rows.append({
+                    "trajectory_trace_id": trace_id,
+                    "trajectory_step_index": step_index,
+                    "latent_norm": 100.0 - 8.0 * step_index,
+                    "latent_mean": 0.01 * step_index,
+                    "latent_std": 0.9 - 0.05 * step_index,
+                })
+    write_jsonl(run_root / "records" / "trajectory_trace.jsonl", rows)
 
 
 @pytest.mark.quick
@@ -110,3 +128,27 @@ def test_small_scale_claim_pilot_gate_writes_governed_artifacts(tmp_path: Path) 
     assert (run_root / "tables" / "small_scale_claim_pilot_gate_table.csv").exists()
     assert (run_root / "artifacts" / "small_scale_claim_pilot_gate_decision.json").exists()
     assert (run_root / "reports" / "small_scale_claim_pilot_gate_report.md").exists()
+
+
+@pytest.mark.quick
+def test_pilot_matrix_postprocess_fills_proxy_matrix_but_keeps_calibration_block(tmp_path: Path) -> None:
+    """pilot matrix postprocess 可补齐 proxy 矩阵, 但不能越过 motion threshold calibration gate。"""
+    run_root = tmp_path / "generative_video_model_probe_colab"
+    _write_generation_records(run_root)
+    _write_trajectory_records(run_root)
+    _write_proxy_postprocess(run_root)
+    write_jsonl(run_root / "records" / "mechanism_score_records.jsonl", [])
+    write_jsonl(run_root / "records" / "controlled_negative_records.jsonl", [])
+
+    matrix_audit = write_pilot_matrix_postprocess(run_root)
+    summary = check_small_scale_claim_pilot_results(run_root)
+
+    assert matrix_audit["pilot_matrix_postprocess_decision"] == "PASS"
+    assert matrix_audit["pilot_matrix_attack_count"] == 3
+    assert matrix_audit["pilot_matrix_method_variant_count"] == 6
+    assert matrix_audit["pilot_matrix_negative_family_count"] == 4
+    assert summary["missing_pilot_requirements"] == []
+    assert summary["pilot_gate_decision"] == "FAIL"
+    assert summary["claim_support_status"] == "blocked_until_motion_threshold_calibration"
+    assert summary["path_marginal_gain_at_fixed_fpr"] is not None
+    assert summary["replay_uncertainty_mean"] is not None

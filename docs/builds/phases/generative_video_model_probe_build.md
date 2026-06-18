@@ -105,3 +105,41 @@ usage: pilot_guardrail
 
 禁止将 evaluation split 或每次生成后的结果反向用于动态调整阈值。正式实验必须使用预先校准并冻结的 threshold artifact。
 
+### 2.4 runtime attack / detection 工程闭环
+
+当前 `generative_video_model_probe` 已补齐真实 runtime 文件级 attack 和 attacked video detection scoring 的工程路径。新增或强化的入口包括:
+
+```text
+experiments/generative_video_model_probe/attack_runner.py
+experiments/generative_video_model_probe/detection_runner.py
+paper_workflow/notebook_utils/generative_video_model_probe_workflow.py
+paper_workflow/colab_utils/generative_video_model_probe_colab.ipynb
+scripts/package_results/generative_video_drive_packager.py
+```
+
+Colab notebook 的冷启动顺序现在包含:
+
+```text
+prepare prompt suite
+run Wan2.1 generation
+run formal quality / motion / semantic metrics
+run mechanism postprocess
+run pilot matrix postprocess
+run runtime video-file attack
+run runtime attacked video detection
+write small-scale claim pilot gate
+run pytest and harness
+package to Google Drive
+```
+
+最新落盘 package manifest 已包含:
+
+```text
+runtime_attack_decision: PASS
+runtime_attack_ready_count: 48
+runtime_detection_decision: PASS
+runtime_detection_ready_count: 48
+small_scale_pilot_claim_support_status: blocked_until_motion_threshold_calibration
+```
+
+该状态表示工程层面已经从真实视频生成推进到攻击、检测、gate 和 package 的完整闭环。正式实验结论仍必须等待 `motion_threshold_calibration` 完成后才能冻结。

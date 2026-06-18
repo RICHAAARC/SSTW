@@ -145,6 +145,7 @@ def build_small_scale_claim_pilot_audit(run_root: str | Path) -> dict:
     controlled_negative_records = _read_jsonl(run_root / "records" / "controlled_negative_records.jsonl")
     pilot_matrix_records = _read_jsonl(run_root / "records" / "small_scale_claim_pilot_matrix_records.jsonl")
     runtime_attack_records = _read_jsonl(run_root / "records" / "runtime_attack_records.jsonl")
+    runtime_detection_records = _read_jsonl(run_root / "records" / "runtime_detection_records.jsonl")
     quality_proxy_records = _read_jsonl(run_root / "records" / "quality_motion_semantic_proxy_records.jsonl")
     formal_metric_records = _read_jsonl(run_root / "records" / "formal_quality_motion_semantic_records.jsonl")
     postprocess_decision = _read_json(run_root / "artifacts" / "generative_video_mechanism_postprocess_decision.json")
@@ -157,6 +158,10 @@ def build_small_scale_claim_pilot_audit(run_root: str | Path) -> dict:
     ready_runtime_attack_records = [
         record for record in runtime_attack_records
         if record.get("attack_runtime_status") == "ready"
+    ]
+    ready_runtime_detection_records = [
+        record for record in runtime_detection_records
+        if record.get("runtime_detection_status") == "ready"
     ]
     attack_names = _attack_names(mechanism_records, controlled_negative_records, pilot_matrix_records, ready_runtime_attack_records)
     negative_families = _negative_families(mechanism_records, controlled_negative_records, pilot_matrix_records)
@@ -195,6 +200,7 @@ def build_small_scale_claim_pilot_audit(run_root: str | Path) -> dict:
         "wrong_sampler_replay_ready": wrong_sampler_present and wrong_sampler_not_equivalent,
         "replay_uncertainty_ready": replay_uncertainty_recorded,
         "quality_proxy_ready": bool(quality_proxy_records) and postprocess_decision.get("details", {}).get("quality_motion_semantic_proxy_pass") is True,
+        "runtime_detection_ready": (not ready_runtime_attack_records) or len(ready_runtime_detection_records) >= len(ready_runtime_attack_records),
     }
     missing = [name for name, passed in requirement_checks.items() if not passed]
 
@@ -225,6 +231,8 @@ def build_small_scale_claim_pilot_audit(run_root: str | Path) -> dict:
         "pilot_matrix_record_count": len(pilot_matrix_records),
         "runtime_attack_record_count": len(runtime_attack_records),
         "runtime_attack_ready_count": len(ready_runtime_attack_records),
+        "runtime_detection_record_count": len(runtime_detection_records),
+        "runtime_detection_ready_count": len(ready_runtime_detection_records),
         "path_marginal_gain_at_fixed_fpr": path_gain,
         "negative_tail_status": "not_inflated" if negative_tail_not_inflated else "missing_or_not_ready",
         "wrong_key_score_separation_passed": wrong_key_score_separation_passed,

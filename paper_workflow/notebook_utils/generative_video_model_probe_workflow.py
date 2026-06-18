@@ -93,6 +93,51 @@ def build_mechanism_postprocess_command(layout: dict[str, str]) -> list[str]:
     ]
 
 
+def build_pilot_matrix_postprocess_command(layout: dict[str, str]) -> list[str]:
+    """构造 small-scale pilot matrix postprocess 命令, 从 generation 与 trajectory records 补齐 pilot 矩阵。"""
+    return [
+        sys.executable,
+        "-m",
+        "experiments.generative_video_model_probe.pilot_matrix_postprocess",
+        "--run-root",
+        layout["drive_run_root"],
+    ]
+
+
+def build_runtime_attack_command(layout: dict[str, str]) -> list[str]:
+    """构造 runtime video-file attack 命令, 对真实 mp4 生成 attacked videos 与 governed records。"""
+    return [
+        sys.executable,
+        "-m",
+        "experiments.generative_video_model_probe.attack_runner",
+        "--run-root",
+        layout["drive_run_root"],
+    ]
+
+
+def build_runtime_detection_command(layout: dict[str, str]) -> list[str]:
+    """构造 runtime attacked video detection 命令, 把 attacked videos 接入检测评分 records。"""
+    return [
+        sys.executable,
+        "-m",
+        "experiments.generative_video_model_probe.detection_runner",
+        "--run-root",
+        layout["drive_run_root"],
+    ]
+
+
+def build_small_scale_claim_pilot_gate_command(layout: dict[str, str]) -> list[str]:
+    """构造 small-scale claim pilot gate 命令, 从 governed records 汇总 pilot 状态。"""
+    return [
+        sys.executable,
+        "-m",
+        "experiments.generative_video_model_probe.pilot_claim_gate",
+        "--run-root",
+        layout["drive_run_root"],
+        "--write-outputs",
+    ]
+
+
 def build_drive_packaging_command(layout: dict[str, str], include_videos: bool = True) -> list[str]:
     """构造 Google Drive 打包命令。"""
     command = [

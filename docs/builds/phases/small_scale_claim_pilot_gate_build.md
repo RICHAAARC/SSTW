@@ -290,3 +290,51 @@ claim_support_status: blocked_until_motion_threshold_calibration
 
 该结果表示工程层面的 runtime attack 链路已经闭合, 但仍不能进入 final claim。剩余阻塞是 `motion_threshold_calibration`, 以及后续如需论文级攻击结论, 仍需要把 runtime attacked videos 接入正式 detection / scoring, 而不是只依赖 proxy matrix score。
 
+### 2.8 runtime attacked video detection 闭环状态
+
+已新增 runtime attacked video detection runner:
+
+```text
+experiments/generative_video_model_probe/detection_runner.py
+```
+
+该 runner 读取:
+
+```text
+records/runtime_attack_records.jsonl
+attacked_videos/*.mp4
+records/trajectory_trace.jsonl
+```
+
+并写出:
+
+```text
+records/runtime_detection_records.jsonl
+tables/runtime_detection_table.csv
+artifacts/runtime_detection_decision.json
+reports/runtime_detection_report.md
+```
+
+当前 Google Drive pilot run 的 runtime detection 结果为:
+
+```text
+runtime_detection_decision: PASS
+runtime_detection_record_count: 48
+runtime_detection_ready_count: 48
+runtime_detection_detectable_count: 48
+runtime_detection_attack_count: 3
+runtime_detection_score_mean: 0.781174
+claim_support_status: runtime_detection_evidence_only
+```
+
+pilot gate 现在会显式检查: 如果存在 ready runtime attack records, 则必须存在对应 ready runtime detection records。该规则用于防止只生成 attacked videos 而未进入 detection scoring 的半闭环状态。
+
+当前 pilot gate 仍为:
+
+```text
+pilot_gate_decision: FAIL
+claim_support_status: blocked_until_motion_threshold_calibration
+missing_pilot_requirements: []
+```
+
+这表示 pilot 的工程矩阵与 runtime attack / detection 链路已闭合, 剩余阻塞项不是工程链路缺失, 而是 motion threshold calibration 尚未完成。

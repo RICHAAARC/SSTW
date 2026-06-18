@@ -598,3 +598,21 @@ Notebook 与 repository module 的跨边界数据
 | latent_norm_change | metric | none | true | false | false | Signed change in latent norm after applying the sampling-time constraint. |
 | minimum_key_separation_gain | metric | none | true | false | false | Minimum required keyed path gain over the strongest without-key or wrong-key control. |
 | minimum_key_separation_flow_velocity_gain | metric | none | true | false | false | Minimum required keyed velocity gain over the strongest without-key or wrong-key control. |
+
+| runtime_detection_decision | governance | none | true | false | false | Runtime attacked video detection runner decision. |
+| runtime_detection_record_count | metric | none | true | false | false | Number of runtime detection records. |
+| runtime_detection_ready_count | metric | none | true | false | false | Number of runtime detection records that decoded and scored attacked videos. |
+| runtime_detection_detectable_count | metric | none | true | false | false | Number of runtime detection records with detectable attacked video proxy evidence. |
+| runtime_detection_attack_count | metric | none | true | false | false | Number of distinct attacks covered by runtime detection records. |
+| runtime_detection_score_mean | metric | none | true | false | false | Mean runtime attacked video detection proxy score. |
+| runtime_detection_evidence_level | governance | none | true | false | false | Evidence level for runtime attacked video detection records. |
+| runtime_detection_status | governance | none | true | false | false | Per-record runtime detection status. |
+| runtime_detection_failure_reason | governance | none | true | false | false | Per-record runtime detection failure reason. |
+| attacked_video_decode_status | governance | none | true | false | false | Whether attacked video file can be decoded during runtime detection. |
+| attacked_video_decode_failure_reason | governance | none | true | false | false | Decode failure reason for attacked video runtime detection. |
+| attacked_video_detectable | metric | none | true | false | false | Whether attacked video produced a positive runtime detection proxy. |
+| attacked_video_decoded_frame_count | metric | none | true | false | false | Number of decoded frames observed by runtime detection runner. |
+| source_to_attack_frame_ratio | metric | none | true | false | false | Ratio between attacked frame count and source frame count. |
+| decoded_to_source_frame_ratio | metric | none | true | false | false | Ratio between decoded attacked frame count and source frame count. |
+| attack_score_delta | metric | none | true | false | false | Runtime attacked video score delta against trajectory observation proxy. |
+| S_runtime_attack_detection | metric | none | true | false | false | Runtime attacked video detection proxy score. |

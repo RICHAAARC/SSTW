@@ -60,6 +60,7 @@ def package_generative_video_colab_run(
     pilot_gate_decision_path = run_root_path / "artifacts" / "small_scale_claim_pilot_gate_decision.json"
     pilot_matrix_decision_path = run_root_path / "artifacts" / "small_scale_claim_pilot_matrix_decision.json"
     runtime_attack_decision_path = run_root_path / "artifacts" / "runtime_attack_decision.json"
+    runtime_detection_decision_path = run_root_path / "artifacts" / "runtime_detection_decision.json"
     generation_manifest_path = run_root_path / "artifacts" / "generation_manifest.json"
 
     with zipfile.ZipFile(archive_path, mode="w", compression=zipfile.ZIP_DEFLATED) as archive:
@@ -75,6 +76,7 @@ def package_generative_video_colab_run(
     pilot_gate_decision = _read_json_if_exists(pilot_gate_decision_path)
     pilot_matrix_decision = _read_json_if_exists(pilot_matrix_decision_path)
     runtime_attack_decision = _read_json_if_exists(runtime_attack_decision_path)
+    runtime_detection_decision = _read_json_if_exists(runtime_detection_decision_path)
     generation_manifest = _read_json_if_exists(generation_manifest_path)
     package_manifest = {
         "artifact_id": "generative_video_colab_drive_package",
@@ -108,6 +110,9 @@ def package_generative_video_colab_run(
             "runtime_attack_decision": runtime_attack_decision.get("runtime_attack_decision"),
             "runtime_attack_record_count": runtime_attack_decision.get("runtime_attack_record_count"),
             "runtime_attack_ready_count": runtime_attack_decision.get("runtime_attack_ready_count"),
+            "runtime_detection_decision": runtime_detection_decision.get("runtime_detection_decision"),
+            "runtime_detection_record_count": runtime_detection_decision.get("runtime_detection_record_count"),
+            "runtime_detection_ready_count": runtime_detection_decision.get("runtime_detection_ready_count"),
         },
         "generation_manifest_status": "present" if generation_manifest else "missing",
     }

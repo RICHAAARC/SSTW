@@ -232,3 +232,52 @@ small_scale_pilot_claim_support_status: blocked_until_motion_threshold_calibrati
 
 该结果说明真实文件级 attack runner 与 attacked video 落盘链路已经具备工程可运行性。当前仍不应进入 full experiment, 因为 formal motion threshold 仍为 heuristic guardrail, 且 runtime attacked videos 尚未接入正式 detection / scoring 表。
 
+## 5. 2026-06-18 阶段状态更新: runtime attack 到 runtime detection 工程闭环
+
+### 5.1 当前工程闭环判定
+
+截至 `2026-06-18T15:34:39Z` 批次, 当前 Wan2.1 small-scale pilot 的工程链路已经从真实生成视频推进到 runtime attack 和 runtime detection 的完整落盘闭环:
+
+```text
+generation_records -> videos -> runtime_attack_records -> attacked_videos -> runtime_detection_records -> pilot_gate -> package_manifest
+```
+
+最新 Google Drive package 为:
+
+```text
+G:\我的云端硬盘\SSTW\packages\generative_video_model_probe\generative_video_model_probe_colab_20260618_153437_e90e82ae.zip
+G:\我的云端硬盘\SSTW\packages\generative_video_model_probe\generative_video_model_probe_colab_20260618_153437_e90e82ae_package_manifest.json
+```
+
+### 5.2 最新工程证据
+
+```text
+runtime_attack_decision: PASS
+runtime_attack_record_count: 48
+runtime_attack_ready_count: 48
+runtime_detection_decision: PASS
+runtime_detection_record_count: 48
+runtime_detection_ready_count: 48
+runtime_detection_detectable_count: 48
+runtime_detection_score_mean: 0.781174
+attacked_videos_count_in_package: 48
+small_scale_pilot_missing_requirement_count: 0
+```
+
+### 5.3 仍然不能声明的内容
+
+该闭环只说明工程层面的真实文件级 attack 和 detection 路径已经接通。当前仍不能声明 final paper claim 已成立, 原因是:
+
+```text
+pilot_gate_decision: FAIL
+claim_support_status: blocked_until_motion_threshold_calibration
+motion_threshold_source_split: heuristic_precalibration
+motion_threshold_calibration_required: true
+```
+
+因此当前项目状态应表述为:
+
+```text
+工程层面: generation / attack / detection / package 已闭合。
+claim 层面: 仍阻塞于 motion_threshold_calibration, 不得进入 final claim 或 full experiment 结论冻结。
+```

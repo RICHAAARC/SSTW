@@ -14,16 +14,31 @@ def _stable_phase_from_key(key_text: str) -> float:
     return int(digest[:8], 16) / 0xFFFFFFFF
 
 
+def _stable_seed_from_key(key_text: str) -> int:
+    """从 key 文本生成 PyTorch 可复现随机种子。
+
+    该函数属于项目特定写法。sampling-time constraint 的 positive key, wrong-key
+    control 和 without-key control 必须在高维 latent 空间中近似正交, 否则 control
+    方向会伪造正确 key 的 trajectory evidence。这里使用 SHA-256 摘要派生种子,
+    使方向可复现且不依赖运行时全局随机状态。
+    """
+    digest = sha256(key_text.encode("utf-8")).hexdigest()
+    return int(digest[:16], 16) % (2**63 - 1)
+
+
 def _deterministic_direction_like(tensor: Any, key_text: str) -> Any:
     """构造与 latent 同形状的确定性方向张量。
 
-    该函数属于项目特定写法。真实生成模型 callback 中没有显式 tubelet code 张量时, 使用 key 派生的确定性方向作为弱约束方向, 并把方向构造过程记录到 governed records。
+    该函数属于项目特定写法。真实生成模型 callback 中没有显式 tubelet code 张量时,
+    使用 key 派生的高维伪随机方向作为弱约束方向, 并把方向构造过程记录到 governed
+    records。该实现替代单一正弦相位平移, 主要原因是相位平移会让 wrong-key 与
+    correct-key 方向高度相关, 从而污染 key separation 审计。
     """
     import torch
 
-    phase = _stable_phase_from_key(key_text)
-    flat_index = torch.arange(tensor.numel(), device=tensor.device, dtype=tensor.float().dtype)
-    direction = torch.sin(flat_index * 0.017 + phase).reshape(tensor.shape)
+    generator = torch.Generator(device=tensor.device)
+    generator.manual_seed(_stable_seed_from_key(key_text))
+    direction = torch.randn(tensor.shape, device=tensor.device, dtype=tensor.float().dtype, generator=generator)
     norm = direction.norm().clamp_min(1e-8)
     return direction / norm
 
@@ -74,8 +89,10 @@ def apply_latent_sampling_constraint(
     )
     lambda_value = float(lambda_values[min(step_index, len(lambda_values) - 1)]) if lambda_values else 0.0
     before_alignment = _cosine_alignment(latents, evidence_direction)
+    application_evidence_direction_cosine = _cosine_alignment(application_direction, evidence_direction)
     before_norm = float(latents.detach().float().norm().item())
     applied = bool(enabled and admissibility_enabled and lambda_value > 0.0)
+    delta_norm = 0.0
     if applied:
         # 约束强度按 latent norm 的小比例缩放, 避免在真实生成链路中产生强制覆盖式扰动。
         norm_budget = float(constraint_config["constraint_norm_budget"])
@@ -95,6 +112,7 @@ def apply_latent_sampling_constraint(
         "wrong_key_control_enabled": wrong_key_control,
         "constraint_application_direction_status": application_direction_status,
         "constraint_evidence_direction_status": "matched_key_evidence_direction",
+        "application_evidence_direction_cosine": application_evidence_direction_cosine,
         "constraint_admissibility_enabled": admissibility_enabled,
         "lambda_schedule_id": schedule_config["lambda_schedule_id"],
         "lambda_max": float(schedule_config["lambda_max"]),
@@ -106,7 +124,8 @@ def apply_latent_sampling_constraint(
         "latent_alignment_gain": round(after_alignment - before_alignment, 6),
         "latent_norm_before_constraint": round(before_norm, 6),
         "latent_norm_after_constraint": round(after_norm, 6),
-        "latent_constraint_delta_norm": round(abs(after_norm - before_norm), 6),
+        "latent_norm_change": round(after_norm - before_norm, 6),
+        "latent_constraint_delta_norm": round(delta_norm, 6),
         **flow_record,
     }
     return constrained_latents, record

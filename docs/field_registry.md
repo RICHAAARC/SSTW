@@ -434,7 +434,7 @@ Notebook 与 repository module 的跨边界数据
 | latent_alignment_gain | metric | none | true | false | false | Alignment gain caused by one sampling-time callback update. |
 | latent_norm_before_constraint | metric | none | true | false | false | Latent norm before sampling-time callback update. |
 | latent_norm_after_constraint | metric | none | true | false | false | Latent norm after sampling-time callback update. |
-| latent_constraint_delta_norm | metric | none | true | false | false | Absolute latent norm delta after sampling-time callback update. |
+| latent_constraint_delta_norm | metric | none | true | false | false | Norm of the explicit sampling-time constraint delta vector applied in callback. |
 | flow_matching_backbone_claim_status | claim | none | true | true | false | Claim boundary status for Wan2.1 Flow Matching backbone evidence. |
 | flow_velocity_proxy_available | governance | none | true | false | false | Whether adjacent callback latent displacement is available as a flow velocity proxy. |
 | flow_velocity_proxy_source | protocol | none | true | false | false | Source used to derive flow velocity proxy records. |
@@ -548,3 +548,7 @@ Notebook 与 repository module 的跨边界数据
 | wrong_key_alignment_gain_mean | metric | none | true | false | false | Mean alignment gain for the wrong-key control variant. |
 | without_key_flow_velocity_alignment_gain_mean | metric | none | true | false | false | Mean flow velocity alignment gain for the without-key control variant. |
 | wrong_key_flow_velocity_alignment_gain_mean | metric | none | true | false | false | Mean flow velocity alignment gain for the wrong-key control variant. |
+| application_evidence_direction_cosine | metric | none | true | false | false | Cosine similarity between the constraint application direction and the matched-key evidence direction. |
+| latent_norm_change | metric | none | true | false | false | Signed change in latent norm after applying the sampling-time constraint. |
+| minimum_key_separation_gain | metric | none | true | false | false | Minimum required keyed path gain over the strongest without-key or wrong-key control. |
+| minimum_key_separation_flow_velocity_gain | metric | none | true | false | false | Minimum required keyed velocity gain over the strongest without-key or wrong-key control. |

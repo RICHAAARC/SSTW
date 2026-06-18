@@ -49,6 +49,8 @@ def test_sampling_constraint_adapter_updates_latents_on_active_step() -> None:
 
     assert record["constraint_apply_status"] == "applied"
     assert record["latent_alignment_gain"] > 0
+    assert record["latent_constraint_delta_norm"] > 0
+    assert "latent_norm_change" in record
     assert not torch.equal(latents, constrained)
 
 
@@ -57,8 +59,8 @@ def test_sampling_constraint_adapter_records_flow_velocity_proxy() -> None:
     """sampling constraint adapter 必须记录相邻 latent 位移形成的 flow velocity proxy。"""
     import torch
 
-    previous_latents = torch.zeros((1, 2, 4, 4), dtype=torch.float32)
-    latents = torch.ones((1, 2, 4, 4), dtype=torch.float32) * 0.01
+    previous_latents = torch.zeros((1, 4, 32, 32), dtype=torch.float32)
+    latents = torch.ones((1, 4, 32, 32), dtype=torch.float32) * 0.01
     constraint_config = {
         "constraint_norm_budget": 0.06,
         "constraint_key_id": "test_key",
@@ -90,8 +92,8 @@ def test_sampling_constraint_adapter_scores_controls_against_matched_key() -> No
     """without-key / wrong-key control 必须按正确 key 证据方向评分, 不能用控制方向自证增益。"""
     import torch
 
-    previous_latents = torch.zeros((1, 2, 4, 4), dtype=torch.float32)
-    latents = torch.ones((1, 2, 4, 4), dtype=torch.float32) * 0.01
+    previous_latents = torch.zeros((1, 4, 32, 32), dtype=torch.float32)
+    latents = torch.ones((1, 4, 32, 32), dtype=torch.float32) * 0.01
     constraint_config = {
         "constraint_norm_budget": 0.06,
         "constraint_key_id": "test_key",
@@ -136,8 +138,12 @@ def test_sampling_constraint_adapter_scores_controls_against_matched_key() -> No
     assert keyed_record["constraint_application_direction_status"] == "matched_key_direction"
     assert control_record["constraint_application_direction_status"] == "key_agnostic_control_direction"
     assert wrong_record["constraint_application_direction_status"] == "wrong_key_control_direction"
-    assert keyed_record["latent_alignment_gain"] > control_record["latent_alignment_gain"]
-    assert keyed_record["latent_alignment_gain"] > wrong_record["latent_alignment_gain"]
+    assert keyed_record["application_evidence_direction_cosine"] == 1.0
+    assert abs(control_record["application_evidence_direction_cosine"]) < 0.05
+    assert abs(wrong_record["application_evidence_direction_cosine"]) < 0.05
+    assert keyed_record["latent_alignment_gain"] >= 0.005
+    assert abs(control_record["latent_alignment_gain"]) < 0.001
+    assert abs(wrong_record["latent_alignment_gain"]) < 0.001
 
 
 @pytest.mark.quick

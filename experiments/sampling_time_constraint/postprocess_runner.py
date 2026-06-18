@@ -11,6 +11,9 @@ from main.protocol.flow_evidence_fields import flow_evidence_protocol_defaults
 from main.protocol.record_writer import write_json, write_jsonl
 from main.protocol.table_builder import write_csv
 
+MIN_KEY_SEPARATION_GAIN = 5e-4
+MIN_KEY_SEPARATION_FLOW_VELOCITY_GAIN = 5e-4
+
 
 def _read_json(path: Path) -> dict:
     """读取 JSON 文件, 文件不存在时返回空对象。"""
@@ -94,8 +97,8 @@ def postprocess_sampling_constraint_colab_run(run_root: str | Path) -> dict:
         gain_over_baseline > 0.0,
         flow_velocity_proxy_ready,
         flow_velocity_gain_over_baseline > 0.0,
-        key_separation_gain_over_control > 0.0,
-        key_separation_flow_velocity_gain_over_control > 0.0,
+        key_separation_gain_over_control >= MIN_KEY_SEPARATION_GAIN,
+        key_separation_flow_velocity_gain_over_control >= MIN_KEY_SEPARATION_FLOW_VELOCITY_GAIN,
         formal_ready,
     ])
     for row in rows:
@@ -126,6 +129,8 @@ def postprocess_sampling_constraint_colab_run(run_root: str | Path) -> dict:
             "wrong_key_flow_velocity_alignment_gain_mean": wrong_key_flow_velocity_gain,
             "key_separation_gain_over_control": key_separation_gain_over_control,
             "key_separation_flow_velocity_gain_over_control": key_separation_flow_velocity_gain_over_control,
+            "minimum_key_separation_gain": MIN_KEY_SEPARATION_GAIN,
+            "minimum_key_separation_flow_velocity_gain": MIN_KEY_SEPARATION_FLOW_VELOCITY_GAIN,
             "flow_velocity_gain_over_unconstrained": flow_velocity_gain_over_baseline,
             "flow_velocity_proxy_ready": flow_velocity_proxy_ready,
             "formal_quality_semantic_ready": formal_ready,

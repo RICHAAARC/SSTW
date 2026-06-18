@@ -9,6 +9,9 @@ from pathlib import Path
 from typing import Iterable
 import zipfile
 
+MIN_KEY_SEPARATION_GAIN = 5e-4
+MIN_KEY_SEPARATION_FLOW_VELOCITY_GAIN = 5e-4
+
 
 def _read_json(path: Path) -> dict:
     """读取 JSON 文件, 文件不存在时返回空对象。"""
@@ -214,9 +217,17 @@ def check_sampling_time_constraint_colab_results(run_root: str | Path) -> dict:
         missing_mechanism_requirements.append("flow_velocity_proxy_not_ready")
     if keyed_flow_velocity_gain <= baseline_flow_velocity_gain:
         missing_mechanism_requirements.append("keyed_flow_velocity_gain_not_above_baseline")
-    if key_separation_gain <= 0.0:
+    minimum_key_separation_gain = float(
+        postprocess_decision.get("details", {}).get("minimum_key_separation_gain", MIN_KEY_SEPARATION_GAIN)
+        or MIN_KEY_SEPARATION_GAIN
+    )
+    minimum_key_separation_flow_velocity_gain = float(
+        postprocess_decision.get("details", {}).get("minimum_key_separation_flow_velocity_gain", MIN_KEY_SEPARATION_FLOW_VELOCITY_GAIN)
+        or MIN_KEY_SEPARATION_FLOW_VELOCITY_GAIN
+    )
+    if key_separation_gain < minimum_key_separation_gain:
         missing_mechanism_requirements.append("keyed_gain_not_separated_from_wrong_or_without_key_control")
-    if key_separation_flow_velocity_gain <= 0.0:
+    if key_separation_flow_velocity_gain < minimum_key_separation_flow_velocity_gain:
         missing_mechanism_requirements.append("keyed_flow_velocity_gain_not_separated_from_wrong_or_without_key_control")
     if postprocess_decision.get("details", {}).get("formal_quality_semantic_ready") is not True:
         missing_mechanism_requirements.append("formal_quality_semantic_not_ready")
@@ -247,6 +258,8 @@ def check_sampling_time_constraint_colab_results(run_root: str | Path) -> dict:
         "baseline_flow_velocity_alignment_gain_mean": baseline_flow_velocity_gain,
         "key_separation_gain_over_control": key_separation_gain,
         "key_separation_flow_velocity_gain_over_control": key_separation_flow_velocity_gain,
+        "minimum_key_separation_gain": minimum_key_separation_gain,
+        "minimum_key_separation_flow_velocity_gain": minimum_key_separation_flow_velocity_gain,
         "flow_velocity_proxy_ready": flow_velocity_proxy_ready,
         "primary_flow_matching_model_ready": primary_flow_matching_model_ready,
         "formal_visual_motion_ready_count": formal_visual_motion_ready_count,

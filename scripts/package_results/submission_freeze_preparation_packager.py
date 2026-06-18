@@ -7,7 +7,14 @@ import hashlib
 import json
 from datetime import datetime, timezone
 from pathlib import Path
+import sys
 import zipfile
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+from main.protocol.package_naming import build_package_batch_id, build_package_file_stem, current_short_commit, current_utc_time_for_filename
 
 
 PACKAGE_SUBDIRS = ("records", "tables", "reports", "artifacts")
@@ -52,8 +59,12 @@ def build_submission_freeze_preparation_package(
     if not files:
         raise RuntimeError(f"没有可打包的 governed artifacts: {run_root}")
 
-    archive_path = package_dir / f"{package_name}.zip"
-    package_manifest_path = package_dir / f"{package_name}_manifest.json"
+    package_utc_time = current_utc_time_for_filename()
+    package_short_commit = current_short_commit()
+    package_batch_id = build_package_batch_id(package_utc_time, package_short_commit)
+    package_file_stem = build_package_file_stem(package_name, package_utc_time, package_short_commit)
+    archive_path = package_dir / f"{package_file_stem}.zip"
+    package_manifest_path = package_dir / f"{package_file_stem}_manifest.json"
     file_records = []
     with zipfile.ZipFile(archive_path, mode="w", compression=zipfile.ZIP_DEFLATED) as archive:
         for file_path in files:
@@ -75,6 +86,9 @@ def build_submission_freeze_preparation_package(
         "package_dir": str(package_dir),
         "archive_path": str(archive_path),
         "package_manifest_path": str(package_manifest_path),
+        "package_batch_id": package_batch_id,
+        "package_utc_time": package_utc_time,
+        "package_short_commit": package_short_commit,
         "package_file_count": len(file_records),
         "package_size_bytes": archive_path.stat().st_size,
         "package_digest": _sha256_file(archive_path),

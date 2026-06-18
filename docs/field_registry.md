@@ -534,3 +534,7 @@ Notebook 与 repository module 的跨边界数据
 | velocity_proxy_status | governance | none | true | false | false | Whether velocity or latent displacement proxy was captured. |
 | velocity_proxy_count | metric | none | true | false | false | Number of callback steps with velocity proxy records. |
 | runtime_sec | metric | none | true | false | false | Wall-clock runtime in seconds for a governed stage. |
+
+| package_batch_id | artifact | none | true | false | false | Package batch identifier in <utc_time>_<short_commit> format shared by archive and manifest files. |
+| package_utc_time | artifact | none | true | false | false | UTC timestamp token used in package file names. |
+| package_short_commit | artifact | none | true | false | false | Short Git commit token used in package file names. |

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+import re
 import zipfile
 
 import pytest
@@ -86,6 +87,10 @@ def test_generative_video_drive_packager_creates_archive_and_manifest(tmp_path: 
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     assert manifest["generation_manifest_status"] == "present"
     assert manifest["decision_summary"]["implementation_decision"] == "PASS"
+    assert re.match(r"generative_video_model_probe_colab_\d{8}_\d{6}_[a-z0-9_\-]+\.zip", archive_path.name)
+    assert manifest["package_batch_id"] == f"{manifest['package_utc_time']}_{manifest['package_short_commit']}"
+    assert archive_path.stem.endswith(manifest["package_batch_id"])
+    assert manifest_path.stem.endswith(f"{manifest['package_batch_id']}_package_manifest")
     with zipfile.ZipFile(archive_path) as archive:
         names = archive.namelist()
     assert any(name.endswith("records/generation_records.jsonl") for name in names)

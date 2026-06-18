@@ -6,7 +6,14 @@ import argparse
 import json
 from datetime import datetime, timezone
 from pathlib import Path
+import sys
 import zipfile
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+from main.protocol.package_naming import build_package_batch_id, build_package_file_stem, current_short_commit, current_utc_time_for_filename
 
 DEFAULT_DRIVE_PROJECT_ROOT = "/content/drive/MyDrive/SSTW"
 
@@ -33,9 +40,12 @@ def package_sampling_time_constraint_colab_run(run_root: str | Path, drive_packa
         raise FileNotFoundError(run_root_path)
     package_dir = Path(drive_package_dir)
     package_dir.mkdir(parents=True, exist_ok=True)
-    timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
-    archive_path = package_dir / f"{run_root_path.name}_{timestamp}.zip"
-    package_manifest_path = package_dir / f"{run_root_path.name}_{timestamp}_package_manifest.json"
+    package_utc_time = current_utc_time_for_filename()
+    package_short_commit = current_short_commit()
+    package_batch_id = build_package_batch_id(package_utc_time, package_short_commit)
+    package_file_stem = build_package_file_stem(run_root_path.name, package_utc_time, package_short_commit)
+    archive_path = package_dir / f"{package_file_stem}.zip"
+    package_manifest_path = package_dir / f"{package_file_stem}_package_manifest.json"
     runtime_decision = _read_json_if_exists(run_root_path / "artifacts" / "sampling_time_constraint_colab_runtime_decision.json")
     postprocess_decision = _read_json_if_exists(run_root_path / "artifacts" / "sampling_time_constraint_colab_postprocess_decision.json")
     formal_metric_decision = _read_json_if_exists(run_root_path / "artifacts" / "formal_quality_motion_semantic_decision.json")
@@ -55,6 +65,9 @@ def package_sampling_time_constraint_colab_run(run_root: str | Path, drive_packa
         "drive_package_dir": str(package_dir),
         "archive_path": str(archive_path),
         "package_manifest_path": str(package_manifest_path),
+        "package_batch_id": package_batch_id,
+        "package_utc_time": package_utc_time,
+        "package_short_commit": package_short_commit,
         "include_videos": include_videos,
         "input_paths": [str(run_root_path)],
         "output_paths": [str(archive_path), str(package_manifest_path)],

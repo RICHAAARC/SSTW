@@ -23,6 +23,22 @@ def _read_jsonl(path: Path) -> list[dict]:
     return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
 
 
+def _latest_package_manifest(package_dir: Path) -> Path:
+    """返回最新 submission freeze package manifest。
+
+    该函数属于通用工程写法。package 文件名包含 UTC 时间和短 commit 后,
+    readiness summary 不能再依赖固定文件名, 必须按 manifest 修改时间选择最新批次。
+    """
+    candidates = sorted(
+        package_dir.glob("submission_freeze_preparation_package_*_manifest.json"),
+        key=lambda path: path.stat().st_mtime,
+        reverse=True,
+    )
+    if candidates:
+        return candidates[0]
+    return package_dir / "submission_freeze_preparation_package_manifest.json"
+
+
 def _claim_rows(claim_records: list[dict]) -> list[dict]:
     """把 claim audit records 转换为面向审稿准备的扁平 summary rows。"""
     rows: list[dict] = []
@@ -58,7 +74,7 @@ def build_submission_readiness_summary(run_root: str | Path) -> dict:
     run_root = Path(run_root)
     claim_records = _read_jsonl(run_root / "records" / "claim_audit_records.jsonl")
     decision = _read_json(run_root / "artifacts" / "submission_freeze_preparation_decision.json")
-    package_manifest = _read_json(run_root / "packages" / "submission_freeze_preparation_package_manifest.json")
+    package_manifest = _read_json(_latest_package_manifest(run_root / "packages"))
     rows = _claim_rows(claim_records)
 
     main_text_ready_claim_count = sum(1 for row in rows if row["readiness_bucket"] == "main_text_ready")

@@ -15,8 +15,9 @@ from main.protocol.table_builder import write_csv
 CALIBRATED_MOTION_THRESHOLD_ID = "motion_delta_calibrated_v1"
 HEURISTIC_MOTION_THRESHOLD_ID = "motion_delta_heuristic_v1"
 DEFAULT_TARGET_STATIC_FPR = 0.01
-DEFAULT_MIN_NEGATIVE_STATIC_COUNT = 8
-DEFAULT_MIN_POSITIVE_MOTION_COUNT = 8
+DEFAULT_MIN_NEGATIVE_STATIC_COUNT = 128
+DEFAULT_MIN_POSITIVE_MOTION_COUNT = 64
+DEFAULT_MIN_AMBIGUOUS_LOW_MOTION_COUNT = 32
 DEFAULT_MARGIN = 0.000001
 
 
@@ -119,6 +120,7 @@ def audit_motion_threshold_calibration(
     target_static_fpr: float = DEFAULT_TARGET_STATIC_FPR,
     min_negative_static_count: int = DEFAULT_MIN_NEGATIVE_STATIC_COUNT,
     min_positive_motion_count: int = DEFAULT_MIN_POSITIVE_MOTION_COUNT,
+    min_ambiguous_low_motion_count: int = DEFAULT_MIN_AMBIGUOUS_LOW_MOTION_COUNT,
     margin: float = DEFAULT_MARGIN,
 ) -> dict:
     """根据 calibration records 生成 threshold artifact 与 calibration decision。"""
@@ -133,13 +135,21 @@ def audit_motion_threshold_calibration(
         if record.get("motion_calibration_role") == "positive_motion"
         and record.get("motion_calibration_source_split") == "calibration"
     ]
+    ambiguous_low_motion_records = [
+        record for record in usable_records
+        if record.get("motion_calibration_role") == "ambiguous_low_motion"
+        and record.get("motion_calibration_source_split") == "calibration"
+    ]
     negative_scores = [float(record["motion_delta_score"]) for record in negative_static_records]
     positive_scores = [float(record["motion_delta_score"]) for record in positive_motion_records]
+    ambiguous_scores = [float(record["motion_delta_score"]) for record in ambiguous_low_motion_records]
     missing_reasons: list[str] = []
     if len(negative_static_records) < min_negative_static_count:
         missing_reasons.append("negative_static_calibration_count_below_min")
     if len(positive_motion_records) < min_positive_motion_count:
         missing_reasons.append("positive_motion_calibration_count_below_min")
+    if len(ambiguous_low_motion_records) < min_ambiguous_low_motion_count:
+        missing_reasons.append("ambiguous_low_motion_calibration_count_below_min")
     if not negative_scores:
         threshold_value = MOTION_DELTA_MIN
         threshold_id = HEURISTIC_MOTION_THRESHOLD_ID
@@ -165,15 +175,19 @@ def audit_motion_threshold_calibration(
         "estimated_static_fpr": round(estimated_static_fpr, 6),
         "negative_static_calibration_count": len(negative_static_records),
         "positive_motion_calibration_count": len(positive_motion_records),
+        "ambiguous_low_motion_calibration_count": len(ambiguous_low_motion_records),
         "usable_motion_calibration_record_count": len(usable_records),
         "motion_calibration_record_count": len(records),
         "negative_static_motion_delta_max": round(max(negative_scores), 6) if negative_scores else None,
         "negative_static_motion_delta_mean": round(mean(negative_scores), 6) if negative_scores else None,
         "positive_motion_delta_min": round(min(positive_scores), 6) if positive_scores else None,
         "positive_motion_delta_mean": round(mean(positive_scores), 6) if positive_scores else None,
+        "ambiguous_low_motion_delta_min": round(min(ambiguous_scores), 6) if ambiguous_scores else None,
+        "ambiguous_low_motion_delta_mean": round(mean(ambiguous_scores), 6) if ambiguous_scores else None,
         "positive_motion_pass_rate_at_threshold": round(positive_pass_rate, 6),
         "minimum_negative_static_calibration_count": min_negative_static_count,
         "minimum_positive_motion_calibration_count": min_positive_motion_count,
+        "minimum_ambiguous_low_motion_calibration_count": min_ambiguous_low_motion_count,
         "motion_threshold_calibration_missing_reasons": missing_reasons,
         "motion_threshold_calibration_required": not calibration_ready,
         "test_time_threshold_update_blocked": True,
@@ -186,6 +200,7 @@ def run_motion_threshold_calibration(
     target_static_fpr: float = DEFAULT_TARGET_STATIC_FPR,
     min_negative_static_count: int = DEFAULT_MIN_NEGATIVE_STATIC_COUNT,
     min_positive_motion_count: int = DEFAULT_MIN_POSITIVE_MOTION_COUNT,
+    min_ambiguous_low_motion_count: int = DEFAULT_MIN_AMBIGUOUS_LOW_MOTION_COUNT,
 ) -> dict:
     """执行 motion threshold calibration 并写出 governed records / threshold / report。"""
     run_root = Path(run_root)
@@ -195,6 +210,7 @@ def run_motion_threshold_calibration(
         target_static_fpr=target_static_fpr,
         min_negative_static_count=min_negative_static_count,
         min_positive_motion_count=min_positive_motion_count,
+        min_ambiguous_low_motion_count=min_ambiguous_low_motion_count,
     )
     write_jsonl(run_root / "records" / "motion_threshold_calibration_records.jsonl", records)
     write_csv(run_root / "tables" / "motion_threshold_calibration_table.csv", records)
@@ -210,6 +226,7 @@ def run_motion_threshold_calibration(
         f"- motion_threshold_source_split: {audit['motion_threshold_source_split']}\n"
         f"- negative_static_calibration_count: {audit['negative_static_calibration_count']}\n"
         f"- positive_motion_calibration_count: {audit['positive_motion_calibration_count']}\n"
+        f"- ambiguous_low_motion_calibration_count: {audit['ambiguous_low_motion_calibration_count']}\n"
         f"- missing_reasons: {', '.join(audit['motion_threshold_calibration_missing_reasons']) if audit['motion_threshold_calibration_missing_reasons'] else 'none'}\n"
         f"- claim_support_status: {audit['claim_support_status']}\n"
     )
@@ -225,12 +242,14 @@ def main() -> None:
     parser.add_argument("--target-static-fpr", type=float, default=DEFAULT_TARGET_STATIC_FPR)
     parser.add_argument("--min-negative-static-count", type=int, default=DEFAULT_MIN_NEGATIVE_STATIC_COUNT)
     parser.add_argument("--min-positive-motion-count", type=int, default=DEFAULT_MIN_POSITIVE_MOTION_COUNT)
+    parser.add_argument("--min-ambiguous-low-motion-count", type=int, default=DEFAULT_MIN_AMBIGUOUS_LOW_MOTION_COUNT)
     args = parser.parse_args()
     payload = run_motion_threshold_calibration(
         args.run_root,
         target_static_fpr=args.target_static_fpr,
         min_negative_static_count=args.min_negative_static_count,
         min_positive_motion_count=args.min_positive_motion_count,
+        min_ambiguous_low_motion_count=args.min_ambiguous_low_motion_count,
     )
     print(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True))
 

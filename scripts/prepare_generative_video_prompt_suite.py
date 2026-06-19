@@ -82,14 +82,108 @@ SEED_ITEMS = [
 ]
 
 
+MOTION_CALIBRATION_SEED_ITEMS = [
+    {"seed_id": f"seed_motion_calib_{index:02d}", "seed_value": 1001 + index * 37, "prompt_suite_role": "motion_calibration"}
+    for index in range(8)
+]
+
+
+def _build_motion_calibration_prompts() -> list[dict]:
+    """构造 motion threshold calibration 专用 prompt split。
+
+    该函数属于项目特定写法。它通过 16 个 negative_static prompt、8 个 positive_motion prompt 和
+    4 个 ambiguous_low_motion prompt, 配合 8 个 calibration seed, 形成 128 / 64 / 32 的校准规模。
+    这些样本只允许用于 threshold calibration, 不得与 pilot main 或 evaluation split 混用。
+    """
+    prompts: list[dict] = []
+    negative_templates = [
+        "A still life photo of a ceramic mug on a wooden desk with no camera movement and stable lighting.",
+        "A stationary book rests on a clean table while the camera remains completely fixed.",
+        "A quiet indoor plant stands beside a window with no visible motion in the scene.",
+        "A framed picture hangs on a plain wall with a locked-off camera and constant illumination.",
+        "A bowl of fruit sits motionless on a kitchen counter under soft light.",
+        "A small toy house remains still on a shelf with no camera pan or zoom.",
+        "A pair of shoes is placed on a floor mat in a static shot with no movement.",
+        "A white candle stands unlit on a table while the scene stays completely still.",
+        "A folded towel lies on a chair in a fixed-camera static composition.",
+        "A glass bottle stands on a windowsill with stable lighting and no object motion.",
+        "A notebook and pencil rest on a desk in a motionless close-up shot.",
+        "A decorative vase remains still on a side table with no camera motion.",
+        "A plush bear sits on a sofa in a static shot with no movement.",
+        "A closed laptop rests on a table with stable exposure and no motion.",
+        "A chess board remains motionless under a fixed overhead camera.",
+        "A wall clock is shown as a still object with no visible hand movement and no camera motion.",
+    ]
+    positive_templates = [
+        "A small red toy car moves smoothly from left to right across a wooden table.",
+        "A blue cube rotates continuously on a turntable under steady lighting.",
+        "Several yellow leaves fall gently in front of a park bench with a fixed camera.",
+        "Clear water pours from a glass pitcher into a cup on a kitchen counter.",
+        "A toy robot walks slowly across a clean desk from right to left.",
+        "A ball rolls diagonally across a flat floor while the camera remains fixed.",
+        "A paper airplane glides across the frame in a simple indoor scene.",
+        "A hand waves a small flag from side to side with smooth periodic motion.",
+    ]
+    ambiguous_templates = [
+        "A flower stem sways very slightly in a weak indoor breeze while the camera remains fixed.",
+        "A small object rotates extremely slowly on a turntable with subtle visible motion.",
+        "A camera performs a barely perceptible slow zoom toward a static ceramic figurine.",
+        "Soft shadows shift subtly across a still table scene with very low apparent motion.",
+    ]
+    for index, prompt_text in enumerate(negative_templates):
+        prompts.append({
+            "prompt_id": f"motion_calib_negative_static_{index:02d}",
+            "prompt_text": prompt_text,
+            "prompt_negative_text": "motion blur, camera shake, object movement, flicker, jitter, distorted",
+            "prompt_category": "motion_threshold_calibration",
+            "motion_pattern_id": "negative_static",
+            "prompt_suite_role": "motion_calibration_negative_static",
+            "motion_calibration_role": "negative_static",
+            "split": "calibration",
+        })
+    for index, prompt_text in enumerate(positive_templates):
+        prompts.append({
+            "prompt_id": f"motion_calib_positive_motion_{index:02d}",
+            "prompt_text": prompt_text,
+            "prompt_negative_text": "static image, frozen frame, no motion, flicker, jitter, distorted",
+            "prompt_category": "motion_threshold_calibration",
+            "motion_pattern_id": "positive_motion",
+            "prompt_suite_role": "motion_calibration_positive_motion",
+            "motion_calibration_role": "positive_motion",
+            "split": "calibration",
+        })
+    for index, prompt_text in enumerate(ambiguous_templates):
+        prompts.append({
+            "prompt_id": f"motion_calib_ambiguous_low_motion_{index:02d}",
+            "prompt_text": prompt_text,
+            "prompt_negative_text": "large motion, fast camera movement, heavy flicker, jitter, distorted",
+            "prompt_category": "motion_threshold_calibration",
+            "motion_pattern_id": "ambiguous_low_motion",
+            "prompt_suite_role": "motion_calibration_ambiguous_low_motion",
+            "motion_calibration_role": "ambiguous_low_motion",
+            "split": "calibration",
+        })
+    return prompts
+
+
 def build_prompt_suite() -> dict:
     """构造独立于测试运行的 prompt suite, 便于 Colab 重复使用。"""
     suite = {
         "prompt_suite_id": "generative_video_probe_prompt_suite_v1",
         "dataset_construction_status": "constructed",
         "dataset_source": "repository_deterministic_prompt_seed_spec",
-        "prompts": PROMPT_ITEMS,
-        "seeds": SEED_ITEMS,
+        "motion_calibration_design": {
+            "negative_static_prompt_count": 16,
+            "positive_motion_prompt_count": 8,
+            "ambiguous_low_motion_prompt_count": 4,
+            "motion_calibration_seed_count": 8,
+            "negative_static_target_video_count": 128,
+            "positive_motion_target_video_count": 64,
+            "ambiguous_low_motion_target_video_count": 32,
+            "split": "calibration"
+        },
+        "prompts": PROMPT_ITEMS + _build_motion_calibration_prompts(),
+        "seeds": SEED_ITEMS + MOTION_CALIBRATION_SEED_ITEMS,
     }
     payload = json.dumps(suite, ensure_ascii=False, sort_keys=True).encode("utf-8")
     suite["prompt_suite_digest"] = sha256(payload).hexdigest()

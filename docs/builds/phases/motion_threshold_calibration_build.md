@@ -182,3 +182,77 @@ positive_motion calibration records >= 8  # 工程最小门槛
 ```
 
 若目标是支撑论文级 `TPR@FPR=0.01`, negative static / negative low-motion tail 应扩大到 1000+ 样本级别, 而不是使用当前 16 条 pilot main records。
+
+## 4. 2026-06-19 calibration split 设计落地
+
+### 4.1 目标规模
+
+已按以下设计更新工程配置:
+
+```text
+negative_static: 128 videos
+positive_motion: 64 videos
+ambiguous_low_motion: 32 videos
+total: 224 videos
+```
+
+具体实现采用:
+
+```text
+16 negative_static prompts x 8 calibration seeds = 128
+8 positive_motion prompts x 8 calibration seeds = 64
+4 ambiguous_low_motion prompts x 8 calibration seeds = 32
+```
+
+### 4.2 新增 profile
+
+`colab_runtime` 已新增独立 profile:
+
+```text
+PROFILE = motion_calibration
+```
+
+该 profile 只选择:
+
+```text
+prompt_suite_role in {
+  motion_calibration_negative_static,
+  motion_calibration_positive_motion,
+  motion_calibration_ambiguous_low_motion
+}
+seed prompt_suite_role = motion_calibration
+split = calibration
+```
+
+这保证 calibration threshold 不会混入 pilot main 或 evaluation split。
+
+### 4.3 calibration runner 通过门槛
+
+`motion_threshold_calibration` 的默认通过门槛已升级为:
+
+```text
+minimum_negative_static_calibration_count: 128
+minimum_positive_motion_calibration_count: 64
+minimum_ambiguous_low_motion_calibration_count: 32
+```
+
+只有满足上述最小样本量并生成 `motion_delta_calibrated_v1` threshold artifact 后, small-scale pilot gate 才能解除 `blocked_until_motion_threshold_calibration`。
+
+### 4.4 当前状态边界
+
+当前变更完成的是工程设计与入口闭合, 不是已经完成 224 个 Wan2.1 GPU calibration 视频生成。下一步需要在 Colab 中切换:
+
+```text
+PROFILE = 'motion_calibration'
+```
+
+然后依次运行:
+
+```text
+prepare prompt suite
+run Wan2.1 generation
+run formal metrics
+run motion_threshold_calibration
+write small-scale claim pilot gate
+package to Google Drive
+```

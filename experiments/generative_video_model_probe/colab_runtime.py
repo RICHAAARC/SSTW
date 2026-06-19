@@ -23,6 +23,21 @@ PROFILE_SETTINGS = {
     "recommended": {"prompt_limit": 2, "seed_limit": 2, "num_inference_steps": 16, "num_frames": 49, "height": 320, "width": 512, "run_cross_model": True},
     "pilot": {"prompt_limit": 8, "seed_limit": 2, "num_inference_steps": 16, "num_frames": 49, "height": 320, "width": 512, "run_cross_model": False},
     "extended": {"prompt_limit": 3, "seed_limit": 3, "num_inference_steps": 24, "num_frames": 65, "height": 384, "width": 640, "run_cross_model": True},
+    "motion_calibration": {
+        "prompt_limit": None,
+        "seed_limit": None,
+        "num_inference_steps": 16,
+        "num_frames": 49,
+        "height": 320,
+        "width": 512,
+        "run_cross_model": False,
+        "prompt_suite_roles": [
+            "motion_calibration_negative_static",
+            "motion_calibration_positive_motion",
+            "motion_calibration_ambiguous_low_motion",
+        ],
+        "seed_suite_roles": ["motion_calibration"],
+    },
 }
 
 
@@ -106,11 +121,22 @@ def _sha256_file(path: Path) -> str:
     return digest.hexdigest()
 
 
+def _select_profile_items(items: list[dict], limit: int | None, allowed_roles: list[str] | None = None) -> list[dict]:
+    """根据 profile 选择 prompt 或 seed。
+
+    通用工程写法是先按显式 role 过滤, 再按 limit 截断。项目特定写法是让 motion_calibration profile
+    只读取 calibration split, 防止 calibration 阈值使用 pilot main 或 evaluation 样本。
+    """
+    allowed_role_set = set(allowed_roles or [])
+    selected = [item for item in items if not allowed_role_set or item.get("prompt_suite_role") in allowed_role_set]
+    return selected if limit is None else selected[:limit]
+
+
 def _build_generation_plan(prompt_suite: dict, profile: str, model_id: str, cross_model_id: str | None) -> list[dict]:
     """根据 profile 构建主模型与可选跨模型运行计划。"""
     settings = PROFILE_SETTINGS[profile]
-    prompts = prompt_suite["prompts"][: settings["prompt_limit"]]
-    seeds = prompt_suite["seeds"][: settings["seed_limit"]]
+    prompts = _select_profile_items(prompt_suite["prompts"], settings["prompt_limit"], settings.get("prompt_suite_roles"))
+    seeds = _select_profile_items(prompt_suite["seeds"], settings["seed_limit"], settings.get("seed_suite_roles"))
     model_items = [{"generation_model_id": model_id, "cross_model_role": "main_generation_model"}]
     if settings["run_cross_model"] and cross_model_id:
         model_items.append({"generation_model_id": cross_model_id, "cross_model_role": "cross_model_validation_model"})
@@ -118,7 +144,10 @@ def _build_generation_plan(prompt_suite: dict, profile: str, model_id: str, cros
     for model_item in model_items:
         for prompt in prompts:
             for seed in seeds:
-                plan.append({**model_item, **prompt, **seed})
+                item = {**model_item, **prompt, **seed}
+                item["prompt_suite_role"] = prompt.get("prompt_suite_role")
+                item["seed_suite_role"] = seed.get("prompt_suite_role")
+                plan.append(item)
     return plan
 
 
@@ -205,7 +234,10 @@ def run_colab_probe(output_root: str | Path, prompt_suite_path: str | Path, prof
             "prompt_text_hash": sha256(item["prompt_text"].encode("utf-8")).hexdigest()[:16],
             "prompt_category": item["prompt_category"],
             "prompt_suite_role": item["prompt_suite_role"],
+            "seed_suite_role": item.get("seed_suite_role"),
             "motion_pattern_id": item["motion_pattern_id"],
+            "motion_calibration_role": item.get("motion_calibration_role"),
+            "split": item.get("split", "main"),
             "seed_id": item["seed_id"],
             "scheduler_id": _scheduler_id_for_model(item["generation_model_id"]),
             "trajectory_scheduler_id": _scheduler_id_for_model(item["generation_model_id"]),

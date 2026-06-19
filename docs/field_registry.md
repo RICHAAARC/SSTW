@@ -640,3 +640,13 @@ Notebook 与 repository module 的跨边界数据
 | motion_calibration_record_failure_reason | governance | none | true | false | false | Failure reason for a motion calibration record. |
 | previous_motion_threshold_id | protocol | none | true | false | false | Previous motion threshold identifier before calibration. |
 | previous_motion_delta_threshold | metric | none | true | false | false | Previous heuristic motion delta threshold before calibration. |
+
+| ambiguous_low_motion_calibration_count | metric | none | true | false | false | Number of ambiguous low-motion calibration records used for threshold sanity analysis. |
+| ambiguous_low_motion_delta_min | metric | none | true | false | false | Minimum motion delta score among ambiguous low-motion calibration records. |
+| ambiguous_low_motion_delta_mean | metric | none | true | false | false | Mean motion delta score among ambiguous low-motion calibration records. |
+| minimum_ambiguous_low_motion_calibration_count | protocol | none | true | false | false | Minimum required ambiguous low-motion calibration record count. |
+| motion_calibration_design | protocol | none | true | false | false | Design counts for motion threshold calibration prompt and seed split. |
+| negative_static_target_video_count | protocol | none | true | false | false | Target negative static video count for motion calibration design. |
+| positive_motion_target_video_count | protocol | none | true | false | false | Target positive motion video count for motion calibration design. |
+| ambiguous_low_motion_target_video_count | protocol | none | true | false | false | Target ambiguous low-motion video count for motion calibration design. |
+| seed_suite_role | protocol | none | true | false | false | Seed role preserved separately from prompt_suite_role in generation plans. |

@@ -12,7 +12,7 @@ from experiments.generative_video_model_probe.pilot_claim_gate import build_smal
 from main.protocol.record_writer import write_json, write_jsonl
 
 
-def _write_formal_motion_records(run_root: Path, negative_count: int, positive_count: int, source_split: str = "calibration") -> None:
+def _write_formal_motion_records(run_root: Path, negative_count: int, positive_count: int, ambiguous_count: int = 0, source_split: str = "calibration") -> None:
     """写出轻量 formal motion records, 用于验证 calibration 阶段而不依赖真实视频解码。"""
     generation_rows = []
     formal_rows = []
@@ -59,6 +59,28 @@ def _write_formal_motion_records(run_root: Path, negative_count: int, positive_c
             "temporal_flicker_score": 0.02,
             "split": source_split,
         })
+    for index in range(ambiguous_count):
+        generation_rows.append({
+            "generation_model_id": "model",
+            "prompt_id": f"ambiguous_{index}",
+            "seed_id": "seed",
+            "generation_status": "success",
+            "prompt_suite_role": "calibration_ambiguous_low_motion" if source_split == "calibration" else "main",
+            "motion_pattern_id": "ambiguous_low_motion",
+            "motion_calibration_role": "ambiguous_low_motion",
+            "split": source_split,
+            "trajectory_trace_id": f"trace_ambiguous_{index}",
+        })
+        formal_rows.append({
+            "generation_model_id": "model",
+            "prompt_id": f"ambiguous_{index}",
+            "seed_id": "seed",
+            "trajectory_trace_id": f"trace_ambiguous_{index}",
+            "video_decode_status": "ready",
+            "motion_delta_score": 0.0002 + index * 0.000002,
+            "temporal_flicker_score": 0.015,
+            "split": source_split,
+        })
     write_jsonl(run_root / "records" / "generation_records.jsonl", generation_rows)
     write_jsonl(run_root / "records" / "formal_quality_motion_semantic_records.jsonl", formal_rows)
 
@@ -67,7 +89,7 @@ def _write_formal_motion_records(run_root: Path, negative_count: int, positive_c
 def test_motion_threshold_calibration_reports_insufficient_without_calibration_split(tmp_path: Path) -> None:
     """没有独立 calibration split 时, calibration runner 必须继续阻塞 claim。"""
     run_root = tmp_path / "run"
-    _write_formal_motion_records(run_root, negative_count=2, positive_count=4, source_split="pilot_main")
+    _write_formal_motion_records(run_root, negative_count=2, positive_count=4, ambiguous_count=1, source_split="pilot_main")
 
     audit = run_motion_threshold_calibration(run_root)
     records = [json.loads(line) for line in (run_root / "records" / "motion_threshold_calibration_records.jsonl").read_text(encoding="utf-8").splitlines()]
@@ -78,6 +100,7 @@ def test_motion_threshold_calibration_reports_insufficient_without_calibration_s
     assert audit["motion_threshold_source_split"] == "heuristic_precalibration"
     assert audit["motion_threshold_calibration_required"] is True
     assert "negative_static_calibration_count_below_min" in audit["motion_threshold_calibration_missing_reasons"]
+    assert "ambiguous_low_motion_calibration_count_below_min" in audit["motion_threshold_calibration_missing_reasons"]
     assert records
     assert (run_root / "tables" / "motion_threshold_calibration_table.csv").exists()
     assert (run_root / "thresholds" / "motion_threshold_calibration_threshold.json").exists()
@@ -89,7 +112,7 @@ def test_motion_threshold_calibration_reports_insufficient_without_calibration_s
 def test_motion_threshold_calibration_passes_with_governed_calibration_split(tmp_path: Path) -> None:
     """样本角色和 calibration split 足够时, runner 才能冻结 calibrated threshold。"""
     run_root = tmp_path / "run"
-    _write_formal_motion_records(run_root, negative_count=8, positive_count=8, source_split="calibration")
+    _write_formal_motion_records(run_root, negative_count=128, positive_count=64, ambiguous_count=32, source_split="calibration")
 
     audit = run_motion_threshold_calibration(run_root)
 
@@ -97,8 +120,9 @@ def test_motion_threshold_calibration_passes_with_governed_calibration_split(tmp
     assert audit["motion_threshold_calibration_ready"] is True
     assert audit["motion_threshold_id"] == "motion_delta_calibrated_v1"
     assert audit["motion_threshold_source_split"] == "calibration"
-    assert audit["negative_static_calibration_count"] == 8
-    assert audit["positive_motion_calibration_count"] == 8
+    assert audit["negative_static_calibration_count"] == 128
+    assert audit["positive_motion_calibration_count"] == 64
+    assert audit["ambiguous_low_motion_calibration_count"] == 32
     assert audit["motion_threshold_calibration_required"] is False
     assert audit["test_time_threshold_update_blocked"] is True
     assert audit["claim_support_status"] == "motion_threshold_calibrated"

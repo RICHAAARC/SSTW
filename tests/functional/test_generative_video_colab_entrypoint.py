@@ -10,6 +10,7 @@ import zipfile
 import pytest
 
 from paper_workflow.notebook_utils.generative_video_model_probe_workflow import build_drive_layout
+from experiments.generative_video_model_probe.colab_runtime import _build_generation_plan
 from scripts.package_results.generative_video_drive_packager import package_generative_video_colab_run
 from scripts.prepare_generative_video_prompt_suite import write_prompt_suite
 from main.protocol.record_writer import write_json, write_jsonl
@@ -34,6 +35,38 @@ def test_prepare_generative_video_prompt_suite_is_separate_from_runtime(tmp_path
 
 
 @pytest.mark.quick
+def test_motion_calibration_prompt_suite_has_target_design(tmp_path: Path) -> None:
+    """motion calibration prompt suite 必须展开为 128 / 64 / 32 的目标规模。"""
+    output_root = tmp_path / "prompt_suite"
+    summary = write_prompt_suite(output_root)
+    suite = json.loads(Path(summary["prompt_suite_path"]).read_text(encoding="utf-8"))
+    prompts = suite["prompts"]
+    seeds = suite["seeds"]
+
+    negative_prompts = [item for item in prompts if item.get("motion_calibration_role") == "negative_static"]
+    positive_prompts = [item for item in prompts if item.get("motion_calibration_role") == "positive_motion"]
+    ambiguous_prompts = [item for item in prompts if item.get("motion_calibration_role") == "ambiguous_low_motion"]
+    calibration_seeds = [item for item in seeds if item.get("prompt_suite_role") == "motion_calibration"]
+    plan = _build_generation_plan(suite, "motion_calibration", "Wan-AI/Wan2.1-T2V-1.3B-Diffusers", None)
+
+    assert len(negative_prompts) == 16
+    assert len(positive_prompts) == 8
+    assert len(ambiguous_prompts) == 4
+    assert len(calibration_seeds) == 8
+    assert len(plan) == 224
+    assert sum(1 for item in plan if item["motion_calibration_role"] == "negative_static") == 128
+    assert sum(1 for item in plan if item["motion_calibration_role"] == "positive_motion") == 64
+    assert sum(1 for item in plan if item["motion_calibration_role"] == "ambiguous_low_motion") == 32
+    assert {item["split"] for item in plan} == {"calibration"}
+    assert {item["seed_suite_role"] for item in plan} == {"motion_calibration"}
+    assert {item["prompt_suite_role"] for item in plan} == {
+        "motion_calibration_negative_static",
+        "motion_calibration_positive_motion",
+        "motion_calibration_ambiguous_low_motion",
+    }
+
+
+@pytest.mark.quick
 def test_generative_video_colab_notebook_calls_repository_modules() -> None:
     """Notebook 只能作为入口, 必须调用仓库脚本或 experiments 模块生成正式输出。"""
     notebook_path = Path("paper_workflow/colab_utils/generative_video_model_probe_colab.ipynb")
@@ -50,6 +83,7 @@ def test_generative_video_colab_notebook_calls_repository_modules() -> None:
     assert "PROFILE = 'pilot'" in source
     assert "MODEL_ID = 'Wan-AI/Wan2.1-T2V-1.3B-Diffusers'" in source
     assert "build_formal_metric_command" in source
+    assert "motion_calibration" in source
     assert "build_motion_threshold_calibration_command" in source
     assert "build_mechanism_postprocess_command" in source
     assert "build_pilot_matrix_postprocess_command" in source

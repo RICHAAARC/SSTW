@@ -311,3 +311,39 @@ claim 层面: small_scale_claim_pilot_gate 仍为 FAIL, 阻塞原因仍是 motio
 ```
 
 该状态是预期的治理结果, 因为当前 16 条 pilot main records 不能替代独立 calibration split。
+
+## 7. 2026-06-19 阶段状态更新: motion calibration profile 已按 128/64/32 设计落地
+
+### 7.1 已完成的工程变更
+
+当前仓库已支持独立 motion calibration split:
+
+```text
+PROFILE = motion_calibration
+negative_static: 128 videos
+positive_motion: 64 videos
+ambiguous_low_motion: 32 videos
+```
+
+实现方式为:
+
+```text
+16 negative_static prompts x 8 seeds
+8 positive_motion prompts x 8 seeds
+4 ambiguous_low_motion prompts x 8 seeds
+```
+
+### 7.2 当前仍未完成的工作
+
+该状态不表示 calibration 已经通过。它表示 Colab 冷启动流程现在可以生成正确规模和正确 split 标记的 calibration records。
+
+真正通过仍需要执行真实 Wan2.1 GPU run, 并得到:
+
+```text
+motion_threshold_calibration_decision: PASS
+motion_threshold_id: motion_delta_calibrated_v1
+motion_threshold_source_split: calibration
+motion_threshold_calibration_required: false
+```
+
+在该结果出现前, 当前 small-scale claim pilot 仍应保持 blocked。

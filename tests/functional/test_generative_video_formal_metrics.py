@@ -123,7 +123,66 @@ def test_formal_metric_runner_reports_motion_gate_blocking_reason(tmp_path: Path
     assert audit["formal_motion_consistency_blocked_count"] == 1
     assert records[0]["formal_metric_blocking_reason"] == "formal_motion_consistency_not_ready"
     assert records[0]["motion_consistency_failure_reason"] == "motion_delta_below_min"
+    assert records[0]["motion_claim_role"] == "positive_motion"
+    assert records[0]["formal_motion_gate_policy"] == "positive_motion_requires_min_delta"
     assert records[0]["formal_semantic_consistency_ready"] is True
+
+
+@pytest.mark.quick
+def test_formal_metric_runner_allows_low_motion_for_negative_static_boundary(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """negative_static 样本太静止是预期现象, 不应阻断 formal motion gate。"""
+    run_root = tmp_path / "generative_video_model_probe_colab"
+    dataset_root = tmp_path / "datasets" / "generative_video_prompt_suite"
+    prompt_suite_path = dataset_root / "prompt_seed_suite.json"
+    video_path = run_root / "videos" / "static.mp4"
+    _write_low_motion_video(video_path)
+    digest = hashlib.sha256(video_path.read_bytes()).hexdigest()
+    write_json(prompt_suite_path, {
+        "prompts": [{
+            "prompt_id": "static_prompt",
+            "prompt_text": "A candle remains completely still on a table.",
+            "motion_calibration_role": "negative_static",
+            "prompt_suite_role": "motion_calibration_negative_static",
+        }],
+    })
+    write_jsonl(run_root / "records" / "generation_records.jsonl", [{
+        "generation_model_id": "model",
+        "prompt_id": "static_prompt",
+        "seed_id": "seed",
+        "generation_status": "success",
+        "video_path": str(video_path),
+        "video_sha256": digest,
+        "trajectory_trace_id": "trace_0000",
+        "motion_calibration_role": "negative_static",
+        "prompt_suite_role": "motion_calibration_negative_static",
+    }])
+
+    def fake_clip_metric(video_path: Path, prompt_text: str, model_id: str, frame_limit: int) -> dict:
+        return {
+            "semantic_metric_name": "clip_text_video_similarity",
+            "semantic_model_id": model_id,
+            "semantic_metric_status": "ready",
+            "semantic_metric_failure_reason": "none",
+            "semantic_consistency_score": 0.31,
+            "semantic_consistency_mean_score": 0.31,
+            "semantic_consistency_max_score": 0.31,
+            "semantic_sampled_frame_count": frame_limit,
+            "semantic_frame_limit": frame_limit,
+            "semantic_metric_device": "cpu",
+        }
+
+    monkeypatch.setattr(formal_metric_runner, "compute_clip_text_video_similarity", fake_clip_metric)
+
+    audit = run_formal_metric_audit(run_root, prompt_suite_path=prompt_suite_path)
+    records = read_jsonl(run_root / "records" / "formal_quality_motion_semantic_records.jsonl")
+
+    assert audit["formal_metric_claim_status"] == "ready"
+    assert audit["formal_motion_consistency_blocked_count"] == 0
+    assert records[0]["motion_consistency_failure_reason"] == "motion_delta_below_min"
+    assert records[0]["motion_claim_role"] == "negative_static"
+    assert records[0]["formal_motion_consistency_ready"] is True
+    assert records[0]["formal_motion_gate_policy"] == "low_motion_allowed_for_boundary_role"
+    assert records[0]["low_motion_expected_for_role"] is True
 
 
 @pytest.mark.quick

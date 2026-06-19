@@ -7,12 +7,19 @@ from pathlib import Path
 import pytest
 
 from tools.harness.run_all_audits import run_all_audits
+from tools.harness.lib.file_scanner import should_skip_path
 
 
 @pytest.mark.constraint
 def test_project_contract_exists() -> None:
     """项目契约必须存在, 作为所有修改前置依据。"""
     assert Path(".codex/project_contract.md").exists()
+
+
+@pytest.mark.constraint
+def test_external_agent_context_directory_is_not_governed_source() -> None:
+    """.agents 是外部 agent 上下文目录, 不应进入项目正式命名审计。"""
+    assert should_skip_path(Path(".agents"))
 
 
 @pytest.mark.constraint

@@ -387,6 +387,10 @@ Notebook 与 repository module 的跨边界数据
 | motion_consistency_failure_reason | governance | none | true | false | false | Explicit motion consistency gate failure reason for generated video file metrics. |
 | formal_visual_quality_ready | governance | none | true | false | false | Whether formal video file visual quality metric is ready. |
 | formal_motion_consistency_ready | governance | none | true | false | false | Whether formal video file motion consistency metric is ready. |
+| motion_claim_role | protocol | none | true | false | false | Role-aware motion claim category used by formal motion gate. |
+| formal_motion_gate_policy | governance | none | true | false | false | Role-aware policy used to interpret file-level motion metric. |
+| formal_motion_gate_failure_reason | governance | none | true | false | false | Role-aware failure reason emitted by formal motion gate. |
+| low_motion_expected_for_role | governance | none | true | false | false | Whether low motion is expected for the sample role and should not block boundary evidence. |
 | semantic_model_id | metric | none | true | false | false | CLIP or VLM model identifier used for formal semantic consistency metric. |
 | semantic_prompt_source | artifact | none | true | false | false | Prompt suite path or source status used by formal semantic metric. |
 | semantic_consistency_mean_score | metric | none | true | false | false | Mean CLIP text-video similarity across sampled frames. |
@@ -628,6 +632,17 @@ Notebook 与 repository module 的跨边界数据
 | motion_calibration_record_count | metric | none | true | false | false | Total number of motion calibration records emitted. |
 | negative_static_motion_delta_max | metric | none | true | false | false | Maximum motion delta score among negative static calibration records. |
 | negative_static_motion_delta_mean | metric | none | true | false | false | Mean motion delta score among negative static calibration records. |
+| conservative_motion_delta_threshold | metric | none | true | false | false | Conservative max-negative-tail motion threshold retained for audit comparison. |
+| motion_threshold_selection_strategy | protocol | none | true | false | false | Strategy used to select the primary motion threshold. |
+| estimated_static_fpr_including_contaminated | metric | none | true | false | false | Estimated static FPR before excluding suspected negative static contamination. |
+| negative_static_contamination_status | governance | none | true | false | false | Whether negative static calibration tail contains suspected high-motion contamination. |
+| negative_static_contamination_rule | protocol | none | true | false | false | Rule used to identify suspected high-motion negative static contamination. |
+| negative_static_contamination_cutoff | metric | none | true | false | false | Motion delta cutoff used for suspected negative static contamination. |
+| negative_static_contamination_count | metric | none | true | false | false | Count of suspected contaminated negative static calibration records. |
+| negative_static_contaminated_prompt_count | metric | none | true | false | false | Count of prompts contributing suspected contaminated negative static records. |
+| negative_static_clean_calibration_count | metric | none | true | false | false | Count of negative static calibration records after excluding suspected contamination. |
+| negative_static_clean_motion_delta_max | metric | none | true | false | false | Maximum motion delta among clean negative static calibration records. |
+| negative_static_contaminated_motion_delta_min | metric | none | true | false | false | Minimum motion delta among suspected contaminated negative static records. |
 | positive_motion_delta_min | metric | none | true | false | false | Minimum motion delta score among positive motion calibration records. |
 | positive_motion_delta_mean | metric | none | true | false | false | Mean motion delta score among positive motion calibration records. |
 | positive_motion_pass_rate_at_threshold | metric | none | true | false | false | Positive motion pass rate under the calibrated or fallback motion threshold. |

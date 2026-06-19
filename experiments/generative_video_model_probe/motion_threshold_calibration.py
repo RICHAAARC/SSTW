@@ -19,6 +19,7 @@ DEFAULT_MIN_NEGATIVE_STATIC_COUNT = 128
 DEFAULT_MIN_POSITIVE_MOTION_COUNT = 64
 DEFAULT_MIN_AMBIGUOUS_LOW_MOTION_COUNT = 32
 DEFAULT_MARGIN = 0.000001
+NEGATIVE_STATIC_CONTAMINATION_IQR_MULTIPLIER = 3.0
 
 
 def _read_jsonl(path: Path) -> list[dict]:
@@ -115,6 +116,48 @@ def _select_threshold_from_negative_tail(scores: list[float], target_static_fpr:
     return round(max(scores) + margin, 6)
 
 
+def _quantile(sorted_scores: list[float], fraction: float) -> float:
+    """从已排序分数中取近似分位数。
+
+    该函数属于通用工程写法。这里使用确定性的 nearest-rank 近似, 避免为了轻量
+    calibration runner 引入额外数值依赖。
+    """
+    if not sorted_scores:
+        raise ValueError("missing_scores")
+    index = round((len(sorted_scores) - 1) * fraction)
+    return sorted_scores[int(index)]
+
+
+def _negative_static_contamination_cutoff(scores: list[float]) -> float | None:
+    """估计 negative_static 中的异常高运动污染阈值。
+
+    该实现属于项目特定写法。negative_static 的职责是估计静止负样本尾部, 如果其中
+    少量样本出现明显高运动, 这些样本应进入 contamination audit, 不应直接把主阈值抬高。
+    """
+    if len(scores) < 4:
+        return None
+    sorted_scores = sorted(scores)
+    q1 = _quantile(sorted_scores, 0.25)
+    q3 = _quantile(sorted_scores, 0.75)
+    iqr = max(q3 - q1, 0.0)
+    return round(max(MOTION_DELTA_MIN, q3 + NEGATIVE_STATIC_CONTAMINATION_IQR_MULTIPLIER * iqr), 6)
+
+
+def _split_negative_static_records(records: list[dict]) -> tuple[list[dict], list[dict], float | None]:
+    """把 negative_static records 分为 clean tail 和疑似污染 tail。
+
+    通用工程写法是先计算阈值再分组。项目特定写法是只把异常高运动的静止负样本隔离,
+    低运动静止样本仍然保留为有效 calibration evidence。
+    """
+    scores = [float(record["motion_delta_score"]) for record in records]
+    cutoff = _negative_static_contamination_cutoff(scores)
+    if cutoff is None:
+        return records, [], None
+    clean_records = [record for record in records if float(record["motion_delta_score"]) <= cutoff]
+    contaminated_records = [record for record in records if float(record["motion_delta_score"]) > cutoff]
+    return clean_records, contaminated_records, cutoff
+
+
 def audit_motion_threshold_calibration(
     records: list[dict],
     target_static_fpr: float = DEFAULT_TARGET_STATIC_FPR,
@@ -140,7 +183,10 @@ def audit_motion_threshold_calibration(
         if record.get("motion_calibration_role") == "ambiguous_low_motion"
         and record.get("motion_calibration_source_split") == "calibration"
     ]
+    clean_negative_static_records, contaminated_negative_static_records, contamination_cutoff = _split_negative_static_records(negative_static_records)
     negative_scores = [float(record["motion_delta_score"]) for record in negative_static_records]
+    clean_negative_scores = [float(record["motion_delta_score"]) for record in clean_negative_static_records]
+    contaminated_negative_scores = [float(record["motion_delta_score"]) for record in contaminated_negative_static_records]
     positive_scores = [float(record["motion_delta_score"]) for record in positive_motion_records]
     ambiguous_scores = [float(record["motion_delta_score"]) for record in ambiguous_low_motion_records]
     missing_reasons: list[str] = []
@@ -150,16 +196,19 @@ def audit_motion_threshold_calibration(
         missing_reasons.append("positive_motion_calibration_count_below_min")
     if len(ambiguous_low_motion_records) < min_ambiguous_low_motion_count:
         missing_reasons.append("ambiguous_low_motion_calibration_count_below_min")
-    if not negative_scores:
+    if not clean_negative_scores:
         threshold_value = MOTION_DELTA_MIN
         threshold_id = HEURISTIC_MOTION_THRESHOLD_ID
         threshold_source_split = "heuristic_precalibration"
     else:
-        threshold_value = _select_threshold_from_negative_tail(negative_scores, target_static_fpr, margin)
+        threshold_value = _select_threshold_from_negative_tail(clean_negative_scores, target_static_fpr, margin)
         threshold_id = CALIBRATED_MOTION_THRESHOLD_ID
         threshold_source_split = "calibration"
-    false_positive_count = sum(1 for score in negative_scores if score >= threshold_value)
-    estimated_static_fpr = 0.0 if not negative_scores else false_positive_count / len(negative_scores)
+    conservative_threshold_value = _select_threshold_from_negative_tail(negative_scores, target_static_fpr, margin) if negative_scores else MOTION_DELTA_MIN
+    false_positive_count = sum(1 for score in clean_negative_scores if score >= threshold_value)
+    estimated_static_fpr = 0.0 if not clean_negative_scores else false_positive_count / len(clean_negative_scores)
+    false_positive_count_including_contaminated = sum(1 for score in negative_scores if score >= threshold_value)
+    estimated_static_fpr_including_contaminated = 0.0 if not negative_scores else false_positive_count_including_contaminated / len(negative_scores)
     positive_pass_count = sum(1 for score in positive_scores if score >= threshold_value)
     positive_pass_rate = 0.0 if not positive_scores else positive_pass_count / len(positive_scores)
     calibration_ready = not missing_reasons and threshold_id == CALIBRATED_MOTION_THRESHOLD_ID and estimated_static_fpr <= target_static_fpr
@@ -169,10 +218,19 @@ def audit_motion_threshold_calibration(
         "motion_threshold_calibration_ready": calibration_ready,
         "motion_threshold_id": threshold_id,
         "motion_delta_threshold": threshold_value,
+        "conservative_motion_delta_threshold": conservative_threshold_value,
         "motion_threshold_source_split": threshold_source_split,
         "threshold_source_split": threshold_source_split,
+        "motion_threshold_selection_strategy": "robust_negative_tail_excluding_contamination" if contaminated_negative_static_records else "negative_tail_max_plus_margin",
         "target_static_fpr": target_static_fpr,
         "estimated_static_fpr": round(estimated_static_fpr, 6),
+        "estimated_static_fpr_including_contaminated": round(estimated_static_fpr_including_contaminated, 6),
+        "negative_static_contamination_status": "suspected" if contaminated_negative_static_records else "none_detected",
+        "negative_static_contamination_rule": "q3_plus_3iqr",
+        "negative_static_contamination_cutoff": contamination_cutoff,
+        "negative_static_contamination_count": len(contaminated_negative_static_records),
+        "negative_static_contaminated_prompt_count": len({record.get("prompt_id") for record in contaminated_negative_static_records}),
+        "negative_static_clean_calibration_count": len(clean_negative_static_records),
         "negative_static_calibration_count": len(negative_static_records),
         "positive_motion_calibration_count": len(positive_motion_records),
         "ambiguous_low_motion_calibration_count": len(ambiguous_low_motion_records),
@@ -180,6 +238,8 @@ def audit_motion_threshold_calibration(
         "motion_calibration_record_count": len(records),
         "negative_static_motion_delta_max": round(max(negative_scores), 6) if negative_scores else None,
         "negative_static_motion_delta_mean": round(mean(negative_scores), 6) if negative_scores else None,
+        "negative_static_clean_motion_delta_max": round(max(clean_negative_scores), 6) if clean_negative_scores else None,
+        "negative_static_contaminated_motion_delta_min": round(min(contaminated_negative_scores), 6) if contaminated_negative_scores else None,
         "positive_motion_delta_min": round(min(positive_scores), 6) if positive_scores else None,
         "positive_motion_delta_mean": round(mean(positive_scores), 6) if positive_scores else None,
         "ambiguous_low_motion_delta_min": round(min(ambiguous_scores), 6) if ambiguous_scores else None,
@@ -223,6 +283,10 @@ def run_motion_threshold_calibration(
         f"- motion_threshold_calibration_decision: {audit['motion_threshold_calibration_decision']}\n"
         f"- motion_threshold_id: {audit['motion_threshold_id']}\n"
         f"- motion_delta_threshold: {audit['motion_delta_threshold']}\n"
+        f"- conservative_motion_delta_threshold: {audit['conservative_motion_delta_threshold']}\n"
+        f"- motion_threshold_selection_strategy: {audit['motion_threshold_selection_strategy']}\n"
+        f"- negative_static_contamination_status: {audit['negative_static_contamination_status']}\n"
+        f"- negative_static_contamination_count: {audit['negative_static_contamination_count']}\n"
         f"- motion_threshold_source_split: {audit['motion_threshold_source_split']}\n"
         f"- negative_static_calibration_count: {audit['negative_static_calibration_count']}\n"
         f"- positive_motion_calibration_count: {audit['positive_motion_calibration_count']}\n"

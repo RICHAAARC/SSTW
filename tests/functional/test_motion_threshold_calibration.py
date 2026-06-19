@@ -126,6 +126,98 @@ def test_motion_threshold_calibration_passes_with_governed_calibration_split(tmp
     assert audit["motion_threshold_calibration_required"] is False
     assert audit["test_time_threshold_update_blocked"] is True
     assert audit["claim_support_status"] == "motion_threshold_calibrated"
+    assert audit["negative_static_contamination_status"] == "none_detected"
+    assert audit["motion_threshold_selection_strategy"] == "negative_tail_max_plus_margin"
+
+
+@pytest.mark.quick
+def test_motion_threshold_calibration_isolates_contaminated_negative_tail(tmp_path: Path) -> None:
+    """异常高运动的 negative_static 只进入污染审计, 不直接抬高主阈值。"""
+    run_root = tmp_path / "run"
+    generation_rows = []
+    formal_rows = []
+
+    for index in range(128):
+        score = 0.001 + index * 0.00001
+        if index >= 120:
+            score = 0.02 + (index - 120) * 0.001
+        generation_rows.append({
+            "generation_model_id": "model",
+            "prompt_id": f"static_{index}",
+            "seed_id": "seed",
+            "generation_status": "success",
+            "prompt_suite_role": "motion_calibration_negative_static",
+            "motion_calibration_role": "negative_static",
+            "split": "calibration",
+            "trajectory_trace_id": f"trace_static_{index}",
+        })
+        formal_rows.append({
+            "generation_model_id": "model",
+            "prompt_id": f"static_{index}",
+            "seed_id": "seed",
+            "trajectory_trace_id": f"trace_static_{index}",
+            "video_decode_status": "ready",
+            "motion_delta_score": score,
+            "temporal_flicker_score": 0.01,
+            "split": "calibration",
+        })
+
+    for index in range(64):
+        generation_rows.append({
+            "generation_model_id": "model",
+            "prompt_id": f"motion_{index}",
+            "seed_id": "seed",
+            "generation_status": "success",
+            "prompt_suite_role": "motion_calibration_positive_motion",
+            "motion_calibration_role": "positive_motion",
+            "split": "calibration",
+            "trajectory_trace_id": f"trace_motion_{index}",
+        })
+        formal_rows.append({
+            "generation_model_id": "model",
+            "prompt_id": f"motion_{index}",
+            "seed_id": "seed",
+            "trajectory_trace_id": f"trace_motion_{index}",
+            "video_decode_status": "ready",
+            "motion_delta_score": 0.004 + index * 0.00001,
+            "temporal_flicker_score": 0.01,
+            "split": "calibration",
+        })
+
+    for index in range(32):
+        generation_rows.append({
+            "generation_model_id": "model",
+            "prompt_id": f"ambiguous_{index}",
+            "seed_id": "seed",
+            "generation_status": "success",
+            "prompt_suite_role": "motion_calibration_ambiguous_low_motion",
+            "motion_calibration_role": "ambiguous_low_motion",
+            "split": "calibration",
+            "trajectory_trace_id": f"trace_ambiguous_{index}",
+        })
+        formal_rows.append({
+            "generation_model_id": "model",
+            "prompt_id": f"ambiguous_{index}",
+            "seed_id": "seed",
+            "trajectory_trace_id": f"trace_ambiguous_{index}",
+            "video_decode_status": "ready",
+            "motion_delta_score": 0.0006 + index * 0.000005,
+            "temporal_flicker_score": 0.01,
+            "split": "calibration",
+        })
+
+    write_jsonl(run_root / "records" / "generation_records.jsonl", generation_rows)
+    write_jsonl(run_root / "records" / "formal_quality_motion_semantic_records.jsonl", formal_rows)
+
+    audit = run_motion_threshold_calibration(run_root)
+
+    assert audit["motion_threshold_calibration_decision"] == "PASS"
+    assert audit["negative_static_contamination_status"] == "suspected"
+    assert audit["negative_static_contamination_count"] == 8
+    assert audit["negative_static_clean_calibration_count"] == 120
+    assert audit["motion_threshold_selection_strategy"] == "robust_negative_tail_excluding_contamination"
+    assert audit["motion_delta_threshold"] < audit["conservative_motion_delta_threshold"]
+    assert audit["positive_motion_pass_rate_at_threshold"] == 1.0
 
 
 @pytest.mark.quick

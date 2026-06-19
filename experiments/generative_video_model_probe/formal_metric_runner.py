@@ -78,18 +78,71 @@ def _resolve_prompt_suite_path(run_root: Path, prompt_suite_path: str | Path | N
     return None
 
 
-def _load_prompt_texts(prompt_suite_path: Path | None) -> tuple[dict[str, str], str]:
-    """读取 prompt_id 到 prompt_text 的映射, 同时返回 prompt 来源状态。"""
+def _load_prompt_metadata(prompt_suite_path: Path | None) -> tuple[dict[str, dict], str]:
+    """读取 prompt 元数据, 同时返回 prompt suite 来源状态。
+
+    该函数属于通用工程写法。调用方不只需要 prompt_text 做语义 metric, 还需要
+    motion_calibration_role 判断样本在 formal motion gate 中的职责。
+    """
     if prompt_suite_path is None:
         return {}, "prompt_suite_missing"
     payload = _read_json(prompt_suite_path)
     prompts = payload.get("prompts", [])
-    prompt_texts = {
-        str(item.get("prompt_id")): str(item.get("prompt_text"))
+    prompt_metadata = {
+        str(item.get("prompt_id")): dict(item)
         for item in prompts
-        if item.get("prompt_id") and item.get("prompt_text")
+        if item.get("prompt_id")
     }
-    return prompt_texts, str(prompt_suite_path)
+    return prompt_metadata, str(prompt_suite_path)
+
+
+def _infer_motion_claim_role(generation_record: dict, prompt_metadata: dict) -> str:
+    """推断 formal motion gate 中样本承担的运动职责。
+
+    通用工程写法是优先读取显式字段。项目特定写法是把 calibration 中的
+    negative_static 和 ambiguous_low_motion 视为负样本或边界样本, 它们允许低运动,
+    但不能用来支撑正向 trajectory / velocity claim。
+    """
+    for source in (generation_record, prompt_metadata):
+        role = source.get("motion_calibration_role")
+        if role:
+            return str(role)
+    prompt_suite_role = str(generation_record.get("prompt_suite_role") or prompt_metadata.get("prompt_suite_role") or "")
+    if "negative_static" in prompt_suite_role:
+        return "negative_static"
+    if "ambiguous_low_motion" in prompt_suite_role:
+        return "ambiguous_low_motion"
+    if "positive_motion" in prompt_suite_role:
+        return "positive_motion"
+    return "positive_motion"
+
+
+def _role_aware_motion_gate(metrics: dict, motion_claim_role: str) -> dict:
+    """根据样本角色解释文件级 motion metric。
+
+    对 positive_motion, 低运动会阻断正向 motion claim。对 negative_static 和
+    ambiguous_low_motion, 低运动是预期现象, 不应阻断 formal metric；但高闪烁仍会阻断,
+    因为高闪烁表示视频文件本身不稳定, 不能作为可靠边界样本。
+    """
+    raw_status = metrics.get("motion_consistency_metric_status")
+    raw_reason = str(metrics.get("motion_consistency_failure_reason") or "none")
+    low_motion_expected = motion_claim_role in {"negative_static", "ambiguous_low_motion"}
+    reason_parts = set(part for part in raw_reason.split(";") if part and part != "none")
+    only_low_motion_failure = reason_parts == {"motion_delta_below_min"}
+    if low_motion_expected and only_low_motion_failure:
+        return {
+            "formal_motion_consistency_ready": True,
+            "formal_motion_gate_policy": "low_motion_allowed_for_boundary_role",
+            "formal_motion_gate_failure_reason": "none",
+            "low_motion_expected_for_role": True,
+        }
+    ready = raw_status == "ready"
+    return {
+        "formal_motion_consistency_ready": ready,
+        "formal_motion_gate_policy": "positive_motion_requires_min_delta" if not low_motion_expected else "boundary_role_blocks_only_non_low_motion_failures",
+        "formal_motion_gate_failure_reason": "none" if ready else raw_reason,
+        "low_motion_expected_for_role": low_motion_expected,
+    }
 
 
 def _build_disabled_semantic_metrics(model_id: str, frame_limit: int, reason: str) -> dict:
@@ -148,15 +201,18 @@ def build_formal_metric_records(
     run_root = Path(run_root)
     generation_records = _read_jsonl(run_root / "records" / "generation_records.jsonl")
     resolved_prompt_suite_path = _resolve_prompt_suite_path(run_root, prompt_suite_path)
-    prompt_texts, semantic_prompt_source = _load_prompt_texts(resolved_prompt_suite_path)
+    prompt_metadata_by_id, semantic_prompt_source = _load_prompt_metadata(resolved_prompt_suite_path)
     records: list[dict] = []
     for generation_record in generation_records:
         video_path = _resolve_video_path(run_root, generation_record)
         metrics = compute_video_file_metrics(video_path)
         visual_ready = metrics.get("visual_quality_metric_status") == "ready"
-        motion_ready = metrics.get("motion_consistency_metric_status") == "ready"
         prompt_id = str(generation_record.get("prompt_id") or "")
-        prompt_text = prompt_texts.get(prompt_id, "")
+        prompt_metadata = prompt_metadata_by_id.get(prompt_id, {})
+        prompt_text = str(prompt_metadata.get("prompt_text") or "")
+        motion_claim_role = _infer_motion_claim_role(generation_record, prompt_metadata)
+        motion_gate = _role_aware_motion_gate(metrics, motion_claim_role)
+        motion_ready = motion_gate["formal_motion_consistency_ready"]
         if not enable_semantic_metric:
             semantic_metrics = _build_disabled_semantic_metrics(semantic_model_id, semantic_frame_limit, "semantic_metric_disabled")
         elif not prompt_text:
@@ -182,12 +238,13 @@ def build_formal_metric_records(
             "prompt_id": generation_record.get("prompt_id"),
             "seed_id": generation_record.get("seed_id"),
             "trajectory_trace_id": generation_record.get("trajectory_trace_id"),
+            "motion_claim_role": motion_claim_role,
             "video_path": str(video_path),
             "video_decode_status": metrics.get("video_decode_status"),
             "video_metric_failure_reason": metrics.get("video_metric_failure_reason"),
             **{key: value for key, value in metrics.items() if key not in {"video_decode_status", "video_metric_failure_reason"}},
             "formal_visual_quality_ready": visual_ready,
-            "formal_motion_consistency_ready": motion_ready,
+            **motion_gate,
             "semantic_prompt_source": semantic_prompt_source,
             "semantic_consistency_threshold": semantic_consistency_threshold,
             **semantic_metrics,

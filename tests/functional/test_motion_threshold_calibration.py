@@ -221,6 +221,94 @@ def test_motion_threshold_calibration_isolates_contaminated_negative_tail(tmp_pa
 
 
 @pytest.mark.quick
+def test_motion_threshold_calibration_fails_when_positive_motion_not_separable(tmp_path: Path) -> None:
+    """当 positive_motion 与 negative_static 分数重叠时, calibration 不能被误判为 PASS。"""
+    run_root = tmp_path / "run"
+    generation_rows = []
+    formal_rows = []
+
+    for index in range(128):
+        generation_rows.append({
+            "generation_model_id": "model",
+            "prompt_id": f"static_{index}",
+            "seed_id": "seed",
+            "generation_status": "success",
+            "prompt_suite_role": "motion_calibration_negative_static",
+            "motion_calibration_role": "negative_static",
+            "split": "calibration",
+            "trajectory_trace_id": f"trace_static_{index}",
+        })
+        formal_rows.append({
+            "generation_model_id": "model",
+            "prompt_id": f"static_{index}",
+            "seed_id": "seed",
+            "trajectory_trace_id": f"trace_static_{index}",
+            "video_decode_status": "ready",
+            "motion_delta_score": 0.001 + index * 0.00007,
+            "temporal_flicker_score": 0.01,
+            "split": "calibration",
+        })
+
+    for index in range(64):
+        generation_rows.append({
+            "generation_model_id": "model",
+            "prompt_id": f"motion_{index}",
+            "seed_id": "seed",
+            "generation_status": "success",
+            "prompt_suite_role": "motion_calibration_positive_motion",
+            "motion_calibration_role": "positive_motion",
+            "split": "calibration",
+            "trajectory_trace_id": f"trace_motion_{index}",
+        })
+        score = 0.0015 + index * 0.00003
+        formal_rows.append({
+            "generation_model_id": "model",
+            "prompt_id": f"motion_{index}",
+            "seed_id": "seed",
+            "trajectory_trace_id": f"trace_motion_{index}",
+            "video_decode_status": "ready",
+            "motion_delta_score": score,
+            "temporal_flicker_score": 0.01,
+            "split": "calibration",
+        })
+
+    for index in range(32):
+        generation_rows.append({
+            "generation_model_id": "model",
+            "prompt_id": f"ambiguous_{index}",
+            "seed_id": "seed",
+            "generation_status": "success",
+            "prompt_suite_role": "motion_calibration_ambiguous_low_motion",
+            "motion_calibration_role": "ambiguous_low_motion",
+            "split": "calibration",
+            "trajectory_trace_id": f"trace_ambiguous_{index}",
+        })
+        formal_rows.append({
+            "generation_model_id": "model",
+            "prompt_id": f"ambiguous_{index}",
+            "seed_id": "seed",
+            "trajectory_trace_id": f"trace_ambiguous_{index}",
+            "video_decode_status": "ready",
+            "motion_delta_score": 0.0004 + index * 0.000002,
+            "temporal_flicker_score": 0.01,
+            "split": "calibration",
+        })
+
+    write_jsonl(run_root / "records" / "generation_records.jsonl", generation_rows)
+    write_jsonl(run_root / "records" / "formal_quality_motion_semantic_records.jsonl", formal_rows)
+
+    audit = run_motion_threshold_calibration(run_root)
+
+    assert audit["motion_threshold_calibration_decision"] == "FAIL_NOT_SEPARABLE"
+    assert audit["motion_threshold_calibration_ready"] is False
+    assert audit["motion_threshold_calibration_required"] is True
+    assert audit["claim_support_status"] == "blocked_until_motion_threshold_calibration"
+    assert "positive_motion_pass_rate_below_min" in audit["motion_threshold_calibration_missing_reasons"]
+    assert "positive_negative_motion_score_overlap" in audit["motion_threshold_calibration_missing_reasons"]
+    assert audit["positive_motion_pass_rate_at_threshold"] < audit["minimum_positive_motion_pass_rate_at_threshold"]
+
+
+@pytest.mark.quick
 def test_pilot_gate_unblocks_only_when_motion_calibration_passes(tmp_path: Path) -> None:
     """pilot gate 只有在 motion calibration artifact PASS 后才允许 claim_support_status 进入 supported。"""
     run_root = tmp_path / "run"

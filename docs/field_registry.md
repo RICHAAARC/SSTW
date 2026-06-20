@@ -646,6 +646,9 @@ Notebook 与 repository module 的跨边界数据
 | positive_motion_delta_min | metric | none | true | false | false | Minimum motion delta score among positive motion calibration records. |
 | positive_motion_delta_mean | metric | none | true | false | false | Mean motion delta score among positive motion calibration records. |
 | positive_motion_pass_rate_at_threshold | metric | none | true | false | false | Positive motion pass rate under the calibrated or fallback motion threshold. |
+| minimum_positive_motion_pass_rate_at_threshold | protocol | none | true | false | false | Motion calibration 中 positive_motion 在冻结阈值下的最低通过率要求。 |
+| positive_negative_motion_delta_margin | metric | none | true | false | false | positive_motion 最小 motion_delta 与 clean negative_static 最大 motion_delta 的间隔。 |
+| motion_threshold_calibration_recommended_action | governance | none | true | false | false | motion calibration 未通过时建议执行的下一步动作。 |
 | minimum_negative_static_calibration_count | protocol | none | true | false | false | Minimum required negative static calibration record count. |
 | minimum_positive_motion_calibration_count | protocol | none | true | false | false | Minimum required positive motion calibration record count. |
 | motion_threshold_calibration_missing_reasons | governance | none | true | false | false | Missing reasons blocking formal motion threshold calibration. |

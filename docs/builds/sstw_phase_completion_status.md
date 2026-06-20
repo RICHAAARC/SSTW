@@ -23,7 +23,7 @@
 | `sampling_time_constraint_probe` | `structure_ready / mechanism_ready / protocol_ready / artifact_ready` | Wan2.1 recommended profile、constraint records、postprocess checker、Drive package | 已完成机制前置验证, 下一步进入 small-scale claim pilot。 |
 | `small_scale_claim_pilot_gate` | `structure_ready / protocol_ready / external_validation_required` | sampling-time recommended 已通过, generative probe 与 checker 入口已存在 | 运行 pilot split, 验证 attack、negative family、wrong-sampler replay 与 fixed-FPR path marginal gain。 |
 | `generative_video_model_probe` | `structure_ready / protocol_ready / external_validation_required` | generative probe runner、external baseline runner、Colab 入口 | 仅在 pilot gate 通过后进入 full experiment。 |
-| `motion_threshold_calibration` | `structure_planned / protocol_required / external_validation_required` | 当前 formal motion gate 已显式记录 heuristic threshold 与阻塞原因 | 使用独立 calibration split 统计测算并冻结 motion threshold。 |
+| `motion_threshold_calibration` | `structure_ready / separability_gate_required / external_validation_required` | runner、records、threshold artifact、128/64/32 profile 与 FAIL_NOT_SEPARABLE gate 已落地 | 重跑独立 calibration split, 验证 positive_motion_pass_rate_at_threshold 与 positive_negative_motion_delta_margin。 |
 | `replay_and_authenticated_sketch_gate` | `structure_ready` | digest、manifest、trajectory trace 基础模块 | 补齐 authenticated sketch、replay uncertainty、wrong prompt replay 与 checker。 |
 | `submission_package_freeze` | `structure_ready / artifact_ready` | submission freeze runner、main tables、readiness summary | 等待 pilot / full experiment governed records 后再冻结最终 artifacts。 |
 
@@ -347,3 +347,51 @@ motion_threshold_calibration_required: false
 ```
 
 在该结果出现前, 当前 small-scale claim pilot 仍应保持 blocked。
+
+
+## 8. 2026-06-20 阶段状态更新: motion calibration 可分性 gate 已修复
+
+### 8.1 修复原因
+
+最新 calibration 结果曾出现:
+
+```text
+positive_motion_pass_rate_at_threshold = 0.1875
+```
+
+该结果表示多数 `positive_motion` 样本在冻结阈值下无法通过。若仍把该结果判定为 `PASS`, 会导致后续 small-scale claim pilot 建立在不可分的 motion gate 上。
+
+### 8.2 已完成的工程修复
+
+已将 motion calibration 从“只检查样本数量与静止 FPR”升级为“同时检查正负样本可分性”。新增硬门槛为:
+
+```text
+minimum_positive_motion_pass_rate_at_threshold: 0.80
+positive_negative_motion_delta_margin > 0
+```
+
+当样本数量充足但分数不可分时, runner 现在输出:
+
+```text
+motion_threshold_calibration_decision: FAIL_NOT_SEPARABLE
+claim_support_status: blocked_until_motion_threshold_calibration
+motion_threshold_calibration_required: true
+```
+
+### 8.3 当前推进状态
+
+```text
+工程层面: motion calibration runner 与 prompt suite 已修复。
+统计层面: 需要重跑真实 Wan2.1 motion_calibration split。
+claim 层面: 在 PASS 出现前, small-scale claim pilot 仍不应解除阻塞。
+```
+
+### 8.4 下一步最小重跑范围
+
+```text
+prepare prompt suite
+Wan2.1 generation with PROFILE = motion_calibration
+formal_metric_runner
+motion_threshold_calibration
+package_outputs
+```

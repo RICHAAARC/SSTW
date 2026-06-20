@@ -1,202 +1,36 @@
 # motion_threshold_calibration 分阶段构建流程
 
-本文档记录 `motion_threshold_calibration` 阶段的构建流程与当前完成情况。该阶段用于把当前 pilot 中的 heuristic motion gate 升级为可审计、可冻结、可复现的 calibrated motion threshold。本文档不直接支撑论文最终 claim。
+本文档记录 `motion_threshold_calibration` 阶段的目标、工程入口、通过条件和当前修复状态。该阶段的职责是把早期 heuristic motion gate 升级为可审计、可冻结、可复现的 calibrated motion threshold。
 
-## 1. 本阶段构建流程
+## 1. 阶段目标
 
-### 1.1 阶段目标
-
-该阶段的目标是为 formal motion gate 建立统计校准流程。当前 `motion_delta_threshold = 0.0005` 仅作为 pilot 阶段的 heuristic guardrail, 用于阻止明显低运动视频支撑 motion-related claim。它尚未通过大量 positive / negative / ambiguous 样本统计测算, 因此不能作为最终论文级 motion threshold。
-
-### 1.2 输入样本分组
-
-建议至少区分以下分组:
+该阶段用于回答一个具体问题:
 
 ```text
-positive_dynamic: 明确应具有可见运动的视频
-negative_static: 明确静态或近似静态的视频
-ambiguous_low_motion: 慢速旋转、微弱镜头运动、低纹理运动等边界视频
-failure_cases: pilot 中被 heuristic gate 阻塞的样本
+当前 motion_delta_score 是否能够把静止负样本与真实运动正样本稳定区分开。
 ```
 
-### 1.3 建议样本规模
+因此它不能只检查样本数量, 还必须检查分数可分性。若 `positive_motion` 在冻结阈值下大面积无法通过, 则说明当前 prompt 设计、生成结果或 motion metric 不足以支撑后续 motion-related claim。
 
-small-scale calibration 建议优先采用:
+## 2. 样本分组
+
+当前工程约定使用 3 类 calibration split:
 
 ```text
-positive_dynamic: 64
-negative_static: 128
-ambiguous_low_motion: 32
-total: 224 videos
+negative_static: 明确静止或近似静止的视频, 用于估计静止负样本尾部。
+positive_motion: 明确应具有可见运动的视频, 用于验证阈值不会误伤真实运动样本。
+ambiguous_low_motion: 低运动或边界运动视频, 用于审计边界行为, 不直接抬高 positive claim。
 ```
 
-该规模用于判断当前 heuristic threshold 是否明显过严或过松, 不能替代 full experiment 的论文级 threshold calibration。若要支撑最终 `TPR@FPR=0.01`, negative split 应扩大到 `1000+`, 更稳妥为 `2000-3000`。
-
-### 1.4 阈值冻结原则
-
-正式实验必须遵循:
+推荐的最小工程规模为:
 
 ```text
-calibration split -> threshold artifact -> frozen threshold -> evaluation split
+negative_static: 128+
+positive_motion: 64+
+ambiguous_low_motion: 32+
 ```
 
-禁止在 evaluation split 或每次生成后动态重算阈值。若需要重新校准, 必须生成新的 `threshold_id`, 不能覆盖旧阈值。
-
-### 1.5 必须记录字段
-
-后续实现时应至少记录:
-
-```text
-threshold_id
-threshold_source_split
-threshold_value
-target_fpr
-test_time_threshold_update_blocked
-motion_delta_threshold
-temporal_flicker_threshold
-calibration_negative_count
-calibration_positive_count
-calibration_ambiguous_count
-calibration_commit
-```
-
-其中 `test_time_threshold_update_blocked` 必须为 `true`, 以防止 evaluation records 反向参与阈值选择。
-
-### 1.6 通过标准
-
-```text
-threshold_source_split 指向独立 calibration split
-negative_static tail 未膨胀
-empirical FPR <= target_fpr
-positive_dynamic recall 不发生不可接受下降
-ambiguous_low_motion 行为可解释
-threshold artifact 可由 records 重建
-```
-
-## 2. 当前阶段完成情况
-
-### 2.1 当前阶段判定
-
-`motion_threshold_calibration` 当前判定为:
-
-```text
-structure_planned / protocol_required / external_validation_required
-```
-
-该阶段尚未运行。当前代码中的 `motion_delta_threshold = 0.0005` 仅作为:
-
-```text
-threshold_id: motion_delta_heuristic_v1
-threshold_source_split: heuristic_precalibration
-usage: pilot_guardrail
-```
-
-### 2.2 对当前 pilot 的影响
-
-当前 small-scale pilot 可以继续推进 attack matrix、negative family、wrong-sampler replay、path marginal gain 和 replay uncertainty 等步骤。但所有涉及 formal motion claim 的结论必须保留以下限制:
-
-```text
-formal motion gate currently uses heuristic_precalibration threshold.
-calibrated motion threshold remains required before final paper claim.
-```
-
-### 2.3 与 full experiment 的关系
-
-在进入 submission package 或最终论文 claim 前, 必须完成本阶段或等价的 calibration artifact。未完成本阶段时, full experiment 可以作为工程探索运行, 但不能把 motion threshold 相关结果声明为 calibrated formal claim。
-
-## 3. 2026-06-19 calibration runner 执行结果
-
-### 3.1 已新增工程入口
-
-当前已新增 formal motion threshold calibration runner:
-
-```text
-experiments/generative_video_model_probe/motion_threshold_calibration.py
-```
-
-该 runner 读取:
-
-```text
-records/generation_records.jsonl
-records/formal_quality_motion_semantic_records.jsonl
-```
-
-并写出:
-
-```text
-records/motion_threshold_calibration_records.jsonl
-tables/motion_threshold_calibration_table.csv
-thresholds/motion_threshold_calibration_threshold.json
-artifacts/motion_threshold_calibration_decision.json
-reports/motion_threshold_calibration_report.md
-```
-
-### 3.2 当前 Google Drive run 的 calibration 结果
-
-已在当前 Wan2.1 pilot run 上执行 calibration。最新 package 为:
-
-```text
-G:\我的云端硬盘\SSTW\packages\generative_video_model_probe\generative_video_model_probe_colab_20260618_162447_882754a4.zip
-G:\我的云端硬盘\SSTW\packages\generative_video_model_probe\generative_video_model_probe_colab_20260618_162447_882754a4_package_manifest.json
-```
-
-当前结果为:
-
-```text
-motion_threshold_calibration_decision: INSUFFICIENT_SAMPLE
-motion_threshold_calibration_ready: false
-motion_threshold_id: motion_delta_heuristic_v1
-motion_delta_threshold: 0.0005
-motion_threshold_source_split: heuristic_precalibration
-negative_static_calibration_count: 0
-positive_motion_calibration_count: 0
-usable_motion_calibration_record_count: 16
-motion_calibration_record_count: 16
-motion_threshold_calibration_required: true
-test_time_threshold_update_blocked: true
-```
-
-阻塞原因为:
-
-```text
-negative_static_calibration_count_below_min
-positive_motion_calibration_count_below_min
-```
-
-### 3.3 结论
-
-本次执行完成了 calibration 工程入口和 artifact 闭环, 但没有完成统计意义上的 calibrated threshold。原因不是 runner 失败, 而是当前 pilot run 没有独立 `calibration` split, 也没有足够的 `negative_static` calibration tail。
-
-因此当前 claim gate 仍必须保持:
-
-```text
-pilot_gate_decision: FAIL
-claim_support_status: blocked_until_motion_threshold_calibration
-```
-
-下一步如果要真正解除该阻塞, 需要生成独立 calibration split, 至少包含:
-
-```text
-negative_static calibration records >= 8  # 工程最小门槛
-positive_motion calibration records >= 8  # 工程最小门槛
-```
-
-若目标是支撑论文级 `TPR@FPR=0.01`, negative static / negative low-motion tail 应扩大到 1000+ 样本级别, 而不是使用当前 16 条 pilot main records。
-
-## 4. 2026-06-19 calibration split 设计落地
-
-### 4.1 目标规模
-
-已按以下设计更新工程配置:
-
-```text
-negative_static: 128 videos
-positive_motion: 64 videos
-ambiguous_low_motion: 32 videos
-total: 224 videos
-```
-
-具体实现采用:
+当前 prompt suite 的构造方式为:
 
 ```text
 16 negative_static prompts x 8 calibration seeds = 128
@@ -204,55 +38,102 @@ total: 224 videos
 4 ambiguous_low_motion prompts x 8 calibration seeds = 32
 ```
 
-### 4.2 新增 profile
+## 3. 阈值冻结原则
 
-`colab_runtime` 已新增独立 profile:
-
-```text
-PROFILE = motion_calibration
-```
-
-该 profile 只选择:
+必须遵守以下流程:
 
 ```text
-prompt_suite_role in {
-  motion_calibration_negative_static,
-  motion_calibration_positive_motion,
-  motion_calibration_ambiguous_low_motion
-}
-seed prompt_suite_role = motion_calibration
-split = calibration
+calibration split -> threshold artifact -> frozen threshold -> evaluation split
 ```
 
-这保证 calibration threshold 不会混入 pilot main 或 evaluation split。
+禁止在 evaluation split 或每次生成后动态重算阈值。若后续需要重新校准, 必须生成新的 `threshold_id`, 不能覆盖旧阈值。
 
-### 4.3 calibration runner 通过门槛
+## 4. 当前通过条件
 
-`motion_threshold_calibration` 的默认通过门槛已升级为:
+`motion_threshold_calibration` 只有同时满足以下条件才允许 `PASS`:
 
 ```text
-minimum_negative_static_calibration_count: 128
-minimum_positive_motion_calibration_count: 64
-minimum_ambiguous_low_motion_calibration_count: 32
+negative_static_calibration_count >= 128
+positive_motion_calibration_count >= 64
+ambiguous_low_motion_calibration_count >= 32
+estimated_static_fpr <= target_static_fpr
+positive_motion_pass_rate_at_threshold >= 0.80
+positive_negative_motion_delta_margin > 0
+motion_threshold_id == motion_delta_calibrated_v1
 ```
 
-只有满足上述最小样本量并生成 `motion_delta_calibrated_v1` threshold artifact 后, small-scale pilot gate 才能解除 `blocked_until_motion_threshold_calibration`。
-
-### 4.4 当前状态边界
-
-当前变更完成的是工程设计与入口闭合, 不是已经完成 224 个 Wan2.1 GPU calibration 视频生成。下一步需要在 Colab 中切换:
+其中:
 
 ```text
-PROFILE = 'motion_calibration'
+positive_motion_pass_rate_at_threshold
 ```
 
-然后依次运行:
+用于防止“阈值虽然控制住静止负样本, 但同时误伤大多数真实运动样本”的情况。
+
+```text
+positive_negative_motion_delta_margin
+```
+
+用于检查 positive_motion 最小分数是否高于 clean negative_static 最大分数。若该值小于或等于0, 说明两类样本在当前 motion metric 下发生重叠。
+
+## 5. 决策状态
+
+当前 runner 输出 3 类稳定决策:
+
+```text
+PASS: 样本数量充足, 静止尾部受控, positive_motion 可分。
+INSUFFICIENT_SAMPLE: calibration split 样本数量不足。
+FAIL_NOT_SEPARABLE: 样本数量充足, 但 positive_motion 与 negative_static 不可分。
+```
+
+当结果为 `FAIL_NOT_SEPARABLE` 时, 后续 small-scale claim pilot 必须继续保持:
+
+```text
+claim_support_status: blocked_until_motion_threshold_calibration
+motion_threshold_calibration_required: true
+```
+
+## 6. 2026-06-20 修复记录
+
+本次修复完成以下变更:
+
+```text
+1. 新增 minimum_positive_motion_pass_rate_at_threshold, 默认值为 0.80。
+2. 新增 positive_negative_motion_delta_margin。
+3. 新增 FAIL_NOT_SEPARABLE 决策。
+4. 当 positive_motion_pass_rate_at_threshold 低于门槛时, 不再允许 calibration PASS。
+5. 当 positive_motion 与 clean negative_static 分数重叠时, 不再允许 calibration PASS。
+6. 增强 calibration prompt suite, 让 positive_motion 明确要求大幅可见位移, 让 negative_static 明确要求 frozen frame。
+7. 更新测试用例, 覆盖样本数量充足但分数不可分的失败路径。
+```
+
+## 7. 对当前项目推进的影响
+
+最近一次结果中曾出现:
+
+```text
+positive_motion_pass_rate_at_threshold = 0.1875
+```
+
+该结果表示大多数 `positive_motion` 样本在当前冻结阈值下没有通过。修复后, 这类结果会被明确判定为:
+
+```text
+motion_threshold_calibration_decision: FAIL_NOT_SEPARABLE
+claim_support_status: blocked_until_motion_threshold_calibration
+```
+
+因此下一步不应直接进入 small-scale claim pilot, 而应先重跑 `motion_calibration` profile, 观察增强 prompt 后的 positive_motion 是否能够与 negative_static 分离。
+
+## 8. 需要重跑的最小范围
+
+修复后不需要重跑全部历史流程。最小重跑范围为:
 
 ```text
 prepare prompt suite
-run Wan2.1 generation
-run formal metrics
-run motion_threshold_calibration
-write small-scale claim pilot gate
-package to Google Drive
+Wan2.1 generation with PROFILE = motion_calibration
+formal_metric_runner
+motion_threshold_calibration
+package_outputs
 ```
+
+只有当 `motion_threshold_calibration_decision = PASS` 后, 才建议继续推进 small-scale claim pilot。

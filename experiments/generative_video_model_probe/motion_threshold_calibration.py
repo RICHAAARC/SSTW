@@ -74,6 +74,19 @@ def _infer_source_split(generation_record: dict, formal_record: dict) -> str:
     return "pilot_main"
 
 
+
+def _motion_calibration_score(formal_record: dict) -> tuple[float | None, str]:
+    """选择 motion calibration 使用的主分数。
+
+    通用工程写法是优先使用显式存在的新字段, 缺失时回退到历史字段。项目特定写法是优先使用
+    `motion_delta_focus_score`, 因为它比整帧平均差分更能区分局部真实运动和全局轻微闪烁。
+    """
+    if formal_record.get("motion_delta_focus_score") is not None:
+        return float(formal_record["motion_delta_focus_score"]), "motion_delta_focus_score"
+    if formal_record.get("motion_delta_score") is not None:
+        return float(formal_record["motion_delta_score"]), "motion_delta_score_legacy_fallback"
+    return None, "missing_motion_score"
+
 def build_motion_calibration_records(run_root: str | Path) -> list[dict]:
     """从 generation records 与 formal motion records 构造 calibration records。"""
     run_root = Path(run_root)
@@ -86,8 +99,9 @@ def build_motion_calibration_records(run_root: str | Path) -> list[dict]:
         source_split = _infer_source_split(generation_record, formal_record)
         role = _infer_motion_calibration_role(generation_record, formal_record)
         motion_delta = formal_record.get("motion_delta_score")
+        motion_score, motion_score_name = _motion_calibration_score(formal_record)
         temporal_flicker = formal_record.get("temporal_flicker_score")
-        usable = motion_delta is not None and formal_record.get("video_decode_status") == "ready"
+        usable = motion_score is not None and formal_record.get("video_decode_status") == "ready"
         records.append({
             "record_version": "motion_threshold_calibration_v1",
             "generation_model_id": formal_record.get("generation_model_id"),
@@ -97,9 +111,14 @@ def build_motion_calibration_records(run_root: str | Path) -> list[dict]:
             "motion_calibration_source_split": source_split,
             "motion_calibration_role": role,
             "motion_delta_score": motion_delta,
+            "motion_delta_focus_score": formal_record.get("motion_delta_focus_score"),
+            "motion_delta_p90_score": formal_record.get("motion_delta_p90_score"),
+            "motion_delta_top10_mean_score": formal_record.get("motion_delta_top10_mean_score"),
+            "motion_calibration_score": motion_score,
+            "motion_calibration_score_name": motion_score_name,
             "temporal_flicker_score": temporal_flicker,
             "motion_calibration_record_status": "usable" if usable else "not_usable",
-            "motion_calibration_record_failure_reason": "none" if usable else "missing_motion_delta_or_video_decode_not_ready",
+            "motion_calibration_record_failure_reason": "none" if usable else "missing_motion_score_or_video_decode_not_ready",
             "previous_motion_threshold_id": HEURISTIC_MOTION_THRESHOLD_ID,
             "previous_motion_delta_threshold": MOTION_DELTA_MIN,
         })
@@ -143,12 +162,12 @@ def _negative_static_contamination_cutoff(scores: list[float]) -> float | None:
 
 def _split_negative_static_records(records: list[dict]) -> tuple[list[dict], list[dict], float | None]:
     """把 negative_static records 分为 clean tail 和疑似污染 tail。"""
-    scores = [float(record["motion_delta_score"]) for record in records]
+    scores = [float(record["motion_calibration_score"]) for record in records]
     cutoff = _negative_static_contamination_cutoff(scores)
     if cutoff is None:
         return records, [], None
-    clean_records = [record for record in records if float(record["motion_delta_score"]) <= cutoff]
-    contaminated_records = [record for record in records if float(record["motion_delta_score"]) > cutoff]
+    clean_records = [record for record in records if float(record["motion_calibration_score"]) <= cutoff]
+    contaminated_records = [record for record in records if float(record["motion_calibration_score"]) > cutoff]
     return clean_records, contaminated_records, cutoff
 
 
@@ -200,11 +219,11 @@ def audit_motion_threshold_calibration(
     ]
 
     clean_negative_static_records, contaminated_negative_static_records, contamination_cutoff = _split_negative_static_records(negative_static_records)
-    negative_scores = [float(record["motion_delta_score"]) for record in negative_static_records]
-    clean_negative_scores = [float(record["motion_delta_score"]) for record in clean_negative_static_records]
-    contaminated_negative_scores = [float(record["motion_delta_score"]) for record in contaminated_negative_static_records]
-    positive_scores = [float(record["motion_delta_score"]) for record in positive_motion_records]
-    ambiguous_scores = [float(record["motion_delta_score"]) for record in ambiguous_low_motion_records]
+    negative_scores = [float(record["motion_calibration_score"]) for record in negative_static_records]
+    clean_negative_scores = [float(record["motion_calibration_score"]) for record in clean_negative_static_records]
+    contaminated_negative_scores = [float(record["motion_calibration_score"]) for record in contaminated_negative_static_records]
+    positive_scores = [float(record["motion_calibration_score"]) for record in positive_motion_records]
+    ambiguous_scores = [float(record["motion_calibration_score"]) for record in ambiguous_low_motion_records]
 
     count_missing_reasons: list[str] = []
     if len(negative_static_records) < min_negative_static_count:
@@ -235,8 +254,8 @@ def audit_motion_threshold_calibration(
     separability_missing_reasons: list[str] = []
     if positive_scores and positive_pass_rate < min_positive_pass_rate:
         separability_missing_reasons.append("positive_motion_pass_rate_below_min")
-    if positive_negative_margin is not None and positive_negative_margin <= 0:
-        separability_missing_reasons.append("positive_negative_motion_score_overlap")
+        if positive_negative_margin is not None and positive_negative_margin <= 0:
+            separability_missing_reasons.append("positive_negative_motion_score_overlap")
 
     missing_reasons = count_missing_reasons + separability_missing_reasons
     calibration_ready = (
@@ -253,6 +272,7 @@ def audit_motion_threshold_calibration(
         "motion_threshold_calibration_ready": calibration_ready,
         "motion_threshold_id": threshold_id,
         "motion_delta_threshold": threshold_value,
+        "motion_calibration_score_name": "motion_delta_focus_score_preferred",
         "conservative_motion_delta_threshold": conservative_threshold_value,
         "motion_threshold_source_split": threshold_source_split,
         "threshold_source_split": threshold_source_split,

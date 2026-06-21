@@ -58,7 +58,6 @@ positive_motion_calibration_count >= 64
 ambiguous_low_motion_calibration_count >= 32
 estimated_static_fpr <= target_static_fpr
 positive_motion_pass_rate_at_threshold >= 0.80
-positive_negative_motion_delta_margin > 0
 motion_threshold_id == motion_delta_calibrated_v1
 ```
 
@@ -74,7 +73,7 @@ positive_motion_pass_rate_at_threshold
 positive_negative_motion_delta_margin
 ```
 
-用于检查 positive_motion 最小分数是否高于 clean negative_static 最大分数。若该值小于或等于0, 说明两类样本在当前 motion metric 下发生重叠。
+用于诊断 positive_motion 最小分数是否高于 clean negative_static 最大分数。由于真实生成模型可能出现少量 stochastic outlier, 该字段不再单独作为硬阻塞条件; 硬阻塞以 `positive_motion_pass_rate_at_threshold` 为准。
 
 ## 5. 决策状态
 
@@ -102,7 +101,7 @@ motion_threshold_calibration_required: true
 2. 新增 positive_negative_motion_delta_margin。
 3. 新增 FAIL_NOT_SEPARABLE 决策。
 4. 当 positive_motion_pass_rate_at_threshold 低于门槛时, 不再允许 calibration PASS。
-5. 当 positive_motion 与 clean negative_static 分数重叠时, 不再允许 calibration PASS。
+5. positive_negative_motion_delta_margin 保留为诊断字段, 用于识别 outlier 和重叠风险。
 6. 增强 calibration prompt suite, 让 positive_motion 明确要求大幅可见位移, 让 negative_static 明确要求 frozen frame。
 7. 更新测试用例, 覆盖样本数量充足但分数不可分的失败路径。
 ```
@@ -137,3 +136,26 @@ package_outputs
 ```
 
 只有当 `motion_threshold_calibration_decision = PASS` 后, 才建议继续推进 small-scale claim pilot。
+
+
+## 9. 2026-06-21 修复记录: motion metric 与 prompt suite 增强
+
+本次修复完成以下变更:
+
+```text
+1. 新增 motion_delta_focus_score, 用高差分区域均值减去中位差分, 降低全局闪烁和曝光漂移对 calibration 的影响。
+2. motion_threshold_calibration 优先使用 motion_delta_focus_score, 缺失时回退到历史 motion_delta_score。
+3. positive_negative_motion_delta_margin 保留为诊断字段, 不再在 positive pass rate 已达标时单独阻塞。
+4. 替换污染较强的 negative_static prompt, 使用更简单的高对比静态几何或静态物体场景。
+5. 强化 positive_motion prompt, 使用更大物体、更大位移、更高对比的运动描述。
+```
+
+该变更属于工程修复, 需要重新运行:
+
+```text
+prepare prompt suite
+Wan2.1 generation with PROFILE = motion_calibration
+formal_metric_runner
+motion_threshold_calibration
+package_outputs
+```

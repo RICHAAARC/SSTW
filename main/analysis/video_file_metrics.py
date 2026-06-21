@@ -36,11 +36,7 @@ def _visual_quality_failure_reason(
     dark_pixel_ratio: float,
     bright_pixel_ratio: float,
 ) -> str:
-    """根据视觉质量阈值生成可审计的失败原因。
-
-    该函数属于项目特定写法。它不会改变评分逻辑, 只把原本隐含在布尔值中的失败原因显式写入 records,
-    便于后续判断样本是质量异常、阈值过严, 还是可以继续用于 claim gate。
-    """
+    """根据视觉质量阈值生成可审计的失败原因。"""
     reasons: list[str] = []
     if mean_brightness < VISUAL_BRIGHTNESS_MIN:
         reasons.append("mean_brightness_below_min")
@@ -58,8 +54,8 @@ def _visual_quality_failure_reason(
 def _motion_consistency_failure_reason(motion_delta_score: float, temporal_flicker_score: float) -> str:
     """根据运动一致性阈值生成可审计的失败原因。
 
-    当前 formal motion gate 的用途不是判断视频是否“好看”, 而是阻止几乎静止的视频支撑运动相关 claim。
-    因此失败原因需要区分低运动量和高闪烁, 不能只记录一个笼统的 failed 状态。
+    当前 formal motion gate 的用途不是判断视频是否“好看”, 而是阻止几乎静止的视频支撑
+    motion-related claim。因此失败原因需要区分低运动量和高闪烁。
     """
     reasons: list[str] = []
     if motion_delta_score < MOTION_DELTA_MIN:
@@ -69,10 +65,57 @@ def _motion_consistency_failure_reason(motion_delta_score: float, temporal_flick
     return "none" if not reasons else ";".join(reasons)
 
 
+def _motion_delta_statistics(gray_frames: list[Any]) -> dict[str, float]:
+    """计算多粒度帧间运动统计量。
+
+    通用工程写法是先保留整帧平均差分 `motion_delta_score`, 便于兼容历史 records。
+    项目特定写法是新增 `motion_delta_focus_score`: 它使用每对相邻帧的高差分区域均值减去中位差分,
+    用来削弱全局曝光漂移或均匀闪烁, 同时提高对局部物体运动的敏感度。该指标仍是文件级 proxy,
+    不能替代光流或人工语义审计, 但更适合 motion threshold calibration。
+    """
+    import numpy as np
+
+    if len(gray_frames) < 2:
+        return {
+            "motion_delta_score": 0.0,
+            "motion_delta_p90_score": 0.0,
+            "motion_delta_top10_mean_score": 0.0,
+            "motion_delta_focus_score": 0.0,
+            "motion_delta_focus_to_mean_ratio": 0.0,
+        }
+
+    mean_deltas: list[float] = []
+    p90_deltas: list[float] = []
+    top10_deltas: list[float] = []
+    focus_deltas: list[float] = []
+    for index in range(1, len(gray_frames)):
+        diff = np.abs(gray_frames[index] - gray_frames[index - 1])
+        mean_delta = float(np.mean(diff))
+        median_delta = float(np.median(diff))
+        p90_delta = float(np.quantile(diff, 0.90))
+        top10_mean_delta = float(np.mean(diff[diff >= p90_delta])) if diff.size else 0.0
+        focus_delta = max(top10_mean_delta - median_delta, 0.0)
+        mean_deltas.append(mean_delta)
+        p90_deltas.append(p90_delta)
+        top10_deltas.append(top10_mean_delta)
+        focus_deltas.append(focus_delta)
+
+    motion_delta_score = float(np.mean(mean_deltas))
+    motion_delta_focus_score = float(np.mean(focus_deltas))
+    ratio = motion_delta_focus_score / motion_delta_score if motion_delta_score > 0 else 0.0
+    return {
+        "motion_delta_score": motion_delta_score,
+        "motion_delta_p90_score": float(np.mean(p90_deltas)),
+        "motion_delta_top10_mean_score": float(np.mean(top10_deltas)),
+        "motion_delta_focus_score": motion_delta_focus_score,
+        "motion_delta_focus_to_mean_ratio": ratio,
+    }
+
+
 def compute_video_file_metrics(video_path: str | Path, max_frames: int = 24) -> dict:
     """计算视频文件级质量与运动指标。
 
-    这些指标来自真实 mp4 文件解码结果, 可用于正式记录视频是否可读、亮度是否坍缩,
+    这些指标来自真实 mp4 文件解码结果, 可用于正式记录视频是否可读、亮度是否健康,
     以及相邻帧是否存在足够运动变化。它们不能替代 CLIP / VLM 类语义一致性指标。
     """
     path = Path(video_path)
@@ -102,16 +145,13 @@ def compute_video_file_metrics(video_path: str | Path, max_frames: int = 24) -> 
     gray_frames = [array.mean(axis=2) if array.ndim == 3 else array for array in arrays]
     brightness_values = [float(gray.mean()) for gray in gray_frames]
     contrast_values = [float(gray.std()) for gray in gray_frames]
-    frame_deltas = [
-        float(np.mean(np.abs(gray_frames[index] - gray_frames[index - 1])))
-        for index in range(1, len(gray_frames))
-    ]
+    motion_stats = _motion_delta_statistics(gray_frames)
     dark_pixel_ratio = float(np.mean([float((gray < 0.03).mean()) for gray in gray_frames]))
     bright_pixel_ratio = float(np.mean([float((gray > 0.97).mean()) for gray in gray_frames]))
     mean_brightness = float(np.mean(brightness_values))
     mean_contrast = float(np.mean(contrast_values))
     temporal_flicker_score = float(np.std(brightness_values))
-    motion_delta_score = float(np.mean(frame_deltas)) if frame_deltas else 0.0
+    motion_delta_score = motion_stats["motion_delta_score"]
 
     visual_failure_reason = _visual_quality_failure_reason(
         mean_brightness,
@@ -134,6 +174,11 @@ def compute_video_file_metrics(video_path: str | Path, max_frames: int = 24) -> 
         "bright_pixel_ratio": round(bright_pixel_ratio, 6),
         "temporal_flicker_score": round(temporal_flicker_score, 6),
         "motion_delta_score": round(motion_delta_score, 6),
+        "motion_delta_p90_score": round(motion_stats["motion_delta_p90_score"], 6),
+        "motion_delta_top10_mean_score": round(motion_stats["motion_delta_top10_mean_score"], 6),
+        "motion_delta_focus_score": round(motion_stats["motion_delta_focus_score"], 6),
+        "motion_delta_focus_to_mean_ratio": round(motion_stats["motion_delta_focus_to_mean_ratio"], 6),
+        "motion_calibration_score_name": "motion_delta_focus_score",
         "visual_brightness_min": VISUAL_BRIGHTNESS_MIN,
         "visual_brightness_max": VISUAL_BRIGHTNESS_MAX,
         "visual_contrast_min": VISUAL_CONTRAST_MIN,

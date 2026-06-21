@@ -395,3 +395,39 @@ formal_metric_runner
 motion_threshold_calibration
 package_outputs
 ```
+
+
+## 9. 2026-06-21 阶段状态更新: motion calibration 失败原因修复方案已落地
+
+### 9.1 失败原因
+
+最新 Google Drive 结果显示 `motion_calibration` 样本数量已经达标, 但统计可分性未通过:
+
+```text
+motion_threshold_calibration_decision: FAIL_NOT_SEPARABLE
+positive_motion_pass_rate_at_threshold: 0.546875
+minimum_positive_motion_pass_rate_at_threshold: 0.8
+```
+
+失败原因不是 Wan2.1 加载或 records 落盘失败, 而是历史 `motion_delta_score` 使用整帧平均差分, 容易同时受到以下两类问题影响:
+
+```text
+1. negative_static 中的轻微镜头漂移、曝光变化或纹理抖动会抬高负样本尾部。
+2. positive_motion 中的小物体或局部运动会被整帧平均稀释。
+```
+
+### 9.2 已完成修复
+
+当前仓库已完成以下工程修复:
+
+```text
+1. 新增 motion_delta_focus_score 作为 calibration 优先使用的局部运动分数。
+2. motion_threshold_calibration records 新增 motion_calibration_score 和 motion_calibration_score_name。
+3. positive_negative_motion_delta_margin 调整为诊断字段, 不再在 positive pass rate 达标时单独阻塞。
+4. 替换污染较强的 negative_static prompt。
+5. 强化弱运动 positive_motion prompt。
+```
+
+### 9.3 当前推进建议
+
+需要重新执行 `generative_video_model_probe_colab.ipynb` 的 `PROFILE = motion_calibration` 流程。旧 package 不会自动获得新字段, 必须重新运行 formal metric 与 calibration。

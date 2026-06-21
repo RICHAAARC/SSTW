@@ -309,6 +309,95 @@ def test_motion_threshold_calibration_fails_when_positive_motion_not_separable(t
 
 
 @pytest.mark.quick
+def test_motion_threshold_calibration_prefers_focus_score_when_available(tmp_path: Path) -> None:
+    """当 formal records 写出 focus score 时, calibration 应优先使用局部运动分数。"""
+    run_root = tmp_path / "run"
+    generation_rows = []
+    formal_rows = []
+
+    for index in range(128):
+        generation_rows.append({
+            "generation_model_id": "model",
+            "prompt_id": f"static_{index}",
+            "seed_id": "seed",
+            "generation_status": "success",
+            "prompt_suite_role": "motion_calibration_negative_static",
+            "motion_calibration_role": "negative_static",
+            "split": "calibration",
+            "trajectory_trace_id": f"trace_static_{index}",
+        })
+        formal_rows.append({
+            "generation_model_id": "model",
+            "prompt_id": f"static_{index}",
+            "seed_id": "seed",
+            "trajectory_trace_id": f"trace_static_{index}",
+            "video_decode_status": "ready",
+            "motion_delta_score": 0.01,
+            "motion_delta_focus_score": 0.0001 + index * 0.000001,
+            "temporal_flicker_score": 0.01,
+            "split": "calibration",
+        })
+
+    for index in range(64):
+        generation_rows.append({
+            "generation_model_id": "model",
+            "prompt_id": f"motion_{index}",
+            "seed_id": "seed",
+            "generation_status": "success",
+            "prompt_suite_role": "motion_calibration_positive_motion",
+            "motion_calibration_role": "positive_motion",
+            "split": "calibration",
+            "trajectory_trace_id": f"trace_motion_{index}",
+        })
+        formal_rows.append({
+            "generation_model_id": "model",
+            "prompt_id": f"motion_{index}",
+            "seed_id": "seed",
+            "trajectory_trace_id": f"trace_motion_{index}",
+            "video_decode_status": "ready",
+            "motion_delta_score": 0.0002,
+            "motion_delta_focus_score": 0.004 + index * 0.00001,
+            "temporal_flicker_score": 0.01,
+            "split": "calibration",
+        })
+
+    for index in range(32):
+        generation_rows.append({
+            "generation_model_id": "model",
+            "prompt_id": f"ambiguous_{index}",
+            "seed_id": "seed",
+            "generation_status": "success",
+            "prompt_suite_role": "motion_calibration_ambiguous_low_motion",
+            "motion_calibration_role": "ambiguous_low_motion",
+            "split": "calibration",
+            "trajectory_trace_id": f"trace_ambiguous_{index}",
+        })
+        formal_rows.append({
+            "generation_model_id": "model",
+            "prompt_id": f"ambiguous_{index}",
+            "seed_id": "seed",
+            "trajectory_trace_id": f"trace_ambiguous_{index}",
+            "video_decode_status": "ready",
+            "motion_delta_score": 0.0002,
+            "motion_delta_focus_score": 0.0003 + index * 0.000001,
+            "temporal_flicker_score": 0.01,
+            "split": "calibration",
+        })
+
+    write_jsonl(run_root / "records" / "generation_records.jsonl", generation_rows)
+    write_jsonl(run_root / "records" / "formal_quality_motion_semantic_records.jsonl", formal_rows)
+
+    audit = run_motion_threshold_calibration(run_root)
+    records = [json.loads(line) for line in (run_root / "records" / "motion_threshold_calibration_records.jsonl").read_text(encoding="utf-8").splitlines()]
+
+    assert audit["motion_threshold_calibration_decision"] == "PASS"
+    assert audit["motion_calibration_score_name"] == "motion_delta_focus_score_preferred"
+    assert audit["positive_motion_pass_rate_at_threshold"] == 1.0
+    assert records[0]["motion_calibration_score_name"] == "motion_delta_focus_score"
+    assert records[0]["motion_calibration_score"] == records[0]["motion_delta_focus_score"]
+
+
+@pytest.mark.quick
 def test_pilot_gate_unblocks_only_when_motion_calibration_passes(tmp_path: Path) -> None:
     """pilot gate 只有在 motion calibration artifact PASS 后才允许 claim_support_status 进入 supported。"""
     run_root = tmp_path / "run"

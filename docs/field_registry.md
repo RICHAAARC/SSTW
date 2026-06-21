@@ -375,6 +375,12 @@ Notebook 与 repository module 的跨边界数据
 | dark_pixel_ratio | metric | none | true | false | false | Ratio of near-black pixels over sampled generated video frames. |
 | bright_pixel_ratio | metric | none | true | false | false | Ratio of near-white pixels over sampled generated video frames. |
 | motion_delta_score | metric | none | true | false | false | Mean adjacent-frame absolute difference over sampled generated frames. |
+| motion_delta_p90_score | metric | none | true | false | false | Mean 90th percentile adjacent-frame absolute difference over sampled frames. |
+| motion_delta_top10_mean_score | metric | none | true | false | false | Mean high-difference region adjacent-frame score over sampled frames. |
+| motion_delta_focus_score | metric | none | true | false | false | Local-motion-oriented score computed as high-difference region mean minus median frame difference. |
+| motion_delta_focus_to_mean_ratio | metric | none | true | false | false | Ratio between focus motion score and full-frame mean motion score. |
+| motion_calibration_score | metric | none | true | false | false | Motion score selected for threshold calibration, preferring motion_delta_focus_score when available. |
+| motion_calibration_score_name | protocol | none | true | false | false | Name of the metric used as the primary motion calibration score. |
 | visual_brightness_min | metric | none | true | false | false | Minimum mean brightness threshold used by formal visual quality gate. |
 | visual_brightness_max | metric | none | true | false | false | Maximum mean brightness threshold used by formal visual quality gate. |
 | visual_contrast_min | metric | none | true | false | false | Minimum mean contrast threshold used by formal visual quality gate. |

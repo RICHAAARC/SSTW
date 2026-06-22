@@ -20,10 +20,10 @@
 |---|---|---|---|
 | `protocol_governance_foundation` | `structure_ready / protocol_ready` | configs、field registry、harness、constraint tests | 随新增字段、negative family 和旧字段映射继续同步注册。 |
 | `flow_model_adapter_preflight` | `structure_ready / mechanism_ready / protocol_ready / artifact_ready` | Wan2.1 Colab preflight、sampler signature、time grid、latent displacement proxy、Drive package | 作为后续 sampling-time 和 pilot 的真实模型接口前置证据。 |
-| `sampling_time_constraint_probe` | `structure_ready / mechanism_ready / protocol_ready / artifact_ready` | Wan2.1 recommended profile、constraint records、postprocess checker、Drive package | 已完成机制前置验证, 下一步进入 small-scale claim pilot。 |
-| `small_scale_claim_pilot_gate` | `structure_ready / protocol_ready / external_validation_required` | sampling-time recommended 已通过, generative probe 与 checker 入口已存在 | 运行 pilot split, 验证 attack、negative family、wrong-sampler replay 与 fixed-FPR path marginal gain。 |
+| `sampling_time_constraint_probe` | `structure_ready / mechanism_ready / protocol_ready / artifact_ready` | Wan2.1 recommended profile、constraint records、postprocess checker、Drive package | 已完成机制前置验证, 等待 motion threshold calibration 通过后再进入 small-scale claim pilot。 |
+| `small_scale_claim_pilot_gate` | `structure_ready / protocol_ready / external_validation_required` | sampling-time recommended 已通过, generative probe 与 checker 入口已存在 | 在 motion threshold calibration PASS 后运行 pilot split, 验证 attack、negative family、wrong-sampler replay 与 fixed-FPR path marginal gain。 |
 | `generative_video_model_probe` | `structure_ready / protocol_ready / external_validation_required` | generative probe runner、external baseline runner、Colab 入口 | 仅在 pilot gate 通过后进入 full experiment。 |
-| `motion_threshold_calibration` | `structure_ready / separability_gate_required / external_validation_required` | runner、records、threshold artifact、128/64/32 profile 与 FAIL_NOT_SEPARABLE gate 已落地 | 重跑独立 calibration split, 验证 positive_motion_pass_rate_at_threshold 与 positive_negative_motion_delta_margin。 |
+| `motion_threshold_calibration` | `structure_ready / separability_gate_required / external_validation_required` | runner、records、threshold artifact、128/64/32 profile、prompt-aware contamination audit 与 positive motion prompt 修复已落地 | 重跑独立 calibration split, 验证 positive_motion_pass_rate_at_threshold 与 Wilson lower bound。 |
 | `replay_and_authenticated_sketch_gate` | `structure_ready` | digest、manifest、trajectory trace 基础模块 | 补齐 authenticated sketch、replay uncertainty、wrong prompt replay 与 checker。 |
 | `submission_package_freeze` | `structure_ready / artifact_ready` | submission freeze runner、main tables、readiness summary | 等待 pilot / full experiment governed records 后再冻结最终 artifacts。 |
 
@@ -465,3 +465,53 @@ artifacts/threshold_stability_audit.json
 ```
 
 当前阶段 PASS 只表示 engineering motion threshold 可用于后续 small-scale pilot gate, 不表示论文级 `TPR@FPR=0.01` 已完成。论文级 PASS 仍需要更大 held-out negative split, 并在 frozen threshold 下报告 fixed-FPR 结果与置信区间。
+
+
+## 2026-06-22 阶段状态更新: motion calibration prompt 可观测性修复
+
+### 当前最新外部结果
+
+最新 Google Drive 批次 `20260622_082859_825b4762` 表明工程运行与打包成功, 但 calibration 仍未通过:
+
+```text
+implementation_decision: PASS
+motion_threshold_calibration_decision: FAIL_NOT_SEPARABLE
+positive_motion_pass_rate_at_threshold: 0.75
+positive_motion_pass_rate_wilson_lower: 0.631835
+```
+
+该结果说明新机制已经修复了“污染过滤是否泄漏”和“负样本尾部是否被异常 prompt 支配”的问题, 但仍暴露出另一类问题:
+
+```text
+部分 positive_motion prompt 在真实 Wan2.1 生成中没有稳定产生足够可观测的运动。
+```
+
+### 已完成工程修复
+
+本次修复保持阈值、Wilson lower bound 和防泄漏污染过滤协议不变, 只修正 calibration 输入设计:
+
+```text
+1. 替换 positive_motion_00 中的抽象 red square slide, 改为真人携带大红色前景板横穿画面。
+2. 替换 positive_motion_02 中的抽象 blue circle bounce, 改为近景 blue beach ball 大幅上下运动。
+3. 强化 positive_motion_04 和 positive_motion_06 的 foreground、entire frame 与 consecutive frame 位移约束。
+4. 替换 high-frequency 或 implied-motion static prompt, 包括 checkerboard、chess board 和 clock illustration。
+5. 更新 prompt_suite_id 为 generative_video_probe_prompt_suite_motion_observability_repair, 使新旧批次可快速区分。
+```
+
+### 当前阶段判定
+
+当前仍不能进入 small-scale claim pilot。下一步必须重新执行:
+
+```text
+PROFILE = motion_calibration
+```
+
+并确认:
+
+```text
+motion_threshold_calibration_decision: PASS
+positive_motion_pass_rate_at_threshold >= 0.80
+positive_motion_pass_rate_wilson_lower >= 0.70
+```
+
+只有上述条件通过后, 才能解除 `blocked_until_motion_threshold_calibration`。

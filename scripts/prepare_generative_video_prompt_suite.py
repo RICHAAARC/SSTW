@@ -100,8 +100,8 @@ def _build_motion_calibration_prompts() -> list[dict]:
         "A locked-off still photograph of a black square printed on white paper on a desk, frozen frame, no camera movement, no object motion, no lighting change.",
         "A single static product photo of a red cube centered on a plain gray background, fixed camera, no pan, no zoom, no moving shadows.",
         "A still photograph of a blue circle printed on a white card, frozen frame, no breeze, no camera movement, stable lighting.",
-        "A locked-off static shot of a yellow triangle symbol on a matte board, no object motion, no exposure change, no camera shake.",
-        "A motionless high-contrast checkerboard card on a table as a still photo, fixed camera, no zoom, no flicker, no background movement.",
+        "A locked-off still product photo of a matte yellow triangle block resting on a plain gray table, frozen frame, no object motion, no exposure change, no camera shake.",
+        "A single matte white index card lies flat on a plain wooden table in a still photograph, fixed camera, no zoom, no flicker, no background movement.",
         "A small toy block remains still on a plain shelf in a frozen frame, no camera movement, no object movement, constant illumination.",
         "A static photo of a white cup centered on a plain blue background, no camera pan, no zoom, no lighting variation.",
         "A simple black arrow printed on paper lies flat on a table in a locked-off still image, no motion, no changing shadows.",
@@ -111,17 +111,17 @@ def _build_motion_calibration_prompts() -> list[dict]:
         "A decorative vase remains still against a plain wall in a frozen frame, fixed camera, no zoom, no pan, no shadow movement.",
         "A solid red ball sits motionless on a plain white table in a single still photograph, no camera motion, no object movement, no flicker.",
         "A closed laptop rests on a table in a locked-off static shot, no screen animation, no movement, stable exposure.",
-        "A chess board remains motionless under a fixed overhead camera, frozen frame, no moving pieces, no lighting change.",
-        "A printed wall clock illustration is shown as a still object with no moving hands, fixed camera, no zoom, no pan, no illumination change.",
+        "A stack of three plain cardboard squares remains motionless under a fixed overhead camera, frozen frame, no moving objects, no lighting change.",
+        "A sealed cardboard box with a printed label is shown as a still object on a plain table, fixed camera, no zoom, no pan, no illumination change.",
     ]
     positive_templates = [
-        "A large red square slides horizontally from the far left edge to the far right edge across a plain white background, occupying one third of the frame, fixed camera.",
+        "A person carries a large bright red rectangular board across the entire frame from far left to far right, the board fills nearly half of the image, fixed camera, plain white wall background, strong visible displacement in every frame.",
         "A high-contrast black and white striped panel scrolls continuously from left to right across the entire frame, strong visible motion in every frame, fixed camera.",
-        "A bright blue circle bounces from the top of the frame to the bottom and back, large visible displacement, fixed camera, plain background.",
+        "A close-up bright blue beach ball is thrown upward and downward repeatedly across most of the frame, the ball stays large in the foreground, fixed camera, plain background, strong position change between consecutive frames.",
         "A yellow arrow sweeps diagonally from the lower left corner to the upper right corner across the whole frame, large visible displacement, fixed camera.",
-        "A large red ball rolls from the right edge to the left edge across a plain floor, occupying a large area of the frame, fixed camera.",
+        "A large red exercise ball rolls quickly from the right edge to the left edge across a high-contrast plain floor, occupying a large area of the foreground, fixed camera, clear position change in every frame.",
         "A high-contrast checkerboard board rotates quickly for multiple full rotations, clearly changing orientation in every frame, fixed camera.",
-        "A paper airplane close to the camera crosses the entire frame from left to right, large object size and strong position change between frames, fixed camera.",
+        "A hand sweeps a large white paper airplane close to the camera from left to right across the entire frame, large foreground object size, repeated visible displacement, fixed camera.",
         "A hand waves a large red flag widely from side to side across most of the frame, repeated large amplitude motion, fixed camera.",
     ]
     ambiguous_templates = [
@@ -169,7 +169,7 @@ def _build_motion_calibration_prompts() -> list[dict]:
 def build_prompt_suite() -> dict:
     """构造独立于测试运行的 prompt suite, 便于 Colab 重复使用。"""
     suite = {
-        "prompt_suite_id": "generative_video_probe_prompt_suite_v1",
+        "prompt_suite_id": "generative_video_probe_prompt_suite_motion_observability_repair",
         "dataset_construction_status": "constructed",
         "dataset_source": "repository_deterministic_prompt_seed_spec",
         "motion_calibration_design": {

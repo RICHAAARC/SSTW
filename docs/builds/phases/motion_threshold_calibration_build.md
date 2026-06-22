@@ -193,3 +193,45 @@ artifacts/threshold_stability_audit.json
 ```
 
 当前阶段 PASS 只表示 engineering motion threshold 可用于后续 small-scale pilot gate, 不表示论文级 `TPR@FPR=0.01` 已完成。论文级 PASS 仍需要更大 held-out negative split, 并在 frozen threshold 下报告 fixed-FPR 结果与置信区间。
+
+
+## 2026-06-22 修复记录: positive motion 可观测性增强
+
+最新真实 Wan2.1 motion calibration 结果显示, prompt-aware robust calibration 已经能够隔离污染负样本, 但正运动样本仍未达到工程通过门槛:
+
+```text
+package_batch_id: 20260622_082859_825b4762
+motion_threshold_calibration_decision: FAIL_NOT_SEPARABLE
+positive_motion_pass_rate_at_threshold: 0.75
+positive_motion_pass_rate_wilson_lower: 0.631835
+minimum_positive_motion_pass_rate_at_threshold: 0.80
+minimum_positive_motion_pass_rate_wilson_lower: 0.70
+```
+
+按 prompt 聚合后, 主要弱项集中在:
+
+```text
+motion_calib_positive_motion_00: 3 / 8
+motion_calib_positive_motion_02: 1 / 8
+motion_calib_positive_motion_04: 6 / 8
+motion_calib_positive_motion_06: 6 / 8
+```
+
+本次修复不放宽阈值, 也不改变污染过滤协议。修复方向是提升 calibration prompt 的真实运动可观测性:
+
+```text
+1. 将抽象几何运动 prompt 替换为更容易被 Wan2.1 执行的真实前景大物体运动。
+2. 对 positive_motion_00 / 02 / 04 / 06 增加 close-up、foreground、entire frame、consecutive frames 等可观测约束。
+3. 移除高污染或高频纹理的 negative_static prompt, 例如 checkerboard、chess board、wall clock illustration。
+4. 将 prompt_suite_id 更新为 generative_video_probe_prompt_suite_motion_observability_repair, 防止与旧 calibration 批次混淆。
+```
+
+该修复属于 prompt suite 工程修复。它不能直接证明水印机制有效, 只能为下一次 `PROFILE = motion_calibration` 重跑提供更干净、更高可观测性的 calibration 输入。修复后仍必须重新运行:
+
+```text
+prepare prompt suite
+Wan2.1 generation with PROFILE = motion_calibration
+formal_metric_runner
+motion_threshold_calibration
+package_outputs
+```

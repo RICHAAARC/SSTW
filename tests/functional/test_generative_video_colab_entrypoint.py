@@ -67,6 +67,34 @@ def test_motion_calibration_prompt_suite_has_target_design(tmp_path: Path) -> No
 
 
 @pytest.mark.quick
+def test_motion_calibration_prompt_suite_uses_observability_repair_prompts(tmp_path: Path) -> None:
+    """修复后的 calibration prompt 不应继续使用已知弱 positive prompt 或高污染 static prompt。"""
+    output_root = tmp_path / "prompt_suite"
+    summary = write_prompt_suite(output_root)
+    suite = json.loads(Path(summary["prompt_suite_path"]).read_text(encoding="utf-8"))
+    prompts_by_id = {item["prompt_id"]: item["prompt_text"].lower() for item in suite["prompts"]}
+
+    assert suite["prompt_suite_id"] == "generative_video_probe_prompt_suite_motion_observability_repair"
+
+    # 这两个历史 prompt 在真实 Wan2.1 calibration 中分别只有 3 / 8 和 1 / 8 通过, 因此不能回退。
+    assert "large red square slides" not in prompts_by_id["motion_calib_positive_motion_00"]
+    assert "bright blue circle bounces" not in prompts_by_id["motion_calib_positive_motion_02"]
+    assert "person carries" in prompts_by_id["motion_calib_positive_motion_00"]
+    assert "beach ball" in prompts_by_id["motion_calib_positive_motion_02"]
+
+    # 这些静态物体或纹理在真实结果中容易触发模型自发运动或纹理闪烁, 不能再作为 clean static 设计。
+    for prompt_id in (
+        "motion_calib_negative_static_04",
+        "motion_calib_negative_static_14",
+        "motion_calib_negative_static_15",
+    ):
+        prompt_text = prompts_by_id[prompt_id]
+        assert "checkerboard" not in prompt_text
+        assert "chess" not in prompt_text
+        assert "clock" not in prompt_text
+
+
+@pytest.mark.quick
 def test_generative_video_colab_notebook_calls_repository_modules() -> None:
     """Notebook 只能作为入口, 必须调用仓库脚本或 experiments 模块生成正式输出。"""
     notebook_path = Path("paper_workflow/colab_utils/generative_video_model_probe_colab.ipynb")

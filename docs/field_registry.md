@@ -674,3 +674,28 @@ Notebook 与 repository module 的跨边界数据
 | positive_motion_target_video_count | protocol | none | true | false | false | Target positive motion video count for motion calibration design. |
 | ambiguous_low_motion_target_video_count | protocol | none | true | false | false | Target ambiguous low-motion video count for motion calibration design. |
 | seed_suite_role | protocol | none | true | false | false | Seed role preserved separately from prompt_suite_role in generation plans. |
+
+
+| prompt_contamination_status | governance | none | true | false | false | Prompt-level contamination status for motion calibration negative prompts. |
+| prompt_contamination_reason | governance | none | true | false | false | Reason for prompt-level contamination decision. |
+| prompt_contamination_score | metric | none | true | false | false | Motion observability score used for prompt contamination audit, not a final watermark score. |
+| contamination_rule_id | protocol | none | true | false | false | Identifier for prompt-level and record-level contamination rules. |
+| contamination_decision_source | protocol | none | true | false | false | Source of contamination decision; must be motion_observability_score_only. |
+| excluded_from_threshold_estimation | governance | none | true | false | false | Whether a calibration record is excluded from threshold estimation. |
+| included_in_contamination_audit | governance | none | true | false | false | Whether a calibration record remains in contamination audit. |
+| included_in_stress_negative_eval | governance | none | true | false | false | Whether a contaminated negative sample is retained for stress negative evaluation. |
+| final_detection_score_filtering_blocked | governance | none | true | false | false | Whether filtering by final watermark detection score is explicitly blocked. |
+| no_final_detection_score_used_for_filtering | governance | none | true | false | false | Whether contamination filtering avoided S_final or final detection scores. |
+| positive_motion_pass_rate_wilson_lower | metric | none | true | false | false | Wilson lower confidence bound for positive motion pass rate. |
+| minimum_positive_motion_pass_rate_wilson_lower | protocol | none | true | false | false | Minimum Wilson lower confidence bound required for engineering calibration PASS. |
+| formal_visual_quality_ready_rate | metric | none | true | false | false | Ready rate of formal visual quality records in motion calibration split. |
+| formal_motion_consistency_ready_rate | metric | none | true | false | false | Ready rate of formal motion consistency records in motion calibration split. |
+| motion_threshold_evidence_level | governance | none | true | false | false | Evidence level of the motion threshold, such as engineering_calibration. |
+| engineering_motion_threshold_calibration_decision | governance | none | true | false | false | Engineering-stage motion calibration decision. |
+| paper_fixed_fpr_calibration_decision | governance | none | true | false | false | Paper-stage fixed-FPR calibration decision. |
+| paper_fixed_fpr_calibration_ready | governance | none | true | false | false | Whether paper-stage fixed-FPR calibration is ready. |
+| target_static_fpr_engineering | protocol | none | true | false | false | Engineering-stage target static FPR used for motion threshold quantile. |
+| threshold_quantile | protocol | none | true | false | false | Quantile used to select motion threshold from filtered negative tail. |
+| not_final_paper_fpr_0_01 | governance | none | true | false | false | Whether current calibration is not a final paper-level FPR=0.01 claim. |
+| prompt_contamination_audit_record_count | metric | none | true | false | false | Number of prompt contamination audit records emitted. |
+| threshold_stability_audit | artifact | none | true | false | false | Artifact summarizing threshold stability, bootstrap CI, and prompt dominance. |

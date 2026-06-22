@@ -106,6 +106,8 @@ def test_motion_threshold_calibration_reports_insufficient_without_calibration_s
     assert (run_root / "thresholds" / "motion_threshold_calibration_threshold.json").exists()
     assert (run_root / "artifacts" / "motion_threshold_calibration_decision.json").exists()
     assert (run_root / "reports" / "motion_threshold_calibration_report.md").exists()
+    assert (run_root / "artifacts" / "prompt_contamination_audit.json").exists()
+    assert (run_root / "artifacts" / "threshold_stability_audit.json").exists()
 
 
 @pytest.mark.quick
@@ -125,9 +127,9 @@ def test_motion_threshold_calibration_passes_with_governed_calibration_split(tmp
     assert audit["ambiguous_low_motion_calibration_count"] == 32
     assert audit["motion_threshold_calibration_required"] is False
     assert audit["test_time_threshold_update_blocked"] is True
-    assert audit["claim_support_status"] == "motion_threshold_calibrated"
+    assert audit["claim_support_status"] == "motion_threshold_engineering_calibrated"
     assert audit["negative_static_contamination_status"] == "none_detected"
-    assert audit["motion_threshold_selection_strategy"] == "negative_tail_max_plus_margin"
+    assert audit["motion_threshold_selection_strategy"] == "prompt_aware_robust_quantile_p95"
 
 
 @pytest.mark.quick
@@ -215,7 +217,7 @@ def test_motion_threshold_calibration_isolates_contaminated_negative_tail(tmp_pa
     assert audit["negative_static_contamination_status"] == "suspected"
     assert audit["negative_static_contamination_count"] == 8
     assert audit["negative_static_clean_calibration_count"] == 120
-    assert audit["motion_threshold_selection_strategy"] == "robust_negative_tail_excluding_contamination"
+    assert audit["motion_threshold_selection_strategy"] == "prompt_aware_robust_quantile_p95"
     assert audit["motion_delta_threshold"] < audit["conservative_motion_delta_threshold"]
     assert audit["positive_motion_pass_rate_at_threshold"] == 1.0
 

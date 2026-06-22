@@ -431,3 +431,37 @@ minimum_positive_motion_pass_rate_at_threshold: 0.8
 ### 9.3 当前推进建议
 
 需要重新执行 `generative_video_model_probe_colab.ipynb` 的 `PROFILE = motion_calibration` 流程。旧 package 不会自动获得新字段, 必须重新运行 formal metric 与 calibration。
+
+
+## 2026-06-22 工程推进: prompt-aware robust calibration 防泄漏协议已落地
+
+本次工程推进将 motion threshold calibration 升级为 prompt-aware robust engineering calibration。核心约束如下:
+
+```text
+污染过滤不能依赖 S_final、S_final_conservative、watermark_detection_score 或任何最终判定分数。
+污染过滤只能使用 motion observability / prompt validity / visual quality 相关字段。
+```
+
+已落地的工程规则:
+
+```text
+motion_calibration_score_role: engineering_prompt_audit
+contamination_decision_source: motion_observability_score_only
+final_detection_score_filtering_blocked: true
+no_final_detection_score_used_for_filtering: true
+threshold_selection_strategy: prompt_aware_robust_quantile_p95
+target_static_fpr_engineering: 0.05
+paper_fixed_fpr_calibration_ready: false
+not_final_paper_fpr_0_01: true
+```
+
+新增 audit artifacts:
+
+```text
+records/prompt_contamination_audit_records.jsonl
+tables/prompt_contamination_audit_table.csv
+artifacts/prompt_contamination_audit.json
+artifacts/threshold_stability_audit.json
+```
+
+当前阶段 PASS 只表示 engineering motion threshold 可用于后续 small-scale pilot gate, 不表示论文级 `TPR@FPR=0.01` 已完成。论文级 PASS 仍需要更大 held-out negative split, 并在 frozen threshold 下报告 fixed-FPR 结果与置信区间。

@@ -103,10 +103,11 @@ def _infer_motion_claim_role(generation_record: dict, prompt_metadata: dict) -> 
     negative_static 和 ambiguous_low_motion 视为负样本或边界样本, 它们允许低运动,
     但不能用来支撑正向 trajectory / velocity claim。
     """
-    for source in (generation_record, prompt_metadata):
-        role = source.get("motion_calibration_role")
-        if role:
-            return str(role)
+    for field_name in ("motion_claim_role", "motion_calibration_role"):
+        for source in (generation_record, prompt_metadata):
+            role = source.get(field_name)
+            if role:
+                return str(role)
     prompt_suite_role = str(generation_record.get("prompt_suite_role") or prompt_metadata.get("prompt_suite_role") or "")
     if "negative_static" in prompt_suite_role:
         return "negative_static"

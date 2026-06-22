@@ -414,6 +414,18 @@ def test_pilot_gate_unblocks_only_when_motion_calibration_passes(tmp_path: Path)
                 "trajectory_trace_id": f"trace_{prompt_index}_{seed_index}",
             })
     write_jsonl(run_root / "records" / "generation_records.jsonl", generation_rows)
+    write_jsonl(run_root / "records" / "formal_quality_motion_semantic_records.jsonl", [{
+        "generation_model_id": row["generation_model_id"],
+        "prompt_id": row["prompt_id"],
+        "seed_id": row["seed_id"],
+        "trajectory_trace_id": row["trajectory_trace_id"],
+        "motion_claim_role": "positive_motion",
+        "formal_visual_quality_ready": True,
+        "formal_motion_consistency_ready": True,
+        "formal_semantic_consistency_ready": True,
+        "formal_metric_result_used_for_claim": True,
+        "formal_metric_blocking_reason": "none",
+    } for row in generation_rows])
     write_jsonl(run_root / "records" / "quality_motion_semantic_proxy_records.jsonl", [{
         "visual_quality_proxy_status": "ready",
         "motion_consistency_proxy_status": "ready",
@@ -423,6 +435,10 @@ def test_pilot_gate_unblocks_only_when_motion_calibration_passes(tmp_path: Path)
     })
     write_json(run_root / "thresholds" / "mechanism_proxy_thresholds.json", {"controlled_negative_fpr": 0.0})
     write_jsonl(run_root / "records" / "small_scale_claim_pilot_matrix_records.jsonl", [{
+        "generation_model_id": "model",
+        "prompt_id": "prompt_0",
+        "seed_id": "seed_0",
+        "trajectory_trace_id": "trace_0_0",
         "attack_name": attack,
         "negative_family": family,
         "method_variant": method,
@@ -436,8 +452,21 @@ def test_pilot_gate_unblocks_only_when_motion_calibration_passes(tmp_path: Path)
     } for attack in ("attack_a", "attack_b", "attack_c") for family in ("negative_static", "wrong_key", "wrong_sampler_replay", "cross_prompt") for method in (
         "m0", "m1", "m2", "m3", "m4", "m5"
     )])
-    write_jsonl(run_root / "records" / "runtime_attack_records.jsonl", [{"attack_name": "attack_b", "attack_runtime_status": "ready"}])
-    write_jsonl(run_root / "records" / "runtime_detection_records.jsonl", [{"runtime_detection_status": "ready"}])
+    write_jsonl(run_root / "records" / "runtime_attack_records.jsonl", [{
+        "generation_model_id": "model",
+        "prompt_id": "prompt_0",
+        "seed_id": "seed_0",
+        "trajectory_trace_id": "trace_0_0",
+        "attack_name": "attack_b",
+        "attack_runtime_status": "ready",
+    }])
+    write_jsonl(run_root / "records" / "runtime_detection_records.jsonl", [{
+        "generation_model_id": "model",
+        "prompt_id": "prompt_0",
+        "seed_id": "seed_0",
+        "trajectory_trace_id": "trace_0_0",
+        "runtime_detection_status": "ready",
+    }])
     write_json(run_root / "artifacts" / "motion_threshold_calibration_decision.json", {
         "motion_threshold_calibration_decision": "PASS",
         "motion_threshold_calibration_ready": True,

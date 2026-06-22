@@ -366,3 +366,96 @@ package_outputs
 ```
 
 其中 `reuse existing motion_threshold_calibration_decision.json` 是关键约束。pilot profile 只读取已经通过的 calibration artifact, 不会重新运行 `motion_threshold_calibration`。
+
+### 2.10 formal motion 失败样本的 claim 过滤修复
+
+最新 small-scale pilot run 中发现 1 个正向运动样本未通过 formal motion consistency:
+
+```text
+prompt_id: heldout_rotation_scene
+seed_id: seed_main_b
+trajectory_trace_id: trace_0005
+formal_motion_gate_failure_reason: motion_delta_below_min
+formal_metric_blocking_reason: formal_motion_consistency_not_ready
+```
+
+该样本的视觉质量和语义一致性可以通过, 但实际生成结果接近低运动状态, 因此不能支撑 velocity / trajectory / motion 相关 claim。治理处理方式为:
+
+```text
+保留 generation record
+保留 formal metric record
+不物理删除视频文件
+从 motion claim eligible set 中排除
+从 pilot matrix proxy records 中排除
+在 small-scale pilot gate 中计入 formal_motion_claim_ready 缺口
+```
+
+本次修复新增公共筛选模块:
+
+```text
+experiments/generative_video_model_probe/formal_motion_claim_filter.py
+```
+
+下游 runner 和 gate 现在遵循同一规则:
+
+```text
+污染或剔除判断不读取 S_final、S_final_conservative 或任何最终检测分数。
+筛选只依赖 formal_visual_quality_ready、formal_motion_consistency_ready、formal_semantic_consistency_ready 和 motion_claim_role。
+```
+
+修复后当前 Google Drive run 的派生 artifacts 已重新写出:
+
+```text
+motion_claim_eligible_generation_count: 15
+motion_claim_excluded_generation_count: 1
+pilot_matrix_record_count: 450
+formal_motion_claim_status: blocked_by_formal_motion_consistency
+pilot_gate_decision: FAIL
+claim_support_status: workflow_progression_only
+missing_pilot_requirements:
+  - seed_coverage_ready
+  - formal_motion_claim_ready
+```
+
+该结果表示当前 16 条生成记录中只有 15 条可用于 motion claim。由于 `heldout_rotation_scene` 只剩 1 个合格 seed, 当前 pilot 不满足每个 prompt 2 个 seed 的覆盖要求, 因此不能进入 full experiment。
+
+### 2.11 heldout pilot prompt 可观测运动修复
+
+为修复 `heldout_rotation_scene / seed_main_b` 在真实 Wan2.1 pilot 中生成低运动结果的问题, 已更新 prompt suite 输入设计。旧 prompt:
+
+```text
+A blue cube rotates gently on a plain gray surface with soft shadows and smooth motion.
+motion_pattern_id: gentle_rotation
+```
+
+已替换为更强可观测运动的 heldout prompt:
+
+```text
+A large blue cube with bright orange arrow markings slides from the far left edge to the far right edge while spinning rapidly for a full rotation on a plain gray floor, fixed camera, the cube fills at least one third of the image, strong visible displacement in every frame.
+motion_pattern_id: large_rotation_translation
+motion_claim_role: positive_motion
+```
+
+同时, pilot 主 prompt 已显式登记:
+
+```text
+motion_claim_role: positive_motion
+```
+
+该变更的作用是提高下一次 `PROFILE = pilot` 运行中 positive motion 样本的可观测运动概率。它不会修改旧 run 的事实记录, 也不会把已经失败的样本重新解释为通过。旧 run 仍保持:
+
+```text
+pilot_gate_decision: FAIL
+missing_pilot_requirements:
+  - seed_coverage_ready
+  - formal_motion_claim_ready
+```
+
+本地 Google Drive 同步目录中的 prompt suite 已更新:
+
+```text
+G:\我的云端硬盘\SSTW\datasets\generative_video_prompt_suite\prompt_seed_suite.json
+prompt_suite_id: generative_video_probe_prompt_suite_motion_observability_and_pilot_repair
+```
+
+下一步需要重新执行 Colab `PROFILE = pilot`, 使新 prompt 产生新的 generation records、formal records 和 pilot gate artifacts。

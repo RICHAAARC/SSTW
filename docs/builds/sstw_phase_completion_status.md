@@ -585,3 +585,152 @@ final TPR@FPR=0.01 / 0.001 claim
 ```
 
 是否继续进入 full experiment, 必须由新的 pilot gate 结果决定。
+
+
+## 2026-06-23 阶段状态更新: small-scale pilot formal motion 过滤已修复
+
+### 当前发现
+
+最新 small-scale pilot run 中有 1 个正向运动样本未通过 formal motion consistency:
+
+```text
+prompt_id: heldout_rotation_scene
+seed_id: seed_main_b
+trajectory_trace_id: trace_0005
+formal_motion_gate_failure_reason: motion_delta_below_min
+formal_metric_blocking_reason: formal_motion_consistency_not_ready
+```
+
+该样本不是文件损坏或语义失败, 而是实际生成结果缺少足够可观测运动。它可以保留为 governed record, 但不能作为 velocity / trajectory claim 的正样本证据。
+
+### 已完成工程修复
+
+已新增并接入统一的 formal motion claim 样本筛选逻辑:
+
+```text
+experiments/generative_video_model_probe/formal_motion_claim_filter.py
+experiments/generative_video_model_probe/pilot_matrix_postprocess.py
+experiments/generative_video_model_probe/pilot_claim_gate.py
+experiments/generative_video_model_probe/attack_runner.py
+```
+
+修复后的规则为:
+
+```text
+formal motion 失败样本不物理删除。
+generation_records 与 formal_quality_motion_semantic_records 保留完整审计痕迹。
+pilot matrix、runtime attack 统计和 pilot gate 覆盖率只使用 motion-claim-eligible 样本。
+样本筛选不得依赖 S_final、S_final_conservative 或最终检测分数。
+```
+
+### 当前最新 gate 判定
+
+已对当前 Google Drive run 重新写出 pilot matrix 和 pilot gate artifacts:
+
+```text
+motion_claim_eligible_generation_count: 15
+motion_claim_excluded_generation_count: 1
+formal_motion_consistency_ready_count: 15
+formal_motion_consistency_blocked_count: 1
+pilot_matrix_record_count: 450
+pilot_gate_decision: FAIL
+claim_support_status: workflow_progression_only
+missing_pilot_requirements:
+  - seed_coverage_ready
+  - formal_motion_claim_ready
+```
+
+对应轻量 governed artifacts package 已写入:
+
+```text
+G:\我的云端硬盘\SSTW\packages\generative_video_model_probe\generative_video_model_probe_colab_20260622_174746_e0f9c79d.zip
+G:\我的云端硬盘\SSTW\packages\generative_video_model_probe\generative_video_model_probe_colab_20260622_174746_e0f9c79d_package_manifest.json
+include_videos: false
+```
+
+### 当前阶段结论
+
+当前不是 motion threshold calibration 阻塞, 因为 calibration artifact 已经 PASS。当前阻塞来自 pilot split 中 1 个正向运动样本实际低运动, 导致:
+
+```text
+heldout_rotation_scene 只有 1 个合格 seed
+small-scale pilot 不满足 8 prompts x 2 seeds 的 motion claim 覆盖要求
+```
+
+因此当前不能进入 full generative video probe。下一步应重跑或替换该 prompt / seed, 直到 8 个 prompt 每个都有 2 个通过 formal motion consistency 的合格样本。
+
+
+## 2026-06-23 阶段状态更新: pilot heldout motion prompt 已修复待重跑
+
+### 已完成变更
+
+已将 `heldout_rotation_scene` 从弱运动 prompt 改为强可观测运动 prompt。旧设计:
+
+```text
+prompt_text: A blue cube rotates gently on a plain gray surface with soft shadows and smooth motion.
+motion_pattern_id: gentle_rotation
+```
+
+新设计:
+
+```text
+prompt_text: A large blue cube with bright orange arrow markings slides from the far left edge to the far right edge while spinning rapidly for a full rotation on a plain gray floor, fixed camera, the cube fills at least one third of the image, strong visible displacement in every frame.
+motion_pattern_id: large_rotation_translation
+motion_claim_role: positive_motion
+prompt_suite_id: generative_video_probe_prompt_suite_motion_observability_and_pilot_repair
+```
+
+同时, pilot 中的 positive motion prompts 已显式携带:
+
+```text
+motion_claim_role: positive_motion
+```
+
+Colab runtime 现在会把该字段写入 generation records, formal metric runner 也会优先读取该字段, 减少隐式角色推断。
+
+### Google Drive 输入状态
+
+已更新本地同步的 Google Drive prompt suite:
+
+```text
+G:\我的云端硬盘\SSTW\datasets\generative_video_prompt_suite\prompt_seed_suite.json
+G:\我的云端硬盘\SSTW\datasets\generative_video_prompt_suite\prompt_seed_suite_manifest.json
+```
+
+### 当前阶段判定
+
+该变更只修复下一次 pilot 输入, 不会 retroactively 修改旧 run。旧 run 仍是:
+
+```text
+pilot_gate_decision: FAIL
+motion_claim_eligible_generation_count: 15
+motion_claim_excluded_generation_count: 1
+```
+
+下一步需要重新执行:
+
+```text
+PROFILE = pilot
+prepare prompt suite
+Wan2.1 generation
+formal_metric_runner
+reuse frozen motion_threshold_calibration_decision.json
+mechanism postprocess
+pilot matrix postprocess
+runtime attack
+runtime detection
+small-scale claim pilot gate
+package_outputs
+```
+
+只有新 run 达到:
+
+```text
+motion_claim_eligible_generation_count: 16
+motion_claim_excluded_generation_count: 0
+seed_per_prompt_min: 2
+formal_motion_claim_status: ready
+pilot_gate_decision: PASS
+```
+
+才可以认为 small-scale pilot 的 motion coverage 阻塞解除。

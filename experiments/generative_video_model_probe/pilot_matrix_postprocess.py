@@ -7,6 +7,7 @@ import json
 from pathlib import Path
 from statistics import mean
 
+from experiments.generative_video_model_probe.formal_motion_claim_filter import select_motion_claim_generation_records
 from main.protocol.record_writer import write_json, write_jsonl
 from main.protocol.table_builder import write_csv
 
@@ -140,10 +141,12 @@ def build_pilot_matrix_records(run_root: str | Path) -> list[dict]:
         record for record in _read_jsonl(run_root / "records" / "generation_records.jsonl")
         if record.get("generation_status") == "success"
     ]
+    formal_metric_records = _read_jsonl(run_root / "records" / "formal_quality_motion_semantic_records.jsonl")
+    selection = select_motion_claim_generation_records(generation_records, formal_metric_records)
     trajectory_groups = _group_trajectory_records(_read_jsonl(run_root / "records" / "trajectory_trace.jsonl"))
     records: list[dict] = []
 
-    for generation_record in generation_records:
+    for generation_record in selection.eligible_generation_records:
         trace_id = str(generation_record.get("trajectory_trace_id") or "")
         base_score, latent_norm_range, latent_std_range = _trajectory_proxy_score(trajectory_groups.get(trace_id, []))
         endpoint_score = round(_clip(base_score - 0.075), 6)
@@ -187,13 +190,19 @@ def build_pilot_matrix_records(run_root: str | Path) -> list[dict]:
     return records
 
 
-def audit_pilot_matrix_records(records: list[dict]) -> dict:
+def audit_pilot_matrix_records(records: list[dict], run_root: str | Path | None = None) -> dict:
     """审计 pilot matrix proxy records 的覆盖情况。"""
     attacks = {str(record.get("attack_name")) for record in records if record.get("attack_name")}
     methods = {str(record.get("method_variant")) for record in records if record.get("method_variant")}
     negative_families = {str(record.get("negative_family")) for record in records if record.get("negative_family")}
     path_gains = [float(record["path_marginal_gain_at_fixed_fpr"]) for record in records if record.get("path_marginal_gain_at_fixed_fpr") is not None]
     replay_uncertainties = [float(record["replay_uncertainty_mean"]) for record in records if record.get("replay_uncertainty_mean") is not None]
+    selection_fields: dict = {}
+    if run_root is not None:
+        root = Path(run_root)
+        generation_records = _read_jsonl(root / "records" / "generation_records.jsonl")
+        formal_metric_records = _read_jsonl(root / "records" / "formal_quality_motion_semantic_records.jsonl")
+        selection_fields = select_motion_claim_generation_records(generation_records, formal_metric_records).audit_fields()
     return {
         "stage_id": "small_scale_claim_pilot_matrix_postprocess",
         "pilot_matrix_postprocess_decision": "PASS" if records else "FAIL",
@@ -205,6 +214,7 @@ def audit_pilot_matrix_records(records: list[dict]) -> dict:
         "replay_uncertainty_mean": round(mean(replay_uncertainties), 6) if replay_uncertainties else None,
         "claim_support_status": "proxy_postprocess_only",
         "pilot_evidence_level": "proxy_postprocess",
+        **selection_fields,
     }
 
 
@@ -212,7 +222,7 @@ def write_pilot_matrix_postprocess(run_root: str | Path) -> dict:
     """写出 small-scale pilot matrix proxy records、table、decision 和 report。"""
     run_root = Path(run_root)
     records = build_pilot_matrix_records(run_root)
-    audit = audit_pilot_matrix_records(records)
+    audit = audit_pilot_matrix_records(records, run_root)
     write_jsonl(run_root / "records" / "small_scale_claim_pilot_matrix_records.jsonl", records)
     write_csv(run_root / "tables" / "small_scale_claim_pilot_matrix_table.csv", records)
     write_json(run_root / "artifacts" / "small_scale_claim_pilot_matrix_decision.json", audit)
@@ -225,6 +235,9 @@ def write_pilot_matrix_postprocess(run_root: str | Path) -> dict:
         f"- pilot_matrix_attack_count: {audit['pilot_matrix_attack_count']}\n"
         f"- pilot_matrix_method_variant_count: {audit['pilot_matrix_method_variant_count']}\n"
         f"- pilot_matrix_negative_family_count: {audit['pilot_matrix_negative_family_count']}\n"
+        f"- motion_claim_eligible_generation_count: {audit.get('motion_claim_eligible_generation_count')}\n"
+        f"- motion_claim_excluded_generation_count: {audit.get('motion_claim_excluded_generation_count')}\n"
+        f"- formal_motion_claim_status: {audit.get('formal_motion_claim_status')}\n"
         f"- claim_support_status: {audit['claim_support_status']}\n"
     )
     report_path = run_root / "reports" / "small_scale_claim_pilot_matrix_report.md"

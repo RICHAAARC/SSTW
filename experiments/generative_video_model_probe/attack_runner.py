@@ -9,6 +9,7 @@ import re
 from pathlib import Path
 from typing import Any
 
+from experiments.generative_video_model_probe.formal_motion_claim_filter import select_motion_claim_generation_records
 from main.protocol.record_writer import write_json, write_jsonl
 from main.protocol.table_builder import write_csv
 
@@ -147,8 +148,10 @@ def build_runtime_attack_records(run_root: str | Path, attack_names: tuple[str, 
         record for record in _read_jsonl(run_root / "records" / "generation_records.jsonl")
         if record.get("generation_status") == "success"
     ]
+    formal_metric_records = _read_jsonl(run_root / "records" / "formal_quality_motion_semantic_records.jsonl")
+    selection = select_motion_claim_generation_records(generation_records, formal_metric_records)
     records: list[dict] = []
-    for generation_record in generation_records:
+    for generation_record in selection.eligible_generation_records:
         source_video_path = _resolve_video_path(run_root, generation_record)
         for attack_name in attack_names:
             record = {
@@ -195,10 +198,16 @@ def build_runtime_attack_records(run_root: str | Path, attack_names: tuple[str, 
     return records
 
 
-def audit_runtime_attack_records(records: list[dict]) -> dict:
+def audit_runtime_attack_records(records: list[dict], run_root: str | Path | None = None) -> dict:
     """审计 runtime attack records 的覆盖情况。"""
     ready_records = [record for record in records if record.get("attack_runtime_status") == "ready"]
     attack_names = {str(record.get("attack_name")) for record in ready_records if record.get("attack_name")}
+    selection_fields: dict = {}
+    if run_root is not None:
+        root = Path(run_root)
+        generation_records = _read_jsonl(root / "records" / "generation_records.jsonl")
+        formal_metric_records = _read_jsonl(root / "records" / "formal_quality_motion_semantic_records.jsonl")
+        selection_fields = select_motion_claim_generation_records(generation_records, formal_metric_records).audit_fields()
     return {
         "stage_id": "generative_video_runtime_attack_runner",
         "runtime_attack_decision": "PASS" if ready_records and len(ready_records) == len(records) else "FAIL",
@@ -207,6 +216,7 @@ def audit_runtime_attack_records(records: list[dict]) -> dict:
         "runtime_attack_count": len(attack_names),
         "attack_matrix_evidence_level": "runtime_video_file",
         "claim_support_status": "runtime_attack_evidence_only",
+        **selection_fields,
     }
 
 
@@ -214,7 +224,7 @@ def run_runtime_attacks(run_root: str | Path, attack_names: tuple[str, ...] = RU
     """执行 runtime attacks 并写出 governed records、table、decision 和 report。"""
     run_root = Path(run_root)
     records = build_runtime_attack_records(run_root, attack_names=attack_names)
-    audit = audit_runtime_attack_records(records)
+    audit = audit_runtime_attack_records(records, run_root)
     write_jsonl(run_root / "records" / "runtime_attack_records.jsonl", records)
     write_csv(run_root / "tables" / "runtime_attack_table.csv", records)
     write_json(run_root / "artifacts" / "runtime_attack_decision.json", audit)
@@ -226,6 +236,8 @@ def run_runtime_attacks(run_root: str | Path, attack_names: tuple[str, ...] = RU
         f"- runtime_attack_record_count: {audit['runtime_attack_record_count']}\n"
         f"- runtime_attack_ready_count: {audit['runtime_attack_ready_count']}\n"
         f"- runtime_attack_count: {audit['runtime_attack_count']}\n"
+        f"- motion_claim_eligible_generation_count: {audit.get('motion_claim_eligible_generation_count')}\n"
+        f"- motion_claim_excluded_generation_count: {audit.get('motion_claim_excluded_generation_count')}\n"
         f"- claim_support_status: {audit['claim_support_status']}\n"
     )
     report_path = run_root / "reports" / "runtime_attack_report.md"

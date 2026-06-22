@@ -15,6 +15,7 @@ PROMPT_ITEMS = [
         "prompt_negative_text": "worst quality, inconsistent motion, blurry, jittery, distorted",
         "prompt_category": "object_motion",
         "motion_pattern_id": "left_to_right_pan",
+        "motion_claim_role": "positive_motion",
         "prompt_suite_role": "main",
     },
     {
@@ -23,14 +24,16 @@ PROMPT_ITEMS = [
         "prompt_negative_text": "worst quality, inconsistent motion, blurry, jittery, distorted",
         "prompt_category": "camera_motion",
         "motion_pattern_id": "slow_zoom",
+        "motion_claim_role": "positive_motion",
         "prompt_suite_role": "main",
     },
     {
         "prompt_id": "heldout_rotation_scene",
-        "prompt_text": "A blue cube rotates gently on a plain gray surface with soft shadows and smooth motion.",
-        "prompt_negative_text": "worst quality, inconsistent motion, blurry, jittery, distorted",
+        "prompt_text": "A large blue cube with bright orange arrow markings slides from the far left edge to the far right edge while spinning rapidly for a full rotation on a plain gray floor, fixed camera, the cube fills at least one third of the image, strong visible displacement in every frame.",
+        "prompt_negative_text": "static image, frozen frame, subtle motion, tiny object, weak rotation, blurry, jittery, distorted",
         "prompt_category": "heldout_motion",
-        "motion_pattern_id": "gentle_rotation",
+        "motion_pattern_id": "large_rotation_translation",
+        "motion_claim_role": "positive_motion",
         "prompt_suite_role": "heldout_prompt",
     },
     {
@@ -39,6 +42,7 @@ PROMPT_ITEMS = [
         "prompt_negative_text": "worst quality, inconsistent motion, blurry, jittery, distorted",
         "prompt_category": "fluid_motion",
         "motion_pattern_id": "continuous_pour",
+        "motion_claim_role": "positive_motion",
         "prompt_suite_role": "pilot_main",
     },
     {
@@ -47,6 +51,7 @@ PROMPT_ITEMS = [
         "prompt_negative_text": "worst quality, inconsistent motion, blurry, jittery, distorted",
         "prompt_category": "articulated_motion",
         "motion_pattern_id": "sideways_walk",
+        "motion_claim_role": "positive_motion",
         "prompt_suite_role": "pilot_main",
     },
     {
@@ -55,6 +60,7 @@ PROMPT_ITEMS = [
         "prompt_negative_text": "worst quality, inconsistent motion, blurry, jittery, distorted",
         "prompt_category": "natural_motion",
         "motion_pattern_id": "downward_fall",
+        "motion_claim_role": "positive_motion",
         "prompt_suite_role": "pilot_main",
     },
     {
@@ -63,6 +69,7 @@ PROMPT_ITEMS = [
         "prompt_negative_text": "worst quality, inconsistent motion, blurry, jittery, distorted",
         "prompt_category": "object_rotation",
         "motion_pattern_id": "turntable_rotation",
+        "motion_claim_role": "positive_motion",
         "prompt_suite_role": "pilot_main",
     },
     {
@@ -71,6 +78,7 @@ PROMPT_ITEMS = [
         "prompt_negative_text": "worst quality, inconsistent motion, blurry, jittery, distorted",
         "prompt_category": "background_motion",
         "motion_pattern_id": "lateral_background_shift",
+        "motion_claim_role": "positive_motion",
         "prompt_suite_role": "pilot_main",
     },
 ]
@@ -169,7 +177,7 @@ def _build_motion_calibration_prompts() -> list[dict]:
 def build_prompt_suite() -> dict:
     """构造独立于测试运行的 prompt suite, 便于 Colab 重复使用。"""
     suite = {
-        "prompt_suite_id": "generative_video_probe_prompt_suite_motion_observability_repair",
+        "prompt_suite_id": "generative_video_probe_prompt_suite_motion_observability_and_pilot_repair",
         "dataset_construction_status": "constructed",
         "dataset_source": "repository_deterministic_prompt_seed_spec",
         "motion_calibration_design": {

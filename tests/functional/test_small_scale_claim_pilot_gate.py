@@ -39,7 +39,7 @@ def _write_proxy_postprocess(run_root: Path) -> None:
             "trajectory_gain_confirmed_by_proxy": True,
             "fixed_low_fpr_proxy_pass": True,
             "quality_motion_semantic_proxy_pass": True,
-            "formal_claim_status": "blocked_by_formal_motion_consistency",
+            "formal_claim_status": "ready",
         },
     })
     write_json(run_root / "thresholds" / "mechanism_proxy_thresholds.json", {
@@ -47,7 +47,7 @@ def _write_proxy_postprocess(run_root: Path) -> None:
         "target_fpr": 0.01,
     })
     write_json(run_root / "artifacts" / "formal_quality_motion_semantic_decision.json", {
-        "formal_metric_claim_status": "blocked_by_formal_motion_consistency",
+        "formal_metric_claim_status": "ready",
     })
     write_jsonl(run_root / "records" / "quality_motion_semantic_proxy_records.jsonl", [{
         "visual_quality_proxy_status": "ready",
@@ -70,6 +70,59 @@ def _write_trajectory_records(run_root: Path, prompt_count: int = 8, seed_count:
                     "latent_std": 0.9 - 0.05 * step_index,
                 })
     write_jsonl(run_root / "records" / "trajectory_trace.jsonl", rows)
+
+
+def _write_formal_metric_records(
+    run_root: Path,
+    prompt_count: int = 8,
+    seed_count: int = 2,
+    failed_prompt_index: int | None = None,
+    failed_seed_index: int | None = None,
+) -> None:
+    """写出 formal metric records, 可指定 1 个低运动失败样本。"""
+    rows = []
+    for prompt_index in range(prompt_count):
+        for seed_index in range(seed_count):
+            motion_ready = not (
+                failed_prompt_index == prompt_index
+                and failed_seed_index == seed_index
+            )
+            rows.append({
+                "record_version": "generative_video_formal_quality_motion_semantic_v1",
+                "generation_model_id": "model",
+                "prompt_id": f"prompt_{prompt_index}",
+                "seed_id": f"seed_{seed_index}",
+                "trajectory_trace_id": f"trace_{prompt_index}_{seed_index}",
+                "motion_claim_role": "positive_motion",
+                "formal_visual_quality_ready": True,
+                "formal_motion_consistency_ready": motion_ready,
+                "formal_semantic_consistency_ready": True,
+                "formal_motion_gate_policy": "positive_motion_requires_min_delta",
+                "formal_motion_gate_failure_reason": "none" if motion_ready else "motion_delta_below_min",
+                "formal_metric_blocking_reason": "none" if motion_ready else "formal_motion_consistency_not_ready",
+                "formal_metric_result_used_for_claim": motion_ready,
+            })
+    write_jsonl(run_root / "records" / "formal_quality_motion_semantic_records.jsonl", rows)
+    write_json(run_root / "artifacts" / "formal_quality_motion_semantic_decision.json", {
+        "formal_metric_record_count": prompt_count * seed_count,
+        "formal_motion_consistency_ready_count": sum(
+            1 for row in rows if row["formal_motion_consistency_ready"] is True
+        ),
+        "formal_motion_consistency_blocked_count": sum(
+            1 for row in rows if row["formal_motion_consistency_ready"] is not True
+        ),
+        "formal_metric_claim_status": "ready" if all(row["formal_metric_result_used_for_claim"] for row in rows) else "blocked_by_formal_motion_consistency",
+    })
+
+
+def _write_motion_calibration_ready(run_root: Path) -> None:
+    """写出已冻结的工程 motion threshold calibration artifact。"""
+    write_json(run_root / "artifacts" / "motion_threshold_calibration_decision.json", {
+        "motion_threshold_calibration_decision": "PASS",
+        "motion_threshold_calibration_ready": True,
+        "motion_threshold_id": "motion_delta_calibrated_v1",
+        "motion_threshold_source_split": "calibration",
+    })
 
 
 @pytest.mark.quick
@@ -152,3 +205,32 @@ def test_pilot_matrix_postprocess_fills_proxy_matrix_but_keeps_calibration_block
     assert summary["claim_support_status"] == "blocked_until_motion_threshold_calibration"
     assert summary["path_marginal_gain_at_fixed_fpr"] is not None
     assert summary["replay_uncertainty_mean"] is not None
+
+
+@pytest.mark.quick
+def test_formal_motion_failed_sample_is_excluded_from_motion_claim_gate(tmp_path: Path) -> None:
+    """formal motion 失败样本必须保留记录, 但不能计入 motion claim 证据。"""
+    run_root = tmp_path / "generative_video_model_probe_colab"
+    _write_generation_records(run_root)
+    _write_trajectory_records(run_root)
+    _write_proxy_postprocess(run_root)
+    _write_motion_calibration_ready(run_root)
+    _write_formal_metric_records(run_root, failed_prompt_index=0, failed_seed_index=1)
+    write_jsonl(run_root / "records" / "mechanism_score_records.jsonl", [])
+    write_jsonl(run_root / "records" / "controlled_negative_records.jsonl", [])
+
+    matrix_audit = write_pilot_matrix_postprocess(run_root)
+    summary = build_small_scale_claim_pilot_audit(run_root)
+
+    assert matrix_audit["pilot_matrix_postprocess_decision"] == "PASS"
+    assert matrix_audit["motion_claim_eligible_generation_count"] == 15
+    assert matrix_audit["motion_claim_excluded_generation_count"] == 1
+    assert matrix_audit["pilot_matrix_record_count"] == 15 * 3 * (6 + 4)
+    assert summary["pilot_gate_decision"] == "FAIL"
+    assert summary["claim_support_status"] == "workflow_progression_only"
+    assert summary["formal_motion_claim_status"] == "blocked_by_formal_motion_consistency"
+    assert summary["motion_claim_eligible_generation_count"] == 15
+    assert summary["motion_claim_excluded_generation_count"] == 1
+    assert summary["seed_per_prompt_min"] == 1
+    assert "formal_motion_claim_ready" in summary["missing_pilot_requirements"]
+    assert "seed_coverage_ready" in summary["missing_pilot_requirements"]

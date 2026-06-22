@@ -554,6 +554,11 @@ Notebook 与 repository module 的跨边界数据
 | replay_uncertainty_mean | metric | none | true | false | false | Mean replay uncertainty used to down-weight or block uncertain reconstructed trajectories. |
 | flow_state_admissibility_status | governance | none | true | false | false | Status showing whether flow trajectory state evidence passed admissibility constraints. |
 | claim_support_status | claim | none | true | true | false | Claim support boundary status mapped to governed records, tables, figures, reports, or manifests. |
+| formal_motion_claim_status | claim | none | true | true | false | Claim readiness status derived from formal motion-consistency records for positive motion samples. |
+| motion_claim_eligible_generation_count | metric | none | true | false | false | Number of successful generation records that passed formal visual, motion, and semantic gates for positive motion claim use. |
+| motion_claim_excluded_generation_count | metric | none | true | false | false | Number of successful generation records excluded from motion or trajectory claim use by formal metric gates. |
+| motion_claim_runtime_attack_ready_count | metric | none | true | false | false | Number of runtime attack records counted after formal motion claim eligibility filtering. |
+| motion_claim_runtime_detection_ready_count | metric | none | true | false | false | Number of runtime detection records counted after formal motion claim eligibility filtering. |
 | pilot_gate_decision | governance | none | true | false | false | Small-scale claim pilot gate decision. |
 | missing_pilot_requirements | governance | none | true | false | false | List of missing requirements blocking small-scale claim pilot progression. |
 | pilot_missing_requirement_count | metric | none | true | false | false | Count of missing small-scale claim pilot requirements. |

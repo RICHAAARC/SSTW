@@ -153,3 +153,49 @@ small_scale_pilot_claim_support_status: blocked_until_motion_threshold_calibrati
 ```
 
 该历史状态表示工程层面已经从真实视频生成推进到攻击、检测、gate 和 package 的完整闭环, 但当时正式实验结论仍等待 `motion_threshold_calibration` 完成。最新 motion calibration 已经 PASS, 因此下一轮 pilot profile 应复用冻结 calibration artifact 并重新计算 pilot gate。
+
+### 2.5 formal motion claim 过滤边界
+
+本阶段现在要求所有进入 motion / trajectory claim 的生成样本先通过 formal visual、motion 和 semantic gate。若某个正向运动样本实际生成结果接近静止或低运动:
+
+```text
+formal_motion_consistency_ready: false
+formal_metric_blocking_reason: formal_motion_consistency_not_ready
+```
+
+则该样本:
+
+```text
+保留在 generation_records 与 formal records 中
+不物理删除原始视频
+不进入 pilot matrix claim evidence
+不计入 prompt / seed 覆盖率
+不计入 runtime attack / detection claim-ready 统计
+```
+
+该过滤由以下公共模块实现:
+
+```text
+experiments/generative_video_model_probe/formal_motion_claim_filter.py
+```
+
+该模块只读取 motion observability、formal readiness 和样本角色字段, 不读取 `S_final`、`S_final_conservative` 或最终判定分数, 因此不会把最终检测结果反向用于污染过滤。
+
+### 2.6 pilot positive motion prompt 修复
+
+当前 `generative_video_model_probe` 的 prompt suite 已从 calibration prompt 修复扩展到 pilot heldout prompt 修复。失败原因是旧的 `heldout_rotation_scene` 使用:
+
+```text
+motion_pattern_id: gentle_rotation
+```
+
+在真实 Wan2.1 生成中可能被模型实现为近静止或极弱旋转, 导致 formal motion gate 低运动失败。新 prompt 保留同一 `prompt_id`, 但把运动约束改为:
+
+```text
+large foreground object
+left-to-right translation across the full frame
+rapid full rotation
+strong visible displacement in every frame
+```
+
+该变更属于输入设计修复, 不改变 detector 或 gate 阈值, 也不允许回头修改旧 run 记录。下一次 pilot 必须重新运行 generation 和 formal metric, 才能判断该修复是否解除 `formal_motion_claim_ready` 与 `seed_coverage_ready` 缺口。

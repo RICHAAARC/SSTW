@@ -8,6 +8,10 @@ from pathlib import Path
 from statistics import mean
 from typing import Any
 
+from experiments.generative_video_model_probe.formal_motion_claim_filter import (
+    filter_records_to_motion_claim_eligible,
+    select_motion_claim_generation_records,
+)
 from main.protocol.record_writer import write_json, write_jsonl
 from main.protocol.table_builder import write_csv
 
@@ -153,20 +157,35 @@ def build_small_scale_claim_pilot_audit(run_root: str | Path) -> dict:
     motion_calibration_decision = _read_json(run_root / "artifacts" / "motion_threshold_calibration_decision.json")
 
     successful_generation_records = [record for record in generation_records if record.get("generation_status") == "success"]
-    prompt_ids = _unique_nonempty(successful_generation_records, "prompt_id")
-    seed_per_prompt_min = _seed_per_prompt_min(successful_generation_records)
-    matrix_source_records = mechanism_records + controlled_negative_records + pilot_matrix_records
+    motion_claim_selection = select_motion_claim_generation_records(successful_generation_records, formal_metric_records)
+    motion_claim_generation_records = motion_claim_selection.eligible_generation_records
+    prompt_ids = _unique_nonempty(motion_claim_generation_records, "prompt_id")
+    seed_per_prompt_min = _seed_per_prompt_min(motion_claim_generation_records)
+    eligible_mechanism_records = filter_records_to_motion_claim_eligible(mechanism_records, motion_claim_selection)
+    eligible_controlled_negative_records = filter_records_to_motion_claim_eligible(controlled_negative_records, motion_claim_selection)
+    eligible_pilot_matrix_records = filter_records_to_motion_claim_eligible(pilot_matrix_records, motion_claim_selection)
+    eligible_runtime_attack_records = filter_records_to_motion_claim_eligible(runtime_attack_records, motion_claim_selection)
+    eligible_runtime_detection_records = filter_records_to_motion_claim_eligible(runtime_detection_records, motion_claim_selection)
+    matrix_source_records = eligible_mechanism_records + eligible_controlled_negative_records + eligible_pilot_matrix_records
     ready_runtime_attack_records = [
         record for record in runtime_attack_records
+        if record.get("attack_runtime_status") == "ready"
+    ]
+    eligible_ready_runtime_attack_records = [
+        record for record in eligible_runtime_attack_records
         if record.get("attack_runtime_status") == "ready"
     ]
     ready_runtime_detection_records = [
         record for record in runtime_detection_records
         if record.get("runtime_detection_status") == "ready"
     ]
-    attack_names = _attack_names(mechanism_records, controlled_negative_records, pilot_matrix_records, ready_runtime_attack_records)
-    negative_families = _negative_families(mechanism_records, controlled_negative_records, pilot_matrix_records)
-    method_variants = _unique_nonempty(mechanism_records + pilot_matrix_records, "method_variant")
+    eligible_ready_runtime_detection_records = [
+        record for record in eligible_runtime_detection_records
+        if record.get("runtime_detection_status") == "ready"
+    ]
+    attack_names = _attack_names(eligible_mechanism_records, eligible_controlled_negative_records, eligible_pilot_matrix_records, eligible_ready_runtime_attack_records)
+    negative_families = _negative_families(eligible_mechanism_records, eligible_controlled_negative_records, eligible_pilot_matrix_records)
+    method_variants = _unique_nonempty(eligible_mechanism_records + eligible_pilot_matrix_records, "method_variant")
 
     path_gain_values = _numeric_values(matrix_source_records, "path_marginal_gain_at_fixed_fpr")
     path_gain = round(mean(path_gain_values), 6) if path_gain_values else None
@@ -186,7 +205,7 @@ def build_small_scale_claim_pilot_audit(run_root: str | Path) -> dict:
     wrong_sampler_present = _has_wrong_sampler_replay(matrix_source_records)
     wrong_sampler_not_equivalent = _wrong_sampler_replay_not_equivalent(matrix_source_records)
 
-    formal_motion_claim_status = _formal_motion_claim_status(formal_metric_records, formal_decision, postprocess_decision)
+    formal_motion_claim_status = motion_claim_selection.formal_motion_claim_status or _formal_motion_claim_status(formal_metric_records, formal_decision, postprocess_decision)
     motion_threshold_calibration_ready = motion_calibration_decision.get("motion_threshold_calibration_ready") is True
     motion_threshold_id = motion_calibration_decision.get("motion_threshold_id") or HEURISTIC_MOTION_THRESHOLD_ID
     motion_threshold_source_split = motion_calibration_decision.get("motion_threshold_source_split") or HEURISTIC_MOTION_THRESHOLD_SOURCE_SPLIT
@@ -204,7 +223,8 @@ def build_small_scale_claim_pilot_audit(run_root: str | Path) -> dict:
         "wrong_sampler_replay_ready": wrong_sampler_present and wrong_sampler_not_equivalent,
         "replay_uncertainty_ready": replay_uncertainty_recorded,
         "quality_proxy_ready": bool(quality_proxy_records) and postprocess_decision.get("details", {}).get("quality_motion_semantic_proxy_pass") is True,
-        "runtime_detection_ready": (not ready_runtime_attack_records) or len(ready_runtime_detection_records) >= len(ready_runtime_attack_records),
+        "formal_motion_claim_ready": formal_motion_claim_status == "ready",
+        "runtime_detection_ready": (not eligible_ready_runtime_attack_records) or len(eligible_ready_runtime_detection_records) >= len(eligible_ready_runtime_attack_records),
     }
     missing = [name for name, passed in requirement_checks.items() if not passed]
 
@@ -227,16 +247,17 @@ def build_small_scale_claim_pilot_audit(run_root: str | Path) -> dict:
         "pilot_missing_requirement_count": len(missing),
         "generation_record_count": len(generation_records),
         "successful_generation_count": len(successful_generation_records),
+        **motion_claim_selection.audit_fields(),
         "prompt_count": len(prompt_ids),
         "seed_per_prompt_min": seed_per_prompt_min,
         "attack_count": len(attack_names),
         "negative_family_count": len(negative_families),
         "method_variant_count": len(method_variants),
-        "pilot_matrix_record_count": len(pilot_matrix_records),
+        "pilot_matrix_record_count": len(eligible_pilot_matrix_records),
         "runtime_attack_record_count": len(runtime_attack_records),
-        "runtime_attack_ready_count": len(ready_runtime_attack_records),
+        "runtime_attack_ready_count": len(eligible_ready_runtime_attack_records),
         "runtime_detection_record_count": len(runtime_detection_records),
-        "runtime_detection_ready_count": len(ready_runtime_detection_records),
+        "runtime_detection_ready_count": len(eligible_ready_runtime_detection_records),
         "path_marginal_gain_at_fixed_fpr": path_gain,
         "negative_tail_status": "not_inflated" if negative_tail_not_inflated else "missing_or_not_ready",
         "wrong_key_score_separation_passed": wrong_key_score_separation_passed,
@@ -269,6 +290,9 @@ def write_small_scale_claim_pilot_audit(run_root: str | Path) -> dict:
         f"- pilot_gate_decision: {audit['pilot_gate_decision']}\n"
         f"- claim_support_status: {audit['claim_support_status']}\n"
         f"- missing_pilot_requirements: {', '.join(audit['missing_pilot_requirements']) if audit['missing_pilot_requirements'] else 'none'}\n"
+        f"- motion_claim_eligible_generation_count: {audit['motion_claim_eligible_generation_count']}\n"
+        f"- motion_claim_excluded_generation_count: {audit['motion_claim_excluded_generation_count']}\n"
+        f"- formal_motion_claim_status: {audit['formal_motion_claim_status']}\n"
         f"- motion_threshold_source_split: {audit['motion_threshold_source_split']}\n"
         f"- motion_threshold_calibration_required: {audit['motion_threshold_calibration_required']}\n"
     )

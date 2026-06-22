@@ -74,7 +74,7 @@ def test_motion_calibration_prompt_suite_uses_observability_repair_prompts(tmp_p
     suite = json.loads(Path(summary["prompt_suite_path"]).read_text(encoding="utf-8"))
     prompts_by_id = {item["prompt_id"]: item["prompt_text"].lower() for item in suite["prompts"]}
 
-    assert suite["prompt_suite_id"] == "generative_video_probe_prompt_suite_motion_observability_repair"
+    assert suite["prompt_suite_id"] == "generative_video_probe_prompt_suite_motion_observability_and_pilot_repair"
 
     # 这两个历史 prompt 在真实 Wan2.1 calibration 中分别只有 3 / 8 和 1 / 8 通过, 因此不能回退。
     assert "large red square slides" not in prompts_by_id["motion_calib_positive_motion_00"]
@@ -92,6 +92,29 @@ def test_motion_calibration_prompt_suite_uses_observability_repair_prompts(tmp_p
         assert "checkerboard" not in prompt_text
         assert "chess" not in prompt_text
         assert "clock" not in prompt_text
+
+
+@pytest.mark.quick
+def test_pilot_prompt_suite_replaces_low_motion_heldout_rotation_prompt(tmp_path: Path) -> None:
+    """pilot heldout prompt 必须避免回退到真实 Wan2.1 中已失败的低运动旋转设计。"""
+    output_root = tmp_path / "prompt_suite"
+    summary = write_prompt_suite(output_root)
+    suite = json.loads(Path(summary["prompt_suite_path"]).read_text(encoding="utf-8"))
+    prompts_by_id = {item["prompt_id"]: item for item in suite["prompts"]}
+    heldout = prompts_by_id["heldout_rotation_scene"]
+    prompt_text = heldout["prompt_text"].lower()
+    plan = _build_generation_plan(suite, "pilot", "Wan-AI/Wan2.1-T2V-1.3B-Diffusers", None)
+    heldout_plan_items = [item for item in plan if item["prompt_id"] == "heldout_rotation_scene"]
+
+    assert "rotates gently" not in prompt_text
+    assert "slides from the far left edge to the far right edge" in prompt_text
+    assert "spinning rapidly" in prompt_text
+    assert "strong visible displacement" in prompt_text
+    assert heldout["motion_pattern_id"] == "large_rotation_translation"
+    assert heldout["motion_claim_role"] == "positive_motion"
+    assert len(heldout_plan_items) == 2
+    assert {item["seed_id"] for item in heldout_plan_items} == {"seed_main_a", "seed_main_b"}
+    assert {item["motion_claim_role"] for item in heldout_plan_items} == {"positive_motion"}
 
 
 @pytest.mark.quick

@@ -236,6 +236,7 @@ def run_colab_probe(output_root: str | Path, prompt_suite_path: str | Path, prof
             "prompt_suite_role": item["prompt_suite_role"],
             "seed_suite_role": item.get("seed_suite_role"),
             "motion_pattern_id": item["motion_pattern_id"],
+            "motion_claim_role": item.get("motion_claim_role"),
             "motion_calibration_role": item.get("motion_calibration_role"),
             "split": item.get("split", "main"),
             "seed_id": item["seed_id"],

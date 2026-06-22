@@ -95,12 +95,21 @@ scripts/package_results/generative_video_drive_packager.py
 
 本阶段可以在工程上继续验证 Wan2.1 生成、trajectory capture、attack matrix、negative family 和 external baseline。但如果结果将用于最终论文 claim 或 submission package, 必须先完成或引用冻结的 `motion_threshold_calibration` artifact。
 
-未完成 calibration 时, 当前 formal motion gate 只能解释为:
+未完成 calibration 时, formal motion gate 只能解释为:
 
 ```text
 threshold_id: motion_delta_heuristic_v1
 threshold_source_split: heuristic_precalibration
 usage: pilot_guardrail
+```
+
+当前已有可用于 small-scale pilot 的冻结工程阈值:
+
+```text
+threshold_id: motion_delta_calibrated_v1
+threshold_source_split: calibration
+motion_delta_threshold: 0.010607
+usage: frozen_engineering_motion_threshold_for_small_scale_pilot
 ```
 
 禁止将 evaluation split 或每次生成后的结果反向用于动态调整阈值。正式实验必须使用预先校准并冻结的 threshold artifact。
@@ -123,6 +132,7 @@ Colab notebook 的冷启动顺序现在包含:
 prepare prompt suite
 run Wan2.1 generation
 run formal quality / motion / semantic metrics
+reuse frozen motion threshold calibration artifact for pilot profile
 run mechanism postprocess
 run pilot matrix postprocess
 run runtime video-file attack
@@ -132,7 +142,7 @@ run pytest and harness
 package to Google Drive
 ```
 
-最新落盘 package manifest 已包含:
+历史 pilot 落盘 package manifest 曾包含:
 
 ```text
 runtime_attack_decision: PASS
@@ -142,4 +152,4 @@ runtime_detection_ready_count: 48
 small_scale_pilot_claim_support_status: blocked_until_motion_threshold_calibration
 ```
 
-该状态表示工程层面已经从真实视频生成推进到攻击、检测、gate 和 package 的完整闭环。正式实验结论仍必须等待 `motion_threshold_calibration` 完成后才能冻结。
+该历史状态表示工程层面已经从真实视频生成推进到攻击、检测、gate 和 package 的完整闭环, 但当时正式实验结论仍等待 `motion_threshold_calibration` 完成。最新 motion calibration 已经 PASS, 因此下一轮 pilot profile 应复用冻结 calibration artifact 并重新计算 pilot gate。

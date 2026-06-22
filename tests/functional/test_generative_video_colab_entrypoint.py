@@ -108,10 +108,12 @@ def test_generative_video_colab_notebook_calls_repository_modules() -> None:
     assert "getpass" in source
     assert "add_to_git_credential=False" in source
     assert "generative_video_model_probe_workflow" in source
-    assert "PROFILE = 'motion_calibration'" in source
+    assert "PROFILE = 'pilot'" in source
     assert "MODEL_ID = 'Wan-AI/Wan2.1-T2V-1.3B-Diffusers'" in source
     assert "build_formal_metric_command" in source
     assert "motion_calibration" in source
+    assert "pilot profile 只能复用已经通过的 calibration artifact" in source
+    assert "motion_threshold_calibration_ready" in source
     assert "build_motion_threshold_calibration_command" in source
     assert "build_mechanism_postprocess_command" in source
     assert "build_pilot_matrix_postprocess_command" in source

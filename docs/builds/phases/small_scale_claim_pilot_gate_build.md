@@ -72,6 +72,7 @@ structure_ready / protocol_ready / external_validation_required
 flow_model_adapter_preflight: PASS
 sampling_time_constraint_probe smoke: PASS
 sampling_time_constraint_probe recommended: PASS
+motion_threshold_calibration: PASS
 ```
 
 最新 sampling-time recommended 证据:
@@ -128,25 +129,26 @@ run_cross_model: false
 
 pilot 失败时不得进入 full experiment。pilot 通过后, 才允许进入 `generative_video_model_probe` 的完整真实模型实验。
 
-### 2.4 motion threshold calibration 后置策略
+### 2.4 motion threshold calibration 冻结策略
 
-当前 small-scale claim pilot 可以继续推进, 但 formal motion gate 使用的阈值必须按 heuristic guardrail 处理:
+当前 small-scale claim pilot 可以使用已经通过的 engineering calibration threshold。pilot profile 不得用 16 条 pilot 样本重新估计 motion threshold, 否则会把独立 calibration split 覆盖为 `INSUFFICIENT_SAMPLE`。
 
 ```text
-motion_delta_threshold: 0.0005
-threshold_id: motion_delta_heuristic_v1
-threshold_source_split: heuristic_precalibration
-usage: pilot_guardrail
+motion_threshold_calibration_decision: PASS
+motion_delta_threshold: 0.010607
+threshold_id: motion_delta_calibrated_v1
+threshold_source_split: calibration
+usage: frozen_engineering_motion_threshold_for_small_scale_pilot
 ```
 
-该阈值用于 pilot 阶段阻止明显低运动视频支撑 motion-related claim, 但尚未通过大量样本统计测算。当前 pilot 的 attack、negative family、wrong-sampler replay、path marginal gain 和 replay uncertainty 可以继续推进; 但最终 paper claim 前必须补齐 `motion_threshold_calibration` 阶段。
+该阈值用于 pilot 阶段阻止明显低运动视频支撑 motion-related claim。它可以解除 `blocked_until_motion_threshold_calibration`, 但仍不等价于论文级 `TPR@FPR=0.01` 或 `TPR@FPR=0.001` 证据。最终 paper claim 前仍需要更大 held-out negative split 和 frozen fixed-FPR 评估。
 
 pilot 报告中应使用以下边界表达:
 
 ```text
-mechanism proxy evidence can support workflow progression.
-formal motion gate currently uses heuristic_precalibration threshold.
-calibrated motion threshold remains required before final paper claim.
+mechanism proxy evidence can support small-scale pilot progression.
+formal motion gate uses frozen engineering calibration threshold.
+paper-level fixed-FPR evidence remains required before final claim.
 ```
 
 ### 2.5 pilot gate 自动审计器
@@ -329,7 +331,7 @@ claim_support_status: runtime_detection_evidence_only
 
 pilot gate 现在会显式检查: 如果存在 ready runtime attack records, 则必须存在对应 ready runtime detection records。该规则用于防止只生成 attacked videos 而未进入 detection scoring 的半闭环状态。
 
-当前 pilot gate 仍为:
+历史 pilot gate 在 motion calibration 未完成时仍为:
 
 ```text
 pilot_gate_decision: FAIL
@@ -337,4 +339,30 @@ claim_support_status: blocked_until_motion_threshold_calibration
 missing_pilot_requirements: []
 ```
 
-这表示 pilot 的工程矩阵与 runtime attack / detection 链路已闭合, 剩余阻塞项不是工程链路缺失, 而是 motion threshold calibration 尚未完成。
+该历史结论表示 pilot 的工程矩阵与 runtime attack / detection 链路已经闭合, 当时剩余阻塞项不是工程链路缺失, 而是 motion threshold calibration 尚未完成。最新 motion calibration 已经 PASS, 因此应重新运行 pilot profile, 让 gate 使用冻结 calibration artifact 重新计算。
+
+### 2.9 2026-06-23 切换记录: small-scale pilot profile
+
+Colab 入口已切换为:
+
+```text
+PROFILE: pilot
+MODEL_ID: Wan-AI/Wan2.1-T2V-1.3B-Diffusers
+```
+
+执行顺序为:
+
+```text
+prepare prompt suite
+Wan2.1 generation with PROFILE = pilot
+formal_metric_runner
+reuse existing motion_threshold_calibration_decision.json
+mechanism postprocess
+pilot matrix postprocess
+runtime attack
+runtime detection
+small-scale claim pilot gate
+package_outputs
+```
+
+其中 `reuse existing motion_threshold_calibration_decision.json` 是关键约束。pilot profile 只读取已经通过的 calibration artifact, 不会重新运行 `motion_threshold_calibration`。

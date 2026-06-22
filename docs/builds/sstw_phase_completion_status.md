@@ -20,10 +20,10 @@
 |---|---|---|---|
 | `protocol_governance_foundation` | `structure_ready / protocol_ready` | configs、field registry、harness、constraint tests | 随新增字段、negative family 和旧字段映射继续同步注册。 |
 | `flow_model_adapter_preflight` | `structure_ready / mechanism_ready / protocol_ready / artifact_ready` | Wan2.1 Colab preflight、sampler signature、time grid、latent displacement proxy、Drive package | 作为后续 sampling-time 和 pilot 的真实模型接口前置证据。 |
-| `sampling_time_constraint_probe` | `structure_ready / mechanism_ready / protocol_ready / artifact_ready` | Wan2.1 recommended profile、constraint records、postprocess checker、Drive package | 已完成机制前置验证, 等待 motion threshold calibration 通过后再进入 small-scale claim pilot。 |
-| `small_scale_claim_pilot_gate` | `structure_ready / protocol_ready / external_validation_required` | sampling-time recommended 已通过, generative probe 与 checker 入口已存在 | 在 motion threshold calibration PASS 后运行 pilot split, 验证 attack、negative family、wrong-sampler replay 与 fixed-FPR path marginal gain。 |
+| `sampling_time_constraint_probe` | `structure_ready / mechanism_ready / protocol_ready / artifact_ready` | Wan2.1 recommended profile、constraint records、postprocess checker、Drive package | 已完成机制前置验证, 当前可支撑 small-scale claim pilot。 |
+| `small_scale_claim_pilot_gate` | `structure_ready / protocol_ready / external_validation_required / ready_to_run` | sampling-time recommended 已通过, motion threshold calibration 已通过, generative probe 与 checker 入口已存在 | 运行 pilot split, 验证 attack、negative family、wrong-sampler replay 与 fixed-FPR path marginal gain。 |
 | `generative_video_model_probe` | `structure_ready / protocol_ready / external_validation_required` | generative probe runner、external baseline runner、Colab 入口 | 仅在 pilot gate 通过后进入 full experiment。 |
-| `motion_threshold_calibration` | `structure_ready / separability_gate_required / external_validation_required` | runner、records、threshold artifact、128/64/32 profile、prompt-aware contamination audit 与 positive motion prompt 修复已落地 | 重跑独立 calibration split, 验证 positive_motion_pass_rate_at_threshold 与 Wilson lower bound。 |
+| `motion_threshold_calibration` | `structure_ready / protocol_ready / artifact_ready / engineering_calibrated` | runner、records、threshold artifact、128/64/32 profile、prompt-aware contamination audit、positive motion prompt 修复与 PASS package | 作为 small-scale pilot 的冻结工程阈值使用; 论文级 fixed-FPR 仍需更大 held-out negative split。 |
 | `replay_and_authenticated_sketch_gate` | `structure_ready` | digest、manifest、trajectory trace 基础模块 | 补齐 authenticated sketch、replay uncertainty、wrong prompt replay 与 checker。 |
 | `submission_package_freeze` | `structure_ready / artifact_ready` | submission freeze runner、main tables、readiness summary | 等待 pilot / full experiment governed records 后再冻结最终 artifacts。 |
 
@@ -500,7 +500,7 @@ positive_motion_pass_rate_wilson_lower: 0.631835
 
 ### 当前阶段判定
 
-当前仍不能进入 small-scale claim pilot。下一步必须重新执行:
+历史上在该批次前仍不能进入 small-scale claim pilot。后续已通过 motion calibration 后, 该阻塞条件已解除。若需要复现该历史判断, 下一步必须重新执行:
 
 ```text
 PROFILE = motion_calibration
@@ -515,3 +515,73 @@ positive_motion_pass_rate_wilson_lower >= 0.70
 ```
 
 只有上述条件通过后, 才能解除 `blocked_until_motion_threshold_calibration`。
+
+
+## 2026-06-23 阶段状态更新: 已切换到 small-scale claim pilot
+
+### 最新 motion calibration 前置条件
+
+最新 Google Drive 批次已经通过 engineering motion threshold calibration:
+
+```text
+package_batch_id: 20260622_162541_13ef225f
+motion_threshold_calibration_decision: PASS
+motion_threshold_calibration_ready: true
+claim_support_status: motion_threshold_engineering_calibrated
+motion_delta_threshold: 0.010607
+positive_motion_pass_rate_at_threshold: 0.84375
+positive_motion_pass_rate_wilson_lower: 0.735717
+```
+
+该结果解除 small-scale pilot 之前的主要阻塞项:
+
+```text
+blocked_until_motion_threshold_calibration
+```
+
+### Colab 参数切换
+
+`paper_workflow/colab_utils/generative_video_model_probe_colab.ipynb` 已切换到:
+
+```text
+PROFILE = 'pilot'
+MODEL_ID = 'Wan-AI/Wan2.1-T2V-1.3B-Diffusers'
+```
+
+pilot profile 的目标规模为:
+
+```text
+8 prompts
+2 seeds per prompt
+3 attacks
+4 negative families
+6 method variants
+```
+
+### 关键执行约束
+
+pilot profile 不会重新运行 `motion_threshold_calibration`, 而是复用已经通过的 calibration artifact:
+
+```text
+runs/generative_video_model_probe_colab/artifacts/motion_threshold_calibration_decision.json
+```
+
+该约束用于防止 16 条 pilot records 覆盖独立 128 / 64 / 32 calibration split, 造成阈值被误写为 `INSUFFICIENT_SAMPLE`。
+
+### 当前阶段结论
+
+当前阶段可以进入:
+
+```text
+small-scale claim pilot
+```
+
+但仍不得进入:
+
+```text
+full generative video probe
+submission package freeze
+final TPR@FPR=0.01 / 0.001 claim
+```
+
+是否继续进入 full experiment, 必须由新的 pilot gate 结果决定。

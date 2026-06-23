@@ -1120,3 +1120,33 @@ minimum_external_baseline_measured_adapter_count: 2
 ```
 
 下一步仍然是补齐 adaptive attack、replay/sketch 或 Claim-3 降级路径, 然后执行 validation-scale 真实复跑。现代 baseline 的正式对比 adapter 应在 full-paper dry-run 前继续接入。
+
+
+## 2026-06-24 external_baseline 接入方式澄清
+
+本项目的外部 baseline 接入方式已经明确为项目内生的 adapter-source-observation-comparison 分层机制, 不依赖任何其他项目名称作为说明依据。
+
+### 已确认的接入结构
+
+```text
+source_registry: external_baseline/source_registry.json
+adapter_boundary: external_baseline/primary/<baseline_id>/adapter/run_sstw_eval.py
+scheduler: experiments/generative_video_model_probe/external_baseline_runner.py
+status_records: records/external_baseline_records.jsonl
+comparison_records: records/external_baseline_score_records.jsonl
+comparison_table: tables/external_baseline_comparison_table.csv
+decision_artifact: artifacts/external_baseline_comparison_decision.json
+report: reports/external_baseline_comparison_report.md
+```
+
+### 阶段性判断
+
+```text
+external_baseline_adapter_boundary: complete_for_proxy_controls
+external_baseline_comparison_output_chain: complete_for_proxy_controls
+modern_external_baseline_formal_adapter: pending
+baseline_claim_support: not_supported_until_modern_measured_records
+full_paper_allowed: false
+```
+
+当前可以说明工程链路已经能从本项目直接产出 baseline comparison 结果; 不能说明现代视频水印外部 baseline 已完成正式论文主表对比。

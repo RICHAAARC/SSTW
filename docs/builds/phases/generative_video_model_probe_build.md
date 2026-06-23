@@ -477,3 +477,18 @@ reports/external_baseline_comparison_report.md
 ```
 
 该实现的职责是闭合外部 baseline 对比工程链路。当前 measured adapter 仅包括显式 DTW 与 frame matching 同步 control proxy; 现代视频水印 baseline 仍需后续接入官方 adapter。
+
+
+### external_baseline adapter comparison 运行语义
+
+该步骤已经作为 generative video model probe 的标准后处理步骤接入。其语义为:
+
+```text
+input: runtime detection records + callback trajectory records
+adapter_boundary: external_baseline/primary/<baseline_id>/adapter
+scheduler: experiments/generative_video_model_probe.external_baseline_runner
+output: external_baseline_score_records + comparison table + decision + report
+claim_boundary: proxy comparison only until modern baseline adapters produce measured records
+```
+
+该步骤必须位于 runtime detection 之后, 因为 adapter 需要读取真实 attacked video detection 链路产生的 governed records。该步骤必须位于 validation-scale gate 之前, 因为 gate 需要检查 `validation_external_baseline_comparison_records_ready`。

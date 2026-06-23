@@ -1779,3 +1779,73 @@ Codex 后续实现这些组件时, 必须优先满足该规范中的输入、输
 full_paper_allowed = false
 submission_freeze_allowed = false
 ```
+
+
+## 35. external_baseline 接入流程
+
+外部 baseline 必须通过 `external_baseline/` 适配边界进入本项目, 不允许把外部论文数字、临时脚本输出或 Notebook 手工结果直接写入主表。
+
+### 35.1 接入层级
+
+```text
+source_registry_layer:
+  path: external_baseline/source_registry.json
+  role: 登记 baseline 身份、源码状态、adapter 路径和 claim 边界
+
+adapter_layer:
+  path: external_baseline/primary/<baseline_id>/adapter/run_sstw_eval.py
+  required_functions: adapter_status, build_score_records
+  role: 把外部方法输出或显式 control 输出映射为统一 score records
+
+experiment_scheduler_layer:
+  path: experiments/generative_video_model_probe/external_baseline_runner.py
+  role: 调度 adapter, 写出 records、tables、artifacts 和 reports
+
+gate_and_package_layer:
+  paths:
+    - experiments/generative_video_model_probe/validation_scale_gate.py
+    - experiments/generative_video_model_probe/validation_artifact_rebuild.py
+    - scripts/package_results/generative_video_drive_packager.py
+  role: 只读取已落盘 artifacts, 不重新解释 baseline 分数
+```
+
+### 35.2 adapter 输入约束
+
+adapter 只能读取 `run_root` 中已受治理的输入:
+
+```text
+records/runtime_detection_records.jsonl
+records/trajectory_trace.jsonl
+records/external_baseline_records.jsonl
+artifacts/runtime_detection_decision.json
+```
+
+adapter 不得读取 Notebook cell 临时变量, 不得使用人工表格, 不得用 `S_final` 或最终判定分数进行污染过滤。
+
+### 35.3 adapter 输出约束
+
+adapter 必须输出统一 comparison score records:
+
+```text
+records/external_baseline_score_records.jsonl
+tables/external_baseline_comparison_table.csv
+artifacts/external_baseline_comparison_decision.json
+reports/external_baseline_comparison_report.md
+```
+
+当前显式 DTW 与 frame matching 只能作为同步 control proxy。现代视频水印 baseline 在 adapter 未接入时必须写为 `unsupported`, 不能被解释为 SSTW 胜出。
+
+### 35.4 full-paper 前置条件
+
+进入 full-paper baseline claim 前必须满足:
+
+```text
+modern_external_baseline_adapter_integrated
+modern_external_baseline_measured_records_ready
+common_prompt_protocol_ready
+common_attack_protocol_ready
+common_threshold_policy_ready
+external_baseline_result_used_for_claim_governed
+```
+
+在上述条件未满足前, `external_baseline_comparison_decision = PASS` 只表示工程产出链路闭合, 不表示论文主 claim 成立。

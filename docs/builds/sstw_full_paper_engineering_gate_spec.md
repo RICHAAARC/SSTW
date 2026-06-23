@@ -484,3 +484,20 @@ modern_video_watermark_baselines: unsupported_until_adapter_integrated
 用 unsupported modern baseline row 声明 SSTW 优于该 baseline
 缺少 external_baseline_score_records.jsonl 时进入 baseline comparison claim
 ```
+
+
+### 12.1 external_baseline 正式 claim 升级条件
+
+external baseline comparison 从 proxy control 升级为 full-paper claim evidence 前, checker 必须同时看到以下证据:
+
+```text
+external_baseline_adapter_status: ready
+external_baseline_output_record_status: governed_records_written
+external_baseline_threshold_policy_compatible: true
+external_baseline_attack_manifest_compatible: true
+external_baseline_result_used_for_claim: true
+metric_status: measured
+claim_support_status: baseline_ready_for_main_comparison
+```
+
+若任一条件缺失, 该 baseline 只能进入 limitation / non-run / proxy comparison 说明, 不能进入主表正向 claim。

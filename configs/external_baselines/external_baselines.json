@@ -25,6 +25,71 @@
       "external_baseline_selection_role": "secondary_explicit_synchronization_external_baseline",
       "external_baseline_source_url": "repository_local_frame_matching_adapter",
       "external_baseline_version": "explicit_frame_matching_temporal_registration_v1"
+    },
+    {
+      "external_baseline_family": "in_generation_or_diffusion_video_watermark_baseline",
+      "external_baseline_integration_status": "governed_non_run_record_ready",
+      "external_baseline_name": "videoshield",
+      "external_baseline_not_run_reason": "adapter_not_integrated_in_repository",
+      "external_baseline_protocol_gap": "modern in-generation video diffusion watermark baseline; repository adapter and output schema still need integration before claim use",
+      "external_baseline_recommended_priority": 3,
+      "external_baseline_result_used_for_claim": false,
+      "external_baseline_runnable_status": "not_runnable",
+      "external_baseline_selection_role": "primary_modern_in_generation_video_watermark_candidate",
+      "external_baseline_source_url": "https://openreview.net/forum?id=uzz3qAYy0D",
+      "external_baseline_version": "source_registration_pending_adapter"
+    },
+    {
+      "external_baseline_family": "blind_extraction_video_watermark_baseline",
+      "external_baseline_integration_status": "governed_non_run_record_ready",
+      "external_baseline_name": "sigmark",
+      "external_baseline_not_run_reason": "adapter_not_integrated_in_repository",
+      "external_baseline_protocol_gap": "blind extraction video diffusion watermark baseline; input video format, key protocol, and detector outputs need adapter mapping",
+      "external_baseline_recommended_priority": 4,
+      "external_baseline_result_used_for_claim": false,
+      "external_baseline_runnable_status": "not_runnable",
+      "external_baseline_selection_role": "modern_blind_extraction_video_watermark_candidate",
+      "external_baseline_source_url": "https://openreview.net/forum?id=tKyAD2LhnI",
+      "external_baseline_version": "source_registration_pending_adapter"
+    },
+    {
+      "external_baseline_family": "parameter_or_adapter_video_watermark_baseline",
+      "external_baseline_integration_status": "governed_non_run_record_ready",
+      "external_baseline_name": "spdmark",
+      "external_baseline_not_run_reason": "adapter_not_integrated_in_repository",
+      "external_baseline_protocol_gap": "parameter displacement or adapter-based video watermark baseline; training and parameter modification cost need separate governed accounting",
+      "external_baseline_recommended_priority": 5,
+      "external_baseline_result_used_for_claim": false,
+      "external_baseline_runnable_status": "not_runnable",
+      "external_baseline_selection_role": "modern_parameter_or_adapter_video_watermark_candidate",
+      "external_baseline_source_url": "https://openaccess.thecvf.com/content/CVPR2026/papers/Fares_SPDMark_Selective_Parameter_Displacement_for_Robust_Video_Watermarking_CVPR_2026_paper.pdf",
+      "external_baseline_version": "source_registration_pending_adapter"
+    },
+    {
+      "external_baseline_family": "latent_video_signature_baseline",
+      "external_baseline_integration_status": "governed_non_run_record_ready",
+      "external_baseline_name": "videomark_or_vidsig",
+      "external_baseline_not_run_reason": "adapter_not_integrated_in_repository",
+      "external_baseline_protocol_gap": "latent-video signature or in-generation baseline candidate; decoder modification and temporal matching assumptions need protocol mapping",
+      "external_baseline_recommended_priority": 6,
+      "external_baseline_result_used_for_claim": false,
+      "external_baseline_runnable_status": "not_runnable",
+      "external_baseline_selection_role": "modern_latent_video_signature_candidate",
+      "external_baseline_source_url": "https://arxiv.org/html/2504.16359v1",
+      "external_baseline_version": "source_registration_pending_adapter"
+    },
+    {
+      "external_baseline_family": "post_hoc_neural_video_watermark_baseline",
+      "external_baseline_integration_status": "governed_non_run_record_ready",
+      "external_baseline_name": "videoseal",
+      "external_baseline_not_run_reason": "adapter_not_integrated_in_repository",
+      "external_baseline_protocol_gap": "post-hoc robust neural video watermark baseline; must be evaluated as post-processing watermark, not as Flow Matching trajectory watermark",
+      "external_baseline_recommended_priority": 7,
+      "external_baseline_result_used_for_claim": false,
+      "external_baseline_runnable_status": "not_runnable",
+      "external_baseline_selection_role": "modern_post_hoc_video_watermark_candidate",
+      "external_baseline_source_url": "https://github.com/facebookresearch/videoseal",
+      "external_baseline_version": "source_registration_pending_adapter"
     }
   ],
   "internal_mechanism_baselines": [
@@ -39,7 +104,7 @@
   "selection_policy": {
     "claim_rule": "only runnable baselines with protocol-compatible governed records may support positive comparison claims",
     "fallback_rule": "runnable adapters without formal comparison records must remain implementation evidence and must not support positive claims",
-    "primary_selection_rule": "prefer explicit synchronization mechanisms that recover or approximate a temporal alignment path, while excluding video watermark systems already used by related SSTW work",
+    "primary_selection_rule": "prefer modern in-generation or post-hoc video watermark baselines plus explicit synchronization controls, while keeping non-runnable modern baselines as governed non-run records instead of silently dropping them",
     "stage_id": "generative_video_model_probe"
   }
 }

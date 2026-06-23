@@ -433,7 +433,7 @@ missing_pilot_requirements:
   - formal_motion_claim_ready
 ```
 
-该结果表示当前 16 条生成记录中只有 15 条可用于 motion claim。由于 `heldout_rotation_scene` 只剩 1 个合格 seed, 当前 pilot 不满足每个 prompt 2 个 seed 的覆盖要求, 因此不能进入 full experiment。
+该历史结果表示当时 16 条生成记录中只有 15 条可用于 motion claim。由于 `heldout_rotation_scene` 只剩 1 个合格 seed, 当时 pilot 的 seed 覆盖率不足, 因此不能进入 full experiment。该阻塞已由后续原生复跑解除。
 
 ### 2.11 heldout pilot prompt 可观测运动修复
 
@@ -458,7 +458,7 @@ motion_claim_role: positive_motion
 motion_claim_role: positive_motion
 ```
 
-该变更的作用是提高下一次 `PROFILE = pilot` 运行中 positive motion 样本的可观测运动概率。它不会修改旧 run 的事实记录, 也不会把已经失败的样本重新解释为通过。旧 run 仍保持:
+该变更的作用是提高后续 `PROFILE = pilot` 运行中 positive motion 样本的可观测运动概率。它不会修改旧 run 的事实记录, 也不会把已经失败的样本重新解释为通过。该旧 run 在当时仍保持:
 
 ```text
 pilot_gate_decision: FAIL
@@ -474,24 +474,24 @@ G:\我的云端硬盘\SSTW\datasets\generative_video_prompt_suite\prompt_seed_su
 prompt_suite_id: generative_video_probe_prompt_suite_motion_observability_and_pilot_repair
 ```
 
-下一步需要重新执行 Colab `PROFILE = pilot`, 使新 prompt 产生新的 generation records、formal records 和 pilot gate artifacts。
+后续已经重新执行 Colab `PROFILE = pilot`, 并产生新的 generation records、formal records 和 pilot gate artifacts。最新结论见本文档末尾的“2026-06-23 最新原生复跑状态”。
 
 
 ## 3. 当前查漏补缺状态
 
 | 项目 | 当前标注 |
 |---|---|
-| 完成状态 | 未完成, 待重跑 |
-| 主要差距项 | 旧 run 只有 15/16 motion-claim-eligible 样本, seed coverage 与 formal motion claim 阻塞。 |
-| 下一步构建方向 | 重新运行修复后的 `PROFILE = pilot`, 直到 pilot_gate_decision = PASS。 |
+| 完成状态 | 已完成 small-scale pilot, 可进入 validation-scale |
+| 主要差距项 | 本阶段阻塞已解除; 剩余差距转移到 validation-scale、现代外部 baseline 主表对比、内部消融和论文级 fixed-FPR。 |
+| 下一步构建方向 | 进入 validation-scale generative probe, 同步补现代外部 baseline、内部消融和 CI reporter。 |
 | full_paper 影响 | 未满足本阶段要求时, 不得把相关结果写入 full_paper supported claim。 |
 
 ### 3.1 快速检查清单
 
 ```text
-stage_status: 未完成, 待重跑
-gap_item: 旧 run 只有 15/16 motion-claim-eligible 样本, seed coverage 与 formal motion claim 阻塞。
-next_action: 重新运行修复后的 `PROFILE = pilot`, 直到 pilot_gate_decision = PASS。
+stage_status: 已完成 small-scale pilot, 可进入 validation-scale
+gap_item: 本阶段阻塞已解除; 剩余差距转移到 validation-scale、现代外部 baseline 主表对比、内部消融和论文级 fixed-FPR。
+next_action: 进入 validation-scale generative probe, 同步补现代外部 baseline、内部消融和 CI reporter。
 full_paper_blocking_rule: unresolved_gap_blocks_full_paper_claim
 ```
 
@@ -525,3 +525,21 @@ validation_resource_budget_checked
 ```
 
 上述条件缺失时, 只能补齐 validation 规划, 不能进入 full_paper。
+
+
+## 2026-06-23 最新原生复跑状态
+
+最新 Wan2.1 `PROFILE = pilot` 原生复跑已经解除本阶段阻塞:
+
+```text
+small_scale_pilot_gate_decision: PASS
+claim_support_status: supported_by_small_scale_claim_pilot_records
+motion_claim_eligible_generation_count: 16
+motion_claim_excluded_generation_count: 0
+seed_per_prompt_min: 2
+runtime_attack_ready_count: 48
+runtime_detection_ready_count: 48
+protocol_missing_failures: []
+```
+
+本阶段现在的结论是: 可以进入 validation-scale generative video probe。该结论不能被解释为 full_paper ready, 也不能用于生成最终 `TPR@FPR=0.001` 主表。

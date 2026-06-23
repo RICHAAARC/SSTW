@@ -198,24 +198,45 @@ full_paper_result_checker
 ### 2.1 当前完成状态
 
 ```text
-stage_status: 未开始
+stage_status: 未开始, validation-scale 前置阻塞
 ```
 
 ### 2.2 差距项
 
 ```text
-small_scale_claim_pilot_gate 尚未 PASS
-modern external baseline 尚未进入 governed records
+small_scale_claim_pilot_gate 已在 small-scale pilot 级别 PASS, 但不能替代 full_paper
+generative_video_model_probe_validation_passed 尚未成立
+modern external baseline 已进入 governed status / non-run records, 但尚无可进入主表的 runnable 同协议结果
+internal ablation full-scale records 尚未完成
 flow_specific_adaptive_attack_gate 尚未完成
 replay_and_authenticated_sketch_gate 尚未闭合
 paper-level FPR=0.001 大规模阈值协议尚未运行
+full_paper_dry_run_checker 与 full_paper_result_checker 尚未实现
 ```
 
 ## 3. 当前查漏补缺状态
 
 | 项目 | 当前标注 |
 |---|---|
-| 完成状态 | 未开始 |
-| 主要差距项 | 全部前序 gate 尚未完成, 因此不能运行 full_paper。 |
-| 下一步构建方向 | 等 small-scale pilot、validation-scale probe、external baseline、adaptive attack 和 replay/sketch gate 完成后再启动。 |
+| 完成状态 | 未开始, validation-scale 前置阻塞 |
+| 主要差距项 | small-scale pilot 已解除, 但 validation-scale、现代外部 baseline 主表对比、内部消融、adaptive attack、replay/sketch、FPR=0.001 和 full_paper checker 仍未闭合。 |
+| 下一步构建方向 | 先完成 validation-scale generative probe, 同步推进现代外部 baseline adapter、内部消融、adaptive attack、replay/sketch 和 CI reporter。 |
 | full_paper 影响 | 本阶段未通过时, 禁止生成 full_paper 论文结果包。 |
+
+### 3.1 2026-06-23 最新阶段边界
+
+最新 Wan2.1 small-scale pilot 复跑已经通过, 因此本阶段的阻塞原因不再是 pilot 未完成。当前阻塞点已经前移到 validation-scale 和论文级证据充分性:
+
+```text
+small_scale_claim_pilot_gate_passed = true
+validation_scale_generative_probe_completed = false
+modern_external_baseline_status_records_ready = true
+modern_external_baseline_main_comparison_ready_count = 0
+internal_ablation_full_scale_records_ready = false
+flow_specific_adaptive_attack_gate_passed = false
+replay_and_authenticated_sketch_gate_closed = false
+paper_fixed_fpr_0_001_protocol_ready = false
+full_paper_allowed = false
+```
+
+该状态允许继续实现 full_paper dry-run checker、baseline 状态审计、CI reporter 等工程组件, 但不允许生成主论文结果表或 submission package。

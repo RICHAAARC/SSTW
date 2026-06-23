@@ -53,6 +53,11 @@ def adapter_status() -> dict:
     """返回本地帧匹配 baseline 的可运行状态, 但不自动支撑正向 claim。"""
     return {
         "external_baseline_runnable_status": "runnable",
+        "external_baseline_adapter_status": "ready",
+        "external_baseline_input_compatibility_status": "synthetic_embedding_sequence_ready",
+        "external_baseline_output_record_status": "governed_records_written",
+        "external_baseline_threshold_policy_compatible": False,
+        "external_baseline_attack_manifest_compatible": False,
         "external_baseline_not_run_reason": "none",
         "external_baseline_result_used_for_claim": False,
     }

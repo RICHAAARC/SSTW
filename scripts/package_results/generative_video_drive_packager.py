@@ -93,6 +93,7 @@ def package_generative_video_colab_run(
     pilot_matrix_decision_path = run_root_path / "artifacts" / "small_scale_claim_pilot_matrix_decision.json"
     runtime_attack_decision_path = run_root_path / "artifacts" / "runtime_attack_decision.json"
     runtime_detection_decision_path = run_root_path / "artifacts" / "runtime_detection_decision.json"
+    external_baseline_decision_path = run_root_path / "artifacts" / "external_baseline_status_decision.json"
     motion_threshold_calibration_decision_path = run_root_path / "artifacts" / "motion_threshold_calibration_decision.json"
     generation_manifest_path = run_root_path / "artifacts" / "generation_manifest.json"
 
@@ -110,6 +111,7 @@ def package_generative_video_colab_run(
     pilot_matrix_decision = _read_json_if_exists(pilot_matrix_decision_path)
     runtime_attack_decision = _read_json_if_exists(runtime_attack_decision_path)
     runtime_detection_decision = _read_json_if_exists(runtime_detection_decision_path)
+    external_baseline_decision = _read_json_if_exists(external_baseline_decision_path)
     motion_threshold_calibration_decision = _read_json_if_exists(motion_threshold_calibration_decision_path)
     generation_manifest = _read_json_if_exists(generation_manifest_path)
     mechanism_summary = _effective_mechanism_decision_summary(decision, postprocess_decision, pilot_gate_decision)
@@ -152,6 +154,11 @@ def package_generative_video_colab_run(
             "runtime_detection_decision": runtime_detection_decision.get("runtime_detection_decision"),
             "runtime_detection_record_count": runtime_detection_decision.get("runtime_detection_record_count"),
             "runtime_detection_ready_count": runtime_detection_decision.get("runtime_detection_ready_count"),
+            "external_baseline_status_decision": external_baseline_decision.get("external_baseline_status_decision"),
+            "external_baseline_record_count": external_baseline_decision.get("external_baseline_record_count"),
+            "modern_external_baseline_record_count": external_baseline_decision.get("modern_external_baseline_record_count"),
+            "modern_external_baseline_main_comparison_ready_count": external_baseline_decision.get("modern_external_baseline_main_comparison_ready_count"),
+            "external_baseline_claim_support_status": external_baseline_decision.get("external_baseline_claim_support_status"),
             "motion_threshold_calibration_decision": motion_threshold_calibration_decision.get("motion_threshold_calibration_decision"),
             "motion_threshold_id": motion_threshold_calibration_decision.get("motion_threshold_id"),
             "motion_threshold_source_split": motion_threshold_calibration_decision.get("motion_threshold_source_split"),

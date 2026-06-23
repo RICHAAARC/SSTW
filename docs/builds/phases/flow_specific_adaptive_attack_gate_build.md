@@ -146,7 +146,7 @@ stage_status: 未完成
 
 ### 2.2 已有基础
 
-当前总体流程中已经定义该阶段, sampling-time、trajectory observation、runtime attack 和 pilot gate 中也已有部分 wrong-key / wrong-sampler control 字段。
+当前总体流程中已经定义该阶段。sampling-time、trajectory observation、runtime attack、runtime detection 和 small-scale pilot gate 中也已有部分 wrong-key / wrong-sampler control 字段。最新 small-scale pilot 已通过, 因此本阶段下一步可以从“等待 pilot”改为“构建 validation-scale adaptive attack manifest 与 runner”。
 
 ### 2.3 差距项
 
@@ -164,5 +164,21 @@ stage_status: 未完成
 |---|---|
 | 完成状态 | 未完成 |
 | 主要差距项 | adaptive attack runner、manifest、negative tail audit 均未闭合。 |
-| 下一步构建方向 | 在 pilot PASS 后、full_paper 前实现并运行本阶段。 |
+| 下一步构建方向 | 在 validation-scale 中实现 adaptive attack runner、attack manifest、negative tail audit 和对应 checker。 |
 | full_paper 影响 | 未通过本阶段时, full_paper 不能声明 Flow-specific adaptive attack robustness。 |
+
+### 3.1 2026-06-23 最新阶段边界
+
+当前 small-scale pilot 已经解除前置阻塞, 但这不等于 adaptive robustness 已成立。本阶段仍必须补齐独立的 Flow-specific adaptive attack 证据:
+
+```text
+small_scale_claim_pilot_gate_passed = true
+adaptive_attack_runner_ready = false
+adaptive_attack_manifest_ready = false
+endpoint_path_decoupling_records_ready = false
+path_response_cancellation_records_ready = false
+adaptive_negative_tail_audit_ready = false
+adaptive_robustness_claim_allowed = false
+```
+
+下一步应优先在 validation-scale 中构建最小可运行 adaptive attack runner, 覆盖 `scheduler_change`、`time_grid_jitter`、`wrong_sampler_replay`、`endpoint_path_decoupling` 与 `path_response_cancellation` 的受控记录。若该阶段持续缺失, full_paper 只能报告普通视频攻击鲁棒性, 不能报告 Flow-specific adaptive attack robustness。

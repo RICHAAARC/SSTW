@@ -256,7 +256,7 @@ runtime_detection_ready_count: 48
 small_scale_pilot_claim_support_status: blocked_until_motion_threshold_calibration
 ```
 
-该历史状态表示工程层面已经从真实视频生成推进到攻击、检测、gate 和 package 的完整闭环, 但当时正式实验结论仍等待 `motion_threshold_calibration` 完成。最新 motion calibration 已经 PASS, 因此下一轮 pilot profile 应复用冻结 calibration artifact 并重新计算 pilot gate。
+该历史状态表示工程层面已经从真实视频生成推进到攻击、检测、gate 和 package 的完整闭环, 但当时正式实验结论仍等待 `motion_threshold_calibration` 完成。当前最新 motion calibration 与 pilot profile 均已 PASS, 因此本阶段下一步不再是重算 pilot gate, 而是进入 validation-scale 规划与工程门禁构建。
 
 ### 2.5 formal motion claim 过滤边界
 
@@ -302,23 +302,54 @@ rapid full rotation
 strong visible displacement in every frame
 ```
 
-该变更属于输入设计修复, 不改变 detector 或 gate 阈值, 也不允许回头修改旧 run 记录。下一次 pilot 必须重新运行 generation 和 formal metric, 才能判断该修复是否解除 `formal_motion_claim_ready` 与 `seed_coverage_ready` 缺口。
+该变更属于输入设计修复, 不改变 detector 或 gate 阈值, 也不允许回头修改旧 run 记录。后续 pilot 复跑已经用新 generation 和 formal metric 解除 `formal_motion_claim_ready` 与 `seed_coverage_ready` 缺口; 旧 run 仍保留为历史失败记录。
 
 
 ## 3. 当前查漏补缺状态
 
 | 项目 | 当前标注 |
 |---|---|
-| 完成状态 | 结构就绪, full experiment 未完成 |
-| 主要差距项 | pilot 未 PASS 前不得进入 full experiment; 现代外部 baseline 尚未集成。 |
-| 下一步构建方向 | pilot PASS 后扩展 validation-scale 真实模型实验和现代 baseline runner。 |
+| 完成状态 | pilot 已通过, validation-scale 未完成 |
+| 主要差距项 | validation-scale 尚未运行; 现代外部 baseline 目前只有 governed 状态记录, 尚无可进主表的 runnable 结果。 |
+| 下一步构建方向 | 构建 validation-scale 真实模型实验、现代 baseline adapter contract、内部消融和 fixed-FPR CI reporter。 |
 | full_paper 影响 | 未满足本阶段要求时, 不得把相关结果写入 full_paper supported claim。 |
 
 ### 3.1 快速检查清单
 
 ```text
-stage_status: 结构就绪, full experiment 未完成
-gap_item: pilot 未 PASS 前不得进入 full experiment; 现代外部 baseline 尚未集成。
-next_action: pilot PASS 后扩展 validation-scale 真实模型实验和现代 baseline runner。
+stage_status: pilot 已通过, validation-scale 未完成
+gap_item: validation-scale 尚未运行; 现代外部 baseline 目前只有 governed 状态记录, 尚无可进主表的 runnable 结果。
+next_action: 构建 validation-scale 真实模型实验、现代 baseline adapter contract、内部消融和 fixed-FPR CI reporter。
 full_paper_blocking_rule: unresolved_gap_blocks_full_paper_claim
+```
+
+
+## 2026-06-23 最新原生复跑状态
+
+`generative_video_model_probe_colab` 已在 Wan2.1 L4 环境完成 small-scale pilot 原生复跑。最新 package 为:
+
+```text
+generative_video_model_probe_colab_20260623_134119_839da169.zip
+```
+
+关键状态:
+
+```text
+implementation_decision: PASS
+effective_mechanism_decision: PASS
+mechanism_decision_source: small_scale_claim_pilot_gate
+small_scale_pilot_gate_decision: PASS
+runtime_attack_decision: PASS
+runtime_detection_decision: PASS
+record_protocol_missing_failures: []
+```
+
+当前阶段下一步不再是修复 pilot, 而是执行 validation-scale 设计和工程化门禁:
+
+```text
+validation-scale prompt / seed / attack manifest
+modern external baseline governed status and adapter contract
+internal ablation matrix
+fixed-FPR threshold protocol
+statistical confidence interval reporter
 ```

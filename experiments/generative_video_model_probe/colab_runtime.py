@@ -10,6 +10,7 @@ from hashlib import sha256
 from pathlib import Path
 from typing import Any
 
+from main.external_baselines.baseline_registry import audit_external_baseline_records
 from experiments.generative_video_model_probe.external_baseline_runner import run_external_baseline_status
 from main.protocol.flow_evidence_fields import (
     with_flow_evidence_protocol_defaults,
@@ -293,16 +294,15 @@ def run_colab_probe(output_root: str | Path, prompt_suite_path: str | Path, prof
         trajectory_source_level="not_applicable",
         claim_support_status="optional_quality_metric_status_only",
     )
-    external_records = with_flow_evidence_protocol_defaults_many(
-        run_external_baseline_status("configs/external_baselines/external_baselines.json"),
-        trajectory_source_level="not_applicable",
-        claim_support_status="external_baseline_limitation_record",
-    )
+    external_records = run_external_baseline_status("configs/external_baselines/external_baselines.json")
+    external_baseline_audit = audit_external_baseline_records(external_records)
     write_jsonl(output_root / "records" / "generation_records.jsonl", generation_records)
     write_jsonl(output_root / "records" / "trajectory_trace.jsonl", trajectory_records)
     write_jsonl(output_root / "records" / "quality_motion_semantic_records.jsonl", quality_records)
     write_jsonl(output_root / "records" / "external_baseline_records.jsonl", external_records)
     write_csv(output_root / "tables" / "generation_runtime_table.csv", generation_records)
+    write_csv(output_root / "tables" / "external_baseline_status_table.csv", external_records)
+    write_json(output_root / "artifacts" / "external_baseline_status_decision.json", external_baseline_audit)
     decision = {
         "stage_id": "generative_video_model_probe_colab_runtime",
         "implementation_decision": "PASS" if any(record["generation_status"] == "success" for record in generation_records) else "FAIL",

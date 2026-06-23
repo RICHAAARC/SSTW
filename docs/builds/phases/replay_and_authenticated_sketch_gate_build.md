@@ -86,6 +86,8 @@ artifacts/replay_and_sketch_gate_decision.json
 
 仓库中已经存在 digest、manifest、trajectory trace 和 trajectory capture 基础模块, 可作为 authenticated sketch 与 replay uncertainty 的实现基础。
 
+最新 small-scale pilot 已经写出 replay uncertainty、wrong-sampler replay control 和 runtime detection 相关记录, 可以作为 validation-scale 继续扩展的工程入口。但这些记录仍属于 pilot / proxy / runtime workflow 证据, 不能替代 authenticated trajectory sketch 或论文级 replay posterior gate。
+
 ### 2.2 当前阶段补充要求
 
 该阶段需要在后续工程中进一步补齐 authenticated trajectory sketch 的正式字段、manifest 记录和 checker 规则。未认证 logging 不得直接支撑 supported claims。
@@ -96,15 +98,32 @@ artifacts/replay_and_sketch_gate_decision.json
 | 项目 | 当前标注 |
 |---|---|
 | 完成状态 | 未完成 |
-| 主要差距项 | authenticated sketch、replay uncertainty、wrong prompt replay 与 checker 未闭合。 |
-| 下一步构建方向 | 补齐 sketch 签名验证、replay uncertainty records、wrong sampler / wrong prompt replay control。 |
+| 主要差距项 | pilot 级 replay uncertainty 已有记录, 但 authenticated sketch、wrong prompt replay、replay/sketch checker 与 full-paper evidence level 仍未闭合。 |
+| 下一步构建方向 | 在 validation-scale 补齐 sketch 签名验证、replay uncertainty records、wrong sampler / wrong prompt replay control 和 gate decision。 |
 | full_paper 影响 | 未满足本阶段要求时, 不得把相关结果写入 full_paper supported claim。 |
 
 ### 3.1 快速检查清单
 
 ```text
 stage_status: 未完成
-gap_item: authenticated sketch、replay uncertainty、wrong prompt replay 与 checker 未闭合。
-next_action: 补齐 sketch 签名验证、replay uncertainty records、wrong sampler / wrong prompt replay control。
+gap_item: pilot 级 replay uncertainty 已有记录, 但 authenticated sketch、wrong prompt replay、replay/sketch checker 与 full-paper evidence level 仍未闭合。
+next_action: 在 validation-scale 补齐 sketch 签名验证、replay uncertainty records、wrong sampler / wrong prompt replay control 和 gate decision。
 full_paper_blocking_rule: unresolved_gap_blocks_full_paper_claim
 ```
+
+### 3.2 2026-06-23 最新阶段边界
+
+当前项目可以继续推进 replay / sketch 工程实现, 但必须保持以下 claim 边界:
+
+```text
+small_scale_claim_pilot_gate_passed = true
+pilot_replay_uncertainty_record_available = true
+wrong_sampler_replay_control_available_at_pilot_level = true
+authenticated_trajectory_sketch_status = not_ready
+trajectory_sketch_verification_status = not_ready
+wrong_prompt_replay_records_ready = false
+replay_and_authenticated_sketch_gate_closed = false
+claim3_full_support_allowed = false
+```
+
+因此, Claim-3 目前只能表述为“小规模 pilot 中 replay uncertainty 与 wrong-sampler control 已进入 governed records”, 不能表述为“攻击后视频均可通过 authenticated replay 恢复轨迹后验”。

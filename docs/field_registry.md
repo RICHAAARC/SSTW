@@ -329,6 +329,20 @@ Notebook 与 repository module 的跨边界数据
 | external_baseline_recommended_priority | governance | none | true | false | false | B5 external baseline recommendation priority. |
 | external_baseline_selection_role | governance | none | true | false | false | B5 role assigned to the external baseline. |
 | external_baseline_integration_status | governance | none | true | false | false | B5 external baseline integration status. |
+| external_baseline_layer | governance | none | true | false | false | Comparison layer for external baseline, such as modern external baseline or explicit synchronization control. |
+| external_baseline_adapter_status | governance | none | true | false | false | Whether the external baseline has a repository adapter ready for governed execution. |
+| external_baseline_input_compatibility_status | governance | none | true | false | false | Whether the external baseline can consume the current project video, key, attack, and split inputs. |
+| external_baseline_output_record_status | governance | none | true | false | false | Whether the external baseline produces governed records or only a governed non-run record. |
+| external_baseline_threshold_policy_compatible | governance | none | true | false | false | Whether the external baseline can be evaluated under the same frozen threshold policy. |
+| external_baseline_attack_manifest_compatible | governance | none | true | false | false | Whether the external baseline can be evaluated under the same attack manifest. |
+| external_baseline_main_comparison_ready | governance | none | true | false | false | Whether the baseline satisfies all conditions to enter the main comparison table. |
+| external_baseline_claim_support_status | claim | none | true | true | false | Claim support boundary for external baseline records. |
+| external_baseline_status_decision | governance | none | true | false | false | Decision for the external baseline status audit. |
+| modern_external_baseline_record_count | metric | none | true | false | false | Number of modern external baseline governed status records. |
+| modern_external_baseline_status_records_ready | governance | none | true | false | false | Whether modern external baselines have governed status records or non-run records. |
+| modern_external_baseline_main_comparison_ready_count | metric | none | true | false | false | Number of modern external baselines ready for main comparison. |
+| external_baseline_main_comparison_ready_count | metric | none | true | false | false | Number of all external baselines ready for main comparison. |
+| external_baseline_non_run_record_count | metric | none | true | false | false | Number of external baselines represented by governed non-run records. |
 | selection_policy | governance | none | true | false | false | B5 external baseline selection policy block. |
 | primary_selection_rule | governance | none | true | false | false | B5 external baseline primary selection rule. |
 | claim_rule | claim | none | true | true | false | B5 external baseline claim usage rule. |

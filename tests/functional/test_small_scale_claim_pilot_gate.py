@@ -265,12 +265,39 @@ def test_formal_motion_failed_sample_is_excluded_from_motion_claim_gate(tmp_path
     assert matrix_audit["pilot_matrix_record_count"] == 15 * 3 * (6 + 4)
     assert summary["pilot_gate_decision"] == "FAIL"
     assert summary["claim_support_status"] == "workflow_progression_only"
-    assert summary["formal_motion_claim_status"] == "blocked_by_formal_motion_consistency"
+    assert summary["formal_motion_claim_status"] == "ready_with_formal_motion_exclusions"
     assert summary["motion_claim_eligible_generation_count"] == 15
     assert summary["motion_claim_excluded_generation_count"] == 1
     assert summary["seed_per_prompt_min"] == 1
-    assert "formal_motion_claim_ready" in summary["missing_pilot_requirements"]
+    assert "formal_motion_claim_ready" not in summary["missing_pilot_requirements"]
     assert "seed_coverage_ready" in summary["missing_pilot_requirements"]
+
+
+@pytest.mark.quick
+def test_validation_like_pilot_allows_single_formal_motion_exclusion_when_coverage_remains(tmp_path: Path) -> None:
+    """当剔除 1 个低运动样本后仍满足覆盖率时, pilot gate 不应被旧失败样本整体阻断。"""
+    run_root = tmp_path / "generative_video_model_probe_colab"
+    _write_generation_records(run_root, seed_count=3)
+    _write_trajectory_records(run_root, seed_count=3)
+    _write_proxy_postprocess(run_root)
+    _write_motion_calibration_ready(run_root)
+    _write_formal_metric_records(run_root, seed_count=3, failed_prompt_index=0, failed_seed_index=2)
+    write_jsonl(run_root / "records" / "mechanism_score_records.jsonl", [])
+    write_jsonl(run_root / "records" / "controlled_negative_records.jsonl", [])
+
+    matrix_audit = write_pilot_matrix_postprocess(run_root)
+    summary = build_small_scale_claim_pilot_audit(run_root)
+
+    assert matrix_audit["pilot_matrix_postprocess_decision"] == "PASS"
+    assert matrix_audit["motion_claim_eligible_generation_count"] == 23
+    assert matrix_audit["motion_claim_excluded_generation_count"] == 1
+    assert summary["pilot_gate_decision"] == "PASS"
+    assert summary["claim_support_status"] == "supported_by_small_scale_claim_pilot_records"
+    assert summary["formal_motion_claim_status"] == "ready_with_formal_motion_exclusions"
+    assert summary["motion_claim_eligible_generation_count"] == 23
+    assert summary["motion_claim_excluded_generation_count"] == 1
+    assert summary["seed_per_prompt_min"] == 2
+    assert summary["missing_pilot_requirements"] == []
 
 
 @pytest.mark.quick

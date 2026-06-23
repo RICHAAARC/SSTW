@@ -9,6 +9,7 @@ from typing import Iterable
 RecordKey = tuple[str, str, str, str]
 
 BOUNDARY_MOTION_ROLES = {"negative_static", "ambiguous_low_motion"}
+FORMAL_MOTION_CLAIM_READY_STATUSES = {"ready", "ready_with_formal_motion_exclusions"}
 
 
 def record_identity_key(record: dict) -> RecordKey:
@@ -74,6 +75,15 @@ def _formal_motion_claim_status(formal_metric_records: list[dict], excluded_coun
     if not positive_records:
         return "blocked_until_positive_motion_formal_records"
 
+    eligible_positive_records = [record for record in positive_records if formal_record_supports_motion_claim(record)]
+    if eligible_positive_records:
+        # 通用工程写法: gate 状态只描述可用于 claim 的合格集合是否存在。
+        # 项目特定写法: 不把被 formal gate 剔除的低运动样本反向计入最终检测分数,
+        # 而是保留审计记录并在下游覆盖率统计中排除, 由 prompt / seed 覆盖规则决定是否仍可推进。
+        if len(eligible_positive_records) < len(positive_records) or excluded_count > 0:
+            return "ready_with_formal_motion_exclusions"
+        return "ready"
+
     visual_blocked = any(record.get("formal_visual_quality_ready") is not True for record in positive_records)
     motion_blocked = any(record.get("formal_motion_consistency_ready") is not True for record in positive_records)
     semantic_blocked = any(record.get("formal_semantic_consistency_ready") is not True for record in positive_records)
@@ -83,9 +93,7 @@ def _formal_motion_claim_status(formal_metric_records: list[dict], excluded_coun
         return "blocked_by_formal_motion_consistency"
     if semantic_blocked:
         return "blocked_until_semantic_metric_ready"
-    if excluded_count > 0:
-        return "blocked_until_formal_quality_motion_semantic_metrics"
-    return "ready"
+    return "blocked_until_formal_quality_motion_semantic_metrics"
 
 
 @dataclass(frozen=True)

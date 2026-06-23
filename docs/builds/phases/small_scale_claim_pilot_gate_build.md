@@ -543,3 +543,23 @@ protocol_missing_failures: []
 ```
 
 本阶段现在的结论是: 可以进入 validation-scale generative video probe。该结论不能被解释为 full_paper ready, 也不能用于生成最终 `TPR@FPR=0.001` 主表。
+
+## 2026-06-24 formal motion exclusion gate 判定修复
+
+本次修复明确区分“样本级 formal motion exclusion”和“阶段级 pilot gate 阻断”。当某个 positive motion 样本未通过 formal motion consistency 时, 该样本仍必须保留 generation record 与 formal metric record, 但不能进入 motion / trajectory claim 的 eligible set。
+
+修复后的阶段级判定规则为:
+
+```text
+formal_motion_claim_status = ready
+  表示所有正向 motion 样本均可用于 claim。
+
+formal_motion_claim_status = ready_with_formal_motion_exclusions
+  表示存在样本被 formal gate 剔除, 但剩余 eligible 样本仍可用于 claim 覆盖率统计。
+  是否可继续推进由 prompt_count、seed_per_prompt_min、attack_count、negative_family_count、method_variant_count 等覆盖规则决定。
+
+formal_motion_claim_status = blocked_by_formal_motion_consistency
+  仅表示没有足够 positive motion eligible records 支撑 motion claim。
+```
+
+该修复不依赖 `S_final`、`S_final_conservative` 或任何最终检测判定分数, 因此不违反污染过滤约束。它只改变 gate 对已被剔除样本的阶段级解释, 不改变样本级过滤逻辑。对于 validation-scale 风格的 8 prompt × 3 seed 运行, 如果 1 个样本被剔除后仍保持 `seed_per_prompt_min >= 2`, pilot gate 可以继续通过并把剔除数量写入审计字段。

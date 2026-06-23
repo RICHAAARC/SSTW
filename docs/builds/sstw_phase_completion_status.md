@@ -1196,3 +1196,20 @@ validation_scale_real_gpu_run: pending_user_colab_rerun
 
 下一步是执行本地 validation-scale 工程闭环核验。若本地测试与 harness 均通过, 项目将等待用户在 Colab 中执行真实 Wan2.1 GPU validation-scale 复跑。
 
+## 2026-06-24 formal motion exclusion gate bug 修复
+
+已修复 small-scale / validation-scale 衔接中的一个 gate 判定问题: 原逻辑把任何一个 formal motion consistency 失败样本都解释为 `formal_motion_claim_ready` 缺失, 即使该样本已经被 formal motion filter 从 claim eligible set 中排除, 且剩余样本仍满足 prompt / seed 覆盖要求。
+
+修复后的工程状态为:
+
+```text
+sample_level_filtering: unchanged
+excluded_low_motion_samples: retained_for_audit_but_not_claim_support
+formal_motion_claim_status_ready_values:
+  - ready
+  - ready_with_formal_motion_exclusions
+pilot_gate_blocking_source_after_exclusion: coverage_rules_only
+final_detection_score_used_for_filtering: false
+```
+
+该变更使 validation-scale 结果中“23 个 eligible 样本 + 1 个 formal motion exclusion”能够被正确解释: 若 8 个 prompt 均仍至少保留 2 个 seed, 则 `small_scale_claim_pilot_gate_passed` 不应再因为已剔除样本而失败。后续真实 GPU 复跑仍需重新生成并落盘 artifacts, 本地代码层面已经补充对应回归测试。

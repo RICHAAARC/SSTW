@@ -9,6 +9,7 @@ from statistics import mean
 from typing import Any
 
 from experiments.generative_video_model_probe.formal_motion_claim_filter import (
+    FORMAL_MOTION_CLAIM_READY_STATUSES,
     filter_records_to_motion_claim_eligible,
     select_motion_claim_generation_records,
 )
@@ -231,7 +232,7 @@ def build_small_scale_claim_pilot_audit(run_root: str | Path) -> dict:
         "wrong_sampler_replay_ready": wrong_sampler_present and wrong_sampler_not_equivalent,
         "replay_uncertainty_ready": replay_uncertainty_recorded,
         "quality_proxy_ready": bool(quality_proxy_records) and postprocess_decision.get("details", {}).get("quality_motion_semantic_proxy_pass") is True,
-        "formal_motion_claim_ready": formal_motion_claim_status == "ready",
+        "formal_motion_claim_ready": formal_motion_claim_status in FORMAL_MOTION_CLAIM_READY_STATUSES,
         "runtime_detection_ready": (not eligible_ready_runtime_attack_records) or len(eligible_ready_runtime_detection_records) >= len(eligible_ready_runtime_attack_records),
     }
     missing = [name for name, passed in requirement_checks.items() if not passed]

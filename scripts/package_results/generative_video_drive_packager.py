@@ -94,6 +94,7 @@ def package_generative_video_colab_run(
     runtime_attack_decision_path = run_root_path / "artifacts" / "runtime_attack_decision.json"
     runtime_detection_decision_path = run_root_path / "artifacts" / "runtime_detection_decision.json"
     external_baseline_decision_path = run_root_path / "artifacts" / "external_baseline_status_decision.json"
+    external_baseline_comparison_decision_path = run_root_path / "artifacts" / "external_baseline_comparison_decision.json"
     internal_ablation_decision_path = run_root_path / "artifacts" / "validation_internal_ablation_decision.json"
     confidence_interval_decision_path = run_root_path / "artifacts" / "statistical_confidence_interval_decision.json"
     artifact_rebuild_decision_path = run_root_path / "artifacts" / "validation_artifact_rebuild_dry_run_decision.json"
@@ -116,6 +117,7 @@ def package_generative_video_colab_run(
     runtime_attack_decision = _read_json_if_exists(runtime_attack_decision_path)
     runtime_detection_decision = _read_json_if_exists(runtime_detection_decision_path)
     external_baseline_decision = _read_json_if_exists(external_baseline_decision_path)
+    external_baseline_comparison_decision = _read_json_if_exists(external_baseline_comparison_decision_path)
     internal_ablation_decision = _read_json_if_exists(internal_ablation_decision_path)
     confidence_interval_decision = _read_json_if_exists(confidence_interval_decision_path)
     artifact_rebuild_decision = _read_json_if_exists(artifact_rebuild_decision_path)
@@ -167,6 +169,12 @@ def package_generative_video_colab_run(
             "modern_external_baseline_record_count": external_baseline_decision.get("modern_external_baseline_record_count"),
             "modern_external_baseline_main_comparison_ready_count": external_baseline_decision.get("modern_external_baseline_main_comparison_ready_count"),
             "external_baseline_claim_support_status": external_baseline_decision.get("external_baseline_claim_support_status"),
+            "external_baseline_comparison_decision": external_baseline_comparison_decision.get("external_baseline_comparison_decision"),
+            "external_baseline_comparison_record_count": external_baseline_comparison_decision.get("external_baseline_comparison_record_count"),
+            "external_baseline_comparison_ready_count": external_baseline_comparison_decision.get("external_baseline_comparison_ready_count"),
+            "external_baseline_measured_adapter_count": external_baseline_comparison_decision.get("external_baseline_measured_adapter_count"),
+            "external_baseline_comparison_status": external_baseline_comparison_decision.get("external_baseline_comparison_status"),
+            "external_baseline_comparison_table_status": external_baseline_comparison_decision.get("external_baseline_comparison_table_status"),
             "validation_internal_ablation_decision": internal_ablation_decision.get("validation_internal_ablation_decision"),
             "validation_internal_ablation_record_count": internal_ablation_decision.get("internal_ablation_record_count"),
             "statistical_confidence_interval_decision": confidence_interval_decision.get("statistical_confidence_interval_decision"),

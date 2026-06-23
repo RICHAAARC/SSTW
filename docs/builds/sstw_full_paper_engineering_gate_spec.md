@@ -458,3 +458,29 @@ reviewer evidence index 中引用不存在的 artifact
 ```
 
 这些规则的目的不是增加流程复杂度, 而是防止项目在投稿阶段因为实验不充分、证据不可复现或 claim 过度而被拒稿。
+
+
+## 12. external_baseline adapter comparison gate
+
+full-paper dry-run 前必须区分两类 baseline 证据:
+
+```text
+external_baseline_status_records: 说明 baseline 是否登记、是否可运行、为何 non-run
+external_baseline_comparison_records: 说明 adapter 是否在同一 run_root 上产出可重建 comparison 结果
+```
+
+当前已实现的 comparison 结果仍为 proxy control:
+
+```text
+explicit_dtw_temporal_alignment: measured_proxy
+explicit_frame_matching_temporal_registration: measured_proxy
+modern_video_watermark_baselines: unsupported_until_adapter_integrated
+```
+
+因此 full-paper checker 后续必须继续阻断以下行为:
+
+```text
+用 explicit synchronization proxy 代替现代视频水印 baseline 主表
+用 unsupported modern baseline row 声明 SSTW 优于该 baseline
+缺少 external_baseline_score_records.jsonl 时进入 baseline comparison claim
+```

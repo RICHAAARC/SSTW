@@ -343,6 +343,35 @@ Notebook 与 repository module 的跨边界数据
 | modern_external_baseline_main_comparison_ready_count | metric | none | true | false | false | Number of modern external baselines ready for main comparison. |
 | external_baseline_main_comparison_ready_count | metric | none | true | false | false | Number of all external baselines ready for main comparison. |
 | external_baseline_non_run_record_count | metric | none | true | false | false | Number of external baselines represented by governed non-run records. |
+| external_baseline_adapter_path | artifact | none | true | false | false | Path of the repository adapter under external_baseline used to produce comparison records. |
+| external_baseline_score_record_id | protocol | none | true | false | false | Stable identifier for one external baseline comparison score record. |
+| external_baseline_score_status | governance | none | true | false | false | Per-record status of an external baseline score, such as measured_proxy or adapter_not_integrated. |
+| external_baseline_score_source | governance | none | true | false | false | Evidence source used by an external baseline adapter score. |
+| external_baseline_score_failure_reason | governance | none | true | false | false | Failure reason for an unsupported external baseline score record. |
+| external_baseline_reference_sequence_length | metric | none | true | false | false | Reference trajectory sequence length consumed by an external synchronization baseline adapter. |
+| external_baseline_observed_sequence_length | metric | none | true | false | false | Observed trajectory or runtime metadata sequence length consumed by an external synchronization baseline adapter. |
+| external_baseline_distance | metric | none | true | false | false | Distance or cost reported by an external synchronization baseline adapter. |
+| external_baseline_score | metric | none | true | false | false | Proxy score reported by an external baseline adapter under the common comparison protocol. |
+| external_baseline_comparison_decision | governance | none | true | false | false | Decision for external_baseline adapter comparison output readiness. |
+| external_baseline_comparison_record_count | metric | none | true | false | false | Number of records written to external_baseline_score_records.jsonl. |
+| external_baseline_comparison_ready_count | metric | none | true | false | false | Number of measured external baseline comparison score records. |
+| external_baseline_measured_adapter_count | metric | none | true | false | false | Number of external_baseline adapters with measured proxy comparison records. |
+| external_baseline_measured_adapter_names | protocol | none | true | false | false | Names of external_baseline adapters with measured proxy comparison records. |
+| external_baseline_unsupported_adapter_count | metric | none | true | false | false | Number of unsupported external baseline comparison records or rows. |
+| external_baseline_comparison_table_status | governance | none | true | false | false | Whether the external baseline comparison table was rebuilt from governed records. |
+| validation_external_baseline_comparison_records_ready | governance | none | true | false | false | Whether validation-scale gate found external_baseline comparison records and enough measured adapters. |
+| minimum_external_baseline_measured_adapter_count | protocol | none | true | false | false | Minimum measured external_baseline adapter count required by validation-scale gate. |
+| comparison_unit_count | metric | none | true | false | false | Number of comparable runtime detection units covered by a non-run external baseline comparison row. |
+| comparison_record_count | metric | none | true | false | false | Number of records aggregated into one comparison table row. |
+| comparison_attack_count | metric | none | true | false | false | Number of attacks represented by one comparison table row. |
+| comparison_scope | governance | none | true | false | false | Scope of a method or baseline comparison table row. |
+| method_id | protocol | none | true | false | false | Stable identifier for a method or baseline in comparison tables. |
+| method_role | protocol | none | true | false | false | Role of a method or baseline in comparison tables. |
+| metric_status | governance | none | true | false | false | Whether a comparison row or record contains measured proxy metrics or remains unsupported. |
+| proposed_method_score_mean | metric | none | true | false | false | Mean SSTW runtime detection proxy score in an external baseline comparison table. |
+| external_baseline_score_mean | metric | none | true | false | false | Mean external baseline adapter proxy score in a comparison table. |
+| external_baseline_distance_mean | metric | none | true | false | false | Mean external baseline adapter distance in a comparison table. |
+| baseline_score_margin_mean | metric | none | true | false | false | Mean score margin between SSTW runtime proxy score and external baseline adapter proxy score. |
 | validation_scale_gate_decision | governance | none | true | false | false | Decision for validation-scale generative probe gate before full-paper dry-run. |
 | missing_validation_requirements | governance | none | true | false | false | Validation-scale requirements that are not yet satisfied. |
 | validation_missing_requirement_count | metric | none | true | false | false | Count of missing validation-scale requirements. |

@@ -137,6 +137,19 @@ def build_runtime_detection_command(layout: dict[str, str]) -> list[str]:
     ]
 
 
+
+def build_external_baseline_comparison_command(layout: dict[str, str]) -> list[str]:
+    """构建 external_baseline adapter comparison 命令, 从 runtime detection records 生成 baseline 对比结果。"""
+    return [
+        sys.executable,
+        "-m",
+        "experiments.generative_video_model_probe.external_baseline_runner",
+        "--run-root",
+        layout["drive_run_root"],
+        "--mode",
+        "comparison",
+    ]
+
 def build_validation_internal_ablation_command(layout: dict[str, str]) -> list[str]:
     """构造 validation-scale 内部消融矩阵后处理命令。"""
     return [

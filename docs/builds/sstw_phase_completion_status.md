@@ -1084,3 +1084,39 @@ replay_and_authenticated_sketch_gate_runner: not_implemented
 modern_external_baseline_real_adapter: not_integrated
 full_paper_dry_run_checker: not_implemented
 ```
+
+
+## 2026-06-23 external_baseline adapter comparison 工程闭环
+
+### 本次完成项
+
+外部 baseline 现在不再只停留在 governed status record。项目已经新增 `external_baseline/` 适配边界, 并由 `experiments/generative_video_model_probe/external_baseline_runner.py` 调度 adapter 产出 comparison records、table、decision 和 report。
+
+```text
+external_baseline_adapter_boundary: implemented
+external_baseline_score_records: implemented
+external_baseline_comparison_table: implemented
+validation_external_baseline_comparison_records_ready: added_to_gate
+package_manifest_external_baseline_comparison_summary: implemented
+```
+
+### 与论文 claim 的边界
+
+当前显式 DTW 与 frame matching 是工程级同步 control proxy, 不是现代视频水印 baseline。它们可以证明“本项目已经具备 baseline 对比结果产出链路”, 但不能证明 SSTW 已经优于 VideoShield、SigMark、SPDMark 或 VideoSeal。
+
+```text
+claim_support_status: external_baseline_proxy_comparison_not_claim_supporting
+modern_external_baseline_real_adapter: not_integrated
+full_paper_allowed: false
+submission_freeze_allowed: false
+```
+
+### validation-scale gate 新增要求
+
+```text
+validation_external_baseline_status_records_ready
+validation_external_baseline_comparison_records_ready
+minimum_external_baseline_measured_adapter_count: 2
+```
+
+下一步仍然是补齐 adaptive attack、replay/sketch 或 Claim-3 降级路径, 然后执行 validation-scale 真实复跑。现代 baseline 的正式对比 adapter 应在 full-paper dry-run 前继续接入。

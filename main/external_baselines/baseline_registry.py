@@ -6,13 +6,12 @@ import json
 from pathlib import Path
 from typing import Any
 
-from main.external_baselines.explicit_dtw_temporal_alignment import adapter_status as dtw_adapter_status
-from main.external_baselines.frame_matching_temporal_registration import adapter_status as frame_matching_adapter_status
+from external_baseline.registry import adapter_status as external_adapter_status
 
 
 ADAPTER_STATUS_BUILDERS = {
-    "explicit_dtw_temporal_alignment": dtw_adapter_status,
-    "explicit_frame_matching_temporal_registration": frame_matching_adapter_status,
+    "explicit_dtw_temporal_alignment": lambda: external_adapter_status("explicit_dtw_temporal_alignment"),
+    "explicit_frame_matching_temporal_registration": lambda: external_adapter_status("explicit_frame_matching_temporal_registration"),
 }
 
 DEFAULT_BASELINE_STATUS_FIELDS: dict[str, Any] = {

@@ -157,6 +157,7 @@ def test_generative_video_colab_notebook_calls_repository_modules() -> None:
     assert "build_pilot_matrix_postprocess_command" in source
     assert "build_runtime_attack_command" in source
     assert "build_runtime_detection_command" in source
+    assert "build_external_baseline_comparison_command" in source
     assert "build_small_scale_claim_pilot_gate_command" in source
     assert "build_validation_internal_ablation_command" in source
     assert "build_statistical_confidence_interval_command" in source
@@ -170,6 +171,7 @@ def test_generative_video_colab_notebook_calls_repository_modules() -> None:
     assert "experiments.generative_video_model_probe.pilot_matrix_postprocess" in Path("paper_workflow/notebook_utils/generative_video_model_probe_workflow.py").read_text(encoding="utf-8")
     assert "experiments.generative_video_model_probe.attack_runner" in Path("paper_workflow/notebook_utils/generative_video_model_probe_workflow.py").read_text(encoding="utf-8")
     assert "experiments.generative_video_model_probe.detection_runner" in Path("paper_workflow/notebook_utils/generative_video_model_probe_workflow.py").read_text(encoding="utf-8")
+    assert "experiments.generative_video_model_probe.external_baseline_runner" in Path("paper_workflow/notebook_utils/generative_video_model_probe_workflow.py").read_text(encoding="utf-8")
     assert "experiments.generative_video_model_probe.pilot_claim_gate" in Path("paper_workflow/notebook_utils/generative_video_model_probe_workflow.py").read_text(encoding="utf-8")
     assert "experiments.generative_video_model_probe.validation_internal_ablation" in Path("paper_workflow/notebook_utils/generative_video_model_probe_workflow.py").read_text(encoding="utf-8")
     assert "experiments.generative_video_model_probe.statistical_confidence_interval" in Path("paper_workflow/notebook_utils/generative_video_model_probe_workflow.py").read_text(encoding="utf-8")
@@ -244,6 +246,14 @@ def test_generative_video_drive_packager_creates_archive_and_manifest(tmp_path: 
         "validation_artifact_rebuild_dry_run_decision": "PASS",
         "artifact_rebuild_missing_count": 0,
     })
+    write_json(run_root / "artifacts" / "external_baseline_comparison_decision.json", {
+        "external_baseline_comparison_decision": "PASS",
+        "external_baseline_comparison_record_count": 96,
+        "external_baseline_comparison_ready_count": 48,
+        "external_baseline_measured_adapter_count": 2,
+        "external_baseline_comparison_status": "adapter_proxy_records_written",
+        "external_baseline_comparison_table_status": "ready",
+    })
 
     payload = package_generative_video_colab_run(run_root, package_dir, include_videos=False)
     archive_path = Path(payload["archive_path"])
@@ -266,6 +276,11 @@ def test_generative_video_drive_packager_creates_archive_and_manifest(tmp_path: 
     assert manifest["decision_summary"]["validation_scale_gate_decision"] == "FAIL"
     assert manifest["decision_summary"]["validation_scale_claim_support_status"] == "validation_scale_blocked"
     assert manifest["decision_summary"]["validation_missing_requirement_count"] == 5
+    assert manifest["decision_summary"]["external_baseline_comparison_decision"] == "PASS"
+    assert manifest["decision_summary"]["external_baseline_comparison_record_count"] == 96
+    assert manifest["decision_summary"]["external_baseline_comparison_ready_count"] == 48
+    assert manifest["decision_summary"]["external_baseline_measured_adapter_count"] == 2
+    assert manifest["decision_summary"]["external_baseline_comparison_table_status"] == "ready"
     assert manifest["decision_summary"]["validation_internal_ablation_decision"] == "PASS"
     assert manifest["decision_summary"]["validation_internal_ablation_record_count"] == 12
     assert manifest["decision_summary"]["statistical_confidence_interval_decision"] == "PASS"

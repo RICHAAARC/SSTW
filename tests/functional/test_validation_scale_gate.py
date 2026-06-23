@@ -71,6 +71,17 @@ def test_validation_scale_gate_passes_when_all_governed_inputs_exist(tmp_path: P
         {"attack_name": "frame_rate_resampling_runtime", "runtime_detection_status": "ready"},
     ])
     write_jsonl(run_root / "records" / "external_baseline_records.jsonl", run_external_baseline_status())
+    write_jsonl(run_root / "records" / "external_baseline_score_records.jsonl", [
+        {"external_baseline_name": "explicit_dtw_temporal_alignment", "metric_status": "measured_proxy"},
+        {"external_baseline_name": "explicit_frame_matching_temporal_registration", "metric_status": "measured_proxy"},
+    ])
+    write_json(run_root / "artifacts" / "external_baseline_comparison_decision.json", {
+        "external_baseline_comparison_decision": "PASS",
+        "external_baseline_comparison_record_count": 2,
+        "external_baseline_comparison_ready_count": 2,
+        "external_baseline_measured_adapter_count": 2,
+        "external_baseline_claim_support_status": "external_baseline_proxy_comparison_not_claim_supporting",
+    })
     write_jsonl(run_root / "records" / "validation_internal_ablation_records.jsonl", [
         {"method_variant": "without_velocity_constraint", "ablation_status": "ready"},
     ])
@@ -116,6 +127,7 @@ def test_validation_scale_gate_passes_when_all_governed_inputs_exist(tmp_path: P
     assert audit["validation_seed_per_prompt_min"] == 3
     assert audit["full_paper_allowed"] is False
     assert audit["full_paper_next_gate"] == "full_paper_dry_run_checker"
+    assert audit["external_baseline_measured_adapter_count"] == 2
     assert (run_root / "records" / "validation_scale_gate_records.jsonl").exists()
     assert (run_root / "tables" / "validation_scale_gate_table.csv").exists()
     assert (run_root / "artifacts" / "validation_scale_gate_decision.json").exists()

@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from main.external_baselines.baseline_registry import audit_external_baseline_records
+from experiments.generative_video_model_probe.external_baseline_runner import audit_external_baseline_comparison_records
 from main.protocol.flow_evidence_fields import with_flow_evidence_protocol_defaults
 from main.protocol.record_writer import write_json, write_jsonl
 from main.protocol.table_builder import write_csv
@@ -45,6 +46,8 @@ def _load_config(config_path: str | Path = DEFAULT_VALIDATION_SCALE_CONFIG) -> d
         "minimum_attack_count": int(config.get("minimum_attack_count", DEFAULT_MINIMUM_ATTACK_COUNT)),
         "require_small_scale_pilot_gate_passed": bool(config.get("require_small_scale_pilot_gate_passed", True)),
         "require_external_baseline_status_records": bool(config.get("require_external_baseline_status_records", True)),
+        "require_external_baseline_comparison_records": bool(config.get("require_external_baseline_comparison_records", True)),
+        "minimum_external_baseline_measured_adapter_count": int(config.get("minimum_external_baseline_measured_adapter_count", 1)),
         "require_internal_ablation_records": bool(config.get("require_internal_ablation_records", True)),
         "require_adaptive_attack_records": bool(config.get("require_adaptive_attack_records", True)),
         "require_replay_or_sketch_records_or_claim3_downgrade": bool(config.get("require_replay_or_sketch_records_or_claim3_downgrade", True)),
@@ -82,6 +85,25 @@ def _validation_generation_records(generation_records: list[dict], validation_pr
         and record.get("colab_runtime_profile") in validation_profile_names
     ]
 
+
+
+def _external_baseline_comparison_ready(run_root: Path, minimum_measured_adapter_count: int) -> tuple[bool, int, int, str]:
+    """检查 external_baseline/ adapter 是否已经写出 comparison records。"""
+    records = _read_jsonl(run_root / "records" / "external_baseline_score_records.jsonl")
+    decision = _read_json(run_root / "artifacts" / "external_baseline_comparison_decision.json")
+    if not decision and records:
+        decision = audit_external_baseline_comparison_records(records)
+    measured_adapter_count = int(decision.get("external_baseline_measured_adapter_count") or 0)
+    ready = (
+        _decision_pass(decision, "external_baseline_comparison_decision")
+        and measured_adapter_count >= minimum_measured_adapter_count
+    )
+    return (
+        ready,
+        len(records),
+        measured_adapter_count,
+        decision.get("external_baseline_claim_support_status", "missing_external_baseline_comparison_decision"),
+    )
 
 def _internal_ablation_ready(run_root: Path) -> tuple[bool, int, str]:
     """检查 validation-scale 是否已有内部消融记录。"""
@@ -161,6 +183,15 @@ def build_validation_scale_gate_audit(
     runtime_detection_ready_count = int(runtime_detection_decision.get("runtime_detection_ready_count") or sum(1 for record in runtime_detection_records if record.get("runtime_detection_status") == "ready"))
 
     external_baseline_audit = audit_external_baseline_records(external_baseline_records) if external_baseline_records else {}
+    (
+        external_baseline_comparison_ready,
+        external_baseline_comparison_record_count,
+        external_baseline_measured_adapter_count,
+        external_baseline_comparison_status,
+    ) = _external_baseline_comparison_ready(
+        run_root,
+        config["minimum_external_baseline_measured_adapter_count"],
+    )
     internal_ablation_ready, internal_ablation_record_count, internal_ablation_status = _internal_ablation_ready(run_root)
     adaptive_attack_ready, adaptive_attack_record_count, adaptive_attack_status = _adaptive_attack_ready(run_root)
     replay_or_sketch_ready, replay_or_sketch_status = _replay_or_sketch_ready(run_root)
@@ -173,6 +204,7 @@ def build_validation_scale_gate_audit(
         "validation_attack_records_ready": _decision_pass(runtime_attack_decision, "runtime_attack_decision") and attack_count >= config["minimum_attack_count"],
         "validation_detection_records_ready": _decision_pass(runtime_detection_decision, "runtime_detection_decision") and runtime_detection_ready_count >= runtime_attack_ready_count > 0,
         "validation_external_baseline_status_records_ready": (not config["require_external_baseline_status_records"]) or external_baseline_audit.get("external_baseline_status_decision") == "PASS",
+        "validation_external_baseline_comparison_records_ready": (not config["require_external_baseline_comparison_records"]) or external_baseline_comparison_ready,
         "validation_internal_ablation_records_ready": (not config["require_internal_ablation_records"]) or internal_ablation_ready,
         "validation_adaptive_attack_records_ready": (not config["require_adaptive_attack_records"]) or adaptive_attack_ready,
         "validation_replay_or_sketch_records_ready": (not config["require_replay_or_sketch_records_or_claim3_downgrade"]) or replay_or_sketch_ready,
@@ -205,6 +237,10 @@ def build_validation_scale_gate_audit(
         "external_baseline_status_decision": external_baseline_audit.get("external_baseline_status_decision"),
         "modern_external_baseline_record_count": external_baseline_audit.get("modern_external_baseline_record_count", 0),
         "modern_external_baseline_main_comparison_ready_count": external_baseline_audit.get("modern_external_baseline_main_comparison_ready_count", 0),
+        "external_baseline_comparison_record_count": external_baseline_comparison_record_count,
+        "external_baseline_measured_adapter_count": external_baseline_measured_adapter_count,
+        "external_baseline_comparison_status": external_baseline_comparison_status,
+        "minimum_external_baseline_measured_adapter_count": config["minimum_external_baseline_measured_adapter_count"],
         "internal_ablation_record_count": internal_ablation_record_count,
         "internal_ablation_status": internal_ablation_status,
         "adaptive_attack_record_count": adaptive_attack_record_count,
@@ -244,6 +280,8 @@ def write_validation_scale_gate_audit(
         f"- validation_prompt_count: {audit['validation_prompt_count']}\n"
         f"- validation_seed_per_prompt_min: {audit['validation_seed_per_prompt_min']}\n"
         f"- modern_external_baseline_main_comparison_ready_count: {audit['modern_external_baseline_main_comparison_ready_count']}\n"
+        f"- external_baseline_comparison_record_count: {audit['external_baseline_comparison_record_count']}\n"
+        f"- external_baseline_measured_adapter_count: {audit['external_baseline_measured_adapter_count']}\n"
         f"- full_paper_allowed: {str(audit['full_paper_allowed']).lower()}\n"
     )
     report_path = run_root / "reports" / "validation_scale_gate_report.md"

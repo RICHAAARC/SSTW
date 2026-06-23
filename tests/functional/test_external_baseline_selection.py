@@ -10,8 +10,8 @@ import pytest
 from main.external_baselines.baseline_registry import audit_external_baseline_records, build_external_baseline_records
 from main.external_baselines.explicit_dtw_temporal_alignment import compute_dtw_alignment_cost
 from main.external_baselines.frame_matching_temporal_registration import compute_registration_cost, match_frames
-from experiments.generative_video_model_probe.external_baseline_runner import write_external_baseline_status_outputs
-from main.protocol.record_writer import read_jsonl
+from experiments.generative_video_model_probe.external_baseline_runner import write_external_baseline_comparison_outputs, write_external_baseline_status_outputs
+from main.protocol.record_writer import read_jsonl, write_jsonl
 
 
 @pytest.mark.quick
@@ -80,3 +80,65 @@ def test_explicit_synchronization_adapters_run_on_small_sequences() -> None:
 
     matches = match_frames(reference, observed)
     assert [item["reference_index"] for item in matches] == [0, 1, 2]
+
+
+
+def _write_external_baseline_runtime_fixture(run_root: Path) -> None:
+    """写出 external_baseline adapter 可消费的最小 runtime detection 与 trajectory fixture。"""
+    trajectory_records = []
+    for step_index in range(4):
+        trajectory_records.append({
+            "trajectory_trace_id": "trace_0",
+            "trajectory_step_index": step_index,
+            "latent_norm": 4.0 - step_index * 0.4,
+            "latent_mean": 0.1 * step_index,
+            "latent_std": 0.2 + step_index * 0.05,
+        })
+    write_jsonl(run_root / "records" / "trajectory_trace.jsonl", trajectory_records)
+    write_jsonl(run_root / "records" / "runtime_detection_records.jsonl", [
+        {
+            "runtime_detection_status": "ready",
+            "generation_model_id": "Wan-AI/Wan2.1-T2V-1.3B-Diffusers",
+            "prompt_id": "prompt_0",
+            "seed_id": "seed_0",
+            "trajectory_trace_id": "trace_0",
+            "attack_name": "video_compression_runtime",
+            "source_frame_count": 4,
+            "attacked_frame_count": 4,
+            "attacked_video_decoded_frame_count": 4,
+            "S_runtime_attack_detection": 0.82,
+        },
+        {
+            "runtime_detection_status": "ready",
+            "generation_model_id": "Wan-AI/Wan2.1-T2V-1.3B-Diffusers",
+            "prompt_id": "prompt_0",
+            "seed_id": "seed_0",
+            "trajectory_trace_id": "trace_0",
+            "attack_name": "frame_rate_resampling_runtime",
+            "source_frame_count": 4,
+            "attacked_frame_count": 2,
+            "attacked_video_decoded_frame_count": 2,
+            "S_runtime_attack_detection": 0.71,
+        },
+    ])
+
+
+@pytest.mark.quick
+def test_external_baseline_comparison_runner_uses_external_baseline_adapters(tmp_path: Path) -> None:
+    """baseline comparison 必须通过 external_baseline/ adapter 产出 records、table、decision 和 report。"""
+    run_root = tmp_path / "generative_video_model_probe_colab"
+    _write_external_baseline_runtime_fixture(run_root)
+
+    audit = write_external_baseline_comparison_outputs(run_root)
+    records = read_jsonl(run_root / "records" / "external_baseline_score_records.jsonl")
+
+    assert audit["external_baseline_comparison_decision"] == "PASS"
+    assert audit["external_baseline_measured_adapter_count"] == 2
+    assert "explicit_dtw_temporal_alignment" in audit["external_baseline_measured_adapter_names"]
+    assert "explicit_frame_matching_temporal_registration" in audit["external_baseline_measured_adapter_names"]
+    assert any(record["external_baseline_adapter_path"].startswith("external_baseline/") for record in records)
+    assert all(record["external_baseline_result_used_for_claim"] is False for record in records)
+    assert all(record.get("S_final") is None for record in records)
+    assert (run_root / "tables" / "external_baseline_comparison_table.csv").exists()
+    assert (run_root / "artifacts" / "external_baseline_comparison_decision.json").exists()
+    assert (run_root / "reports" / "external_baseline_comparison_report.md").exists()

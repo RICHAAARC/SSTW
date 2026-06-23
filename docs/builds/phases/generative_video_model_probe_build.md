@@ -444,3 +444,36 @@ package to Google Drive
 ```
 
 因此, 后续真实复跑可以延后; 在复跑发生后, 新增后处理会自动把 validation-scale 缺口显式落盘, 而不是让缺口停留在人工判断。
+
+
+## 2026-06-23 external_baseline adapter comparison 接入
+
+Colab workflow 已在 runtime detection 之后新增 external baseline comparison 步骤:
+
+```text
+runtime detection
+external_baseline adapter comparison
+small-scale claim pilot gate
+validation internal ablation
+statistical confidence interval
+validation artifact rebuild dry-run
+validation-scale gate
+package to Google Drive
+```
+
+该步骤调用:
+
+```text
+python -m experiments.generative_video_model_probe.external_baseline_runner --run-root <drive_run_root> --mode comparison
+```
+
+产物包括:
+
+```text
+records/external_baseline_score_records.jsonl
+tables/external_baseline_comparison_table.csv
+artifacts/external_baseline_comparison_decision.json
+reports/external_baseline_comparison_report.md
+```
+
+该实现的职责是闭合外部 baseline 对比工程链路。当前 measured adapter 仅包括显式 DTW 与 frame matching 同步 control proxy; 现代视频水印 baseline 仍需后续接入官方 adapter。

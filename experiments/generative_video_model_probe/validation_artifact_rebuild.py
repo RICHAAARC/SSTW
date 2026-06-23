@@ -18,12 +18,14 @@ REQUIRED_REBUILD_INPUTS = (
     "records/runtime_attack_records.jsonl",
     "records/runtime_detection_records.jsonl",
     "records/external_baseline_records.jsonl",
+    "records/external_baseline_score_records.jsonl",
     "records/validation_internal_ablation_records.jsonl",
     "records/statistical_confidence_interval_records.jsonl",
     "artifacts/generative_video_colab_runtime_decision.json",
     "artifacts/runtime_attack_decision.json",
     "artifacts/runtime_detection_decision.json",
     "artifacts/external_baseline_status_decision.json",
+    "artifacts/external_baseline_comparison_decision.json",
     "artifacts/validation_internal_ablation_decision.json",
     "artifacts/statistical_confidence_interval_decision.json",
 )
@@ -31,10 +33,12 @@ REQUIRED_REBUILD_INPUTS = (
 REQUIRED_REBUILD_OUTPUTS = (
     "tables/generation_runtime_table.csv",
     "tables/external_baseline_status_table.csv",
+    "tables/external_baseline_comparison_table.csv",
     "tables/runtime_attack_table.csv",
     "tables/runtime_detection_table.csv",
     "tables/validation_internal_ablation_table.csv",
     "tables/statistical_confidence_interval_table.csv",
+    "reports/external_baseline_comparison_report.md",
     "reports/validation_internal_ablation_report.md",
     "reports/statistical_confidence_interval_report.md",
 )

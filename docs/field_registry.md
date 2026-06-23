@@ -343,6 +343,24 @@ Notebook 与 repository module 的跨边界数据
 | modern_external_baseline_main_comparison_ready_count | metric | none | true | false | false | Number of modern external baselines ready for main comparison. |
 | external_baseline_main_comparison_ready_count | metric | none | true | false | false | Number of all external baselines ready for main comparison. |
 | external_baseline_non_run_record_count | metric | none | true | false | false | Number of external baselines represented by governed non-run records. |
+| validation_scale_gate_decision | governance | none | true | false | false | Decision for validation-scale generative probe gate before full-paper dry-run. |
+| missing_validation_requirements | governance | none | true | false | false | Validation-scale requirements that are not yet satisfied. |
+| validation_missing_requirement_count | metric | none | true | false | false | Count of missing validation-scale requirements. |
+| validation_profile_names | protocol | none | true | false | false | Runtime profile names accepted as validation-scale generation records. |
+| validation_generation_record_count | metric | none | true | false | false | Number of successful generation records produced by validation-scale profiles. |
+| validation_prompt_count | metric | none | true | false | false | Number of prompts covered by validation-scale generation records. |
+| validation_seed_per_prompt_min | metric | none | true | false | false | Minimum seed count per prompt in validation-scale generation records. |
+| minimum_prompt_count | protocol | none | true | false | false | Minimum prompt count required by a gate. |
+| minimum_seed_per_prompt | protocol | none | true | false | false | Minimum seed count per prompt required by a gate. |
+| internal_ablation_record_count | metric | none | true | false | false | Number of internal ablation records available to a validation or full-paper gate. |
+| internal_ablation_status | governance | none | true | false | false | Internal ablation readiness or claim boundary status. |
+| adaptive_attack_record_count | metric | none | true | false | false | Number of Flow-specific adaptive attack records available to a validation or full-paper gate. |
+| adaptive_attack_status | governance | none | true | false | false | Adaptive attack readiness or claim boundary status. |
+| replay_or_sketch_status | governance | none | true | false | false | Replay/sketch readiness status or explicit Claim-3 downgrade status. |
+| confidence_interval_status | governance | none | true | false | false | Statistical confidence interval report readiness status. |
+| artifact_rebuild_status | governance | none | true | false | false | Artifact rebuild dry-run readiness status. |
+| full_paper_allowed | governance | none | true | false | false | Whether current gate allows full-paper result package execution. |
+| full_paper_next_gate | governance | none | true | false | false | Next gate required before full-paper result production. |
 | selection_policy | governance | none | true | false | false | B5 external baseline selection policy block. |
 | primary_selection_rule | governance | none | true | false | false | B5 external baseline primary selection rule. |
 | claim_rule | claim | none | true | true | false | B5 external baseline claim usage rule. |

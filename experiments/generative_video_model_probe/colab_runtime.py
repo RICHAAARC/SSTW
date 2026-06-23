@@ -27,6 +27,17 @@ PROFILE_SETTINGS = {
     "smoke": {"prompt_limit": 1, "seed_limit": 1, "num_inference_steps": 8, "num_frames": 33, "height": 320, "width": 512, "run_cross_model": False},
     "recommended": {"prompt_limit": 2, "seed_limit": 2, "num_inference_steps": 16, "num_frames": 49, "height": 320, "width": 512, "run_cross_model": True},
     "pilot": {"prompt_limit": 8, "seed_limit": 2, "num_inference_steps": 16, "num_frames": 49, "height": 320, "width": 512, "run_cross_model": False},
+    "validation_scale": {
+        "prompt_limit": None,
+        "seed_limit": None,
+        "num_inference_steps": 16,
+        "num_frames": 49,
+        "height": 320,
+        "width": 512,
+        "run_cross_model": False,
+        "prompt_suite_roles": ["main", "heldout_prompt", "pilot_main"],
+        "seed_suite_roles": ["main", "heldout_seed"],
+    },
     "extended": {"prompt_limit": 3, "seed_limit": 3, "num_inference_steps": 24, "num_frames": 65, "height": 384, "width": 640, "run_cross_model": True},
     "motion_calibration": {
         "prompt_limit": None,
@@ -70,7 +81,7 @@ def _tensor_stats(value: Any) -> dict:
 
 
 def _model_family_from_id(model_id: str) -> str:
-    """???? ID ???????????"""
+    """根据模型 ID 判断当前生成模型家族。"""
     normalized = model_id.lower()
     if "wan2.1" in normalized or "wan2_1" in normalized or "wan-ai" in normalized:
         return "diffusers_wan21_flow_matching_dit"
@@ -80,17 +91,17 @@ def _model_family_from_id(model_id: str) -> str:
 
 
 def _scheduler_id_for_model(model_id: str) -> str:
-    """??????? pipeline ?? scheduler ???"""
+    """根据模型家族登记 pipeline 默认 scheduler 语义。"""
     if _model_family_from_id(model_id) == "diffusers_wan21_flow_matching_dit":
         return "wan21_flow_matching_pipeline_default_scheduler"
     return "ltx_pipeline_default_scheduler"
 
 
 def _load_video_generation_pipeline(model_id: str, torch_dtype: Any) -> Any:
-    """?????????????? pipeline?
+    """加载真实视频生成 pipeline。
 
-    ????????????small-scale claim pilot ???? Wan2.1 ?? Flow
-    Matching DiT ??; LTX-Video ???? fallback ?????????
+    该函数属于 Colab runtime 路径。项目主线必须使用 Wan2.1 Flow Matching DiT;
+    LTX-Video 只保留为工程 fallback, 不能替代主论文证据。
     """
     hf_token = os.environ.get("HF_TOKEN") or None
     if _model_family_from_id(model_id) == "diffusers_wan21_flow_matching_dit":

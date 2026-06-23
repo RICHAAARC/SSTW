@@ -118,6 +118,20 @@ def test_pilot_prompt_suite_replaces_low_motion_heldout_rotation_prompt(tmp_path
 
 
 @pytest.mark.quick
+def test_validation_scale_profile_expands_pilot_prompts_to_three_seeds(tmp_path: Path) -> None:
+    """validation_scale profile 必须使用 pilot 后的 8 个 prompt 和 3 个 seed。"""
+    output_root = tmp_path / "prompt_suite"
+    summary = write_prompt_suite(output_root)
+    suite = json.loads(Path(summary["prompt_suite_path"]).read_text(encoding="utf-8"))
+    plan = _build_generation_plan(suite, "validation_scale", "Wan-AI/Wan2.1-T2V-1.3B-Diffusers", None)
+
+    assert len(plan) == 24
+    assert len({item["prompt_id"] for item in plan}) == 8
+    assert {item["seed_id"] for item in plan} == {"seed_main_a", "seed_main_b", "seed_heldout_c"}
+    assert {item["prompt_suite_role"] for item in plan} == {"main", "heldout_prompt", "pilot_main"}
+
+
+@pytest.mark.quick
 def test_generative_video_colab_notebook_calls_repository_modules() -> None:
     """Notebook 只能作为入口, 必须调用仓库脚本或 experiments 模块生成正式输出。"""
     notebook_path = Path("paper_workflow/colab_utils/generative_video_model_probe_colab.ipynb")
@@ -131,11 +145,11 @@ def test_generative_video_colab_notebook_calls_repository_modules() -> None:
     assert "getpass" in source
     assert "add_to_git_credential=False" in source
     assert "generative_video_model_probe_workflow" in source
-    assert "PROFILE = 'pilot'" in source
+    assert "PROFILE = 'validation_scale'" in source
     assert "MODEL_ID = 'Wan-AI/Wan2.1-T2V-1.3B-Diffusers'" in source
     assert "build_formal_metric_command" in source
     assert "motion_calibration" in source
-    assert "pilot profile 只能复用已经通过的 calibration artifact" in source
+    assert "pilot / validation_scale profile 只能复用已经通过的 calibration artifact" in source
     assert "motion_threshold_calibration_ready" in source
     assert "read_text(encoding='utf-8-sig')" in source
     assert "build_motion_threshold_calibration_command" in source
@@ -144,6 +158,7 @@ def test_generative_video_colab_notebook_calls_repository_modules() -> None:
     assert "build_runtime_attack_command" in source
     assert "build_runtime_detection_command" in source
     assert "build_small_scale_claim_pilot_gate_command" in source
+    assert "build_validation_scale_gate_command" in source
     assert "scripts/prepare_generative_video_prompt_suite.py" in Path("paper_workflow/notebook_utils/generative_video_model_probe_workflow.py").read_text(encoding="utf-8")
     assert "experiments.generative_video_model_probe.colab_runtime" in Path("paper_workflow/notebook_utils/generative_video_model_probe_workflow.py").read_text(encoding="utf-8")
     assert "experiments.generative_video_model_probe.formal_metric_runner" in Path("paper_workflow/notebook_utils/generative_video_model_probe_workflow.py").read_text(encoding="utf-8")
@@ -153,6 +168,7 @@ def test_generative_video_colab_notebook_calls_repository_modules() -> None:
     assert "experiments.generative_video_model_probe.attack_runner" in Path("paper_workflow/notebook_utils/generative_video_model_probe_workflow.py").read_text(encoding="utf-8")
     assert "experiments.generative_video_model_probe.detection_runner" in Path("paper_workflow/notebook_utils/generative_video_model_probe_workflow.py").read_text(encoding="utf-8")
     assert "experiments.generative_video_model_probe.pilot_claim_gate" in Path("paper_workflow/notebook_utils/generative_video_model_probe_workflow.py").read_text(encoding="utf-8")
+    assert "experiments.generative_video_model_probe.validation_scale_gate" in Path("paper_workflow/notebook_utils/generative_video_model_probe_workflow.py").read_text(encoding="utf-8")
     assert "scripts/package_results/generative_video_drive_packager.py" in Path("paper_workflow/notebook_utils/generative_video_model_probe_workflow.py").read_text(encoding="utf-8")
     assert "pytest -q" in source
     assert "tools/harness/run_all_audits.py" in source
@@ -202,6 +218,14 @@ def test_generative_video_drive_packager_creates_archive_and_manifest(tmp_path: 
         "motion_threshold_source_split": "heuristic_precalibration",
         "motion_threshold_calibration_required": True,
     })
+    write_json(run_root / "artifacts" / "validation_scale_gate_decision.json", {
+        "validation_scale_gate_decision": "FAIL",
+        "claim_support_status": "validation_scale_blocked",
+        "validation_missing_requirement_count": 5,
+        "validation_generation_record_count": 0,
+        "validation_prompt_count": 0,
+        "validation_seed_per_prompt_min": 0,
+    })
 
     payload = package_generative_video_colab_run(run_root, package_dir, include_videos=False)
     archive_path = Path(payload["archive_path"])
@@ -221,6 +245,9 @@ def test_generative_video_drive_packager_creates_archive_and_manifest(tmp_path: 
     assert manifest["decision_summary"]["runtime_detection_decision"] == "PASS"
     assert manifest["decision_summary"]["runtime_detection_record_count"] == 48
     assert manifest["decision_summary"]["runtime_detection_ready_count"] == 48
+    assert manifest["decision_summary"]["validation_scale_gate_decision"] == "FAIL"
+    assert manifest["decision_summary"]["validation_scale_claim_support_status"] == "validation_scale_blocked"
+    assert manifest["decision_summary"]["validation_missing_requirement_count"] == 5
     assert manifest["decision_summary"]["motion_threshold_calibration_decision"] == "INSUFFICIENT_SAMPLE"
     assert manifest["decision_summary"]["motion_threshold_id"] == "motion_delta_heuristic_v1"
     assert manifest["decision_summary"]["motion_threshold_source_split"] == "heuristic_precalibration"
@@ -280,5 +307,7 @@ def test_generative_video_colab_runtime_uses_optional_hf_token_without_recording
     assert "provided" in runtime_text
     assert "not_provided" in runtime_text
     assert '"pilot": {"prompt_limit": 8, "seed_limit": 2' in runtime_text
+    assert '"validation_scale": {' in runtime_text
+    assert '"seed_suite_roles": ["main", "heldout_seed"]' in runtime_text
     assert 'default="pilot"' in runtime_text
     assert 'default=WAN21_PRIMARY_MODEL_ID' in runtime_text

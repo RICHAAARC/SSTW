@@ -984,3 +984,53 @@ external_baseline_threshold_policy_compatible = true
 external_baseline_attack_manifest_compatible = true
 external_baseline_result_used_for_claim = true
 ```
+
+## 2026-06-23 validation-scale gate 工程推进状态
+
+### 本次新增工程入口
+
+为防止从 small-scale pilot 直接跳到 full_paper, 当前仓库新增 validation-scale gate:
+
+```text
+experiments/generative_video_model_probe/validation_scale_gate.py
+configs/protocol/validation_scale_generative_probe.json
+paper_workflow/notebook_utils/generative_video_model_probe_workflow.py::build_validation_scale_gate_command
+paper_workflow/colab_utils/generative_video_model_probe_colab.ipynb PROFILE = validation_scale
+```
+
+该 gate 会写出:
+
+```text
+records/validation_scale_gate_records.jsonl
+tables/validation_scale_gate_table.csv
+artifacts/validation_scale_gate_decision.json
+reports/validation_scale_gate_report.md
+```
+
+### 当前阶段语义
+
+当前项目已经具备 validation-scale 的工程审计入口, 但尚未完成 validation-scale 真实运行。当前状态应表述为:
+
+```text
+small_scale_claim_pilot_gate: PASS
+validation_scale_gate_checker: implemented
+validation_scale_gate_decision: waiting_for_validation_scale_run
+full_paper_allowed: false
+submission_freeze_allowed: false
+```
+
+### validation-scale 必须闭合的内容
+
+```text
+validation_generation_records_ready
+validation_attack_records_ready
+validation_detection_records_ready
+validation_external_baseline_status_records_ready
+validation_internal_ablation_records_ready
+validation_adaptive_attack_records_ready
+validation_replay_or_sketch_records_ready
+validation_confidence_interval_report_ready
+validation_artifact_rebuild_dry_run_ready
+```
+
+该 gate 通过后, 下一步仍然是 `full_paper_dry_run_checker`, 不是 full_paper result package。

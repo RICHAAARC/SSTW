@@ -149,6 +149,18 @@ def build_small_scale_claim_pilot_gate_command(layout: dict[str, str]) -> list[s
     ]
 
 
+def build_validation_scale_gate_command(layout: dict[str, str]) -> list[str]:
+    """构造 validation-scale gate 命令, 防止从 pilot 直接跳到 full_paper。"""
+    return [
+        sys.executable,
+        "-m",
+        "experiments.generative_video_model_probe.validation_scale_gate",
+        "--run-root",
+        layout["drive_run_root"],
+        "--write-outputs",
+    ]
+
+
 def build_drive_packaging_command(layout: dict[str, str], include_videos: bool = True) -> list[str]:
     """构造 Google Drive 打包命令。"""
     command = [

@@ -353,3 +353,44 @@ internal ablation matrix
 fixed-FPR threshold protocol
 statistical confidence interval reporter
 ```
+
+## 2026-06-23 validation-scale gate 工程入口
+
+当前仓库已新增 validation-scale gate 自动审计入口:
+
+```text
+experiments/generative_video_model_probe/validation_scale_gate.py
+configs/protocol/validation_scale_generative_probe.json
+records/validation_scale_gate_records.jsonl
+tables/validation_scale_gate_table.csv
+artifacts/validation_scale_gate_decision.json
+reports/validation_scale_gate_report.md
+```
+
+该 gate 的作用是检查 pilot 通过后是否已经具备进入 full_paper dry-run checker 的条件。它只读取已经落盘的 governed records 和 decision artifacts, 不运行 GPU, 也不补造缺失的 baseline、消融、adaptive attack、replay/sketch 或 CI 结果。
+
+当前 validation-scale gate 检查的最小条件为:
+
+```text
+small_scale_claim_pilot_gate_passed
+validation_generation_records_ready
+validation_attack_records_ready
+validation_detection_records_ready
+validation_external_baseline_status_records_ready
+validation_internal_ablation_records_ready
+validation_adaptive_attack_records_ready
+validation_replay_or_sketch_records_ready
+validation_confidence_interval_report_ready
+validation_artifact_rebuild_dry_run_ready
+```
+
+同时, Colab 入口已新增 `PROFILE = validation_scale` 运行配置:
+
+```text
+prompt_count: 8
+seed_per_prompt: 3
+expected_generation_count: 24
+profile_name: validation_scale
+```
+
+需要强调的是, 即使 `validation_scale_gate_decision = PASS`, 也只表示可以进入 `full_paper_dry_run_checker`; 它仍不允许直接生成 full_paper 论文主表。

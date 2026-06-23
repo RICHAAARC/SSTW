@@ -1,0 +1,266 @@
+"""validation-scale generative video probe 的自动门禁审计。"""
+
+from __future__ import annotations
+
+import argparse
+import json
+from pathlib import Path
+from typing import Any
+
+from main.external_baselines.baseline_registry import audit_external_baseline_records
+from main.protocol.flow_evidence_fields import with_flow_evidence_protocol_defaults
+from main.protocol.record_writer import write_json, write_jsonl
+from main.protocol.table_builder import write_csv
+
+
+DEFAULT_VALIDATION_SCALE_CONFIG = "configs/protocol/validation_scale_generative_probe.json"
+DEFAULT_VALIDATION_PROFILE_NAMES = {"validation_scale"}
+DEFAULT_MINIMUM_PROMPT_COUNT = 8
+DEFAULT_MINIMUM_SEED_PER_PROMPT = 3
+DEFAULT_MINIMUM_ATTACK_COUNT = 3
+
+
+def _read_json(path: Path) -> dict:
+    """读取 JSON 文件, 并兼容 Windows 或 Colab 产生的 UTF-8 BOM。"""
+    if not path.exists():
+        return {}
+    return json.loads(path.read_text(encoding="utf-8-sig"))
+
+
+def _read_jsonl(path: Path) -> list[dict]:
+    """读取 JSONL records, 文件不存在时返回空列表。"""
+    if not path.exists():
+        return []
+    return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
+
+
+def _load_config(config_path: str | Path = DEFAULT_VALIDATION_SCALE_CONFIG) -> dict:
+    """读取 validation-scale 门禁配置, 文件缺失时使用保守默认值。"""
+    path = Path(config_path)
+    config = _read_json(path)
+    return {
+        "validation_profile_names": config.get("validation_profile_names", sorted(DEFAULT_VALIDATION_PROFILE_NAMES)),
+        "minimum_prompt_count": int(config.get("minimum_prompt_count", DEFAULT_MINIMUM_PROMPT_COUNT)),
+        "minimum_seed_per_prompt": int(config.get("minimum_seed_per_prompt", DEFAULT_MINIMUM_SEED_PER_PROMPT)),
+        "minimum_attack_count": int(config.get("minimum_attack_count", DEFAULT_MINIMUM_ATTACK_COUNT)),
+        "require_small_scale_pilot_gate_passed": bool(config.get("require_small_scale_pilot_gate_passed", True)),
+        "require_external_baseline_status_records": bool(config.get("require_external_baseline_status_records", True)),
+        "require_internal_ablation_records": bool(config.get("require_internal_ablation_records", True)),
+        "require_adaptive_attack_records": bool(config.get("require_adaptive_attack_records", True)),
+        "require_replay_or_sketch_records_or_claim3_downgrade": bool(config.get("require_replay_or_sketch_records_or_claim3_downgrade", True)),
+        "require_confidence_interval_report": bool(config.get("require_confidence_interval_report", True)),
+        "require_artifact_rebuild_dry_run": bool(config.get("require_artifact_rebuild_dry_run", True)),
+    }
+
+
+def _unique_nonempty(records: list[dict], field: str) -> set[str]:
+    """从 records 中提取非空唯一字段值。"""
+    return {str(record.get(field)) for record in records if record.get(field) not in {None, ""}}
+
+
+def _seed_per_prompt_min(records: list[dict]) -> int:
+    """统计每个 prompt 对应的成功 seed 最小数量。"""
+    grouped: dict[str, set[str]] = {}
+    for record in records:
+        prompt_id = str(record.get("prompt_id") or "")
+        seed_id = str(record.get("seed_id") or "")
+        if prompt_id and seed_id:
+            grouped.setdefault(prompt_id, set()).add(seed_id)
+    return min((len(seed_ids) for seed_ids in grouped.values()), default=0)
+
+
+def _decision_pass(decision: dict, *field_names: str) -> bool:
+    """检查任一指定决策字段是否为 PASS。"""
+    return any(decision.get(field_name) == "PASS" for field_name in field_names)
+
+
+def _validation_generation_records(generation_records: list[dict], validation_profile_names: set[str]) -> list[dict]:
+    """筛选 validation-scale profile 产生的成功生成记录。"""
+    return [
+        record for record in generation_records
+        if record.get("generation_status") == "success"
+        and record.get("colab_runtime_profile") in validation_profile_names
+    ]
+
+
+def _internal_ablation_ready(run_root: Path) -> tuple[bool, int, str]:
+    """检查 validation-scale 是否已有内部消融记录。"""
+    records = _read_jsonl(run_root / "records" / "validation_internal_ablation_records.jsonl")
+    if not records:
+        records = _read_jsonl(run_root / "records" / "ablation_scores.jsonl")
+    decision = _read_json(run_root / "artifacts" / "validation_internal_ablation_decision.json")
+    if not decision:
+        decision = _read_json(run_root / "artifacts" / "internal_ablation_decision.json")
+    decision_ready = not decision or _decision_pass(decision, "validation_internal_ablation_decision", "internal_ablation_decision")
+    return bool(records) and decision_ready, len(records), decision.get("claim_support_status", "missing_internal_ablation_decision")
+
+
+def _adaptive_attack_ready(run_root: Path) -> tuple[bool, int, str]:
+    """检查 validation-scale 是否已有 Flow-specific adaptive attack 记录。"""
+    records = _read_jsonl(run_root / "records" / "adaptive_attack_records.jsonl")
+    decision = _read_json(run_root / "artifacts" / "adaptive_attack_decision.json")
+    ready = bool(records) and _decision_pass(decision, "adaptive_attack_decision")
+    return ready, len(records), decision.get("claim_support_status", "missing_adaptive_attack_decision")
+
+
+def _replay_or_sketch_ready(run_root: Path) -> tuple[bool, str]:
+    """检查 replay/sketch gate 是否闭合, 或 Claim-3 是否已经显式降级。"""
+    replay_decision = _read_json(run_root / "artifacts" / "replay_and_sketch_gate_decision.json")
+    if _decision_pass(replay_decision, "replay_and_sketch_gate_decision"):
+        return True, "replay_and_sketch_gate_passed"
+    downgrade_decision = _read_json(run_root / "artifacts" / "claim3_downgrade_decision.json")
+    if downgrade_decision.get("claim3_downgraded") is True:
+        return True, "claim3_explicitly_downgraded"
+    return False, "missing_replay_sketch_gate_or_claim3_downgrade"
+
+
+def _confidence_interval_ready(run_root: Path) -> tuple[bool, str]:
+    """检查统计置信区间报告是否已由 governed artifact 写出。"""
+    decision = _read_json(run_root / "artifacts" / "statistical_confidence_interval_decision.json")
+    ready = _decision_pass(decision, "statistical_confidence_interval_decision")
+    return ready, decision.get("claim_support_status", "missing_confidence_interval_decision")
+
+
+def _artifact_rebuild_ready(run_root: Path) -> tuple[bool, str]:
+    """检查 validation-scale artifact rebuild dry-run 是否通过。"""
+    decision = _read_json(run_root / "artifacts" / "validation_artifact_rebuild_dry_run_decision.json")
+    if not decision:
+        decision = _read_json(run_root / "artifacts" / "artifact_rebuild_dry_run_decision.json")
+    ready = _decision_pass(decision, "validation_artifact_rebuild_dry_run_decision", "artifact_rebuild_dry_run_decision")
+    return ready, decision.get("claim_support_status", "missing_artifact_rebuild_dry_run_decision")
+
+
+def build_validation_scale_gate_audit(
+    run_root: str | Path,
+    config_path: str | Path = DEFAULT_VALIDATION_SCALE_CONFIG,
+) -> dict[str, Any]:
+    """构建 validation-scale generative probe 门禁审计结果。
+
+    该函数属于项目特定写法。它只读取 run_root 中已经落盘的 governed records、decision artifacts
+    和 reports, 不运行 GPU, 不补造 baseline、消融、adaptive attack 或 replay 结果。若某类证据缺失,
+    它必须把缺口写入 `missing_validation_requirements`, 防止从 pilot 直接跳到 full_paper。
+    """
+    run_root = Path(run_root)
+    config = _load_config(config_path)
+    validation_profile_names = set(config["validation_profile_names"])
+
+    generation_records = _read_jsonl(run_root / "records" / "generation_records.jsonl")
+    validation_generation_records = _validation_generation_records(generation_records, validation_profile_names)
+    runtime_attack_records = _read_jsonl(run_root / "records" / "runtime_attack_records.jsonl")
+    runtime_detection_records = _read_jsonl(run_root / "records" / "runtime_detection_records.jsonl")
+    external_baseline_records = _read_jsonl(run_root / "records" / "external_baseline_records.jsonl")
+
+    pilot_decision = _read_json(run_root / "artifacts" / "small_scale_claim_pilot_gate_decision.json")
+    runtime_attack_decision = _read_json(run_root / "artifacts" / "runtime_attack_decision.json")
+    runtime_detection_decision = _read_json(run_root / "artifacts" / "runtime_detection_decision.json")
+
+    prompt_count = len(_unique_nonempty(validation_generation_records, "prompt_id"))
+    seed_per_prompt_min = _seed_per_prompt_min(validation_generation_records)
+    attack_count = int(runtime_attack_decision.get("runtime_attack_count") or len(_unique_nonempty(runtime_attack_records, "attack_name")))
+    runtime_attack_ready_count = int(runtime_attack_decision.get("runtime_attack_ready_count") or sum(1 for record in runtime_attack_records if record.get("attack_runtime_status") == "ready"))
+    runtime_detection_ready_count = int(runtime_detection_decision.get("runtime_detection_ready_count") or sum(1 for record in runtime_detection_records if record.get("runtime_detection_status") == "ready"))
+
+    external_baseline_audit = audit_external_baseline_records(external_baseline_records) if external_baseline_records else {}
+    internal_ablation_ready, internal_ablation_record_count, internal_ablation_status = _internal_ablation_ready(run_root)
+    adaptive_attack_ready, adaptive_attack_record_count, adaptive_attack_status = _adaptive_attack_ready(run_root)
+    replay_or_sketch_ready, replay_or_sketch_status = _replay_or_sketch_ready(run_root)
+    confidence_interval_ready, confidence_interval_status = _confidence_interval_ready(run_root)
+    artifact_rebuild_ready, artifact_rebuild_status = _artifact_rebuild_ready(run_root)
+
+    requirement_checks = {
+        "small_scale_claim_pilot_gate_passed": (not config["require_small_scale_pilot_gate_passed"]) or pilot_decision.get("pilot_gate_decision") == "PASS",
+        "validation_generation_records_ready": prompt_count >= config["minimum_prompt_count"] and seed_per_prompt_min >= config["minimum_seed_per_prompt"],
+        "validation_attack_records_ready": _decision_pass(runtime_attack_decision, "runtime_attack_decision") and attack_count >= config["minimum_attack_count"],
+        "validation_detection_records_ready": _decision_pass(runtime_detection_decision, "runtime_detection_decision") and runtime_detection_ready_count >= runtime_attack_ready_count > 0,
+        "validation_external_baseline_status_records_ready": (not config["require_external_baseline_status_records"]) or external_baseline_audit.get("external_baseline_status_decision") == "PASS",
+        "validation_internal_ablation_records_ready": (not config["require_internal_ablation_records"]) or internal_ablation_ready,
+        "validation_adaptive_attack_records_ready": (not config["require_adaptive_attack_records"]) or adaptive_attack_ready,
+        "validation_replay_or_sketch_records_ready": (not config["require_replay_or_sketch_records_or_claim3_downgrade"]) or replay_or_sketch_ready,
+        "validation_confidence_interval_report_ready": (not config["require_confidence_interval_report"]) or confidence_interval_ready,
+        "validation_artifact_rebuild_dry_run_ready": (not config["require_artifact_rebuild_dry_run"]) or artifact_rebuild_ready,
+    }
+    missing_requirements = [name for name, passed in requirement_checks.items() if not passed]
+    gate_decision = "PASS" if not missing_requirements else "FAIL"
+    claim_support_status = "validation_scale_ready_for_full_paper_dry_run" if gate_decision == "PASS" else "validation_scale_blocked"
+
+    return {
+        "stage_id": "validation_scale_generative_probe_gate",
+        "run_root": str(run_root),
+        "validation_scale_gate_decision": gate_decision,
+        "claim_support_status": claim_support_status,
+        "missing_validation_requirements": missing_requirements,
+        "validation_missing_requirement_count": len(missing_requirements),
+        "validation_profile_names": sorted(validation_profile_names),
+        "generation_record_count": len(generation_records),
+        "validation_generation_record_count": len(validation_generation_records),
+        "validation_prompt_count": prompt_count,
+        "validation_seed_per_prompt_min": seed_per_prompt_min,
+        "minimum_prompt_count": config["minimum_prompt_count"],
+        "minimum_seed_per_prompt": config["minimum_seed_per_prompt"],
+        "runtime_attack_decision": runtime_attack_decision.get("runtime_attack_decision"),
+        "runtime_attack_ready_count": runtime_attack_ready_count,
+        "runtime_attack_count": attack_count,
+        "runtime_detection_decision": runtime_detection_decision.get("runtime_detection_decision"),
+        "runtime_detection_ready_count": runtime_detection_ready_count,
+        "external_baseline_status_decision": external_baseline_audit.get("external_baseline_status_decision"),
+        "modern_external_baseline_record_count": external_baseline_audit.get("modern_external_baseline_record_count", 0),
+        "modern_external_baseline_main_comparison_ready_count": external_baseline_audit.get("modern_external_baseline_main_comparison_ready_count", 0),
+        "internal_ablation_record_count": internal_ablation_record_count,
+        "internal_ablation_status": internal_ablation_status,
+        "adaptive_attack_record_count": adaptive_attack_record_count,
+        "adaptive_attack_status": adaptive_attack_status,
+        "replay_or_sketch_status": replay_or_sketch_status,
+        "confidence_interval_status": confidence_interval_status,
+        "artifact_rebuild_status": artifact_rebuild_status,
+        "full_paper_allowed": False,
+        "full_paper_next_gate": "full_paper_dry_run_checker" if gate_decision == "PASS" else "complete_missing_validation_requirements",
+    }
+
+
+def write_validation_scale_gate_audit(
+    run_root: str | Path,
+    config_path: str | Path = DEFAULT_VALIDATION_SCALE_CONFIG,
+) -> dict[str, Any]:
+    """写出 validation-scale gate records、table、decision 和 report。"""
+    run_root = Path(run_root)
+    audit = build_validation_scale_gate_audit(run_root, config_path)
+    record = with_flow_evidence_protocol_defaults(
+        {"record_version": "validation_scale_generative_probe_gate_v1", **audit},
+        trajectory_source_level="validation_scale_gate_aggregated_records",
+        flow_state_admissibility_status="validation_scale_ready" if audit["validation_scale_gate_decision"] == "PASS" else "validation_scale_blocked",
+        claim_support_status=audit["claim_support_status"],
+    )
+    write_jsonl(run_root / "records" / "validation_scale_gate_records.jsonl", [record])
+    write_csv(run_root / "tables" / "validation_scale_gate_table.csv", [record])
+    write_json(run_root / "artifacts" / "validation_scale_gate_decision.json", audit)
+    report = (
+        "# Validation-scale Generative Probe Gate Report\n\n"
+        "该报告由已落盘的 governed records 与 decision artifacts 自动生成。它只判断 validation-scale "
+        "是否具备进入 full_paper dry-run checker 的条件, 不生成论文主结果。\n\n"
+        f"- validation_scale_gate_decision: {audit['validation_scale_gate_decision']}\n"
+        f"- claim_support_status: {audit['claim_support_status']}\n"
+        f"- missing_validation_requirements: {', '.join(audit['missing_validation_requirements']) if audit['missing_validation_requirements'] else 'none'}\n"
+        f"- validation_generation_record_count: {audit['validation_generation_record_count']}\n"
+        f"- validation_prompt_count: {audit['validation_prompt_count']}\n"
+        f"- validation_seed_per_prompt_min: {audit['validation_seed_per_prompt_min']}\n"
+        f"- modern_external_baseline_main_comparison_ready_count: {audit['modern_external_baseline_main_comparison_ready_count']}\n"
+        f"- full_paper_allowed: {str(audit['full_paper_allowed']).lower()}\n"
+    )
+    report_path = run_root / "reports" / "validation_scale_gate_report.md"
+    report_path.parent.mkdir(parents=True, exist_ok=True)
+    report_path.write_text(report, encoding="utf-8")
+    return audit
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description="审计 validation-scale generative video probe gate。")
+    parser.add_argument("--run-root", required=True)
+    parser.add_argument("--config-path", default=DEFAULT_VALIDATION_SCALE_CONFIG)
+    parser.add_argument("--write-outputs", action="store_true")
+    args = parser.parse_args()
+    payload = write_validation_scale_gate_audit(args.run_root, args.config_path) if args.write_outputs else build_validation_scale_gate_audit(args.run_root, args.config_path)
+    print(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True))
+
+
+if __name__ == "__main__":
+    main()

@@ -80,3 +80,22 @@ endpoint_only_control
 ```
 
 这些要求用于证明 SSTW 不是固定 step-index 对齐, 也不是 endpoint-only 或 trajectory-only 分数堆叠。
+
+
+## 3. 当前查漏补缺状态
+
+| 项目 | 当前标注 |
+|---|---|
+| 完成状态 | 部分完成 |
+| 主要差距项 | path evidence 独立性和 fixed-FPR marginal gain 仍需 pilot/full validation。 |
+| 下一步构建方向 | 强化 endpoint/path redundancy audit、wrong sampler replay control 和 trajectory-only safety。 |
+| full_paper 影响 | 未满足本阶段要求时, 不得把相关结果写入 full_paper supported claim。 |
+
+### 3.1 快速检查清单
+
+```text
+stage_status: 部分完成
+gap_item: path evidence 独立性和 fixed-FPR marginal gain 仍需 pilot/full validation。
+next_action: 强化 endpoint/path redundancy audit、wrong sampler replay control 和 trajectory-only safety。
+full_paper_blocking_rule: unresolved_gap_blocks_full_paper_claim
+```

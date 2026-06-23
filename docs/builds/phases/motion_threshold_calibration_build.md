@@ -1,4 +1,4 @@
-# motion_threshold_calibration 分阶段构建流程
+﻿# motion_threshold_calibration 分阶段构建流程
 
 本文档记录 `motion_threshold_calibration` 阶段的目标、工程入口、通过条件和当前修复状态。该阶段的职责是把早期 heuristic motion gate 升级为可审计、可冻结、可复现的 calibrated motion threshold。
 
@@ -47,6 +47,18 @@ calibration split -> threshold artifact -> frozen threshold -> evaluation split
 ```
 
 禁止在 evaluation split 或每次生成后动态重算阈值。若后续需要重新校准, 必须生成新的 `threshold_id`, 不能覆盖旧阈值。
+
+full_paper 阶段还必须区分 engineering motion threshold 与 paper-level detection threshold。`motion_delta_calibrated_v1` 只能证明运动可观测性门控可用于 pilot guardrail, 不能替代 `TPR@FPR=0.001` 的 watermark detection threshold。
+
+full_paper 前必须补齐:
+
+```text
+paper_fixed_fpr_calibration_ready
+heldout_negative_motion_tail_report
+threshold_stability_confidence_interval
+prompt_dominance_audit
+cluster_by_prompt_threshold_sensitivity
+```
 
 ## 4. 当前通过条件
 
@@ -235,3 +247,23 @@ formal_metric_runner
 motion_threshold_calibration
 package_outputs
 ```
+
+
+## 10. 当前查漏补缺状态
+
+| 项目 | 当前标注 |
+|---|---|
+| 完成状态 | 已完成 engineering calibration |
+| 主要差距项 | 工程阈值可用于 pilot guardrail, 但不是论文级 FPR=0.001 阈值。 |
+| 下一步构建方向 | full_paper 前扩展 held-out negative 并报告置信区间和 threshold stability。 |
+| full_paper 影响 | 未满足本阶段要求时, 不得把相关结果写入 full_paper supported claim。 |
+
+### 10.1 快速检查清单
+
+```text
+stage_status: 已完成 engineering calibration
+gap_item: 工程阈值可用于 pilot guardrail, 但不是论文级 FPR=0.001 阈值。
+next_action: full_paper 前扩展 held-out negative 并报告置信区间和 threshold stability。
+full_paper_blocking_rule: unresolved_gap_blocks_full_paper_claim
+```
+

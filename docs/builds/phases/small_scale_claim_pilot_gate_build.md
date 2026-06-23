@@ -56,6 +56,22 @@ wrong_key_score_separation_passed = true
 wrong_sampler_replay_control_not_equivalent = true
 ```
 
+### 1.6 进入 full validation 的升级条件
+
+pilot 通过只表示可以进入 validation-scale, 不表示可以进入 full_paper。进入 validation-scale 还必须确认:
+
+```text
+all_pilot_records_are_governed = true
+proxy_only_records_are_labeled = true
+runtime_attack_detection_chain_ready = true
+modern_baseline_plan_exists = true
+adaptive_attack_plan_exists = true
+replay_or_claim3_downgrade_plan_exists = true
+artifact_rebuild_dry_run_plan_exists = true
+```
+
+若上述任一条件不满足, pilot 即使分数通过, 也只能继续补齐工程流程, 不能进入 full_paper。
+
 ## 2. 当前阶段完成情况
 
 ### 2.1 当前阶段判定
@@ -459,3 +475,53 @@ prompt_suite_id: generative_video_probe_prompt_suite_motion_observability_and_pi
 ```
 
 下一步需要重新执行 Colab `PROFILE = pilot`, 使新 prompt 产生新的 generation records、formal records 和 pilot gate artifacts。
+
+
+## 3. 当前查漏补缺状态
+
+| 项目 | 当前标注 |
+|---|---|
+| 完成状态 | 未完成, 待重跑 |
+| 主要差距项 | 旧 run 只有 15/16 motion-claim-eligible 样本, seed coverage 与 formal motion claim 阻塞。 |
+| 下一步构建方向 | 重新运行修复后的 `PROFILE = pilot`, 直到 pilot_gate_decision = PASS。 |
+| full_paper 影响 | 未满足本阶段要求时, 不得把相关结果写入 full_paper supported claim。 |
+
+### 3.1 快速检查清单
+
+```text
+stage_status: 未完成, 待重跑
+gap_item: 旧 run 只有 15/16 motion-claim-eligible 样本, seed coverage 与 formal motion claim 阻塞。
+next_action: 重新运行修复后的 `PROFILE = pilot`, 直到 pilot_gate_decision = PASS。
+full_paper_blocking_rule: unresolved_gap_blocks_full_paper_claim
+```
+
+## 4. pilot 结果使用边界
+
+small-scale pilot 的作用是判断是否值得进入 validation-scale, 不是产出论文主结果。即使 pilot PASS, 也必须遵守:
+
+```text
+pilot_records_not_used_for_main_detection_table
+pilot_thresholds_not_used_for_full_paper_thresholds
+pilot_prompt_fixes_not_applied_retroactively
+pilot_baseline_results_not_used_as_external_main_comparison
+pilot_attack_results_not_used_as_full_robustness_claim
+```
+
+pilot PASS 后的下一步是 validation-scale generative video probe, 不是 full_paper。若 Codex 检测到用户或脚本试图从 pilot 直接生成 full_paper package, 应将其标记为阶段跳跃。
+
+## 5. pilot 通过后的 validation 准入清单
+
+pilot 通过后, 进入 validation-scale 前仍需确认:
+
+```text
+validation_prompt_manifest_prepared
+validation_seed_plan_prepared
+validation_attack_manifest_prepared
+validation_baseline_manifest_prepared
+validation_ablation_manifest_prepared
+validation_replay_or_sketch_plan_prepared
+validation_artifact_rebuild_plan_prepared
+validation_resource_budget_checked
+```
+
+上述条件缺失时, 只能补齐 validation 规划, 不能进入 full_paper。

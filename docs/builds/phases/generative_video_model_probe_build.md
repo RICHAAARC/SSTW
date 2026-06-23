@@ -38,14 +38,19 @@ Wan-AI/Wan2.1-T2V-1.3B-Diffusers
 
 该模型用于支撑 Flow Matching / velocity-field sampler 主线。其他轻量模型只能作为冷启动或工程排错路线。
 
-### 1.5 默认外部 baseline
+### 1.5 外部 baseline 分层
 
 ```text
+VideoShield
+SIGMark
+SPDMark
+VideoMark 或 VidSig
+VideoSeal
 explicit_dtw_temporal_alignment
 frame_matching_temporal_registration
 ```
 
-项目默认不保留 VideoSeal、RivaGAN、VidStamp 作为本阶段外部 baseline, 以降低与并行论文或既有实验叙事的重复风险。
+其中, VideoShield、SIGMark、SPDMark、VideoMark / VidSig 与 VideoSeal 用于覆盖 2025-2026 年现代视频生成水印和后处理视频水印路线; `explicit_dtw_temporal_alignment` 与 `frame_matching_temporal_registration` 只作为显式同步 control, 不能作为顶刊顶会版本的唯一外部 baseline。
 
 ### 1.6 必须比较
 
@@ -58,6 +63,11 @@ without_endpoint_aware_control
 without_replay_uncertainty_weighting
 explicit_dtw_temporal_alignment
 frame_matching_temporal_registration
+VideoShield
+SIGMark
+SPDMark
+VideoMark_or_VidSig
+VideoSeal
 generic_ssm_baseline
 ```
 
@@ -66,7 +76,101 @@ generic_ssm_baseline
 1. 主线记录必须说明 generation model 是 Flow Matching / velocity-field sampler 相关模型。
 2. velocity / flow trajectory proxy 必须参与同步证据。
 3. SSTW full method 在 `TPR@FPR=0.01` 下优于外部 baseline 与内部机制 baseline。
-4. 质量、运动和语义指标不显示不可接受退化。
+4. full_paper 前置验证必须确认 `TPR@FPR=0.001` 的大规模 records、threshold 和 held-out negative 协议可运行。
+5. 质量、运动和语义指标不显示不可接受退化。
+
+### 1.8 validation-scale 运行要求
+
+在进入 full_paper 前, 本阶段必须先完成 validation-scale 运行。validation-scale 不要求达到 full_paper 样本量, 但必须证明完整流程不会阻断。
+
+必须覆盖:
+
+```text
+modern external baseline dry-run 或 runnable records
+internal ablation matrix dry-run
+runtime attack records
+runtime detection records
+wrong sampler replay records
+negative family records
+artifact rebuild dry-run
+```
+
+### 1.9 modern baseline 接入状态记录
+
+每个现代外部 baseline 必须写入:
+
+```text
+external_baseline_name
+external_baseline_source_url
+external_baseline_runnable_status
+external_baseline_adapter_status
+external_baseline_input_compatibility_status
+external_baseline_output_record_status
+external_baseline_not_run_reason
+external_baseline_protocol_gap
+external_baseline_result_used_for_claim
+```
+
+若 baseline 不能运行, 也必须生成 governed record, 不能静默缺失。
+
+### 1.10 validation-scale 充分性矩阵
+
+pilot PASS 后不得直接进入 full_paper。必须先执行 validation-scale 真实模型实验, 用较小但覆盖完整的矩阵验证全链路:
+
+```text
+validation_generation_records_ready
+validation_attack_records_ready
+validation_detection_records_ready
+validation_external_baseline_records_ready
+validation_internal_ablation_records_ready
+validation_adaptive_attack_records_ready
+validation_replay_or_sketch_records_ready
+validation_confidence_interval_report_ready
+validation_artifact_rebuild_dry_run_ready
+```
+
+validation-scale 不要求达到 full_paper 的最终样本量, 但必须覆盖 full_paper 的所有产物类型。若某一类产物在 validation-scale 阻断, 不允许进入 full_paper。
+
+### 1.11 现代 baseline 最小接入组合
+
+本阶段进入 full_paper 前, 至少需要确认以下 baseline 组合已经 runnable 或已有 governed non-run reason:
+
+```text
+in_generation_or_diffusion_video_watermark_baseline
+post_hoc_neural_video_watermark_baseline
+explicit_temporal_alignment_control
+endpoint_only_control
+generic_state_space_or_temporal_aggregator_control
+```
+
+如果现代 in-generation baseline 暂时无法运行, 不能用传统 frame watermark 替代。此时应输出:
+
+```text
+modern_external_baseline_blocking_status
+external_baseline_not_run_reason
+claim_downgrade_recommendation
+```
+
+并阻止 full_paper 主对比表生成。
+
+### 1.12 baseline runner 工程规范索引
+
+现代 baseline runner 的实现必须遵守:
+
+```text
+docs/builds/sstw_full_paper_engineering_gate_spec.md
+```
+
+本阶段只允许把以下结果写入主表候选:
+
+```text
+external_baseline_runnable_status == runnable
+external_baseline_adapter_status == ready
+external_baseline_output_record_status == governed_records_written
+external_baseline_result_used_for_claim == true
+```
+
+无法运行的 baseline 只能生成 governed non-run record, 不得静默删除。
 
 ## 2. 当前阶段具体完成情况
 
@@ -199,3 +303,22 @@ strong visible displacement in every frame
 ```
 
 该变更属于输入设计修复, 不改变 detector 或 gate 阈值, 也不允许回头修改旧 run 记录。下一次 pilot 必须重新运行 generation 和 formal metric, 才能判断该修复是否解除 `formal_motion_claim_ready` 与 `seed_coverage_ready` 缺口。
+
+
+## 3. 当前查漏补缺状态
+
+| 项目 | 当前标注 |
+|---|---|
+| 完成状态 | 结构就绪, full experiment 未完成 |
+| 主要差距项 | pilot 未 PASS 前不得进入 full experiment; 现代外部 baseline 尚未集成。 |
+| 下一步构建方向 | pilot PASS 后扩展 validation-scale 真实模型实验和现代 baseline runner。 |
+| full_paper 影响 | 未满足本阶段要求时, 不得把相关结果写入 full_paper supported claim。 |
+
+### 3.1 快速检查清单
+
+```text
+stage_status: 结构就绪, full experiment 未完成
+gap_item: pilot 未 PASS 前不得进入 full experiment; 现代外部 baseline 尚未集成。
+next_action: pilot PASS 后扩展 validation-scale 真实模型实验和现代 baseline runner。
+full_paper_blocking_rule: unresolved_gap_blocks_full_paper_claim
+```

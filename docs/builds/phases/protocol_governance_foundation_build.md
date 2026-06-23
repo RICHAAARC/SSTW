@@ -97,3 +97,22 @@ dependency_boundary_audit
 1. 后续新增字段必须先进入 `docs/field_registry.md` 或对应 schema。
 2. 后续新增 Notebook 不能直接写正式 records、thresholds、tables、figures 或 reports。
 3. 后续新增阶段输出不能放入 checked-in `outputs/` 作为正式论文产物。
+
+
+## 3. 当前查漏补缺状态
+
+| 项目 | 当前标注 |
+|---|---|
+| 完成状态 | 已完成当前阶段, 持续维护 |
+| 主要差距项 | 新增 full_paper、modern external baseline、replay sketch 字段时需要同步 docs/field_registry.md 与 schema。 |
+| 下一步构建方向 | 维护字段闭包, 保证后续 records 不出现未登记字段。 |
+| full_paper 影响 | 未满足本阶段要求时, 不得把相关结果写入 full_paper supported claim。 |
+
+### 3.1 快速检查清单
+
+```text
+stage_status: 已完成当前阶段, 持续维护
+gap_item: 新增 full_paper、modern external baseline、replay sketch 字段时需要同步 docs/field_registry.md 与 schema。
+next_action: 维护字段闭包, 保证后续 records 不出现未登记字段。
+full_paper_blocking_rule: unresolved_gap_blocks_full_paper_claim
+```

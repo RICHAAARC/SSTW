@@ -68,3 +68,22 @@ trajectory_time_grid_id
 
 作为 replay、sampler mismatch 与 trajectory evidence 的输入证据。
 
+
+
+## 3. 当前查漏补缺状态
+
+| 项目 | 当前标注 |
+|---|---|
+| 完成状态 | 已完成前置验证 |
+| 主要差距项 | 真实 velocity field 原值未必可访问, 当前主要使用 latent displacement proxy。 |
+| 下一步构建方向 | 继续记录 proxy 边界, 如后续可访问 velocity field 则新增真实 velocity 字段。 |
+| full_paper 影响 | 未满足本阶段要求时, 不得把相关结果写入 full_paper supported claim。 |
+
+### 3.1 快速检查清单
+
+```text
+stage_status: 已完成前置验证
+gap_item: 真实 velocity field 原值未必可访问, 当前主要使用 latent displacement proxy。
+next_action: 继续记录 proxy 边界, 如后续可访问 velocity field 则新增真实 velocity 字段。
+full_paper_blocking_rule: unresolved_gap_blocks_full_paper_claim
+```

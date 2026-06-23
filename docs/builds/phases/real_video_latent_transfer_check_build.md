@@ -77,3 +77,22 @@ main/video/video_io.py
 ### 2.2 当前阶段使用边界
 
 该阶段证明 VAE 链路可迁移性, 但仍不是 Flow Matching 采样动力学本身。若该阶段成立, 它为真实视频链路低误报提供证据; 若该阶段失败, 后续 Flow Matching 主线必须重新评估 endpoint consistency 与 VAE robustness。
+
+
+## 3. 当前查漏补缺状态
+
+| 项目 | 当前标注 |
+|---|---|
+| 完成状态 | 部分完成 |
+| 主要差距项 | 真实 VAE 大规模 transfer 与低误报验证仍不足。 |
+| 下一步构建方向 | pilot PASS 后执行 real-video transfer validation, 检查 VAE 重建对 endpoint/path evidence 的影响。 |
+| full_paper 影响 | 未满足本阶段要求时, 不得把相关结果写入 full_paper supported claim。 |
+
+### 3.1 快速检查清单
+
+```text
+stage_status: 部分完成
+gap_item: 真实 VAE 大规模 transfer 与低误报验证仍不足。
+next_action: pilot PASS 后执行 real-video transfer validation, 检查 VAE 重建对 endpoint/path evidence 的影响。
+full_paper_blocking_rule: unresolved_gap_blocks_full_paper_claim
+```

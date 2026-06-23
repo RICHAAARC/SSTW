@@ -2,6 +2,13 @@
 
 ## 0. 文档定位
 
+## 0.1 文档关系与独立阅读边界
+
+本文档是项目级构建手册, 只规定从机制、数据、baseline、消融、验证门禁到论文结果包的构建顺序, 不记录任何阶段已完成或未完成状态。阶段进度只能记录在 `docs/builds/sstw_phase_completion_status.md` 和 `docs/builds/phases/` 下的分阶段文档中。
+
+`sstw_method_mechanism_design.md` 与 `sstw_algorithm_primitives_design.md` 均可独立阅读。前者定义完整方法机制和论文 claim 边界, 后者定义算法原语、体系创新性和实验映射。`sstw_top_tier_experimental_sufficiency_checklist.md` 独立定义顶刊顶会实验充分性核查清单。本文档只引用这些文档作为规范来源, 不把这些内容压缩成某一次运行结论。
+
+
 本文档定义 SSTW 项目的整体构建流程。它的职责不是记录项目进度, 也不是列出某一轮实验的执行状态, 而是规定从方法机制到实验产物、论文证据和投稿判断之间的固定构建顺序。
 
 本文档依赖的核心方法机制为:
@@ -119,14 +126,15 @@ trajectory_time_shuffled_control
 
 普通视频水印 baseline 可以用于证明 SSTW 在时间扰动、重采样和生成式攻击下的优势, 但不能使用已经在相关并行论文中作为主 baseline 的方法作为 SSTW 的唯一外部 baseline。
 
-项目流程中推荐的外部 baseline 类型为:
+项目流程中必须区分三类 baseline:
 
 ```text
-explicit_dtw_temporal_alignment
-frame_matching_temporal_registration
+mechanism_control_baseline: endpoint_only, trajectory_only, generic_ssm, key_agnostic_state_space
+explicit_synchronization_baseline: explicit_dtw_temporal_alignment, frame_matching_temporal_registration
+modern_video_watermark_baseline: VideoShield, SIGMark, SPDMark, VideoMark 或 VidSig, VideoSeal
 ```
 
-不保留 VideoSeal、RivaGAN、VidStamp 作为本项目默认外部 baseline, 以降低与并行论文或既有实验叙事的重复风险。
+其中, `explicit_dtw_temporal_alignment` 与 `frame_matching_temporal_registration` 只能证明 SSTW 不是普通显式时间对齐; 它们不能作为顶刊顶会版本的唯一外部 baseline。VideoSeal、VideoShield、SIGMark、SPDMark、VideoMark 或 VidSig 等现代视频水印方法可以进入外部 baseline 层, 但必须以 governed records 方式运行或明确记录未运行原因。若某个 baseline 与并行论文或作者已有工作重叠, 仍可作为 supplementary comparison 或 related-work robustness control, 但不能替代与 SSTW 机制最接近的 in-generation video watermark baseline。
 
 ### 2.3 与服务端日志审计的边界
 
@@ -297,10 +305,12 @@ state_space_inference_formalization
 trajectory_observation_core_probe
 flow_model_adapter_preflight
 sampling_time_constraint_probe
+motion_threshold_calibration
 small_scale_claim_pilot_gate
 generative_video_model_probe
 replay_and_authenticated_sketch_gate
 flow_specific_adaptive_attack_gate
+full_paper_result_package_gate
 submission_package_freeze
 ```
 
@@ -732,12 +742,33 @@ generic_ssm_baseline
 
 ### 13.4 外部 baseline
 
-默认外部 baseline 为:
+顶刊顶会版本不得只使用显式时间对齐作为外部 baseline。外部 baseline 必须覆盖至少三类方法:
 
 ```text
-explicit_dtw_temporal_alignment
-frame_matching_temporal_registration
+posthoc_neural_video_watermark: VideoSeal
+in_generation_video_diffusion_watermark: VideoShield, VideoMark, VidSig
+training_or_parameter_based_video_watermark: SIGMark, SPDMark
+explicit_synchronization_control: explicit_dtw_temporal_alignment, frame_matching_temporal_registration
 ```
+
+推荐优先级如下:
+
+| baseline | 推荐角色 | 纳入原因 | governed record 要求 |
+|---|---|---|---|
+| VideoShield | primary modern video diffusion watermark baseline | 训练-free in-generation 视频扩散水印, 与生成时水印最接近 | 记录模型、视频长度、攻击、检测阈值、失败原因 |
+| SIGMark | primary blind extraction baseline | 面向视频扩散的 blind extraction 与时序鲁棒水印 | 记录是否能在本项目视频格式上运行, 不能运行时写明协议 gap |
+| SPDMark | parameter or adapter based baseline | 选择性参数位移 / 适配器类视频水印, 可对比训练或参数修改路线 | 记录训练 / 适配成本、推理成本和检测性能 |
+| VideoMark 或 VidSig | in-generation 或 latent-video baseline | 覆盖 PRC / decoder fine-tuning / latent video signature 路线 | 记录是否依赖 decoder 修改、是否需要时间匹配 |
+| VideoSeal | post-hoc robust video watermark baseline | 开源且工程成熟, 用于证明 SSTW 不是普通后处理水印 | 记录后处理开销、质量指标与攻击鲁棒性 |
+| explicit_dtw_temporal_alignment | synchronization control | 显式恢复时间路径的反事实 baseline | 只能支撑 control 结论 |
+| frame_matching_temporal_registration | synchronization control | 显式帧匹配配准 baseline | 只能支撑 control 结论 |
+
+外部 baseline 选择原则:
+
+1. 优先选择 2025-2026 年顶会、顶刊、OpenReview、CVF OpenAccess、arXiv 或官方代码中与视频生成水印直接相关的方法。
+2. 至少一个 baseline 必须是 in-generation video watermark, 至少一个 baseline 必须是 post-hoc video watermark, 至少一个 baseline 必须是显式时间同步 control。
+3. 不能把无法运行的 baseline 直接写成“弱于 SSTW”。无法运行只能形成 `external_baseline_not_run_reason` 与 protocol gap。
+4. 所有正向比较必须来自 records 和 tables, 不得由人工阅读论文后手写。
 
 ### 13.5 必须证明
 
@@ -936,6 +967,7 @@ wrong_sampler_replay_control_not_equivalent = true
 
 ```text
 TPR@FPR=0.01 达到预设目标
+TPR@FPR=0.001 达到 full_paper 预设目标
 clean_negative_fpr_controlled = true
 attacked_negative_fpr_controlled = true
 replay_negative_fpr_controlled = true
@@ -1045,7 +1077,7 @@ print_next_step_and_evidence_gap
 最低情况需要同时满足:
 
 1. Wan2.1 主线模型运行链路可复现。
-2. `TPR@FPR=0.01` 达到论文预设目标。
+2. `TPR@FPR=0.01` 达到论文预设目标, 且 full_paper 结果包必须额外达到 `TPR@FPR=0.001` 的冻结阈值评估要求。
 3. SSTW full method 优于内部机制 baseline 和外部 baseline。
 4. trajectory evidence、state posterior 和 endpoint evidence 形成互补。
 5. claim audit、artifact rebuild 和 harness 全部通过。
@@ -1059,3 +1091,691 @@ print_next_step_and_evidence_gap
 3. Flow-specific adaptive attacks 下仍保持低 FPR。
 4. authenticated trajectory sketch 与 replay uncertainty 形成完整证据链。
 5. 所有主表、主图和 claim audit 可由 records 与 manifests 自动重建。
+
+## 21. 数据集与 prompt suite 构建方法
+
+本节规定数据集与 prompt suite 的构建方法。该规则用于降低弱 prompt、低运动样本、prompt 泄漏、test-time 阈值更新和 cherry-picking 导致的拒稿风险。
+
+### 21.1 数据集分层
+
+SSTW 的数据集必须按“样本事实来源”和“实验用途”同时分层。推荐数据层如下:
+
+```text
+engineering_calibration_dataset: 用于工程阈值和可观测性门控, 不进入论文主表
+pilot_dataset: 用于 small-scale claim pilot, 只决定是否进入 full experiment
+full_validation_dataset: 用于验证 full_paper 运行链路、baseline、消融和攻击覆盖
+full_paper_dataset: 用于最终论文结果包, 只允许在全部前序 gate 通过后运行
+stress_dataset: 用于强攻击、adaptive attack、跨模型和失败边界分析
+```
+
+每个 dataset 必须写出以下 manifest, 并且正式运行只能读取 manifest, 不能在运行中临时增删 prompt 或 seed:
+
+```text
+prompt_suite.json
+seed_plan.json
+content_manifest.json
+generation_manifest.json
+attack_manifest.json
+baseline_manifest.json
+split_manifest.json
+```
+
+### 21.2 prompt 构建原则
+
+Prompt suite 必须覆盖静态、刚体运动、非刚体运动、相机运动、主体运动、复杂背景、低纹理、高纹理和遮挡等场景。每个 prompt 必须带有可审计元数据:
+
+```text
+prompt_id
+prompt_text
+prompt_family
+motion_claim_role
+motion_pattern_id
+expected_motion_observability
+foreground_scale_requirement
+camera_motion_status
+semantic_risk_tag
+negative_contamination_risk
+```
+
+### 21.3 避免弱 prompt 的规则
+
+弱 prompt 指生成模型可能稳定输出低运动、近静止或不可观测运动的视频, 从而让 motion / trajectory claim 被错误阻塞的 prompt。构建时必须执行以下规则:
+
+1. 正向运动 prompt 必须显式包含 `large foreground object`、`visible displacement`、`across the frame`、`fixed camera` 或等价约束。
+2. 对 rotation、bounce、slide、walk、drive、flow、splash 等运动类别, prompt 必须描述运动幅度、主体尺度和连续帧可见性。
+3. 禁止使用 `gently rotates`、`subtle movement`、`slight motion` 等弱运动表述支撑 motion claim。此类 prompt 只能进入 ambiguous 或 stress split。
+4. negative_static prompt 必须避免高频纹理、闪烁光源、时钟、棋盘、电视屏幕等容易造成伪运动的内容。
+5. prompt 修复只能影响未来 run, 不能 retroactively 修改旧 records 的事实解释。
+
+### 21.4 prompt 可观测性预审
+
+在进入 pilot、full_validation 或 full_paper 前, 必须先运行 prompt observability audit。该 audit 只能使用视觉质量、运动可观测性和 prompt validity 字段, 禁止读取 `S_final`、`S_final_conservative` 或任何最终检测分数。
+
+允许用于 prompt 过滤的字段包括:
+
+```text
+formal_visual_quality_ready
+formal_motion_consistency_ready
+formal_semantic_consistency_ready
+motion_calibration_score
+prompt_contamination_status
+expected_motion_observability
+```
+
+禁止用于 prompt 过滤的字段包括:
+
+```text
+S_final
+S_final_conservative
+watermark_detection_score
+claim_support_status
+decision
+```
+
+### 21.5 full_paper 样本规模原则
+
+full_paper 的目标是报告 `TPR@FPR=0.001`。因此 calibration negative 与 held-out test negative 必须远大于 1000 条。推荐最低事件规模为:
+
+```text
+calibration_negative_event_count >= 50000
+heldout_test_negative_event_count >= 50000
+heldout_attacked_positive_event_count >= 20000
+negative_event_count_per_family >= 5000
+attack_event_count_per_attack >= 2000
+method_variant_event_count_per_primary_variant >= 5000
+```
+
+这里的 event 是 `(video, attack, negative_family, method_variant, replay_setting)` 级记录。若 GPU 成本无法产生足够独立视频, 必须在 manifest 中区分 `unique_video_count` 与 `event_count`, 并在论文中报告置信区间、bootstrap 稳定性和 cluster-by-video robust interval。
+
+### 21.6 split 与阈值冻结
+
+`full_paper_dataset` 必须使用以下顺序:
+
+```text
+calibration split -> frozen threshold artifact -> held-out test split -> tables / figures / claim audit
+```
+
+禁止事项:
+
+1. 不得用 held-out test split 更新 threshold。
+2. 不得用 pilot split 产生主论文表格。
+3. 不得用 prompt 修复后的结果覆盖旧 run。
+4. 不得在发现结果不好后增删 negative family 或 attack family。
+
+## 22. full_paper 结果包门禁
+
+`full_paper` 是论文结果包语义, 不是普通工程 package。只有所有前序验证通过后, 才允许运行 full_paper。
+
+### 22.1 前置 gate
+
+运行 full_paper 前必须全部满足:
+
+```text
+protocol_governance_foundation_passed = true
+flow_model_adapter_preflight_passed = true
+sampling_time_constraint_probe_passed = true
+motion_threshold_calibration_engineering_passed = true
+small_scale_claim_pilot_gate_passed = true
+generative_video_model_probe_validation_passed = true
+replay_and_authenticated_sketch_gate_ready_or_claim3_downgraded = true
+flow_specific_adaptive_attack_gate_passed = true
+external_baseline_integration_ready = true
+internal_ablation_matrix_ready = true
+artifact_rebuild_dry_run_passed = true
+```
+
+如果任一条件不满足, Codex 只能补齐前序流程, 不得产出 full_paper 论文结果包。
+
+### 22.2 full_paper 输出边界
+
+full_paper 运行应输出到本地或远程运行目录, 不得写入 checked-in `outputs/`。正式归档必须由 packager 根据 records 与 manifests 生成。
+
+必须产物包括:
+
+```text
+records/event_scores.jsonl
+records/trajectory_traces.jsonl
+records/thresholds.jsonl
+records/baseline_scores.jsonl
+records/ablation_scores.jsonl
+tables/main_detection_table.csv
+tables/baseline_comparison_table.csv
+tables/ablation_table.csv
+figures/tpr_at_fpr_figure.json
+figures/trajectory_evidence_figure.json
+reports/claim_audit_report.json
+reports/readiness_summary.json
+manifests/full_paper_package_manifest.json
+```
+
+### 22.3 full_paper 审计指标
+
+full_paper 必须至少报告:
+
+```text
+TPR@FPR=0.01
+TPR@FPR=0.001
+clean_negative_fpr
+attacked_negative_fpr
+replay_negative_fpr
+sampler_mismatch_negative_fpr
+wrong_key_negative_fpr
+path_marginal_gain_at_fixed_fpr
+trajectory_payload_redundancy
+quality_degradation
+motion_degradation
+semantic_degradation
+generation_overhead
+detection_overhead
+```
+
+## 23. 现代外部 baseline 来源登记
+
+本节只规定 baseline 选择来源和工程接入要求, 不记录本项目是否已经运行。建议优先检查以下公开来源:
+
+| baseline | 来源 | 工程接入备注 |
+|---|---|---|
+| VideoShield | https://openreview.net/forum?id=uzz3qAYy0D | 作为 2025 in-generation video diffusion watermark baseline。 |
+| SIGMark | https://openreview.net/forum?id=tKyAD2LhnI | 作为 2026 blind extraction / scalable in-generation video watermark baseline。 |
+| SPDMark | https://openaccess.thecvf.com/content/CVPR2026/papers/Fares_SPDMark_Selective_Parameter_Displacement_for_Robust_Video_Watermarking_CVPR_2026_paper.pdf | 作为 2026 parameter / adapter based video watermark baseline。 |
+| VideoMark | https://arxiv.org/html/2504.16359v1 | 作为 training-free 或 distortion-free video diffusion watermark baseline 候选。 |
+| VideoSeal | https://github.com/facebookresearch/videoseal | 作为开源 post-hoc neural video watermark baseline。 |
+
+若 baseline 无法直接运行, 必须写出:
+
+```text
+external_baseline_name
+external_baseline_source_url
+external_baseline_runnable_status
+external_baseline_not_run_reason
+external_baseline_protocol_gap
+external_baseline_result_used_for_claim = false
+```
+
+## 24. Codex 构建执行手册
+
+Codex 按本文档推进项目时, 应遵循以下顺序:
+
+1. 读取 `.codex/project_contract.md` 与相关 `.codex/skills/`。
+2. 检查 `docs/builds/sstw_phase_completion_status.md` 的当前阻塞项。
+3. 只修改当前阻塞阶段所需的 repository modules、runner、checker、configs 或 docs。
+4. 不跳过 `small_scale_claim_pilot_gate` 进入 full_paper。
+5. 不把 proxy-only evidence 写成 supported claim。
+6. 每次修改后运行 `pytest -q` 和 `python tools/harness/run_all_audits.py`。
+7. 只有 full_paper 前置 gate 全部通过后, 才执行 full_paper 结果包流程。
+
+## 25. 自动化门禁与 checker 实现要求
+
+本文档中的每个关键 gate 最终都应有 repository checker 或 runner 支撑。若某个 gate 只停留在文档描述, Codex 不得把该 gate 标记为通过, 只能标记为:
+
+```text
+checker_not_implemented
+records_not_available
+manual_review_required
+claim_not_supported
+```
+
+### 25.1 gate checker 层级
+
+| checker 层级 | 作用 | 是否可支撑 full_paper |
+|---|---|---|
+| `structure_checker` | 检查目录、配置、字段和入口是否存在 | 否 |
+| `pilot_checker` | 检查 small-scale records 是否满足进入 full validation | 否 |
+| `validation_checker` | 检查 validation-scale 真实模型、baseline、攻击和消融是否闭合 | 部分 |
+| `full_paper_dry_run_checker` | 检查 full_paper 前置 gate、manifest、样本规模和 artifact rebuild 是否齐全 | 是, 但不产生最终结果 |
+| `full_paper_result_checker` | 检查 full_paper records、阈值、表格、图、报告和 claim audit | 是 |
+
+### 25.2 full_paper dry-run checker 必须检查
+
+```text
+all_required_phase_decisions_exist
+all_required_phase_decisions_passed_or_downgraded
+prompt_suite_manifest_frozen
+seed_plan_manifest_frozen
+generation_manifest_frozen
+attack_manifest_frozen
+baseline_manifest_frozen
+ablation_manifest_frozen
+threshold_manifest_frozen
+calibration_negative_event_count_plan_sufficient
+heldout_test_negative_event_count_plan_sufficient
+attacked_positive_event_count_plan_sufficient
+modern_external_baseline_plan_complete
+adaptive_attack_plan_complete
+replay_or_claim3_downgrade_plan_complete
+artifact_rebuild_plan_complete
+checked_in_outputs_blocked
+```
+
+### 25.3 full_paper result checker 必须检查
+
+```text
+threshold_source_split == calibration
+test_time_threshold_update_blocked == true
+target_fpr includes 0.001
+heldout_clean_negative_fpr <= target_fpr
+heldout_attacked_negative_fpr <= target_fpr
+heldout_replay_negative_fpr <= target_fpr
+heldout_sampler_mismatch_negative_fpr <= target_fpr
+wrong_key_negative_fpr <= target_fpr
+full_method_beats_modern_external_baseline
+full_method_beats_internal_ablation_baseline
+path_marginal_gain_at_fixed_fpr > 0
+trajectory_payload_redundancy <= preset_limit
+quality_degradation_within_limit == true
+motion_degradation_within_limit == true
+semantic_degradation_within_limit == true
+claim_audit_passed == true
+artifact_rebuild_passed == true
+```
+
+### 25.4 checker 失败处理
+
+任何 checker 失败时, 应输出:
+
+```text
+blocking_stage
+blocking_requirement
+observed_value
+required_value
+recommended_next_action
+claim_support_status
+full_paper_allowed = false
+```
+
+禁止把 checker 失败解释为“可以人工放行”。若必须降级, 应显式写入 claim 降级记录, 并从 full_paper supported claims 中移除对应主张。
+
+## 26. 统计报告与置信区间要求
+
+顶会论文不能只报告单点 TPR / FPR。所有 full_paper 主结果必须报告统计稳定性。
+
+### 26.1 必须报告的区间
+
+```text
+binomial_confidence_interval_for_fpr
+binomial_confidence_interval_for_tpr
+bootstrap_confidence_interval_for_tpr_at_fpr
+cluster_by_video_confidence_interval
+per_attack_family_confidence_interval
+per_negative_family_confidence_interval
+per_prompt_family_confidence_interval
+```
+
+其中, `cluster_by_video_confidence_interval` 用于避免同一视频被多个 attack / method variant 扩展后造成事件数虚高。
+
+### 26.2 论文主表最低统计单元
+
+主表不得只按 event 统计, 必须同时报告:
+
+```text
+unique_video_count
+event_count
+unique_prompt_count
+unique_seed_count
+attack_family_count
+negative_family_count
+baseline_count
+method_variant_count
+```
+
+### 26.3 FPR=0.001 的样本量解释
+
+若 held-out negative event 小于 50000, 可以继续运行 validation, 但不得把 `TPR@FPR=0.001` 写成 full_paper 主 claim。此时只能写为:
+
+```text
+low_fpr_validation_incomplete
+sample_size_insufficient_for_fpr_0_001_claim
+```
+
+## 27. 审稿风险对照矩阵
+
+为了减少“实验不足被拒稿”, full_paper 前必须逐项回答以下审稿风险。
+
+| 审稿风险 | 必须证据 | 未满足时的处理 |
+|---|---|---|
+| baseline 不足 | modern external baseline records 和 baseline comparison table | 不进入 full_paper |
+| 消融不足 | internal ablation table 覆盖 injection、path、state、admissibility、replay | 不进入 full_paper |
+| 低 FPR 样本不足 | FPR=0.001 大规模 held-out negative 和 CI | 降级为 validation 结果 |
+| prompt cherry-picking | frozen prompt manifest、prompt observability audit、旧 run 保留 | 不允许手工替换主表样本 |
+| attack 不足 | spatial、temporal、generative、Flow-specific adaptive attacks | adaptive claim 降级 |
+| replay 伪证据 | replay negative、wrong sampler、wrong prompt、uncertainty records | Claim-3 降级 |
+| 服务端日志质疑 | authenticated trajectory sketch verification | owner-side claim 降级 |
+| 质量退化 | FVD / LPIPS / SSIM / CLIP / motion metrics | 降低强度或降级方法 |
+| 结果不可复现 | records、manifests、rebuild commands、code version | 不进入 submission freeze |
+
+## 28. full_paper 执行顺序
+
+full_paper 必须按以下顺序执行, 不得并行跳过 gate:
+
+```text
+1. run_full_paper_dry_run_checker
+2. freeze_full_paper_manifests
+3. run_generation
+4. run_attacks
+5. run_replay_or_sketch_verification
+6. run_detection
+7. run_external_baselines
+8. run_internal_ablations
+9. run_adaptive_attacks
+10. freeze_thresholds_from_calibration
+11. evaluate_heldout_test
+12. build_tables_figures_reports
+13. run_claim_audit
+14. run_artifact_rebuild_audit
+15. package_full_paper
+```
+
+若任一步失败, 后续步骤只能生成 diagnostic package, 不得生成 full_paper result package。
+
+## 29. 大规模 full_paper 可运行性预演与分片执行
+
+full_paper 目标包含 `TPR@FPR=0.001` 级别评估, 因此不能把一次超大规模运行作为首次端到端验证。Codex 必须在 full_paper 前完成可运行性预演, 证明数据、模型、攻击、检测、baseline、消融、统计和打包链路在小规模到中规模上都不会阻断。
+
+### 29.1 分级预演规模
+
+推荐采用以下分级:
+
+```text
+smoke_rehearsal: 验证配置、schema、路径、模型加载、单 shard 输出和 packager
+pilot_rehearsal: 验证 small-scale claim gate 与 motion / prompt / attack 覆盖
+validation_rehearsal: 验证 baseline、ablation、adaptive attack、replay、CI 和 artifact rebuild
+full_paper_dry_run: 只检查 full_paper 启动条件, 不生成论文主结果
+full_paper_run: 只在全部前置 gate 通过后执行
+```
+
+`smoke_rehearsal`、`pilot_rehearsal` 和 `validation_rehearsal` 的结果只能用于排查链路和判断是否进入下一阶段, 不能替代 full_paper 主表。
+
+### 29.2 分片执行协议
+
+full_paper 必须支持 shard 化执行, 避免单次长任务失败导致全量重跑。每个 shard 必须有独立 manifest:
+
+```text
+shard_id
+shard_role
+split
+prompt_id_range
+seed_id_range
+attack_family_range
+baseline_subset
+method_variant_subset
+expected_record_count
+actual_record_count
+shard_status
+shard_checksum
+resume_policy
+artifact_write_scope
+```
+
+分片写入必须满足:
+
+1. 同一个 `sample_id` 和 `method_variant` 的正式 record 只能由一个 shard 负责。
+2. shard 重跑必须覆盖同一 shard 输出, 不能追加重复 records。
+3. 所有 shard 合并前必须执行 schema audit、duplicate audit、split audit 和 threshold-source audit。
+4. 合并后的 records 才能进入 tables、figures 和 reports rebuild。
+
+### 29.3 full_paper 前资源与阻断预检
+
+full_paper dry-run checker 除了实验协议外, 还必须检查:
+
+```text
+model_cache_ready
+gpu_memory_budget_ready
+disk_free_space_ready
+google_drive_or_remote_storage_ready
+dependency_lock_ready
+dataset_manifest_readable
+output_write_scope_not_checked_in
+records_schema_version_compatible
+packager_manifest_schema_compatible
+resume_from_interrupted_shard_supported
+```
+
+若资源预检失败, 只能生成 `full_paper_blocking_report.md`, 不允许启动生成任务。
+
+### 29.4 失败恢复规则
+
+允许恢复的失败:
+
+```text
+single_shard_runtime_timeout
+single_shard_upload_interruption
+single_baseline_adapter_timeout
+single_attack_runner_timeout
+non_claim_supporting_metric_missing
+```
+
+不允许自动恢复并继续 full_paper 的失败:
+
+```text
+threshold_source_split_violation
+test_time_threshold_update_detected
+schema_incompatible_records
+duplicate_claim_records
+prompt_manifest_changed_after_freeze
+baseline_manifest_changed_after_freeze
+attack_manifest_changed_after_freeze
+claim_audit_failed
+artifact_rebuild_failed
+```
+
+第二类失败必须回到对应前置阶段修复, 不能通过删除失败 records 或手工改表解决。
+
+## 30. 外部 baseline 选择与公平比较协议
+
+顶刊顶会版本不能只比较弱 baseline。外部 baseline 必须覆盖“机制接近性”和“审稿熟悉度”两个维度。
+
+### 30.1 baseline 层级
+
+推荐 baseline 层级如下:
+
+| baseline 层级 | 作用 | 是否可作为主外部对比 |
+|---|---|---|
+| in_generation_video_watermark | 与生成过程内嵌水印最接近, 用于主对比 | 是 |
+| diffusion_or_flow_video_watermark | 与视频扩散或 Flow sampler 机制相关, 用于主对比或强补充 | 是 |
+| post_hoc_neural_video_watermark | 代表公开视频水印强基线, 用于鲁棒性和质量对比 | 是, 但不能单独作为唯一 baseline |
+| image_or_frame_watermark_extended_to_video | 代表传统弱 baseline, 用于说明视频时序挑战 | 否 |
+| explicit_temporal_alignment_control | 证明 SSTW 不是普通显式时间同步 | 否 |
+| endpoint_only_or_latent_only_control | 证明 SSTW 不是 endpoint-only 方法 | 否 |
+
+### 30.2 最低 baseline 组合
+
+full_paper 至少应包含:
+
+```text
+one_in_generation_or_diffusion_video_watermark_baseline
+one_post_hoc_neural_video_watermark_baseline
+one_explicit_temporal_alignment_control
+one_endpoint_only_control
+one_generic_state_space_or_temporal_aggregator_control
+```
+
+如果无法运行某个现代 baseline, 必须提供 governed non-run record, 并说明协议不兼容原因。不能把无法运行的现代方法从论文对比中静默删除。
+
+### 30.3 公平比较要求
+
+所有 baseline 必须尽量共享以下输入条件:
+
+```text
+same_video_resolution_or_declared_resize_policy
+same_video_duration_or_declared_clip_policy
+same_attack_manifest
+same_clean_negative_split
+same_attacked_negative_split
+same_quality_metric_suite
+same_threshold_source_split_policy
+same_target_fpr_reporting
+```
+
+若 baseline 原论文只支持不同输入格式, 需要写入:
+
+```text
+external_baseline_input_compatibility_status
+external_baseline_protocol_gap
+external_baseline_adapter_status
+external_baseline_result_used_for_claim
+```
+
+### 30.4 baseline 结果使用边界
+
+只有同时满足以下条件的 baseline 结果, 才能进入主表:
+
+```text
+external_baseline_runnable_status == runnable
+external_baseline_output_record_status == governed_records_written
+external_baseline_threshold_policy_compatible == true
+external_baseline_attack_manifest_compatible == true
+external_baseline_result_used_for_claim == true
+```
+
+若 baseline 只能以论文报告数值或非同协议结果引用, 只能放入 related work 或 supplementary discussion, 不能作为主表胜负证据。
+
+## 31. 内部消融矩阵
+
+内部消融必须证明每个算法原语都有必要性, 不能只证明 full method 分数较高。
+
+### 31.1 必须包含的消融变体
+
+```text
+sstw_full_method
+without_velocity_field_weak_constraint
+endpoint_only_control
+trajectory_only_control
+without_endpoint_aware_minimum_energy_control
+without_time_reparameterization_invariant_observation
+without_replay_uncertainty
+without_flow_state_admissibility
+key_agnostic_state_space_control
+generic_state_space_control
+mean_temporal_aggregator_control
+explicit_temporal_alignment_baseline
+trajectory_time_shuffled_control
+trajectory_key_shuffled_control
+wrong_sampler_replay_control
+wrong_prompt_replay_control
+without_quality_guard
+```
+
+### 31.2 每个消融必须报告的指标
+
+```text
+TPR@FPR=0.01
+TPR@FPR=0.001
+clean_negative_fpr
+attacked_negative_fpr
+replay_negative_fpr
+path_marginal_gain_at_fixed_fpr
+trajectory_payload_redundancy
+quality_degradation
+motion_degradation
+semantic_degradation
+detection_overhead
+generation_overhead
+```
+
+### 31.3 消融失败解释
+
+若某个消融与 full method 差异不显著, 不能简单删除该消融。必须生成:
+
+```text
+ablation_failure_analysis_report
+effect_size_with_confidence_interval
+power_analysis_or_sample_size_note
+claim_downgrade_recommendation
+```
+
+这用于避免审稿人认为该算法原语只是工程堆叠。
+
+## 32. 审稿证据索引与 rebuttal-ready package
+
+submission package 必须包含一个面向审稿问题的证据索引。该索引的作用不是重写论文结论, 而是把每个潜在质疑直接映射到 governed artifacts。
+
+### 32.1 evidence index 字段
+
+```text
+reviewer_question_id
+reviewer_question_category
+paper_claim_id
+required_evidence_artifact
+supporting_record_path
+supporting_table_path
+supporting_figure_path
+supporting_report_path
+supporting_manifest_path
+evidence_status
+claim_downgrade_if_missing
+```
+
+### 32.2 必须覆盖的审稿问题
+
+```text
+why_not_endpoint_only
+why_not_post_hoc_video_watermark
+why_not_explicit_temporal_alignment
+why_flow_matching_specific
+why_low_fpr_result_is_reliable
+why_negative_tail_is_controlled
+why_prompt_suite_is_not_cherry_picked
+why_external_baselines_are_sufficient
+why_ablation_is_sufficient
+why_quality_degradation_is_acceptable
+why_replay_or_sketch_evidence_is_trustworthy
+why_results_are_reproducible
+```
+
+### 32.3 不允许进入 rebuttal-ready package 的内容
+
+```text
+manual_table_edits
+unsupported_claims
+placeholder_supported_claims
+test_split_threshold_tuning
+unregistered_external_numbers
+screenshots_without_records
+```
+
+## 33. Codex 任务执行模板
+
+当 Codex 按本文档推进项目时, 每次任务应输出或更新以下信息:
+
+```text
+current_stage
+blocking_gate
+files_changed
+records_or_manifests_created
+tests_run
+harness_audits_run
+full_paper_allowed
+next_allowed_action
+next_forbidden_action
+claim_support_status
+```
+
+若本轮只修改文档, `records_or_manifests_created` 应写为 `none`, 并明确说明没有产出 full_paper 或 submission 结果包。
+
+## 34. full_paper 工程门禁实现规范
+
+本文档定义的是项目总体流程。具体 checker、runner、reporter 和 builder 的实现接口, 必须以以下文档为工程规范:
+
+```text
+docs/builds/sstw_full_paper_engineering_gate_spec.md
+```
+
+该规范把以下仍需工程化的门禁拆解为可实现组件:
+
+```text
+full_paper_dry_run_checker
+modern_external_baseline_runner
+flow_specific_adaptive_attack_runner
+statistical_confidence_interval_reporter
+full_paper_result_checker
+reviewer_evidence_index_builder
+```
+
+Codex 后续实现这些组件时, 必须优先满足该规范中的输入、输出、阻断规则和验收测试要求。若实际实现与该规范不一致, 必须同步更新规范文档、阶段文档和 tests, 不能只修改代码。
+
+在上述组件未实现前, full_paper 仍必须保持:
+
+```text
+full_paper_allowed = false
+submission_freeze_allowed = false
+```

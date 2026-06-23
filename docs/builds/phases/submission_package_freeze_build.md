@@ -57,6 +57,76 @@ manifests/submission_package_manifest.json
 2. `pytest -q` 和 harness 审计通过。
 3. supported claims 全部绑定 governed artifacts。
 
+### 1.7 审稿风险包
+
+submission package 除主结果外, 还必须包含审稿风险回应材料:
+
+```text
+reports/baseline_sufficiency_report.md
+reports/ablation_sufficiency_report.md
+reports/adaptive_attack_report.md
+reports/low_fpr_confidence_interval_report.md
+reports/prompt_observability_audit_report.md
+reports/replay_and_sketch_evidence_report.md
+reports/artifact_rebuild_report.md
+```
+
+这些报告不应手写结论, 而应由 records、tables 和 manifests 重建。
+
+### 1.8 不允许冻结的情况
+
+```text
+full_paper_dry_run_decision != PASS
+full_paper_result_checker_decision != PASS
+claim_audit_passed != true
+artifact_rebuild_passed != true
+modern_external_baseline_records_missing = true
+adaptive_attack_records_missing = true
+low_fpr_confidence_interval_missing = true
+```
+
+### 1.9 审稿证据索引
+
+submission package 必须生成 reviewer evidence index, 用于把潜在审稿问题映射到 records、tables、figures、reports 和 manifests:
+
+```text
+reviewer_question_id
+reviewer_question_category
+paper_claim_id
+supporting_record_path
+supporting_table_path
+supporting_figure_path
+supporting_report_path
+supporting_manifest_path
+evidence_status
+claim_downgrade_if_missing
+```
+
+该 index 必须至少覆盖:
+
+```text
+why_not_endpoint_only
+why_not_post_hoc_video_watermark
+why_not_explicit_temporal_alignment
+why_flow_matching_specific
+why_low_fpr_result_is_reliable
+why_external_baselines_are_sufficient
+why_ablation_is_sufficient
+why_results_are_reproducible
+```
+
+若 evidence index 不能重建或存在 unsupported claim, 本阶段不得给出 ready-for-submission 结论。
+
+### 1.10 reviewer evidence index 工程规范索引
+
+reviewer evidence index 的字段、覆盖问题和阻断规则必须遵守:
+
+```text
+docs/builds/sstw_full_paper_engineering_gate_spec.md
+```
+
+该 index 不是人工 rebuttal 文案, 而是 governed artifacts 的索引。若索引中的任一 supporting path 不存在或不可由 manifest 追溯, 对应 claim 必须降级。
+
 ## 2. 当前阶段具体完成情况
 
 ### 2.1 已有工程文件
@@ -73,3 +143,22 @@ scripts/package_results/submission_freeze_preparation_packager.py
 ### 2.2 当前阶段使用边界
 
 该阶段只能组织和重建 governed artifacts, 不能手工创造论文结果。若上游阶段缺少真实 GPU、真实模型 records、pilot gate 记录或 negative family 记录, 本阶段只能报告 evidence gap, 不能补写 supported claims。
+
+
+## 3. 当前查漏补缺状态
+
+| 项目 | 当前标注 |
+|---|---|
+| 完成状态 | 结构就绪, 未进入最终冻结 |
+| 主要差距项 | 上游 full_paper records 不存在, 只能报告 evidence gap。 |
+| 下一步构建方向 | 等待 full_paper gate 通过后重建 tables、figures、reports 和 claim audit。 |
+| full_paper 影响 | 未满足本阶段要求时, 不得把相关结果写入 full_paper supported claim。 |
+
+### 3.1 快速检查清单
+
+```text
+stage_status: 结构就绪, 未进入最终冻结
+gap_item: 上游 full_paper records 不存在, 只能报告 evidence gap。
+next_action: 等待 full_paper gate 通过后重建 tables、figures、reports 和 claim audit。
+full_paper_blocking_rule: unresolved_gap_blocks_full_paper_claim
+```

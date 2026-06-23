@@ -92,3 +92,22 @@ main/methods/state_space_watermark/
 ### 2.3 当前阶段使用边界
 
 该阶段可以支撑“密钥条件状态空间推断在可控 synthetic latent 中成立”的机制证据, 但不能单独支撑“真实 Flow Matching 视频生成轨迹水印”的最终主张。
+
+
+## 3. 当前查漏补缺状态
+
+| 项目 | 当前标注 |
+|---|---|
+| 完成状态 | 部分完成 |
+| 主要差距项 | 当前只能支撑 synthetic sanity, 不能支撑真实 Flow Matching 视频主 claim。 |
+| 下一步构建方向 | 保留为 regression 与机制 sanity, 补齐 key-agnostic / generic SSM / temporal aggregator 消融 records。 |
+| full_paper 影响 | 未满足本阶段要求时, 不得把相关结果写入 full_paper supported claim。 |
+
+### 3.1 快速检查清单
+
+```text
+stage_status: 部分完成
+gap_item: 当前只能支撑 synthetic sanity, 不能支撑真实 Flow Matching 视频主 claim。
+next_action: 保留为 regression 与机制 sanity, 补齐 key-agnostic / generic SSM / temporal aggregator 消融 records。
+full_paper_blocking_rule: unresolved_gap_blocks_full_paper_claim
+```

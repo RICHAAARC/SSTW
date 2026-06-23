@@ -56,6 +56,30 @@ wrong_sampler_replay_control
 3. level 3 只能作为补充证据, 除非经过 fixed-FPR 独立验证。
 4. 未认证 trajectory logging 只能作为 control。
 
+### 1.7 Claim-3 降级规则
+
+若本阶段不能闭合, Claim-3 必须降级, 不得写成完全鲁棒 replay verification。
+
+```text
+authenticated_sketch_not_ready -> owner-side audit claim 降级为 deployment protocol sketch
+replay_uncertainty_not_ready -> model-side replay claim 降级为 exploratory replay analysis
+wrong_sampler_replay_not_ready -> 不声明 sampler-mismatch robustness
+wrong_prompt_replay_not_ready -> 不声明 prompt-mismatch robustness
+video_only_proxy_not_validated -> 不声明 black-box video-only trajectory detection
+```
+
+### 1.8 必须输出的审计 artifacts
+
+```text
+records/trajectory_sketch_verification_records.jsonl
+records/replay_uncertainty_records.jsonl
+records/wrong_sampler_replay_records.jsonl
+records/wrong_prompt_replay_records.jsonl
+tables/replay_verification_table.csv
+reports/replay_and_sketch_gate_report.md
+artifacts/replay_and_sketch_gate_decision.json
+```
+
 ## 2. 当前阶段具体完成情况
 
 ### 2.1 已有工程基础
@@ -65,3 +89,22 @@ wrong_sampler_replay_control
 ### 2.2 当前阶段补充要求
 
 该阶段需要在后续工程中进一步补齐 authenticated trajectory sketch 的正式字段、manifest 记录和 checker 规则。未认证 logging 不得直接支撑 supported claims。
+
+
+## 3. 当前查漏补缺状态
+
+| 项目 | 当前标注 |
+|---|---|
+| 完成状态 | 未完成 |
+| 主要差距项 | authenticated sketch、replay uncertainty、wrong prompt replay 与 checker 未闭合。 |
+| 下一步构建方向 | 补齐 sketch 签名验证、replay uncertainty records、wrong sampler / wrong prompt replay control。 |
+| full_paper 影响 | 未满足本阶段要求时, 不得把相关结果写入 full_paper supported claim。 |
+
+### 3.1 快速检查清单
+
+```text
+stage_status: 未完成
+gap_item: authenticated sketch、replay uncertainty、wrong prompt replay 与 checker 未闭合。
+next_action: 补齐 sketch 签名验证、replay uncertainty records、wrong sampler / wrong prompt replay control。
+full_paper_blocking_rule: unresolved_gap_blocks_full_paper_claim
+```

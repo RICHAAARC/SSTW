@@ -133,3 +133,22 @@ wrong-key application_evidence_direction_cosine mean: -0.000084
 small_scale_claim_pilot_gate
 ```
 
+
+
+## 3. 当前查漏补缺状态
+
+| 项目 | 当前标注 |
+|---|---|
+| 完成状态 | 已完成机制前置验证 |
+| 主要差距项 | 尚未覆盖 full attack matrix、negative family、fixed-FPR path gain 和 wrong-sampler replay。 |
+| 下一步构建方向 | 作为 small-scale pilot 输入, 不单独支撑 full_paper claim。 |
+| full_paper 影响 | 未满足本阶段要求时, 不得把相关结果写入 full_paper supported claim。 |
+
+### 3.1 快速检查清单
+
+```text
+stage_status: 已完成机制前置验证
+gap_item: 尚未覆盖 full attack matrix、negative family、fixed-FPR path gain 和 wrong-sampler replay。
+next_action: 作为 small-scale pilot 输入, 不单独支撑 full_paper claim。
+full_paper_blocking_rule: unresolved_gap_blocks_full_paper_claim
+```

@@ -68,3 +68,22 @@ experiments/state_space_formalization/package_outputs.py
 ### 2.3 当前阶段使用边界
 
 该阶段支撑 state-space inference 的机制独立性, 但不能替代 Flow Matching velocity constraint 与 trajectory observation 的证据。
+
+
+## 3. 当前查漏补缺状态
+
+| 项目 | 当前标注 |
+|---|---|
+| 完成状态 | 部分完成 |
+| 主要差距项 | 状态变量和接口已拆分, 但缺少 full-scale governed comparison。 |
+| 下一步构建方向 | 补齐 generic SSM、Mamba-style temporal fusion、without-admissibility 等正式消融。 |
+| full_paper 影响 | 未满足本阶段要求时, 不得把相关结果写入 full_paper supported claim。 |
+
+### 3.1 快速检查清单
+
+```text
+stage_status: 部分完成
+gap_item: 状态变量和接口已拆分, 但缺少 full-scale governed comparison。
+next_action: 补齐 generic SSM、Mamba-style temporal fusion、without-admissibility 等正式消融。
+full_paper_blocking_rule: unresolved_gap_blocks_full_paper_claim
+```

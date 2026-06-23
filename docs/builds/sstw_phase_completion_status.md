@@ -1,4 +1,4 @@
-# SSTW 分阶段完成情况记录
+﻿# SSTW 分阶段完成情况记录
 
 ## 0. 文档定位
 
@@ -16,16 +16,22 @@
 
 ## 2. 阶段完成情况总览
 
-| 阶段 | 当前状态 | 主要依据 | 后续重点 |
-|---|---|---|---|
-| `protocol_governance_foundation` | `structure_ready / protocol_ready` | configs、field registry、harness、constraint tests | 随新增字段、negative family 和旧字段映射继续同步注册。 |
-| `flow_model_adapter_preflight` | `structure_ready / mechanism_ready / protocol_ready / artifact_ready` | Wan2.1 Colab preflight、sampler signature、time grid、latent displacement proxy、Drive package | 作为后续 sampling-time 和 pilot 的真实模型接口前置证据。 |
-| `sampling_time_constraint_probe` | `structure_ready / mechanism_ready / protocol_ready / artifact_ready` | Wan2.1 recommended profile、constraint records、postprocess checker、Drive package | 已完成机制前置验证, 当前可支撑 small-scale claim pilot。 |
-| `small_scale_claim_pilot_gate` | `structure_ready / protocol_ready / external_validation_required / ready_to_run` | sampling-time recommended 已通过, motion threshold calibration 已通过, generative probe 与 checker 入口已存在 | 运行 pilot split, 验证 attack、negative family、wrong-sampler replay 与 fixed-FPR path marginal gain。 |
-| `generative_video_model_probe` | `structure_ready / protocol_ready / external_validation_required` | generative probe runner、external baseline runner、Colab 入口 | 仅在 pilot gate 通过后进入 full experiment。 |
-| `motion_threshold_calibration` | `structure_ready / protocol_ready / artifact_ready / engineering_calibrated` | runner、records、threshold artifact、128/64/32 profile、prompt-aware contamination audit、positive motion prompt 修复与 PASS package | 作为 small-scale pilot 的冻结工程阈值使用; 论文级 fixed-FPR 仍需更大 held-out negative split。 |
-| `replay_and_authenticated_sketch_gate` | `structure_ready` | digest、manifest、trajectory trace 基础模块 | 补齐 authenticated sketch、replay uncertainty、wrong prompt replay 与 checker。 |
-| `submission_package_freeze` | `structure_ready / artifact_ready` | submission freeze runner、main tables、readiness summary | 等待 pilot / full experiment governed records 后再冻结最终 artifacts。 |
+| 阶段 | 当前完成标注 | 当前项目实际情况 | 未完成 / 差距项 | 下一步构建方向 | full_paper 影响 |
+|---|---|---|---|---|---|
+| `protocol_governance_foundation` | 已完成当前阶段, 持续维护 | 协议、字段注册、测试分层、harness 审计已可运行。 | 新增 baseline、full_paper 和 replay 字段时仍需同步 registry 与 schema。 | 随后续阶段增量维护字段闭包。 | 是所有结果包的前置条件。 |
+| `synthetic_state_inference_sanity` | 部分完成 | synthetic runner、state-space 模块和轻量机制测试已存在。 | 不能支撑真实 Flow Matching 视频主 claim。 | 保持为 state inference sanity 与 regression test。 | 只作为机制合理性证据。 |
+| `real_video_latent_transfer_check` | 部分完成 | VAE/视频链路模块和 runner 已存在。 | 真实视频 VAE 大规模低误报验证不足。 | 在 pilot 通过后补齐 real-video transfer validation。 | 影响 endpoint robustness 与视频链路可信度。 |
+| `state_space_inference_formalization` | 部分完成 | state variable、transition、observation、admissibility 结构已拆分。 | generic SSM、Mamba-style temporal fusion、key-agnostic 对比仍需 full-scale governed records。 | 强化 formal ablation 与 negative tail audit。 | 影响 Claim-2 的状态后验贡献。 |
+| `trajectory_observation_core_probe` | 部分完成 | trajectory observation、velocity projection、correlation audit 入口已存在。 | path evidence 独立增益仍需 pilot / full validation 证明。 | 绑定 endpoint、path、velocity 三证据并跑消融。 | 影响 Claim-2 是否成立。 |
+| `flow_model_adapter_preflight` | 已完成前置验证 | Wan2.1 callback、time grid、sampler signature 和 latent displacement proxy 已验证。 | 真实 velocity field 原值未必可访问, 当前主要依赖 proxy。 | 保持 proxy 边界, 如能访问真实 velocity 再升级。 | 满足进入 sampling-time 与 pilot 的接口前置。 |
+| `sampling_time_constraint_probe` | 已完成机制前置验证 | recommended profile 显示 keyed alignment gain 与 wrong-key 分离。 | 尚不能替代 attack matrix、negative family、fixed-FPR path gain。 | 作为 small-scale pilot 前置证据。 | 证明可进入 pilot, 不直接支撑 full_paper。 |
+| `motion_threshold_calibration` | 已完成 engineering calibration | 已有 `motion_delta_calibrated_v1` 可作 pilot guardrail。 | 不是论文级 `TPR@FPR=0.001` fixed-FPR 证据。 | full_paper 前补齐更大 held-out negative 和 CI。 | 影响 motion claim 样本资格过滤。 |
+| `small_scale_claim_pilot_gate` | 未完成, 待重跑 | 旧 run 因 1 个 heldout motion prompt 低运动导致 15/16 eligible。prompt 已修复。 | 需要新 run 达到 16/16 eligible、seed coverage 和 gate PASS。 | 重新执行 `PROFILE = pilot` 全流程。 | 未 PASS 前禁止 full experiment 和 full_paper。 |
+| `generative_video_model_probe` | 结构就绪, full experiment 未完成 | 生成、attack、detection、postprocess、packager 入口已存在。 | 不能在 pilot 失败时进入 full experiment; 现代外部 baseline 未集成。 | pilot PASS 后进入 validation-scale generative probe。 | 影响主表和真实模型结论。 |
+| `replay_and_authenticated_sketch_gate` | 未完成 | digest、manifest、trajectory trace 基础模块存在。 | authenticated sketch、replay uncertainty、wrong prompt replay 未闭合。 | 补齐签名 sketch、replay records 和 checker。 | 影响 Claim-3 强度; 不通过则降级 Claim-3。 |
+| `flow_specific_adaptive_attack_gate` | 未完成 | phase 文档已补建, 但 runner、manifest 与 governed records 尚未完成。 | adaptive attacks、endpoint-preserving resampling、path cancellation 未形成 records。 | 补齐 runner 设计、stress protocol、attack manifest 和 checker。 | full_paper 前必须完成或明确降级。 |
+| `full_paper_result_package_gate` | 未开始 | 仅在本文档增强中定义 gate。 | 必须等全部前序验证通过后才能运行。 | 建立 dry-run checker 和 sample-size manifest。 | 是论文结果包产出前最后阻断 gate。 |
+| `submission_package_freeze` | 结构就绪, 未进入最终冻结 | submission freeze runner 和 readiness summary 已存在。 | 上游 full_paper records 不存在, 不得冻结论文结论。 | 等 full_paper 完成后重建 tables、figures、reports。 | 负责最终 claim audit 和 artifact rebuild。 |
 
 ## 3. 2026-06-18 阶段状态更新: 机制前置验证闭合
 
@@ -734,3 +740,160 @@ pilot_gate_decision: PASS
 ```
 
 才可以认为 small-scale pilot 的 motion coverage 阻塞解除。
+
+
+## 2026-06-23 文档增强后当前阶段查漏补缺基线
+
+### 当前总体判定
+
+当前项目不是 full_paper 运行前状态, 也不是 submission freeze 状态。当前最准确的阶段判定为:
+
+```text
+core_method_runtime_construction 已具备主要工程骨架
+sampling_time_constraint_probe 已完成机制前置验证
+small_scale_claim_pilot_gate 未完成, 需要重跑修复后的 pilot
+full_paper_result_package_gate 未开始, 且在 pilot / validation / adaptive attack / baseline 前不得启动
+```
+
+### 当前阻塞项
+
+```text
+primary_blocker: small_scale_claim_pilot_gate_not_passed
+secondary_blocker: modern_external_baseline_not_integrated
+secondary_blocker: replay_and_authenticated_sketch_gate_not_closed
+secondary_blocker: flow_specific_adaptive_attack_gate_not_closed
+secondary_blocker: paper_level_fpr_0_001_calibration_not_ready
+```
+
+### 下一步允许执行
+
+```text
+PROFILE = pilot
+prepare prompt suite
+Wan2.1 generation
+formal_metric_runner
+reuse frozen motion_threshold_calibration_decision.json
+mechanism postprocess
+pilot matrix postprocess
+runtime attack
+runtime detection
+small-scale claim pilot gate
+package_outputs
+```
+
+### 下一步禁止执行
+
+```text
+full_paper result package
+submission freeze final claim
+TPR@FPR=0.001 final table
+manual baseline comparison table
+test split threshold update
+```
+
+### pilot 解除阻塞标准
+
+```text
+motion_claim_eligible_generation_count = 16
+motion_claim_excluded_generation_count = 0
+seed_per_prompt_min >= 2
+formal_motion_claim_status = ready
+pilot_gate_decision = PASS
+claim_support_status = supported_by_small_scale_claim_pilot_records
+```
+
+## 2026-06-23 文档增强后工程化门禁缺口
+
+### 当前文档层面已增强的内容
+
+```text
+full_paper dry-run checker 规范已写入总体流程
+统计置信区间与 cluster-by-video interval 要求已写入总体流程
+审稿风险对照矩阵已写入总体流程
+算法原语到 full_paper package 的记录映射已写入算法原语文档
+```
+
+### 当前仍未工程化的门禁
+
+```text
+full_paper_dry_run_checker: not_implemented
+full_paper_result_checker: not_implemented
+modern_external_baseline_runner: incomplete
+flow_specific_adaptive_attack_runner: not_implemented
+replay_sketch_verification_checker: incomplete
+statistical_confidence_interval_reporter: not_implemented
+cluster_by_video_interval_reporter: not_implemented
+```
+
+### 阻断解释
+
+上述缺口不影响当前文档作为操作手册使用, 但会阻止项目直接进入 full_paper 论文结果包产出。下一步若继续工程推进, 应优先把这些文档化 gate 转换为 repository runner、checker、records 和 reports。
+
+## 2026-06-23 文档继续增强: 顶会实验充分性清单与 full_paper 可运行性预演
+
+### 本次文档增强内容
+
+```text
+新增 sstw_top_tier_experimental_sufficiency_checklist.md
+总体流程新增 full_paper 分片执行、资源预检和失败恢复规则
+总体流程新增外部 baseline 公平比较协议
+总体流程新增内部消融矩阵与审稿证据索引
+full_paper phase 新增 shard / rehearsal 要求
+generative video phase 新增 validation-scale 充分性矩阵
+adaptive attack phase 新增攻击者知识层级与 claim 降级规则
+small-scale pilot phase 新增 pilot 结果使用边界
+submission freeze phase 新增 reviewer evidence index 要求
+算法原语文档新增可证伪条件和原语级实验打包要求
+```
+
+### 当前状态不变
+
+本次增强只修改构建文档, 不改变当前工程阶段判断。当前仍为:
+
+```text
+primary_blocker: small_scale_claim_pilot_gate_not_passed
+full_paper_allowed: false
+submission_freeze_allowed: false
+```
+
+### 下一步工程化方向
+
+```text
+1. 重跑修复后的 PROFILE = pilot。
+2. pilot PASS 后实现 validation-scale generative probe。
+3. 将 full_paper dry-run checker、baseline runner、adaptive attack runner、CI reporter 和 reviewer evidence index 从文档规范转化为 repository 工程实现。
+```
+
+## 2026-06-23 文档继续增强: full_paper 工程门禁实现规范
+
+### 本次补强内容
+
+```text
+新增 sstw_full_paper_engineering_gate_spec.md
+总体流程新增 full_paper 工程门禁实现规范索引
+顶会实验充分性清单新增工程化 readiness 评分
+```
+
+### 当前状态解释
+
+本次补强进一步降低“文档无法落地为 Codex 工程任务”的风险, 但仍不改变当前项目阶段:
+
+```text
+primary_blocker: small_scale_claim_pilot_gate_not_passed
+full_paper_allowed: false
+submission_freeze_allowed: false
+```
+
+### 新增工程化目标
+
+后续若继续推进代码实现, 应优先按 `sstw_full_paper_engineering_gate_spec.md` 实现:
+
+```text
+full_paper_dry_run_checker
+statistical_confidence_interval_reporter
+modern_external_baseline_runner
+reviewer_evidence_index_builder
+full_paper_result_checker
+flow_specific_adaptive_attack_runner
+```
+

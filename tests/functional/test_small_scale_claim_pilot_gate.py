@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
@@ -125,6 +126,21 @@ def _write_motion_calibration_ready(run_root: Path) -> None:
     })
 
 
+def _write_motion_calibration_ready_with_bom(run_root: Path) -> None:
+    """写出带 UTF-8 BOM 的 calibration artifact, 模拟 Windows PowerShell 重写后的 Drive 文件。"""
+    path = run_root / "artifacts" / "motion_threshold_calibration_decision.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps({
+            "motion_threshold_calibration_decision": "PASS",
+            "motion_threshold_calibration_ready": True,
+            "motion_threshold_id": "motion_delta_calibrated_v1",
+            "motion_threshold_source_split": "calibration",
+        }, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8-sig",
+    )
+
+
 @pytest.mark.quick
 def test_small_scale_claim_pilot_checker_reports_missing_matrix(tmp_path: Path) -> None:
     """当前只有生成和 proxy 证据时, pilot gate 必须明确报告矩阵缺口。"""
@@ -234,3 +250,24 @@ def test_formal_motion_failed_sample_is_excluded_from_motion_claim_gate(tmp_path
     assert summary["seed_per_prompt_min"] == 1
     assert "formal_motion_claim_ready" in summary["missing_pilot_requirements"]
     assert "seed_coverage_ready" in summary["missing_pilot_requirements"]
+
+
+@pytest.mark.quick
+def test_pilot_gate_reads_bom_encoded_motion_calibration_artifact(tmp_path: Path) -> None:
+    """pilot gate 必须能读取带 BOM 的 calibration artifact, 避免 Drive 本地映射编码差异阻断 Colab。"""
+    run_root = tmp_path / "generative_video_model_probe_colab"
+    _write_generation_records(run_root)
+    _write_trajectory_records(run_root)
+    _write_proxy_postprocess(run_root)
+    _write_formal_metric_records(run_root)
+    _write_motion_calibration_ready_with_bom(run_root)
+    write_jsonl(run_root / "records" / "mechanism_score_records.jsonl", [])
+    write_jsonl(run_root / "records" / "controlled_negative_records.jsonl", [])
+    write_pilot_matrix_postprocess(run_root)
+
+    summary = build_small_scale_claim_pilot_audit(run_root)
+
+    assert summary["motion_threshold_calibration_required"] is False
+    assert summary["motion_threshold_id"] == "motion_delta_calibrated_v1"
+    assert summary["motion_threshold_source_split"] == "calibration"
+    assert "formal_motion_claim_ready" not in summary["missing_pilot_requirements"]

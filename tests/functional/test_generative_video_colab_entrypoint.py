@@ -137,6 +137,7 @@ def test_generative_video_colab_notebook_calls_repository_modules() -> None:
     assert "motion_calibration" in source
     assert "pilot profile 只能复用已经通过的 calibration artifact" in source
     assert "motion_threshold_calibration_ready" in source
+    assert "read_text(encoding='utf-8-sig')" in source
     assert "build_motion_threshold_calibration_command" in source
     assert "build_mechanism_postprocess_command" in source
     assert "build_pilot_matrix_postprocess_command" in source

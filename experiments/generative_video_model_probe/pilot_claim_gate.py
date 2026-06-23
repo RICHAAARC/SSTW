@@ -26,10 +26,14 @@ HEURISTIC_MOTION_THRESHOLD_SOURCE_SPLIT = "heuristic_precalibration"
 
 
 def _read_json(path: Path) -> dict:
-    """读取 JSON 文件, 文件不存在时返回空对象。"""
+    """读取 JSON 文件, 文件不存在时返回空对象。
+
+    使用 `utf-8-sig` 是为了兼容 Windows PowerShell 写出的 UTF-8 BOM 文件。
+    该兼容只影响文件解码, 不改变任何 governed record 的语义。
+    """
     if not path.exists():
         return {}
-    return json.loads(path.read_text(encoding="utf-8"))
+    return json.loads(path.read_text(encoding="utf-8-sig"))
 
 
 def _read_jsonl(path: Path) -> list[dict]:

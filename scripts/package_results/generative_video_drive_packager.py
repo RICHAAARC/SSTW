@@ -28,10 +28,14 @@ def _write_tree_to_archive(archive: zipfile.ZipFile, run_root: Path, tree_path: 
 
 
 def _read_json_if_exists(path: Path) -> dict:
-    """读取可选 JSON 文件, 不存在时返回空对象。"""
+    """读取可选 JSON 文件, 不存在时返回空对象。
+
+    Google Drive 本地映射中的文件可能被 Windows PowerShell 以 UTF-8 BOM 重写。
+    使用 `utf-8-sig` 可以同时读取有 BOM 和无 BOM 的 JSON。
+    """
     if not path.exists():
         return {}
-    return json.loads(path.read_text(encoding="utf-8"))
+    return json.loads(path.read_text(encoding="utf-8-sig"))
 
 
 def package_generative_video_colab_run(

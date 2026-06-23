@@ -1150,3 +1150,19 @@ full_paper_allowed: false
 ```
 
 当前可以说明工程链路已经能从本项目直接产出 baseline comparison 结果; 不能说明现代视频水印外部 baseline 已完成正式论文主表对比。
+
+## 2026-06-24 replay/sketch gate 最终创新性要求
+
+当前项目允许短期实现 `Claim-3 downgrade gate` 以保护 validation-scale 流程和 claim 边界, 但这不表示 Claim-3 已经完成。项目最终若要把 replay posterior、authenticated sketch 和 wrong replay 分离作为强创新点, 必须实现并通过 `replay/sketch gate`。
+
+当前阶段性判断为:
+
+```text
+claim3_downgrade_gate: allowed_for_validation_scale_short_term
+replay_and_authenticated_sketch_gate: required_for_full_paper_strong_claim
+replay_and_authenticated_sketch_gate_runner: not_implemented
+claim3_full_support_allowed: false
+```
+
+后续工程必须补齐 authenticated trajectory sketch、replay uncertainty records、wrong sampler / wrong prompt / wrong time grid replay controls、replay negative FPR control 和 `artifacts/replay_and_sketch_gate_decision.json`。在这些产物闭合前, 只能把 Claim-3 表述为降级或探索性 replay analysis。
+

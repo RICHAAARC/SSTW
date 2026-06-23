@@ -127,3 +127,17 @@ claim3_full_support_allowed = false
 ```
 
 因此, Claim-3 目前只能表述为“小规模 pilot 中 replay uncertainty 与 wrong-sampler control 已进入 governed records”, 不能表述为“攻击后视频均可通过 authenticated replay 恢复轨迹后验”。
+
+### 3.3 最终创新性要求
+
+短期可以通过 `Claim-3 downgrade gate` 保护 validation-scale 流程不被 unsupported claim 阻断, 但这只是 claim 边界收缩, 不是本阶段完成。若项目最终要把 replay posterior / authenticated sketch 作为足够强的创新性贡献, 必须实现并通过 `replay/sketch gate`。
+
+该要求在项目构建流程中对应如下边界:
+
+```text
+validation_scale_short_term: claim3_downgrade_gate_allowed
+full_paper_strong_claim: replay/sketch gate_required
+top_tier_innovation_claim: replay/sketch gate_required
+```
+
+`replay/sketch gate` 完成前, full_paper 或投稿叙述不得把 Claim-3 写成强 supported claim。

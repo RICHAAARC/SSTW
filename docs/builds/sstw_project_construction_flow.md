@@ -813,6 +813,32 @@ wrong_prompt_replay_control
 3. level 3 只能作为补充证据, 除非在 fixed-FPR 下经过独立验证。
 4. 未认证 trajectory logging 只能作为 control, 不能支撑主 claim。
 
+### 14.5 replay/sketch gate 与 Claim-3 降级边界
+
+`replay/sketch gate` 是 Claim-3 的正式支撑门禁, 不能被 pilot 级 replay uncertainty、未认证 trajectory logging 或简单 replay proxy 替代。短期内可以使用 `Claim-3 downgrade gate` 解除 validation-scale 流程阻断, 但这只表示项目主动收缩 claim 边界, 不表示 replay/sketch 机制已经完成。
+
+从项目最终创新性角度, 必须实现 `replay/sketch gate`。只有该 gate 通过后, 才允许把 Claim-3 写成强支持主张。若只存在 `claim3_downgraded = true`, 则后续结果包只能声称 Claim-1、Claim-2 和受限 owner-side audit / exploratory replay analysis, 不能声称完整 robust replay verification。
+
+该 gate 必须至少检查:
+
+```text
+authenticated_trajectory_sketch_status == ready
+trajectory_sketch_verification_status == pass
+replay_uncertainty_records_ready == true
+wrong_sampler_replay_records_ready == true
+wrong_prompt_replay_records_ready == true
+replay_negative_fpr_controlled == true
+replay_and_sketch_gate_decision == PASS
+```
+
+允许的阶段策略为:
+
+```text
+validation_scale_short_term: claim3_downgrade_gate_allowed
+full_paper_strong_claim: replay/sketch gate_required
+top_tier_innovation_claim: replay/sketch gate_required
+```
+
 ---
 
 ## 15. flow_specific_adaptive_attack_gate
@@ -1218,6 +1244,7 @@ motion_threshold_calibration_engineering_passed = true
 small_scale_claim_pilot_gate_passed = true
 generative_video_model_probe_validation_passed = true
 replay_and_authenticated_sketch_gate_ready_or_claim3_downgraded = true
+replay_and_authenticated_sketch_gate_passed_for_strong_claim = true
 flow_specific_adaptive_attack_gate_passed = true
 external_baseline_integration_ready = true
 internal_ablation_matrix_ready = true
@@ -1225,6 +1252,8 @@ artifact_rebuild_dry_run_passed = true
 ```
 
 如果任一条件不满足, Codex 只能补齐前序流程, 不得产出 full_paper 论文结果包。
+
+需要特别区分: `replay_and_authenticated_sketch_gate_ready_or_claim3_downgraded = true` 只允许 reduced-scope dry-run 继续检查其他前置项; 若要在 full_paper 或投稿叙述中把 Claim-3 作为强创新点, 必须额外满足 `replay_and_authenticated_sketch_gate_passed_for_strong_claim = true`。
 
 ### 22.2 full_paper 输出边界
 

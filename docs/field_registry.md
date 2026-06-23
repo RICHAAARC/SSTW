@@ -394,6 +394,19 @@ Notebook 与 repository module 的跨边界数据
 | adaptive_attack_record_count | metric | none | true | false | false | Number of Flow-specific adaptive attack records available to a validation or full-paper gate. |
 | adaptive_attack_status | governance | none | true | false | false | Adaptive attack readiness or claim boundary status. |
 | replay_or_sketch_status | governance | none | true | false | false | Replay/sketch readiness status or explicit Claim-3 downgrade status. |
+| claim3_downgrade_decision | governance | none | true | false | false | Claim-3 降级门禁决策。 |
+| claim3_downgraded | governance | none | true | false | false | 是否已经显式将 Claim-3 降级。 |
+| claim3_original_scope | claim | none | true | false | false | Claim-3 原始强主张范围。 |
+| claim3_allowed_scope | claim | none | true | false | false | 当前证据允许的 Claim-3 范围。 |
+| claim3_downgrade_reason | governance | none | true | false | false | Claim-3 降级或未降级的原因。 |
+| claim3_full_support_allowed | governance | none | true | false | false | 是否允许把 Claim-3 写成强 supported claim。 |
+| claim3_missing_replay_requirement_count | metric | none | true | false | false | Claim-3 replay/sketch 缺失要求数量。 |
+| claim3_missing_replay_requirements | governance | none | true | false | false | Claim-3 replay/sketch 缺失要求列表。 |
+| authenticated_trajectory_sketch_status | governance | none | true | false | false | Authenticated trajectory sketch 就绪状态。 |
+| trajectory_sketch_verification_status | governance | none | true | false | false | Trajectory sketch 验证状态。 |
+| replay_uncertainty_records_ready | governance | none | true | false | false | Replay uncertainty records 是否就绪。 |
+| wrong_sampler_replay_records_ready | governance | none | true | false | false | Wrong sampler replay records 是否就绪。 |
+| wrong_prompt_replay_records_ready | governance | none | true | false | false | Wrong prompt replay records 是否就绪。 |
 | confidence_interval_status | governance | none | true | false | false | Statistical confidence interval report readiness status. |
 | statistical_confidence_interval_decision | governance | none | true | false | false | Decision for validation-scale statistical confidence interval reporter. |
 | statistical_confidence_interval_family | governance | none | true | false | false | Metric family covered by a statistical confidence interval record. |

@@ -1181,3 +1181,18 @@ full_paper_adaptive_attack_gate: still_requires_real_negative_tail_audit
 
 该更新只能让 validation-scale gate 获得 governed adaptive attack records, 不能支撑 full-paper 中的 `robust_to_flow_specific_adaptive_attacks` 强主张。
 
+## 2026-06-24 validation-scale hard-blocker workflow 接入
+
+当前 generative video Colab workflow 已接入 adaptive attack validation proxy 与 Claim-3 downgrade gate。validation-scale artifact rebuild dry-run 也已将两类新增产物纳入 required inputs / outputs 检查。
+
+阶段状态更新为:
+
+```text
+adaptive_attack_runner_workflow: integrated
+claim3_downgrade_gate_workflow: integrated
+validation_artifact_rebuild_required_claim3_and_adaptive_outputs: integrated
+validation_scale_real_gpu_run: pending_user_colab_rerun
+```
+
+下一步是执行本地 validation-scale 工程闭环核验。若本地测试与 harness 均通过, 项目将等待用户在 Colab 中执行真实 Wan2.1 GPU validation-scale 复跑。
+

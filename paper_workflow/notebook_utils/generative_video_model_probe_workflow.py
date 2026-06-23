@@ -161,6 +161,28 @@ def build_validation_internal_ablation_command(layout: dict[str, str]) -> list[s
     ]
 
 
+def build_adaptive_attack_command(layout: dict[str, str]) -> list[str]:
+    """构造 validation-scale adaptive attack proxy 命令。"""
+    return [
+        sys.executable,
+        "-m",
+        "experiments.generative_video_model_probe.adaptive_attack_runner",
+        "--run-root",
+        layout["drive_run_root"],
+    ]
+
+
+def build_claim3_downgrade_command(layout: dict[str, str]) -> list[str]:
+    """构造 Claim-3 downgrade gate 命令, 明确 replay/sketch 未闭合时的 claim 边界。"""
+    return [
+        sys.executable,
+        "-m",
+        "experiments.generative_video_model_probe.claim3_downgrade",
+        "--run-root",
+        layout["drive_run_root"],
+    ]
+
+
 def build_statistical_confidence_interval_command(layout: dict[str, str]) -> list[str]:
     """构造 validation-scale 统计置信区间报告命令。"""
     return [

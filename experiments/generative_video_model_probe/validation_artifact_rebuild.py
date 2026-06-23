@@ -20,6 +20,8 @@ REQUIRED_REBUILD_INPUTS = (
     "records/external_baseline_records.jsonl",
     "records/external_baseline_score_records.jsonl",
     "records/validation_internal_ablation_records.jsonl",
+    "records/adaptive_attack_records.jsonl",
+    "records/claim3_downgrade_records.jsonl",
     "records/statistical_confidence_interval_records.jsonl",
     "artifacts/generative_video_colab_runtime_decision.json",
     "artifacts/runtime_attack_decision.json",
@@ -27,6 +29,8 @@ REQUIRED_REBUILD_INPUTS = (
     "artifacts/external_baseline_status_decision.json",
     "artifacts/external_baseline_comparison_decision.json",
     "artifacts/validation_internal_ablation_decision.json",
+    "artifacts/adaptive_attack_decision.json",
+    "artifacts/claim3_downgrade_decision.json",
     "artifacts/statistical_confidence_interval_decision.json",
 )
 
@@ -37,9 +41,13 @@ REQUIRED_REBUILD_OUTPUTS = (
     "tables/runtime_attack_table.csv",
     "tables/runtime_detection_table.csv",
     "tables/validation_internal_ablation_table.csv",
+    "tables/adaptive_attack_table.csv",
+    "tables/claim3_downgrade_table.csv",
     "tables/statistical_confidence_interval_table.csv",
     "reports/external_baseline_comparison_report.md",
     "reports/validation_internal_ablation_report.md",
+    "reports/adaptive_attack_report.md",
+    "reports/claim3_downgrade_report.md",
     "reports/statistical_confidence_interval_report.md",
 )
 

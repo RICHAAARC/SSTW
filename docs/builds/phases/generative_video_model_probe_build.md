@@ -492,3 +492,43 @@ claim_boundary: proxy comparison only until modern baseline adapters produce mea
 ```
 
 该步骤必须位于 runtime detection 之后, 因为 adapter 需要读取真实 attacked video detection 链路产生的 governed records。该步骤必须位于 validation-scale gate 之前, 因为 gate 需要检查 `validation_external_baseline_comparison_records_ready`。
+
+## 2026-06-24 validation-scale hard-blocker runner workflow 接入
+
+当前 validation-scale notebook workflow 已接入两个硬阻断 runner:
+
+```text
+experiments.generative_video_model_probe.adaptive_attack_runner
+experiments.generative_video_model_probe.claim3_downgrade
+```
+
+运行顺序为:
+
+```text
+runtime detection
+external_baseline adapter comparison
+small_scale_claim_pilot_gate
+validation_internal_ablation
+adaptive_attack validation proxy
+Claim-3 downgrade gate
+statistical_confidence_interval
+validation_artifact_rebuild_dry_run
+validation_scale_gate
+package
+```
+
+其中 adaptive attack runner 只提供 validation proxy records, 不支撑 full-paper adaptive robustness claim。Claim-3 downgrade gate 只允许 validation-scale 合规继续, 不替代最终必须实现的 replay/sketch gate。
+
+新增落盘产物包括:
+
+```text
+records/adaptive_attack_records.jsonl
+tables/adaptive_attack_table.csv
+artifacts/adaptive_attack_decision.json
+reports/adaptive_attack_report.md
+records/claim3_downgrade_records.jsonl
+tables/claim3_downgrade_table.csv
+artifacts/claim3_downgrade_decision.json
+reports/claim3_downgrade_report.md
+```
+

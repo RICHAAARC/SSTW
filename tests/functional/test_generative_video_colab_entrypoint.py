@@ -160,6 +160,8 @@ def test_generative_video_colab_notebook_calls_repository_modules() -> None:
     assert "build_external_baseline_comparison_command" in source
     assert "build_small_scale_claim_pilot_gate_command" in source
     assert "build_validation_internal_ablation_command" in source
+    assert "build_adaptive_attack_command" in source
+    assert "build_claim3_downgrade_command" in source
     assert "build_statistical_confidence_interval_command" in source
     assert "build_validation_artifact_rebuild_dry_run_command" in source
     assert "build_validation_scale_gate_command" in source
@@ -174,6 +176,8 @@ def test_generative_video_colab_notebook_calls_repository_modules() -> None:
     assert "experiments.generative_video_model_probe.external_baseline_runner" in Path("paper_workflow/notebook_utils/generative_video_model_probe_workflow.py").read_text(encoding="utf-8")
     assert "experiments.generative_video_model_probe.pilot_claim_gate" in Path("paper_workflow/notebook_utils/generative_video_model_probe_workflow.py").read_text(encoding="utf-8")
     assert "experiments.generative_video_model_probe.validation_internal_ablation" in Path("paper_workflow/notebook_utils/generative_video_model_probe_workflow.py").read_text(encoding="utf-8")
+    assert "experiments.generative_video_model_probe.adaptive_attack_runner" in Path("paper_workflow/notebook_utils/generative_video_model_probe_workflow.py").read_text(encoding="utf-8")
+    assert "experiments.generative_video_model_probe.claim3_downgrade" in Path("paper_workflow/notebook_utils/generative_video_model_probe_workflow.py").read_text(encoding="utf-8")
     assert "experiments.generative_video_model_probe.statistical_confidence_interval" in Path("paper_workflow/notebook_utils/generative_video_model_probe_workflow.py").read_text(encoding="utf-8")
     assert "experiments.generative_video_model_probe.validation_artifact_rebuild" in Path("paper_workflow/notebook_utils/generative_video_model_probe_workflow.py").read_text(encoding="utf-8")
     assert "experiments.generative_video_model_probe.validation_scale_gate" in Path("paper_workflow/notebook_utils/generative_video_model_probe_workflow.py").read_text(encoding="utf-8")
@@ -238,6 +242,17 @@ def test_generative_video_drive_packager_creates_archive_and_manifest(tmp_path: 
         "validation_internal_ablation_decision": "PASS",
         "internal_ablation_record_count": 12,
     })
+    write_json(run_root / "artifacts" / "adaptive_attack_decision.json", {
+        "adaptive_attack_decision": "PASS",
+        "adaptive_attack_record_count": 72,
+        "adaptive_robustness_claim_allowed": False,
+    })
+    write_json(run_root / "artifacts" / "claim3_downgrade_decision.json", {
+        "claim3_downgrade_decision": "PASS",
+        "claim3_downgraded": True,
+        "claim3_full_support_allowed": False,
+        "replay_or_sketch_status": "claim3_explicitly_downgraded",
+    })
     write_json(run_root / "artifacts" / "statistical_confidence_interval_decision.json", {
         "statistical_confidence_interval_decision": "PASS",
         "ci_total_count": 12,
@@ -283,6 +298,13 @@ def test_generative_video_drive_packager_creates_archive_and_manifest(tmp_path: 
     assert manifest["decision_summary"]["external_baseline_comparison_table_status"] == "ready"
     assert manifest["decision_summary"]["validation_internal_ablation_decision"] == "PASS"
     assert manifest["decision_summary"]["validation_internal_ablation_record_count"] == 12
+    assert manifest["decision_summary"]["adaptive_attack_decision"] == "PASS"
+    assert manifest["decision_summary"]["adaptive_attack_record_count"] == 72
+    assert manifest["decision_summary"]["adaptive_robustness_claim_allowed"] is False
+    assert manifest["decision_summary"]["claim3_downgrade_decision"] == "PASS"
+    assert manifest["decision_summary"]["claim3_downgraded"] is True
+    assert manifest["decision_summary"]["claim3_full_support_allowed"] is False
+    assert manifest["decision_summary"]["replay_or_sketch_status"] == "claim3_explicitly_downgraded"
     assert manifest["decision_summary"]["statistical_confidence_interval_decision"] == "PASS"
     assert manifest["decision_summary"]["statistical_confidence_interval_total_count"] == 12
     assert manifest["decision_summary"]["validation_artifact_rebuild_dry_run_decision"] == "PASS"

@@ -9,6 +9,7 @@ from pathlib import Path
 from statistics import mean
 from typing import Any
 
+from main.protocol.flow_evidence_fields import with_flow_evidence_protocol_defaults
 from main.protocol.record_writer import write_json, write_jsonl
 from main.protocol.table_builder import write_csv
 
@@ -22,7 +23,7 @@ def build_detection_records(generation_records: list[dict], attack_records: list
     records = []
     for generation_record in generation_records:
         for attack_record in attack_records:
-            records.append({
+            records.append(with_flow_evidence_protocol_defaults({
                 "record_version": "generative_video_model_probe_v1",
                 "generation_model_id": generation_record["generation_model_id"],
                 "prompt_id": generation_record["prompt_id"],
@@ -36,7 +37,11 @@ def build_detection_records(generation_records: list[dict], attack_records: list
                 "trajectory_gain_over_state_space": None,
                 "trajectory_negative_leakage_delta": None,
                 "negative_state_over_threshold_count": None,
-            })
+            },
+                trajectory_source_level="not_captured",
+                flow_state_admissibility_status="not_evaluated",
+                claim_support_status="not_supported_generation_model_not_runnable",
+            ))
     return records
 
 
@@ -129,6 +134,8 @@ def _runtime_detection_score(runtime_attack_record: dict, feature: dict[str, flo
     attack_delta = round(attack_score - trajectory_score, 6)
     return {
         "S_trajectory_observation": round(trajectory_score, 6) if feature else None,
+        "S_path_inv": round(trajectory_score, 6) if feature else None,
+        "S_velocity": round(trajectory_score, 6) if feature else None,
         "S_runtime_attack_detection": attack_score,
         "S_final_conservative": attack_score,
         "source_to_attack_frame_ratio": frame_ratio,
@@ -147,7 +154,7 @@ def build_runtime_detection_records(run_root: str | Path) -> list[dict]:
     records: list[dict] = []
 
     for attack_record in runtime_attack_records:
-        detection_record = {
+        detection_record = with_flow_evidence_protocol_defaults({
             "record_version": "generative_video_runtime_detection_v1",
             "generation_model_id": attack_record.get("generation_model_id"),
             "prompt_id": attack_record.get("prompt_id"),
@@ -170,7 +177,12 @@ def build_runtime_detection_records(run_root: str | Path) -> list[dict]:
             "decision": "not_run",
             "decision_reason": "runtime_attack_not_ready",
             "claim_support_status": "runtime_detection_evidence_only",
-        }
+        },
+            negative_family=attack_record.get("negative_family"),
+            trajectory_source_level="runtime_attacked_video_file_with_callback_trace_proxy",
+            flow_state_admissibility_status="not_evaluated",
+            claim_support_status="runtime_detection_evidence_only",
+        )
         try:
             if attack_record.get("attack_runtime_status") != "ready":
                 raise RuntimeError(str(attack_record.get("attack_runtime_failure_reason") or "runtime_attack_not_ready"))
@@ -191,6 +203,9 @@ def build_runtime_detection_records(run_root: str | Path) -> list[dict]:
                 "attacked_video_decoded_frame_count": decoded_frame_count,
                 "decision": "runtime_detectable_proxy" if score_payload["attacked_video_detectable"] else "runtime_detection_proxy_below_threshold",
                 "decision_reason": "runtime_attacked_video_scored_with_trajectory_proxy",
+                "flow_state_admissibility_status": "proxy_admissible"
+                if score_payload["attacked_video_detectable"]
+                else "proxy_not_admissible",
                 **score_payload,
             })
         except Exception as exc:  # pragma: no cover - 依赖实际落盘文件和编解码后端

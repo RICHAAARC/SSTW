@@ -7,6 +7,9 @@ import json
 from pathlib import Path
 from statistics import mean
 
+from main.protocol.flow_evidence_fields import (
+    with_flow_evidence_protocol_defaults,
+)
 from main.protocol.record_writer import write_json, write_jsonl
 from main.protocol.table_builder import write_csv
 
@@ -98,7 +101,7 @@ def _build_mechanism_score_records(generation_records: list[dict], trajectory_fe
         key_score = _method_score(base_score, "key_conditioned_state_space_with_trajectory")
         for method_variant in METHOD_VARIANTS:
             score = _method_score(base_score, method_variant)
-            records.append({
+            record = {
                 "record_version": "generative_video_mechanism_postprocess_v1",
                 "generation_model_id": generation_record["generation_model_id"],
                 "prompt_id": generation_record["prompt_id"],
@@ -110,10 +113,19 @@ def _build_mechanism_score_records(generation_records: list[dict], trajectory_fe
                 "mechanism_score_source": "latent_trajectory_proxy",
                 "S_final": score,
                 "S_trajectory_observation": base_score,
+                "S_path_inv": base_score,
+                "S_velocity": base_score,
                 "baseline_score_margin": round(key_score - score, 6),
                 "decision": "above_proxy_threshold" if score >= 0.5 else "below_proxy_threshold",
                 **feature,
-            })
+            }
+            records.append(with_flow_evidence_protocol_defaults(
+                record,
+                trajectory_source_level="callback_latent_trace_proxy",
+                flow_state_admissibility_status="proxy_admissible",
+                claim_support_status="proxy_postprocess_only",
+                compute_conservative_score=True,
+            ))
     return records
 
 
@@ -135,7 +147,7 @@ def _build_control_records(generation_records: list[dict], trajectory_features: 
             "trajectory_key_agnostic_control": round(_clip(0.26 + (1.0 - base) * 0.08), 6),
         }
         for control_name, score in controls.items():
-            records.append({
+            record = {
                 "record_version": "generative_video_mechanism_postprocess_v1",
                 "generation_model_id": generation_record["generation_model_id"],
                 "prompt_id": generation_record["prompt_id"],
@@ -144,10 +156,20 @@ def _build_control_records(generation_records: list[dict], trajectory_features: 
                 "method_variant": "key_conditioned_state_space_with_trajectory",
                 "control_name": control_name,
                 "sample_role": "controlled_negative",
+                "negative_family": None,
                 "mechanism_score_source": "latent_trajectory_direction_control",
                 "S_final": score,
+                "S_path_inv": score,
+                "S_velocity": score,
                 "decision": "controlled_negative_below_threshold",
-            })
+            }
+            records.append(with_flow_evidence_protocol_defaults(
+                record,
+                trajectory_source_level="latent_trajectory_direction_control_proxy",
+                flow_state_admissibility_status="controlled_negative_not_admissible",
+                claim_support_status="proxy_control_only",
+                compute_conservative_score=True,
+            ))
     return records
 
 
@@ -158,7 +180,7 @@ def _build_quality_proxy_records(generation_records: list[dict], trajectory_feat
         feature = trajectory_features.get(generation_record.get("trajectory_trace_id"), {})
         video_path = Path(str(generation_record.get("video_path") or ""))
         local_video_exists = video_path.exists()
-        records.append({
+        records.append(with_flow_evidence_protocol_defaults({
             "record_version": "generative_video_quality_proxy_v1",
             "generation_model_id": generation_record["generation_model_id"],
             "prompt_id": generation_record["prompt_id"],
@@ -170,7 +192,11 @@ def _build_quality_proxy_records(generation_records: list[dict], trajectory_feat
             "motion_consistency_proxy_status": "ready" if feature else "missing_trajectory",
             "semantic_consistency_proxy_status": "proxy_only_prompt_hash_available",
             "video_file_local_status": "exists" if local_video_exists else "path_not_local_or_not_synced",
-        })
+        },
+            trajectory_source_level="callback_latent_trace_proxy" if feature else "not_captured",
+            flow_state_admissibility_status="not_evaluated",
+            claim_support_status="quality_motion_semantic_proxy_only",
+        ))
     return records
 
 

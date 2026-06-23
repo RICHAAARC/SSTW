@@ -8,6 +8,7 @@ from pathlib import Path
 
 from main.analysis.semantic_video_metrics import DEFAULT_CLIP_MODEL_ID, DEFAULT_SEMANTIC_THRESHOLD, compute_clip_text_video_similarity
 from main.analysis.video_file_metrics import compute_video_file_metrics
+from main.protocol.flow_evidence_fields import with_flow_evidence_protocol_defaults
 from main.protocol.record_writer import write_json, write_jsonl
 from main.protocol.table_builder import write_csv
 
@@ -232,7 +233,7 @@ def build_formal_metric_records(
             and float(semantic_score) >= semantic_consistency_threshold
         )
         formal_metric_ready = bool(visual_ready and motion_ready and semantic_ready)
-        records.append({
+        records.append(with_flow_evidence_protocol_defaults({
             "record_version": "generative_video_formal_quality_motion_semantic_v1",
             "generation_model_id": generation_record.get("generation_model_id"),
             "method_variant": generation_record.get("method_variant"),
@@ -252,7 +253,11 @@ def build_formal_metric_records(
             "formal_semantic_consistency_ready": semantic_ready,
             "formal_metric_blocking_reason": _formal_metric_blocking_reason(visual_ready, motion_ready, semantic_ready),
             "formal_metric_result_used_for_claim": formal_metric_ready,
-        })
+        },
+            trajectory_source_level="formal_video_metric_with_generation_trace_reference",
+            flow_state_admissibility_status="formal_metric_ready" if formal_metric_ready else "formal_metric_blocked",
+            claim_support_status="formal_metric_evidence_only" if formal_metric_ready else "formal_metric_blocked",
+        ))
     return records
 
 

@@ -132,10 +132,15 @@ def check_generative_video_colab_results(run_root: str | Path) -> dict:
     if successful_generation_count < 4:
         missing_mechanism_requirements.append("insufficient_prompt_seed_coverage_for_b5")
 
-    formal_mechanism_pass = (
-        decision.get("mechanism_decision") == "PASS"
-        or postprocess_decision.get("mechanism_decision") == "PASS"
-    )
+    runtime_mechanism_decision = decision.get("mechanism_decision")
+    postprocess_mechanism_decision = postprocess_decision.get("mechanism_decision")
+    if postprocess_mechanism_decision == "PASS":
+        effective_mechanism_decision = "PASS"
+        mechanism_decision_source = "postprocess_mechanism_artifact"
+    else:
+        effective_mechanism_decision = runtime_mechanism_decision
+        mechanism_decision_source = "runtime_mechanism_artifact"
+    formal_mechanism_pass = effective_mechanism_decision == "PASS"
     mechanism_evidence_status = "PASS" if formal_mechanism_pass and not missing_mechanism_requirements else "FAIL"
     return {
         "run_root": str(run_root),
@@ -160,10 +165,13 @@ def check_generative_video_colab_results(run_root: str | Path) -> dict:
         "decision_summary": {
             "stage_id": decision.get("stage_id"),
             "implementation_decision": decision.get("implementation_decision"),
-            "mechanism_decision": decision.get("mechanism_decision"),
+            "mechanism_decision": effective_mechanism_decision,
+            "effective_mechanism_decision": effective_mechanism_decision,
+            "mechanism_decision_source": mechanism_decision_source,
+            "runtime_mechanism_decision": runtime_mechanism_decision,
             "postprocess_stage_id": postprocess_decision.get("stage_id"),
             "mechanism_postprocess_decision": postprocess_decision.get("mechanism_postprocess_decision"),
-            "postprocess_mechanism_decision": postprocess_decision.get("mechanism_decision"),
+            "postprocess_mechanism_decision": postprocess_mechanism_decision,
         },
         "next_recommended_profile": "recommended_on_l4_or_a100" if implementation_evidence_status == "PASS" else "rerun_smoke_after_fixing_outputs",
     }

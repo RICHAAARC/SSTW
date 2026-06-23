@@ -1,4 +1,4 @@
-﻿"""B5 formal motion threshold calibration runner.
+"""B5 formal motion threshold calibration runner.
 
 该模块只负责 motion observability / prompt validity 层面的阈值校准。
 污染过滤不得读取或依赖最终水印检测分数, 例如 S_final、S_final_conservative 或 watermark_detection_score。
@@ -16,6 +16,7 @@ from statistics import mean, median
 from typing import Any
 
 from main.analysis.video_file_metrics import MOTION_DELTA_MIN
+from main.protocol.flow_evidence_fields import with_flow_evidence_protocol_defaults
 from main.protocol.record_writer import write_json, write_jsonl
 from main.protocol.table_builder import write_csv
 
@@ -108,12 +109,15 @@ def build_motion_calibration_records(run_root: str | Path) -> list[dict]:
         generation_record = generation_by_key.get(_key(formal_record), {})
         motion_score, motion_score_name = _motion_calibration_score(formal_record)
         usable = motion_score is not None and formal_record.get("video_decode_status") == "ready"
-        records.append({
+        records.append(with_flow_evidence_protocol_defaults({
             "record_version": "motion_threshold_calibration_v2",
             "generation_model_id": formal_record.get("generation_model_id"),
             "prompt_id": formal_record.get("prompt_id"),
             "seed_id": formal_record.get("seed_id"),
             "trajectory_trace_id": formal_record.get("trajectory_trace_id"),
+            "negative_family": _infer_motion_calibration_role(generation_record, formal_record)
+            if _infer_motion_calibration_role(generation_record, formal_record) in {"negative_static", "ambiguous_low_motion"}
+            else None,
             "motion_calibration_source_split": _infer_source_split(generation_record, formal_record),
             "motion_calibration_role": _infer_motion_calibration_role(generation_record, formal_record),
             "motion_delta_score": formal_record.get("motion_delta_score"),
@@ -135,7 +139,11 @@ def build_motion_calibration_records(run_root: str | Path) -> list[dict]:
             "contamination_decision_source": CONTAMINATION_DECISION_SOURCE,
             "final_detection_score_filtering_blocked": True,
             "no_final_detection_score_used_for_filtering": True,
-        })
+        },
+            trajectory_source_level="formal_motion_metric_calibration",
+            flow_state_admissibility_status="motion_calibration_usable" if usable else "motion_calibration_not_usable",
+            claim_support_status="motion_threshold_calibration_record_only",
+        ))
     return records
 
 
@@ -531,7 +539,15 @@ def audit_motion_threshold_calibration(
 
 def _write_prompt_contamination_outputs(run_root: Path, audit: dict) -> None:
     """写出 prompt-level contamination audit records / table / artifact。"""
-    prompt_audit = audit.get("prompt_contamination_audit", [])
+    prompt_audit = [
+        with_flow_evidence_protocol_defaults(
+            record,
+            trajectory_source_level="prompt_level_motion_calibration_audit",
+            flow_state_admissibility_status="not_evaluated",
+            claim_support_status="prompt_contamination_audit_record_only",
+        )
+        for record in audit.get("prompt_contamination_audit", [])
+    ]
     write_jsonl(run_root / "records" / "prompt_contamination_audit_records.jsonl", prompt_audit)
     write_csv(run_root / "tables" / "prompt_contamination_audit_table.csv", prompt_audit)
     write_json(run_root / "artifacts" / "prompt_contamination_audit.json", {

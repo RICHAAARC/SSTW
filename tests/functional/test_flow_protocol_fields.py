@@ -7,7 +7,11 @@ from pathlib import Path
 
 import pytest
 
-from main.protocol.flow_evidence_fields import conservative_flow_score, flow_evidence_protocol_defaults
+from main.protocol.flow_evidence_fields import (
+    conservative_flow_score,
+    flow_evidence_protocol_defaults,
+    with_flow_evidence_protocol_defaults,
+)
 
 
 REQUIRED_FLOW_FIELDS = {
@@ -38,6 +42,26 @@ def test_conservative_flow_score_uses_lowest_available_evidence() -> None:
     """保守分数必须取 endpoint、path 和 velocity 中的最低可用证据。"""
     record = {"S_final": 0.8, "S_path_inv": 0.4, "S_velocity": 0.6}
     assert conservative_flow_score(record) == 0.4
+
+
+@pytest.mark.quick
+def test_flow_evidence_defaults_do_not_overwrite_real_fields() -> None:
+    """协议字段补齐只能填补缺口, 不能覆盖已存在的真实 evidence 字段。"""
+    record = with_flow_evidence_protocol_defaults(
+        {
+            "S_final": 0.7,
+            "S_path_inv": 0.5,
+            "S_velocity": 0.6,
+            "claim_support_status": "runtime_detection_evidence_only",
+        },
+        trajectory_source_level="callback_latent_trace_proxy",
+        claim_support_status="not_supported",
+        compute_conservative_score=True,
+    )
+    assert REQUIRED_FLOW_FIELDS <= set(record)
+    assert record["claim_support_status"] == "runtime_detection_evidence_only"
+    assert record["trajectory_source_level"] == "callback_latent_trace_proxy"
+    assert record["S_final_conservative"] == 0.5
 
 
 @pytest.mark.constraint

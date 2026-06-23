@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from experiments.generative_video_model_probe.formal_motion_claim_filter import select_motion_claim_generation_records
+from main.protocol.flow_evidence_fields import with_flow_evidence_protocol_defaults
 from main.protocol.record_writer import write_json, write_jsonl
 from main.protocol.table_builder import write_csv
 
@@ -154,7 +155,7 @@ def build_runtime_attack_records(run_root: str | Path, attack_names: tuple[str, 
     for generation_record in selection.eligible_generation_records:
         source_video_path = _resolve_video_path(run_root, generation_record)
         for attack_name in attack_names:
-            record = {
+            record = with_flow_evidence_protocol_defaults({
                 "record_version": "generative_video_runtime_attack_v1",
                 "generation_model_id": generation_record.get("generation_model_id"),
                 "prompt_id": generation_record.get("prompt_id"),
@@ -171,7 +172,12 @@ def build_runtime_attack_records(run_root: str | Path, attack_names: tuple[str, 
                 "source_frame_count": 0,
                 "attacked_frame_count": 0,
                 "claim_support_status": "runtime_attack_evidence_only",
-            }
+            },
+                negative_family=None,
+                trajectory_source_level="runtime_video_file_attack",
+                flow_state_admissibility_status="not_evaluated",
+                claim_support_status="runtime_attack_evidence_only",
+            )
             try:
                 if not source_video_path.exists():
                     raise FileNotFoundError("source_video_not_found")

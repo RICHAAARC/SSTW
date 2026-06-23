@@ -235,6 +235,40 @@ def test_generative_video_drive_packager_creates_archive_and_manifest(tmp_path: 
 
 
 @pytest.mark.quick
+def test_generative_video_drive_packager_reports_effective_mechanism_decision(tmp_path: Path) -> None:
+    """package manifest 必须区分 runtime 原始机制判定与后处理后的有效机制判定。"""
+    run_root = tmp_path / "runs" / "generative_video_model_probe_colab"
+    package_dir = tmp_path / "packages"
+    write_jsonl(run_root / "records" / "generation_records.jsonl", [{"generation_model_id": "model", "prompt_id": "prompt"}])
+    write_json(run_root / "artifacts" / "generative_video_colab_runtime_decision.json", {
+        "stage_id": "generative_video_model_probe_colab_runtime",
+        "implementation_decision": "PASS",
+        "mechanism_decision": "FAIL",
+    })
+    write_json(run_root / "artifacts" / "generative_video_mechanism_postprocess_decision.json", {
+        "stage_id": "generative_video_mechanism_postprocess",
+        "mechanism_postprocess_decision": "PASS",
+        "mechanism_decision": "PASS",
+        "details": {"formal_claim_status": "supported_by_governed_generation_records"},
+    })
+    write_json(run_root / "artifacts" / "small_scale_claim_pilot_gate_decision.json", {
+        "pilot_gate_decision": "PASS",
+        "claim_support_status": "supported_by_small_scale_claim_pilot_records",
+        "pilot_missing_requirement_count": 0,
+    })
+
+    payload = package_generative_video_colab_run(run_root, package_dir, include_videos=False)
+
+    manifest = json.loads(Path(payload["package_manifest_path"]).read_text(encoding="utf-8"))
+    summary = manifest["decision_summary"]
+    assert summary["runtime_mechanism_decision"] == "FAIL"
+    assert summary["postprocess_mechanism_decision"] == "PASS"
+    assert summary["mechanism_decision"] == "PASS"
+    assert summary["effective_mechanism_decision"] == "PASS"
+    assert summary["mechanism_decision_source"] == "small_scale_claim_pilot_gate"
+
+
+@pytest.mark.quick
 def test_generative_video_colab_runtime_uses_optional_hf_token_without_recording_secret() -> None:
     """模型加载应支持 HF_TOKEN, 但只能记录 provided / not_provided 状态。"""
     runtime_text = Path("experiments/generative_video_model_probe/colab_runtime.py").read_text(encoding="utf-8")

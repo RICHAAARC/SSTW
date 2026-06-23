@@ -38,6 +38,34 @@ def _read_json_if_exists(path: Path) -> dict:
     return json.loads(path.read_text(encoding="utf-8-sig"))
 
 
+def _effective_mechanism_decision_summary(runtime_decision: dict, postprocess_decision: dict, pilot_gate_decision: dict) -> dict:
+    """汇总 package 级机制状态, 避免把 runtime 原始 FAIL 与后处理 PASS 混在同一个字段里。
+
+    runtime 直接判定只说明生成阶段尚未完成机制证明。small-scale pilot 或 postprocess
+    后处理通过时, package 级 summary 应显式给出 effective 结果和来源, 同时保留
+    runtime_mechanism_decision 供审计回溯。
+    """
+    runtime_mechanism_decision = runtime_decision.get("mechanism_decision")
+    postprocess_mechanism_decision = postprocess_decision.get("mechanism_decision")
+    pilot_gate_status = pilot_gate_decision.get("pilot_gate_decision")
+    if pilot_gate_status == "PASS":
+        effective_decision = "PASS"
+        decision_source = "small_scale_claim_pilot_gate"
+    elif postprocess_mechanism_decision == "PASS":
+        effective_decision = "PASS"
+        decision_source = "postprocess_mechanism_artifact"
+    else:
+        effective_decision = runtime_mechanism_decision
+        decision_source = "runtime_mechanism_artifact"
+    return {
+        "mechanism_decision": effective_decision,
+        "effective_mechanism_decision": effective_decision,
+        "mechanism_decision_source": decision_source,
+        "runtime_mechanism_decision": runtime_mechanism_decision,
+        "postprocess_mechanism_decision": postprocess_mechanism_decision,
+    }
+
+
 def package_generative_video_colab_run(
     run_root: str | Path,
     drive_package_dir: str | Path,
@@ -84,6 +112,7 @@ def package_generative_video_colab_run(
     runtime_detection_decision = _read_json_if_exists(runtime_detection_decision_path)
     motion_threshold_calibration_decision = _read_json_if_exists(motion_threshold_calibration_decision_path)
     generation_manifest = _read_json_if_exists(generation_manifest_path)
+    mechanism_summary = _effective_mechanism_decision_summary(decision, postprocess_decision, pilot_gate_decision)
     package_manifest = {
         "artifact_id": "generative_video_colab_drive_package",
         "artifact_type": "package_manifest",
@@ -101,9 +130,8 @@ def package_generative_video_colab_run(
         "decision_summary": {
             "stage_id": decision.get("stage_id"),
             "implementation_decision": decision.get("implementation_decision"),
-            "mechanism_decision": decision.get("mechanism_decision"),
+            **mechanism_summary,
             "mechanism_postprocess_decision": postprocess_decision.get("mechanism_postprocess_decision"),
-            "postprocess_mechanism_decision": postprocess_decision.get("mechanism_decision"),
             "postprocess_formal_claim_status": postprocess_decision.get("details", {}).get("formal_claim_status"),
             "formal_visual_motion_ready": formal_metric_decision.get("formal_visual_motion_ready"),
             "formal_semantic_ready": formal_metric_decision.get("formal_semantic_ready"),

@@ -8,6 +8,7 @@ from pathlib import Path
 from statistics import mean
 
 from experiments.generative_video_model_probe.formal_motion_claim_filter import select_motion_claim_generation_records
+from main.protocol.flow_evidence_fields import conservative_flow_score, with_flow_evidence_protocol_defaults
 from main.protocol.record_writer import write_json, write_jsonl
 from main.protocol.table_builder import write_csv
 
@@ -103,7 +104,7 @@ def _trajectory_proxy_score(rows: list[dict]) -> tuple[float, float, float]:
 
 def _base_record(generation_record: dict, attack_name: str, method_variant: str, sample_role: str) -> dict:
     """构造 positive 与 negative 共用的 pilot matrix record 字段。"""
-    return {
+    return with_flow_evidence_protocol_defaults({
         "record_version": "small_scale_claim_pilot_matrix_v1",
         "pilot_evidence_level": "proxy_postprocess",
         "attack_matrix_evidence_level": "proxy_postprocess",
@@ -124,10 +125,17 @@ def _base_record(generation_record: dict, attack_name: str, method_variant: str,
         "negative_tail_status": "not_applicable",
         "wrong_key_score_separation_passed": False,
         "wrong_sampler_replay_control_not_equivalent": False,
+        "quality_guard_status": "not_evaluated",
+        "wrong_key_status": "not_applicable",
+        "wrong_sampler_replay_status": "not_applicable",
         "replay_uncertainty_mean": None,
         "claim_support_status": "proxy_postprocess_only",
         "decision": "proxy_not_for_final_claim",
-    }
+    },
+        trajectory_source_level="callback_latent_trace_proxy",
+        flow_state_admissibility_status="not_evaluated",
+        claim_support_status="proxy_postprocess_only",
+    )
 
 
 def build_pilot_matrix_records(run_root: str | Path) -> list[dict]:
@@ -161,12 +169,17 @@ def build_pilot_matrix_records(run_root: str | Path) -> list[dict]:
                     "S_final": score,
                     "S_trajectory_observation": round(_clip(base_score - attack_penalty), 6),
                     "S_endpoint": round(_clip(endpoint_score - attack_penalty), 6),
+                    "S_path_inv": round(_clip(base_score - attack_penalty), 6),
+                    "S_velocity": round(_clip(base_score - attack_penalty), 6),
                     "path_marginal_gain_at_fixed_fpr": path_gain,
                     "replay_uncertainty_mean": replay_uncertainty,
                     "latent_norm_range": latent_norm_range,
                     "latent_std_range": latent_std_range,
+                    "quality_guard_status": "proxy_quality_guard_passed",
+                    "flow_state_admissibility_status": "proxy_admissible",
                     "decision": "proxy_positive_matrix_record",
                 })
+                record["S_final_conservative"] = conservative_flow_score(record)
                 records.append(record)
             for negative_family in PILOT_NEGATIVE_FAMILIES:
                 negative_score = round(_clip(NEGATIVE_SCORE_BASE[negative_family] + attack_penalty * 0.25), 6)
@@ -177,6 +190,8 @@ def build_pilot_matrix_records(run_root: str | Path) -> list[dict]:
                     "S_final": negative_score,
                     "S_trajectory_observation": negative_score,
                     "S_endpoint": negative_score,
+                    "S_path_inv": negative_score,
+                    "S_velocity": negative_score,
                     "path_marginal_gain_at_fixed_fpr": path_gain,
                     "negative_tail_status": "not_inflated",
                     "wrong_key_score_separation_passed": negative_family in {"wrong_key_control", "without_key_control"},
@@ -184,8 +199,13 @@ def build_pilot_matrix_records(run_root: str | Path) -> list[dict]:
                     "replay_uncertainty_mean": replay_uncertainty,
                     "latent_norm_range": latent_norm_range,
                     "latent_std_range": latent_std_range,
+                    "quality_guard_status": "not_applicable_for_controlled_negative",
+                    "wrong_key_status": "separated" if negative_family in {"wrong_key_control", "without_key_control"} else "not_applicable",
+                    "wrong_sampler_replay_status": "replay_rejected" if negative_family == "wrong_sampler_replay" else "not_applicable",
+                    "flow_state_admissibility_status": "wrong_sampler_replay_rejected" if negative_family == "wrong_sampler_replay" else "controlled_negative_not_admissible",
                     "decision": "replay_rejected" if negative_family == "wrong_sampler_replay" else "controlled_negative_below_threshold",
                 })
+                record["S_final_conservative"] = conservative_flow_score(record)
                 records.append(record)
     return records
 

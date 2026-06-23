@@ -11,6 +11,10 @@ from pathlib import Path
 from typing import Any
 
 from experiments.generative_video_model_probe.external_baseline_runner import run_external_baseline_status
+from main.protocol.flow_evidence_fields import (
+    with_flow_evidence_protocol_defaults,
+    with_flow_evidence_protocol_defaults_many,
+)
 from main.protocol.record_writer import write_json, write_jsonl
 from main.protocol.table_builder import write_csv
 
@@ -269,7 +273,31 @@ def run_colab_probe(output_root: str | Path, prompt_suite_path: str | Path, prof
             "metric_failure_reason": "optional_metric_dependencies_not_configured",
         })
 
-    external_records = run_external_baseline_status("configs/external_baselines/external_baselines.json")
+    generation_records = [
+        with_flow_evidence_protocol_defaults(
+            record,
+            trajectory_source_level="callback_latent_trace"
+            if record.get("trajectory_capture_status") == "captured"
+            else "not_captured",
+            claim_support_status="generation_evidence_only",
+        )
+        for record in generation_records
+    ]
+    trajectory_records = with_flow_evidence_protocol_defaults_many(
+        trajectory_records,
+        trajectory_source_level="callback_latent_step",
+        claim_support_status="trajectory_trace_evidence_only",
+    )
+    quality_records = with_flow_evidence_protocol_defaults_many(
+        quality_records,
+        trajectory_source_level="not_applicable",
+        claim_support_status="optional_quality_metric_status_only",
+    )
+    external_records = with_flow_evidence_protocol_defaults_many(
+        run_external_baseline_status("configs/external_baselines/external_baselines.json"),
+        trajectory_source_level="not_applicable",
+        claim_support_status="external_baseline_limitation_record",
+    )
     write_jsonl(output_root / "records" / "generation_records.jsonl", generation_records)
     write_jsonl(output_root / "records" / "trajectory_trace.jsonl", trajectory_records)
     write_jsonl(output_root / "records" / "quality_motion_semantic_records.jsonl", quality_records)

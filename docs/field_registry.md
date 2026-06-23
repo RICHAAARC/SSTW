@@ -366,6 +366,9 @@ Notebook 与 repository module 的跨边界数据
 | mechanism_postprocess_status | governance | none | true | false | false | Result checker status for B5 mechanism postprocess artifacts. |
 | postprocess_stage_id | governance | none | true | false | false | Stage id reported by B5 mechanism postprocess decision. |
 | postprocess_mechanism_decision | governance | none | true | false | false | Formal mechanism decision reported by postprocess artifacts. |
+| runtime_mechanism_decision | governance | none | true | false | false | Raw mechanism decision reported by the runtime generation stage before postprocess or pilot gate aggregation. |
+| effective_mechanism_decision | governance | none | true | false | false | Package-level mechanism decision after applying governed postprocess and small-scale pilot evidence precedence. |
+| mechanism_decision_source | governance | none | true | false | false | Artifact source used to derive the package-level effective mechanism decision. |
 | video_decode_status | governance | none | true | false | false | Decode status for generated mp4 files used by B5 formal metrics. |
 | video_metric_failure_reason | governance | none | true | false | false | Failure reason for generated video file metric extraction. |
 | decoded_frame_count | metric | none | true | false | false | Number of decoded frames sampled from a generated video. |
@@ -577,6 +580,9 @@ Notebook 与 repository module 的跨边界数据
 | method_variant_count | metric | none | true | false | false | Number of distinct method variants observed by a pilot gate. |
 | wrong_key_score_separation_passed | metric | none | true | false | false | Whether wrong-key controls are separated from the matched-key trajectory score. |
 | wrong_sampler_replay_control_not_equivalent | metric | none | true | false | false | Whether wrong-sampler replay control cannot forge the matched sampler trajectory. |
+| quality_guard_status | governance | none | true | false | false | Status indicating whether the quality guard was evaluated or passed for a pilot matrix record. |
+| wrong_key_status | governance | none | true | false | false | Status describing wrong-key separation evidence for a pilot or detection record. |
+| wrong_sampler_replay_status | governance | none | true | false | false | Status describing whether wrong-sampler replay was rejected or not applicable. |
 | motion_threshold_id | protocol | none | true | false | false | Identifier for the motion threshold used by formal motion gate. |
 | motion_threshold_source_split | protocol | none | true | false | false | Source split or heuristic source used to define the motion threshold. |
 | motion_threshold_calibration_required | governance | none | true | false | false | Whether motion threshold calibration remains required before final claim use. |

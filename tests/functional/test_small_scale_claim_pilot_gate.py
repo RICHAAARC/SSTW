@@ -221,6 +221,27 @@ def test_pilot_matrix_postprocess_fills_proxy_matrix_but_keeps_calibration_block
     assert summary["claim_support_status"] == "blocked_until_motion_threshold_calibration"
     assert summary["path_marginal_gain_at_fixed_fpr"] is not None
     assert summary["replay_uncertainty_mean"] is not None
+    records = [
+        json.loads(line)
+        for line in (run_root / "records" / "small_scale_claim_pilot_matrix_records.jsonl").read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+    required_protocol_fields = {
+        "negative_family",
+        "sampler_signature_placeholder",
+        "trajectory_source_level",
+        "S_path_inv",
+        "S_velocity",
+        "S_final_conservative",
+        "path_marginal_gain_at_fixed_fpr",
+        "replay_uncertainty_mean",
+        "flow_state_admissibility_status",
+        "claim_support_status",
+    }
+    assert records
+    assert all(required_protocol_fields <= set(record) for record in records)
+    assert all(record["S_final_conservative"] is not None for record in records)
+    assert any(record["wrong_sampler_replay_status"] == "replay_rejected" for record in records)
 
 
 @pytest.mark.quick

@@ -12,6 +12,7 @@ from experiments.generative_video_model_probe.formal_motion_claim_filter import 
     filter_records_to_motion_claim_eligible,
     select_motion_claim_generation_records,
 )
+from main.protocol.flow_evidence_fields import with_flow_evidence_protocol_defaults
 from main.protocol.record_writer import write_json, write_jsonl
 from main.protocol.table_builder import write_csv
 
@@ -92,7 +93,10 @@ def _negative_families(*record_groups: list[dict]) -> set[str]:
     families: set[str] = set()
     for records in record_groups:
         families.update(_unique_nonempty(records, "negative_family"))
-    return families
+    return {
+        family for family in families
+        if family not in {"not_applicable", "not_evaluated", "none"}
+    }
 
 
 def _has_wrong_sampler_replay(records: list[dict]) -> bool:
@@ -283,7 +287,14 @@ def write_small_scale_claim_pilot_audit(run_root: str | Path) -> dict:
     """写出 small-scale claim pilot gate 的 records、table、decision 和 report。"""
     run_root = Path(run_root)
     audit = build_small_scale_claim_pilot_audit(run_root)
-    record = {"record_version": "small_scale_claim_pilot_gate_v1", **audit}
+    record = with_flow_evidence_protocol_defaults(
+        {"record_version": "small_scale_claim_pilot_gate_v1", **audit},
+        trajectory_source_level="pilot_gate_aggregated_records",
+        flow_state_admissibility_status="pilot_gate_ready"
+        if audit["pilot_gate_decision"] == "PASS"
+        else "pilot_gate_blocked",
+        claim_support_status=audit["claim_support_status"],
+    )
     write_jsonl(run_root / "records" / "small_scale_claim_pilot_gate_records.jsonl", [record])
     write_csv(run_root / "tables" / "small_scale_claim_pilot_gate_table.csv", [record])
     write_json(run_root / "artifacts" / "small_scale_claim_pilot_gate_decision.json", audit)

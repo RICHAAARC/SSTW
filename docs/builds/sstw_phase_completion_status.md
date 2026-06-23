@@ -1166,3 +1166,18 @@ claim3_full_support_allowed: false
 
 后续工程必须补齐 authenticated trajectory sketch、replay uncertainty records、wrong sampler / wrong prompt / wrong time grid replay controls、replay negative FPR control 和 `artifacts/replay_and_sketch_gate_decision.json`。在这些产物闭合前, 只能把 Claim-3 表述为降级或探索性 replay analysis。
 
+## 2026-06-24 adaptive attack validation proxy runner
+
+当前已补齐 validation-scale 的 adaptive attack 硬阻断 runner。该 runner 从 runtime detection records 生成 Flow-specific adaptive attack proxy records, 覆盖 scheduler/time grid mismatch、wrong sampler replay、endpoint-path decoupling、path response cancellation 和 trajectory sketch replacement attempt。
+
+阶段状态更新为:
+
+```text
+adaptive_attack_runner: implemented_for_validation_proxy
+adaptive_attack_decision_artifact: implemented
+adaptive_robustness_claim_allowed: false
+full_paper_adaptive_attack_gate: still_requires_real_negative_tail_audit
+```
+
+该更新只能让 validation-scale gate 获得 governed adaptive attack records, 不能支撑 full-paper 中的 `robust_to_flow_specific_adaptive_attacks` 强主张。
+

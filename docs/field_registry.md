@@ -393,6 +393,33 @@ Notebook 与 repository module 的跨边界数据
 | validation_ablation_proxy_score | metric | none | true | false | false | Derived validation-scale ablation proxy score. |
 | adaptive_attack_record_count | metric | none | true | false | false | Number of Flow-specific adaptive attack records available to a validation or full-paper gate. |
 | adaptive_attack_status | governance | none | true | false | false | Adaptive attack readiness or claim boundary status. |
+| adaptive_attack_decision | governance | none | true | false | false | Adaptive attack validation runner 决策。 |
+| adaptive_attack_name | protocol | none | true | false | false | Adaptive attack 名称。 |
+| adaptive_attack_family | protocol | none | true | false | false | Adaptive attack 家族。 |
+| adaptive_attack_strength | metric | none | true | false | false | Adaptive attack 强度。 |
+| adaptive_attack_budget | protocol | none | true | false | false | Adaptive attack 预算。 |
+| attack_knowledge_level | protocol | none | true | false | false | 攻击者知识层级。 |
+| targeted_evidence_layer | protocol | none | true | false | false | Adaptive attack 目标证据层。 |
+| endpoint_preservation_status | governance | none | true | false | false | Endpoint 保持状态。 |
+| path_response_suppression_score | metric | none | true | false | false | Path response suppression proxy 分数。 |
+| velocity_projection_suppression_score | metric | none | true | false | false | Velocity projection suppression proxy 分数。 |
+| adaptive_residual_proxy_score | metric | none | true | false | false | Adaptive attack 后残余 proxy 分数。 |
+| replay_signature_mismatch_status | governance | none | true | false | false | Replay signature mismatch 状态。 |
+| trajectory_sketch_tamper_status | governance | none | true | false | false | Trajectory sketch tamper 状态。 |
+| quality_guard_status | governance | none | true | false | false | Quality guard 状态。 |
+| semantic_projection_status | governance | none | true | false | false | Semantic projection 状态。 |
+| adaptive_negative_fpr | metric | none | true | false | false | Adaptive negative FPR。 |
+| adaptive_negative_fpr_status | governance | none | true | false | false | Adaptive negative FPR 可用状态。 |
+| adaptive_attack_success_status | governance | none | true | false | false | Adaptive attack success 或 proxy 状态。 |
+| adaptive_attack_claim_support_status | claim | none | true | false | false | Adaptive attack claim 支撑状态。 |
+| adaptive_attack_name_count | metric | none | true | false | false | Adaptive attack 名称覆盖数量。 |
+| adaptive_attack_family_count | metric | none | true | false | false | Adaptive attack family 覆盖数量。 |
+| adaptive_attack_knowledge_level_count | metric | none | true | false | false | Adaptive attack 攻击者知识层级覆盖数量。 |
+| adaptive_attack_targeted_layer_count | metric | none | true | false | false | Adaptive attack 目标证据层覆盖数量。 |
+| adaptive_attack_missing_names | governance | none | true | false | false | 缺失的 adaptive attack 名称列表。 |
+| adaptive_attack_score_mean | metric | none | true | false | false | Adaptive residual proxy 平均分数。 |
+| adaptive_robustness_claim_allowed | governance | none | true | false | false | 是否允许 adaptive robustness 强 claim。 |
+| adaptive_attack_evidence_level | governance | none | true | false | false | Adaptive attack evidence 等级。 |
 | replay_or_sketch_status | governance | none | true | false | false | Replay/sketch readiness status or explicit Claim-3 downgrade status. |
 | claim3_downgrade_decision | governance | none | true | false | false | Claim-3 降级门禁决策。 |
 | claim3_downgraded | governance | none | true | false | false | 是否已经显式将 Claim-3 降级。 |

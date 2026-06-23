@@ -182,3 +182,29 @@ adaptive_robustness_claim_allowed = false
 ```
 
 下一步应优先在 validation-scale 中构建最小可运行 adaptive attack runner, 覆盖 `scheduler_change`、`time_grid_jitter`、`wrong_sampler_replay`、`endpoint_path_decoupling` 与 `path_response_cancellation` 的受控记录。若该阶段持续缺失, full_paper 只能报告普通视频攻击鲁棒性, 不能报告 Flow-specific adaptive attack robustness。
+
+### 3.2 2026-06-24 validation proxy runner
+
+当前已新增 validation-scale adaptive attack proxy runner:
+
+```text
+experiments/generative_video_model_probe/adaptive_attack_runner.py
+records/adaptive_attack_records.jsonl
+tables/adaptive_attack_table.csv
+artifacts/adaptive_attack_decision.json
+reports/adaptive_attack_report.md
+```
+
+该 runner 覆盖 scheduler change、time grid jitter、wrong sampler replay、endpoint-path decoupling、path response cancellation 和 trajectory sketch replacement attempt。其作用是闭合 validation-scale 的 governed records 入口, 不是 full-paper Flow-specific adaptive robustness 证明。
+
+当前阶段边界更新为:
+
+```text
+adaptive_attack_runner_ready = true_for_validation_proxy
+adaptive_attack_manifest_ready = validation_proxy_manifest_embedded
+adaptive_negative_tail_audit_ready = false
+adaptive_robustness_claim_allowed = false
+```
+
+后续 full-paper 前仍需用真实 adaptive negative split、真实 quality guard 和 fixed-FPR negative tail audit 替换 validation proxy。
+

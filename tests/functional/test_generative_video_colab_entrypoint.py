@@ -158,6 +158,9 @@ def test_generative_video_colab_notebook_calls_repository_modules() -> None:
     assert "build_runtime_attack_command" in source
     assert "build_runtime_detection_command" in source
     assert "build_small_scale_claim_pilot_gate_command" in source
+    assert "build_validation_internal_ablation_command" in source
+    assert "build_statistical_confidence_interval_command" in source
+    assert "build_validation_artifact_rebuild_dry_run_command" in source
     assert "build_validation_scale_gate_command" in source
     assert "scripts/prepare_generative_video_prompt_suite.py" in Path("paper_workflow/notebook_utils/generative_video_model_probe_workflow.py").read_text(encoding="utf-8")
     assert "experiments.generative_video_model_probe.colab_runtime" in Path("paper_workflow/notebook_utils/generative_video_model_probe_workflow.py").read_text(encoding="utf-8")
@@ -168,6 +171,9 @@ def test_generative_video_colab_notebook_calls_repository_modules() -> None:
     assert "experiments.generative_video_model_probe.attack_runner" in Path("paper_workflow/notebook_utils/generative_video_model_probe_workflow.py").read_text(encoding="utf-8")
     assert "experiments.generative_video_model_probe.detection_runner" in Path("paper_workflow/notebook_utils/generative_video_model_probe_workflow.py").read_text(encoding="utf-8")
     assert "experiments.generative_video_model_probe.pilot_claim_gate" in Path("paper_workflow/notebook_utils/generative_video_model_probe_workflow.py").read_text(encoding="utf-8")
+    assert "experiments.generative_video_model_probe.validation_internal_ablation" in Path("paper_workflow/notebook_utils/generative_video_model_probe_workflow.py").read_text(encoding="utf-8")
+    assert "experiments.generative_video_model_probe.statistical_confidence_interval" in Path("paper_workflow/notebook_utils/generative_video_model_probe_workflow.py").read_text(encoding="utf-8")
+    assert "experiments.generative_video_model_probe.validation_artifact_rebuild" in Path("paper_workflow/notebook_utils/generative_video_model_probe_workflow.py").read_text(encoding="utf-8")
     assert "experiments.generative_video_model_probe.validation_scale_gate" in Path("paper_workflow/notebook_utils/generative_video_model_probe_workflow.py").read_text(encoding="utf-8")
     assert "scripts/package_results/generative_video_drive_packager.py" in Path("paper_workflow/notebook_utils/generative_video_model_probe_workflow.py").read_text(encoding="utf-8")
     assert "pytest -q" in source
@@ -226,6 +232,18 @@ def test_generative_video_drive_packager_creates_archive_and_manifest(tmp_path: 
         "validation_prompt_count": 0,
         "validation_seed_per_prompt_min": 0,
     })
+    write_json(run_root / "artifacts" / "validation_internal_ablation_decision.json", {
+        "validation_internal_ablation_decision": "PASS",
+        "internal_ablation_record_count": 12,
+    })
+    write_json(run_root / "artifacts" / "statistical_confidence_interval_decision.json", {
+        "statistical_confidence_interval_decision": "PASS",
+        "ci_total_count": 12,
+    })
+    write_json(run_root / "artifacts" / "validation_artifact_rebuild_dry_run_decision.json", {
+        "validation_artifact_rebuild_dry_run_decision": "PASS",
+        "artifact_rebuild_missing_count": 0,
+    })
 
     payload = package_generative_video_colab_run(run_root, package_dir, include_videos=False)
     archive_path = Path(payload["archive_path"])
@@ -248,6 +266,12 @@ def test_generative_video_drive_packager_creates_archive_and_manifest(tmp_path: 
     assert manifest["decision_summary"]["validation_scale_gate_decision"] == "FAIL"
     assert manifest["decision_summary"]["validation_scale_claim_support_status"] == "validation_scale_blocked"
     assert manifest["decision_summary"]["validation_missing_requirement_count"] == 5
+    assert manifest["decision_summary"]["validation_internal_ablation_decision"] == "PASS"
+    assert manifest["decision_summary"]["validation_internal_ablation_record_count"] == 12
+    assert manifest["decision_summary"]["statistical_confidence_interval_decision"] == "PASS"
+    assert manifest["decision_summary"]["statistical_confidence_interval_total_count"] == 12
+    assert manifest["decision_summary"]["validation_artifact_rebuild_dry_run_decision"] == "PASS"
+    assert manifest["decision_summary"]["validation_artifact_rebuild_missing_count"] == 0
     assert manifest["decision_summary"]["motion_threshold_calibration_decision"] == "INSUFFICIENT_SAMPLE"
     assert manifest["decision_summary"]["motion_threshold_id"] == "motion_delta_heuristic_v1"
     assert manifest["decision_summary"]["motion_threshold_source_split"] == "heuristic_precalibration"

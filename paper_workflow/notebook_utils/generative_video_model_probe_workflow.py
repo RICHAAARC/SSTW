@@ -137,6 +137,39 @@ def build_runtime_detection_command(layout: dict[str, str]) -> list[str]:
     ]
 
 
+def build_validation_internal_ablation_command(layout: dict[str, str]) -> list[str]:
+    """构造 validation-scale 内部消融矩阵后处理命令。"""
+    return [
+        sys.executable,
+        "-m",
+        "experiments.generative_video_model_probe.validation_internal_ablation",
+        "--run-root",
+        layout["drive_run_root"],
+    ]
+
+
+def build_statistical_confidence_interval_command(layout: dict[str, str]) -> list[str]:
+    """构造 validation-scale 统计置信区间报告命令。"""
+    return [
+        sys.executable,
+        "-m",
+        "experiments.generative_video_model_probe.statistical_confidence_interval",
+        "--run-root",
+        layout["drive_run_root"],
+    ]
+
+
+def build_validation_artifact_rebuild_dry_run_command(layout: dict[str, str]) -> list[str]:
+    """构造 validation-scale artifact rebuild dry-run 命令。"""
+    return [
+        sys.executable,
+        "-m",
+        "experiments.generative_video_model_probe.validation_artifact_rebuild",
+        "--run-root",
+        layout["drive_run_root"],
+    ]
+
+
 def build_small_scale_claim_pilot_gate_command(layout: dict[str, str]) -> list[str]:
     """构造 small-scale claim pilot gate 命令, 从 governed records 汇总 pilot 状态。"""
     return [

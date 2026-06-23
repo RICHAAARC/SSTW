@@ -394,3 +394,53 @@ profile_name: validation_scale
 ```
 
 需要强调的是, 即使 `validation_scale_gate_decision = PASS`, 也只表示可以进入 `full_paper_dry_run_checker`; 它仍不允许直接生成 full_paper 论文主表。
+
+## 2026-06-23 validation-scale 后处理工程闭环
+
+为延后真实 GPU 复跑但继续推进工程闭环, 当前仓库已补齐三个不依赖重新生成视频的 validation-scale 后处理入口:
+
+```text
+experiments/generative_video_model_probe/validation_internal_ablation.py
+experiments/generative_video_model_probe/statistical_confidence_interval.py
+experiments/generative_video_model_probe/validation_artifact_rebuild.py
+```
+
+这些入口分别写出:
+
+```text
+records/validation_internal_ablation_records.jsonl
+tables/validation_internal_ablation_table.csv
+artifacts/validation_internal_ablation_decision.json
+reports/validation_internal_ablation_report.md
+
+records/statistical_confidence_interval_records.jsonl
+tables/statistical_confidence_interval_table.csv
+artifacts/statistical_confidence_interval_decision.json
+reports/statistical_confidence_interval_report.md
+
+records/validation_artifact_rebuild_dry_run_records.jsonl
+tables/validation_artifact_rebuild_dry_run_table.csv
+artifacts/validation_artifact_rebuild_dry_run_decision.json
+reports/validation_artifact_rebuild_dry_run_report.md
+```
+
+该实现的边界是:
+
+```text
+validation_internal_ablation: 使用 runtime detection proxy 生成 validation 级消融矩阵, 不替代 full-paper 正式消融。
+statistical_confidence_interval: 只计算 validation runtime detection proxy 的 Wilson 区间, 不替代 FPR=0.001 大规模统计。
+validation_artifact_rebuild: 只检查 validation 产物是否具备 records -> tables / reports 重建闭环, 不生成 full-paper package。
+```
+
+Colab workflow 已按以下顺序接入:
+
+```text
+runtime detection
+validation internal ablation
+statistical confidence interval
+validation artifact rebuild dry-run
+validation-scale gate
+package to Google Drive
+```
+
+因此, 后续真实复跑可以延后; 在复跑发生后, 新增后处理会自动把 validation-scale 缺口显式落盘, 而不是让缺口停留在人工判断。

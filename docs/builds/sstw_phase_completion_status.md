@@ -1034,3 +1034,53 @@ validation_artifact_rebuild_dry_run_ready
 ```
 
 该 gate 通过后, 下一步仍然是 `full_paper_dry_run_checker`, 不是 full_paper result package。
+
+## 2026-06-23 validation-scale 后处理闭环工程推进
+
+### 本次新增工程能力
+
+在延后真实 GPU 复跑的前提下, 当前仓库继续补齐 validation-scale 运行后的自动后处理链路:
+
+```text
+validation_internal_ablation_runner: implemented
+statistical_confidence_interval_reporter: implemented_for_validation_proxy
+validation_artifact_rebuild_dry_run: implemented
+```
+
+对应模块为:
+
+```text
+experiments/generative_video_model_probe/validation_internal_ablation.py
+experiments/generative_video_model_probe/statistical_confidence_interval.py
+experiments/generative_video_model_probe/validation_artifact_rebuild.py
+```
+
+### 当前状态解释
+
+这些模块不运行 Wan2.1, 不生成 full_paper 主表, 也不把 validation proxy 伪装成最终论文 claim。它们的作用是让未来 `PROFILE = validation_scale` 复跑结束后, 以下产物自动闭环:
+
+```text
+validation_internal_ablation_records
+statistical_confidence_interval_records
+validation_artifact_rebuild_dry_run_records
+validation_scale_gate_decision
+```
+
+当前阶段仍为:
+
+```text
+validation_scale_gate_checker: implemented
+validation_scale_postprocess_runners: implemented
+validation_scale_real_gpu_run: not_yet_rerun
+full_paper_allowed: false
+submission_freeze_allowed: false
+```
+
+### 仍未完成的工程项
+
+```text
+adaptive_attack_runner: not_implemented
+replay_and_authenticated_sketch_gate_runner: not_implemented
+modern_external_baseline_real_adapter: not_integrated
+full_paper_dry_run_checker: not_implemented
+```

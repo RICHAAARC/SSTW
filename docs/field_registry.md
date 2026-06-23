@@ -354,11 +354,42 @@ Notebook 与 repository module 的跨边界数据
 | minimum_seed_per_prompt | protocol | none | true | false | false | Minimum seed count per prompt required by a gate. |
 | internal_ablation_record_count | metric | none | true | false | false | Number of internal ablation records available to a validation or full-paper gate. |
 | internal_ablation_status | governance | none | true | false | false | Internal ablation readiness or claim boundary status. |
+| validation_internal_ablation_decision | governance | none | true | false | false | Decision for validation-scale internal ablation proxy runner. |
+| validation_internal_ablation_variant_count | metric | none | true | false | false | Number of method variants covered by validation-scale internal ablation records. |
+| validation_internal_ablation_attack_count | metric | none | true | false | false | Number of attacks covered by validation-scale internal ablation records. |
+| validation_internal_ablation_score_margin | metric | none | true | false | false | Mean score margin between full method and ablated proxy variants in validation-scale. |
+| validation_internal_ablation_evidence_level | governance | none | true | false | false | Evidence level for validation-scale internal ablation records. |
+| validation_ablation_evidence_level | governance | none | true | false | false | Per-record evidence level for validation-scale ablation proxy records. |
+| validation_ablation_source_score | metric | none | true | false | false | Source runtime detection proxy score used by a validation-scale ablation record. |
+| validation_ablation_proxy_score | metric | none | true | false | false | Derived validation-scale ablation proxy score. |
 | adaptive_attack_record_count | metric | none | true | false | false | Number of Flow-specific adaptive attack records available to a validation or full-paper gate. |
 | adaptive_attack_status | governance | none | true | false | false | Adaptive attack readiness or claim boundary status. |
 | replay_or_sketch_status | governance | none | true | false | false | Replay/sketch readiness status or explicit Claim-3 downgrade status. |
 | confidence_interval_status | governance | none | true | false | false | Statistical confidence interval report readiness status. |
+| statistical_confidence_interval_decision | governance | none | true | false | false | Decision for validation-scale statistical confidence interval reporter. |
+| statistical_confidence_interval_family | governance | none | true | false | false | Metric family covered by a statistical confidence interval record. |
+| ci_record_count | metric | none | true | false | false | Number of confidence interval records. |
+| ci_success_count | metric | none | true | false | false | Count of successful events used in a confidence interval. |
+| ci_total_count | metric | none | true | false | false | Total event count used in a confidence interval. |
+| ci_point_estimate | metric | none | true | false | false | Point estimate for a confidence interval. |
+| ci_wilson_lower | metric | none | true | false | false | Wilson lower bound for a binomial confidence interval. |
+| ci_wilson_upper | metric | none | true | false | false | Wilson upper bound for a binomial confidence interval. |
+| ci_confidence_level | protocol | none | true | false | false | Confidence level used by a confidence interval record. |
+| ci_evidence_level | governance | none | true | false | false | Evidence level for a validation-scale confidence interval record. |
+| cluster_by_video_interval_status | governance | none | true | false | false | Status of cluster-by-video confidence interval availability. |
+| paper_low_fpr_ci_status | governance | none | true | false | false | Status of paper-level low-FPR confidence interval availability. |
 | artifact_rebuild_status | governance | none | true | false | false | Artifact rebuild dry-run readiness status. |
+| validation_artifact_rebuild_dry_run_decision | governance | none | true | false | false | Decision for validation-scale artifact rebuild dry-run. |
+| artifact_rebuild_check_record_count | metric | none | true | false | false | Number of artifact rebuild dry-run check records. |
+| artifact_rebuild_missing_count | metric | none | true | false | false | Number of missing artifacts in a rebuild dry-run. |
+| artifact_rebuild_missing_paths | artifact | none | true | false | false | List of missing artifact paths from a rebuild dry-run. |
+| artifact_rebuild_scope | governance | none | true | false | false | Scope of an artifact rebuild dry-run. |
+| artifact_role | artifact | none | true | false | false | Whether an artifact is required input or required output. |
+| artifact_rebuild_check_scope | governance | none | true | false | false | Per-record scope of artifact rebuild dry-run. |
+| artifact_relative_path | artifact | none | true | false | false | Artifact path relative to run root checked by rebuild dry-run. |
+| artifact_exists | artifact | none | true | false | false | Whether an artifact exists during rebuild dry-run. |
+| artifact_size_bytes | metric | none | true | false | false | Artifact size observed during rebuild dry-run. |
+| artifact_status | governance | none | true | false | false | Per-artifact rebuild dry-run status. |
 | full_paper_allowed | governance | none | true | false | false | Whether current gate allows full-paper result package execution. |
 | full_paper_next_gate | governance | none | true | false | false | Next gate required before full-paper result production. |
 | selection_policy | governance | none | true | false | false | B5 external baseline selection policy block. |

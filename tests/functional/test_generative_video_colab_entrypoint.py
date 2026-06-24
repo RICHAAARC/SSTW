@@ -262,6 +262,11 @@ def test_split_colab_notebooks_are_profile_driven() -> None:
         assert notebook_path.exists()
         notebook = json.loads(notebook_path.read_text(encoding="utf-8"))
         source = "".join("".join(cell.get("source", [])) for cell in notebook["cells"])
+        switch_source = "".join(notebook["cells"][2].get("source", []))
+        assert "# 1.1 可编辑 workflow profile 切换" in switch_source
+        assert "SSTW_WORKFLOW_PROFILE_VALUE = ''" in switch_source
+        assert "os.environ['SSTW_WORKFLOW_PROFILE']" in switch_source
+        assert source.index("SSTW_WORKFLOW_PROFILE_VALUE") < source.index("resolve_notebook_workflow_profile")
         assert f"NOTEBOOK_ROLE = '{role}'" in source
         assert "SSTW_WORKFLOW_PROFILE" in source
         assert "resolve_notebook_workflow_profile" in source

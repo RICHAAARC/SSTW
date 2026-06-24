@@ -18,8 +18,13 @@ configs/generation/generation_models.json
 configs/generation/prompts.json
 configs/generation/seeds.json
 configs/external_baselines/external_baselines.json
+configs/paper_workflow/generative_video_notebook_workflows.json
 experiments/generative_video_model_probe/
-paper_workflow/colab_utils/generative_video_model_probe_colab.ipynb
+paper_workflow/colab_utils/motion_threshold_calibration_colab.ipynb
+paper_workflow/colab_utils/generative_video_runtime_colab.ipynb
+paper_workflow/colab_utils/external_baseline_formal_scoring_colab.ipynb
+paper_workflow/colab_utils/paper_gate_and_package_colab.ipynb
+paper_workflow/colab_utils/generative_video_model_probe_colab.ipynb  # 兼容综合入口
 ```
 
 ### 1.3 构建任务
@@ -243,21 +248,18 @@ paper_workflow/colab_utils/generative_video_model_probe_colab.ipynb
 scripts/package_results/generative_video_drive_packager.py
 ```
 
-Colab notebook 的冷启动顺序现在包含:
+推荐 Colab 冷启动顺序现在拆分为:
 
 ```text
-prepare prompt suite
-run Wan2.1 generation
-run formal quality / motion / semantic metrics
-reuse frozen motion threshold calibration artifact for pilot profile
-run mechanism postprocess
-run pilot matrix postprocess
-run runtime video-file attack
-run runtime attacked video detection
-write small-scale claim pilot gate
-run pytest and harness
-package to Google Drive
+motion_threshold_calibration_colab.ipynb
+-> generative_video_runtime_colab.ipynb
+-> external_baseline_formal_scoring_colab.ipynb
+-> paper_gate_and_package_colab.ipynb
 ```
+
+`generative_video_model_probe_colab.ipynb` 保留为兼容综合入口, 但不再作为推荐主路径。
+所有 Notebook 的 profile、Drive 目录和 stage plan 均由
+`configs/paper_workflow/generative_video_notebook_workflows.json` 控制。
 
 历史 pilot 落盘 package manifest 曾包含:
 
@@ -668,3 +670,31 @@ SSTW_VIDEOSEAL_EVAL_COMMAND
 ```
 
 命令未配置时, adapter 会写 unsupported record, `validation_scale` 必须阻断进入 `pilot_paper`; 若仍进入 `pilot_paper`, `pilot_paper` gate 也会因为 `missing_modern_external_baseline_formal_adapter_names` 失败。这是硬阻断, 不是 warning。
+
+### 2.13 profile-driven Notebook 重构状态
+
+当前 Colab workflow 已从单一综合 Notebook 拆分为职责明确的 4 个推荐入口, 并由统一配置控制 profile 切换:
+
+```text
+configs/paper_workflow/generative_video_notebook_workflows.json
+```
+
+推荐执行职责为:
+
+```text
+motion_threshold_calibration_colab.ipynb: 只运行 motion calibration split 并冻结 threshold artifact
+generative_video_runtime_colab.ipynb: 运行 Wan2.1 生成、formal metrics、motion threshold 复用、attack 和 detection
+external_baseline_formal_scoring_colab.ipynb: 运行现代 baseline command adapter 和 comparison records
+paper_gate_and_package_colab.ipynb: 运行 internal ablation、adaptive attack、replay/sketch 或 Claim-3 downgrade、CI、gate 和 package
+```
+
+切换运行层级时只应修改环境变量或配置:
+
+```text
+SSTW_WORKFLOW_PROFILE=validation_scale
+SSTW_WORKFLOW_PROFILE=pilot_paper
+```
+
+不应在 Notebook 中复制新的 Google Drive 目录、样本上限或 profile 分支。未来 `full_paper` 已在配置中登记, 但状态为 `design_registered_not_ready`, 当前不允许真实运行或支撑 claim。
+
+`motion_threshold_artifact_run_root_relative` 指向独立 calibration run_root。该设计允许 `validation_scale` 与 `pilot_paper` 使用各自隔离的 evaluation run_root, 同时复用同一个已冻结 motion threshold artifact, 防止把 calibration 输出与 evaluation 输出混写。

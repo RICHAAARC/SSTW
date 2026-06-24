@@ -6,32 +6,230 @@ import json
 from pathlib import Path, PurePosixPath
 import subprocess
 import sys
-from typing import Mapping
+from typing import Any, Mapping
 
 
 DEFAULT_DRIVE_PROJECT_ROOT = "/content/drive/MyDrive/SSTW"
 DEFAULT_VALIDATION_SCALE_CONFIG = "configs/protocol/validation_scale_generative_probe.json"
 DEFAULT_FPR01_PILOT_CONFIG = "configs/protocol/fpr01_pilot_generative_probe.json"
+DEFAULT_NOTEBOOK_WORKFLOW_CONFIG = "configs/paper_workflow/generative_video_notebook_workflows.json"
 PAPER_GATE_PROFILES = {"validation_scale", "pilot_paper", "fpr01_pilot"}
 EXTERNAL_BASELINE_COLAB_PREFLIGHT_DECISION = "artifacts/external_baseline_colab_preflight_decision.json"
 
 
-def build_drive_layout(drive_project_root: str = DEFAULT_DRIVE_PROJECT_ROOT) -> dict[str, str]:
-    """构造 Colab 与 Google Drive 共享的 SSTW 输出目录布局。"""
-    root = PurePosixPath(drive_project_root)
+def _join_drive_path(root: PurePosixPath, relative_path: str) -> str:
+    """把配置中的相对路径拼接到 Drive 根目录下。
+
+    该函数属于通用工程写法, 用于避免 Notebook cell 中硬写多个 Google Drive
+    输出目录。项目特定约束是 profile 之间必须隔离 run / package / log 目录,
+    防止 `validation_scale`、`pilot_paper` 和未来 `full_paper` 产物混写。
+    """
+    return (root / PurePosixPath(relative_path)).as_posix()
+
+
+def load_notebook_workflow_config(
+    config_path: str | Path = DEFAULT_NOTEBOOK_WORKFLOW_CONFIG,
+) -> dict[str, Any]:
+    """读取 Colab Notebook 统一 workflow profile 配置。
+
+    Notebook 只负责入口编排。不同结果层级、Drive 路径、样本规模和默认 profile
+    均由该配置控制, 避免把 `pilot_paper` 或 `validation_scale` 写死在 Notebook
+    的多处 cell 中。
+    """
+    config = _read_json(config_path)
+    if not config:
+        raise FileNotFoundError(f"缺少 Notebook workflow 配置: {config_path}")
+    return config
+
+
+def canonical_workflow_profile(
+    profile: str,
+    config_path: str | Path = DEFAULT_NOTEBOOK_WORKFLOW_CONFIG,
+) -> str:
+    """返回 profile 的规范名称, 并兼容旧入口别名。"""
+    config = load_notebook_workflow_config(config_path)
+    aliases = config.get("workflow_profile_aliases", {})
+    canonical = str(aliases.get(profile, profile))
+    profiles = config.get("workflow_profiles", {})
+    if canonical not in profiles:
+        raise KeyError(f"未知 workflow profile: {profile}")
+    return canonical
+
+
+def default_workflow_profile_for_notebook_role(
+    notebook_role: str,
+    config_path: str | Path = DEFAULT_NOTEBOOK_WORKFLOW_CONFIG,
+) -> str:
+    """从统一配置中读取某类 Notebook 的默认 profile。"""
+    config = load_notebook_workflow_config(config_path)
+    defaults = config.get("default_workflow_profile_by_notebook_role", {})
+    if notebook_role not in defaults:
+        raise KeyError(f"Notebook role 缺少默认 workflow profile: {notebook_role}")
+    return str(defaults[notebook_role])
+
+
+def resolve_notebook_workflow_profile(
+    profile: str,
+    notebook_role: str | None = None,
+    config_path: str | Path = DEFAULT_NOTEBOOK_WORKFLOW_CONFIG,
+    *,
+    allow_disabled: bool = False,
+) -> dict[str, Any]:
+    """解析 Notebook workflow profile 与 role 的组合。
+
+    返回值会显式包含 requested / canonical profile、runtime profile、result tier、
+    Drive 相对路径、protocol config path 和 stage plan。Notebook 应只消费该返回值,
+    不再根据 profile 名称手写分支。
+    """
+    config = load_notebook_workflow_config(config_path)
+    aliases = config.get("workflow_profile_aliases", {})
+    canonical_profile = str(aliases.get(profile, profile))
+    profiles = config.get("workflow_profiles", {})
+    if canonical_profile not in profiles:
+        raise KeyError(f"未知 workflow profile: {profile}")
+    profile_config = dict(profiles[canonical_profile])
+    role_config: dict[str, Any] = {}
+    if notebook_role:
+        roles = config.get("notebook_roles", {})
+        if notebook_role not in roles:
+            raise KeyError(f"未知 Notebook role: {notebook_role}")
+        role_config = dict(roles[notebook_role])
+        allowed_profiles = {str(item) for item in role_config.get("allowed_workflow_profiles", [])}
+        if allowed_profiles and canonical_profile not in allowed_profiles:
+            raise ValueError(
+                f"Notebook role {notebook_role} 不允许 workflow profile {profile}。"
+                f" 允许值: {sorted(allowed_profiles)}"
+            )
+    if not allow_disabled and profile_config.get("enabled_for_run") is False:
+        raise RuntimeError(
+            f"workflow profile {canonical_profile} 当前不可运行: "
+            f"{profile_config.get('profile_status')}"
+        )
     return {
-        "drive_project_root": root.as_posix(),
-        "drive_dataset_root": (root / "datasets" / "generative_video_prompt_suite").as_posix(),
-        "drive_run_root": (root / "runs" / "generative_video_model_probe_colab").as_posix(),
-        "drive_package_dir": (root / "packages" / "generative_video_model_probe").as_posix(),
-        "drive_log_dir": (root / "logs" / "generative_video_model_probe").as_posix(),
-        "prompt_suite_path": (root / "datasets" / "generative_video_prompt_suite" / "prompt_seed_suite.json").as_posix(),
+        **profile_config,
+        "requested_workflow_profile": profile,
+        "canonical_workflow_profile": canonical_profile,
+        "workflow_profile": canonical_profile,
+        "profile_alias_applied": canonical_profile != profile,
+        "notebook_role": notebook_role or "",
+        "notebook_path": role_config.get("notebook_path", ""),
+        "workflow_stage_plan": list(role_config.get("stage_plan", [])),
+        "allowed_workflow_profiles": list(role_config.get("allowed_workflow_profiles", [])),
+        "config_path": str(config_path),
     }
 
 
-def ensure_drive_layout(drive_project_root: str = DEFAULT_DRIVE_PROJECT_ROOT) -> dict[str, str]:
+def build_workflow_stage_plan(
+    profile: str,
+    notebook_role: str,
+    config_path: str | Path = DEFAULT_NOTEBOOK_WORKFLOW_CONFIG,
+) -> list[str]:
+    """返回指定 profile / Notebook role 的阶段计划。"""
+    resolved = resolve_notebook_workflow_profile(profile, notebook_role, config_path)
+    disabled_stage_names = {str(item) for item in resolved.get("disabled_stage_names", [])}
+    return [
+        str(item)
+        for item in resolved.get("workflow_stage_plan", [])
+        if str(item) not in disabled_stage_names
+    ]
+
+
+def workflow_stage_enabled(
+    profile: str,
+    notebook_role: str,
+    stage_name: str,
+    config_path: str | Path = DEFAULT_NOTEBOOK_WORKFLOW_CONFIG,
+) -> bool:
+    """判断某个语义阶段是否属于当前 Notebook 计划。"""
+    return stage_name in build_workflow_stage_plan(profile, notebook_role, config_path)
+
+
+def workflow_profile_is_paper_gate(
+    profile: str,
+    config_path: str | Path = DEFAULT_NOTEBOOK_WORKFLOW_CONFIG,
+) -> bool:
+    """从统一配置判断 profile 是否属于 paper gate 相关运行。"""
+    resolved = resolve_notebook_workflow_profile(profile, config_path=config_path, allow_disabled=True)
+    return bool(resolved.get("paper_gate_profile"))
+
+
+def protocol_config_path_for_profile(
+    profile: str,
+    config_path: str | Path = DEFAULT_NOTEBOOK_WORKFLOW_CONFIG,
+) -> str:
+    """从统一 workflow 配置中读取 profile 对应的 protocol config。"""
+    resolved = resolve_notebook_workflow_profile(profile, config_path=config_path, allow_disabled=True)
+    return str(resolved.get("protocol_config_path") or _config_path_for_profile(profile))
+
+
+def build_drive_layout(
+    drive_project_root: str = DEFAULT_DRIVE_PROJECT_ROOT,
+    workflow_profile: str | None = None,
+    notebook_role: str | None = None,
+    workflow_config_path: str | Path = DEFAULT_NOTEBOOK_WORKFLOW_CONFIG,
+) -> dict[str, str]:
+    """构造 Colab 与 Google Drive 共享的 SSTW 输出目录布局。
+
+    不传 `workflow_profile` 时保持历史路径兼容。传入 profile 后, run / package /
+    log 目录由统一配置决定, 从而支持在 Colab 中安全切换 `validation_scale`、
+    `pilot_paper` 和未来 `full_paper`。
+    """
+    root = PurePosixPath(drive_project_root)
+    if workflow_profile is None:
+        return {
+            "drive_project_root": root.as_posix(),
+            "drive_dataset_root": (root / "datasets" / "generative_video_prompt_suite").as_posix(),
+            "drive_run_root": (root / "runs" / "generative_video_model_probe_colab").as_posix(),
+            "drive_package_dir": (root / "packages" / "generative_video_model_probe").as_posix(),
+            "drive_log_dir": (root / "logs" / "generative_video_model_probe").as_posix(),
+            "prompt_suite_path": (root / "datasets" / "generative_video_prompt_suite" / "prompt_seed_suite.json").as_posix(),
+        }
+    workflow = resolve_notebook_workflow_profile(workflow_profile, notebook_role, workflow_config_path)
+    config = load_notebook_workflow_config(workflow_config_path)
+    dataset_root_relative = str(
+        workflow.get("drive_dataset_root_relative")
+        or config.get("default_dataset_root_relative")
+        or "datasets/generative_video_prompt_suite"
+    )
+    prompt_suite_path_relative = str(
+        workflow.get("prompt_suite_path_relative")
+        or config.get("default_prompt_suite_path_relative")
+        or "datasets/generative_video_prompt_suite/prompt_seed_suite.json"
+    )
+    return {
+        "drive_project_root": root.as_posix(),
+        "drive_dataset_root": _join_drive_path(root, dataset_root_relative),
+        "drive_run_root": _join_drive_path(root, str(workflow["drive_run_root_relative"])),
+        "drive_package_dir": _join_drive_path(root, str(workflow["drive_package_dir_relative"])),
+        "drive_log_dir": _join_drive_path(root, str(workflow["drive_log_dir_relative"])),
+        "motion_threshold_artifact_run_root": _join_drive_path(
+            root,
+            str(workflow.get("motion_threshold_artifact_run_root_relative") or workflow["drive_run_root_relative"]),
+        ),
+        "prompt_suite_path": _join_drive_path(root, prompt_suite_path_relative),
+        "workflow_profile": str(workflow["workflow_profile"]),
+        "canonical_workflow_profile": str(workflow["canonical_workflow_profile"]),
+        "requested_workflow_profile": str(workflow["requested_workflow_profile"]),
+        "runtime_profile": str(workflow["runtime_profile"]),
+        "result_tier": str(workflow["result_tier"]),
+        "notebook_role": str(workflow.get("notebook_role") or ""),
+        "protocol_config_path": str(workflow.get("protocol_config_path") or ""),
+    }
+
+
+def ensure_drive_layout(
+    drive_project_root: str = DEFAULT_DRIVE_PROJECT_ROOT,
+    workflow_profile: str | None = None,
+    notebook_role: str | None = None,
+    workflow_config_path: str | Path = DEFAULT_NOTEBOOK_WORKFLOW_CONFIG,
+) -> dict[str, str]:
     """创建 Google Drive 目标目录并返回路径布局。"""
-    layout = build_drive_layout(drive_project_root)
+    layout = build_drive_layout(
+        drive_project_root,
+        workflow_profile=workflow_profile,
+        notebook_role=notebook_role,
+        workflow_config_path=workflow_config_path,
+    )
     for key, value in layout.items():
         if key.endswith("_dir") or key.endswith("_root"):
             Path(value).mkdir(parents=True, exist_ok=True)
@@ -58,6 +256,10 @@ def _write_json(path: str | Path, payload: Mapping[str, object]) -> None:
 
 def _config_path_for_profile(profile: str) -> str:
     """根据运行 profile 选择现代 baseline 要求来源。"""
+    try:
+        return protocol_config_path_for_profile(profile)
+    except Exception:
+        pass
     if profile in {"pilot_paper", "fpr01_pilot"}:
         return DEFAULT_FPR01_PILOT_CONFIG
     return DEFAULT_VALIDATION_SCALE_CONFIG
@@ -82,7 +284,7 @@ def required_modern_external_baseline_command_requirements(
     和 `fpr01_pilot` 的 hard gate 要求统一收敛到 helper, 防止配置已更新而
     Notebook cell 仍保留旧 baseline 列表。
     """
-    config = _read_json(config_path or _config_path_for_profile(profile))
+    config = _read_json(config_path or protocol_config_path_for_profile(profile))
     baseline_ids = [
         str(name)
         for name in config.get("required_modern_external_baseline_adapter_names", [])
@@ -132,6 +334,15 @@ def build_external_baseline_colab_preflight_decision(
     baseline, 也不把配置存在解释为论文 claim。其价值在于: Colab 冷启动失败时,
     Google Drive 中仍保留可审计的阻断原因。
     """
+    try:
+        resolved_profile = resolve_notebook_workflow_profile(profile, allow_disabled=True)
+    except Exception:
+        resolved_profile = {
+            "requested_workflow_profile": profile,
+            "canonical_workflow_profile": profile,
+            "workflow_profile": profile,
+            "result_tier": profile,
+        }
     requirements = required_modern_external_baseline_command_requirements(profile, config_path)
     required_env_vars = [item["external_baseline_command_env_var"] for item in requirements]
     configured_env_vars = [
@@ -139,7 +350,10 @@ def build_external_baseline_colab_preflight_decision(
         if str(command_env.get(env_var) or "").strip()
     ]
     missing_env_vars = [env_var for env_var in required_env_vars if env_var not in configured_env_vars]
-    paper_gate_profile = profile in PAPER_GATE_PROFILES
+    try:
+        paper_gate_profile = workflow_profile_is_paper_gate(profile)
+    except Exception:
+        paper_gate_profile = profile in PAPER_GATE_PROFILES
     hard_required = paper_gate_profile and require_modern_baseline_commands_for_paper_gate
     decision = "FAIL" if hard_required and missing_env_vars else "PASS"
     if not paper_gate_profile:
@@ -154,6 +368,10 @@ def build_external_baseline_colab_preflight_decision(
         "artifact_name": "external_baseline_colab_preflight_decision.json",
         "manifest_kind": "external_baseline_colab_preflight",
         "profile": profile,
+        "requested_workflow_profile": resolved_profile["requested_workflow_profile"],
+        "canonical_workflow_profile": resolved_profile["canonical_workflow_profile"],
+        "workflow_profile": resolved_profile["workflow_profile"],
+        "result_tier": resolved_profile["result_tier"],
         "run_root": layout["drive_run_root"],
         "external_baseline_colab_preflight_decision": decision,
         "external_baseline_colab_preflight_status": status,
@@ -205,6 +423,57 @@ def validate_modern_baseline_commands_for_profile(preflight_decision: Mapping[st
             "当前 PROFILE 是 paper gate 或 paper gate 前最后门禁, 必须先在 Colab 配置现代视频水印 baseline command。"
             f" 缺失: {missing}"
         )
+
+
+def read_motion_threshold_calibration_decision(layout: Mapping[str, str]) -> dict[str, Any]:
+    """读取已落盘的 motion threshold calibration 决策, 并兼容 UTF-8 BOM。"""
+    candidate_roots = [
+        Path(layout.get("motion_threshold_artifact_run_root") or layout["drive_run_root"]),
+        Path(layout["drive_run_root"]),
+    ]
+    candidate_paths = [
+        root / "artifacts" / "motion_threshold_calibration_decision.json"
+        for root in candidate_roots
+    ]
+    decision_path = next((path for path in candidate_paths if path.exists()), None)
+    if decision_path is None:
+        raise FileNotFoundError(
+            "缺少 motion_threshold_calibration_decision.json。"
+            " 请先运行 motion_threshold_calibration Notebook, 或确认当前 workflow profile 配置的阈值 artifact run_root 中已有阈值 artifact。"
+        )
+    return json.loads(decision_path.read_text(encoding="utf-8-sig"))
+
+
+def validate_motion_threshold_ready_for_profile(
+    layout: Mapping[str, str],
+    profile: str,
+) -> dict[str, Any]:
+    """校验非 calibration profile 只能复用已冻结的 motion threshold。
+
+    该函数避免 Notebook 在 `validation_scale` 或 `pilot_paper` 中根据当前测试样本重新估计
+    motion threshold。阈值必须来自独立 calibration split, 否则 fixed-FPR 协议会被污染。
+    """
+    if canonical_workflow_profile(profile) == "motion_calibration":
+        return {
+            "motion_threshold_reuse_required": False,
+            "motion_threshold_reuse_status": "not_required_for_motion_calibration",
+        }
+    decision = read_motion_threshold_calibration_decision(layout)
+    if decision.get("motion_threshold_calibration_ready") is not True:
+        raise RuntimeError(
+            "当前 workflow profile 需要复用已通过的 motion threshold calibration artifact, "
+            "但 artifact 未通过: "
+            + str(decision.get("motion_threshold_calibration_decision"))
+        )
+    return {
+        "motion_threshold_reuse_required": True,
+        "motion_threshold_reuse_status": "ready",
+        "motion_threshold_calibration_decision": decision.get("motion_threshold_calibration_decision"),
+        "motion_threshold_id": decision.get("motion_threshold_id"),
+        "motion_threshold_source_split": decision.get("motion_threshold_source_split"),
+        "motion_delta_threshold": decision.get("motion_delta_threshold"),
+        "claim_support_status": decision.get("claim_support_status"),
+    }
 
 
 def build_prompt_suite_command(layout: dict[str, str]) -> list[str]:

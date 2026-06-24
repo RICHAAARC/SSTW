@@ -332,6 +332,73 @@ submission_package_freeze
 2. 工程约束: 由 repository modules、runner、checker 和 packager 产生可复现产物。
 3. 论文约束: supported claims 必须映射到 governed records、tables、figures、reports 或 manifests。
 
+### 4.1 Colab workflow profile 配置规则
+
+生成式视频主线的 Colab 入口不得在多个 Notebook cell 中硬编码 `validation_scale`、
+`pilot_paper` 或未来 `full_paper` 的 run_root、package 目录、样本数量和 gate
+阶段。统一配置文件为:
+
+```text
+configs/paper_workflow/generative_video_notebook_workflows.json
+```
+
+该配置负责定义:
+
+```text
+workflow_profile: motion_calibration / validation_scale / pilot_paper / full_paper
+result_tier
+runtime_profile
+protocol_config_path
+drive_run_root_relative
+drive_package_dir_relative
+drive_log_dir_relative
+motion_threshold_artifact_run_root_relative
+method_sample_count
+baseline_sample_count
+max_content_records
+max_source_records
+target_fpr
+minimum_clean_negative_count
+bootstrap_iteration_count
+notebook_role
+workflow_stage_plan
+```
+
+Notebook 只能通过 `paper_workflow/notebook_utils/generative_video_model_probe_workflow.py`
+读取上述配置, 再调用 `experiments/`、`scripts/` 或 `main/` 中的正式模块。禁止
+在 Notebook 中为不同结果层级单独维护一套路径和样本上限。
+
+当前推荐 Notebook 编排为:
+
+```text
+motion_threshold_calibration_colab.ipynb
+-> generative_video_runtime_colab.ipynb
+-> external_baseline_formal_scoring_colab.ipynb
+-> paper_gate_and_package_colab.ipynb
+```
+
+其中:
+
+1. `motion_threshold_calibration_colab.ipynb` 只负责独立 calibration split 和阈值冻结。
+2. `generative_video_runtime_colab.ipynb` 负责 Wan2.1 生成、formal metrics、阈值复用、
+   runtime attack 和 detection, 并在真实 GPU 生成前执行现代 baseline command 预检。
+3. `external_baseline_formal_scoring_colab.ipynb` 只负责外部 baseline source intake、
+   command adapter 运行和 comparison records, 不重新生成视频。
+4. `paper_gate_and_package_colab.ipynb` 负责内部消融、adaptive attack proxy、replay/sketch
+   或 Claim-3 downgrade、CI、fixed-FPR gate、artifact rebuild 和 Drive package。
+
+`generative_video_model_probe_colab.ipynb` 仅作为兼容综合入口保留。正式推进应优先使用
+拆分 Notebook, 因为拆分后可以在同一 `workflow_profile` 下分阶段复跑、检查和打包,
+避免 runtime、baseline 与 gate 的失败原因混在一个长 Notebook 中。
+
+`pilot_paper` 和 `full_paper` 的协议差异只能是样本规模和评价等级。当前 `full_paper`
+仅在配置中登记为未来同构入口, 状态为 `design_registered_not_ready`, 不允许作为可运行
+claim profile 使用。
+
+注意: profile-specific run_root 用于防止不同结果层级混写。motion threshold calibration
+artifact 通过 `motion_threshold_artifact_run_root_relative` 显式共享给 `validation_scale` 与
+`pilot_paper`, 而不是把 calibration 输出复制进 evaluation run_root。
+
 ---
 
 ## 5. protocol_governance_foundation

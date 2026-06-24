@@ -189,4 +189,4 @@ submission package 已冻结
 
 ## 7. 当前完成状态
 
-当前仓库层面已经完成 `pilot_paper` 的数据集构造、profile 接入、frozen threshold gate runner、external_baseline comparison 前置检查、内部消融矩阵前置检查、notebook workflow 接入、package manifest 摘要和默认 pytest 覆盖。真实 Wan2.1 GPU 结果尚未生成, 因此该阶段的实验结论仍需用户在 Colab 中以 `PROFILE = 'pilot_paper'` 复跑后再审计。
+当前仓库层面已经完成 `pilot_paper` 的数据集构造、profile 接入、frozen threshold gate runner、external_baseline comparison 前置检查、内部消融矩阵前置检查、notebook workflow 接入、package manifest 摘要和默认 pytest 覆盖。真实 Wan2.1 GPU 结果尚未生成, 因此该阶段的实验结论仍需用户在 Colab 中以 `SSTW_WORKFLOW_PROFILE=pilot_paper` 复跑后再审计。

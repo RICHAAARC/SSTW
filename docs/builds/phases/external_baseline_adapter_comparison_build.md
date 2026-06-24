@@ -130,16 +130,16 @@ claim_support_status: formal_results_required_for_validation_scale_and_pilot_pap
 ## 后续工作
 
 ```text
-1. 在 Colab 或本地环境中安装每个现代 baseline 的官方源码、权重和命令入口。
+1. 在 Colab 环境中安装每个现代 baseline 的官方源码、权重和命令入口。
 2. 配置 `SSTW_VIDEOSHIELD_EVAL_COMMAND`、`SSTW_SIGMARK_EVAL_COMMAND`、`SSTW_SPDMARK_EVAL_COMMAND`、`SSTW_VIDEOMARK_EVAL_COMMAND`、`SSTW_VIDSIG_EVAL_COMMAND` 和 `SSTW_VIDEOSEAL_EVAL_COMMAND`。
-3. 运行 external_baseline comparison, 使 6 个现代 baseline 均产出 `measured_formal` records。
+3. 运行 `paper_workflow/colab_utils/external_baseline_formal_scoring_colab.ipynb`, 使 6 个现代 baseline 均产出 `measured_formal` records。
 4. 仅当全部现代 baseline 都产生 governed measured_formal records 后, 才允许 validation_scale gate 通过并进入 pilot_paper gate。
 ```
 
 
 ### 5. 现代 baseline 正式命令契约
 
-现代视频水印 baseline 的 adapter 不在本仓库中重写第三方论文方法本体。每个 adapter 调用用户在 Colab / 本地配置的官方命令, 并要求命令输出 JSON:
+现代视频水印 baseline 的 adapter 不在本仓库中重写第三方论文方法本体。每个 adapter 调用用户在 Colab 配置的官方命令, 并要求命令输出 JSON:
 
 ```text
 external_baseline_score 或 score
@@ -162,3 +162,19 @@ external_baseline_threshold 或 threshold
 ```
 
 若命令未配置或输出缺失, adapter 必须写出 unsupported record, 并使 `validation_scale` 和 `pilot_paper` gate 失败。该设计保证 `pilot_paper` 与后续更大规模 paper 运行的差异只保留为样本规模和 FPR 评价级别, 而不是 baseline 协议缺口。
+
+### 6. Notebook role 边界
+
+外部 baseline 不应再作为主方法 runtime Notebook 的长尾附属步骤来维护。当前推荐边界为:
+
+```text
+generative_video_runtime_colab.ipynb: 在真实 GPU 生成前执行 baseline command preflight, 但不运行 baseline comparison。
+external_baseline_formal_scoring_colab.ipynb: 读取同一 workflow_profile 的 run_root, 执行 source intake 与 comparison。
+paper_gate_and_package_colab.ipynb: 只读取 comparison records 和 execution manifest, 不直接调用第三方命令。
+```
+
+profile、Drive 目录和 stage plan 由下述配置统一控制:
+
+```text
+configs/paper_workflow/generative_video_notebook_workflows.json
+```

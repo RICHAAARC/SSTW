@@ -1459,3 +1459,66 @@ real_modern_baseline_results: still_pending_colab_run
 ```
 
 该更新不会在本地产生真实 baseline 结果, 但会保证未来 Colab 运行完成后, package 中保留每条 `measured_formal` baseline score 的官方输出、stdout / stderr 和命令证据 manifest, 便于后续 claim audit 和 rebuttal-ready evidence index 使用。
+
+## 2026-06-24 Colab workflow profile 配置化重构
+
+本次工程重构将生成式视频主线的 Colab 执行入口从“单 Notebook 多处手写 profile 分支”调整为“统一 workflow profile 配置 + 拆分 Notebook role”的方式。
+
+新增统一配置文件:
+
+```text
+configs/paper_workflow/generative_video_notebook_workflows.json
+```
+
+该配置集中维护:
+
+```text
+workflow_profile
+result_tier
+runtime_profile
+protocol_config_path
+drive_run_root_relative
+drive_package_dir_relative
+drive_log_dir_relative
+motion_threshold_artifact_run_root_relative
+method_sample_count
+baseline_sample_count
+target_fpr
+minimum_clean_negative_count
+bootstrap_iteration_count
+notebook_role
+workflow_stage_plan
+```
+
+新增或重构的 Notebook 入口为:
+
+```text
+paper_workflow/colab_utils/motion_threshold_calibration_colab.ipynb
+paper_workflow/colab_utils/generative_video_runtime_colab.ipynb
+paper_workflow/colab_utils/external_baseline_formal_scoring_colab.ipynb
+paper_workflow/colab_utils/paper_gate_and_package_colab.ipynb
+paper_workflow/colab_utils/generative_video_model_probe_colab.ipynb  # 兼容综合入口
+```
+
+阶段性状态为:
+
+```text
+profile_driven_colab_workflow_config: implemented
+profile_specific_drive_run_root: implemented
+profile_specific_drive_package_dir: implemented
+shared_motion_threshold_artifact_run_root: implemented
+fpr01_pilot_alias_to_pilot_paper: implemented
+full_paper_profile_registration: design_registered_not_ready
+monolithic_notebook_legacy_mode: retained_for_compatibility
+recommended_split_notebook_workflow: implemented
+```
+
+该变更解决的问题是: `validation_scale`、`pilot_paper` 和未来 `full_paper` 不再依赖 Notebook 中多处硬编码路径、样本数量或 profile 集合。切换运行层级时, 用户只需要设置:
+
+```text
+SSTW_WORKFLOW_PROFILE=validation_scale
+或
+SSTW_WORKFLOW_PROFILE=pilot_paper
+```
+
+当前仍不允许设置 `SSTW_WORKFLOW_PROFILE=full_paper` 进入真实 claim 运行, 因为该 profile 只登记未来同构协议入口, 尚未完成 full-paper 样本规模、FPR=0.001 统计设计和真实大规模 baseline / ablation 结果闭合。

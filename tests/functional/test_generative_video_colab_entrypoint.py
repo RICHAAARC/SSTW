@@ -11,7 +11,11 @@ import pytest
 
 from paper_workflow.notebook_utils.generative_video_model_probe_workflow import (
     build_drive_layout,
+    build_workflow_stage_plan,
     build_modern_baseline_command_env,
+    default_workflow_profile_for_notebook_role,
+    resolve_notebook_workflow_profile,
+    validate_motion_threshold_ready_for_profile,
     write_external_baseline_colab_preflight_decision,
 )
 from experiments.generative_video_model_probe.colab_runtime import _build_generation_plan
@@ -172,23 +176,27 @@ def test_fpr01_pilot_profile_constructs_medium_scale_low_fpr_plan(tmp_path: Path
 
 @pytest.mark.quick
 def test_generative_video_colab_notebook_calls_repository_modules() -> None:
-    """Notebook 只能作为入口, 必须调用仓库脚本或 experiments 模块生成正式输出。"""
+    """Notebook 只能作为入口, 必须通过统一 workflow profile 调用仓库模块。"""
     notebook_path = Path("paper_workflow/colab_utils/generative_video_model_probe_colab.ipynb")
     assert notebook_path.exists()
     notebook = json.loads(notebook_path.read_text(encoding="utf-8"))
     source = "".join("".join(cell.get("source", [])) for cell in notebook["cells"])
+    helper_text = Path("paper_workflow/notebook_utils/generative_video_model_probe_workflow.py").read_text(encoding="utf-8")
 
     assert "/content/drive/MyDrive/SSTW" in source
     assert "drive.mount('/content/drive')" in source
+    assert "SSTW_WORKFLOW_PROFILE" in source
+    assert "NOTEBOOK_ROLE = 'generative_video_model_probe_legacy'" in source
+    assert "default_workflow_profile_for_notebook_role" in source
+    assert "resolve_notebook_workflow_profile" in source
+    assert "ensure_drive_layout(" in source
+    assert "workflow_profile=WORKFLOW_PROFILE" in source
+    assert "stage_enabled(" in source
+    assert "workflow_stage_enabled" in source
     assert "HF_TOKEN" in source
-    assert "getpass" in source
     assert "add_to_git_credential=False" in source
     assert "generative_video_model_probe_workflow" in source
-    assert "PROFILE = 'validation_scale'" in source
-    assert "fpr01_pilot" in source
-    assert "pilot_paper" in source
-    assert "TPR@FPR=0.01" in source
-    assert "MODEL_ID = 'Wan-AI/Wan2.1-T2V-1.3B-Diffusers'" in source
+    assert "MODEL_ID = os.environ.get('SSTW_MODEL_ID'" in source
     assert "RUN_EXTERNAL_BASELINE_SOURCE_CLONE" in source
     assert "EXTERNAL_BASELINE_EVIDENCE_PATHS" in source
     assert "REQUIRE_MODERN_BASELINE_COMMANDS_FOR_PAPER_GATE" in source
@@ -196,12 +204,9 @@ def test_generative_video_colab_notebook_calls_repository_modules() -> None:
     assert "build_modern_baseline_command_env" in source
     assert "write_external_baseline_colab_preflight_decision" in source
     assert "validate_modern_baseline_commands_for_profile" in source
-    assert "external_baseline_colab_preflight_decision" in Path("paper_workflow/notebook_utils/generative_video_model_probe_workflow.py").read_text(encoding="utf-8")
+    assert "external_baseline_colab_preflight_decision" in helper_text
+    assert "validate_motion_threshold_ready_for_profile" in source
     assert "build_formal_metric_command" in source
-    assert "motion_calibration" in source
-    assert "pilot / validation_scale profile 只能复用已经通过的 calibration artifact" in source
-    assert "motion_threshold_calibration_ready" in source
-    assert "read_text(encoding='utf-8-sig')" in source
     assert "build_motion_threshold_calibration_command" in source
     assert "build_mechanism_postprocess_command" in source
     assert "build_pilot_matrix_postprocess_command" in source
@@ -218,29 +223,150 @@ def test_generative_video_colab_notebook_calls_repository_modules() -> None:
     assert "build_fpr01_pilot_gate_command" in source
     assert "build_validation_artifact_rebuild_dry_run_command" in source
     assert "build_validation_scale_gate_command" in source
-    assert "scripts/prepare_generative_video_prompt_suite.py" in Path("paper_workflow/notebook_utils/generative_video_model_probe_workflow.py").read_text(encoding="utf-8")
-    assert "experiments.generative_video_model_probe.colab_runtime" in Path("paper_workflow/notebook_utils/generative_video_model_probe_workflow.py").read_text(encoding="utf-8")
-    assert "experiments.generative_video_model_probe.formal_metric_runner" in Path("paper_workflow/notebook_utils/generative_video_model_probe_workflow.py").read_text(encoding="utf-8")
-    assert "experiments.generative_video_model_probe.motion_threshold_calibration" in Path("paper_workflow/notebook_utils/generative_video_model_probe_workflow.py").read_text(encoding="utf-8")
-    assert "experiments.generative_video_model_probe.postprocess_runner" in Path("paper_workflow/notebook_utils/generative_video_model_probe_workflow.py").read_text(encoding="utf-8")
-    assert "experiments.generative_video_model_probe.pilot_matrix_postprocess" in Path("paper_workflow/notebook_utils/generative_video_model_probe_workflow.py").read_text(encoding="utf-8")
-    assert "experiments.generative_video_model_probe.attack_runner" in Path("paper_workflow/notebook_utils/generative_video_model_probe_workflow.py").read_text(encoding="utf-8")
-    assert "experiments.generative_video_model_probe.detection_runner" in Path("paper_workflow/notebook_utils/generative_video_model_probe_workflow.py").read_text(encoding="utf-8")
-    assert "scripts/build_external_baseline_source_intake.py" in Path("paper_workflow/notebook_utils/generative_video_model_probe_workflow.py").read_text(encoding="utf-8")
-    assert "--execute-clone" in Path("paper_workflow/notebook_utils/generative_video_model_probe_workflow.py").read_text(encoding="utf-8")
-    assert "experiments.generative_video_model_probe.external_baseline_runner" in Path("paper_workflow/notebook_utils/generative_video_model_probe_workflow.py").read_text(encoding="utf-8")
-    assert "experiments.generative_video_model_probe.pilot_claim_gate" in Path("paper_workflow/notebook_utils/generative_video_model_probe_workflow.py").read_text(encoding="utf-8")
-    assert "experiments.generative_video_model_probe.validation_internal_ablation" in Path("paper_workflow/notebook_utils/generative_video_model_probe_workflow.py").read_text(encoding="utf-8")
-    assert "experiments.generative_video_model_probe.adaptive_attack_runner" in Path("paper_workflow/notebook_utils/generative_video_model_probe_workflow.py").read_text(encoding="utf-8")
-    assert "experiments.generative_video_model_probe.replay_and_sketch_gate" in Path("paper_workflow/notebook_utils/generative_video_model_probe_workflow.py").read_text(encoding="utf-8")
-    assert "experiments.generative_video_model_probe.claim3_downgrade" in Path("paper_workflow/notebook_utils/generative_video_model_probe_workflow.py").read_text(encoding="utf-8")
-    assert "experiments.generative_video_model_probe.statistical_confidence_interval" in Path("paper_workflow/notebook_utils/generative_video_model_probe_workflow.py").read_text(encoding="utf-8")
-    assert "experiments.generative_video_model_probe.fpr01_pilot_gate" in Path("paper_workflow/notebook_utils/generative_video_model_probe_workflow.py").read_text(encoding="utf-8")
-    assert "experiments.generative_video_model_probe.validation_artifact_rebuild" in Path("paper_workflow/notebook_utils/generative_video_model_probe_workflow.py").read_text(encoding="utf-8")
-    assert "experiments.generative_video_model_probe.validation_scale_gate" in Path("paper_workflow/notebook_utils/generative_video_model_probe_workflow.py").read_text(encoding="utf-8")
-    assert "scripts/package_results/generative_video_drive_packager.py" in Path("paper_workflow/notebook_utils/generative_video_model_probe_workflow.py").read_text(encoding="utf-8")
+    assert "scripts/prepare_generative_video_prompt_suite.py" in helper_text
+    assert "experiments.generative_video_model_probe.colab_runtime" in helper_text
+    assert "experiments.generative_video_model_probe.formal_metric_runner" in helper_text
+    assert "experiments.generative_video_model_probe.motion_threshold_calibration" in helper_text
+    assert "experiments.generative_video_model_probe.postprocess_runner" in helper_text
+    assert "experiments.generative_video_model_probe.pilot_matrix_postprocess" in helper_text
+    assert "experiments.generative_video_model_probe.attack_runner" in helper_text
+    assert "experiments.generative_video_model_probe.detection_runner" in helper_text
+    assert "scripts/build_external_baseline_source_intake.py" in helper_text
+    assert "--execute-clone" in helper_text
+    assert "experiments.generative_video_model_probe.external_baseline_runner" in helper_text
+    assert "experiments.generative_video_model_probe.pilot_claim_gate" in helper_text
+    assert "experiments.generative_video_model_probe.validation_internal_ablation" in helper_text
+    assert "experiments.generative_video_model_probe.adaptive_attack_runner" in helper_text
+    assert "experiments.generative_video_model_probe.replay_and_sketch_gate" in helper_text
+    assert "experiments.generative_video_model_probe.claim3_downgrade" in helper_text
+    assert "experiments.generative_video_model_probe.statistical_confidence_interval" in helper_text
+    assert "experiments.generative_video_model_probe.fpr01_pilot_gate" in helper_text
+    assert "experiments.generative_video_model_probe.validation_artifact_rebuild" in helper_text
+    assert "experiments.generative_video_model_probe.validation_scale_gate" in helper_text
+    assert "scripts/package_results/generative_video_drive_packager.py" in helper_text
     assert "pytest -q" in source
     assert "tools/harness/run_all_audits.py" in source
+    assert "pilot_paper_results" not in source
+
+
+@pytest.mark.quick
+def test_split_colab_notebooks_are_profile_driven() -> None:
+    """拆分后的 Colab Notebook 必须通过统一配置切换 profile, 不能维护独立路径硬编码。"""
+    expected_roles = {
+        "motion_threshold_calibration_colab.ipynb": "motion_threshold_calibration",
+        "generative_video_runtime_colab.ipynb": "generative_video_runtime",
+        "external_baseline_formal_scoring_colab.ipynb": "external_baseline_formal_scoring",
+        "paper_gate_and_package_colab.ipynb": "paper_gate_and_package",
+    }
+    for notebook_name, role in expected_roles.items():
+        notebook_path = Path("paper_workflow/colab_utils") / notebook_name
+        assert notebook_path.exists()
+        notebook = json.loads(notebook_path.read_text(encoding="utf-8"))
+        source = "".join("".join(cell.get("source", [])) for cell in notebook["cells"])
+        assert f"NOTEBOOK_ROLE = '{role}'" in source
+        assert "SSTW_WORKFLOW_PROFILE" in source
+        assert "resolve_notebook_workflow_profile" in source
+        assert "workflow_profile=WORKFLOW_PROFILE" in source
+        assert "stage_enabled(" in source
+        assert "drive.mount('/content/drive')" in source
+        assert "git clone" in source
+        assert "tools/harness/run_all_audits.py" in source
+        assert "pilot_paper_results" not in source
+        assert "full_paper_results" not in source
+
+    runtime_source = Path("paper_workflow/colab_utils/generative_video_runtime_colab.ipynb").read_text(encoding="utf-8")
+    baseline_source = Path("paper_workflow/colab_utils/external_baseline_formal_scoring_colab.ipynb").read_text(encoding="utf-8")
+    gate_source = Path("paper_workflow/colab_utils/paper_gate_and_package_colab.ipynb").read_text(encoding="utf-8")
+    assert "external_baseline_colab_preflight" in runtime_source
+    assert "build_external_baseline_comparison_command" not in runtime_source
+    assert "build_colab_runtime_command" not in baseline_source
+    assert "build_external_baseline_comparison_command" in baseline_source
+    assert "build_fpr01_pilot_gate_command" in gate_source
+    assert "build_validation_scale_gate_command" in gate_source
+
+
+@pytest.mark.quick
+def test_notebook_workflow_profile_config_supports_profile_switching() -> None:
+    """统一配置层必须能区分 validation_scale、pilot_paper 和未开放的 full_paper。"""
+    assert default_workflow_profile_for_notebook_role("generative_video_runtime") == "validation_scale"
+    validation = resolve_notebook_workflow_profile("validation_scale", "paper_gate_and_package")
+    pilot = resolve_notebook_workflow_profile("fpr01_pilot", "paper_gate_and_package")
+    full = resolve_notebook_workflow_profile("full_paper", config_path="configs/paper_workflow/generative_video_notebook_workflows.json", allow_disabled=True)
+
+    assert validation["workflow_profile"] == "validation_scale"
+    assert validation["result_tier"] == "validation_scale"
+    assert validation["enabled_for_claim"] is False
+    assert validation["target_fpr"] == 0.01
+    assert "validation_scale_gate" in build_workflow_stage_plan("validation_scale", "paper_gate_and_package")
+    assert "fpr01_pilot_gate" not in build_workflow_stage_plan("validation_scale", "paper_gate_and_package")
+
+    assert pilot["requested_workflow_profile"] == "fpr01_pilot"
+    assert pilot["workflow_profile"] == "pilot_paper"
+    assert pilot["profile_alias_applied"] is True
+    assert pilot["result_tier"] == "pilot_paper"
+    assert pilot["enabled_for_claim"] is True
+    assert pilot["method_sample_count"] == 168
+    assert pilot["baseline_sample_count"] == 84
+    assert pilot["protocol_config_path"] == "configs/protocol/fpr01_pilot_generative_probe.json"
+    assert "fpr01_pilot_gate" in build_workflow_stage_plan("pilot_paper", "paper_gate_and_package")
+    assert "validation_scale_gate" not in build_workflow_stage_plan("pilot_paper", "paper_gate_and_package")
+
+    assert full["workflow_profile"] == "full_paper"
+    assert full["profile_status"] == "design_registered_not_ready"
+    assert full["enabled_for_run"] is False
+    assert full["enabled_for_claim"] is False
+    with pytest.raises(RuntimeError):
+        resolve_notebook_workflow_profile("full_paper", "paper_gate_and_package")
+
+
+@pytest.mark.quick
+def test_profile_specific_drive_layout_prevents_result_mixing(tmp_path: Path) -> None:
+    """带 workflow profile 的 Drive layout 必须按结果层级隔离 run 和 package 目录。"""
+    validation_layout = build_drive_layout(
+        str(tmp_path / "SSTW"),
+        workflow_profile="validation_scale",
+        notebook_role="generative_video_runtime",
+    )
+    pilot_layout = build_drive_layout(
+        str(tmp_path / "SSTW"),
+        workflow_profile="pilot_paper",
+        notebook_role="generative_video_runtime",
+    )
+
+    assert validation_layout["drive_run_root"].endswith("/runs/generative_video_model_probe/validation_scale")
+    assert validation_layout["drive_package_dir"].endswith("/packages/generative_video_model_probe/validation_scale")
+    assert validation_layout["motion_threshold_artifact_run_root"].endswith("/runs/generative_video_model_probe/motion_calibration")
+    assert validation_layout["runtime_profile"] == "validation_scale"
+    assert pilot_layout["drive_run_root"].endswith("/runs/generative_video_model_probe/pilot_paper")
+    assert pilot_layout["drive_package_dir"].endswith("/packages/generative_video_model_probe/pilot_paper")
+    assert pilot_layout["motion_threshold_artifact_run_root"].endswith("/runs/generative_video_model_probe/motion_calibration")
+    assert pilot_layout["runtime_profile"] == "pilot_paper"
+    assert validation_layout["drive_run_root"] != pilot_layout["drive_run_root"]
+
+
+@pytest.mark.quick
+def test_profile_specific_layout_reuses_shared_motion_threshold_artifact(tmp_path: Path) -> None:
+    """profile-specific run_root 隔离后, evaluation profile 仍必须能读取独立 calibration artifact。"""
+    layout = build_drive_layout(
+        str(tmp_path / "SSTW"),
+        workflow_profile="validation_scale",
+        notebook_role="generative_video_runtime",
+    )
+    calibration_root = Path(layout["motion_threshold_artifact_run_root"])
+    write_json(calibration_root / "artifacts" / "motion_threshold_calibration_decision.json", {
+        "motion_threshold_calibration_ready": True,
+        "motion_threshold_calibration_decision": "PASS",
+        "motion_threshold_id": "motion_delta_calibrated_v1",
+        "motion_threshold_source_split": "calibration",
+        "motion_delta_threshold": 0.01,
+        "claim_support_status": "motion_threshold_calibration_ready",
+    })
+
+    decision = validate_motion_threshold_ready_for_profile(layout, "validation_scale")
+
+    assert decision["motion_threshold_reuse_required"] is True
+    assert decision["motion_threshold_reuse_status"] == "ready"
+    assert decision["motion_threshold_id"] == "motion_delta_calibrated_v1"
 
 
 @pytest.mark.quick

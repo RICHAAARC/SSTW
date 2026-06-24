@@ -125,7 +125,7 @@ official_command_manifest.json
 
 这些文件会被自动纳入 `external_baseline_execution_manifest.json` 的 `evidence_paths`。因此 Colab 断开后, 用户仍可以从 Google Drive package 中审计每条 `measured_formal` baseline score 的官方输出来源。若没有自动持久化证据且没有额外 evidence path, `measured_formal` rows 只能证明 command adapter 写出了受治理 records, 不能单独支撑论文主表 claim。
 
-当前 `validation_scale` 已经是进入 paper 级运行前的最后一道完整门禁。因此在 `PROFILE = 'validation_scale'`、`PROFILE = 'pilot_paper'` 或 `PROFILE = 'fpr01_pilot'` 时, Colab notebook 会在 6 个现代 baseline command 缺失时提前阻断, 避免先消耗 GPU 生成视频后才发现 baseline 主表无法闭合。
+当前 `validation_scale` 已经是进入 paper 级运行前的最后一道完整门禁。因此在 `SSTW_WORKFLOW_PROFILE=validation_scale` 或 `SSTW_WORKFLOW_PROFILE=pilot_paper` 时, Colab notebook 会在 6 个现代 baseline command 缺失时提前阻断, 避免先消耗 GPU 生成视频后才发现 baseline 主表无法闭合。旧的 `fpr01_pilot` 仅作为兼容别名映射到 `pilot_paper`。
 
 Notebook 的现代 baseline command preflight 逻辑集中在:
 
@@ -140,3 +140,34 @@ artifacts/external_baseline_colab_preflight_decision.json
 ```
 
 该 artifact 只用于冷启动执行审计, 不表示 baseline 已经运行, 也不能单独支撑外部 baseline 对比 claim。
+
+## 独立 baseline Notebook
+
+现代 baseline 正式运行应优先使用:
+
+```text
+paper_workflow/colab_utils/external_baseline_formal_scoring_colab.ipynb
+```
+
+该 Notebook 的职责是读取同一 `workflow_profile` 的 `drive_run_root`, 执行 source intake、
+command adapter 和 comparison records 生成。它不重新生成 Wan2.1 视频, 也不执行最终
+paper gate。这样可以把三类失败原因分离:
+
+1. `generative_video_runtime_colab.ipynb`: 主方法生成、attack 和 detection 是否成功。
+2. `external_baseline_formal_scoring_colab.ipynb`: 现代视频水印 baseline 官方命令和 evidence 是否成功。
+3. `paper_gate_and_package_colab.ipynb`: validation-scale 或 pilot-paper gate 是否满足论文协议。
+
+Notebook 的 profile、Drive 目录和 stage plan 均由以下配置控制:
+
+```text
+configs/paper_workflow/generative_video_notebook_workflows.json
+```
+
+因此, 切换 `validation_scale` 与 `pilot_paper` 时, 不应复制或改写 Notebook 中的 run_root /
+package_dir 字符串, 而应设置:
+
+```text
+SSTW_WORKFLOW_PROFILE=validation_scale
+或
+SSTW_WORKFLOW_PROFILE=pilot_paper
+```

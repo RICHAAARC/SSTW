@@ -307,6 +307,42 @@ Notebook 与 repository module 的跨边界数据
 | dataset_source | protocol | none | true | false | false | B5 input dataset source description. |
 | prompt_negative_text | protocol | none | false | false | false | B5 prompt negative text kept in input dataset, not formal result records. |
 | colab_runtime_profile | protocol | none | true | false | false | B5 Colab runtime profile. |
+| config_kind | governance | none | true | false | false | 配置或 artifact 的语义类型。 |
+| config_version | governance | none | true | false | false | 配置或 artifact 的版本标识。 |
+| default_drive_project_root | protocol | none | false | false | false | Colab workflow 统一配置中的默认 Google Drive 项目根目录。 |
+| default_dataset_root_relative | protocol | none | false | false | false | Colab workflow 统一配置中的默认 dataset 相对目录。 |
+| default_prompt_suite_path_relative | protocol | none | false | false | false | Colab workflow 统一配置中的默认 prompt suite 相对路径。 |
+| default_workflow_profile_by_notebook_role | protocol | none | false | false | false | Colab workflow 统一配置中每类 Notebook 的默认 workflow profile 映射。 |
+| workflow_profile_aliases | protocol | none | false | false | false | Colab workflow 统一配置中旧 profile 名称到规范 profile 名称的别名映射。 |
+| workflow_profiles | protocol | none | false | false | false | Colab workflow 统一配置中所有结果层级 profile 的配置映射。 |
+| workflow_profile | protocol | none | true | false | false | Colab workflow 的规范 profile 名称, 用于区分 motion_calibration、validation_scale、pilot_paper 和未来 full_paper。 |
+| requested_workflow_profile | protocol | none | true | false | false | 用户或环境变量请求的原始 workflow profile 名称。 |
+| canonical_workflow_profile | protocol | none | true | false | false | 经过 alias 解析后的规范 workflow profile 名称。 |
+| profile_alias_applied | governance | none | true | false | false | requested_workflow_profile 是否经过 alias 映射。 |
+| profile_status | governance | none | true | false | false | workflow profile 的实现或阻断状态。 |
+| enabled_for_run | governance | none | true | false | false | workflow profile 当前是否允许作为可运行入口。 |
+| enabled_for_claim | governance | none | true | false | false | workflow profile 当前是否允许支撑论文 claim。 |
+| runtime_profile | protocol | none | true | false | false | workflow profile 映射到 experiments runner 的 runtime profile。 |
+| result_tier | protocol | none | true | false | false | 当前结果层级, 例如 validation_scale、pilot_paper 或 future full_paper。 |
+| notebook_role | protocol | none | true | false | false | Colab Notebook 的职责角色, 用于从统一 workflow 配置读取 stage plan。 |
+| notebook_roles | protocol | none | false | false | false | Colab workflow 统一配置中 Notebook role 到路径、允许 profile 和 stage plan 的映射。 |
+| notebook_path | artifact | none | true | false | false | Notebook role 对应的 Colab Notebook 文件路径。 |
+| allowed_workflow_profiles | protocol | none | true | false | false | 某个 Notebook role 允许使用的 workflow profile 列表。 |
+| workflow_stage_plan | protocol | none | true | false | false | 某个 Notebook role 在指定 workflow profile 下应执行的语义阶段列表。 |
+| disabled_stage_names | protocol | none | true | false | false | 某个 workflow profile 在通用 stage plan 中禁用的阶段名称列表。 |
+| protocol_config_path | protocol | none | true | false | false | workflow profile 对应的 protocol gate 配置路径。 |
+| drive_run_root_relative | artifact | none | false | false | false | workflow profile 对应的 Google Drive run_root 相对路径。 |
+| drive_package_dir_relative | artifact | none | false | false | false | workflow profile 对应的 Google Drive package 目录相对路径。 |
+| drive_log_dir_relative | artifact | none | false | false | false | workflow profile 对应的 Google Drive log 目录相对路径。 |
+| motion_threshold_artifact_run_root_relative | artifact | none | false | false | false | workflow profile 复用 motion threshold calibration artifact 的 Google Drive run_root 相对路径。 |
+| motion_threshold_artifact_run_root | artifact | none | true | false | false | 当前 workflow profile 复用 motion threshold calibration artifact 的绝对 run_root。 |
+| method_sample_count | protocol | none | true | false | false | workflow profile 计划中的主方法样本数量。 |
+| baseline_sample_count | protocol | none | true | false | false | workflow profile 计划中的 baseline 评价样本数量。 |
+| max_content_records | governance | none | true | false | false | workflow profile 计划或审计中允许读取的最大内容记录数量。 |
+| max_source_records | governance | none | true | false | false | workflow profile 计划或审计中允许读取的最大 source record 数量。 |
+| minimum_clean_negative_count | protocol | none | true | false | false | workflow profile 或 gate 要求的 clean negative 最小数量。 |
+| bootstrap_iteration_count | protocol | none | true | false | false | workflow profile 计划中的 bootstrap 迭代次数。 |
+| profile_switching_note | governance | none | false | false | false | workflow profile 切换时的人类可读边界说明。 |
 | cross_model_role | generalization | none | true | false | false | B5 model role for cross-model validation. |
 | generation_status | protocol | none | true | false | false | B5 generation execution status. |
 | generation_failure_reason | protocol | none | true | false | false | B5 generation failure reason. |

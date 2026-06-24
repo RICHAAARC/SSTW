@@ -1,0 +1,237 @@
+{
+  "config_kind": "generative_video_notebook_workflow_config",
+  "config_version": "2026_06_24_profile_driven_colab_workflow_v1",
+  "default_drive_project_root": "/content/drive/MyDrive/SSTW",
+  "default_dataset_root_relative": "datasets/generative_video_prompt_suite",
+  "default_prompt_suite_path_relative": "datasets/generative_video_prompt_suite/prompt_seed_suite.json",
+  "default_workflow_profile_by_notebook_role": {
+    "motion_threshold_calibration": "motion_calibration",
+    "generative_video_runtime": "validation_scale",
+    "external_baseline_formal_scoring": "validation_scale",
+    "paper_gate_and_package": "validation_scale",
+    "generative_video_model_probe_legacy": "validation_scale"
+  },
+  "workflow_profile_aliases": {
+    "fpr01_pilot": "pilot_paper"
+  },
+  "workflow_profiles": {
+    "motion_calibration": {
+      "profile_status": "implemented",
+      "enabled_for_run": true,
+      "enabled_for_claim": false,
+      "runtime_profile": "motion_calibration",
+      "result_tier": "motion_calibration",
+      "paper_gate_profile": false,
+      "protocol_config_path": "configs/protocol/validation_scale_generative_probe.json",
+      "drive_run_root_relative": "runs/generative_video_model_probe/motion_calibration",
+      "drive_package_dir_relative": "packages/generative_video_model_probe/motion_calibration",
+      "drive_log_dir_relative": "logs/generative_video_model_probe/motion_calibration",
+      "motion_threshold_artifact_run_root_relative": "runs/generative_video_model_probe/motion_calibration",
+      "method_sample_count": 224,
+      "baseline_sample_count": 0,
+      "max_content_records": 224,
+      "max_source_records": 224,
+      "target_fpr": null,
+      "minimum_clean_negative_count": 128,
+      "bootstrap_iteration_count": 0,
+      "disabled_stage_names": [
+        "external_baseline_colab_preflight",
+        "motion_threshold_reuse_check",
+        "mechanism_postprocess",
+        "pilot_matrix_postprocess",
+        "runtime_attack",
+        "runtime_detection",
+        "external_baseline_source_intake",
+        "external_baseline_comparison",
+        "small_scale_claim_pilot_gate",
+        "validation_internal_ablation",
+        "adaptive_attack_proxy",
+        "replay_and_sketch_gate",
+        "claim3_downgrade_gate",
+        "statistical_confidence_interval",
+        "fpr01_pilot_gate",
+        "validation_artifact_rebuild_dry_run",
+        "validation_scale_gate"
+      ],
+      "profile_switching_note": "motion_calibration 只冻结运动阈值, 不支撑论文 detection claim。"
+    },
+    "validation_scale": {
+      "profile_status": "implemented_requires_colab_formal_baselines",
+      "enabled_for_run": true,
+      "enabled_for_claim": false,
+      "runtime_profile": "validation_scale",
+      "result_tier": "validation_scale",
+      "paper_gate_profile": true,
+      "protocol_config_path": "configs/protocol/validation_scale_generative_probe.json",
+      "drive_run_root_relative": "runs/generative_video_model_probe/validation_scale",
+      "drive_package_dir_relative": "packages/generative_video_model_probe/validation_scale",
+      "drive_log_dir_relative": "logs/generative_video_model_probe/validation_scale",
+      "motion_threshold_artifact_run_root_relative": "runs/generative_video_model_probe/motion_calibration",
+      "method_sample_count": 24,
+      "baseline_sample_count": 24,
+      "max_content_records": 24,
+      "max_source_records": 24,
+      "target_fpr": 0.01,
+      "minimum_clean_negative_count": 0,
+      "bootstrap_iteration_count": 200,
+      "disabled_stage_names": [
+        "motion_threshold_calibration",
+        "fpr01_pilot_gate"
+      ],
+      "profile_switching_note": "validation_scale 是进入 paper 级运行前的最后完整门禁, 必须完成现代 baseline、内部消融、attack、replay 或 Claim-3 downgrade、CI 和 artifact rebuild。"
+    },
+    "pilot_paper": {
+      "profile_status": "implemented_requires_validation_scale_and_colab_formal_baselines",
+      "enabled_for_run": true,
+      "enabled_for_claim": true,
+      "runtime_profile": "pilot_paper",
+      "result_tier": "pilot_paper",
+      "paper_gate_profile": true,
+      "protocol_config_path": "configs/protocol/fpr01_pilot_generative_probe.json",
+      "drive_run_root_relative": "runs/generative_video_model_probe/pilot_paper",
+      "drive_package_dir_relative": "packages/generative_video_model_probe/pilot_paper",
+      "drive_log_dir_relative": "logs/generative_video_model_probe/pilot_paper",
+      "motion_threshold_artifact_run_root_relative": "runs/generative_video_model_probe/motion_calibration",
+      "method_sample_count": 168,
+      "baseline_sample_count": 84,
+      "max_content_records": 168,
+      "max_source_records": 168,
+      "target_fpr": 0.01,
+      "minimum_clean_negative_count": 1000,
+      "bootstrap_iteration_count": 1000,
+      "disabled_stage_names": [
+        "motion_threshold_calibration",
+        "validation_scale_gate"
+      ],
+      "profile_switching_note": "pilot_paper 是小规模跑完整 full paper 协议并产出 pilot 级论文结果, 与 full_paper 的差异只允许是样本规模和评价等级。"
+    },
+    "full_paper": {
+      "profile_status": "design_registered_not_ready",
+      "enabled_for_run": false,
+      "enabled_for_claim": false,
+      "runtime_profile": "full_paper",
+      "result_tier": "full_paper",
+      "paper_gate_profile": true,
+      "protocol_config_path": "configs/protocol/full_paper_generative_probe.json",
+      "drive_run_root_relative": "runs/generative_video_model_probe/full_paper",
+      "drive_package_dir_relative": "packages/generative_video_model_probe/full_paper",
+      "drive_log_dir_relative": "logs/generative_video_model_probe/full_paper",
+      "motion_threshold_artifact_run_root_relative": "runs/generative_video_model_probe/motion_calibration",
+      "method_sample_count": null,
+      "baseline_sample_count": null,
+      "max_content_records": null,
+      "max_source_records": null,
+      "target_fpr": 0.001,
+      "minimum_clean_negative_count": null,
+      "bootstrap_iteration_count": null,
+      "disabled_stage_names": [],
+      "profile_switching_note": "full_paper 只登记未来同构协议入口, 当前不得作为可运行 claim profile 使用。"
+    }
+  },
+  "notebook_roles": {
+    "motion_threshold_calibration": {
+      "notebook_path": "paper_workflow/colab_utils/motion_threshold_calibration_colab.ipynb",
+      "allowed_workflow_profiles": [
+        "motion_calibration"
+      ],
+      "stage_plan": [
+        "prepare_prompt_suite",
+        "wan21_runtime_generation",
+        "formal_metric_scoring",
+        "motion_threshold_calibration",
+        "quick_tests_and_harness",
+        "drive_packaging"
+      ]
+    },
+    "generative_video_runtime": {
+      "notebook_path": "paper_workflow/colab_utils/generative_video_runtime_colab.ipynb",
+      "allowed_workflow_profiles": [
+        "validation_scale",
+        "pilot_paper",
+        "full_paper"
+      ],
+      "stage_plan": [
+        "prepare_prompt_suite",
+        "external_baseline_colab_preflight",
+        "wan21_runtime_generation",
+        "formal_metric_scoring",
+        "motion_threshold_reuse_check",
+        "mechanism_postprocess",
+        "pilot_matrix_postprocess",
+        "runtime_attack",
+        "runtime_detection",
+        "small_scale_claim_pilot_gate",
+        "quick_tests_and_harness",
+        "drive_packaging"
+      ]
+    },
+    "external_baseline_formal_scoring": {
+      "notebook_path": "paper_workflow/colab_utils/external_baseline_formal_scoring_colab.ipynb",
+      "allowed_workflow_profiles": [
+        "validation_scale",
+        "pilot_paper",
+        "full_paper"
+      ],
+      "stage_plan": [
+        "external_baseline_colab_preflight",
+        "external_baseline_source_intake",
+        "external_baseline_comparison",
+        "quick_tests_and_harness",
+        "drive_packaging"
+      ]
+    },
+    "paper_gate_and_package": {
+      "notebook_path": "paper_workflow/colab_utils/paper_gate_and_package_colab.ipynb",
+      "allowed_workflow_profiles": [
+        "validation_scale",
+        "pilot_paper",
+        "full_paper"
+      ],
+      "stage_plan": [
+        "validation_internal_ablation",
+        "adaptive_attack_proxy",
+        "replay_and_sketch_gate",
+        "claim3_downgrade_gate",
+        "statistical_confidence_interval",
+        "fpr01_pilot_gate",
+        "validation_artifact_rebuild_dry_run",
+        "validation_scale_gate",
+        "quick_tests_and_harness",
+        "drive_packaging"
+      ]
+    },
+    "generative_video_model_probe_legacy": {
+      "notebook_path": "paper_workflow/colab_utils/generative_video_model_probe_colab.ipynb",
+      "allowed_workflow_profiles": [
+        "motion_calibration",
+        "validation_scale",
+        "pilot_paper",
+        "full_paper"
+      ],
+      "stage_plan": [
+        "prepare_prompt_suite",
+        "external_baseline_colab_preflight",
+        "wan21_runtime_generation",
+        "formal_metric_scoring",
+        "motion_threshold_calibration_or_reuse_check",
+        "mechanism_postprocess",
+        "pilot_matrix_postprocess",
+        "runtime_attack",
+        "runtime_detection",
+        "external_baseline_source_intake",
+        "external_baseline_comparison",
+        "small_scale_claim_pilot_gate",
+        "validation_internal_ablation",
+        "adaptive_attack_proxy",
+        "replay_and_sketch_gate",
+        "claim3_downgrade_gate",
+        "statistical_confidence_interval",
+        "fpr01_pilot_gate",
+        "validation_artifact_rebuild_dry_run",
+        "validation_scale_gate",
+        "quick_tests_and_harness",
+        "drive_packaging"
+      ]
+    }
+  }
+}

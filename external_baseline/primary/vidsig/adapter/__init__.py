@@ -1,0 +1,1 @@
+"""VidSig adapter 包。"""

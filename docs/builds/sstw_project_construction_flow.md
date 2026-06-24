@@ -131,10 +131,10 @@ trajectory_time_shuffled_control
 ```text
 mechanism_control_baseline: endpoint_only, trajectory_only, generic_ssm, key_agnostic_state_space
 explicit_synchronization_baseline: explicit_dtw_temporal_alignment, frame_matching_temporal_registration
-modern_video_watermark_baseline: VideoShield, SIGMark, SPDMark, VideoMark 或 VidSig, VideoSeal
+modern_video_watermark_baseline: VideoShield, SIGMark, SPDMark, VideoMark 与 VidSig, VideoSeal
 ```
 
-其中, `explicit_dtw_temporal_alignment` 与 `frame_matching_temporal_registration` 只能证明 SSTW 不是普通显式时间对齐; 它们不能作为顶刊顶会版本的唯一外部 baseline。VideoSeal、VideoShield、SIGMark、SPDMark、VideoMark 或 VidSig 等现代视频水印方法可以进入外部 baseline 层, 但必须以 governed records 方式运行或明确记录未运行原因。若某个 baseline 与并行论文或作者已有工作重叠, 仍可作为 supplementary comparison 或 related-work robustness control, 但不能替代与 SSTW 机制最接近的 in-generation video watermark baseline。
+其中, `explicit_dtw_temporal_alignment` 与 `frame_matching_temporal_registration` 只能证明 SSTW 不是普通显式时间对齐; 它们不能作为顶刊顶会版本的唯一外部 baseline。VideoSeal、VideoShield、SIGMark、SPDMark、VideoMark 与 VidSig 等现代视频水印方法可以进入外部 baseline 层, 但必须以 governed records 方式运行或明确记录未运行原因。若某个 baseline 与并行论文或作者已有工作重叠, 仍可作为 supplementary comparison 或 related-work robustness control, 但不能替代与 SSTW 机制最接近的 in-generation video watermark baseline。
 
 ### 2.3 与服务端日志审计的边界
 
@@ -744,7 +744,8 @@ key_agnostic_state_space_baseline
 videoshield
 sigmark
 spdmark
-videomark_or_vidsig
+videomark
+vidsig
 videoseal
 ```
 
@@ -766,7 +767,7 @@ explicit_synchronization_control: explicit_dtw_temporal_alignment, frame_matchin
 | VideoShield | primary modern video diffusion watermark baseline | 训练-free in-generation 视频扩散水印, 与生成时水印最接近 | 记录模型、视频长度、攻击、检测阈值、失败原因 |
 | SIGMark | primary blind extraction baseline | 面向视频扩散的 blind extraction 与时序鲁棒水印 | 记录是否能在本项目视频格式上运行, 不能运行时写明协议 gap |
 | SPDMark | parameter or adapter based baseline | 选择性参数位移 / 适配器类视频水印, 可对比训练或参数修改路线 | 记录训练 / 适配成本、推理成本和检测性能 |
-| VideoMark 或 VidSig | in-generation 或 latent-video baseline | 覆盖 PRC / decoder fine-tuning / latent video signature 路线 | 记录是否依赖 decoder 修改、是否需要时间匹配 |
+| VideoMark 与 VidSig | in-generation 或 latent-video baseline | 覆盖 PRC / decoder fine-tuning / latent video signature 路线 | 记录是否依赖 decoder 修改、是否需要时间匹配 |
 | VideoSeal | post-hoc robust video watermark baseline | 开源且工程成熟, 用于证明 SSTW 不是普通后处理水印 | 记录后处理开销、质量指标与攻击鲁棒性 |
 | explicit_dtw_temporal_alignment | synchronization control | 显式恢复时间路径的反事实 baseline | 只能支撑 control 结论 |
 | frame_matching_temporal_registration | synchronization control | 显式帧匹配配准 baseline | 只能支撑 control 结论 |
@@ -797,8 +798,8 @@ explicit_synchronization_control: explicit_dtw_temporal_alignment, frame_matchin
 validation_generation_records_ready
 validation_detection_records_ready
 validation_external_baseline_comparison_records_ready
-external_baseline_measured_adapter_count >= 7
-modern_external_baseline_formal_measured_adapter_count >= 5
+external_baseline_measured_adapter_count >= 8
+modern_external_baseline_formal_measured_adapter_count >= 6
 validation_internal_ablation_records_ready
 required_internal_ablation_variants covered
 validation_adaptive_attack_records_ready
@@ -920,8 +921,8 @@ trajectory_sketch_replacement_attempt
 ```text
 validation_scale_gate_decision == PASS
 external_baseline_comparison_decision == PASS
-external_baseline_measured_adapter_count >= 7
-modern_external_baseline_formal_measured_adapter_count >= 5
+external_baseline_measured_adapter_count >= 8
+modern_external_baseline_formal_measured_adapter_count >= 6
 pilot_paper_external_baseline_trace_count_min >= 84
 validation_internal_ablation_decision == PASS
 pilot_paper_internal_ablation_trace_count_min >= 84
@@ -1357,10 +1358,11 @@ detection_overhead
 
 | baseline | 来源 | 工程接入备注 |
 |---|---|---|
-| VideoShield | https://openreview.net/forum?id=uzz3qAYy0D | 作为 2025 in-generation video diffusion watermark baseline。 |
-| SIGMark | https://openreview.net/forum?id=tKyAD2LhnI | 作为 2026 blind extraction / scalable in-generation video watermark baseline。 |
-| SPDMark | https://openaccess.thecvf.com/content/CVPR2026/papers/Fares_SPDMark_Selective_Parameter_Displacement_for_Robust_Video_Watermarking_CVPR_2026_paper.pdf | 作为 2026 parameter / adapter based video watermark baseline。 |
-| VideoMark | https://arxiv.org/html/2504.16359v1 | 作为 training-free 或 distortion-free video diffusion watermark baseline 候选。 |
+| VideoShield | https://github.com/hurunyi/VideoShield | 作为 2025 in-generation video diffusion watermark baseline。 |
+| SIGMark | https://github.com/JeremyZhao1998/SIGMark-release | 作为 2026 blind extraction / scalable in-generation video watermark baseline。 |
+| SPDMark | https://github.com/Samar-Fares/SPDMark | 作为 2026 parameter / adapter based video watermark baseline。 |
+| VideoMark | https://github.com/KYRIE-LI11/VideoMark | 作为 training-free 或 distortion-free video diffusion watermark baseline 候选。 |
+| VidSig | https://github.com/hardenyu21/Video-Signature | 作为 latent video signature baseline 候选。 |
 | VideoSeal | https://github.com/facebookresearch/videoseal | 作为开源 post-hoc neural video watermark baseline。 |
 
 若 baseline 无法直接运行, 必须写出:
@@ -1402,15 +1404,15 @@ source_registry
 | adapter score records | `records/external_baseline_score_records.jsonl` | 在同一 run_root 上写出 measured_proxy 或 measured_formal records | 仅 measured_formal 可进入正式对比候选 |
 | execution manifest | `artifacts/external_baseline_execution_manifest.json` | 记录 measured / formal 数量、evidence paths、source intake 路径和执行边界 | evidence paths 缺失时不能升级为正式主表 claim |
 
-其中 `explicit_dtw_temporal_alignment` 与 `explicit_frame_matching_temporal_registration` 只能作为显式同步 control。`videoshield`、`sigmark`、`spdmark`、`videomark_or_vidsig` 和 `videoseal` 必须通过官方命令或已放入 `source/` 的等价官方入口产生 `measured_formal` records。
+其中 `explicit_dtw_temporal_alignment` 与 `explicit_frame_matching_temporal_registration` 只能作为显式同步 control。`videoshield`、`sigmark`、`spdmark`、`videomark`、`vidsig` 和 `videoseal` 必须通过官方命令或已放入 `source/` 的等价官方入口产生 `measured_formal` records。
 
 ### 23.2 validation_scale 对 baseline 的硬阻断
 
 `validation_scale` 是进入 `pilot_paper` 前最后一道 paper 级工程门禁, 因此 external baseline 条件不得只要求两个显式同步 control。该阶段必须检查:
 
 ```text
-external_baseline_measured_adapter_count >= 7
-modern_external_baseline_formal_measured_adapter_count >= 5
+external_baseline_measured_adapter_count >= 8
+modern_external_baseline_formal_measured_adapter_count >= 6
 missing_modern_external_baseline_formal_adapter_names == []
 external_baseline_execution_manifest_status == present
 ```
@@ -2009,7 +2011,7 @@ packager 轻量回归测试
 clone / pull SSTW 仓库
 安装 SSTW 依赖
 安装或挂载现代 baseline 官方实现
-配置 5 个现代 baseline command adapter
+配置 6 个现代 baseline command adapter
 可选执行 source clone
 绑定 external baseline evidence paths
 运行 runtime detection 后执行 external_baseline_runner

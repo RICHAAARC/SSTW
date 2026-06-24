@@ -15,7 +15,8 @@ ADAPTER_STATUS_BUILDERS = {
     "videoshield": lambda: external_adapter_status("videoshield"),
     "sigmark": lambda: external_adapter_status("sigmark"),
     "spdmark": lambda: external_adapter_status("spdmark"),
-    "videomark_or_vidsig": lambda: external_adapter_status("videomark_or_vidsig"),
+    "videomark": lambda: external_adapter_status("videomark"),
+    "vidsig": lambda: external_adapter_status("vidsig"),
     "videoseal": lambda: external_adapter_status("videoseal"),
 }
 

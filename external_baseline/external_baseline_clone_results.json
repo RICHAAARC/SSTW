@@ -3,7 +3,7 @@
   "claim_support_status": "source_clone_manifest_only_not_claim_evidence",
   "clone_executed_count": 0,
   "clone_failed_count": 0,
-  "clone_result_count": 7,
+  "clone_result_count": 8,
   "clone_results": [
     {
       "baseline_id": "explicit_dtw_temporal_alignment",
@@ -21,24 +21,53 @@
     },
     {
       "baseline_id": "videoshield",
-      "clone_failure_reason": "official_repository_url_not_git_cloneable",
-      "clone_operation_status": "not_cloneable",
+      "clone_failure_reason": "execute_clone_false",
+      "clone_operation_status": "planned_not_executed",
+      "planned_repository_url": "https://github.com/hurunyi/VideoShield",
       "source_dir": "external_baseline/primary/videoshield/source",
-      "source_dir_exists": false
+      "source_dir_exists": false,
+      "target_repository_branch": "master",
+      "target_repository_commit": "a61efa73abb15d30f50ee535c3301cea7dec3075"
     },
     {
       "baseline_id": "sigmark",
-      "clone_failure_reason": "official_repository_url_not_git_cloneable",
-      "clone_operation_status": "not_cloneable",
+      "clone_failure_reason": "execute_clone_false",
+      "clone_operation_status": "planned_not_executed",
+      "planned_repository_url": "https://github.com/JeremyZhao1998/SIGMark-release",
       "source_dir": "external_baseline/primary/sigmark/source",
-      "source_dir_exists": false
+      "source_dir_exists": false,
+      "target_repository_branch": "main",
+      "target_repository_commit": "3713243f2e002cb21bbc3da896094d39b2b528c9"
     },
     {
       "baseline_id": "spdmark",
-      "clone_failure_reason": "official_repository_url_not_git_cloneable",
-      "clone_operation_status": "not_cloneable",
+      "clone_failure_reason": "execute_clone_false",
+      "clone_operation_status": "planned_not_executed",
+      "planned_repository_url": "https://github.com/Samar-Fares/SPDMark",
       "source_dir": "external_baseline/primary/spdmark/source",
-      "source_dir_exists": false
+      "source_dir_exists": false,
+      "target_repository_branch": "main",
+      "target_repository_commit": "4d9a894384a8585734b493301fe9d1a4d6abd07c"
+    },
+    {
+      "baseline_id": "videomark",
+      "clone_failure_reason": "execute_clone_false",
+      "clone_operation_status": "planned_not_executed",
+      "planned_repository_url": "https://github.com/KYRIE-LI11/VideoMark",
+      "source_dir": "external_baseline/primary/videomark/source",
+      "source_dir_exists": false,
+      "target_repository_branch": "main",
+      "target_repository_commit": "9f8d78b73ab9f9f055651b1b4f37d68bdb05e7be"
+    },
+    {
+      "baseline_id": "vidsig",
+      "clone_failure_reason": "execute_clone_false",
+      "clone_operation_status": "planned_not_executed",
+      "planned_repository_url": "https://github.com/hardenyu21/Video-Signature",
+      "source_dir": "external_baseline/primary/vidsig/source",
+      "source_dir_exists": false,
+      "target_repository_branch": "main",
+      "target_repository_commit": "9d219c47670c30fdaaccd17b24e7783c976a8c66"
     },
     {
       "baseline_id": "videoseal",
@@ -46,14 +75,9 @@
       "clone_operation_status": "planned_not_executed",
       "planned_repository_url": "https://github.com/facebookresearch/videoseal",
       "source_dir": "external_baseline/primary/videoseal/source",
-      "source_dir_exists": false
-    },
-    {
-      "baseline_id": "videomark_or_vidsig",
-      "clone_failure_reason": "official_repository_url_not_git_cloneable",
-      "clone_operation_status": "not_cloneable",
-      "source_dir": "external_baseline/primary/videomark_or_vidsig/source",
-      "source_dir_exists": false
+      "source_dir_exists": false,
+      "target_repository_branch": "main",
+      "target_repository_commit": "e00b98c7ca77eb1fb5b9b68260e7c6c8fc207a84"
     }
   ],
   "clone_results_decision": "PASS",

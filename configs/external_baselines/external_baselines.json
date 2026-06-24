@@ -68,14 +68,27 @@
     {
       "external_baseline_family": "latent_video_signature_baseline",
       "external_baseline_integration_status": "repository_external_baseline_formal_adapter_ready_requires_official_command",
-      "external_baseline_name": "videomark_or_vidsig",
+      "external_baseline_name": "videomark",
       "external_baseline_not_run_reason": "official_command_not_configured_until_colab_source_install",
       "external_baseline_protocol_gap": "none_after_official_command_configuration; before configuration this baseline remains governed non-run",
       "external_baseline_recommended_priority": 6,
       "external_baseline_result_used_for_claim": false,
       "external_baseline_runnable_status": "not_runnable",
       "external_baseline_selection_role": "modern_latent_video_signature_candidate",
-      "external_baseline_source_url": "external_baseline/primary/videomark_or_vidsig/adapter/run_sstw_eval.py",
+      "external_baseline_source_url": "external_baseline/primary/videomark/adapter/run_sstw_eval.py",
+      "external_baseline_version": "formal_command_adapter_v1"
+    },
+    {
+      "external_baseline_family": "latent_video_signature_baseline",
+      "external_baseline_integration_status": "repository_external_baseline_formal_adapter_ready_requires_official_command",
+      "external_baseline_name": "vidsig",
+      "external_baseline_not_run_reason": "official_command_not_configured_until_colab_source_install",
+      "external_baseline_protocol_gap": "none_after_official_command_configuration; before configuration this baseline remains governed non-run",
+      "external_baseline_recommended_priority": 7,
+      "external_baseline_result_used_for_claim": false,
+      "external_baseline_runnable_status": "not_runnable",
+      "external_baseline_selection_role": "modern_latent_video_signature_candidate",
+      "external_baseline_source_url": "external_baseline/primary/vidsig/adapter/run_sstw_eval.py",
       "external_baseline_version": "formal_command_adapter_v1"
     },
     {
@@ -84,7 +97,7 @@
       "external_baseline_name": "videoseal",
       "external_baseline_not_run_reason": "official_command_not_configured_until_colab_source_install",
       "external_baseline_protocol_gap": "none_after_official_command_configuration; before configuration this baseline remains governed non-run",
-      "external_baseline_recommended_priority": 7,
+      "external_baseline_recommended_priority": 8,
       "external_baseline_result_used_for_claim": false,
       "external_baseline_runnable_status": "not_runnable",
       "external_baseline_selection_role": "modern_post_hoc_video_watermark_candidate",
@@ -106,9 +119,9 @@
     "claim_rule": "only runnable baselines with protocol-compatible governed records may support positive comparison claims",
     "comparison_output_rule": "baseline comparison tables must be rebuilt from external_baseline_score_records.jsonl and must not treat unsupported modern baseline rows as positive claim evidence",
     "fallback_rule": "runnable adapters without formal comparison records must remain implementation evidence and must not support positive claims",
-    "primary_selection_rule": "prefer modern in-generation or post-hoc video watermark baselines plus explicit synchronization controls, while keeping non-runnable modern baselines as governed non-run records instead of silently dropping them",
-    "stage_id": "generative_video_model_probe",
+    "formal_adapter_rule": "modern baseline adapters may call official commands or source scripts, but must write governed records and must fail closed when commands are not configured.",
     "pilot_paper_rule": "pilot_paper must require all configured modern_video_watermark baselines to produce measured_formal records; explicit synchronization controls are insufficient.",
-    "formal_adapter_rule": "modern baseline adapters may call official commands or source scripts, but must write governed records and must fail closed when commands are not configured."
+    "primary_selection_rule": "prefer modern in-generation or post-hoc video watermark baselines plus explicit synchronization controls, while keeping non-runnable modern baselines as governed non-run records instead of silently dropping them",
+    "stage_id": "generative_video_model_probe"
   }
 }

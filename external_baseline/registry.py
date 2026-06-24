@@ -9,8 +9,9 @@ from external_baseline.primary.explicit_dtw_temporal_alignment.adapter import ru
 from external_baseline.primary.explicit_frame_matching_temporal_registration.adapter import run_sstw_eval as explicit_frame_matching_temporal_registration
 from external_baseline.primary.sigmark.adapter import run_sstw_eval as sigmark
 from external_baseline.primary.spdmark.adapter import run_sstw_eval as spdmark
-from external_baseline.primary.videomark_or_vidsig.adapter import run_sstw_eval as videomark_or_vidsig
+from external_baseline.primary.videomark.adapter import run_sstw_eval as videomark
 from external_baseline.primary.videoseal.adapter import run_sstw_eval as videoseal
+from external_baseline.primary.vidsig.adapter import run_sstw_eval as vidsig
 from external_baseline.primary.videoshield.adapter import run_sstw_eval as videoshield
 
 
@@ -20,7 +21,8 @@ ADAPTER_MODULES: dict[str, ModuleType] = {
     "videoshield": videoshield,
     "sigmark": sigmark,
     "spdmark": spdmark,
-    "videomark_or_vidsig": videomark_or_vidsig,
+    "videomark": videomark,
+    "vidsig": vidsig,
     "videoseal": videoseal,
 }
 

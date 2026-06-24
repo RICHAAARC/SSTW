@@ -26,7 +26,7 @@ def test_external_baseline_selection_keeps_modern_non_run_records() -> None:
     names = [record["external_baseline_name"] for record in records]
     assert "explicit_dtw_temporal_alignment" in names
     assert "explicit_frame_matching_temporal_registration" in names
-    assert {"videoshield", "sigmark", "spdmark", "videomark_or_vidsig", "videoseal"} <= set(names)
+    assert {"videoshield", "sigmark", "spdmark", "videomark", "vidsig", "videoseal"} <= set(names)
     excluded_related_work_names = {"riva" + "gan", "vid" + "stamp"}
     assert excluded_related_work_names.isdisjoint(names)
     assert config["selection_policy"]["claim_rule"]
@@ -36,7 +36,7 @@ def test_external_baseline_selection_keeps_modern_non_run_records() -> None:
     explicit_records = [record for record in records if record["external_baseline_layer"] == "explicit_synchronization_control"]
     modern_records = [record for record in records if record["external_baseline_layer"] == "modern_external_baseline"]
     assert len(explicit_records) == 2
-    assert len(modern_records) >= 5
+    assert len(modern_records) >= 6
     assert all(record["external_baseline_runnable_status"] == "runnable" for record in explicit_records)
     assert all(record["external_baseline_runnable_status"] == "not_runnable" for record in modern_records)
     assert all(record["external_baseline_adapter_status"] == "adapter_ready_command_not_configured" for record in modern_records)
@@ -51,7 +51,7 @@ def test_external_baseline_status_audit_reports_modern_gap() -> None:
 
     assert audit["external_baseline_status_decision"] == "PASS"
     assert audit["modern_external_baseline_status_records_ready"] is True
-    assert audit["modern_external_baseline_record_count"] >= 5
+    assert audit["modern_external_baseline_record_count"] >= 6
     assert audit["modern_external_baseline_main_comparison_ready_count"] == 0
     assert audit["external_baseline_claim_support_status"] == "governed_status_records_only"
 
@@ -61,8 +61,14 @@ def test_external_baseline_source_intake_writes_governed_manifests(tmp_path: Pat
     """source intake 必须写出源码、inspection、clone plan 和 table plan 治理文件。"""
     manifest = build_source_intake_manifest()
     assert manifest["external_baseline_source_intake_decision"] == "PASS"
-    assert manifest["baseline_source_count"] >= 7
-    assert manifest["modern_external_baseline_source_count"] >= 5
+    assert manifest["baseline_source_count"] >= 8
+    assert manifest["modern_external_baseline_source_count"] >= 6
+    modern_rows = [
+        row for row in manifest["baseline_sources"]
+        if row["baseline_id"] in {"videoshield", "sigmark", "spdmark", "videomark", "vidsig", "videoseal"}
+    ]
+    assert all(row["source_cloneable"] is True for row in modern_rows)
+    assert {row["baseline_id"] for row in modern_rows} == {"videoshield", "sigmark", "spdmark", "videomark", "vidsig", "videoseal"}
     assert manifest["claim_support_status"] == "source_intake_manifest_only_not_claim_evidence"
 
     summary = write_source_intake_artifacts(tmp_path / "external_baseline_artifacts")
@@ -70,6 +76,10 @@ def test_external_baseline_source_intake_writes_governed_manifests(tmp_path: Pat
     assert Path(summary["source_inspection_manifest_path"]).exists()
     assert Path(summary["clone_results_manifest_path"]).exists()
     assert Path(summary["table_plan_path"]).exists()
+    clone_manifest = json.loads(Path(summary["clone_results_manifest_path"]).read_text(encoding="utf-8"))
+    clone_rows = {row["baseline_id"]: row for row in clone_manifest["clone_results"]}
+    assert clone_rows["spdmark"]["planned_repository_url"] == "https://github.com/Samar-Fares/SPDMark"
+    assert clone_rows["spdmark"]["target_repository_commit"] == "4d9a894384a8585734b493301fe9d1a4d6abd07c"
 
 
 @pytest.mark.quick
@@ -201,7 +211,8 @@ def test_modern_external_baseline_formal_command_adapters_write_measured_records
         "SSTW_VIDEOSHIELD_EVAL_COMMAND",
         "SSTW_SIGMARK_EVAL_COMMAND",
         "SSTW_SPDMARK_EVAL_COMMAND",
-        "SSTW_VIDEOMARK_OR_VIDSIG_EVAL_COMMAND",
+        "SSTW_VIDEOMARK_EVAL_COMMAND",
+        "SSTW_VIDSIG_EVAL_COMMAND",
         "SSTW_VIDEOSEAL_EVAL_COMMAND",
     ):
         monkeypatch.setenv(env_var, command)
@@ -211,13 +222,14 @@ def test_modern_external_baseline_formal_command_adapters_write_measured_records
     formal_records = [record for record in records if record.get("metric_status") == "measured_formal"]
 
     assert audit["external_baseline_comparison_decision"] == "PASS"
-    assert audit["external_baseline_measured_adapter_count"] == 7
-    assert audit["modern_external_baseline_formal_measured_adapter_count"] == 5
+    assert audit["external_baseline_measured_adapter_count"] == 8
+    assert audit["modern_external_baseline_formal_measured_adapter_count"] == 6
     assert set(audit["modern_external_baseline_formal_measured_adapter_names"]) == {
         "videoshield",
         "sigmark",
         "spdmark",
-        "videomark_or_vidsig",
+        "videomark",
+        "vidsig",
         "videoseal",
     }
     assert formal_records
@@ -228,6 +240,6 @@ def test_modern_external_baseline_formal_command_adapters_write_measured_records
     assert all(Path(record["external_baseline_official_command_manifest_path"]).exists() for record in formal_records)
     assert all(record.get("S_final") is None for record in records)
     execution_manifest = json.loads((run_root / "artifacts" / "external_baseline_execution_manifest.json").read_text(encoding="utf-8"))
-    assert execution_manifest["modern_external_baseline_formal_measured_adapter_count"] == 5
+    assert execution_manifest["modern_external_baseline_formal_measured_adapter_count"] == 6
     assert execution_manifest["formal_evidence_status"] == "evidence_paths_bound"
     assert execution_manifest["evidence_path_count"] >= len(formal_records)

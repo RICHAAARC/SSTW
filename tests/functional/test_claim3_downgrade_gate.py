@@ -17,14 +17,16 @@ EXTERNAL_BASELINE_NAMES = (
     "videoshield",
     "sigmark",
     "spdmark",
-    "videomark_or_vidsig",
+    "videomark",
+    "vidsig",
     "videoseal",
 )
 MODERN_EXTERNAL_BASELINE_NAMES = {
     "videoshield",
     "sigmark",
     "spdmark",
-    "videomark_or_vidsig",
+    "videomark",
+    "vidsig",
     "videoseal",
 }
 
@@ -140,8 +142,8 @@ def test_validation_scale_gate_accepts_claim3_downgrade_path(tmp_path: Path) -> 
     })
     write_json(run_root / "artifacts" / "external_baseline_comparison_decision.json", {
         "external_baseline_comparison_decision": "PASS",
-        "external_baseline_measured_adapter_count": 7,
-        "modern_external_baseline_formal_measured_adapter_count": 5,
+        "external_baseline_measured_adapter_count": 8,
+        "modern_external_baseline_formal_measured_adapter_count": 6,
         "modern_external_baseline_formal_measured_adapter_names": sorted(MODERN_EXTERNAL_BASELINE_NAMES),
         "external_baseline_claim_support_status": "external_baseline_formal_and_proxy_records_written",
     })

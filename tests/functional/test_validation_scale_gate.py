@@ -16,14 +16,16 @@ EXTERNAL_BASELINE_NAMES = (
     "videoshield",
     "sigmark",
     "spdmark",
-    "videomark_or_vidsig",
+    "videomark",
+    "vidsig",
     "videoseal",
 )
 MODERN_EXTERNAL_BASELINE_NAMES = {
     "videoshield",
     "sigmark",
     "spdmark",
-    "videomark_or_vidsig",
+    "videomark",
+    "vidsig",
     "videoseal",
 }
 
@@ -107,10 +109,10 @@ def test_validation_scale_gate_passes_when_all_governed_inputs_exist(tmp_path: P
     write_jsonl(run_root / "records" / "external_baseline_score_records.jsonl", _formal_external_baseline_records())
     write_json(run_root / "artifacts" / "external_baseline_comparison_decision.json", {
         "external_baseline_comparison_decision": "PASS",
-        "external_baseline_comparison_record_count": 7,
-        "external_baseline_comparison_ready_count": 7,
-        "external_baseline_measured_adapter_count": 7,
-        "modern_external_baseline_formal_measured_adapter_count": 5,
+        "external_baseline_comparison_record_count": 8,
+        "external_baseline_comparison_ready_count": 8,
+        "external_baseline_measured_adapter_count": 8,
+        "modern_external_baseline_formal_measured_adapter_count": 6,
         "modern_external_baseline_formal_measured_adapter_names": sorted(MODERN_EXTERNAL_BASELINE_NAMES),
         "external_baseline_claim_support_status": "external_baseline_formal_and_proxy_records_written",
     })
@@ -159,8 +161,8 @@ def test_validation_scale_gate_passes_when_all_governed_inputs_exist(tmp_path: P
     assert audit["validation_seed_per_prompt_min"] == 3
     assert audit["full_paper_allowed"] is False
     assert audit["full_paper_next_gate"] == "pilot_paper_generative_probe_gate"
-    assert audit["external_baseline_measured_adapter_count"] == 7
-    assert audit["modern_external_baseline_formal_measured_adapter_count"] == 5
+    assert audit["external_baseline_measured_adapter_count"] == 8
+    assert audit["modern_external_baseline_formal_measured_adapter_count"] == 6
     assert audit["missing_modern_external_baseline_formal_adapter_names"] == []
     assert (run_root / "records" / "validation_scale_gate_records.jsonl").exists()
     assert (run_root / "tables" / "validation_scale_gate_table.csv").exists()

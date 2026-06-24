@@ -44,13 +44,13 @@ Wan-AI/Wan2.1-T2V-1.3B-Diffusers
 VideoShield
 SIGMark
 SPDMark
-VideoMark 或 VidSig
+VideoMark 与 VidSig
 VideoSeal
 explicit_dtw_temporal_alignment
 frame_matching_temporal_registration
 ```
 
-其中, VideoShield、SIGMark、SPDMark、VideoMark / VidSig 与 VideoSeal 用于覆盖 2025-2026 年现代视频生成水印和后处理视频水印路线; `explicit_dtw_temporal_alignment` 与 `frame_matching_temporal_registration` 只作为显式同步 control, 不能作为顶刊顶会版本的唯一外部 baseline。
+其中, VideoShield、SIGMark、SPDMark、VideoMark、VidSig 与 VideoSeal 用于覆盖 2025-2026 年现代视频生成水印和后处理视频水印路线; `explicit_dtw_temporal_alignment` 与 `frame_matching_temporal_registration` 只作为显式同步 control, 不能作为顶刊顶会版本的唯一外部 baseline。
 
 ### 1.6 必须比较
 
@@ -493,7 +493,7 @@ artifacts/external_baseline_comparison_decision.json
 reports/external_baseline_comparison_report.md
 ```
 
-该实现的职责是闭合外部 baseline 对比工程链路。显式 DTW 与 frame matching 仍只是同步 control proxy; `pilot_paper` 和 `full_paper` 必须额外要求 VideoShield、SigMark、SPDMark、VideoMark / VidSig 与 VideoSeal 通过正式 command adapter 产出 `measured_formal` records。
+该实现的职责是闭合外部 baseline 对比工程链路。显式 DTW 与 frame matching 仍只是同步 control proxy; `pilot_paper` 和 `full_paper` 必须额外要求 VideoShield、SigMark、SPDMark、VideoMark、VidSig 与 VideoSeal 通过正式 command adapter 产出 `measured_formal` records。
 
 
 ### external_baseline adapter comparison 运行语义
@@ -633,8 +633,8 @@ records/validation_internal_ablation_records.jsonl
 ```text
 pilot_paper_external_baseline_comparison_ready == true
 pilot_paper_internal_ablation_matrix_ready == true
-minimum_external_baseline_measured_adapter_count >= 7
-minimum_modern_external_baseline_formal_adapter_count >= 5
+minimum_external_baseline_measured_adapter_count >= 8
+minimum_modern_external_baseline_formal_adapter_count >= 6
 minimum_internal_ablation_variant_count >= 8
 pilot_paper_external_baseline_trace_count_min >= 84
 pilot_paper_internal_ablation_trace_count_min >= 84
@@ -651,7 +651,8 @@ pilot_paper_internal_ablation_trace_count_min >= 84
 videoshield
 sigmark
 spdmark
-videomark_or_vidsig
+videomark
+vidsig
 videoseal
 ```
 
@@ -661,7 +662,8 @@ videoseal
 SSTW_VIDEOSHIELD_EVAL_COMMAND
 SSTW_SIGMARK_EVAL_COMMAND
 SSTW_SPDMARK_EVAL_COMMAND
-SSTW_VIDEOMARK_OR_VIDSIG_EVAL_COMMAND
+SSTW_VIDEOMARK_EVAL_COMMAND
+SSTW_VIDSIG_EVAL_COMMAND
 SSTW_VIDEOSEAL_EVAL_COMMAND
 ```
 

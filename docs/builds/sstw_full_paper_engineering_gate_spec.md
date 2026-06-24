@@ -510,7 +510,7 @@ external_baseline_threshold_policy_compatible: true
 external_baseline_attack_manifest_compatible: true
 external_baseline_result_used_for_claim: true
 metric_status: measured
-modern_external_baseline_formal_measured_adapter_count >= 5
+modern_external_baseline_formal_measured_adapter_count >= 6
 missing_modern_external_baseline_formal_adapter_names == []
 external_baseline_execution_manifest.json: present
 claim_support_status: baseline_ready_for_main_comparison

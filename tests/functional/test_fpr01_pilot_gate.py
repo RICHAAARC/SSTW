@@ -19,10 +19,11 @@ EXTERNAL_BASELINE_NAMES = (
     "videoshield",
     "sigmark",
     "spdmark",
-    "videomark_or_vidsig",
+    "videomark",
+    "vidsig",
     "videoseal",
 )
-MODERN_EXTERNAL_BASELINE_NAMES = {"videoshield", "sigmark", "spdmark", "videomark_or_vidsig", "videoseal"}
+MODERN_EXTERNAL_BASELINE_NAMES = {"videoshield", "sigmark", "spdmark", "videomark", "vidsig", "videoseal"}
 INTERNAL_ABLATION_VARIANTS = (
     "sstw_full_method",
     "endpoint_only_control",
@@ -236,8 +237,8 @@ def test_fpr01_pilot_gate_passes_calibrated_heldout_fixture(tmp_path: Path) -> N
     assert audit["pilot_paper_protocol_matches_full_paper"] is True
     assert audit["validation_scale_gate_decision"] == "PASS"
     assert audit["external_baseline_comparison_decision"] == "PASS"
-    assert audit["external_baseline_measured_adapter_count"] == 7
-    assert audit["modern_external_baseline_formal_measured_adapter_count"] == 5
+    assert audit["external_baseline_measured_adapter_count"] == 8
+    assert audit["modern_external_baseline_formal_measured_adapter_count"] == 6
     assert audit["missing_modern_external_baseline_formal_adapter_names"] == []
     assert audit["pilot_paper_external_baseline_trace_count"] == 84
     assert audit["pilot_paper_external_baseline_trace_count_min"] == 84

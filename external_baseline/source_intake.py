@@ -21,7 +21,8 @@ MODERN_BASELINE_IDS = {
     "videoshield",
     "sigmark",
     "spdmark",
-    "videomark_or_vidsig",
+    "videomark",
+    "vidsig",
     "videoseal",
 }
 
@@ -267,6 +268,31 @@ def _run_git_command(command: list[str], cwd: Path | None = None) -> dict[str, A
     }
 
 
+def _concrete_git_reference(value: Any) -> str | None:
+    """返回可 checkout 的 branch 或 commit, 排除 registry 中的占位语义值。"""
+    text = str(value or "").strip()
+    if not text or text in {"user_configured_or_source_default", "not_applicable"}:
+        return None
+    return text
+
+
+def _checkout_pinned_source_reference(entry: Mapping[str, Any], source_dir: Path) -> list[dict[str, Any]]:
+    """在 source 仓库存在时 checkout registry 中冻结的 branch / commit。
+
+    通用工程写法是先 clone 或 fetch, 再 checkout 明确版本。项目特定要求是
+    validation-scale 与 pilot_paper 的外部 baseline 必须能记录精确上游 commit,
+    因此若 registry 提供 `official_repository_commit`, 该 commit 优先于 branch。
+    """
+    branch = _concrete_git_reference(entry.get("official_repository_branch"))
+    commit = _concrete_git_reference(entry.get("official_repository_commit"))
+    git_results: list[dict[str, Any]] = []
+    if branch:
+        git_results.append(_run_git_command(["git", "-C", str(source_dir), "checkout", branch]))
+    if commit:
+        git_results.append(_run_git_command(["git", "-C", str(source_dir), "checkout", commit]))
+    return git_results
+
+
 def _clone_or_update_one(entry: Mapping[str, Any], repo_root: Path, execute_clone: bool) -> dict[str, Any]:
     """对单个 baseline 生成或执行 source clone 操作。"""
     baseline_id = str(entry.get("baseline_id") or "")
@@ -274,6 +300,7 @@ def _clone_or_update_one(entry: Mapping[str, Any], repo_root: Path, execute_clon
     source_dir = repo_root / source_dir_value
     repository_url = str(entry.get("official_repository_url") or "")
     branch = str(entry.get("official_repository_branch") or "")
+    commit = str(entry.get("official_repository_commit") or "")
     cloneable = _is_cloneable_url(repository_url)
     if str(entry.get("source_status") or "") == "repository_local_algorithm":
         return {
@@ -299,20 +326,23 @@ def _clone_or_update_one(entry: Mapping[str, Any], repo_root: Path, execute_clon
             "clone_failure_reason": "execute_clone_false",
             "source_dir_exists": source_dir.is_dir(),
             "planned_repository_url": repository_url,
+            "target_repository_branch": branch,
+            "target_repository_commit": commit,
         }
     source_dir.parent.mkdir(parents=True, exist_ok=True)
     if source_dir.exists() and (source_dir / ".git").is_dir():
         fetch_result = _run_git_command(["git", "-C", str(source_dir), "fetch", "--all", "--prune"])
-        checkout_result = None
-        if branch and branch not in {"user_configured_or_source_default", "not_applicable"}:
-            checkout_result = _run_git_command(["git", "-C", str(source_dir), "checkout", branch])
+        checkout_results = _checkout_pinned_source_reference(entry, source_dir)
+        checkout_failed = any(result["return_code"] != 0 for result in checkout_results)
         return {
             "baseline_id": baseline_id,
             "source_dir": source_dir_value,
-            "clone_operation_status": "updated" if fetch_result["return_code"] == 0 else "failed",
-            "clone_failure_reason": "none" if fetch_result["return_code"] == 0 else "git_fetch_failed",
+            "clone_operation_status": "updated" if fetch_result["return_code"] == 0 and not checkout_failed else "failed",
+            "clone_failure_reason": "none" if fetch_result["return_code"] == 0 and not checkout_failed else ("git_checkout_failed" if checkout_failed else "git_fetch_failed"),
             "source_dir_exists": source_dir.is_dir(),
-            "git_results": [item for item in (fetch_result, checkout_result) if item is not None],
+            "target_repository_branch": branch,
+            "target_repository_commit": commit,
+            "git_results": [fetch_result, *checkout_results],
         }
     if source_dir.exists():
         return {
@@ -323,17 +353,22 @@ def _clone_or_update_one(entry: Mapping[str, Any], repo_root: Path, execute_clon
             "source_dir_exists": True,
         }
     command = ["git", "clone"]
-    if branch and branch not in {"user_configured_or_source_default", "not_applicable"}:
-        command.extend(["--branch", branch])
+    concrete_branch = _concrete_git_reference(branch)
+    if concrete_branch:
+        command.extend(["--branch", concrete_branch])
     command.extend([repository_url, str(source_dir)])
     clone_result = _run_git_command(command)
+    checkout_results = _checkout_pinned_source_reference(entry, source_dir) if clone_result["return_code"] == 0 else []
+    checkout_failed = any(result["return_code"] != 0 for result in checkout_results)
     return {
         "baseline_id": baseline_id,
         "source_dir": source_dir_value,
-        "clone_operation_status": "cloned" if clone_result["return_code"] == 0 else "failed",
-        "clone_failure_reason": "none" if clone_result["return_code"] == 0 else "git_clone_failed",
+        "clone_operation_status": "cloned" if clone_result["return_code"] == 0 and not checkout_failed else "failed",
+        "clone_failure_reason": "none" if clone_result["return_code"] == 0 and not checkout_failed else ("git_checkout_failed" if checkout_failed else "git_clone_failed"),
         "source_dir_exists": source_dir.is_dir(),
-        "git_results": [clone_result],
+        "target_repository_branch": branch,
+        "target_repository_commit": commit,
+        "git_results": [clone_result, *checkout_results],
     }
 
 

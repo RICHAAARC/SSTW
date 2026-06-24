@@ -3,7 +3,7 @@
   "claim_support_status": "table_plan_only_not_claim_evidence",
   "explicit_synchronization_control_count": 2,
   "manifest_kind": "external_baseline_table_plan",
-  "method_count": 7,
+  "method_count": 8,
   "methods": [
     {
       "adapter_path": "external_baseline/primary/explicit_dtw_temporal_alignment/adapter/run_sstw_eval.py",
@@ -38,7 +38,7 @@
       "local_source_root": "external_baseline/primary/videoshield/source",
       "method_id": "videoshield",
       "paper_claim_support": true,
-      "source_url": "https://openreview.net/forum?id=uzz3qAYy0D",
+      "source_url": "https://github.com/hurunyi/VideoShield",
       "table_role": "primary_modern_video_watermark_baseline"
     },
     {
@@ -50,7 +50,7 @@
       "local_source_root": "external_baseline/primary/sigmark/source",
       "method_id": "sigmark",
       "paper_claim_support": true,
-      "source_url": "https://openreview.net/forum?id=tKyAD2LhnI",
+      "source_url": "https://github.com/JeremyZhao1998/SIGMark-release",
       "table_role": "primary_modern_video_watermark_baseline"
     },
     {
@@ -62,7 +62,31 @@
       "local_source_root": "external_baseline/primary/spdmark/source",
       "method_id": "spdmark",
       "paper_claim_support": true,
-      "source_url": "https://openaccess.thecvf.com/content/CVPR2026/papers/Fares_SPDMark_Selective_Parameter_Displacement_for_Robust_Video_Watermarking_CVPR_2026_paper.pdf",
+      "source_url": "https://github.com/Samar-Fares/SPDMark",
+      "table_role": "primary_modern_video_watermark_baseline"
+    },
+    {
+      "adapter_path": "external_baseline/primary/videomark/adapter/run_sstw_eval.py",
+      "claim_boundary": "formal_measured_required",
+      "comparison_layer": "modern_external_baseline",
+      "display_name": "VideoMark",
+      "integration_status": "formal_command_adapter_ready_requires_official_command",
+      "local_source_root": "external_baseline/primary/videomark/source",
+      "method_id": "videomark",
+      "paper_claim_support": true,
+      "source_url": "https://github.com/KYRIE-LI11/VideoMark",
+      "table_role": "primary_modern_video_watermark_baseline"
+    },
+    {
+      "adapter_path": "external_baseline/primary/vidsig/adapter/run_sstw_eval.py",
+      "claim_boundary": "formal_measured_required",
+      "comparison_layer": "modern_external_baseline",
+      "display_name": "VidSig",
+      "integration_status": "formal_command_adapter_ready_requires_official_command",
+      "local_source_root": "external_baseline/primary/vidsig/source",
+      "method_id": "vidsig",
+      "paper_claim_support": true,
+      "source_url": "https://github.com/hardenyu21/Video-Signature",
       "table_role": "primary_modern_video_watermark_baseline"
     },
     {
@@ -76,20 +100,8 @@
       "paper_claim_support": true,
       "source_url": "https://github.com/facebookresearch/videoseal",
       "table_role": "primary_modern_video_watermark_baseline"
-    },
-    {
-      "adapter_path": "external_baseline/primary/videomark_or_vidsig/adapter/run_sstw_eval.py",
-      "claim_boundary": "formal_measured_required",
-      "comparison_layer": "modern_external_baseline",
-      "display_name": "VideoMark or VidSig",
-      "integration_status": "formal_command_adapter_ready_requires_official_command",
-      "local_source_root": "external_baseline/primary/videomark_or_vidsig/source",
-      "method_id": "videomark_or_vidsig",
-      "paper_claim_support": true,
-      "source_url": "https://arxiv.org/html/2504.16359v1",
-      "table_role": "primary_modern_video_watermark_baseline"
     }
   ],
-  "modern_external_baseline_count": 5,
+  "modern_external_baseline_count": 6,
   "registry_path": "external_baseline\\source_registry.json"
 }

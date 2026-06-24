@@ -87,7 +87,8 @@ external_baseline/primary/explicit_frame_matching_temporal_registration/adapter/
 external_baseline/primary/videoshield/adapter/run_sstw_eval.py
 external_baseline/primary/sigmark/adapter/run_sstw_eval.py
 external_baseline/primary/spdmark/adapter/run_sstw_eval.py
-external_baseline/primary/videomark_or_vidsig/adapter/run_sstw_eval.py
+external_baseline/primary/videomark/adapter/run_sstw_eval.py
+external_baseline/primary/vidsig/adapter/run_sstw_eval.py
 external_baseline/primary/videoseal/adapter/run_sstw_eval.py
 experiments/generative_video_model_probe/external_baseline_runner.py
 ```
@@ -121,7 +122,7 @@ external_baseline_adapter_boundary: implemented
 explicit_dtw_temporal_alignment_adapter: implemented_proxy_control
 explicit_frame_matching_temporal_registration_adapter: implemented_proxy_control
 modern_video_watermark_baseline_adapter: formal_command_adapter_integrated_requires_official_command
-required_modern_video_watermark_baselines: videoshield, sigmark, spdmark, videomark_or_vidsig, videoseal
+required_modern_video_watermark_baselines: videoshield, sigmark, spdmark, videomark, vidsig, videoseal
 baseline_comparison_output_chain: implemented
 claim_support_status: formal_results_required_for_validation_scale_and_pilot_paper
 ```
@@ -130,8 +131,8 @@ claim_support_status: formal_results_required_for_validation_scale_and_pilot_pap
 
 ```text
 1. 在 Colab 或本地环境中安装每个现代 baseline 的官方源码、权重和命令入口。
-2. 配置 `SSTW_VIDEOSHIELD_EVAL_COMMAND`、`SSTW_SIGMARK_EVAL_COMMAND`、`SSTW_SPDMARK_EVAL_COMMAND`、`SSTW_VIDEOMARK_OR_VIDSIG_EVAL_COMMAND` 和 `SSTW_VIDEOSEAL_EVAL_COMMAND`。
-3. 运行 external_baseline comparison, 使 5 个现代 baseline 均产出 `measured_formal` records。
+2. 配置 `SSTW_VIDEOSHIELD_EVAL_COMMAND`、`SSTW_SIGMARK_EVAL_COMMAND`、`SSTW_SPDMARK_EVAL_COMMAND`、`SSTW_VIDEOMARK_EVAL_COMMAND`、`SSTW_VIDSIG_EVAL_COMMAND` 和 `SSTW_VIDEOSEAL_EVAL_COMMAND`。
+3. 运行 external_baseline comparison, 使 6 个现代 baseline 均产出 `measured_formal` records。
 4. 仅当全部现代 baseline 都产生 governed measured_formal records 后, 才允许 validation_scale gate 通过并进入 pilot_paper gate。
 ```
 

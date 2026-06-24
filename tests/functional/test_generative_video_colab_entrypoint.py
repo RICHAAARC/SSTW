@@ -264,7 +264,10 @@ def test_split_colab_notebooks_are_profile_driven() -> None:
         source = "".join("".join(cell.get("source", [])) for cell in notebook["cells"])
         switch_source = "".join(notebook["cells"][2].get("source", []))
         assert "# 1.1 可编辑 workflow profile 切换" in switch_source
-        assert "SSTW_WORKFLOW_PROFILE_VALUE = ''" in switch_source
+        if role == "motion_threshold_calibration":
+            assert "SSTW_WORKFLOW_PROFILE_VALUE = ''" in switch_source
+        else:
+            assert "SSTW_WORKFLOW_PROFILE_VALUE = 'validation_scale'" in switch_source
         assert "os.environ['SSTW_WORKFLOW_PROFILE']" in switch_source
         assert source.index("SSTW_WORKFLOW_PROFILE_VALUE") < source.index("resolve_notebook_workflow_profile")
         assert f"NOTEBOOK_ROLE = '{role}'" in source

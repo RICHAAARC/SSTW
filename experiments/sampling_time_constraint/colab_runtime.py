@@ -13,7 +13,13 @@ from typing import Any
 
 from experiments.generative_video_model_probe.colab_runtime import _export_video, _select_dtype, _sha256_file, _tensor_stats
 from main.generation.sampling_constraint_adapter import apply_latent_sampling_constraint
-from main.core.progress import ProgressReporter
+from main.core.progress import (
+    ProgressReporter,
+    configure_noisy_library_progress,
+    configure_pipeline_progress_bar,
+    emit_progress_event,
+    suppress_third_party_progress_output,
+)
 from main.protocol.flow_evidence_fields import conservative_flow_score, flow_evidence_protocol_defaults
 from main.protocol.record_writer import write_json, write_jsonl
 from main.protocol.table_builder import write_csv
@@ -143,21 +149,29 @@ def _load_video_generation_pipeline(model_id: str, torch_dtype: Any) -> Any:
     LTX-Video 保留为前置机制验证和回退测试入口。Notebook 仍然只调用仓库模块,
     不在 Notebook 中手写正式 records。
     """
+    configure_noisy_library_progress()
     hf_token = os.environ.get("HF_TOKEN") or None
+    emit_progress_event("sampling_constraint_model_load", f"start | model={model_id}")
     if _model_family_from_id(model_id) == "diffusers_wan21_flow_matching_dit":
-        from diffusers import WanPipeline
+        with suppress_third_party_progress_output("sampling_constraint_model_import"):
+            from diffusers import WanPipeline
 
-        pipe = WanPipeline.from_pretrained(model_id, torch_dtype=torch_dtype, token=hf_token)
+        with suppress_third_party_progress_output("sampling_constraint_model_load"):
+            pipe = WanPipeline.from_pretrained(model_id, torch_dtype=torch_dtype, token=hf_token)
     else:
-        from diffusers import LTXPipeline
+        with suppress_third_party_progress_output("sampling_constraint_model_import"):
+            from diffusers import LTXPipeline
 
-        pipe = LTXPipeline.from_pretrained(model_id, torch_dtype=torch_dtype, token=hf_token)
+        with suppress_third_party_progress_output("sampling_constraint_model_load"):
+            pipe = LTXPipeline.from_pretrained(model_id, torch_dtype=torch_dtype, token=hf_token)
+    progress_bar_status = configure_pipeline_progress_bar(pipe)
     if hasattr(pipe, "enable_model_cpu_offload"):
         pipe.enable_model_cpu_offload()
     else:
         pipe.to("cuda")
     if hasattr(pipe, "vae") and hasattr(pipe.vae, "enable_tiling"):
         pipe.vae.enable_tiling()
+    emit_progress_event("sampling_constraint_model_load", f"finish | model={model_id} | pipeline_progress_bar={progress_bar_status}")
     return pipe
 
 
@@ -285,17 +299,18 @@ def run_sampling_constraint_colab_probe(
         video_path = output_root / "videos" / f"{item['generation_model_id'].replace('/', '_')}_{item['method_variant']}_{item['prompt_id']}_{item['seed_id']}.mp4"
         started = time.time()
         try:
-            result = pipe(
-                prompt=item["prompt_text"],
-                negative_prompt=item.get("prompt_negative_text"),
-                width=settings["width"],
-                height=settings["height"],
-                num_frames=settings["num_frames"],
-                num_inference_steps=settings["num_inference_steps"],
-                generator=generator,
-                callback_on_step_end=constraint_callback,
-                callback_on_step_end_tensor_inputs=["latents"],
-            )
+            with suppress_third_party_progress_output("sampling_constraint_single_video_generation"):
+                result = pipe(
+                    prompt=item["prompt_text"],
+                    negative_prompt=item.get("prompt_negative_text"),
+                    width=settings["width"],
+                    height=settings["height"],
+                    num_frames=settings["num_frames"],
+                    num_inference_steps=settings["num_inference_steps"],
+                    generator=generator,
+                    callback_on_step_end=constraint_callback,
+                    callback_on_step_end_tensor_inputs=["latents"],
+                )
             frames = result.frames[0]
             _export_video(frames, video_path, fps=8)
             generation_status = "success"

@@ -248,6 +248,24 @@ export SSTW_PROGRESS=0
 
 Colab Notebook 调用仓库命令时必须使用 `paper_workflow.notebook_utils.streaming_command.run_streaming_command`。该 helper 会逐行转发子进程输出, 避免 `subprocess.run(..., capture_output=True)` 把 `SSTW 工作量进度` 缓存到任务结束后才显示。若长时间没有看到进度, 优先确认 Colab 中的仓库代码已经拉取到包含该 helper 的最新提交。
 
+为避免 Colab 输出被第三方库刷屏, workflow 默认压制 Hugging Face / Diffusers / tqdm 的内部下载、加载和单次采样进度条。默认应主要看到如下 SSTW 外层进度:
+
+```text
+SSTW 工作量进度 | video_generation_model_load | start | model=...
+SSTW 工作量进度 | video_generation_model_load | finish | model=... | pipeline_progress_bar=disabled
+SSTW 工作量进度 | wan21_runtime_generation | 1/24 (4.2%) | elapsed=...
+```
+
+该压制只影响屏幕日志, 不影响 callback latent、time grid、sampler signature、records 或 package 落盘。若需要调试第三方库内部下载或采样细节, 可以在 Notebook 前置 cell 中显式打开:
+
+```python
+import os
+os.environ["SSTW_SUPPRESS_THIRD_PARTY_PROGRESS"] = "0"
+os.environ["SSTW_ENABLE_PIPELINE_PROGRESS_BAR"] = "1"
+```
+
+除非正在排查模型下载、权重加载或单次 pipeline 调用失败, 否则不建议开启上述调试开关, 因为这会重新显示 `Fetching files`、`Loading checkpoint shards` 和单视频采样 step 等大量内部进度。
+
 ## 7. 常见失败原因
 
 1. 未先运行或未保留 `motion_calibration` artifact, 导致 motion threshold reuse 失败。

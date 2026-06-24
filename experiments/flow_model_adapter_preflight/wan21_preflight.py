@@ -10,6 +10,12 @@ from hashlib import sha256
 from pathlib import Path
 from typing import Any
 
+from main.core.progress import (
+    configure_noisy_library_progress,
+    configure_pipeline_progress_bar,
+    emit_progress_event,
+    suppress_third_party_progress_output,
+)
 from main.protocol.flow_evidence_fields import conservative_flow_score, flow_evidence_protocol_defaults
 from main.protocol.record_writer import write_json, write_jsonl
 
@@ -80,16 +86,22 @@ def _velocity_proxy(previous_latents: Any | None, latents: Any) -> dict[str, Any
 
 def _load_wan21_pipeline(model_id: str, torch_dtype: Any) -> Any:
     """加载 Wan2.1 Diffusers pipeline。"""
-    from diffusers import WanPipeline
+    configure_noisy_library_progress()
+    emit_progress_event("wan21_preflight_model_load", f"start | model={model_id}")
+    with suppress_third_party_progress_output("wan21_preflight_model_import"):
+        from diffusers import WanPipeline
 
     hf_token = os.environ.get("HF_TOKEN") or None
-    pipe = WanPipeline.from_pretrained(model_id, torch_dtype=torch_dtype, token=hf_token)
+    with suppress_third_party_progress_output("wan21_preflight_model_load"):
+        pipe = WanPipeline.from_pretrained(model_id, torch_dtype=torch_dtype, token=hf_token)
+    progress_bar_status = configure_pipeline_progress_bar(pipe)
     if hasattr(pipe, "enable_model_cpu_offload"):
         pipe.enable_model_cpu_offload()
     else:
         pipe.to("cuda")
     if hasattr(pipe, "vae") and hasattr(pipe.vae, "enable_tiling"):
         pipe.vae.enable_tiling()
+    emit_progress_event("wan21_preflight_model_load", f"finish | model={model_id} | pipeline_progress_bar={progress_bar_status}")
     return pipe
 
 
@@ -186,16 +198,17 @@ def run_wan21_flow_adapter_preflight(
             return callback_kwargs
 
         generator = torch.Generator(device="cuda").manual_seed(17)
-        pipe(
-            prompt="A small paper boat moving slowly on a calm lake.",
-            width=width,
-            height=height,
-            num_frames=num_frames,
-            num_inference_steps=num_inference_steps,
-            generator=generator,
-            callback_on_step_end=callback_on_step_end,
-            callback_on_step_end_tensor_inputs=["latents"],
-        )
+        with suppress_third_party_progress_output("wan21_preflight_single_video_generation"):
+            pipe(
+                prompt="A small paper boat moving slowly on a calm lake.",
+                width=width,
+                height=height,
+                num_frames=num_frames,
+                num_inference_steps=num_inference_steps,
+                generator=generator,
+                callback_on_step_end=callback_on_step_end,
+                callback_on_step_end_tensor_inputs=["latents"],
+            )
         model_load_status = "loaded"
         failure_reason = "none"
     except Exception as exc:  # pragma: no cover - GPU preflight path

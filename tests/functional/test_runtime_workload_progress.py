@@ -3,12 +3,18 @@
 from __future__ import annotations
 
 import io
+import os
 from pathlib import Path
 import sys
 
 import pytest
 
-from main.core.progress import ProgressReporter
+from main.core.progress import (
+    ProgressReporter,
+    configure_noisy_library_progress,
+    configure_pipeline_progress_bar,
+    suppress_third_party_progress_output,
+)
 from paper_workflow.notebook_utils.streaming_command import run_streaming_command
 
 
@@ -44,6 +50,81 @@ def test_notebook_command_runner_streams_subprocess_output(capsys: pytest.Captur
     assert result.stdout == ""
     assert result.stderr == ""
     assert "SSTW 工作量进度 | stream_test | 1/1 (100.0%)" in captured.out
+
+
+@pytest.mark.quick
+def test_noisy_library_progress_defaults_are_configured(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Colab 子进程默认应压制第三方下载、加载和 tqdm 进度噪声。"""
+    for key in [
+        "HF_HUB_DISABLE_PROGRESS_BARS",
+        "HF_HUB_DISABLE_TELEMETRY",
+        "TQDM_DISABLE",
+        "TRANSFORMERS_VERBOSITY",
+        "DIFFUSERS_VERBOSITY",
+    ]:
+        monkeypatch.delenv(key, raising=False)
+
+    configure_noisy_library_progress()
+
+    assert os.environ["HF_HUB_DISABLE_PROGRESS_BARS"] == "1"
+    assert os.environ["HF_HUB_DISABLE_TELEMETRY"] == "1"
+    assert os.environ["TQDM_DISABLE"] == "1"
+    assert os.environ["TRANSFORMERS_VERBOSITY"] == "error"
+    assert os.environ["DIFFUSERS_VERBOSITY"] == "error"
+
+
+@pytest.mark.quick
+def test_pipeline_progress_bar_is_disabled_by_default(monkeypatch: pytest.MonkeyPatch) -> None:
+    """单次 Diffusers pipeline 内部进度条默认关闭, 只保留外层工作量进度。"""
+    monkeypatch.delenv("SSTW_ENABLE_PIPELINE_PROGRESS_BAR", raising=False)
+
+    class FakePipeline:
+        def __init__(self) -> None:
+            self.kwargs: dict[str, bool] | None = None
+
+        def set_progress_bar_config(self, **kwargs: bool) -> None:
+            self.kwargs = kwargs
+
+    pipeline = FakePipeline()
+    status = configure_pipeline_progress_bar(pipeline)
+
+    assert status == "disabled"
+    assert pipeline.kwargs == {"disable": True}
+
+
+@pytest.mark.quick
+def test_third_party_progress_output_is_suppressed_by_default(
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """第三方库进度噪声默认不应污染 Colab 输出。"""
+    monkeypatch.delenv("SSTW_SUPPRESS_THIRD_PARTY_PROGRESS", raising=False)
+
+    with suppress_third_party_progress_output("unit_noise_test"):
+        print("Fetching 19 files: 100%")
+        print("Loading checkpoint shards: 100%", file=sys.stderr)
+
+    captured = capsys.readouterr()
+    assert "Fetching 19 files" not in captured.out
+    assert "Loading checkpoint shards" not in captured.err
+
+
+@pytest.mark.quick
+def test_third_party_progress_output_tail_is_visible_on_failure(
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """压制第三方输出时, 异常路径仍应保留末尾摘要用于诊断。"""
+    monkeypatch.delenv("SSTW_SUPPRESS_THIRD_PARTY_PROGRESS", raising=False)
+
+    with pytest.raises(RuntimeError):
+        with suppress_third_party_progress_output("unit_failure_test", tail_chars=120):
+            print("Loading checkpoint shards: 100%", file=sys.stderr)
+            raise RuntimeError("simulated failure")
+
+    captured = capsys.readouterr()
+    assert "third_party_output_suppressed_before_failure" in captured.err
+    assert "Loading checkpoint shards" in captured.err
 
 
 @pytest.mark.quick
@@ -90,6 +171,38 @@ def test_runtime_runners_use_dynamic_plan_and_record_counts_for_progress() -> No
         "external_baseline/primary/explicit_frame_matching_temporal_registration/adapter/run_sstw_eval.py": [
             "len(detection_records)",
             '"runtime_video"',
+        ],
+    }
+
+    for path_text, patterns in expected_patterns.items():
+        source = Path(path_text).read_text(encoding="utf-8")
+        for pattern in patterns:
+            assert pattern in source, path_text
+
+
+@pytest.mark.quick
+def test_runtime_runners_suppress_third_party_pipeline_noise() -> None:
+    """真实 GPU runner 应默认压制第三方内部进度条, 避免覆盖 SSTW 工作量进度。"""
+    expected_patterns = {
+        "experiments/generative_video_model_probe/colab_runtime.py": [
+            "configure_noisy_library_progress()",
+            "configure_pipeline_progress_bar(pipe)",
+            'suppress_third_party_progress_output("wan21_runtime_single_video_generation")',
+        ],
+        "experiments/sampling_time_constraint/colab_runtime.py": [
+            "configure_noisy_library_progress()",
+            "configure_pipeline_progress_bar(pipe)",
+            'suppress_third_party_progress_output("sampling_constraint_single_video_generation")',
+        ],
+        "experiments/flow_model_adapter_preflight/wan21_preflight.py": [
+            "configure_noisy_library_progress()",
+            "configure_pipeline_progress_bar(pipe)",
+            'suppress_third_party_progress_output("wan21_preflight_single_video_generation")',
+        ],
+        "paper_workflow/notebook_utils/streaming_command.py": [
+            "NOISY_LIBRARY_ENV_DEFAULTS",
+            'env.setdefault("SSTW_SUPPRESS_THIRD_PARTY_PROGRESS", "1")',
+            'env.setdefault("SSTW_ENABLE_PIPELINE_PROGRESS_BAR", "0")',
         ],
     }
 

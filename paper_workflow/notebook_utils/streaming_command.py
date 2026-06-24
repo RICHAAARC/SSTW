@@ -6,6 +6,8 @@ import os
 import subprocess
 import sys
 
+from main.core.progress import NOISY_LIBRARY_ENV_DEFAULTS
+
 
 def run_streaming_command(command: list[str]) -> subprocess.CompletedProcess[str]:
     """执行命令并实时转发 stdout / stderr。
@@ -19,6 +21,10 @@ def run_streaming_command(command: list[str]) -> subprocess.CompletedProcess[str
     """
     env = os.environ.copy()
     env.setdefault("PYTHONUNBUFFERED", "1")
+    for key, value in NOISY_LIBRARY_ENV_DEFAULTS.items():
+        env.setdefault(key, value)
+    env.setdefault("SSTW_SUPPRESS_THIRD_PARTY_PROGRESS", "1")
+    env.setdefault("SSTW_ENABLE_PIPELINE_PROGRESS_BAR", "0")
     process = subprocess.Popen(
         command,
         stdout=subprocess.PIPE,

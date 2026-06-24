@@ -293,6 +293,37 @@ def test_split_colab_notebooks_are_profile_driven() -> None:
 
 
 @pytest.mark.quick
+def test_colab_workflow_readme_documents_validation_scale_execution() -> None:
+    """Colab workflow README 必须说明 validation-scale 执行顺序、profile 切换和 Drive 落盘边界。"""
+    readme_path = Path("paper_workflow/colab_utils/README.md")
+    assert readme_path.exists()
+    text = readme_path.read_text(encoding="utf-8")
+
+    assert "motion_threshold_calibration_colab.ipynb" in text
+    assert "generative_video_runtime_colab.ipynb" in text
+    assert "external_baseline_formal_scoring_colab.ipynb" in text
+    assert "paper_gate_and_package_colab.ipynb" in text
+    assert text.index("motion_threshold_calibration_colab.ipynb") < text.index("generative_video_runtime_colab.ipynb")
+    assert text.index("generative_video_runtime_colab.ipynb") < text.index("external_baseline_formal_scoring_colab.ipynb")
+    assert text.index("external_baseline_formal_scoring_colab.ipynb") < text.index("paper_gate_and_package_colab.ipynb")
+    assert "SSTW_WORKFLOW_PROFILE_VALUE = 'validation_scale'" in text
+    assert "SSTW_WORKFLOW_PROFILE_VALUE = 'pilot_paper'" in text
+    assert "不要把该 Notebook 切换到 `validation_scale` 或 `pilot_paper`" in text
+    assert "SSTW_VIDEOSHIELD_EVAL_COMMAND" in text
+    assert "SSTW_SIGMARK_EVAL_COMMAND" in text
+    assert "SSTW_SPDMARK_EVAL_COMMAND" in text
+    assert "SSTW_VIDEOMARK_EVAL_COMMAND" in text
+    assert "SSTW_VIDSIG_EVAL_COMMAND" in text
+    assert "SSTW_VIDEOSEAL_EVAL_COMMAND" in text
+    assert "validation_scale_gate_decision.json" in text
+    assert "pilot_paper_gate_decision.json" in text
+    assert "/content/drive/MyDrive/SSTW" in text
+    assert r"G:\我的云端硬盘\SSTW" in text
+    assert "不要手写 records" in text
+    assert "<utc_time>_<short_commit>" in text
+
+
+@pytest.mark.quick
 def test_notebook_workflow_profile_config_supports_profile_switching() -> None:
     """统一配置层必须能区分 validation_scale、pilot_paper 和未开放的 full_paper。"""
     assert default_workflow_profile_for_notebook_role("generative_video_runtime") == "validation_scale"

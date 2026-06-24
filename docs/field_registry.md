@@ -266,6 +266,18 @@ Notebook 与 repository module 的跨边界数据
 | external_baseline_result_used_for_claim | claim | none | true | true | false | Whether B5 external baseline is used for a claim. |
 | external_baseline_command_config_status | governance | none | true | false | false | 现代 external baseline 官方命令是否已配置。 |
 | external_baseline_command_env_var | provenance | none | true | false | false | 现代 external baseline adapter 使用的命令环境变量名称。 |
+| external_baseline_colab_preflight_decision | governance | none | true | false | false | Colab 真实 GPU 运行前现代 external baseline command preflight 的 PASS / FAIL 决策。 |
+| external_baseline_colab_preflight_status | governance | none | true | false | false | Colab 真实 GPU 运行前现代 external baseline command preflight 的阻断或通过状态。 |
+| external_baseline_colab_preflight_required_env_vars | provenance | none | true | false | false | Colab preflight 要求配置的现代 external baseline command 环境变量列表。 |
+| external_baseline_colab_preflight_configured_env_vars | provenance | none | true | false | false | Colab preflight 已配置的现代 external baseline command 环境变量列表。 |
+| external_baseline_colab_preflight_missing_env_vars | governance | none | true | false | false | Colab preflight 缺失的现代 external baseline command 环境变量列表。 |
+| external_baseline_colab_preflight_required_env_var_count | metric | none | true | false | false | Colab preflight 要求配置的现代 external baseline command 环境变量数量。 |
+| external_baseline_colab_preflight_configured_env_var_count | metric | none | true | false | false | Colab preflight 已配置的现代 external baseline command 环境变量数量。 |
+| external_baseline_colab_preflight_missing_env_var_count | metric | none | true | false | false | Colab preflight 缺失的现代 external baseline command 环境变量数量。 |
+| paper_gate_profile | protocol | none | true | false | false | 当前 Colab profile 是否属于 validation_scale / pilot_paper / fpr01_pilot 这类 paper gate profile。 |
+| require_modern_baseline_commands_for_paper_gate | protocol | none | true | false | false | Colab paper gate profile 是否要求现代 baseline command 在真实 GPU 运行前全部配置。 |
+| run_external_baseline_source_clone | protocol | none | true | false | false | Colab 冷启动阶段是否执行可 clone 外部 baseline 官方 source 拉取。 |
+| external_baseline_evidence_path_count | metric | none | true | false | false | Colab preflight 或 execution manifest 中登记的外部 baseline evidence path 数量。 |
 | external_baseline_formal_ready_count | metric | none | true | false | false | external_baseline comparison 中 measured_formal record 数量。 |
 | external_baseline_formal_measured_adapter_count | metric | none | true | false | false | external_baseline comparison 中产出 measured_formal records 的 adapter 数量。 |
 | external_baseline_formal_measured_adapter_names | metric | none | true | false | false | external_baseline comparison 中产出 measured_formal records 的 adapter 名称列表。 |

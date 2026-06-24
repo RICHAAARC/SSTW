@@ -1416,6 +1416,9 @@ missing_modern_external_baseline_formal_adapter_names == []
 RUN_EXTERNAL_BASELINE_SOURCE_CLONE
 EXTERNAL_BASELINE_EVIDENCE_PATHS
 REQUIRE_MODERN_BASELINE_COMMANDS_FOR_PAPER_GATE
+build_modern_baseline_command_env(...)
+write_external_baseline_colab_preflight_decision(...)
+external_baseline_colab_preflight_decision.json
 build_external_baseline_source_intake_command(..., execute_clone=...)
 SSTW_EXTERNAL_BASELINE_EVIDENCE_PATHS
 ```
@@ -1427,11 +1430,12 @@ local_heavy_baseline_execution: forbidden
 colab_modern_baseline_command_configuration: required
 validation_scale_missing_modern_command_preflight: hard_block
 pilot_paper_missing_modern_command_preflight: hard_block
+external_baseline_colab_preflight_artifact: integrated
 external_baseline_evidence_path_manifest_binding: integrated
 real_modern_baseline_results: pending_user_colab_configuration_and_run
 ```
 
-该更新只改变执行边界和 Notebook 预检逻辑, 不产生新的真实 baseline 结果。当前项目仍需要用户在 Colab 中安装或挂载 6 个现代视频水印 baseline 的官方实现, 配置对应 command adapter, 并把运行日志、配置或官方输出路径填入 `EXTERNAL_BASELINE_EVIDENCE_PATHS`。在这些内容完成前, `validation_scale` 会提前阻断, 不允许继续生成缺现代 baseline 的 paper-gate 结果包。
+该更新只改变执行边界和 Notebook 预检逻辑, 不产生新的真实 baseline 结果。当前项目仍需要用户在 Colab 中安装或挂载 6 个现代视频水印 baseline 的官方实现, 配置对应 command adapter, 并把运行日志、配置或官方输出路径填入 `EXTERNAL_BASELINE_EVIDENCE_PATHS`。在这些内容完成前, `validation_scale` 会提前阻断, 不允许继续生成缺现代 baseline 的 paper-gate 结果包。阻断前会写出 `artifacts/external_baseline_colab_preflight_decision.json`, 使 Colab 冷启动失败原因可随 Google Drive package 审计。
 
 ## 2026-06-24 现代 baseline 官方输出证据持久化
 

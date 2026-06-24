@@ -9,7 +9,11 @@ import zipfile
 
 import pytest
 
-from paper_workflow.notebook_utils.generative_video_model_probe_workflow import build_drive_layout
+from paper_workflow.notebook_utils.generative_video_model_probe_workflow import (
+    build_drive_layout,
+    build_modern_baseline_command_env,
+    write_external_baseline_colab_preflight_decision,
+)
 from experiments.generative_video_model_probe.colab_runtime import _build_generation_plan
 from scripts.package_results.generative_video_drive_packager import package_generative_video_colab_run
 from scripts.prepare_generative_video_prompt_suite import write_prompt_suite
@@ -189,7 +193,10 @@ def test_generative_video_colab_notebook_calls_repository_modules() -> None:
     assert "EXTERNAL_BASELINE_EVIDENCE_PATHS" in source
     assert "REQUIRE_MODERN_BASELINE_COMMANDS_FOR_PAPER_GATE" in source
     assert "SSTW_EXTERNAL_BASELINE_EVIDENCE_PATHS" in source
-    assert "PROFILE in {'validation_scale', 'pilot_paper', 'fpr01_pilot'}" in source
+    assert "build_modern_baseline_command_env" in source
+    assert "write_external_baseline_colab_preflight_decision" in source
+    assert "validate_modern_baseline_commands_for_profile" in source
+    assert "external_baseline_colab_preflight_decision" in Path("paper_workflow/notebook_utils/generative_video_model_probe_workflow.py").read_text(encoding="utf-8")
     assert "build_formal_metric_command" in source
     assert "motion_calibration" in source
     assert "pilot / validation_scale profile 只能复用已经通过的 calibration artifact" in source
@@ -234,6 +241,79 @@ def test_generative_video_colab_notebook_calls_repository_modules() -> None:
     assert "scripts/package_results/generative_video_drive_packager.py" in Path("paper_workflow/notebook_utils/generative_video_model_probe_workflow.py").read_text(encoding="utf-8")
     assert "pytest -q" in source
     assert "tools/harness/run_all_audits.py" in source
+
+
+@pytest.mark.quick
+def test_external_baseline_colab_preflight_uses_protocol_config(tmp_path: Path) -> None:
+    """Notebook preflight 必须从 protocol config 读取 6 个现代 baseline 要求并写入 Drive artifact。"""
+    layout = build_drive_layout(str(tmp_path / "SSTW"))
+    commands = build_modern_baseline_command_env("validation_scale", {
+        "videoshield": "python videoshield.py --output-json {output_json_path}",
+        "sigmark": "python sigmark.py --output-json {output_json_path}",
+    })
+
+    decision = write_external_baseline_colab_preflight_decision(
+        layout,
+        profile="validation_scale",
+        command_env=commands,
+        require_modern_baseline_commands_for_paper_gate=True,
+        run_external_baseline_source_clone=True,
+        evidence_paths=[str(tmp_path / "baseline.log")],
+    )
+
+    assert decision["external_baseline_colab_preflight_decision"] == "FAIL"
+    assert decision["external_baseline_colab_preflight_status"] == "commands_missing_for_paper_gate"
+    assert decision["external_baseline_colab_preflight_required_env_var_count"] == 6
+    assert decision["external_baseline_colab_preflight_configured_env_var_count"] == 2
+    assert decision["external_baseline_colab_preflight_missing_env_var_count"] == 4
+    assert set(decision["required_modern_external_baseline_adapter_names"]) == {
+        "videoshield",
+        "sigmark",
+        "spdmark",
+        "videomark",
+        "vidsig",
+        "videoseal",
+    }
+    artifact_path = Path(layout["drive_run_root"]) / "artifacts" / "external_baseline_colab_preflight_decision.json"
+    assert artifact_path.exists()
+    persisted = json.loads(artifact_path.read_text(encoding="utf-8"))
+    assert persisted["run_external_baseline_source_clone"] is True
+    assert persisted["claim_support_status"] == "external_baseline_colab_preflight_only_not_claim_evidence"
+
+
+@pytest.mark.quick
+def test_external_baseline_colab_preflight_passes_when_all_commands_configured(tmp_path: Path) -> None:
+    """6 个现代 baseline command 均配置时, paper gate preflight 应允许继续进入 GPU 流程。"""
+    layout = build_drive_layout(str(tmp_path / "SSTW"))
+    commands = build_modern_baseline_command_env("pilot_paper", {
+        "videoshield": "python videoshield.py --output-json {output_json_path}",
+        "sigmark": "python sigmark.py --output-json {output_json_path}",
+        "spdmark": "python spdmark.py --output-json {output_json_path}",
+        "videomark": "python videomark.py --output-json {output_json_path}",
+        "vidsig": "python vidsig.py --output-json {output_json_path}",
+        "videoseal": "python videoseal.py --output-json {output_json_path}",
+    })
+
+    decision = write_external_baseline_colab_preflight_decision(
+        layout,
+        profile="pilot_paper",
+        command_env=commands,
+        require_modern_baseline_commands_for_paper_gate=True,
+        run_external_baseline_source_clone=False,
+        evidence_paths=[],
+    )
+
+    assert decision["external_baseline_colab_preflight_decision"] == "PASS"
+    assert decision["external_baseline_colab_preflight_status"] == "commands_configured_for_paper_gate"
+    assert decision["external_baseline_colab_preflight_missing_env_vars"] == []
+    assert set(decision["external_baseline_colab_preflight_configured_env_vars"]) == {
+        "SSTW_VIDEOSHIELD_EVAL_COMMAND",
+        "SSTW_SIGMARK_EVAL_COMMAND",
+        "SSTW_SPDMARK_EVAL_COMMAND",
+        "SSTW_VIDEOMARK_EVAL_COMMAND",
+        "SSTW_VIDSIG_EVAL_COMMAND",
+        "SSTW_VIDEOSEAL_EVAL_COMMAND",
+    }
 
 
 @pytest.mark.quick

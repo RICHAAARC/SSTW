@@ -2028,6 +2028,22 @@ fpr01_pilot
 
 Notebook 必须在真实 GPU 生成前检查现代 baseline command 是否全部配置。若缺少任何一个 command, 应提前阻断, 不允许先生成缺 baseline 的混淆结果包。该规则属于项目特定写法, 目的是保证 `validation_scale` 作为 paper 级最后门禁时已经能够产出完整 baseline comparison 结果。
 
+该检查不得散落在 Notebook cell 中手工维护 baseline 清单。Notebook 应调用:
+
+```text
+paper_workflow/notebook_utils/generative_video_model_probe_workflow.py::build_modern_baseline_command_env
+paper_workflow/notebook_utils/generative_video_model_probe_workflow.py::write_external_baseline_colab_preflight_decision
+paper_workflow/notebook_utils/generative_video_model_probe_workflow.py::validate_modern_baseline_commands_for_profile
+```
+
+并在阻断前写出:
+
+```text
+artifacts/external_baseline_colab_preflight_decision.json
+```
+
+该 artifact 只记录 Colab 冷启动 preflight 状态, 不运行第三方 baseline, 不支持论文 claim。它的作用是让用户在 Google Drive 中直接看到缺少哪些现代 baseline command, 避免 Colab 断开后无法定位失败原因。
+
 `external_baseline_execution_manifest.json` 必须记录:
 
 ```text

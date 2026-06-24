@@ -126,3 +126,17 @@ official_command_manifest.json
 这些文件会被自动纳入 `external_baseline_execution_manifest.json` 的 `evidence_paths`。因此 Colab 断开后, 用户仍可以从 Google Drive package 中审计每条 `measured_formal` baseline score 的官方输出来源。若没有自动持久化证据且没有额外 evidence path, `measured_formal` rows 只能证明 command adapter 写出了受治理 records, 不能单独支撑论文主表 claim。
 
 当前 `validation_scale` 已经是进入 paper 级运行前的最后一道完整门禁。因此在 `PROFILE = 'validation_scale'`、`PROFILE = 'pilot_paper'` 或 `PROFILE = 'fpr01_pilot'` 时, Colab notebook 会在 6 个现代 baseline command 缺失时提前阻断, 避免先消耗 GPU 生成视频后才发现 baseline 主表无法闭合。
+
+Notebook 的现代 baseline command preflight 逻辑集中在:
+
+```text
+paper_workflow/notebook_utils/generative_video_model_probe_workflow.py
+```
+
+该 helper 会从 protocol config 读取 `required_modern_external_baseline_adapter_names`, 生成需要配置的环境变量列表, 并在阻断前写出:
+
+```text
+artifacts/external_baseline_colab_preflight_decision.json
+```
+
+该 artifact 只用于冷启动执行审计, 不表示 baseline 已经运行, 也不能单独支撑外部 baseline 对比 claim。

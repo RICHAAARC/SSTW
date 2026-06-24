@@ -137,9 +137,13 @@ def build_runtime_detection_command(layout: dict[str, str]) -> list[str]:
     ]
 
 
-def build_external_baseline_source_intake_command(layout: dict[str, str]) -> list[str]:
-    """构造 external baseline source intake 命令, 写出源码、adapter 和命令配置治理清单。"""
-    return [
+def build_external_baseline_source_intake_command(layout: dict[str, str], execute_clone: bool = False) -> list[str]:
+    """构造 external baseline source intake 命令, 写出源码、adapter 和命令配置治理清单。
+
+    `execute_clone` 仅应在 Colab 冷启动且用户已经确认第三方源码 URL 可访问时启用。
+    默认不访问网络, 这样本地测试和 harness 审计不会被外部仓库状态影响。
+    """
+    command = [
         sys.executable,
         "scripts/build_external_baseline_source_intake.py",
         "--output-root",
@@ -147,6 +151,9 @@ def build_external_baseline_source_intake_command(layout: dict[str, str]) -> lis
         "--repo-root",
         ".",
     ]
+    if execute_clone:
+        command.append("--execute-clone")
+    return command
 
 
 

@@ -1406,3 +1406,28 @@ missing_modern_external_baseline_formal_adapter_names == []
 ```
 
 如果仅有 `explicit_dtw_temporal_alignment` 与 `explicit_frame_matching_temporal_registration` 两个 proxy control, validation-scale 现在必须失败。下一步不是进入 `pilot_paper`, 而是配置现代 baseline 官方命令、执行同批视频的 baseline adapter, 并确认 `external_baseline_execution_manifest.json` 与 comparison records 均已落盘。
+
+## 2026-06-24 Colab-only external baseline 运行边界加固
+
+根据“所有真实运行均在 Colab 进行”的执行约束, 当前 generative video Notebook 已把现代 baseline 配置前置为 Colab 显式参数。新增或固化的入口包括:
+
+```text
+RUN_EXTERNAL_BASELINE_SOURCE_CLONE
+EXTERNAL_BASELINE_EVIDENCE_PATHS
+REQUIRE_MODERN_BASELINE_COMMANDS_FOR_PAPER_GATE
+build_external_baseline_source_intake_command(..., execute_clone=...)
+SSTW_EXTERNAL_BASELINE_EVIDENCE_PATHS
+```
+
+阶段性状态为:
+
+```text
+local_heavy_baseline_execution: forbidden
+colab_modern_baseline_command_configuration: required
+validation_scale_missing_modern_command_preflight: hard_block
+pilot_paper_missing_modern_command_preflight: hard_block
+external_baseline_evidence_path_manifest_binding: integrated
+real_modern_baseline_results: pending_user_colab_configuration_and_run
+```
+
+该更新只改变执行边界和 Notebook 预检逻辑, 不产生新的真实 baseline 结果。当前项目仍需要用户在 Colab 中安装或挂载 5 个现代视频水印 baseline 的官方实现, 配置对应 command adapter, 并把运行日志、配置或官方输出路径填入 `EXTERNAL_BASELINE_EVIDENCE_PATHS`。在这些内容完成前, `validation_scale` 会提前阻断, 不允许继续生成缺现代 baseline 的 paper-gate 结果包。

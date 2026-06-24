@@ -70,3 +70,39 @@ python scripts/build_external_baseline_source_intake.py --output-root external_b
 ```
 
 该命令属于工程准备层, 不能替代真实 baseline 运行。真实比较仍必须由 adapter 生成 `external_baseline_score_records.jsonl`、`external_baseline_comparison_decision.json` 和 `external_baseline_execution_manifest.json`。
+
+## Colab 冷启动运行要求
+
+真实现代 baseline 运行统一放在 Colab 环境中完成。本地仓库只负责 adapter、schema、manifest、gate 和轻量测试, 不负责执行第三方视频水印模型的重型推理。
+
+Colab 中必须显式配置以下三类内容:
+
+1. 现代 baseline command:
+
+   ```text
+   SSTW_VIDEOSHIELD_EVAL_COMMAND
+   SSTW_SIGMARK_EVAL_COMMAND
+   SSTW_SPDMARK_EVAL_COMMAND
+   SSTW_VIDEOMARK_OR_VIDSIG_EVAL_COMMAND
+   SSTW_VIDEOSEAL_EVAL_COMMAND
+   ```
+
+2. 可选的官方 source clone:
+
+   ```text
+   RUN_EXTERNAL_BASELINE_SOURCE_CLONE = True 或 False
+   ```
+
+   该开关只会对可 git clone 的 source URL 生效。不能 git clone 的论文页面、PDF 或 HTML source 仍需要用户在 Colab 中提供官方命令或手工放置 source snapshot。
+
+3. 外部运行证据路径:
+
+   ```text
+   EXTERNAL_BASELINE_EVIDENCE_PATHS = [
+       "/content/drive/MyDrive/SSTW/...",
+   ]
+   ```
+
+这些 evidence path 应指向官方 baseline 运行日志、配置、输出 JSON、依赖快照或校验文件。adapter 会把路径写入 `artifacts/external_baseline_execution_manifest.json`。没有 evidence path 的 `measured_formal` rows 只能证明 command adapter 写出了受治理 records, 不能单独支撑论文主表 claim。
+
+当前 `validation_scale` 已经是进入 paper 级运行前的最后一道完整门禁。因此在 `PROFILE = 'validation_scale'`、`PROFILE = 'pilot_paper'` 或 `PROFILE = 'fpr01_pilot'` 时, Colab notebook 会在 5 个现代 baseline command 缺失时提前阻断, 避免先消耗 GPU 生成视频后才发现 baseline 主表无法闭合。

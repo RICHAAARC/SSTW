@@ -185,6 +185,11 @@ def test_generative_video_colab_notebook_calls_repository_modules() -> None:
     assert "pilot_paper" in source
     assert "TPR@FPR=0.01" in source
     assert "MODEL_ID = 'Wan-AI/Wan2.1-T2V-1.3B-Diffusers'" in source
+    assert "RUN_EXTERNAL_BASELINE_SOURCE_CLONE" in source
+    assert "EXTERNAL_BASELINE_EVIDENCE_PATHS" in source
+    assert "REQUIRE_MODERN_BASELINE_COMMANDS_FOR_PAPER_GATE" in source
+    assert "SSTW_EXTERNAL_BASELINE_EVIDENCE_PATHS" in source
+    assert "PROFILE in {'validation_scale', 'pilot_paper', 'fpr01_pilot'}" in source
     assert "build_formal_metric_command" in source
     assert "motion_calibration" in source
     assert "pilot / validation_scale profile 只能复用已经通过的 calibration artifact" in source
@@ -215,6 +220,7 @@ def test_generative_video_colab_notebook_calls_repository_modules() -> None:
     assert "experiments.generative_video_model_probe.attack_runner" in Path("paper_workflow/notebook_utils/generative_video_model_probe_workflow.py").read_text(encoding="utf-8")
     assert "experiments.generative_video_model_probe.detection_runner" in Path("paper_workflow/notebook_utils/generative_video_model_probe_workflow.py").read_text(encoding="utf-8")
     assert "scripts/build_external_baseline_source_intake.py" in Path("paper_workflow/notebook_utils/generative_video_model_probe_workflow.py").read_text(encoding="utf-8")
+    assert "--execute-clone" in Path("paper_workflow/notebook_utils/generative_video_model_probe_workflow.py").read_text(encoding="utf-8")
     assert "experiments.generative_video_model_probe.external_baseline_runner" in Path("paper_workflow/notebook_utils/generative_video_model_probe_workflow.py").read_text(encoding="utf-8")
     assert "experiments.generative_video_model_probe.pilot_claim_gate" in Path("paper_workflow/notebook_utils/generative_video_model_probe_workflow.py").read_text(encoding="utf-8")
     assert "experiments.generative_video_model_probe.validation_internal_ablation" in Path("paper_workflow/notebook_utils/generative_video_model_probe_workflow.py").read_text(encoding="utf-8")

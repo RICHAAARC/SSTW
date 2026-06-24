@@ -1989,3 +1989,52 @@ external_baseline_result_used_for_claim_governed
 ```
 
 在上述条件未满足前, `external_baseline_comparison_decision = PASS` 只表示工程产出链路闭合, 不表示论文主 claim 成立。
+
+### 35.5 Colab-only 真实 baseline 执行约束
+
+现代视频水印 baseline 的真实执行统一放在 Colab 或等价 GPU 运行环境中完成。本地仓库只允许执行以下轻量工程任务:
+
+```text
+adapter 接口检查
+source registry / source intake manifest 生成
+schema 与字段审计
+validation gate 逻辑测试
+Notebook 入口静态检查
+packager 轻量回归测试
+```
+
+本地不得把第三方 baseline 的重型推理结果伪造成正式记录。Colab 冷启动时必须完成:
+
+```text
+clone / pull SSTW 仓库
+安装 SSTW 依赖
+安装或挂载现代 baseline 官方实现
+配置 5 个现代 baseline command adapter
+可选执行 source clone
+绑定 external baseline evidence paths
+运行 runtime detection 后执行 external_baseline_runner
+打包 records / artifacts / reports / manifests 到 Google Drive
+```
+
+当 `PROFILE` 为以下任一阶段时:
+
+```text
+validation_scale
+pilot_paper
+fpr01_pilot
+```
+
+Notebook 必须在真实 GPU 生成前检查现代 baseline command 是否全部配置。若缺少任何一个 command, 应提前阻断, 不允许先生成缺 baseline 的混淆结果包。该规则属于项目特定写法, 目的是保证 `validation_scale` 作为 paper 级最后门禁时已经能够产出完整 baseline comparison 结果。
+
+`external_baseline_execution_manifest.json` 必须记录:
+
+```text
+source_intake_manifest_path
+external_baseline_measured_adapter_count
+modern_external_baseline_formal_measured_adapter_count
+modern_external_baseline_formal_measured_adapter_names
+formal_evidence_status
+evidence_paths
+```
+
+其中 evidence paths 应指向 Colab 或 Google Drive 中实际存在的官方 baseline 运行日志、配置、输出 JSON 或依赖快照。没有 evidence paths 的 formal rows 只能作为工程接入证据, 不得直接升级为论文主表 claim。

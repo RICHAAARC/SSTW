@@ -387,6 +387,7 @@ Notebook 与 repository module 的跨边界数据
 | clone_results_decision | governance | none | true | false | false | Decision for external baseline clone results manifest. |
 | external_baseline_execution_manifest_status | governance | none | true | false | false | Whether external_baseline_execution_manifest.json is present in a packaged run. |
 | formal_evidence_status | governance | none | true | true | false | Whether measured_formal external baseline rows are bound to explicit evidence paths. |
+| evidence_paths | artifact | none | true | true | false | Existing log, config, output, or source-evidence paths bound to an execution manifest. |
 | evidence_path_count | metric | none | true | true | false | Number of evidence paths bound to an execution manifest. |
 | manifest_kind | artifact | none | false | false | false | Kind of manifest written by a governance runner or source intake tool. |
 | baseline_source_count | metric | none | false | false | false | Number of external baseline source entries in the source intake manifest. |

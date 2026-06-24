@@ -95,6 +95,18 @@ def test_validation_scale_gate_passes_when_all_governed_inputs_exist(tmp_path: P
                 "seed_id": f"seed_{seed_index}",
             })
     write_jsonl(run_root / "records" / "generation_records.jsonl", generation_records)
+    write_jsonl(run_root / "records" / "formal_quality_motion_semantic_records.jsonl", [
+        {
+            "prompt_id": record["prompt_id"],
+            "seed_id": record["seed_id"],
+            "formal_visual_quality_ready": True,
+            "formal_motion_consistency_ready": True,
+            "formal_semantic_consistency_ready": True,
+            "formal_metric_result_used_for_claim": True,
+            "motion_claim_role": "positive_motion",
+        }
+        for record in generation_records
+    ])
     write_jsonl(run_root / "records" / "runtime_attack_records.jsonl", [
         {"attack_name": "video_compression_runtime", "attack_runtime_status": "ready"},
         {"attack_name": "temporal_crop_runtime", "attack_runtime_status": "ready"},
@@ -123,6 +135,12 @@ def test_validation_scale_gate_passes_when_all_governed_inputs_exist(tmp_path: P
         {"adaptive_attack_name": "time_grid_jitter", "adaptive_attack_status": "ready"},
     ])
     write_json(run_root / "artifacts" / "small_scale_claim_pilot_gate_decision.json", {"pilot_gate_decision": "PASS"})
+    write_json(run_root / "artifacts" / "motion_threshold_calibration_decision.json", {
+        "motion_threshold_calibration_decision": "PASS",
+        "motion_threshold_calibration_ready": True,
+        "motion_threshold_id": "motion_delta_calibrated_v1",
+        "motion_threshold_source_split": "calibration",
+    })
     write_json(run_root / "artifacts" / "runtime_attack_decision.json", {
         "runtime_attack_decision": "PASS",
         "runtime_attack_ready_count": 3,
@@ -159,6 +177,8 @@ def test_validation_scale_gate_passes_when_all_governed_inputs_exist(tmp_path: P
     assert audit["validation_generation_record_count"] == 24
     assert audit["validation_prompt_count"] == 8
     assert audit["validation_seed_per_prompt_min"] == 3
+    assert audit["motion_threshold_calibration_ready"] is True
+    assert audit["formal_motion_claim_status"] == "ready"
     assert audit["full_paper_allowed"] is False
     assert audit["full_paper_next_gate"] == "pilot_paper_generative_probe_gate"
     assert audit["external_baseline_measured_adapter_count"] == 8
@@ -168,3 +188,26 @@ def test_validation_scale_gate_passes_when_all_governed_inputs_exist(tmp_path: P
     assert (run_root / "tables" / "validation_scale_gate_table.csv").exists()
     assert (run_root / "artifacts" / "validation_scale_gate_decision.json").exists()
     assert (run_root / "reports" / "validation_scale_gate_report.md").exists()
+
+
+@pytest.mark.quick
+def test_validation_scale_gate_requires_reused_motion_threshold_and_formal_motion_records(tmp_path: Path) -> None:
+    """validation-scale 正式门禁必须确认 motion threshold 复用和 formal motion claim 均已闭合。"""
+    run_root = tmp_path / "run"
+    generation_records = []
+    for prompt_index in range(8):
+        for seed_index in range(3):
+            generation_records.append({
+                "generation_status": "success",
+                "colab_runtime_profile": "validation_scale",
+                "prompt_id": f"prompt_{prompt_index}",
+                "seed_id": f"seed_{seed_index}",
+            })
+    write_jsonl(run_root / "records" / "generation_records.jsonl", generation_records)
+    write_json(run_root / "artifacts" / "small_scale_claim_pilot_gate_decision.json", {"pilot_gate_decision": "PASS"})
+
+    audit = build_validation_scale_gate_audit(run_root)
+
+    assert audit["validation_scale_gate_decision"] == "FAIL"
+    assert "validation_motion_threshold_calibration_ready" in audit["missing_validation_requirements"]
+    assert "validation_formal_motion_claim_ready" in audit["missing_validation_requirements"]

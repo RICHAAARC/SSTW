@@ -9,6 +9,10 @@ from typing import Any
 
 from main.external_baselines.baseline_registry import audit_external_baseline_records
 from experiments.generative_video_model_probe.external_baseline_runner import audit_external_baseline_comparison_records
+from experiments.generative_video_model_probe.formal_motion_claim_filter import (
+    FORMAL_MOTION_CLAIM_READY_STATUSES,
+    select_motion_claim_generation_records,
+)
 from main.protocol.flow_evidence_fields import with_flow_evidence_protocol_defaults
 from main.protocol.record_writer import write_json, write_jsonl
 from main.protocol.table_builder import write_csv
@@ -60,6 +64,8 @@ def _load_config(config_path: str | Path = DEFAULT_VALIDATION_SCALE_CONFIG) -> d
         "minimum_external_baseline_measured_adapter_count": int(config.get("minimum_external_baseline_measured_adapter_count", DEFAULT_MINIMUM_EXTERNAL_BASELINE_MEASURED_ADAPTER_COUNT)),
         "minimum_modern_external_baseline_formal_adapter_count": int(config.get("minimum_modern_external_baseline_formal_adapter_count", DEFAULT_MINIMUM_MODERN_EXTERNAL_BASELINE_FORMAL_ADAPTER_COUNT)),
         "required_modern_external_baseline_adapter_names": list(config.get("required_modern_external_baseline_adapter_names", DEFAULT_REQUIRED_MODERN_EXTERNAL_BASELINE_ADAPTER_NAMES)),
+        "require_motion_threshold_calibration_ready": bool(config.get("require_motion_threshold_calibration_ready", True)),
+        "require_formal_motion_claim_ready": bool(config.get("require_formal_motion_claim_ready", True)),
         "require_internal_ablation_records": bool(config.get("require_internal_ablation_records", True)),
         "require_adaptive_attack_records": bool(config.get("require_adaptive_attack_records", True)),
         "require_replay_or_sketch_records_or_claim3_downgrade": bool(config.get("require_replay_or_sketch_records_or_claim3_downgrade", True)),
@@ -200,10 +206,12 @@ def build_validation_scale_gate_audit(
     runtime_attack_records = _read_jsonl(run_root / "records" / "runtime_attack_records.jsonl")
     runtime_detection_records = _read_jsonl(run_root / "records" / "runtime_detection_records.jsonl")
     external_baseline_records = _read_jsonl(run_root / "records" / "external_baseline_records.jsonl")
+    formal_metric_records = _read_jsonl(run_root / "records" / "formal_quality_motion_semantic_records.jsonl")
 
     pilot_decision = _read_json(run_root / "artifacts" / "small_scale_claim_pilot_gate_decision.json")
     runtime_attack_decision = _read_json(run_root / "artifacts" / "runtime_attack_decision.json")
     runtime_detection_decision = _read_json(run_root / "artifacts" / "runtime_detection_decision.json")
+    motion_threshold_decision = _read_json(run_root / "artifacts" / "motion_threshold_calibration_decision.json")
 
     prompt_count = len(_unique_nonempty(validation_generation_records, "prompt_id"))
     seed_per_prompt_min = _seed_per_prompt_min(validation_generation_records)
@@ -230,10 +238,15 @@ def build_validation_scale_gate_audit(
     replay_or_sketch_ready, replay_or_sketch_status = _replay_or_sketch_ready(run_root)
     confidence_interval_ready, confidence_interval_status = _confidence_interval_ready(run_root)
     artifact_rebuild_ready, artifact_rebuild_status = _artifact_rebuild_ready(run_root)
+    motion_selection = select_motion_claim_generation_records(validation_generation_records, formal_metric_records)
+    formal_motion_claim_ready = motion_selection.formal_motion_claim_status in FORMAL_MOTION_CLAIM_READY_STATUSES
+    motion_threshold_ready = motion_threshold_decision.get("motion_threshold_calibration_ready") is True
 
     requirement_checks = {
         "small_scale_claim_pilot_gate_passed": (not config["require_small_scale_pilot_gate_passed"]) or pilot_decision.get("pilot_gate_decision") == "PASS",
         "validation_generation_records_ready": prompt_count >= config["minimum_prompt_count"] and seed_per_prompt_min >= config["minimum_seed_per_prompt"],
+        "validation_motion_threshold_calibration_ready": (not config["require_motion_threshold_calibration_ready"]) or motion_threshold_ready,
+        "validation_formal_motion_claim_ready": (not config["require_formal_motion_claim_ready"]) or formal_motion_claim_ready,
         "validation_attack_records_ready": _decision_pass(runtime_attack_decision, "runtime_attack_decision") and attack_count >= config["minimum_attack_count"],
         "validation_detection_records_ready": _decision_pass(runtime_detection_decision, "runtime_detection_decision") and runtime_detection_ready_count >= runtime_attack_ready_count > 0,
         "validation_external_baseline_status_records_ready": (not config["require_external_baseline_status_records"]) or external_baseline_audit.get("external_baseline_status_decision") == "PASS",
@@ -262,6 +275,15 @@ def build_validation_scale_gate_audit(
         "validation_seed_per_prompt_min": seed_per_prompt_min,
         "minimum_prompt_count": config["minimum_prompt_count"],
         "minimum_seed_per_prompt": config["minimum_seed_per_prompt"],
+        "motion_threshold_calibration_decision": motion_threshold_decision.get("motion_threshold_calibration_decision"),
+        "motion_threshold_calibration_ready": motion_threshold_ready,
+        "motion_threshold_id": motion_threshold_decision.get("motion_threshold_id"),
+        "motion_threshold_source_split": motion_threshold_decision.get("motion_threshold_source_split"),
+        "formal_motion_claim_status": motion_selection.formal_motion_claim_status,
+        "formal_motion_consistency_ready_count": motion_selection.formal_motion_consistency_ready_count,
+        "formal_motion_consistency_blocked_count": motion_selection.formal_motion_consistency_blocked_count,
+        "motion_claim_eligible_generation_count": motion_selection.motion_claim_eligible_generation_count,
+        "motion_claim_excluded_generation_count": motion_selection.motion_claim_excluded_generation_count,
         "runtime_attack_decision": runtime_attack_decision.get("runtime_attack_decision"),
         "runtime_attack_ready_count": runtime_attack_ready_count,
         "runtime_attack_count": attack_count,
@@ -317,6 +339,8 @@ def write_validation_scale_gate_audit(
         f"- validation_generation_record_count: {audit['validation_generation_record_count']}\n"
         f"- validation_prompt_count: {audit['validation_prompt_count']}\n"
         f"- validation_seed_per_prompt_min: {audit['validation_seed_per_prompt_min']}\n"
+        f"- motion_threshold_calibration_decision: {audit['motion_threshold_calibration_decision']}\n"
+        f"- formal_motion_claim_status: {audit['formal_motion_claim_status']}\n"
         f"- modern_external_baseline_main_comparison_ready_count: {audit['modern_external_baseline_main_comparison_ready_count']}\n"
         f"- external_baseline_comparison_record_count: {audit['external_baseline_comparison_record_count']}\n"
         f"- external_baseline_measured_adapter_count: {audit['external_baseline_measured_adapter_count']}\n"

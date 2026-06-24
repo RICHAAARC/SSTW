@@ -12,6 +12,8 @@
   "require_external_baseline_comparison_records": true,
   "require_external_baseline_status_records": true,
   "require_internal_ablation_records": true,
+  "require_formal_motion_claim_ready": true,
+  "require_motion_threshold_calibration_ready": true,
   "require_replay_or_sketch_records_or_claim3_downgrade": true,
   "require_small_scale_pilot_gate_passed": true,
   "required_modern_external_baseline_adapter_names": [

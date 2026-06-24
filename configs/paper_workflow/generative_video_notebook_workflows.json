@@ -185,6 +185,7 @@
         "full_paper"
       ],
       "stage_plan": [
+        "motion_threshold_reuse_check",
         "validation_internal_ablation",
         "adaptive_attack_proxy",
         "replay_and_sketch_gate",

@@ -158,6 +158,10 @@ SSTW_WORKFLOW_PROFILE_VALUE = 'validation_scale'
 ```
 
 该 Notebook 必须在 runtime 与 external baseline notebook 完成后运行, 因为 gate 需要读取前序 artifacts。
+执行 gate 前, Notebook 会再次校验并复制 `motion_calibration` run root 中已冻结的
+`motion_threshold_calibration_decision.json` 到当前 `validation_scale` 或 `pilot_paper`
+run root。该步骤不重新估计阈值, 只把独立 calibration split 的阈值 artifact 固化到当前
+gate 所需的 governed artifacts 中。
 
 ## 4. validation-scale 到 pilot-paper 的切换
 

@@ -17,6 +17,7 @@ from paper_workflow.notebook_utils.generative_video_model_probe_workflow import 
     resolve_notebook_workflow_profile,
     validate_motion_threshold_ready_for_profile,
     write_external_baseline_colab_preflight_decision,
+    write_motion_threshold_reuse_artifact_for_profile,
 )
 from experiments.generative_video_model_probe.colab_runtime import _build_generation_plan
 from scripts.package_results.generative_video_drive_packager import package_generative_video_colab_run
@@ -204,7 +205,7 @@ def test_generative_video_colab_notebook_calls_repository_modules() -> None:
     assert "write_external_baseline_colab_preflight_decision" in source
     assert "validate_modern_baseline_commands_for_profile" in source
     assert "external_baseline_colab_preflight_decision" in helper_text
-    assert "validate_motion_threshold_ready_for_profile" in source
+    assert "write_motion_threshold_reuse_artifact_for_profile" in source
     assert "build_formal_metric_command" in source
     assert "build_motion_threshold_calibration_command" in source
     assert "build_mechanism_postprocess_command" in source
@@ -341,6 +342,7 @@ def test_notebook_workflow_profile_config_supports_profile_switching() -> None:
     assert validation["result_tier"] == "validation_scale"
     assert validation["enabled_for_claim"] is False
     assert validation["target_fpr"] == 0.01
+    assert "motion_threshold_reuse_check" in build_workflow_stage_plan("validation_scale", "paper_gate_and_package")
     assert "validation_scale_gate" in build_workflow_stage_plan("validation_scale", "paper_gate_and_package")
     assert "pilot_paper_gate" not in build_workflow_stage_plan("validation_scale", "paper_gate_and_package")
 
@@ -352,6 +354,7 @@ def test_notebook_workflow_profile_config_supports_profile_switching() -> None:
     assert pilot["method_sample_count"] == 168
     assert pilot["baseline_sample_count"] == 84
     assert pilot["protocol_config_path"] == "configs/protocol/pilot_paper_generative_probe.json"
+    assert "motion_threshold_reuse_check" in build_workflow_stage_plan("pilot_paper", "paper_gate_and_package")
     assert "pilot_paper_gate" in build_workflow_stage_plan("pilot_paper", "paper_gate_and_package")
     assert "validation_scale_gate" not in build_workflow_stage_plan("pilot_paper", "paper_gate_and_package")
 
@@ -411,6 +414,17 @@ def test_profile_specific_layout_reuses_shared_motion_threshold_artifact(tmp_pat
     assert decision["motion_threshold_reuse_required"] is True
     assert decision["motion_threshold_reuse_status"] == "ready"
     assert decision["motion_threshold_id"] == "motion_delta_calibrated_v1"
+
+    persisted = write_motion_threshold_reuse_artifact_for_profile(layout, "validation_scale")
+    target_artifact = Path(layout["drive_run_root"]) / "artifacts" / "motion_threshold_calibration_decision.json"
+    reuse_artifact = Path(layout["drive_run_root"]) / "artifacts" / "motion_threshold_reuse_decision.json"
+    copied_decision = json.loads(target_artifact.read_text(encoding="utf-8"))
+
+    assert persisted["motion_threshold_reuse_decision"] == "PASS"
+    assert target_artifact.exists()
+    assert reuse_artifact.exists()
+    assert copied_decision["motion_threshold_id"] == "motion_delta_calibrated_v1"
+    assert copied_decision["motion_threshold_reused_by_profile"] == "validation_scale"
 
 
 @pytest.mark.quick

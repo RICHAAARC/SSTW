@@ -112,6 +112,18 @@ def test_validation_scale_gate_accepts_claim3_downgrade_path(tmp_path: Path) -> 
                 "seed_id": f"seed_{seed_index}",
             })
     write_jsonl(run_root / "records" / "generation_records.jsonl", generation_records)
+    write_jsonl(run_root / "records" / "formal_quality_motion_semantic_records.jsonl", [
+        {
+            "prompt_id": record["prompt_id"],
+            "seed_id": record["seed_id"],
+            "formal_visual_quality_ready": True,
+            "formal_motion_consistency_ready": True,
+            "formal_semantic_consistency_ready": True,
+            "formal_metric_result_used_for_claim": True,
+            "motion_claim_role": "positive_motion",
+        }
+        for record in generation_records
+    ])
     write_jsonl(run_root / "records" / "runtime_attack_records.jsonl", [
         {"attack_name": "video_compression_runtime", "attack_runtime_status": "ready"},
         {"attack_name": "temporal_crop_runtime", "attack_runtime_status": "ready"},
@@ -131,6 +143,12 @@ def test_validation_scale_gate_accepts_claim3_downgrade_path(tmp_path: Path) -> 
         {"adaptive_attack_name": "time_grid_jitter", "adaptive_attack_status": "ready"},
     ])
     write_json(run_root / "artifacts" / "small_scale_claim_pilot_gate_decision.json", {"pilot_gate_decision": "PASS"})
+    write_json(run_root / "artifacts" / "motion_threshold_calibration_decision.json", {
+        "motion_threshold_calibration_decision": "PASS",
+        "motion_threshold_calibration_ready": True,
+        "motion_threshold_id": "motion_delta_calibrated_v1",
+        "motion_threshold_source_split": "calibration",
+    })
     write_json(run_root / "artifacts" / "runtime_attack_decision.json", {
         "runtime_attack_decision": "PASS",
         "runtime_attack_ready_count": 3,

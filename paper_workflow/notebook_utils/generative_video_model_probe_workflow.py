@@ -446,6 +446,50 @@ def read_motion_threshold_calibration_decision(layout: Mapping[str, str]) -> dic
     return json.loads(decision_path.read_text(encoding="utf-8-sig"))
 
 
+def write_motion_threshold_reuse_artifact_for_profile(
+    layout: Mapping[str, str],
+    profile: str,
+) -> dict[str, Any]:
+    """校验并复制当前 profile 复用的 motion threshold artifact。
+
+    该函数属于项目特定写法。`motion_threshold_calibration_colab` 的输出目录与
+    `validation_scale` / `pilot_paper` 的运行目录相互隔离, 但 paper gate 只应读取当前
+    run_root 中的 governed artifacts。因此非 calibration profile 在复用阈值时, 必须把
+    已通过的阈值决策复制到当前 run_root, 并额外写出 reuse decision 说明来源。
+    """
+    reuse = validate_motion_threshold_ready_for_profile(layout, profile)
+    if not reuse.get("motion_threshold_reuse_required"):
+        return reuse
+
+    decision = read_motion_threshold_calibration_decision(layout)
+    run_root = Path(layout["drive_run_root"])
+    artifact_path = run_root / "artifacts" / "motion_threshold_calibration_decision.json"
+    reuse_path = run_root / "artifacts" / "motion_threshold_reuse_decision.json"
+    artifact_path.parent.mkdir(parents=True, exist_ok=True)
+
+    artifact_payload = {
+        **decision,
+        "motion_threshold_reused_by_profile": canonical_workflow_profile(profile),
+        "motion_threshold_reuse_source_run_root": str(layout.get("motion_threshold_artifact_run_root") or ""),
+        "motion_threshold_reuse_target_run_root": str(layout["drive_run_root"]),
+        "claim_support_status": decision.get("claim_support_status", "motion_threshold_calibration_ready"),
+    }
+    reuse_payload = {
+        "stage_id": "motion_threshold_reuse_check",
+        "motion_threshold_reuse_decision": "PASS",
+        "motion_threshold_reuse_required": True,
+        "motion_threshold_reuse_status": "ready",
+        "workflow_profile": canonical_workflow_profile(profile),
+        "source_artifact_run_root": str(layout.get("motion_threshold_artifact_run_root") or ""),
+        "target_run_root": str(layout["drive_run_root"]),
+        "persisted_motion_threshold_artifact_path": str(artifact_path),
+        **reuse,
+    }
+    _write_json(artifact_path, artifact_payload)
+    _write_json(reuse_path, reuse_payload)
+    return reuse_payload
+
+
 def validate_motion_threshold_ready_for_profile(
     layout: Mapping[str, str],
     profile: str,

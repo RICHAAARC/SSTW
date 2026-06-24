@@ -264,6 +264,16 @@ Notebook 与 repository module 的跨边界数据
 | external_baseline_not_run_reason | governance | none | true | false | false | B5 external baseline not run reason. |
 | external_baseline_protocol_gap | governance | none | true | false | false | B5 external baseline protocol gap. |
 | external_baseline_result_used_for_claim | claim | none | true | true | false | Whether B5 external baseline is used for a claim. |
+| external_baseline_command_config_status | governance | none | true | false | false | 现代 external baseline 官方命令是否已配置。 |
+| external_baseline_command_env_var | provenance | none | true | false | false | 现代 external baseline adapter 使用的命令环境变量名称。 |
+| external_baseline_formal_ready_count | metric | none | true | false | false | external_baseline comparison 中 measured_formal record 数量。 |
+| external_baseline_formal_measured_adapter_count | metric | none | true | false | false | external_baseline comparison 中产出 measured_formal records 的 adapter 数量。 |
+| external_baseline_formal_measured_adapter_names | metric | none | true | false | false | external_baseline comparison 中产出 measured_formal records 的 adapter 名称列表。 |
+| modern_external_baseline_formal_measured_adapter_count | metric | none | true | true | false | 现代视频水印 baseline 中产出 measured_formal records 的 adapter 数量。 |
+| modern_external_baseline_formal_measured_adapter_names | metric | none | true | true | false | 现代视频水印 baseline 中产出 measured_formal records 的 adapter 名称列表。 |
+| external_baseline_detected | metric | none | true | false | false | 外部 baseline 官方 detector 是否给出 detected 判定。 |
+| external_baseline_bit_accuracy | metric | none | true | false | false | 外部 baseline 官方 detector 给出的 bit accuracy 或等价 payload accuracy。 |
+| external_baseline_threshold | protocol | none | true | false | false | 外部 baseline 官方 detector 使用或输出的阈值。 |
 | generation_model_main_table_ready | governance | none | true | false | false | B5 main table readiness status. |
 | trajectory_observation_gain_confirmed | metric | none | true | false | false | B5 trajectory gain confirmation status. |
 | fixed_low_fpr_audit_pass | metric | none | true | false | false | B5 fixed low-FPR audit status. |
@@ -771,12 +781,15 @@ Notebook 与 repository module 的跨边界数据
 | minimum_heldout_negative_event_count_per_family | protocol | none | true | false | false | gate 要求的 held-out split 每个 negative family 最小事件数。 |
 | minimum_attack_event_count_per_attack | protocol | none | true | false | false | gate 要求的每个 attack 最小 held-out positive event 数量。 |
 | require_external_baseline_comparison_ready | protocol | none | true | false | false | pilot_paper gate 是否要求 external_baseline adapter comparison 已完成。 |
+| require_modern_external_baseline_formal_results | protocol | none | true | false | false | pilot_paper gate 是否要求现代视频水印 baseline 使用正式 adapter measured_formal 结果。 |
 | require_internal_ablation_matrix_ready | protocol | none | true | false | false | pilot_paper gate 是否要求内部消融矩阵已完成。 |
 | required_external_baseline_adapter_names | protocol | none | true | false | false | pilot_paper gate 要求出现的 external_baseline adapter 名称列表。 |
+| required_modern_external_baseline_adapter_names | protocol | none | true | false | false | pilot_paper gate 要求产出 measured_formal records 的现代视频水印 baseline adapter 名称列表。 |
 | required_internal_ablation_variants | protocol | none | true | false | false | pilot_paper gate 要求出现的内部消融 method variant 列表。 |
 | minimum_pilot_paper_external_baseline_trace_count | protocol | none | true | false | false | pilot_paper external baseline comparison 要求覆盖的 held-out trace 最小数量。 |
 | minimum_pilot_paper_internal_ablation_trace_count | protocol | none | true | false | false | pilot_paper internal ablation 每个必需变体要求覆盖的 held-out trace 最小数量。 |
 | minimum_internal_ablation_variant_count | protocol | none | true | false | false | pilot_paper gate 要求的内部消融变体最小数量。 |
+| minimum_modern_external_baseline_formal_adapter_count | protocol | none | true | false | false | pilot_paper gate 要求的现代视频水印 measured_formal adapter 最小数量。 |
 | pilot_paper_external_baseline_comparison_ready | governance | none | true | true | false | pilot_paper gate 中 external_baseline comparison 是否满足完整协议预演要求。 |
 | pilot_paper_internal_ablation_matrix_ready | governance | none | true | true | false | pilot_paper gate 中 internal ablation matrix 是否满足完整协议预演要求。 |
 | pilot_paper_external_baseline_trace_count | metric | none | true | true | false | pilot_paper held-out trace 中已有任一 measured external_baseline comparison 的数量。 |
@@ -785,6 +798,7 @@ Notebook 与 repository module 的跨边界数据
 | pilot_paper_internal_ablation_trace_count_min | metric | none | true | true | false | pilot_paper held-out trace 中每个必需内部消融变体的最小覆盖数量。 |
 | pilot_paper_internal_ablation_trace_counts | metric | none | true | false | false | pilot_paper held-out trace 中各内部消融变体的覆盖数量映射。 |
 | missing_external_baseline_adapter_names | governance | none | true | true | false | pilot_paper gate 中缺失的 required external_baseline adapter 名称列表。 |
+| missing_modern_external_baseline_formal_adapter_names | governance | none | true | true | false | pilot_paper gate 中缺失 measured_formal 结果的现代视频水印 baseline adapter 名称列表。 |
 | missing_internal_ablation_variants | governance | none | true | true | false | pilot_paper gate 中缺失的 required internal ablation variant 名称列表。 |
 | next_allowed_action | governance | none | true | false | false | 当前 gate 后允许执行的下一步动作。 |
 | next_forbidden_action | governance | none | true | false | false | 当前 gate 后明确禁止执行的动作。 |
@@ -797,6 +811,8 @@ Notebook 与 repository module 的跨边界数据
 | pilot_paper_protocol_matches_full_paper | governance | none | true | true | false | package manifest 中记录的 pilot_paper 协议同构状态。 |
 | pilot_paper_claim_allowed | governance | none | true | true | false | package manifest 中记录的 pilot_paper claim 允许状态。 |
 | pilot_paper_missing_external_baseline_adapter_names | governance | none | true | true | false | package manifest 中记录的 pilot_paper gate 缺失 external_baseline adapter 名称列表。 |
+| pilot_paper_missing_modern_external_baseline_formal_adapter_names | governance | none | true | true | false | package manifest 中记录的 pilot_paper gate 缺失现代视频水印 formal adapter 名称列表。 |
+| pilot_paper_modern_external_baseline_formal_measured_adapter_count | metric | none | true | true | false | package manifest 中记录的 pilot_paper 现代视频水印 measured_formal adapter 数量。 |
 | pilot_paper_missing_internal_ablation_variants | governance | none | true | true | false | package manifest 中记录的 pilot_paper gate 缺失内部消融变体列表。 |
 | fpr01_threshold_protocol | protocol | none | true | false | false | package manifest 中记录的 fpr01 threshold protocol 摘要。 |
 | fpr01_threshold_source_split | protocol | none | true | false | false | package manifest 中记录的 fpr01 阈值来源 split 摘要。 |

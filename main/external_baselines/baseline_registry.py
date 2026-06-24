@@ -12,6 +12,11 @@ from external_baseline.registry import adapter_status as external_adapter_status
 ADAPTER_STATUS_BUILDERS = {
     "explicit_dtw_temporal_alignment": lambda: external_adapter_status("explicit_dtw_temporal_alignment"),
     "explicit_frame_matching_temporal_registration": lambda: external_adapter_status("explicit_frame_matching_temporal_registration"),
+    "videoshield": lambda: external_adapter_status("videoshield"),
+    "sigmark": lambda: external_adapter_status("sigmark"),
+    "spdmark": lambda: external_adapter_status("spdmark"),
+    "videomark_or_vidsig": lambda: external_adapter_status("videomark_or_vidsig"),
+    "videoseal": lambda: external_adapter_status("videoseal"),
 }
 
 DEFAULT_BASELINE_STATUS_FIELDS: dict[str, Any] = {
@@ -21,6 +26,8 @@ DEFAULT_BASELINE_STATUS_FIELDS: dict[str, Any] = {
     "external_baseline_threshold_policy_compatible": False,
     "external_baseline_attack_manifest_compatible": False,
     "external_baseline_result_used_for_claim": False,
+    "external_baseline_command_config_status": "not_applicable",
+    "external_baseline_command_env_var": "not_applicable",
 }
 
 MODERN_BASELINE_FAMILIES = {

@@ -313,7 +313,7 @@ full_paper_run
 submission_package_freeze
 ```
 
-其中 `replay_and_authenticated_sketch_gate`、`flow_specific_adaptive_attack_gate`、external baseline、internal ablation 与 CI reporter 属于 `validation_scale` 到 `full_paper_run` 之间必须闭合的子门禁, 不再作为 `pilot_paper` 之后的独立线性阶段。`pilot_paper` 的定位是小规模跑完整 full paper 协议并产出 pilot 级论文结果, 等价于 full paper 前完整流程预演。进入 `pilot_paper` gate 前, external_baseline comparison 与内部消融矩阵必须已经覆盖同批 held-out test trace; 否则不能报告 pilot 级 `TPR@FPR=0.01`。
+其中 `replay_and_authenticated_sketch_gate`、`flow_specific_adaptive_attack_gate`、external baseline、internal ablation 与 CI reporter 属于 `validation_scale` 到 `full_paper_run` 之间必须闭合的子门禁, 不再作为 `pilot_paper` 之后的独立线性阶段。`pilot_paper` 的定位是小规模跑完整 full paper 协议并产出 pilot 级论文结果, 等价于 full paper 前完整流程预演。进入 `pilot_paper` gate 前, external_baseline comparison 与内部消融矩阵必须已经覆盖同批 held-out test trace; external baseline 必须包含完整现代视频水印 baseline 集合的 measured_formal records。否则不能报告 pilot 级 `TPR@FPR=0.01`。
 
 核心原则是:
 
@@ -888,6 +888,8 @@ trajectory_sketch_replacement_attempt
 ```text
 validation_scale_gate_decision == PASS
 external_baseline_comparison_decision == PASS
+external_baseline_measured_adapter_count >= 7
+modern_external_baseline_formal_measured_adapter_count >= 5
 pilot_paper_external_baseline_trace_count_min >= 84
 validation_internal_ablation_decision == PASS
 pilot_paper_internal_ablation_trace_count_min >= 84

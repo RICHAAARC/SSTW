@@ -476,7 +476,7 @@ artifacts/external_baseline_comparison_decision.json
 reports/external_baseline_comparison_report.md
 ```
 
-该实现的职责是闭合外部 baseline 对比工程链路。当前 measured adapter 仅包括显式 DTW 与 frame matching 同步 control proxy; 现代视频水印 baseline 仍需后续接入官方 adapter。
+该实现的职责是闭合外部 baseline 对比工程链路。显式 DTW 与 frame matching 仍只是同步 control proxy; `pilot_paper` 和 `full_paper` 必须额外要求 VideoShield、SigMark、SPDMark、VideoMark / VidSig 与 VideoSeal 通过正式 command adapter 产出 `measured_formal` records。
 
 
 ### external_baseline adapter comparison 运行语义
@@ -616,10 +616,36 @@ records/validation_internal_ablation_records.jsonl
 ```text
 pilot_paper_external_baseline_comparison_ready == true
 pilot_paper_internal_ablation_matrix_ready == true
-minimum_external_baseline_measured_adapter_count >= 2
+minimum_external_baseline_measured_adapter_count >= 7
+minimum_modern_external_baseline_formal_adapter_count >= 5
 minimum_internal_ablation_variant_count >= 8
 pilot_paper_external_baseline_trace_count_min >= 84
 pilot_paper_internal_ablation_trace_count_min >= 84
 ```
 
 这一实现属于项目特定 gate 设计: 它强制 `pilot_paper` 先闭合对比链路和消融链路, 再允许输出 pilot 级 fixed-FPR 论文主张。显式 DTW 与 frame matching 仍只是同步 control proxy, 现代视频水印 baseline 的正式 adapter 仍需在 full-paper 主表前继续接入。
+
+
+### 2.12 现代视频水印 baseline 正式 adapter 要求
+
+`pilot_paper` 与 `full_paper` 的差异只允许是样本规模和 FPR 评价级别。因此 `pilot_paper` 运行前必须完成完整现代 baseline adapter 配置。当前工程已接入以下正式 command adapter 边界:
+
+```text
+videoshield
+sigmark
+spdmark
+videomark_or_vidsig
+videoseal
+```
+
+每个现代 baseline 必须配置对应环境变量命令:
+
+```text
+SSTW_VIDEOSHIELD_EVAL_COMMAND
+SSTW_SIGMARK_EVAL_COMMAND
+SSTW_SPDMARK_EVAL_COMMAND
+SSTW_VIDEOMARK_OR_VIDSIG_EVAL_COMMAND
+SSTW_VIDEOSEAL_EVAL_COMMAND
+```
+
+命令未配置时, adapter 会写 unsupported record, `pilot_paper` gate 会因为 `missing_modern_external_baseline_formal_adapter_names` 失败。这是硬阻断, 不是 warning。

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+import sys
 
 import pytest
 
@@ -37,6 +38,7 @@ def test_external_baseline_selection_keeps_modern_non_run_records() -> None:
     assert len(modern_records) >= 5
     assert all(record["external_baseline_runnable_status"] == "runnable" for record in explicit_records)
     assert all(record["external_baseline_runnable_status"] == "not_runnable" for record in modern_records)
+    assert all(record["external_baseline_adapter_status"] == "adapter_ready_command_not_configured" for record in modern_records)
     assert all(record["external_baseline_claim_support_status"] == "governed_non_run_record_only" for record in modern_records)
 
 
@@ -95,6 +97,12 @@ def _write_external_baseline_runtime_fixture(run_root: Path) -> None:
             "latent_std": 0.2 + step_index * 0.05,
         })
     write_jsonl(run_root / "records" / "trajectory_trace.jsonl", trajectory_records)
+    source_video_path = run_root / "videos" / "source.mp4"
+    attacked_video_path = run_root / "attacks" / "attacked.mp4"
+    source_video_path.parent.mkdir(parents=True, exist_ok=True)
+    attacked_video_path.parent.mkdir(parents=True, exist_ok=True)
+    source_video_path.write_bytes(b"source-video-placeholder")
+    attacked_video_path.write_bytes(b"attacked-video-placeholder")
     write_jsonl(run_root / "records" / "runtime_detection_records.jsonl", [
         {
             "runtime_detection_status": "ready",
@@ -103,6 +111,9 @@ def _write_external_baseline_runtime_fixture(run_root: Path) -> None:
             "seed_id": "seed_0",
             "trajectory_trace_id": "trace_0",
             "attack_name": "video_compression_runtime",
+            "source_video_path": str(source_video_path),
+            "attacked_video_path": str(attacked_video_path),
+            "sample_role": "generated_positive",
             "source_frame_count": 4,
             "attacked_frame_count": 4,
             "attacked_video_decoded_frame_count": 4,
@@ -115,6 +126,9 @@ def _write_external_baseline_runtime_fixture(run_root: Path) -> None:
             "seed_id": "seed_0",
             "trajectory_trace_id": "trace_0",
             "attack_name": "frame_rate_resampling_runtime",
+            "source_video_path": str(source_video_path),
+            "attacked_video_path": str(attacked_video_path),
+            "sample_role": "generated_positive",
             "source_frame_count": 4,
             "attacked_frame_count": 2,
             "attacked_video_decoded_frame_count": 2,
@@ -142,3 +156,49 @@ def test_external_baseline_comparison_runner_uses_external_baseline_adapters(tmp
     assert (run_root / "tables" / "external_baseline_comparison_table.csv").exists()
     assert (run_root / "artifacts" / "external_baseline_comparison_decision.json").exists()
     assert (run_root / "reports" / "external_baseline_comparison_report.md").exists()
+
+
+@pytest.mark.quick
+def test_modern_external_baseline_formal_command_adapters_write_measured_records(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """现代视频水印 baseline 必须通过正式 command adapter 产出 measured_formal records。"""
+    run_root = tmp_path / "generative_video_model_probe_colab"
+    _write_external_baseline_runtime_fixture(run_root)
+    fake_adapter = tmp_path / "fake_modern_baseline_eval.py"
+    fake_adapter.write_text(
+        "import argparse, json\n"
+        "parser = argparse.ArgumentParser()\n"
+        "parser.add_argument('--output-json', required=True)\n"
+        "parser.add_argument('--source-video')\n"
+        "parser.add_argument('--attacked-video')\n"
+        "parser.add_argument('--attack-name')\n"
+        "args = parser.parse_args()\n"
+        "json.dump({'external_baseline_score': 0.37, 'detected': True, 'bit_accuracy': 0.91, 'threshold': 0.5}, open(args.output_json, 'w', encoding='utf-8'))\n",
+        encoding="utf-8",
+    )
+    command = f'{sys.executable} {fake_adapter} --source-video {{source_video_path}} --attacked-video {{attacked_video_path}} --attack-name {{attack_name}} --output-json {{output_json_path}}'
+    for env_var in (
+        "SSTW_VIDEOSHIELD_EVAL_COMMAND",
+        "SSTW_SIGMARK_EVAL_COMMAND",
+        "SSTW_SPDMARK_EVAL_COMMAND",
+        "SSTW_VIDEOMARK_OR_VIDSIG_EVAL_COMMAND",
+        "SSTW_VIDEOSEAL_EVAL_COMMAND",
+    ):
+        monkeypatch.setenv(env_var, command)
+
+    audit = write_external_baseline_comparison_outputs(run_root)
+    records = read_jsonl(run_root / "records" / "external_baseline_score_records.jsonl")
+    formal_records = [record for record in records if record.get("metric_status") == "measured_formal"]
+
+    assert audit["external_baseline_comparison_decision"] == "PASS"
+    assert audit["external_baseline_measured_adapter_count"] == 7
+    assert audit["modern_external_baseline_formal_measured_adapter_count"] == 5
+    assert set(audit["modern_external_baseline_formal_measured_adapter_names"]) == {
+        "videoshield",
+        "sigmark",
+        "spdmark",
+        "videomark_or_vidsig",
+        "videoseal",
+    }
+    assert formal_records
+    assert all(record["external_baseline_result_used_for_claim"] is True for record in formal_records)
+    assert all(record.get("S_final") is None for record in records)

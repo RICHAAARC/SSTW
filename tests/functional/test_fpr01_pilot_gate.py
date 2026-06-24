@@ -13,7 +13,16 @@ ATTACKS = ("video_compression_runtime", "temporal_crop_runtime", "frame_rate_res
 NEGATIVE_FAMILIES = ("wrong_key_control", "without_key_control", "wrong_sampler_replay", "trajectory_time_shuffle_control")
 CALIBRATION_SEEDS = tuple(f"seed_calibration_{index:02d}" for index in range(4))
 TEST_SEEDS = tuple(f"seed_test_{index:02d}" for index in range(4))
-EXTERNAL_BASELINE_NAMES = ("explicit_dtw_temporal_alignment", "explicit_frame_matching_temporal_registration")
+EXTERNAL_BASELINE_NAMES = (
+    "explicit_dtw_temporal_alignment",
+    "explicit_frame_matching_temporal_registration",
+    "videoshield",
+    "sigmark",
+    "spdmark",
+    "videomark_or_vidsig",
+    "videoseal",
+)
+MODERN_EXTERNAL_BASELINE_NAMES = {"videoshield", "sigmark", "spdmark", "videomark_or_vidsig", "videoseal"}
 INTERNAL_ABLATION_VARIANTS = (
     "sstw_full_method",
     "endpoint_only_control",
@@ -126,11 +135,11 @@ def _seed_fpr01_pilot_run(
                             **base,
                             "attack_name": attack_name,
                             "external_baseline_name": baseline_name,
-                            "metric_status": "measured_proxy",
+                            "metric_status": "measured_formal" if baseline_name in MODERN_EXTERNAL_BASELINE_NAMES else "measured_proxy",
                             "external_baseline_score": 0.35,
                             "external_baseline_distance": 1.85,
                             "baseline_score_margin": 0.45,
-                            "claim_support_status": "external_baseline_proxy_comparison_not_claim_supporting",
+                            "claim_support_status": "modern_external_baseline_formal_measured" if baseline_name in MODERN_EXTERNAL_BASELINE_NAMES else "external_baseline_proxy_comparison_not_claim_supporting",
                         })
                     for method_variant in INTERNAL_ABLATION_VARIANTS:
                         internal_ablation_records.append({
@@ -152,7 +161,9 @@ def _seed_fpr01_pilot_run(
             "external_baseline_comparison_table_status": "ready",
             "external_baseline_measured_adapter_count": len(EXTERNAL_BASELINE_NAMES),
             "external_baseline_measured_adapter_names": list(EXTERNAL_BASELINE_NAMES),
-            "external_baseline_claim_support_status": "external_baseline_proxy_comparison_not_claim_supporting",
+            "modern_external_baseline_formal_measured_adapter_count": len(MODERN_EXTERNAL_BASELINE_NAMES),
+            "modern_external_baseline_formal_measured_adapter_names": sorted(MODERN_EXTERNAL_BASELINE_NAMES),
+            "external_baseline_claim_support_status": "external_baseline_formal_and_proxy_records_written",
         })
     if write_internal_ablation:
         write_jsonl(run_root / "records" / "validation_internal_ablation_records.jsonl", internal_ablation_records)
@@ -225,7 +236,9 @@ def test_fpr01_pilot_gate_passes_calibrated_heldout_fixture(tmp_path: Path) -> N
     assert audit["pilot_paper_protocol_matches_full_paper"] is True
     assert audit["validation_scale_gate_decision"] == "PASS"
     assert audit["external_baseline_comparison_decision"] == "PASS"
-    assert audit["external_baseline_measured_adapter_count"] == 2
+    assert audit["external_baseline_measured_adapter_count"] == 7
+    assert audit["modern_external_baseline_formal_measured_adapter_count"] == 5
+    assert audit["missing_modern_external_baseline_formal_adapter_names"] == []
     assert audit["pilot_paper_external_baseline_trace_count"] == 84
     assert audit["pilot_paper_external_baseline_trace_count_min"] == 84
     assert audit["validation_internal_ablation_decision"] == "PASS"

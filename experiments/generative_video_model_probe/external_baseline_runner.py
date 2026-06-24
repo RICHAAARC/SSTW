@@ -176,18 +176,19 @@ def build_external_baseline_comparison_table_rows(
         grouped.setdefault(str(record.get("external_baseline_name") or "unknown_external_baseline"), []).append(record)
     for baseline_name, group in sorted(grouped.items()):
         first = group[0]
-        measured_rows = [record for record in group if record.get("metric_status") == "measured_proxy"]
+        measured_rows = [record for record in group if record.get("metric_status") in {"measured_proxy", "measured_formal"}]
+        has_formal_rows = any(record.get("metric_status") == "measured_formal" for record in measured_rows)
         attack_names = {str(record.get("attack_name")) for record in measured_rows if record.get("attack_name")}
         rows.append({
             "method_id": baseline_name,
             "method_role": f"external_baseline_{first.get('external_baseline_layer')}",
-            "comparison_scope": "external_baseline_adapter_proxy" if measured_rows else "external_baseline_result_missing",
-            "metric_status": "measured_proxy" if measured_rows else "unsupported",
+            "comparison_scope": "external_baseline_formal_adapter" if has_formal_rows else ("external_baseline_adapter_proxy" if measured_rows else "external_baseline_result_missing"),
+            "metric_status": "measured_formal" if has_formal_rows else ("measured_proxy" if measured_rows else "unsupported"),
             "external_baseline_name": baseline_name,
             "external_baseline_family": first.get("external_baseline_family"),
             "external_baseline_layer": first.get("external_baseline_layer"),
-            "external_baseline_score_status": "measured_proxy" if measured_rows else first.get("external_baseline_score_status"),
-            "external_baseline_result_used_for_claim": False,
+            "external_baseline_score_status": "measured_formal" if has_formal_rows else ("measured_proxy" if measured_rows else first.get("external_baseline_score_status")),
+            "external_baseline_result_used_for_claim": bool(has_formal_rows and first.get("external_baseline_layer") == "modern_external_baseline"),
             "comparison_record_count": len(group),
             "comparison_attack_count": len(attack_names),
             "proposed_method_score_mean": None,
@@ -201,8 +202,15 @@ def build_external_baseline_comparison_table_rows(
 
 def audit_external_baseline_comparison_records(records: list[dict[str, Any]]) -> dict[str, Any]:
     """审计 external baseline comparison 是否已经由 adapter 产出。"""
-    measured_records = [record for record in records if record.get("metric_status") == "measured_proxy"]
+    measured_records = [record for record in records if record.get("metric_status") in {"measured_proxy", "measured_formal"}]
+    formal_records = [record for record in records if record.get("metric_status") == "measured_formal"]
     measured_adapter_names = {str(record.get("external_baseline_name")) for record in measured_records if record.get("external_baseline_name")}
+    formal_adapter_names = {str(record.get("external_baseline_name")) for record in formal_records if record.get("external_baseline_name")}
+    modern_formal_adapter_names = {
+        str(record.get("external_baseline_name"))
+        for record in formal_records
+        if record.get("external_baseline_layer") == "modern_external_baseline"
+    }
     unsupported_records = [record for record in records if record.get("metric_status") == "unsupported"]
     decision = "PASS" if records and measured_adapter_names else "FAIL"
     return {
@@ -210,11 +218,16 @@ def audit_external_baseline_comparison_records(records: list[dict[str, Any]]) ->
         "external_baseline_comparison_decision": decision,
         "external_baseline_comparison_record_count": len(records),
         "external_baseline_comparison_ready_count": len(measured_records),
+        "external_baseline_formal_ready_count": len(formal_records),
         "external_baseline_measured_adapter_count": len(measured_adapter_names),
         "external_baseline_measured_adapter_names": sorted(measured_adapter_names),
+        "external_baseline_formal_measured_adapter_count": len(formal_adapter_names),
+        "external_baseline_formal_measured_adapter_names": sorted(formal_adapter_names),
+        "modern_external_baseline_formal_measured_adapter_count": len(modern_formal_adapter_names),
+        "modern_external_baseline_formal_measured_adapter_names": sorted(modern_formal_adapter_names),
         "external_baseline_unsupported_adapter_count": len(unsupported_records),
-        "external_baseline_comparison_status": "adapter_proxy_records_written" if decision == "PASS" else "comparison_records_missing",
-        "external_baseline_claim_support_status": "external_baseline_proxy_comparison_not_claim_supporting" if decision == "PASS" else "external_baseline_comparison_blocked",
+        "external_baseline_comparison_status": "adapter_records_written" if decision == "PASS" else "comparison_records_missing",
+        "external_baseline_claim_support_status": "external_baseline_formal_and_proxy_records_written" if formal_records else ("external_baseline_proxy_comparison_not_claim_supporting" if decision == "PASS" else "external_baseline_comparison_blocked"),
     }
 
 

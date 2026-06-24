@@ -28,7 +28,7 @@
 | `motion_threshold_calibration` | 已完成 engineering calibration | 已有 `motion_delta_calibrated_v1` 可作 pilot guardrail。 | 不是论文级 `TPR@FPR=0.001` fixed-FPR 证据。 | full_paper 前补齐更大 held-out negative 和 CI。 | 影响 motion claim 样本资格过滤。 |
 | `small_scale_claim_pilot_gate` | 已完成 small-scale pilot | 最新 Wan2.1 pilot 原生复跑已达到 16/16 eligible、seed_per_prompt_min=2、runtime attack/detection 48/48 ready、pilot_gate_decision=PASS。 | 它只判断机制是否值得继续, 不是 paper 级结果包。 | 进入 validation-scale generative probe, 并保留 small-scale pilot 作为工作流证据。 | 解除 validation-scale 前置阻塞, 但不解除 full_paper 阻塞。 |
 | `validation_scale` | 工程入口已完成, 真实 GPU 结果待运行 | 已接入工程稳定性、attack runner、baseline 接口、ablation 接口、claim gate、CI 和 artifact rebuild 汇总。 | 真实 validation-scale 结果尚未生成, replay/sketch 仍未达到 full-paper 强支持。 | 在 Colab 中运行 `PROFILE = validation_scale`, 审计 `validation_scale_ready_for_pilot_paper`, 并确认 baseline / ablation runner 能稳定产出 records。 | 通过后才允许进入 pilot_paper, 但仍不允许直接生成 full_paper 主表。 |
-| `pilot_paper` | 工程入口已完成, 真实 GPU 结果待运行 | 已按 full_paper 同构协议接入 21 prompt × 8 seed、calibration split、frozen threshold artifact、held-out test split、external_baseline comparison 前置检查、内部消融矩阵前置检查和 claim audit。 | 真实 Wan2.1 GPU 结果尚未生成; 现代 baseline 正式主表 adapter 与 full-scale 内部消融仍需后续扩大。 | 在 validation-scale 通过后运行 `PROFILE = pilot_paper`, 审计 `pilot_paper_calibrated_heldout_claim_ready`, 同时要求 `pilot_paper_external_baseline_comparison_ready` 与 `pilot_paper_internal_ablation_matrix_ready`。 | 它是小规模跑完整 full paper 协议并产出 pilot 级论文结果的阶段, 可支撑 pilot_paper 级 `TPR@FPR=0.01`, 但不支撑 `TPR@FPR=0.001` 或 full_paper 规模结论。 |
+| `pilot_paper` | 工程入口已完成, 真实 GPU 结果待运行 | 已按 full_paper 同构协议接入 21 prompt × 8 seed、calibration split、frozen threshold artifact、held-out test split、完整现代 external_baseline formal adapter 前置检查、内部消融矩阵前置检查和 claim audit。 | 真实 Wan2.1 GPU 结果尚未生成; 5 个现代 baseline 的官方命令和权重需要在 Colab / 本地配置后才能产出 measured_formal。 | 在 validation-scale 通过后运行 `PROFILE = pilot_paper`, 审计 `pilot_paper_calibrated_heldout_claim_ready`, 同时要求 `modern_external_baseline_formal_measured_adapter_count >= 5` 与 `pilot_paper_internal_ablation_matrix_ready`。 | 它是小规模跑完整 full paper 协议并产出 pilot 级论文结果的阶段, 可支撑 pilot_paper 级 `TPR@FPR=0.01`, 但不支撑 `TPR@FPR=0.001` 或 full_paper 规模结论。 |
 | `generative_video_model_probe` | pilot 已通过, validation-scale / pilot_paper 待真实运行 | 生成、attack、detection、postprocess、external_baseline proxy comparison、内部消融 runner、packager 与协议字段闭包已接入。 | validation-scale 样本量、pilot_paper 真实结果、现代外部 baseline runnable 正式结果、内部消融 full-scale records、论文级 fixed-FPR 尚未完成。 | 按 small_scale_claim_pilot -> validation_scale -> baseline / ablation gate -> pilot_paper 的顺序推进。 | 影响主表、baseline comparison、ablation table 和真实模型结论。 |
 | `replay_and_authenticated_sketch_gate` | 未完成 | digest、manifest、trajectory trace 基础模块存在。 | authenticated sketch、replay uncertainty、wrong prompt replay 未闭合。 | 补齐签名 sketch、replay records 和 checker。 | 影响 Claim-3 强度; 不通过则降级 Claim-3。 |
 | `flow_specific_adaptive_attack_gate` | 未完成 | phase 文档已补建, 但 runner、manifest 与 governed records 尚未完成。 | adaptive attacks、endpoint-preserving resampling、path cancellation 未形成 records。 | 补齐 runner 设计、stress protocol、attack manifest 和 checker。 | full_paper 前必须完成或明确降级。 |
@@ -1146,7 +1146,7 @@ report: reports/external_baseline_comparison_report.md
 ```text
 external_baseline_adapter_boundary: complete_for_proxy_controls
 external_baseline_comparison_output_chain: complete_for_proxy_controls
-modern_external_baseline_formal_adapter: pending
+modern_external_baseline_formal_adapter: integrated_requires_official_commands
 baseline_claim_support: not_supported_until_modern_measured_records
 full_paper_allowed: false
 ```
@@ -1308,3 +1308,30 @@ full_scale_ablation_table: pending_full_paper_scale
 ```
 
 因此下一步真实 GPU 复跑顺序仍是先 `PROFILE = validation_scale`, 再 `PROFILE = pilot_paper`。如果 `pilot_paper` 运行后 baseline 或消融 records 未覆盖同批 held-out test trace, gate 会失败, 不能报告 pilot 级 `TPR@FPR=0.01`。
+
+
+## 2026-06-24 现代 baseline 正式 adapter 硬前置
+
+根据项目阶段定义, `pilot_paper` 和 `full_paper` 的区别只能是样本规模和 FPR 评价级别。因此 `pilot_paper` 不能只接入一个现代 baseline, 也不能用显式同步 control proxy 替代现代视频水印 baseline。
+
+当前工程已经把以下 5 个现代 baseline 接入为正式 command adapter 边界:
+
+```text
+videoshield
+sigmark
+spdmark
+videomark_or_vidsig
+videoseal
+```
+
+阶段性状态为:
+
+```text
+modern_external_baseline_formal_adapter_boundary: implemented
+modern_external_baseline_official_commands_configured: pending_user_colab_or_local_setup
+pilot_paper_required_modern_external_baseline_count: 5
+pilot_paper_required_external_baseline_count_total: 7
+pilot_paper_gate_missing_modern_formal_results: hard_blocker
+```
+
+这表示当前代码框架已经支持真实产出相关对比结果, 但真实运行前必须在 Colab 环境安装或配置对应官方 baseline 命令。若命令未配置, adapter 会写 unsupported record, `pilot_paper` gate 会失败。

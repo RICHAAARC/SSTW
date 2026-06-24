@@ -56,14 +56,19 @@ records/validation_internal_ablation_records.jsonl
 artifacts/validation_internal_ablation_decision.json
 ```
 
-当前 runnable external adapter 至少包括:
+`pilot_paper` 需要完整 external baseline 集合, 不能只接入一个现代 baseline, 也不能用显式同步 control 替代现代视频水印 baseline。必须覆盖:
 
 ```text
 explicit_dtw_temporal_alignment
 explicit_frame_matching_temporal_registration
+videoshield
+sigmark
+spdmark
+videomark_or_vidsig
+videoseal
 ```
 
-这两个 adapter 是显式同步 control proxy, 用于证明 baseline comparison 链路和同步对照闭合; 它们不能替代 VideoShield、SIGMark、SPDMark、VideoMark / VidSig 或 VideoSeal 等现代视频水印 baseline 的正式论文主表对比。内部消融矩阵至少需要覆盖 `sstw_full_method`、endpoint-only、trajectory-only、去 velocity constraint、去 endpoint-aware control、去 replay uncertainty weighting、去 admissibility 和 generic SSM baseline。若 baseline 或消融缺失, `pilot_paper` gate 必须失败, 不允许先报告 `TPR@FPR=0.01` 再补表。
+其中显式 DTW 与 frame matching 只能写出 `measured_proxy` control records; 5 个现代视频水印 baseline 必须通过正式 command adapter 写出 `metric_status = measured_formal` records。内部消融矩阵至少需要覆盖 `sstw_full_method`、endpoint-only、trajectory-only、去 velocity constraint、去 endpoint-aware control、去 replay uncertainty weighting、去 admissibility 和 generic SSM baseline。若任何现代 baseline 或消融缺失, `pilot_paper` gate 必须失败, 不允许先报告 `TPR@FPR=0.01` 再补表。
 
 
 ## 3. 工程入口
@@ -144,8 +149,10 @@ motion_threshold_calibration_ready == true
 small_scale_claim_pilot_gate_decision == PASS
 validation_scale_gate_decision == PASS
 external_baseline_comparison_decision == PASS
-external_baseline_measured_adapter_count >= 2
+external_baseline_measured_adapter_count >= 7
+modern_external_baseline_formal_measured_adapter_count >= 5
 required_external_baseline_adapter_names covered
+required_modern_external_baseline_adapter_names measured_formal
 pilot_paper_external_baseline_trace_count_min >= 84
 validation_internal_ablation_decision == PASS
 internal_ablation_variant_count >= 8

@@ -44,11 +44,20 @@ DEFAULT_MINIMUM_HELDOUT_ATTACKED_POSITIVE_EVENT_COUNT = 200
 DEFAULT_MINIMUM_NEGATIVE_FAMILY_COUNT = 4
 DEFAULT_MINIMUM_NEGATIVE_EVENT_COUNT_PER_FAMILY = 200
 DEFAULT_MINIMUM_ATTACK_EVENT_COUNT_PER_ATTACK = 60
-DEFAULT_MINIMUM_EXTERNAL_BASELINE_MEASURED_ADAPTER_COUNT = 2
+DEFAULT_REQUIRED_MODERN_EXTERNAL_BASELINE_ADAPTER_NAMES = (
+    "videoshield",
+    "sigmark",
+    "spdmark",
+    "videomark_or_vidsig",
+    "videoseal",
+)
 DEFAULT_REQUIRED_EXTERNAL_BASELINE_ADAPTER_NAMES = (
     "explicit_dtw_temporal_alignment",
     "explicit_frame_matching_temporal_registration",
+    *DEFAULT_REQUIRED_MODERN_EXTERNAL_BASELINE_ADAPTER_NAMES,
 )
+DEFAULT_MINIMUM_EXTERNAL_BASELINE_MEASURED_ADAPTER_COUNT = len(DEFAULT_REQUIRED_EXTERNAL_BASELINE_ADAPTER_NAMES)
+DEFAULT_MINIMUM_MODERN_EXTERNAL_BASELINE_FORMAL_ADAPTER_COUNT = len(DEFAULT_REQUIRED_MODERN_EXTERNAL_BASELINE_ADAPTER_NAMES)
 DEFAULT_REQUIRED_INTERNAL_ABLATION_VARIANTS = (
     "sstw_full_method",
     "endpoint_only_control",
@@ -113,9 +122,12 @@ def _load_config(config_path: str | Path = DEFAULT_FPR01_PILOT_CONFIG) -> dict[s
         "minimum_pilot_paper_external_baseline_trace_count": int(raw.get("minimum_pilot_paper_external_baseline_trace_count", DEFAULT_MINIMUM_SPLIT_UNIQUE_VIDEO_COUNT)),
         "minimum_pilot_paper_internal_ablation_trace_count": int(raw.get("minimum_pilot_paper_internal_ablation_trace_count", DEFAULT_MINIMUM_SPLIT_UNIQUE_VIDEO_COUNT)),
         "minimum_internal_ablation_variant_count": int(raw.get("minimum_internal_ablation_variant_count", len(DEFAULT_REQUIRED_INTERNAL_ABLATION_VARIANTS))),
+        "minimum_modern_external_baseline_formal_adapter_count": int(raw.get("minimum_modern_external_baseline_formal_adapter_count", DEFAULT_MINIMUM_MODERN_EXTERNAL_BASELINE_FORMAL_ADAPTER_COUNT)),
         "required_external_baseline_adapter_names": raw.get("required_external_baseline_adapter_names", list(DEFAULT_REQUIRED_EXTERNAL_BASELINE_ADAPTER_NAMES)),
+        "required_modern_external_baseline_adapter_names": raw.get("required_modern_external_baseline_adapter_names", list(DEFAULT_REQUIRED_MODERN_EXTERNAL_BASELINE_ADAPTER_NAMES)),
         "required_internal_ablation_variants": raw.get("required_internal_ablation_variants", list(DEFAULT_REQUIRED_INTERNAL_ABLATION_VARIANTS)),
         "require_external_baseline_comparison_ready": bool(raw.get("require_external_baseline_comparison_ready", True)),
+        "require_modern_external_baseline_formal_results": bool(raw.get("require_modern_external_baseline_formal_results", True)),
         "require_internal_ablation_matrix_ready": bool(raw.get("require_internal_ablation_matrix_ready", True)),
         "require_motion_threshold_calibration_ready": bool(raw.get("require_motion_threshold_calibration_ready", True)),
         "require_small_scale_pilot_gate_passed": bool(raw.get("require_small_scale_pilot_gate_passed", True)),
@@ -231,17 +243,21 @@ def _external_baseline_readiness(
 ) -> tuple[bool, dict[str, Any]]:
     """审计 pilot_paper 是否已有 external_baseline adapter comparison 结果。
 
-    这一检查属于项目特定写法。它不把 unsupported modern baseline 当作正向比较证据,
-    只要求已经接入 `external_baseline/` 的 runnable adapter 在 pilot_paper held-out test trace 上
-    写出 governed measured proxy records。
+    这一检查属于项目特定写法。它不把 unsupported modern baseline 当作正向比较证据。
+    显式同步 control 可以是 measured_proxy, 但现代视频水印 baseline 必须是 measured_formal,
+    并且必须覆盖 pilot_paper held-out test trace。
     """
     decision = _read_json(run_root / "artifacts" / "external_baseline_comparison_decision.json")
     records = _read_jsonl(run_root / "records" / "external_baseline_score_records.jsonl")
-    measured_records = [record for record in records if record.get("metric_status") == "measured_proxy"]
+    measured_records = [record for record in records if record.get("metric_status") in {"measured_proxy", "measured_formal"}]
+    formal_records = [record for record in records if record.get("metric_status") == "measured_formal"]
     measured_adapter_names = {str(record.get("external_baseline_name")) for record in measured_records if record.get("external_baseline_name")}
+    formal_adapter_names = {str(record.get("external_baseline_name")) for record in formal_records if record.get("external_baseline_name")}
     required_adapter_names = set(str(name) for name in config["required_external_baseline_adapter_names"])
+    required_modern_adapter_names = set(str(name) for name in config["required_modern_external_baseline_adapter_names"])
     covered_trace_ids = _trace_ids(measured_records) & required_trace_ids
     missing_adapter_names = sorted(required_adapter_names - measured_adapter_names)
+    missing_modern_formal_adapter_names = sorted(required_modern_adapter_names - formal_adapter_names)
     trace_ids_by_adapter: dict[str, set[str]] = defaultdict(set)
     for record in measured_records:
         adapter_name = str(record.get("external_baseline_name") or "")
@@ -256,7 +272,9 @@ def _external_baseline_readiness(
     ready = (
         decision.get("external_baseline_comparison_decision") == "PASS"
         and len(measured_adapter_names) >= config["minimum_external_baseline_measured_adapter_count"]
+        and len(formal_adapter_names & required_modern_adapter_names) >= config["minimum_modern_external_baseline_formal_adapter_count"]
         and not missing_adapter_names
+        and (not config["require_modern_external_baseline_formal_results"] or not missing_modern_formal_adapter_names)
         and adapter_trace_count_min >= config["minimum_pilot_paper_external_baseline_trace_count"]
     )
     return ready, {
@@ -264,8 +282,14 @@ def _external_baseline_readiness(
         "external_baseline_comparison_table_status": decision.get("external_baseline_comparison_table_status"),
         "external_baseline_measured_adapter_count": len(measured_adapter_names),
         "external_baseline_measured_adapter_names": sorted(measured_adapter_names),
+        "external_baseline_formal_measured_adapter_count": len(formal_adapter_names),
+        "external_baseline_formal_measured_adapter_names": sorted(formal_adapter_names),
+        "modern_external_baseline_formal_measured_adapter_count": len(formal_adapter_names & required_modern_adapter_names),
+        "modern_external_baseline_formal_measured_adapter_names": sorted(formal_adapter_names & required_modern_adapter_names),
         "required_external_baseline_adapter_names": sorted(required_adapter_names),
+        "required_modern_external_baseline_adapter_names": sorted(required_modern_adapter_names),
         "missing_external_baseline_adapter_names": missing_adapter_names,
+        "missing_modern_external_baseline_formal_adapter_names": missing_modern_formal_adapter_names,
         "pilot_paper_external_baseline_trace_count": len(covered_trace_ids),
         "pilot_paper_external_baseline_trace_count_min": adapter_trace_count_min,
         "pilot_paper_external_baseline_trace_counts": adapter_trace_counts,
@@ -588,6 +612,7 @@ def build_fpr01_pilot_gate_audit(
         "minimum_heldout_negative_event_count_per_family": config["minimum_heldout_negative_event_count_per_family"],
         "minimum_attack_event_count_per_attack": config["minimum_attack_event_count_per_attack"],
         "minimum_external_baseline_measured_adapter_count": config["minimum_external_baseline_measured_adapter_count"],
+        "minimum_modern_external_baseline_formal_adapter_count": config["minimum_modern_external_baseline_formal_adapter_count"],
         "minimum_internal_ablation_variant_count": config["minimum_internal_ablation_variant_count"],
         "next_allowed_action": "report_pilot_paper_result_then_plan_full_paper_scaleup" if gate_decision == "PASS" else "complete_missing_pilot_paper_requirements",
         "next_forbidden_action": "do_not_report_tpr_at_fpr_0_001_or_full_paper_scale_claim_from_pilot_paper",
@@ -646,6 +671,7 @@ def write_fpr01_pilot_gate_audit(
         f"- validation_scale_gate_decision: {audit['validation_scale_gate_decision']}\n"
         f"- external_baseline_comparison_decision: {audit['external_baseline_comparison_decision']}\n"
         f"- external_baseline_measured_adapter_count: {audit['external_baseline_measured_adapter_count']}\n"
+        f"- modern_external_baseline_formal_measured_adapter_count: {audit['modern_external_baseline_formal_measured_adapter_count']}\n"
         f"- pilot_paper_external_baseline_trace_count_min: {audit['pilot_paper_external_baseline_trace_count_min']}\n"
         f"- validation_internal_ablation_decision: {audit['validation_internal_ablation_decision']}\n"
         f"- validation_internal_ablation_variant_count: {audit['validation_internal_ablation_variant_count']}\n"

@@ -371,6 +371,56 @@ Notebook 与 repository module 的跨边界数据
 | external_baseline_comparison_table_status | governance | none | true | false | false | Whether the external baseline comparison table was rebuilt from governed records. |
 | validation_external_baseline_comparison_records_ready | governance | none | true | false | false | Whether validation-scale gate found external_baseline comparison records and enough measured adapters. |
 | minimum_external_baseline_measured_adapter_count | protocol | none | true | false | false | Minimum measured external_baseline adapter count required by validation-scale gate. |
+| external_baseline_source_intake_decision | governance | none | true | false | false | Decision for external baseline source intake manifest readiness. |
+| external_baseline_source_intake_ready_count | metric | none | true | false | false | Number of external baseline sources that are local, present, or command-configured. |
+| external_baseline_source_intake_missing_count | metric | none | true | false | false | Number of external baseline sources still requiring official source or command configuration. |
+| external_baseline_source_intake_manifest_path | artifact | none | true | false | false | Path to the generated source intake manifest for external baseline governance. |
+| source_intake_status | governance | none | true | false | false | Per-baseline source intake state, such as source snapshot available or manual command required. |
+| source_intake_action_required | governance | none | true | false | false | Next action required before the external baseline can run formally. |
+| source_cloneable | governance | none | true | false | false | Whether the registered source URL can be handled by git clone. |
+| source_dir_exists | artifact | none | true | false | false | Whether the expected external baseline source directory exists. |
+| source_dir_file_count | metric | none | true | false | false | Number of auditable files found under an external baseline source directory. |
+| source_inspection_status | governance | none | true | false | false | Whether a source directory was inspected or is missing. |
+| source_inspection_decision | governance | none | true | false | false | Decision for the source inspection manifest. |
+| clone_operation_status | governance | none | true | false | false | Status of a planned or executed external baseline source clone operation. |
+| clone_failure_reason | governance | none | true | false | false | Failure or non-execution reason for external baseline source clone operation. |
+| clone_results_decision | governance | none | true | false | false | Decision for external baseline clone results manifest. |
+| external_baseline_execution_manifest_status | governance | none | true | false | false | Whether external_baseline_execution_manifest.json is present in a packaged run. |
+| formal_evidence_status | governance | none | true | true | false | Whether measured_formal external baseline rows are bound to explicit evidence paths. |
+| evidence_path_count | metric | none | true | true | false | Number of evidence paths bound to an execution manifest. |
+| manifest_kind | artifact | none | false | false | false | Kind of manifest written by a governance runner or source intake tool. |
+| baseline_source_count | metric | none | false | false | false | Number of external baseline source entries in the source intake manifest. |
+| modern_external_baseline_source_count | metric | none | false | false | false | Number of modern external baseline source entries in source intake. |
+| source_intake_ready_count | metric | none | false | false | false | Number of source intake rows that are ready through local code, source snapshot, or configured command. |
+| source_intake_missing_count | metric | none | false | false | false | Number of source intake rows still missing source or official command configuration. |
+| modern_external_baseline_source_ready_count | metric | none | false | false | false | Number of modern external baseline rows ready through source snapshot or configured command. |
+| adapter_exists | governance | none | false | false | false | Whether the registered adapter path exists in the repository. |
+| source_dir_top_level_entries | artifact | none | false | false | false | Top-level files or folders found in an external baseline source directory. |
+| source_inspection_record_count | metric | none | false | false | false | Number of source inspection rows written for external baselines. |
+| source_inspection_ready_count | metric | none | false | false | false | Number of external baseline source directories inspected successfully. |
+| source_inspection_missing_count | metric | none | false | false | false | Number of external baseline source directories missing during inspection. |
+| source_inspections | artifact | none | false | false | false | Source inspection row list in external baseline source inspection manifest. |
+| metadata_files | artifact | none | false | false | false | Candidate metadata, dependency, README, or license files discovered in an external source tree. |
+| entrypoint_candidate_files | artifact | none | false | false | false | Candidate run, eval, detect, or infer entrypoint files discovered in an external source tree. |
+| clone_result_count | metric | none | false | false | false | Number of clone result rows in external baseline clone manifest. |
+| clone_executed_count | metric | none | false | false | false | Number of clone or update operations actually executed. |
+| clone_failed_count | metric | none | false | false | false | Number of failed clone or update operations. |
+| clone_results | artifact | none | false | false | false | Clone result row list for external baseline source preparation. |
+| execute_clone | protocol | none | false | false | false | Whether the source intake command was allowed to execute git clone or fetch. |
+| planned_repository_url | artifact | none | false | false | false | Git URL that would be cloned when execute_clone is enabled. |
+| git_results | artifact | none | false | false | false | Structured stdout, stderr, and return code summaries from git operations. |
+| stdout_tail | artifact | none | false | false | false | Tail of stdout captured from a governed external command. |
+| stderr_tail | artifact | none | false | false | false | Tail of stderr captured from a governed external command. |
+| return_code | metric | none | false | false | false | Process return code captured from a governed external command. |
+| table_plan_path | artifact | none | false | false | false | Path to external baseline table plan generated by source intake. |
+| method_count | metric | none | false | false | false | Number of methods listed in an external baseline table plan. |
+| modern_external_baseline_count | metric | none | false | false | false | Number of modern external baselines listed in a table plan. |
+| explicit_synchronization_control_count | metric | none | false | false | false | Number of explicit synchronization controls listed in a table plan. |
+| comparison_layer | governance | none | false | false | false | External baseline comparison layer, such as modern external baseline or synchronization control. |
+| claim_boundary | claim | none | false | true | false | Claim boundary assigned to an external baseline table plan method. |
+| local_source_root | artifact | none | false | false | false | Local source root path for an external baseline. |
+| formal_result_claim | claim | none | false | true | false | Whether an execution manifest declares formal result evidence. |
+| execution_boundary | governance | none | false | true | false | Boundary describing how external baseline outputs were produced and bound to evidence. |
 | comparison_unit_count | metric | none | true | false | false | Number of comparable runtime detection units covered by a non-run external baseline comparison row. |
 | comparison_record_count | metric | none | true | false | false | Number of records aggregated into one comparison table row. |
 | comparison_attack_count | metric | none | true | false | false | Number of attacks represented by one comparison table row. |

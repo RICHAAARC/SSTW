@@ -476,14 +476,16 @@ pilot_paper 前必须区分两类 baseline 证据:
 ```text
 external_baseline_status_records: 说明 baseline 是否登记、是否可运行、为何 non-run
 external_baseline_comparison_records: 说明 adapter 是否在同一 run_root 上产出可重建 comparison 结果
+external_baseline_source_intake_manifest: 说明第三方 source、adapter 和官方命令配置边界
+external_baseline_execution_manifest: 说明本次 baseline comparison 的 execution boundary、formal rows 和 evidence paths
 ```
 
-当前已实现的 comparison 结果仍为 proxy control:
+validation_scale 之前必须能够区分三类结果:
 
 ```text
 explicit_dtw_temporal_alignment: measured_proxy
 explicit_frame_matching_temporal_registration: measured_proxy
-modern_video_watermark_baselines: unsupported_until_adapter_integrated
+modern_video_watermark_baselines: measured_formal 或 unsupported_with_reason
 ```
 
 因此 full-paper checker 后续必须继续阻断以下行为:
@@ -492,6 +494,8 @@ modern_video_watermark_baselines: unsupported_until_adapter_integrated
 用 explicit synchronization proxy 代替现代视频水印 baseline 主表
 用 unsupported modern baseline row 声明 SSTW 优于该 baseline
 缺少 external_baseline_score_records.jsonl 时进入 baseline comparison claim
+缺少 external_baseline_execution_manifest.json 时进入 baseline comparison claim
+缺少 source intake / source inspection / clone results 清单时进入 validation_scale PASS
 ```
 
 
@@ -506,6 +510,9 @@ external_baseline_threshold_policy_compatible: true
 external_baseline_attack_manifest_compatible: true
 external_baseline_result_used_for_claim: true
 metric_status: measured
+modern_external_baseline_formal_measured_adapter_count >= 5
+missing_modern_external_baseline_formal_adapter_names == []
+external_baseline_execution_manifest.json: present
 claim_support_status: baseline_ready_for_main_comparison
 ```
 

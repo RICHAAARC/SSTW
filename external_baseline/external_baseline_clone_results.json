@@ -1,0 +1,63 @@
+{
+  "artifact_name": "external_baseline_clone_results.json",
+  "claim_support_status": "source_clone_manifest_only_not_claim_evidence",
+  "clone_executed_count": 0,
+  "clone_failed_count": 0,
+  "clone_result_count": 7,
+  "clone_results": [
+    {
+      "baseline_id": "explicit_dtw_temporal_alignment",
+      "clone_failure_reason": "repository_local_algorithm",
+      "clone_operation_status": "not_applicable",
+      "source_dir": "external_baseline/primary/explicit_dtw_temporal_alignment/source",
+      "source_dir_exists": false
+    },
+    {
+      "baseline_id": "explicit_frame_matching_temporal_registration",
+      "clone_failure_reason": "repository_local_algorithm",
+      "clone_operation_status": "not_applicable",
+      "source_dir": "external_baseline/primary/explicit_frame_matching_temporal_registration/source",
+      "source_dir_exists": false
+    },
+    {
+      "baseline_id": "videoshield",
+      "clone_failure_reason": "official_repository_url_not_git_cloneable",
+      "clone_operation_status": "not_cloneable",
+      "source_dir": "external_baseline/primary/videoshield/source",
+      "source_dir_exists": false
+    },
+    {
+      "baseline_id": "sigmark",
+      "clone_failure_reason": "official_repository_url_not_git_cloneable",
+      "clone_operation_status": "not_cloneable",
+      "source_dir": "external_baseline/primary/sigmark/source",
+      "source_dir_exists": false
+    },
+    {
+      "baseline_id": "spdmark",
+      "clone_failure_reason": "official_repository_url_not_git_cloneable",
+      "clone_operation_status": "not_cloneable",
+      "source_dir": "external_baseline/primary/spdmark/source",
+      "source_dir_exists": false
+    },
+    {
+      "baseline_id": "videoseal",
+      "clone_failure_reason": "execute_clone_false",
+      "clone_operation_status": "planned_not_executed",
+      "planned_repository_url": "https://github.com/facebookresearch/videoseal",
+      "source_dir": "external_baseline/primary/videoseal/source",
+      "source_dir_exists": false
+    },
+    {
+      "baseline_id": "videomark_or_vidsig",
+      "clone_failure_reason": "official_repository_url_not_git_cloneable",
+      "clone_operation_status": "not_cloneable",
+      "source_dir": "external_baseline/primary/videomark_or_vidsig/source",
+      "source_dir_exists": false
+    }
+  ],
+  "clone_results_decision": "PASS",
+  "execute_clone": false,
+  "manifest_kind": "external_baseline_source_clone_results",
+  "registry_path": "external_baseline\\source_registry.json"
+}

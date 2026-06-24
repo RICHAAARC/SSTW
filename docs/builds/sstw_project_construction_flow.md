@@ -1374,6 +1374,49 @@ external_baseline_protocol_gap
 external_baseline_result_used_for_claim = false
 ```
 
+### 23.1 外部 baseline 接入层级
+
+外部 baseline 不得只表现为一条命令或一个表格行。正式接入必须按以下层级闭合:
+
+```text
+source_registry
+-> source_intake_manifest
+-> source_inspection_manifest
+-> clone_results_or_manual_command_gap
+-> adapter
+-> score_records
+-> comparison_decision
+-> execution_manifest
+-> validation_scale / pilot_paper gate
+```
+
+各层职责如下:
+
+| 层级 | 产物 | 职责 | claim 边界 |
+|---|---|---|---|
+| source registry | `external_baseline/source_registry.json` | 登记 baseline 身份、来源、adapter 路径和 source 状态 | 只说明候选对象存在 |
+| source intake | `external_baseline_intake_manifest.json` | 记录 source 目录、adapter 是否存在、官方命令环境变量是否配置 | 不支持论文 claim |
+| source inspection | `external_baseline_source_inspection.json` | 记录第三方 source 中的入口、依赖和许可证候选文件 | 不支持论文 claim |
+| clone results | `external_baseline_clone_results.json` | 记录 clone 计划、已执行 clone 或无法 clone 的原因 | 不支持论文 claim |
+| table plan | `plans/external_baseline_table_plan.json` | 固定 baseline 在主表或 control 表中的角色 | 不支持论文 claim |
+| adapter score records | `records/external_baseline_score_records.jsonl` | 在同一 run_root 上写出 measured_proxy 或 measured_formal records | 仅 measured_formal 可进入正式对比候选 |
+| execution manifest | `artifacts/external_baseline_execution_manifest.json` | 记录 measured / formal 数量、evidence paths、source intake 路径和执行边界 | evidence paths 缺失时不能升级为正式主表 claim |
+
+其中 `explicit_dtw_temporal_alignment` 与 `explicit_frame_matching_temporal_registration` 只能作为显式同步 control。`videoshield`、`sigmark`、`spdmark`、`videomark_or_vidsig` 和 `videoseal` 必须通过官方命令或已放入 `source/` 的等价官方入口产生 `measured_formal` records。
+
+### 23.2 validation_scale 对 baseline 的硬阻断
+
+`validation_scale` 是进入 `pilot_paper` 前最后一道 paper 级工程门禁, 因此 external baseline 条件不得只要求两个显式同步 control。该阶段必须检查:
+
+```text
+external_baseline_measured_adapter_count >= 7
+modern_external_baseline_formal_measured_adapter_count >= 5
+missing_modern_external_baseline_formal_adapter_names == []
+external_baseline_execution_manifest_status == present
+```
+
+若现代视频水印 baseline 仍处于 `official_command_not_configured`、`manual_source_or_command_required` 或 `unsupported`, 则只能说明 baseline 接入尚未闭合, 不得进入 `pilot_paper` 结果运行。
+
 ## 24. Codex 构建执行手册
 
 Codex 按本文档推进项目时, 应遵循以下顺序:

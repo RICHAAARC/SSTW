@@ -13,6 +13,7 @@ from main.external_baselines.explicit_dtw_temporal_alignment import compute_dtw_
 from main.external_baselines.frame_matching_temporal_registration import compute_registration_cost, match_frames
 from experiments.generative_video_model_probe.external_baseline_runner import write_external_baseline_comparison_outputs, write_external_baseline_status_outputs
 from main.protocol.record_writer import read_jsonl, write_jsonl
+from external_baseline.source_intake import build_source_intake_manifest, write_source_intake_artifacts
 
 
 @pytest.mark.quick
@@ -56,6 +57,22 @@ def test_external_baseline_status_audit_reports_modern_gap() -> None:
 
 
 @pytest.mark.quick
+def test_external_baseline_source_intake_writes_governed_manifests(tmp_path: Path) -> None:
+    """source intake 必须写出源码、inspection、clone plan 和 table plan 治理文件。"""
+    manifest = build_source_intake_manifest()
+    assert manifest["external_baseline_source_intake_decision"] == "PASS"
+    assert manifest["baseline_source_count"] >= 7
+    assert manifest["modern_external_baseline_source_count"] >= 5
+    assert manifest["claim_support_status"] == "source_intake_manifest_only_not_claim_evidence"
+
+    summary = write_source_intake_artifacts(tmp_path / "external_baseline_artifacts")
+    assert Path(summary["source_intake_manifest_path"]).exists()
+    assert Path(summary["source_inspection_manifest_path"]).exists()
+    assert Path(summary["clone_results_manifest_path"]).exists()
+    assert Path(summary["table_plan_path"]).exists()
+
+
+@pytest.mark.quick
 def test_external_baseline_runner_writes_governed_status_outputs(tmp_path: Path) -> None:
     """外部 baseline runner 必须写出 records、table、decision 和 report。"""
     run_root = tmp_path / "generative_video_model_probe_colab"
@@ -68,6 +85,9 @@ def test_external_baseline_runner_writes_governed_status_outputs(tmp_path: Path)
     assert all("claim_support_status" in record for record in records)
     assert (run_root / "tables" / "external_baseline_status_table.csv").exists()
     assert (run_root / "artifacts" / "external_baseline_status_decision.json").exists()
+    assert (run_root / "artifacts" / "external_baseline_intake_manifest.json").exists()
+    assert (run_root / "artifacts" / "external_baseline_source_inspection.json").exists()
+    assert (run_root / "artifacts" / "external_baseline_clone_results.json").exists()
     assert (run_root / "reports" / "external_baseline_status_report.md").exists()
 
 
@@ -155,6 +175,7 @@ def test_external_baseline_comparison_runner_uses_external_baseline_adapters(tmp
     assert all(record.get("S_final") is None for record in records)
     assert (run_root / "tables" / "external_baseline_comparison_table.csv").exists()
     assert (run_root / "artifacts" / "external_baseline_comparison_decision.json").exists()
+    assert (run_root / "artifacts" / "external_baseline_execution_manifest.json").exists()
     assert (run_root / "reports" / "external_baseline_comparison_report.md").exists()
 
 
@@ -202,3 +223,6 @@ def test_modern_external_baseline_formal_command_adapters_write_measured_records
     assert formal_records
     assert all(record["external_baseline_result_used_for_claim"] is True for record in formal_records)
     assert all(record.get("S_final") is None for record in records)
+    execution_manifest = json.loads((run_root / "artifacts" / "external_baseline_execution_manifest.json").read_text(encoding="utf-8"))
+    assert execution_manifest["modern_external_baseline_formal_measured_adapter_count"] == 5
+    assert execution_manifest["formal_evidence_status"] == "formal_rows_without_external_evidence_paths"

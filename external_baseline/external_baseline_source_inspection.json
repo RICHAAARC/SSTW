@@ -1,0 +1,75 @@
+{
+  "artifact_name": "external_baseline_source_inspection.json",
+  "claim_support_status": "source_inspection_manifest_only_not_claim_evidence",
+  "manifest_kind": "external_baseline_source_inspection",
+  "registry_path": "external_baseline\\source_registry.json",
+  "source_inspection_decision": "PASS",
+  "source_inspection_missing_count": 7,
+  "source_inspection_ready_count": 0,
+  "source_inspection_record_count": 7,
+  "source_inspections": [
+    {
+      "baseline_id": "explicit_dtw_temporal_alignment",
+      "entrypoint_candidate_files": [],
+      "metadata_files": [],
+      "source_dir": "external_baseline/primary/explicit_dtw_temporal_alignment/source",
+      "source_dir_exists": false,
+      "source_dir_file_count": 0,
+      "source_inspection_status": "source_missing"
+    },
+    {
+      "baseline_id": "explicit_frame_matching_temporal_registration",
+      "entrypoint_candidate_files": [],
+      "metadata_files": [],
+      "source_dir": "external_baseline/primary/explicit_frame_matching_temporal_registration/source",
+      "source_dir_exists": false,
+      "source_dir_file_count": 0,
+      "source_inspection_status": "source_missing"
+    },
+    {
+      "baseline_id": "videoshield",
+      "entrypoint_candidate_files": [],
+      "metadata_files": [],
+      "source_dir": "external_baseline/primary/videoshield/source",
+      "source_dir_exists": false,
+      "source_dir_file_count": 0,
+      "source_inspection_status": "source_missing"
+    },
+    {
+      "baseline_id": "sigmark",
+      "entrypoint_candidate_files": [],
+      "metadata_files": [],
+      "source_dir": "external_baseline/primary/sigmark/source",
+      "source_dir_exists": false,
+      "source_dir_file_count": 0,
+      "source_inspection_status": "source_missing"
+    },
+    {
+      "baseline_id": "spdmark",
+      "entrypoint_candidate_files": [],
+      "metadata_files": [],
+      "source_dir": "external_baseline/primary/spdmark/source",
+      "source_dir_exists": false,
+      "source_dir_file_count": 0,
+      "source_inspection_status": "source_missing"
+    },
+    {
+      "baseline_id": "videoseal",
+      "entrypoint_candidate_files": [],
+      "metadata_files": [],
+      "source_dir": "external_baseline/primary/videoseal/source",
+      "source_dir_exists": false,
+      "source_dir_file_count": 0,
+      "source_inspection_status": "source_missing"
+    },
+    {
+      "baseline_id": "videomark_or_vidsig",
+      "entrypoint_candidate_files": [],
+      "metadata_files": [],
+      "source_dir": "external_baseline/primary/videomark_or_vidsig/source",
+      "source_dir_exists": false,
+      "source_dir_file_count": 0,
+      "source_inspection_status": "source_missing"
+    }
+  ]
+}

@@ -195,6 +195,7 @@ def test_generative_video_colab_notebook_calls_repository_modules() -> None:
     assert "build_pilot_matrix_postprocess_command" in source
     assert "build_runtime_attack_command" in source
     assert "build_runtime_detection_command" in source
+    assert "build_external_baseline_source_intake_command" in source
     assert "build_external_baseline_comparison_command" in source
     assert "build_small_scale_claim_pilot_gate_command" in source
     assert "build_validation_internal_ablation_command" in source
@@ -213,6 +214,7 @@ def test_generative_video_colab_notebook_calls_repository_modules() -> None:
     assert "experiments.generative_video_model_probe.pilot_matrix_postprocess" in Path("paper_workflow/notebook_utils/generative_video_model_probe_workflow.py").read_text(encoding="utf-8")
     assert "experiments.generative_video_model_probe.attack_runner" in Path("paper_workflow/notebook_utils/generative_video_model_probe_workflow.py").read_text(encoding="utf-8")
     assert "experiments.generative_video_model_probe.detection_runner" in Path("paper_workflow/notebook_utils/generative_video_model_probe_workflow.py").read_text(encoding="utf-8")
+    assert "scripts/build_external_baseline_source_intake.py" in Path("paper_workflow/notebook_utils/generative_video_model_probe_workflow.py").read_text(encoding="utf-8")
     assert "experiments.generative_video_model_probe.external_baseline_runner" in Path("paper_workflow/notebook_utils/generative_video_model_probe_workflow.py").read_text(encoding="utf-8")
     assert "experiments.generative_video_model_probe.pilot_claim_gate" in Path("paper_workflow/notebook_utils/generative_video_model_probe_workflow.py").read_text(encoding="utf-8")
     assert "experiments.generative_video_model_probe.validation_internal_ablation" in Path("paper_workflow/notebook_utils/generative_video_model_probe_workflow.py").read_text(encoding="utf-8")

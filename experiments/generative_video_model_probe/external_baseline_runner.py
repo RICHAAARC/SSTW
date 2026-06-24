@@ -10,6 +10,7 @@ from typing import Any, Mapping
 
 from external_baseline.registry import get_adapter
 from external_baseline.runtime_trace_io import comparable_detection_records, read_jsonl, safe_float
+from external_baseline.source_intake import build_execution_manifest, write_source_intake_artifacts
 from main.core.digest import build_stable_digest
 from main.external_baselines.baseline_registry import audit_external_baseline_records, build_external_baseline_records
 from main.protocol.flow_evidence_fields import with_flow_evidence_protocol_defaults, with_flow_evidence_protocol_defaults_many
@@ -22,6 +23,7 @@ EXTERNAL_BASELINE_SCORE_RECORDS = "records/external_baseline_score_records.jsonl
 EXTERNAL_BASELINE_COMPARISON_TABLE = "tables/external_baseline_comparison_table.csv"
 EXTERNAL_BASELINE_COMPARISON_DECISION = "artifacts/external_baseline_comparison_decision.json"
 EXTERNAL_BASELINE_COMPARISON_REPORT = "reports/external_baseline_comparison_report.md"
+EXTERNAL_BASELINE_EXECUTION_MANIFEST = "artifacts/external_baseline_execution_manifest.json"
 
 
 def run_external_baseline_status(config_path: str = DEFAULT_EXTERNAL_BASELINE_CONFIG) -> list[dict[str, Any]]:
@@ -49,8 +51,13 @@ def write_external_baseline_status_outputs(
 ) -> dict[str, Any]:
     """写出外部 baseline 状态 records、table、decision 和 report。"""
     run_root = Path(run_root)
+    source_intake_summary = write_source_intake_artifacts(run_root / "artifacts")
     records = run_external_baseline_status(config_path)
     audit = audit_external_baseline_records(records)
+    audit["external_baseline_source_intake_decision"] = source_intake_summary["external_baseline_source_intake_decision"]
+    audit["external_baseline_source_intake_ready_count"] = source_intake_summary["source_intake_ready_count"]
+    audit["external_baseline_source_intake_missing_count"] = source_intake_summary["source_intake_missing_count"]
+    audit["external_baseline_source_intake_manifest_path"] = source_intake_summary["source_intake_manifest_path"]
     write_jsonl(run_root / "records" / "external_baseline_records.jsonl", records)
     write_csv(run_root / "tables" / "external_baseline_status_table.csv", records)
     write_json(run_root / "artifacts" / "external_baseline_status_decision.json", audit)
@@ -62,6 +69,7 @@ def write_external_baseline_status_outputs(
         f"- external_baseline_record_count: {audit['external_baseline_record_count']}\n"
         f"- modern_external_baseline_record_count: {audit['modern_external_baseline_record_count']}\n"
         f"- modern_external_baseline_main_comparison_ready_count: {audit['modern_external_baseline_main_comparison_ready_count']}\n"
+        f"- external_baseline_source_intake_decision: {audit['external_baseline_source_intake_decision']}\n"
         f"- external_baseline_claim_support_status: {audit['external_baseline_claim_support_status']}\n"
     )
     report_path = run_root / "reports" / "external_baseline_status_report.md"
@@ -237,13 +245,24 @@ def write_external_baseline_comparison_outputs(
 ) -> dict[str, Any]:
     """写出外部 baseline comparison records、table、decision 和 report。"""
     run_root = Path(run_root)
+    source_intake_summary = write_source_intake_artifacts(run_root / "artifacts")
     records = build_external_baseline_comparison_records(run_root, config_path)
     audit = audit_external_baseline_comparison_records(records)
     table_rows = build_external_baseline_comparison_table_rows(run_root, records)
     audit["external_baseline_comparison_table_status"] = "ready" if table_rows else "missing"
+    audit["external_baseline_source_intake_decision"] = source_intake_summary["external_baseline_source_intake_decision"]
+    audit["external_baseline_source_intake_ready_count"] = source_intake_summary["source_intake_ready_count"]
+    audit["external_baseline_source_intake_missing_count"] = source_intake_summary["source_intake_missing_count"]
+    execution_manifest = build_execution_manifest(
+        records,
+        run_root=run_root,
+        config_path=config_path,
+        source_intake_manifest_path=source_intake_summary["source_intake_manifest_path"],
+    )
     write_jsonl(run_root / EXTERNAL_BASELINE_SCORE_RECORDS, records)
     write_csv(run_root / EXTERNAL_BASELINE_COMPARISON_TABLE, table_rows)
     write_json(run_root / EXTERNAL_BASELINE_COMPARISON_DECISION, audit)
+    write_json(run_root / EXTERNAL_BASELINE_EXECUTION_MANIFEST, execution_manifest)
     report = (
         "# External Baseline Comparison Report\n\n"
         "该报告由 `external_baseline/` adapter 产出, 用于证明本项目已经具备 baseline 对比结果落盘链路。"
@@ -254,6 +273,8 @@ def write_external_baseline_comparison_outputs(
         f"- external_baseline_comparison_ready_count: {audit['external_baseline_comparison_ready_count']}\n"
         f"- external_baseline_measured_adapter_count: {audit['external_baseline_measured_adapter_count']}\n"
         f"- external_baseline_measured_adapter_names: {', '.join(audit['external_baseline_measured_adapter_names']) or 'none'}\n"
+        f"- modern_external_baseline_formal_measured_adapter_count: {audit['modern_external_baseline_formal_measured_adapter_count']}\n"
+        f"- external_baseline_source_intake_decision: {audit['external_baseline_source_intake_decision']}\n"
         f"- external_baseline_claim_support_status: {audit['external_baseline_claim_support_status']}\n"
     )
     report_path = run_root / EXTERNAL_BASELINE_COMPARISON_REPORT

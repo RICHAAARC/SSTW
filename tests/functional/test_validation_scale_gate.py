@@ -10,6 +10,39 @@ from experiments.generative_video_model_probe.validation_scale_gate import (
 from main.protocol.record_writer import write_json, write_jsonl
 
 
+EXTERNAL_BASELINE_NAMES = (
+    "explicit_dtw_temporal_alignment",
+    "explicit_frame_matching_temporal_registration",
+    "videoshield",
+    "sigmark",
+    "spdmark",
+    "videomark_or_vidsig",
+    "videoseal",
+)
+MODERN_EXTERNAL_BASELINE_NAMES = {
+    "videoshield",
+    "sigmark",
+    "spdmark",
+    "videomark_or_vidsig",
+    "videoseal",
+}
+
+
+def _formal_external_baseline_records() -> list[dict]:
+    """构造 validation-scale 通过所需的完整 external baseline records fixture。"""
+    return [
+        {
+            "external_baseline_name": name,
+            "external_baseline_layer": "modern_external_baseline" if name in MODERN_EXTERNAL_BASELINE_NAMES else "explicit_synchronization_control",
+            "metric_status": "measured_formal" if name in MODERN_EXTERNAL_BASELINE_NAMES else "measured_proxy",
+            "claim_support_status": "modern_external_baseline_formal_measured"
+            if name in MODERN_EXTERNAL_BASELINE_NAMES
+            else "external_baseline_proxy_comparison_not_claim_supporting",
+        }
+        for name in EXTERNAL_BASELINE_NAMES
+    ]
+
+
 @pytest.mark.quick
 def test_validation_scale_gate_blocks_empty_run(tmp_path: Path) -> None:
     """空 run_root 必须被 validation-scale gate 阻断, 不能进入 pilot_paper。"""
@@ -71,16 +104,15 @@ def test_validation_scale_gate_passes_when_all_governed_inputs_exist(tmp_path: P
         {"attack_name": "frame_rate_resampling_runtime", "runtime_detection_status": "ready"},
     ])
     write_jsonl(run_root / "records" / "external_baseline_records.jsonl", run_external_baseline_status())
-    write_jsonl(run_root / "records" / "external_baseline_score_records.jsonl", [
-        {"external_baseline_name": "explicit_dtw_temporal_alignment", "metric_status": "measured_proxy"},
-        {"external_baseline_name": "explicit_frame_matching_temporal_registration", "metric_status": "measured_proxy"},
-    ])
+    write_jsonl(run_root / "records" / "external_baseline_score_records.jsonl", _formal_external_baseline_records())
     write_json(run_root / "artifacts" / "external_baseline_comparison_decision.json", {
         "external_baseline_comparison_decision": "PASS",
-        "external_baseline_comparison_record_count": 2,
-        "external_baseline_comparison_ready_count": 2,
-        "external_baseline_measured_adapter_count": 2,
-        "external_baseline_claim_support_status": "external_baseline_proxy_comparison_not_claim_supporting",
+        "external_baseline_comparison_record_count": 7,
+        "external_baseline_comparison_ready_count": 7,
+        "external_baseline_measured_adapter_count": 7,
+        "modern_external_baseline_formal_measured_adapter_count": 5,
+        "modern_external_baseline_formal_measured_adapter_names": sorted(MODERN_EXTERNAL_BASELINE_NAMES),
+        "external_baseline_claim_support_status": "external_baseline_formal_and_proxy_records_written",
     })
     write_jsonl(run_root / "records" / "validation_internal_ablation_records.jsonl", [
         {"method_variant": "without_velocity_constraint", "ablation_status": "ready"},
@@ -127,7 +159,9 @@ def test_validation_scale_gate_passes_when_all_governed_inputs_exist(tmp_path: P
     assert audit["validation_seed_per_prompt_min"] == 3
     assert audit["full_paper_allowed"] is False
     assert audit["full_paper_next_gate"] == "pilot_paper_generative_probe_gate"
-    assert audit["external_baseline_measured_adapter_count"] == 2
+    assert audit["external_baseline_measured_adapter_count"] == 7
+    assert audit["modern_external_baseline_formal_measured_adapter_count"] == 5
+    assert audit["missing_modern_external_baseline_formal_adapter_names"] == []
     assert (run_root / "records" / "validation_scale_gate_records.jsonl").exists()
     assert (run_root / "tables" / "validation_scale_gate_table.csv").exists()
     assert (run_root / "artifacts" / "validation_scale_gate_decision.json").exists()

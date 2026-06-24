@@ -137,6 +137,18 @@ def build_runtime_detection_command(layout: dict[str, str]) -> list[str]:
     ]
 
 
+def build_external_baseline_source_intake_command(layout: dict[str, str]) -> list[str]:
+    """构造 external baseline source intake 命令, 写出源码、adapter 和命令配置治理清单。"""
+    return [
+        sys.executable,
+        "scripts/build_external_baseline_source_intake.py",
+        "--output-root",
+        f"{layout['drive_run_root']}/artifacts",
+        "--repo-root",
+        ".",
+    ]
+
+
 
 def build_external_baseline_comparison_command(layout: dict[str, str]) -> list[str]:
     """构建 external_baseline adapter comparison 命令, 从 runtime detection records 生成 baseline 对比结果。"""

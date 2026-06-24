@@ -19,6 +19,15 @@ DEFAULT_VALIDATION_PROFILE_NAMES = {"validation_scale"}
 DEFAULT_MINIMUM_PROMPT_COUNT = 8
 DEFAULT_MINIMUM_SEED_PER_PROMPT = 3
 DEFAULT_MINIMUM_ATTACK_COUNT = 3
+DEFAULT_REQUIRED_MODERN_EXTERNAL_BASELINE_ADAPTER_NAMES = (
+    "videoshield",
+    "sigmark",
+    "spdmark",
+    "videomark_or_vidsig",
+    "videoseal",
+)
+DEFAULT_MINIMUM_EXTERNAL_BASELINE_MEASURED_ADAPTER_COUNT = 7
+DEFAULT_MINIMUM_MODERN_EXTERNAL_BASELINE_FORMAL_ADAPTER_COUNT = len(DEFAULT_REQUIRED_MODERN_EXTERNAL_BASELINE_ADAPTER_NAMES)
 
 
 def _read_json(path: Path) -> dict:
@@ -47,7 +56,9 @@ def _load_config(config_path: str | Path = DEFAULT_VALIDATION_SCALE_CONFIG) -> d
         "require_small_scale_pilot_gate_passed": bool(config.get("require_small_scale_pilot_gate_passed", True)),
         "require_external_baseline_status_records": bool(config.get("require_external_baseline_status_records", True)),
         "require_external_baseline_comparison_records": bool(config.get("require_external_baseline_comparison_records", True)),
-        "minimum_external_baseline_measured_adapter_count": int(config.get("minimum_external_baseline_measured_adapter_count", 1)),
+        "minimum_external_baseline_measured_adapter_count": int(config.get("minimum_external_baseline_measured_adapter_count", DEFAULT_MINIMUM_EXTERNAL_BASELINE_MEASURED_ADAPTER_COUNT)),
+        "minimum_modern_external_baseline_formal_adapter_count": int(config.get("minimum_modern_external_baseline_formal_adapter_count", DEFAULT_MINIMUM_MODERN_EXTERNAL_BASELINE_FORMAL_ADAPTER_COUNT)),
+        "required_modern_external_baseline_adapter_names": list(config.get("required_modern_external_baseline_adapter_names", DEFAULT_REQUIRED_MODERN_EXTERNAL_BASELINE_ADAPTER_NAMES)),
         "require_internal_ablation_records": bool(config.get("require_internal_ablation_records", True)),
         "require_adaptive_attack_records": bool(config.get("require_adaptive_attack_records", True)),
         "require_replay_or_sketch_records_or_claim3_downgrade": bool(config.get("require_replay_or_sketch_records_or_claim3_downgrade", True)),
@@ -87,21 +98,38 @@ def _validation_generation_records(generation_records: list[dict], validation_pr
 
 
 
-def _external_baseline_comparison_ready(run_root: Path, minimum_measured_adapter_count: int) -> tuple[bool, int, int, str]:
+def _external_baseline_comparison_ready(
+    run_root: Path,
+    minimum_measured_adapter_count: int,
+    minimum_modern_formal_adapter_count: int,
+    required_modern_adapter_names: list[str],
+) -> tuple[bool, int, int, int, list[str], str]:
     """检查 external_baseline/ adapter 是否已经写出 comparison records。"""
     records = _read_jsonl(run_root / "records" / "external_baseline_score_records.jsonl")
     decision = _read_json(run_root / "artifacts" / "external_baseline_comparison_decision.json")
     if not decision and records:
         decision = audit_external_baseline_comparison_records(records)
     measured_adapter_count = int(decision.get("external_baseline_measured_adapter_count") or 0)
+    modern_formal_adapter_count = int(decision.get("modern_external_baseline_formal_measured_adapter_count") or 0)
+    modern_formal_names = {
+        str(name)
+        for name in decision.get("modern_external_baseline_formal_measured_adapter_names", [])
+        if str(name)
+    }
+    required_modern_names = {str(name) for name in required_modern_adapter_names if str(name)}
+    missing_modern_names = sorted(required_modern_names - modern_formal_names)
     ready = (
         _decision_pass(decision, "external_baseline_comparison_decision")
         and measured_adapter_count >= minimum_measured_adapter_count
+        and modern_formal_adapter_count >= minimum_modern_formal_adapter_count
+        and not missing_modern_names
     )
     return (
         ready,
         len(records),
         measured_adapter_count,
+        modern_formal_adapter_count,
+        missing_modern_names,
         decision.get("external_baseline_claim_support_status", "missing_external_baseline_comparison_decision"),
     )
 
@@ -187,10 +215,14 @@ def build_validation_scale_gate_audit(
         external_baseline_comparison_ready,
         external_baseline_comparison_record_count,
         external_baseline_measured_adapter_count,
+        modern_external_baseline_formal_measured_adapter_count,
+        missing_modern_external_baseline_formal_adapter_names,
         external_baseline_comparison_status,
     ) = _external_baseline_comparison_ready(
         run_root,
         config["minimum_external_baseline_measured_adapter_count"],
+        config["minimum_modern_external_baseline_formal_adapter_count"],
+        config["required_modern_external_baseline_adapter_names"],
     )
     internal_ablation_ready, internal_ablation_record_count, internal_ablation_status = _internal_ablation_ready(run_root)
     adaptive_attack_ready, adaptive_attack_record_count, adaptive_attack_status = _adaptive_attack_ready(run_root)
@@ -239,6 +271,10 @@ def build_validation_scale_gate_audit(
         "modern_external_baseline_main_comparison_ready_count": external_baseline_audit.get("modern_external_baseline_main_comparison_ready_count", 0),
         "external_baseline_comparison_record_count": external_baseline_comparison_record_count,
         "external_baseline_measured_adapter_count": external_baseline_measured_adapter_count,
+        "modern_external_baseline_formal_measured_adapter_count": modern_external_baseline_formal_measured_adapter_count,
+        "minimum_modern_external_baseline_formal_adapter_count": config["minimum_modern_external_baseline_formal_adapter_count"],
+        "required_modern_external_baseline_adapter_names": sorted(config["required_modern_external_baseline_adapter_names"]),
+        "missing_modern_external_baseline_formal_adapter_names": missing_modern_external_baseline_formal_adapter_names,
         "external_baseline_comparison_status": external_baseline_comparison_status,
         "minimum_external_baseline_measured_adapter_count": config["minimum_external_baseline_measured_adapter_count"],
         "internal_ablation_record_count": internal_ablation_record_count,
@@ -283,6 +319,8 @@ def write_validation_scale_gate_audit(
         f"- modern_external_baseline_main_comparison_ready_count: {audit['modern_external_baseline_main_comparison_ready_count']}\n"
         f"- external_baseline_comparison_record_count: {audit['external_baseline_comparison_record_count']}\n"
         f"- external_baseline_measured_adapter_count: {audit['external_baseline_measured_adapter_count']}\n"
+        f"- modern_external_baseline_formal_measured_adapter_count: {audit['modern_external_baseline_formal_measured_adapter_count']}\n"
+        f"- missing_modern_external_baseline_formal_adapter_names: {', '.join(audit['missing_modern_external_baseline_formal_adapter_names']) if audit['missing_modern_external_baseline_formal_adapter_names'] else 'none'}\n"
         f"- full_paper_allowed: {str(audit['full_paper_allowed']).lower()}\n"
     )
     report_path = run_root / "reports" / "validation_scale_gate_report.md"

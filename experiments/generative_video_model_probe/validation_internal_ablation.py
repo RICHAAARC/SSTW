@@ -71,8 +71,8 @@ VALIDATION_ABLATION_VARIANTS = (
         "score_offset": -0.02,
     },
 )
-INTERNAL_ABLATION_PROFILE_NAMES = {"validation_scale", "pilot_paper", "fpr01_pilot"}
-PILOT_PAPER_PROFILE_NAMES = {"pilot_paper", "fpr01_pilot"}
+INTERNAL_ABLATION_PROFILE_NAMES = {"validation_scale", "pilot_paper"}
+PILOT_PAPER_PROFILE_NAMES = {"pilot_paper"}
 
 
 def _read_jsonl(path: Path) -> list[dict]:

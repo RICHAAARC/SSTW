@@ -24,7 +24,7 @@ DEFAULT_STAGE_DECISION_PATHS = {
     "sampling_time_constraint_preflight": "outputs/runs/sampling_time_constraint_preflight/artifacts/sampling_time_constraint_preflight_decision.json",
 }
 
-DEFAULT_B5_RUN_ROOT = Path(r"G:\我的云端硬盘\SSTW\runs\generative_video_model_probe_colab")
+DEFAULT_B5_RUN_ROOT = Path(r"G:\我的云端硬盘\SSTW\runs\generative_video_model_probe\pilot_paper")
 DEFAULT_B6_RUN_ROOT = Path(r"G:\我的云端硬盘\SSTW\runs\sampling_time_constraint_colab")
 
 
@@ -112,7 +112,7 @@ def _collect_b5_evidence(b5_run_root: str | Path) -> tuple[dict, dict]:
     }
     status = _artifact_status_from_checker(payload)
     record = _supporting_stage_record(
-        "generative_video_model_probe_colab",
+        "generative_video_model_probe",
         status,
         [
             str(b5_run_root / "records" / "generation_records.jsonl"),
@@ -210,7 +210,7 @@ def _build_claim_records(status_by_stage: dict[str, str], b5_payload: dict, b6_p
             "The mechanism remains observable in real generative video outputs under the governed LTX-Video probe and formal quality, motion, and semantic metrics.",
             "main",
             "supported" if b5_pass else "unsupported",
-            ["generative_video_model_probe_colab"],
+            ["generative_video_model_probe"],
             [str(b5_payload.get("run_root", DEFAULT_B5_RUN_ROOT))],
         ),
         _build_claim_record(
@@ -231,7 +231,7 @@ def _build_claim_records(status_by_stage: dict[str, str], b5_payload: dict, b6_p
                 "state_space_inference_formalization",
                 "real_video_latent_transfer",
                 "trajectory_observation_core_probe",
-                "generative_video_model_probe_colab",
+                "generative_video_model_probe",
             ],
             [str(b5_payload.get("run_root", DEFAULT_B5_RUN_ROOT))],
         ),

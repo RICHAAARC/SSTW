@@ -144,7 +144,7 @@ def _write_motion_calibration_ready_with_bom(run_root: Path) -> None:
 @pytest.mark.quick
 def test_small_scale_claim_pilot_checker_reports_missing_matrix(tmp_path: Path) -> None:
     """当前只有生成和 proxy 证据时, pilot gate 必须明确报告矩阵缺口。"""
-    run_root = tmp_path / "generative_video_model_probe_colab"
+    run_root = tmp_path / "generative_video_runtime"
     _write_generation_records(run_root)
     _write_proxy_postprocess(run_root)
     write_jsonl(run_root / "records" / "mechanism_score_records.jsonl", [
@@ -183,7 +183,7 @@ def test_small_scale_claim_pilot_checker_reports_missing_matrix(tmp_path: Path) 
 @pytest.mark.quick
 def test_small_scale_claim_pilot_gate_writes_governed_artifacts(tmp_path: Path) -> None:
     """pilot gate 写出结果必须可由 records、table、decision 和 report 复核。"""
-    run_root = tmp_path / "generative_video_model_probe_colab"
+    run_root = tmp_path / "generative_video_runtime"
     _write_generation_records(run_root)
     _write_proxy_postprocess(run_root)
     write_jsonl(run_root / "records" / "mechanism_score_records.jsonl", [])
@@ -202,7 +202,7 @@ def test_small_scale_claim_pilot_gate_writes_governed_artifacts(tmp_path: Path) 
 @pytest.mark.quick
 def test_pilot_matrix_postprocess_fills_proxy_matrix_but_keeps_calibration_block(tmp_path: Path) -> None:
     """pilot matrix postprocess 可补齐 proxy 矩阵, 但不能越过 motion threshold calibration gate。"""
-    run_root = tmp_path / "generative_video_model_probe_colab"
+    run_root = tmp_path / "generative_video_runtime"
     _write_generation_records(run_root)
     _write_trajectory_records(run_root)
     _write_proxy_postprocess(run_root)
@@ -247,7 +247,7 @@ def test_pilot_matrix_postprocess_fills_proxy_matrix_but_keeps_calibration_block
 @pytest.mark.quick
 def test_formal_motion_failed_sample_is_excluded_from_motion_claim_gate(tmp_path: Path) -> None:
     """formal motion 失败样本必须保留记录, 但不能计入 motion claim 证据。"""
-    run_root = tmp_path / "generative_video_model_probe_colab"
+    run_root = tmp_path / "generative_video_runtime"
     _write_generation_records(run_root)
     _write_trajectory_records(run_root)
     _write_proxy_postprocess(run_root)
@@ -276,7 +276,7 @@ def test_formal_motion_failed_sample_is_excluded_from_motion_claim_gate(tmp_path
 @pytest.mark.quick
 def test_validation_like_pilot_allows_single_formal_motion_exclusion_when_coverage_remains(tmp_path: Path) -> None:
     """当剔除 1 个低运动样本后仍满足覆盖率时, pilot gate 不应被旧失败样本整体阻断。"""
-    run_root = tmp_path / "generative_video_model_probe_colab"
+    run_root = tmp_path / "generative_video_runtime"
     _write_generation_records(run_root, seed_count=3)
     _write_trajectory_records(run_root, seed_count=3)
     _write_proxy_postprocess(run_root)
@@ -303,7 +303,7 @@ def test_validation_like_pilot_allows_single_formal_motion_exclusion_when_covera
 @pytest.mark.quick
 def test_pilot_gate_reads_bom_encoded_motion_calibration_artifact(tmp_path: Path) -> None:
     """pilot gate 必须能读取带 BOM 的 calibration artifact, 避免 Drive 本地映射编码差异阻断 Colab。"""
-    run_root = tmp_path / "generative_video_model_probe_colab"
+    run_root = tmp_path / "generative_video_runtime"
     _write_generation_records(run_root)
     _write_trajectory_records(run_root)
     _write_proxy_postprocess(run_root)

@@ -125,7 +125,7 @@ official_command_manifest.json
 
 这些文件会被自动纳入 `external_baseline_execution_manifest.json` 的 `evidence_paths`。因此 Colab 断开后, 用户仍可以从 Google Drive package 中审计每条 `measured_formal` baseline score 的官方输出来源。若没有自动持久化证据且没有额外 evidence path, `measured_formal` rows 只能证明 command adapter 写出了受治理 records, 不能单独支撑论文主表 claim。
 
-当前 `validation_scale` 已经是进入 paper 级运行前的最后一道完整门禁。因此在 `SSTW_WORKFLOW_PROFILE=validation_scale` 或 `SSTW_WORKFLOW_PROFILE=pilot_paper` 时, Colab notebook 会在 6 个现代 baseline command 缺失时提前阻断, 避免先消耗 GPU 生成视频后才发现 baseline 主表无法闭合。旧的 `fpr01_pilot` 仅作为兼容别名映射到 `pilot_paper`。
+当前 `validation_scale` 已经是进入 paper 级运行前的最后一道完整门禁。因此在 `SSTW_WORKFLOW_PROFILE=validation_scale` 或 `SSTW_WORKFLOW_PROFILE=pilot_paper` 时, Colab notebook 会在 6 个现代 baseline command 缺失时提前阻断, 避免先消耗 GPU 生成视频后才发现 baseline 主表无法闭合。旧低 FPR pilot profile 已移除, 正式 paper 级小样本入口只保留 `pilot_paper`。
 
 Notebook 的现代 baseline command preflight 逻辑集中在:
 

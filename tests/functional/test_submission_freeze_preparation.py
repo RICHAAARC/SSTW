@@ -76,7 +76,7 @@ def test_submission_freeze_preparation_downgrades_sstw_tc_claim(tmp_path: Path) 
     ])
     _write_json(b5_run / "artifacts" / "generation_manifest.json", {"artifact_id": "b5_manifest"})
     _write_json(b5_run / "artifacts" / "generative_video_colab_runtime_decision.json", {
-        "stage_id": "generative_video_model_probe_colab",
+        "stage_id": "generative_video_model_probe",
         "implementation_decision": "PASS",
         "mechanism_decision": "FAIL",
         "details": {"fixed_low_fpr_audit_pass": True, "trajectory_observation_gain_confirmed": True},

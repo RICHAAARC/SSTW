@@ -87,7 +87,7 @@ def _motion_calibration_score(formal_record: dict) -> tuple[float | None, str]:
     if formal_record.get("motion_delta_focus_score") is not None:
         return float(formal_record["motion_delta_focus_score"]), "motion_delta_focus_score"
     if formal_record.get("motion_delta_score") is not None:
-        return float(formal_record["motion_delta_score"]), "motion_delta_score_legacy_fallback"
+        return float(formal_record["motion_delta_score"]), "motion_delta_score_backward_fallback"
     return None, "missing_motion_score"
 
 

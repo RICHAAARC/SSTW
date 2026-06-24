@@ -38,17 +38,6 @@ PROFILE_SETTINGS = {
         "prompt_suite_roles": ["main", "heldout_prompt", "pilot_main"],
         "seed_suite_roles": ["main", "heldout_seed"],
     },
-    "fpr01_pilot": {
-        "prompt_limit": None,
-        "seed_limit": None,
-        "num_inference_steps": 16,
-        "num_frames": 49,
-        "height": 320,
-        "width": 512,
-        "run_cross_model": False,
-        "prompt_suite_roles": ["fpr01_pilot"],
-        "seed_suite_roles": ["fpr01_pilot"],
-    },
     "pilot_paper": {
         "prompt_limit": None,
         "seed_limit": None,
@@ -57,8 +46,8 @@ PROFILE_SETTINGS = {
         "height": 320,
         "width": 512,
         "run_cross_model": False,
-        "prompt_suite_roles": ["fpr01_pilot"],
-        "seed_suite_roles": ["fpr01_pilot"],
+        "prompt_suite_roles": ["pilot_paper"],
+        "seed_suite_roles": ["pilot_paper"],
     },
     "extended": {"prompt_limit": 3, "seed_limit": 3, "num_inference_steps": 24, "num_frames": 65, "height": 384, "width": 640, "run_cross_model": True},
     "motion_calibration": {
@@ -337,7 +326,7 @@ def run_colab_probe(output_root: str | Path, prompt_suite_path: str | Path, prof
     write_csv(output_root / "tables" / "external_baseline_status_table.csv", external_records)
     write_json(output_root / "artifacts" / "external_baseline_status_decision.json", external_baseline_audit)
     decision = {
-        "stage_id": "generative_video_model_probe_colab_runtime",
+        "stage_id": "generative_video_runtime",
         "implementation_decision": "PASS" if any(record["generation_status"] == "success" for record in generation_records) else "FAIL",
         "mechanism_decision": "FAIL",
         "details": {
@@ -368,7 +357,7 @@ def run_colab_probe(output_root: str | Path, prompt_suite_path: str | Path, prof
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="在 Colab GPU 环境中运行 B5 生成式视频模型探测。")
-    parser.add_argument("--output-root", default="outputs/runs/generative_video_model_probe_colab")
+    parser.add_argument("--output-root", default="outputs/runs/generative_video_runtime")
     parser.add_argument("--prompt-suite-path", default="outputs/datasets/generative_video_prompt_suite/prompt_seed_suite.json")
     parser.add_argument("--profile", choices=sorted(PROFILE_SETTINGS), default="pilot")
     parser.add_argument("--model-id", default=WAN21_PRIMARY_MODEL_ID)

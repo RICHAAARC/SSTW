@@ -31,7 +31,7 @@ def _write_tiny_video(path: Path) -> None:
 @pytest.mark.quick
 def test_runtime_attack_runner_writes_attacked_videos_and_records(tmp_path: Path) -> None:
     """runtime attack runner 必须对真实 mp4 生成 attacked video 与 governed records。"""
-    run_root = tmp_path / "generative_video_model_probe_colab"
+    run_root = tmp_path / "generative_video_runtime"
     video_path = run_root / "videos" / "tiny.mp4"
     _write_tiny_video(video_path)
     digest = hashlib.sha256(video_path.read_bytes()).hexdigest()
@@ -68,7 +68,7 @@ def test_runtime_attack_runner_writes_attacked_videos_and_records(tmp_path: Path
 @pytest.mark.quick
 def test_runtime_detection_runner_scores_attacked_videos(tmp_path: Path) -> None:
     """runtime detection runner 必须把 attacked videos 接入 governed detection records。"""
-    run_root = tmp_path / "generative_video_model_probe_colab"
+    run_root = tmp_path / "generative_video_runtime"
     video_path = run_root / "videos" / "tiny.mp4"
     _write_tiny_video(video_path)
     digest = hashlib.sha256(video_path.read_bytes()).hexdigest()

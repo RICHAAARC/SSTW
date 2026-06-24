@@ -15,7 +15,7 @@ STAGE_LABELS = {
     "real_video_latent_transfer": "B3 real-video VAE latent transfer",
     "trajectory_observation_core_probe": "B4 trajectory observation core",
     "sampling_time_constraint_preflight": "B6 sampling-time preflight",
-    "generative_video_model_probe_colab": "B5 generative video model probe",
+    "generative_video_model_probe": "B5 generative video model probe",
     "sampling_time_constraint_colab_probe": "B6 real sampling callback probe",
 }
 

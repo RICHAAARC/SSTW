@@ -15,7 +15,7 @@ from scripts.check_results.generative_video_colab_result_checker import check_ge
 @pytest.mark.quick
 def test_generative_video_postprocess_builds_proxy_records(tmp_path: Path) -> None:
     """后处理必须从已有 Colab records 重建 proxy records, 且不得直接声明正式机制 claim。"""
-    run_root = tmp_path / "generative_video_model_probe_colab"
+    run_root = tmp_path / "generative_video_runtime"
     video_path = run_root / "videos" / "sample.mp4"
     video_path.parent.mkdir(parents=True)
     video_path.write_bytes(b"fake video")
@@ -47,7 +47,7 @@ def test_generative_video_postprocess_builds_proxy_records(tmp_path: Path) -> No
     write_jsonl(run_root / "records" / "external_baseline_records.jsonl", [{"external_baseline_runnable_status": "runnable"}])
     write_json(run_root / "artifacts" / "generation_manifest.json", {"artifact_id": "manifest"})
     write_json(run_root / "artifacts" / "generative_video_colab_runtime_decision.json", {
-        "stage_id": "generative_video_model_probe_colab_runtime",
+        "stage_id": "generative_video_runtime",
         "implementation_decision": "PASS",
         "mechanism_decision": "FAIL",
         "details": {
@@ -75,7 +75,7 @@ def test_generative_video_postprocess_builds_proxy_records(tmp_path: Path) -> No
 @pytest.mark.quick
 def test_colab_checker_reports_postprocess_progress_without_formal_claim(tmp_path: Path) -> None:
     """结果检查器应识别后处理进展, 但正式机制证据仍需 formal quality motion semantic metrics。"""
-    run_root = tmp_path / "generative_video_model_probe_colab"
+    run_root = tmp_path / "generative_video_runtime"
     video_path = run_root / "videos" / "sample.mp4"
     video_path.parent.mkdir(parents=True)
     payload = b"fake video"
@@ -102,7 +102,7 @@ def test_colab_checker_reports_postprocess_progress_without_formal_claim(tmp_pat
     write_jsonl(run_root / "records" / "external_baseline_records.jsonl", [{"external_baseline_runnable_status": "runnable"}])
     write_json(run_root / "artifacts" / "generation_manifest.json", {"artifact_id": "manifest"})
     write_json(run_root / "artifacts" / "generative_video_colab_runtime_decision.json", {
-        "stage_id": "generative_video_model_probe_colab_runtime",
+        "stage_id": "generative_video_runtime",
         "implementation_decision": "PASS",
         "mechanism_decision": "FAIL",
         "details": {},

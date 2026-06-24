@@ -18,13 +18,13 @@ calibration split
 
 ## 2. 数据集构造要求
 
-当前仓库保留 `fpr01_pilot` 作为历史兼容 profile 名称, 新语义推荐入口为:
+当前仓库只保留 `pilot_paper` 作为 paper 级小样本正式 profile。运行入口为:
 
 ```text
 PROFILE = pilot_paper
 ```
 
-`pilot_paper` 与兼容入口 `fpr01_pilot` 使用同一套 prompt / seed 数据集。该数据集不复用 `pilot` 或 `validation_scale` prompt, 避免样本角色混淆。
+`pilot_paper` 使用独立 prompt / seed 数据集。该数据集不复用 `pilot` 或 `validation_scale` prompt, 避免样本角色混淆。
 
 ```text
 paper_result_level: pilot_paper
@@ -47,7 +47,7 @@ threshold_protocol: calibration_split_to_frozen_threshold_to_heldout_test_split
 
 ## 2.1 baseline 与内部消融前置要求
 
-`pilot_paper` 本质是小规模跑完整 full paper 协议。因此在执行 `fpr01_pilot_gate` 之前, 同一批 held-out test trace 必须已经写出以下 governed artifacts:
+`pilot_paper` 本质是小规模跑完整 full paper 协议。因此在执行 `pilot_paper_gate` 之前, 同一批 held-out test trace 必须已经写出以下 governed artifacts:
 
 ```text
 records/external_baseline_score_records.jsonl
@@ -75,12 +75,11 @@ videoseal
 ## 3. 工程入口
 
 ```text
-configs/protocol/fpr01_pilot_generative_probe.json
-experiments/generative_video_model_probe/fpr01_pilot_gate.py
+configs/protocol/pilot_paper_generative_probe.json
+experiments/generative_video_model_probe/pilot_paper_gate.py
 experiments/generative_video_model_probe/colab_runtime.py PROFILE = pilot_paper
-experiments/generative_video_model_probe/colab_runtime.py PROFILE = fpr01_pilot  # 兼容旧入口
-paper_workflow/notebook_utils/generative_video_model_probe_workflow.py::build_fpr01_pilot_gate_command
-paper_workflow/colab_utils/generative_video_model_probe_colab.ipynb
+paper_workflow/notebook_utils/generative_video_model_probe_workflow.py::build_pilot_paper_gate_command
+paper_workflow/colab_utils/generative_video_runtime_colab.ipynb
 scripts/package_results/generative_video_drive_packager.py
 ```
 
@@ -89,14 +88,14 @@ scripts/package_results/generative_video_drive_packager.py
 该 gate 写出以下 governed artifacts:
 
 ```text
-records/fpr01_pilot_gate_records.jsonl
-tables/fpr01_pilot_gate_table.csv
-thresholds/fpr01_pilot_frozen_threshold.json
-artifacts/fpr01_pilot_gate_decision.json
-reports/fpr01_pilot_gate_report.md
+records/pilot_paper_gate_records.jsonl
+tables/pilot_paper_gate_table.csv
+thresholds/pilot_paper_frozen_threshold.json
+artifacts/pilot_paper_gate_decision.json
+reports/pilot_paper_gate_report.md
 ```
 
-文件名保留 `fpr01_pilot` 是为了保持历史兼容; artifact 内部必须写出 `paper_result_level = pilot_paper` 和 `paper_protocol_difference_from_full_paper = sample_scale_only`。
+文件名和 artifact 字段统一使用 `pilot_paper`; artifact 内部必须写出 `paper_result_level = pilot_paper` 和 `paper_protocol_difference_from_full_paper = sample_scale_only`。
 
 package manifest 会同步记录:
 
@@ -113,25 +112,25 @@ pilot_paper_external_baseline_trace_count_min
 pilot_paper_internal_ablation_trace_count_min
 pilot_paper_missing_external_baseline_adapter_names
 pilot_paper_missing_internal_ablation_variants
-fpr01_tpr_at_fpr_01
-fpr01_calibration_negative_fpr_at_threshold
-fpr01_heldout_negative_fpr_at_threshold
-fpr01_calibration_negative_event_count
-fpr01_heldout_test_negative_event_count
-fpr01_heldout_attacked_positive_event_count
-fpr01_tpr_at_fpr_001_claim_allowed
+pilot_paper_tpr_at_fpr_01
+pilot_paper_calibration_negative_fpr_at_threshold
+pilot_paper_heldout_negative_fpr_at_threshold
+pilot_paper_calibration_negative_event_count
+pilot_paper_heldout_test_negative_event_count
+pilot_paper_heldout_attacked_positive_event_count
+pilot_paper_tpr_at_fpr_001_claim_allowed
 ```
 
 ## 5. 通过标准
 
 ```text
-fpr01_prompt_count >= 21
-fpr01_seed_per_prompt_min >= 8
-fpr01_calibration_seed_per_prompt_min >= 4
-fpr01_test_seed_per_prompt_min >= 4
-fpr01_unique_video_count >= 168
-fpr01_calibration_unique_video_count >= 84
-fpr01_test_unique_video_count >= 84
+pilot_paper_prompt_count >= 21
+pilot_paper_seed_per_prompt_min >= 8
+pilot_paper_calibration_seed_per_prompt_min >= 4
+pilot_paper_test_seed_per_prompt_min >= 4
+pilot_paper_unique_video_count >= 168
+pilot_paper_calibration_unique_video_count >= 84
+pilot_paper_test_unique_video_count >= 84
 calibration_negative_event_count >= 1000
 heldout_test_negative_event_count >= 1000
 heldout_attacked_positive_event_count >= 200

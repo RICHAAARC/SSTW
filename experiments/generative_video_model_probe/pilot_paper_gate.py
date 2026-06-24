@@ -1,4 +1,4 @@
-"""FPR=0.01 pilot gate 的自动审计入口。
+"""pilot_paper fixed-FPR gate 的自动审计入口。
 
 该模块只读取已经落盘的 governed records, 不运行 GPU, 不补造样本。
 与早期 workflow pilot 不同, 本 gate 明确采用论文实验同构的低 FPR 流程:
@@ -30,8 +30,8 @@ from main.protocol.record_writer import write_json, write_jsonl
 from main.protocol.table_builder import write_csv
 
 
-DEFAULT_FPR01_PILOT_CONFIG = "configs/protocol/fpr01_pilot_generative_probe.json"
-DEFAULT_PILOT_PROFILE_NAMES = {"pilot_paper", "fpr01_pilot"}
+DEFAULT_PILOT_PAPER_CONFIG = "configs/protocol/pilot_paper_generative_probe.json"
+DEFAULT_PILOT_PROFILE_NAMES = {"pilot_paper"}
 DEFAULT_TARGET_FPR = 0.01
 DEFAULT_MINIMUM_PROMPT_COUNT = 21
 DEFAULT_MINIMUM_SEED_PER_PROMPT = 8
@@ -94,8 +94,8 @@ def _read_jsonl(path: Path) -> list[dict]:
     return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
 
 
-def _load_config(config_path: str | Path = DEFAULT_FPR01_PILOT_CONFIG) -> dict[str, Any]:
-    """读取 fpr01 pilot gate 配置, 缺失时使用保守默认值。"""
+def _load_config(config_path: str | Path = DEFAULT_PILOT_PAPER_CONFIG) -> dict[str, Any]:
+    """读取 pilot_paper gate 配置, 缺失时使用保守默认值。"""
     raw = _read_json(Path(config_path))
     return {
         "pilot_profile_names": raw.get("pilot_profile_names", sorted(DEFAULT_PILOT_PROFILE_NAMES)),
@@ -173,7 +173,7 @@ def _records_with_scores(records: Iterable[dict]) -> list[dict]:
         score = _score_value(record)
         if score is None:
             continue
-        rows.append({**record, "fpr01_pilot_score": score})
+        rows.append({**record, "pilot_paper_score": score})
     return rows
 
 
@@ -209,7 +209,7 @@ def _rate_at_threshold(scores: list[float], threshold: float | None) -> tuple[fl
 
 
 def _pilot_generation_records(generation_records: list[dict], profile_names: set[str]) -> list[dict]:
-    """筛选 fpr01 pilot profile 产生的成功 generation records。"""
+    """筛选 pilot_paper profile 产生的成功 generation records。"""
     return [
         record for record in generation_records
         if record.get("generation_status") == "success"
@@ -385,11 +385,11 @@ def _wrong_sampler_replay_rejected(records: Iterable[dict]) -> bool:
     return False
 
 
-def build_fpr01_pilot_gate_audit(
+def build_pilot_paper_gate_audit(
     run_root: str | Path,
-    config_path: str | Path = DEFAULT_FPR01_PILOT_CONFIG,
+    config_path: str | Path = DEFAULT_PILOT_PAPER_CONFIG,
 ) -> dict[str, Any]:
-    """构建 FPR=0.01 pilot gate 审计结果。
+    """构建 pilot_paper fixed-FPR gate 审计结果。
 
     该函数是项目特定写法。它只汇总已落盘 records, 并强制区分 calibration split 与
     held-out test split。只有 calibration negative 用于冻结阈值; held-out test negative
@@ -430,9 +430,9 @@ def build_fpr01_pilot_gate_audit(
         if record.get("runtime_detection_status") == "ready"
     ])
 
-    calibration_negative_scores = [float(record["fpr01_pilot_score"]) for record in calibration_negative_records]
-    heldout_negative_scores = [float(record["fpr01_pilot_score"]) for record in heldout_negative_records]
-    heldout_positive_scores = [float(record["fpr01_pilot_score"]) for record in heldout_positive_records]
+    calibration_negative_scores = [float(record["pilot_paper_score"]) for record in calibration_negative_records]
+    heldout_negative_scores = [float(record["pilot_paper_score"]) for record in heldout_negative_records]
+    heldout_positive_scores = [float(record["pilot_paper_score"]) for record in heldout_positive_records]
     threshold, calibration_fpr, calibration_false_positive_count = _fixed_fpr_threshold(calibration_negative_scores, config["target_fpr"])
     heldout_fpr, heldout_false_positive_count = _rate_at_threshold(heldout_negative_scores, threshold)
     tpr_at_fpr, true_positive_count = _rate_at_threshold(heldout_positive_scores, threshold)
@@ -499,12 +499,12 @@ def build_fpr01_pilot_gate_audit(
         "validation_scale_gate_passed": validation_scale_ready,
         "motion_threshold_calibration_ready": motion_threshold_ready,
         "formal_motion_claim_ready": formal_motion_claim_ready,
-        "fpr01_profile_generation_records_ready": prompt_count >= config["minimum_prompt_count"]
+        "pilot_paper_profile_generation_records_ready": prompt_count >= config["minimum_prompt_count"]
         and seed_per_prompt_min >= config["minimum_seed_per_prompt"]
         and unique_video_count >= config["minimum_unique_video_count"],
-        "fpr01_calibration_split_ready": calibration_seed_per_prompt_min >= config["minimum_calibration_seed_per_prompt"]
+        "pilot_paper_calibration_split_ready": calibration_seed_per_prompt_min >= config["minimum_calibration_seed_per_prompt"]
         and calibration_unique_video_count >= config["minimum_calibration_unique_video_count"],
-        "fpr01_heldout_test_split_ready": test_seed_per_prompt_min >= config["minimum_test_seed_per_prompt"]
+        "pilot_paper_heldout_test_split_ready": test_seed_per_prompt_min >= config["minimum_test_seed_per_prompt"]
         and test_unique_video_count >= config["minimum_test_unique_video_count"],
         "calibration_negative_event_count_ready": len(calibration_negative_records) >= config["minimum_calibration_negative_event_count"],
         "heldout_test_negative_event_count_ready": len(heldout_negative_records) >= config["minimum_heldout_test_negative_event_count"],
@@ -537,7 +537,6 @@ def build_fpr01_pilot_gate_audit(
     return {
         "stage_id": "pilot_paper_generative_probe_gate",
         "run_root": str(run_root),
-        "fpr01_pilot_gate_decision": gate_decision,
         "pilot_paper_gate_decision": gate_decision,
         "claim_support_status": claim_support_status,
         "paper_result_level": config["paper_result_level"],
@@ -545,8 +544,8 @@ def build_fpr01_pilot_gate_audit(
         "paper_protocol_difference_from_full_paper": config["paper_protocol_difference_from_full_paper"],
         "pilot_paper_protocol_matches_full_paper": True,
         "pilot_paper_claim_allowed": gate_decision == "PASS",
-        "missing_fpr01_pilot_requirements": missing,
-        "fpr01_pilot_missing_requirement_count": len(missing),
+        "missing_pilot_paper_requirements": missing,
+        "pilot_paper_missing_requirement_count": len(missing),
         "pilot_profile_names": sorted(profile_names),
         "threshold_protocol": config["threshold_protocol"],
         "validation_scale_gate_decision": validation_scale_decision.get("validation_scale_gate_decision"),
@@ -555,7 +554,7 @@ def build_fpr01_pilot_gate_audit(
         **internal_ablation_summary,
         "target_fpr": config["target_fpr"],
         "blocked_target_fpr": config["blocked_target_fpr"],
-        "threshold_id": "fpr01_pilot_calibrated_threshold_v1" if threshold is not None else None,
+        "threshold_id": "pilot_paper_calibrated_threshold_v1" if threshold is not None else None,
         "threshold_source_split": "calibration" if threshold is not None else None,
         "test_time_threshold_update_blocked": True,
         "fpr_threshold_value": threshold,
@@ -570,15 +569,15 @@ def build_fpr01_pilot_gate_audit(
         "tpr_at_fpr_001_claim_allowed": False,
         "full_paper_allowed": False,
         "generation_record_count": len(generation_records),
-        "fpr01_generation_record_count": len(pilot_generation_records),
-        "fpr01_motion_claim_eligible_generation_count": len(eligible_generation_records),
-        "fpr01_prompt_count": prompt_count,
-        "fpr01_seed_per_prompt_min": seed_per_prompt_min,
-        "fpr01_calibration_seed_per_prompt_min": calibration_seed_per_prompt_min,
-        "fpr01_test_seed_per_prompt_min": test_seed_per_prompt_min,
-        "fpr01_unique_video_count": unique_video_count,
-        "fpr01_calibration_unique_video_count": calibration_unique_video_count,
-        "fpr01_test_unique_video_count": test_unique_video_count,
+        "pilot_paper_generation_record_count": len(pilot_generation_records),
+        "pilot_paper_motion_claim_eligible_generation_count": len(eligible_generation_records),
+        "pilot_paper_prompt_count": prompt_count,
+        "pilot_paper_seed_per_prompt_min": seed_per_prompt_min,
+        "pilot_paper_calibration_seed_per_prompt_min": calibration_seed_per_prompt_min,
+        "pilot_paper_test_seed_per_prompt_min": test_seed_per_prompt_min,
+        "pilot_paper_unique_video_count": unique_video_count,
+        "pilot_paper_calibration_unique_video_count": calibration_unique_video_count,
+        "pilot_paper_test_unique_video_count": test_unique_video_count,
         "calibration_negative_event_count": len(calibration_negative_records),
         "heldout_test_negative_event_count": len(heldout_negative_records),
         "heldout_attacked_positive_event_count": len(heldout_positive_records),
@@ -623,7 +622,7 @@ def build_fpr01_pilot_gate_audit(
 def _threshold_artifact_from_audit(audit: dict[str, Any]) -> dict[str, Any]:
     """从 gate audit 中重建冻结阈值 artifact。"""
     return {
-        "artifact_id": "fpr01_pilot_frozen_threshold",
+        "artifact_id": "pilot_paper_frozen_threshold",
         "artifact_type": "threshold_artifact",
         "threshold_id": audit.get("threshold_id"),
         "threshold_value": audit.get("fpr_threshold_value"),
@@ -638,32 +637,31 @@ def _threshold_artifact_from_audit(audit: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def write_fpr01_pilot_gate_audit(
+def write_pilot_paper_gate_audit(
     run_root: str | Path,
-    config_path: str | Path = DEFAULT_FPR01_PILOT_CONFIG,
+    config_path: str | Path = DEFAULT_PILOT_PAPER_CONFIG,
 ) -> dict[str, Any]:
-    """写出 FPR=0.01 pilot gate records、table、threshold artifact、decision 和 report。"""
+    """写出 pilot_paper fixed-FPR gate records、table、threshold artifact、decision 和 report。"""
     run_root = Path(run_root)
-    audit = build_fpr01_pilot_gate_audit(run_root, config_path)
+    audit = build_pilot_paper_gate_audit(run_root, config_path)
     record = with_flow_evidence_protocol_defaults(
-        {"record_version": "fpr01_pilot_gate_v1", **audit},
-        trajectory_source_level="fpr01_pilot_gate_aggregated_records",
-        flow_state_admissibility_status="fpr01_pilot_ready" if audit["fpr01_pilot_gate_decision"] == "PASS" else "fpr01_pilot_blocked",
+        {"record_version": "pilot_paper_gate_v1", **audit},
+        trajectory_source_level="pilot_paper_gate_aggregated_records",
+        flow_state_admissibility_status="pilot_paper_ready" if audit["pilot_paper_gate_decision"] == "PASS" else "pilot_paper_blocked",
         claim_support_status=audit["claim_support_status"],
     )
-    write_jsonl(run_root / "records" / "fpr01_pilot_gate_records.jsonl", [record])
-    write_csv(run_root / "tables" / "fpr01_pilot_gate_table.csv", [record])
-    write_json(run_root / "thresholds" / "fpr01_pilot_frozen_threshold.json", _threshold_artifact_from_audit(audit))
-    write_json(run_root / "artifacts" / "fpr01_pilot_gate_decision.json", audit)
+    write_jsonl(run_root / "records" / "pilot_paper_gate_records.jsonl", [record])
+    write_csv(run_root / "tables" / "pilot_paper_gate_table.csv", [record])
+    write_json(run_root / "thresholds" / "pilot_paper_frozen_threshold.json", _threshold_artifact_from_audit(audit))
+    write_json(run_root / "artifacts" / "pilot_paper_gate_decision.json", audit)
     report = (
-        "# FPR=0.01 Pilot Paper Gate Report\n\n"
+        "# pilot_paper fixed-FPR Paper Gate Report\n\n"
         "该报告由已落盘的 governed records 自动生成, 使用 calibration split 冻结阈值, "
         "再在 held-out test split 上报告 FPR 与 TPR。该报告可支持 pilot_paper 规模的 "
         "TPR@FPR=0.01 论文级结论。pilot_paper 是小规模跑完整 full_paper 协议并产出 "
         "pilot 级论文结果的阶段, 因此不再需要单独的前置预演阶段。"
         "pilot_paper 与 full_paper 的协议同构, 差异只在样本规模和统计置信度, "
         "因此该报告不支持 TPR@FPR=0.001 或 full-paper 规模结论。\n\n"
-        f"- fpr01_pilot_gate_decision: {audit['fpr01_pilot_gate_decision']}\n"
         f"- pilot_paper_gate_decision: {audit['pilot_paper_gate_decision']}\n"
         f"- claim_support_status: {audit['claim_support_status']}\n"
         f"- paper_result_level: {audit['paper_result_level']}\n"
@@ -676,10 +674,10 @@ def write_fpr01_pilot_gate_audit(
         f"- pilot_paper_external_baseline_trace_count_min: {audit['pilot_paper_external_baseline_trace_count_min']}\n"
         f"- validation_internal_ablation_decision: {audit['validation_internal_ablation_decision']}\n"
         f"- validation_internal_ablation_variant_count: {audit['validation_internal_ablation_variant_count']}\n"
-        f"- missing_fpr01_pilot_requirements: {', '.join(audit['missing_fpr01_pilot_requirements']) if audit['missing_fpr01_pilot_requirements'] else 'none'}\n"
-        f"- fpr01_generation_record_count: {audit['fpr01_generation_record_count']}\n"
-        f"- fpr01_calibration_unique_video_count: {audit['fpr01_calibration_unique_video_count']}\n"
-        f"- fpr01_test_unique_video_count: {audit['fpr01_test_unique_video_count']}\n"
+        f"- missing_pilot_paper_requirements: {', '.join(audit['missing_pilot_paper_requirements']) if audit['missing_pilot_paper_requirements'] else 'none'}\n"
+        f"- pilot_paper_generation_record_count: {audit['pilot_paper_generation_record_count']}\n"
+        f"- pilot_paper_calibration_unique_video_count: {audit['pilot_paper_calibration_unique_video_count']}\n"
+        f"- pilot_paper_test_unique_video_count: {audit['pilot_paper_test_unique_video_count']}\n"
         f"- calibration_negative_event_count: {audit['calibration_negative_event_count']}\n"
         f"- heldout_test_negative_event_count: {audit['heldout_test_negative_event_count']}\n"
         f"- heldout_attacked_positive_event_count: {audit['heldout_attacked_positive_event_count']}\n"
@@ -689,19 +687,19 @@ def write_fpr01_pilot_gate_audit(
         f"- tpr_at_fpr_001_claim_allowed: {str(audit['tpr_at_fpr_001_claim_allowed']).lower()}\n"
         f"- full_paper_allowed: {str(audit['full_paper_allowed']).lower()}\n"
     )
-    report_path = run_root / "reports" / "fpr01_pilot_gate_report.md"
+    report_path = run_root / "reports" / "pilot_paper_gate_report.md"
     report_path.parent.mkdir(parents=True, exist_ok=True)
     report_path.write_text(report, encoding="utf-8")
     return audit
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="审计 FPR=0.01 pilot gate。")
+    parser = argparse.ArgumentParser(description="审计 pilot_paper fixed-FPR gate。")
     parser.add_argument("--run-root", required=True)
-    parser.add_argument("--config-path", default=DEFAULT_FPR01_PILOT_CONFIG)
+    parser.add_argument("--config-path", default=DEFAULT_PILOT_PAPER_CONFIG)
     parser.add_argument("--write-outputs", action="store_true")
     args = parser.parse_args()
-    payload = write_fpr01_pilot_gate_audit(args.run_root, args.config_path) if args.write_outputs else build_fpr01_pilot_gate_audit(args.run_root, args.config_path)
+    payload = write_pilot_paper_gate_audit(args.run_root, args.config_path) if args.write_outputs else build_pilot_paper_gate_audit(args.run_root, args.config_path)
     print(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True))
 
 

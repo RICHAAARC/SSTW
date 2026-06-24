@@ -38,7 +38,7 @@ paper 级工程门禁分为七类组件:
 推荐实现路径如下:
 
 ```text
-experiments/generative_video_model_probe/fpr01_pilot_gate.py
+experiments/generative_video_model_probe/pilot_paper_gate.py
 scripts/check_results/full_paper_result_checker.py
 experiments/generative_video_model_probe/external_baseline_runner.py
 experiments/flow_specific_adaptive_attack/runner.py
@@ -46,7 +46,7 @@ experiments/flow_specific_adaptive_attack/table_builder.py
 experiments/flow_specific_adaptive_attack/package_outputs.py
 main/analysis/statistical_confidence_intervals.py
 experiments/submission_freeze_preparation/reviewer_evidence_index.py
-tests/functional/test_fpr01_pilot_gate.py
+tests/functional/test_pilot_paper_gate.py
 tests/functional/test_full_paper_result_checker.py
 tests/functional/test_statistical_confidence_intervals.py
 tests/functional/test_reviewer_evidence_index.py
@@ -100,21 +100,21 @@ manually_selected_best_threshold
 必须输出:
 
 ```text
-artifacts/fpr01_pilot_gate_decision.json
-thresholds/fpr01_pilot_frozen_threshold.json
-records/fpr01_pilot_gate_records.jsonl
-tables/fpr01_pilot_gate_table.csv
-reports/fpr01_pilot_gate_report.md
+artifacts/pilot_paper_gate_decision.json
+thresholds/pilot_paper_frozen_threshold.json
+records/pilot_paper_gate_records.jsonl
+tables/pilot_paper_gate_table.csv
+reports/pilot_paper_gate_report.md
 ```
 
-`fpr01_pilot_gate_decision.json` 必须至少包含:
+`pilot_paper_gate_decision.json` 必须至少包含:
 
 ```text
-fpr01_pilot_gate_decision
+pilot_paper_gate_decision
 pilot_paper_gate_decision
 pilot_paper_claim_allowed
 full_paper_allowed
-missing_fpr01_pilot_requirements
+missing_pilot_paper_requirements
 next_allowed_action
 next_forbidden_action
 claim_support_status
@@ -139,9 +139,9 @@ small_scale_claim_pilot_gate_passed
 validation_scale_gate_passed
 motion_threshold_calibration_ready
 formal_motion_claim_ready
-fpr01_profile_generation_records_ready
-fpr01_calibration_split_ready
-fpr01_heldout_test_split_ready
+pilot_paper_profile_generation_records_ready
+pilot_paper_calibration_split_ready
+pilot_paper_heldout_test_split_ready
 calibration_negative_event_count_ready
 heldout_test_negative_event_count_ready
 heldout_attacked_positive_event_count_ready

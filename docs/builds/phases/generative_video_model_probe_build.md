@@ -24,7 +24,6 @@ paper_workflow/colab_utils/motion_threshold_calibration_colab.ipynb
 paper_workflow/colab_utils/generative_video_runtime_colab.ipynb
 paper_workflow/colab_utils/external_baseline_formal_scoring_colab.ipynb
 paper_workflow/colab_utils/paper_gate_and_package_colab.ipynb
-paper_workflow/colab_utils/generative_video_model_probe_colab.ipynb  # 兼容综合入口
 ```
 
 ### 1.3 构建任务
@@ -244,7 +243,7 @@ usage: frozen_engineering_motion_threshold_for_small_scale_pilot
 experiments/generative_video_model_probe/attack_runner.py
 experiments/generative_video_model_probe/detection_runner.py
 paper_workflow/notebook_utils/generative_video_model_probe_workflow.py
-paper_workflow/colab_utils/generative_video_model_probe_colab.ipynb
+paper_workflow/colab_utils/generative_video_runtime_colab.ipynb
 scripts/package_results/generative_video_drive_packager.py
 ```
 
@@ -257,7 +256,7 @@ motion_threshold_calibration_colab.ipynb
 -> paper_gate_and_package_colab.ipynb
 ```
 
-`generative_video_model_probe_colab.ipynb` 保留为兼容综合入口, 但不再作为推荐主路径。
+旧综合 Notebook 已移除; 当前只保留拆分后的 Notebook workflow。
 所有 Notebook 的 profile、Drive 目录和 stage plan 均由
 `configs/paper_workflow/generative_video_notebook_workflows.json` 控制。
 
@@ -341,10 +340,10 @@ full_paper_blocking_rule: unresolved_gap_blocks_full_paper_claim
 
 ## 2026-06-23 最新原生复跑状态
 
-`generative_video_model_probe_colab` 已在 Wan2.1 L4 环境完成 small-scale pilot 原生复跑。最新 package 为:
+`generative_video_runtime` 已在 Wan2.1 L4 环境完成 small-scale pilot 原生复跑。最新 package 为:
 
 ```text
-generative_video_model_probe_colab_20260623_134119_839da169.zip
+generative_video_runtime_20260623_134119_839da169.zip
 ```
 
 关键状态:
@@ -588,11 +587,10 @@ calibration split
 新增工程入口包括:
 
 ```text
-configs/protocol/fpr01_pilot_generative_probe.json
-experiments/generative_video_model_probe/fpr01_pilot_gate.py
+configs/protocol/pilot_paper_generative_probe.json
+experiments/generative_video_model_probe/pilot_paper_gate.py
 colab_runtime PROFILE = pilot_paper
-colab_runtime PROFILE = fpr01_pilot  # 兼容旧入口
-notebook workflow build_fpr01_pilot_gate_command
+notebook workflow build_pilot_paper_gate_command
 Google Drive package manifest pilot_paper summary
 ```
 
@@ -621,7 +619,7 @@ threshold_protocol: calibration_split_to_frozen_threshold_to_heldout_test_split
 
 ### 2.11 pilot_paper gate 前置 baseline 与内部消融闭环
 
-在进入真实 `PROFILE = pilot_paper` 复跑前, baseline 和内部消融必须已经在 `validation_scale` 中作为完整机制门禁闭合。`fpr01_pilot_gate` 仍会复核同批 held-out test trace 的 records 覆盖, 但不应承担补 baseline 或补消融的职责。它会读取:
+在进入真实 `PROFILE = pilot_paper` 复跑前, baseline 和内部消融必须已经在 `validation_scale` 中作为完整机制门禁闭合。`pilot_paper_gate` 仍会复核同批 held-out test trace 的 records 覆盖, 但不应承担补 baseline 或补消融的职责。它会读取:
 
 ```text
 artifacts/external_baseline_comparison_decision.json

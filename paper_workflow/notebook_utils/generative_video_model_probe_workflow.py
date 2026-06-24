@@ -11,9 +11,10 @@ from typing import Any, Mapping
 
 DEFAULT_DRIVE_PROJECT_ROOT = "/content/drive/MyDrive/SSTW"
 DEFAULT_VALIDATION_SCALE_CONFIG = "configs/protocol/validation_scale_generative_probe.json"
-DEFAULT_FPR01_PILOT_CONFIG = "configs/protocol/fpr01_pilot_generative_probe.json"
+DEFAULT_PILOT_PAPER_CONFIG = "configs/protocol/pilot_paper_generative_probe.json"
 DEFAULT_NOTEBOOK_WORKFLOW_CONFIG = "configs/paper_workflow/generative_video_notebook_workflows.json"
-PAPER_GATE_PROFILES = {"validation_scale", "pilot_paper", "fpr01_pilot"}
+DEFAULT_NOTEBOOK_ROLE = "generative_video_runtime"
+PAPER_GATE_PROFILES = {"validation_scale", "pilot_paper"}
 EXTERNAL_BASELINE_COLAB_PREFLIGHT_DECISION = "artifacts/external_baseline_colab_preflight_decision.json"
 
 
@@ -46,7 +47,11 @@ def canonical_workflow_profile(
     profile: str,
     config_path: str | Path = DEFAULT_NOTEBOOK_WORKFLOW_CONFIG,
 ) -> str:
-    """返回 profile 的规范名称, 并兼容旧入口别名。"""
+    """返回 profile 的规范名称。
+
+    当前正式 Colab workflow 不再保留历史 profile alias。该函数仍读取配置中的
+    alias 映射, 主要用于 harness 在发现误配置时给出明确错误。
+    """
     config = load_notebook_workflow_config(config_path)
     aliases = config.get("workflow_profile_aliases", {})
     canonical = str(aliases.get(profile, profile))
@@ -170,20 +175,15 @@ def build_drive_layout(
 ) -> dict[str, str]:
     """构造 Colab 与 Google Drive 共享的 SSTW 输出目录布局。
 
-    不传 `workflow_profile` 时保持历史路径兼容。传入 profile 后, run / package /
-    log 目录由统一配置决定, 从而支持在 Colab 中安全切换 `validation_scale`、
-    `pilot_paper` 和未来 `full_paper`。
+    run / package / log 目录由统一配置决定, 从而支持在 Colab 中安全切换
+    `validation_scale`、`pilot_paper` 和未来 `full_paper`。不传 `workflow_profile`
+    时使用 `generative_video_runtime` 的默认 profile, 不再回退到旧综合 Notebook
+    的历史目录。
     """
     root = PurePosixPath(drive_project_root)
     if workflow_profile is None:
-        return {
-            "drive_project_root": root.as_posix(),
-            "drive_dataset_root": (root / "datasets" / "generative_video_prompt_suite").as_posix(),
-            "drive_run_root": (root / "runs" / "generative_video_model_probe_colab").as_posix(),
-            "drive_package_dir": (root / "packages" / "generative_video_model_probe").as_posix(),
-            "drive_log_dir": (root / "logs" / "generative_video_model_probe").as_posix(),
-            "prompt_suite_path": (root / "datasets" / "generative_video_prompt_suite" / "prompt_seed_suite.json").as_posix(),
-        }
+        notebook_role = notebook_role or DEFAULT_NOTEBOOK_ROLE
+        workflow_profile = default_workflow_profile_for_notebook_role(notebook_role, workflow_config_path)
     workflow = resolve_notebook_workflow_profile(workflow_profile, notebook_role, workflow_config_path)
     config = load_notebook_workflow_config(workflow_config_path)
     dataset_root_relative = str(
@@ -260,8 +260,8 @@ def _config_path_for_profile(profile: str) -> str:
         return protocol_config_path_for_profile(profile)
     except Exception:
         pass
-    if profile in {"pilot_paper", "fpr01_pilot"}:
-        return DEFAULT_FPR01_PILOT_CONFIG
+    if profile == "pilot_paper":
+        return DEFAULT_PILOT_PAPER_CONFIG
     return DEFAULT_VALIDATION_SCALE_CONFIG
 
 
@@ -280,8 +280,8 @@ def required_modern_external_baseline_command_requirements(
 ) -> list[dict[str, str]]:
     """从 protocol config 中读取现代 baseline command 要求。
 
-    Notebook 不应手写 baseline 清单。该函数把 `validation_scale`、`pilot_paper`
-    和 `fpr01_pilot` 的 hard gate 要求统一收敛到 helper, 防止配置已更新而
+    Notebook 不应手写 baseline 清单。该函数把 `validation_scale` 和
+    `pilot_paper` 的 hard gate 要求统一收敛到 helper, 防止配置已更新而
     Notebook cell 仍保留旧 baseline 列表。
     """
     config = _read_json(config_path or protocol_config_path_for_profile(profile))
@@ -420,7 +420,7 @@ def validate_modern_baseline_commands_for_profile(preflight_decision: Mapping[st
     if preflight_decision.get("external_baseline_colab_preflight_decision") == "FAIL":
         missing = preflight_decision.get("external_baseline_colab_preflight_missing_env_vars")
         raise RuntimeError(
-            "当前 PROFILE 是 paper gate 或 paper gate 前最后门禁, 必须先在 Colab 配置现代视频水印 baseline command。"
+            "当前 workflow profile 是 paper gate 或 paper gate 前最后门禁, 必须先在 Colab 配置现代视频水印 baseline command。"
             f" 缺失: {missing}"
         )
 
@@ -668,12 +668,12 @@ def build_statistical_confidence_interval_command(layout: dict[str, str]) -> lis
     ]
 
 
-def build_fpr01_pilot_gate_command(layout: dict[str, str]) -> list[str]:
+def build_pilot_paper_gate_command(layout: dict[str, str]) -> list[str]:
     """构建 pilot_paper FPR=0.01 gate 命令, 只汇总已落盘 records 并写出冻结阈值。"""
     return [
         sys.executable,
         "-m",
-        "experiments.generative_video_model_probe.fpr01_pilot_gate",
+        "experiments.generative_video_model_probe.pilot_paper_gate",
         "--run-root",
         layout["drive_run_root"],
         "--write-outputs",

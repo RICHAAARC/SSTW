@@ -2,9 +2,9 @@
 
 import pytest
 
-from experiments.generative_video_model_probe.fpr01_pilot_gate import (
-    build_fpr01_pilot_gate_audit,
-    write_fpr01_pilot_gate_audit,
+from experiments.generative_video_model_probe.pilot_paper_gate import (
+    build_pilot_paper_gate_audit,
+    write_pilot_paper_gate_audit,
 )
 from main.protocol.record_writer import write_json, write_jsonl
 
@@ -36,7 +36,7 @@ INTERNAL_ABLATION_VARIANTS = (
 )
 
 
-def _seed_fpr01_pilot_run(
+def _seed_pilot_paper_run(
     run_root: Path,
     *,
     profile: str = "pilot_paper",
@@ -192,43 +192,40 @@ def _seed_fpr01_pilot_run(
 
 
 @pytest.mark.quick
-def test_fpr01_pilot_gate_blocks_empty_run(tmp_path: Path) -> None:
-    """空 run_root 不能被解释为 FPR=0.01 pilot_paper 证据。"""
-    audit = build_fpr01_pilot_gate_audit(tmp_path / "empty")
+def test_pilot_paper_gate_blocks_empty_run(tmp_path: Path) -> None:
+    """空 run_root 不能被解释为 pilot_paper fixed-FPR paper 证据。"""
+    audit = build_pilot_paper_gate_audit(tmp_path / "empty")
 
-    assert audit["fpr01_pilot_gate_decision"] == "FAIL"
     assert audit["pilot_paper_gate_decision"] == "FAIL"
     assert audit["claim_support_status"] == "blocked_until_pilot_paper_generation_records"
     assert audit["paper_result_level"] == "pilot_paper"
     assert audit["tpr_at_fpr_01_pilot_claim_allowed"] is False
     assert audit["pilot_paper_claim_allowed"] is False
     assert audit["tpr_at_fpr_001_claim_allowed"] is False
-    assert "fpr01_profile_generation_records_ready" in audit["missing_fpr01_pilot_requirements"]
+    assert "pilot_paper_profile_generation_records_ready" in audit["missing_pilot_paper_requirements"]
 
 
 @pytest.mark.quick
-def test_fpr01_pilot_gate_rejects_validation_scale_profile(tmp_path: Path) -> None:
+def test_pilot_paper_gate_rejects_validation_scale_profile(tmp_path: Path) -> None:
     """validation_scale profile 不能冒充 pilot_paper profile。"""
     run_root = tmp_path / "run"
-    _seed_fpr01_pilot_run(run_root, profile="validation_scale")
+    _seed_pilot_paper_run(run_root, profile="validation_scale")
 
-    audit = build_fpr01_pilot_gate_audit(run_root)
+    audit = build_pilot_paper_gate_audit(run_root)
 
-    assert audit["fpr01_pilot_gate_decision"] == "FAIL"
     assert audit["pilot_paper_gate_decision"] == "FAIL"
-    assert audit["fpr01_generation_record_count"] == 0
-    assert "fpr01_profile_generation_records_ready" in audit["missing_fpr01_pilot_requirements"]
+    assert audit["pilot_paper_generation_record_count"] == 0
+    assert "pilot_paper_profile_generation_records_ready" in audit["missing_pilot_paper_requirements"]
 
 
 @pytest.mark.quick
-def test_fpr01_pilot_gate_passes_calibrated_heldout_fixture(tmp_path: Path) -> None:
+def test_pilot_paper_gate_passes_calibrated_heldout_fixture(tmp_path: Path) -> None:
     """满足 calibration/test split 与 1000+ held-out negative events 时允许 pilot_paper 级 TPR@FPR=0.01。"""
     run_root = tmp_path / "run"
-    _seed_fpr01_pilot_run(run_root)
+    _seed_pilot_paper_run(run_root)
 
-    audit = write_fpr01_pilot_gate_audit(run_root)
+    audit = write_pilot_paper_gate_audit(run_root)
 
-    assert audit["fpr01_pilot_gate_decision"] == "PASS"
     assert audit["pilot_paper_gate_decision"] == "PASS"
     assert audit["claim_support_status"] == "pilot_paper_calibrated_heldout_claim_ready"
     assert audit["paper_result_level"] == "pilot_paper"
@@ -248,12 +245,12 @@ def test_fpr01_pilot_gate_passes_calibrated_heldout_fixture(tmp_path: Path) -> N
     assert audit["threshold_protocol"] == "calibration_split_to_frozen_threshold_to_heldout_test_split"
     assert audit["threshold_source_split"] == "calibration"
     assert audit["test_time_threshold_update_blocked"] is True
-    assert audit["fpr01_generation_record_count"] == 168
-    assert audit["fpr01_unique_video_count"] == 168
-    assert audit["fpr01_calibration_unique_video_count"] == 84
-    assert audit["fpr01_test_unique_video_count"] == 84
-    assert audit["fpr01_calibration_seed_per_prompt_min"] == 4
-    assert audit["fpr01_test_seed_per_prompt_min"] == 4
+    assert audit["pilot_paper_generation_record_count"] == 168
+    assert audit["pilot_paper_unique_video_count"] == 168
+    assert audit["pilot_paper_calibration_unique_video_count"] == 84
+    assert audit["pilot_paper_test_unique_video_count"] == 84
+    assert audit["pilot_paper_calibration_seed_per_prompt_min"] == 4
+    assert audit["pilot_paper_test_seed_per_prompt_min"] == 4
     assert audit["calibration_negative_event_count"] == 1008
     assert audit["heldout_test_negative_event_count"] == 1008
     assert audit["heldout_attacked_positive_event_count"] == 252
@@ -270,52 +267,51 @@ def test_fpr01_pilot_gate_passes_calibrated_heldout_fixture(tmp_path: Path) -> N
     assert audit["pilot_paper_claim_allowed"] is True
     assert audit["tpr_at_fpr_001_claim_allowed"] is False
     assert audit["full_paper_allowed"] is False
-    assert (run_root / "records" / "fpr01_pilot_gate_records.jsonl").exists()
-    assert (run_root / "tables" / "fpr01_pilot_gate_table.csv").exists()
-    assert (run_root / "thresholds" / "fpr01_pilot_frozen_threshold.json").exists()
-    assert (run_root / "artifacts" / "fpr01_pilot_gate_decision.json").exists()
-    assert (run_root / "reports" / "fpr01_pilot_gate_report.md").exists()
+    assert (run_root / "records" / "pilot_paper_gate_records.jsonl").exists()
+    assert (run_root / "tables" / "pilot_paper_gate_table.csv").exists()
+    assert (run_root / "thresholds" / "pilot_paper_frozen_threshold.json").exists()
+    assert (run_root / "artifacts" / "pilot_paper_gate_decision.json").exists()
+    assert (run_root / "reports" / "pilot_paper_gate_report.md").exists()
 
 
 @pytest.mark.quick
-def test_fpr01_pilot_gate_requires_validation_scale_gate(tmp_path: Path) -> None:
+def test_pilot_paper_gate_requires_validation_scale_gate(tmp_path: Path) -> None:
     """pilot_paper 是 full_paper 协议的小规模预演, 因此必须先通过 validation-scale。"""
     run_root = tmp_path / "run"
-    _seed_fpr01_pilot_run(run_root, validation_scale_gate_decision=None)
+    _seed_pilot_paper_run(run_root, validation_scale_gate_decision=None)
 
-    audit = build_fpr01_pilot_gate_audit(run_root)
+    audit = build_pilot_paper_gate_audit(run_root)
 
-    assert audit["fpr01_pilot_gate_decision"] == "FAIL"
     assert audit["pilot_paper_gate_decision"] == "FAIL"
-    assert "validation_scale_gate_passed" in audit["missing_fpr01_pilot_requirements"]
+    assert "validation_scale_gate_passed" in audit["missing_pilot_paper_requirements"]
     assert audit["pilot_paper_claim_allowed"] is False
 
 
 @pytest.mark.quick
-def test_fpr01_pilot_gate_requires_external_baseline_and_ablation(tmp_path: Path) -> None:
+def test_pilot_paper_gate_requires_external_baseline_and_ablation(tmp_path: Path) -> None:
     """pilot_paper 是完整协议预演, 因此必须同时具备 baseline comparison 与内部消融矩阵。"""
     run_root = tmp_path / "run"
-    _seed_fpr01_pilot_run(run_root, write_external_baseline=False, write_internal_ablation=False)
+    _seed_pilot_paper_run(run_root, write_external_baseline=False, write_internal_ablation=False)
 
-    audit = build_fpr01_pilot_gate_audit(run_root)
+    audit = build_pilot_paper_gate_audit(run_root)
 
-    assert audit["fpr01_pilot_gate_decision"] == "FAIL"
-    assert "pilot_paper_external_baseline_comparison_ready" in audit["missing_fpr01_pilot_requirements"]
-    assert "pilot_paper_internal_ablation_matrix_ready" in audit["missing_fpr01_pilot_requirements"]
+    assert audit["pilot_paper_gate_decision"] == "FAIL"
+    assert "pilot_paper_external_baseline_comparison_ready" in audit["missing_pilot_paper_requirements"]
+    assert "pilot_paper_internal_ablation_matrix_ready" in audit["missing_pilot_paper_requirements"]
     assert audit["pilot_paper_claim_allowed"] is False
 
 
 @pytest.mark.quick
-def test_fpr01_pilot_gate_blocks_insufficient_negative_events(tmp_path: Path) -> None:
+def test_pilot_paper_gate_blocks_insufficient_negative_events(tmp_path: Path) -> None:
     """negative event 数量不足时不能报告 pilot 级低 FPR 结论。"""
     run_root = tmp_path / "run"
-    _seed_fpr01_pilot_run(run_root, prompt_count=4, calibration_seed_count=2, test_seed_count=2)
+    _seed_pilot_paper_run(run_root, prompt_count=4, calibration_seed_count=2, test_seed_count=2)
 
-    audit = build_fpr01_pilot_gate_audit(run_root)
+    audit = build_pilot_paper_gate_audit(run_root)
 
-    assert audit["fpr01_pilot_gate_decision"] == "FAIL"
+    assert audit["pilot_paper_gate_decision"] == "FAIL"
     assert audit["calibration_negative_event_count"] < audit["minimum_calibration_negative_event_count"]
     assert audit["heldout_test_negative_event_count"] < audit["minimum_heldout_test_negative_event_count"]
-    assert "calibration_negative_event_count_ready" in audit["missing_fpr01_pilot_requirements"]
-    assert "heldout_test_negative_event_count_ready" in audit["missing_fpr01_pilot_requirements"]
+    assert "calibration_negative_event_count_ready" in audit["missing_pilot_paper_requirements"]
+    assert "heldout_test_negative_event_count_ready" in audit["missing_pilot_paper_requirements"]
     assert audit["tpr_at_fpr_01_pilot_claim_allowed"] is False

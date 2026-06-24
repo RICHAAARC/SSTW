@@ -143,7 +143,6 @@ Notebook 与 repository module 的跨边界数据
 | source_frame_count | metric | none | true | false | false | Number of decoded source frames used by runtime attack runner. |
 | attacked_frame_count | metric | none | true | false | false | Number of frames written to attacked video. |
 | attack_transform | protocol | none | true | false | false | Runtime attack transform description. |
-| attack_strength | protocol | none | true | false | false | Runtime attack strength descriptor. |
 | runtime_attack_expected_effect | protocol | none | true | false | false | Expected effect of a runtime attack transform. |
 | attack_failure_status | protocol | none | true | false | false | Attack failure status. |
 | attack_failure_reason | protocol | none | true | false | false | Attack failure reason. |
@@ -274,7 +273,7 @@ Notebook 与 repository module 的跨边界数据
 | external_baseline_colab_preflight_required_env_var_count | metric | none | true | false | false | Colab preflight 要求配置的现代 external baseline command 环境变量数量。 |
 | external_baseline_colab_preflight_configured_env_var_count | metric | none | true | false | false | Colab preflight 已配置的现代 external baseline command 环境变量数量。 |
 | external_baseline_colab_preflight_missing_env_var_count | metric | none | true | false | false | Colab preflight 缺失的现代 external baseline command 环境变量数量。 |
-| paper_gate_profile | protocol | none | true | false | false | 当前 Colab profile 是否属于 validation_scale / pilot_paper / fpr01_pilot 这类 paper gate profile。 |
+| paper_gate_profile | protocol | none | true | false | false | 当前 Colab profile 是否属于 validation_scale / pilot_paper 这类 paper gate profile。 |
 | require_modern_baseline_commands_for_paper_gate | protocol | none | true | false | false | Colab paper gate profile 是否要求现代 baseline command 在真实 GPU 运行前全部配置。 |
 | run_external_baseline_source_clone | protocol | none | true | false | false | Colab 冷启动阶段是否执行可 clone 外部 baseline 官方 source 拉取。 |
 | external_baseline_evidence_path_count | metric | none | true | false | false | Colab preflight 或 execution manifest 中登记的外部 baseline evidence path 数量。 |
@@ -503,7 +502,7 @@ Notebook 与 repository module 的跨边界数据
 | validation_internal_ablation_evidence_level | governance | none | true | false | false | Evidence level for validation-scale internal ablation records. |
 | ablation_runtime_profile | protocol | none | true | false | false | Internal ablation record 对应的 runtime profile, 用于区分 validation_scale 与 pilot_paper 覆盖。 |
 | validation_internal_ablation_profile_counts | metric | none | true | false | false | Internal ablation records 按 runtime profile 汇总的数量映射。 |
-| pilot_paper_internal_ablation_record_count | metric | none | true | true | false | Internal ablation records 中属于 pilot_paper / fpr01_pilot profile 的数量。 |
+| pilot_paper_internal_ablation_record_count | metric | none | true | true | false | Internal ablation records 中属于 pilot_paper profile 的数量。 |
 | validation_ablation_evidence_level | governance | none | true | false | false | Per-record evidence level for validation-scale ablation proxy records. |
 | validation_ablation_source_score | metric | none | true | false | false | Source runtime detection proxy score used by a validation-scale ablation record. |
 | validation_ablation_proxy_score | metric | none | true | false | false | Derived validation-scale ablation proxy score. |
@@ -828,13 +827,11 @@ Notebook 与 repository module 的跨边界数据
 | method_variant_count | metric | none | true | false | false | Number of distinct method variants observed by a pilot gate. |
 | wrong_key_score_separation_passed | metric | none | true | false | false | Whether wrong-key controls are separated from the matched-key trajectory score. |
 | wrong_sampler_replay_control_not_equivalent | metric | none | true | false | false | Whether wrong-sampler replay control cannot forge the matched sampler trajectory. |
-| quality_guard_status | governance | none | true | false | false | Status indicating whether the quality guard was evaluated or passed for a pilot matrix record. |
 | wrong_key_status | governance | none | true | false | false | Status describing wrong-key separation evidence for a pilot or detection record. |
 | wrong_sampler_replay_status | governance | none | true | false | false | Status describing whether wrong-sampler replay was rejected or not applicable. |
-| fpr01_pilot_gate_decision | governance | none | true | false | false | FPR=0.01 pilot gate 的 PASS / FAIL 判定。 |
-| pilot_paper_gate_decision | governance | none | true | false | false | pilot_paper 结果 gate 的 PASS / FAIL 判定。 |
-| missing_fpr01_pilot_requirements | governance | none | true | false | false | 阻断 FPR=0.01 pilot claim 的缺失条件列表。 |
-| fpr01_pilot_missing_requirement_count | metric | none | true | false | false | FPR=0.01 pilot gate 的缺失条件数量。 |
+| pilot_paper_gate_decision | governance | none | true | false | false | pilot_paper fixed-FPR gate 的 PASS / FAIL 判定。 |
+| missing_pilot_paper_requirements | governance | none | true | false | false | 阻断 pilot_paper fixed-FPR claim 的缺失条件列表。 |
+| pilot_paper_missing_requirement_count | metric | none | true | false | false | pilot_paper fixed-FPR gate 的缺失条件数量。 |
 | paper_result_level | governance | none | true | true | false | 结果包的论文级别, 例如 pilot_paper 或 full_paper。 |
 | paper_protocol_level | governance | none | true | true | false | 结果包采用的协议级别, 例如 paper_grade_protocol。 |
 | paper_protocol_difference_from_full_paper | governance | none | true | true | false | 当前结果级别与 full_paper 的协议差异说明。 |
@@ -847,21 +844,21 @@ Notebook 与 repository module 的跨边界数据
 | calibration_negative_false_positive_count_at_threshold | metric | none | true | false | false | calibration negative split 在冻结阈值下的 false positive 数量。 |
 | heldout_negative_fpr_at_threshold | metric | none | true | false | false | held-out test negative split 在冻结阈值下的观测 FPR。 |
 | heldout_negative_false_positive_count_at_threshold | metric | none | true | false | false | held-out test negative split 在冻结阈值下的 false positive 数量。 |
-| observed_negative_fpr_at_threshold | metric | none | true | false | false | 对外摘要使用的 negative FPR, 在 fpr01 pilot 中等于 held-out test negative FPR。 |
+| observed_negative_fpr_at_threshold | metric | none | true | false | false | 对外摘要使用的 negative FPR, 在 pilot_paper 中等于 held-out test negative FPR。 |
 | tpr_at_fpr_01 | metric | none | true | false | false | 冻结 FPR=0.01 阈值下的 held-out attacked positive TPR。 |
 | true_positive_count_at_threshold | metric | none | true | false | false | held-out attacked positive split 在冻结阈值下的 true positive 数量。 |
 | tpr_at_fpr_01_pilot_claim_allowed | governance | none | true | false | false | 当前 pilot_paper 是否允许报告 pilot_paper 级 TPR@FPR=0.01 结论。 |
 | tpr_at_fpr_001_claim_allowed | governance | none | true | false | false | 当前结果是否允许报告 TPR@FPR=0.001 结论。 |
 | generation_record_count | metric | none | true | false | false | 当前 run_root 中读取到的 generation record 总数。 |
-| fpr01_generation_record_count | metric | none | true | false | false | 属于 fpr01_pilot profile 的 generation record 数量。 |
-| fpr01_motion_claim_eligible_generation_count | metric | none | true | false | false | 通过 formal motion claim 过滤的 fpr01 generation record 数量。 |
-| fpr01_prompt_count | metric | none | true | false | false | fpr01_pilot 中 motion-eligible prompt 数量。 |
-| fpr01_seed_per_prompt_min | metric | none | true | false | false | fpr01_pilot 中每个 prompt 的最小 seed 覆盖数。 |
-| fpr01_calibration_seed_per_prompt_min | metric | none | true | false | false | fpr01_pilot calibration split 中每个 prompt 的最小 seed 覆盖数。 |
-| fpr01_test_seed_per_prompt_min | metric | none | true | false | false | fpr01_pilot test split 中每个 prompt 的最小 seed 覆盖数。 |
-| fpr01_unique_video_count | metric | none | true | false | false | fpr01_pilot motion-eligible unique video 数量。 |
-| fpr01_calibration_unique_video_count | metric | none | true | false | false | fpr01_pilot calibration split unique video 数量。 |
-| fpr01_test_unique_video_count | metric | none | true | false | false | fpr01_pilot held-out test split unique video 数量。 |
+| pilot_paper_generation_record_count | metric | none | true | false | false | 属于 pilot_paper profile 的 generation record 数量。 |
+| pilot_paper_motion_claim_eligible_generation_count | metric | none | true | false | false | 通过 formal motion claim 过滤的 pilot_paper generation record 数量。 |
+| pilot_paper_prompt_count | metric | none | true | false | false | pilot_paper 中 motion-eligible prompt 数量。 |
+| pilot_paper_seed_per_prompt_min | metric | none | true | false | false | pilot_paper 中每个 prompt 的最小 seed 覆盖数。 |
+| pilot_paper_calibration_seed_per_prompt_min | metric | none | true | false | false | pilot_paper calibration split 中每个 prompt 的最小 seed 覆盖数。 |
+| pilot_paper_test_seed_per_prompt_min | metric | none | true | false | false | pilot_paper test split 中每个 prompt 的最小 seed 覆盖数。 |
+| pilot_paper_unique_video_count | metric | none | true | false | false | pilot_paper motion-eligible unique video 数量。 |
+| pilot_paper_calibration_unique_video_count | metric | none | true | false | false | pilot_paper calibration split unique video 数量。 |
+| pilot_paper_test_unique_video_count | metric | none | true | false | false | pilot_paper held-out test split unique video 数量。 |
 | calibration_negative_event_count | metric | none | true | false | false | calibration split 中用于冻结阈值的 negative event 数量。 |
 | heldout_test_negative_event_count | metric | none | true | false | false | held-out test split 中用于报告 FPR 的 negative event 数量。 |
 | heldout_attacked_positive_event_count | metric | none | true | false | false | held-out test split 中用于报告 TPR 的 attacked positive event 数量。 |
@@ -905,32 +902,29 @@ Notebook 与 repository module 的跨边界数据
 | missing_internal_ablation_variants | governance | none | true | true | false | pilot_paper gate 中缺失的 required internal ablation variant 名称列表。 |
 | next_allowed_action | governance | none | true | false | false | 当前 gate 后允许执行的下一步动作。 |
 | next_forbidden_action | governance | none | true | false | false | 当前 gate 后明确禁止执行的动作。 |
-| fpr01_pilot_claim_support_status | claim | none | true | true | false | package manifest 中记录的 fpr01 pilot claim 支撑状态摘要。 |
 | pilot_paper_claim_support_status | claim | none | true | true | false | package manifest 中记录的 pilot_paper claim 支撑状态摘要。 |
 | validation_scale_claim_support_status | claim | none | true | true | false | package manifest 或 pilot_paper gate 中记录的 validation-scale claim 支撑状态摘要。 |
 | pilot_paper_result_level | governance | none | true | true | false | package manifest 中记录的 pilot_paper 结果级别。 |
 | pilot_paper_protocol_level | governance | none | true | true | false | package manifest 中记录的 pilot_paper 协议级别。 |
 | pilot_paper_protocol_difference_from_full_paper | governance | none | true | true | false | package manifest 中记录的 pilot_paper 与 full_paper 差异。 |
-| pilot_paper_protocol_matches_full_paper | governance | none | true | true | false | package manifest 中记录的 pilot_paper 协议同构状态。 |
-| pilot_paper_claim_allowed | governance | none | true | true | false | package manifest 中记录的 pilot_paper claim 允许状态。 |
 | pilot_paper_missing_external_baseline_adapter_names | governance | none | true | true | false | package manifest 中记录的 pilot_paper gate 缺失 external_baseline adapter 名称列表。 |
 | pilot_paper_missing_modern_external_baseline_formal_adapter_names | governance | none | true | true | false | package manifest 中记录的 pilot_paper gate 缺失现代视频水印 formal adapter 名称列表。 |
 | pilot_paper_modern_external_baseline_formal_measured_adapter_count | metric | none | true | true | false | package manifest 中记录的 pilot_paper 现代视频水印 measured_formal adapter 数量。 |
 | pilot_paper_missing_internal_ablation_variants | governance | none | true | true | false | package manifest 中记录的 pilot_paper gate 缺失内部消融变体列表。 |
-| fpr01_threshold_protocol | protocol | none | true | false | false | package manifest 中记录的 fpr01 threshold protocol 摘要。 |
-| fpr01_threshold_source_split | protocol | none | true | false | false | package manifest 中记录的 fpr01 阈值来源 split 摘要。 |
-| fpr01_test_time_threshold_update_blocked | protocol | none | true | false | false | package manifest 中记录的 fpr01 test-time 阈值更新阻断状态。 |
-| fpr01_tpr_at_fpr_01 | metric | none | true | false | false | package manifest 中记录的 pilot_paper 级 TPR@FPR=0.01 摘要。 |
-| fpr01_calibration_negative_fpr_at_threshold | metric | none | true | false | false | package manifest 中记录的 calibration negative FPR 摘要。 |
-| fpr01_heldout_negative_fpr_at_threshold | metric | none | true | false | false | package manifest 中记录的 held-out negative FPR 摘要。 |
-| fpr01_observed_negative_fpr_at_threshold | metric | none | true | false | false | package manifest 中记录的 observed negative FPR 摘要。 |
-| fpr01_calibration_negative_event_count | metric | none | true | false | false | package manifest 中记录的 calibration negative event 数量摘要。 |
-| fpr01_heldout_test_negative_event_count | metric | none | true | false | false | package manifest 中记录的 held-out test negative event 数量摘要。 |
-| fpr01_heldout_negative_event_count | metric | none | true | false | false | package manifest 中记录的 held-out negative event 数量摘要别名。 |
-| fpr01_heldout_attacked_positive_event_count | metric | none | true | false | false | package manifest 中记录的 held-out attacked positive event 数量摘要。 |
-| fpr01_attacked_positive_event_count | metric | none | true | false | false | package manifest 中记录的 attacked positive event 数量摘要别名。 |
-| fpr01_tpr_at_fpr_01_pilot_claim_allowed | governance | none | true | false | false | package manifest 中记录的 pilot_paper 级 TPR@FPR=0.01 claim 允许状态。 |
-| fpr01_tpr_at_fpr_001_claim_allowed | governance | none | true | false | false | package manifest 中记录的 TPR@FPR=0.001 claim 禁止状态。 |
+| pilot_paper_threshold_protocol | protocol | none | true | false | false | package manifest 中记录的 pilot_paper threshold protocol 摘要。 |
+| pilot_paper_threshold_source_split | protocol | none | true | false | false | package manifest 中记录的 pilot_paper 阈值来源 split 摘要。 |
+| pilot_paper_test_time_threshold_update_blocked | protocol | none | true | false | false | package manifest 中记录的 pilot_paper test-time 阈值更新阻断状态。 |
+| pilot_paper_tpr_at_fpr_01 | metric | none | true | false | false | package manifest 中记录的 pilot_paper 级 TPR@FPR=0.01 摘要。 |
+| pilot_paper_calibration_negative_fpr_at_threshold | metric | none | true | false | false | package manifest 中记录的 calibration negative FPR 摘要。 |
+| pilot_paper_heldout_negative_fpr_at_threshold | metric | none | true | false | false | package manifest 中记录的 held-out negative FPR 摘要。 |
+| pilot_paper_observed_negative_fpr_at_threshold | metric | none | true | false | false | package manifest 中记录的 observed negative FPR 摘要。 |
+| pilot_paper_calibration_negative_event_count | metric | none | true | false | false | package manifest 中记录的 calibration negative event 数量摘要。 |
+| pilot_paper_heldout_test_negative_event_count | metric | none | true | false | false | package manifest 中记录的 held-out test negative event 数量摘要。 |
+| pilot_paper_heldout_negative_event_count | metric | none | true | false | false | package manifest 中记录的 held-out negative event 数量摘要别名。 |
+| pilot_paper_heldout_attacked_positive_event_count | metric | none | true | false | false | package manifest 中记录的 held-out attacked positive event 数量摘要。 |
+| pilot_paper_attacked_positive_event_count | metric | none | true | false | false | package manifest 中记录的 attacked positive event 数量摘要别名。 |
+| pilot_paper_tpr_at_fpr_01_pilot_claim_allowed | governance | none | true | false | false | package manifest 中记录的 pilot_paper 级 TPR@FPR=0.01 claim 允许状态。 |
+| pilot_paper_tpr_at_fpr_001_claim_allowed | governance | none | true | false | false | package manifest 中记录的 TPR@FPR=0.001 claim 禁止状态。 |
 | motion_threshold_id | protocol | none | true | false | false | Identifier for the motion threshold used by formal motion gate. |
 | motion_threshold_source_split | protocol | none | true | false | false | Source split or heuristic source used to define the motion threshold. |
 | motion_threshold_calibration_required | governance | none | true | false | false | Whether motion threshold calibration remains required before final claim use. |
@@ -988,7 +982,6 @@ Notebook 与 repository module 的跨边界数据
 
 | motion_threshold_calibration_decision | governance | none | true | false | false | Decision for formal motion threshold calibration stage. |
 | motion_threshold_calibration_ready | governance | none | true | false | false | Whether calibrated motion threshold is ready for claim gating. |
-| motion_delta_threshold | metric | none | true | false | false | Motion delta threshold selected by calibration or heuristic fallback. |
 | target_static_fpr | protocol | none | true | false | false | Target false positive rate for static negative motion tail calibration. |
 | estimated_static_fpr | metric | none | true | false | false | Estimated false positive rate on calibration negative static tail. |
 | negative_static_calibration_count | metric | none | true | false | false | Number of negative static calibration records used for motion threshold calibration. |

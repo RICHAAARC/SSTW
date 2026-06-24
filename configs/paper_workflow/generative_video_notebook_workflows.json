@@ -1,6 +1,6 @@
 {
   "config_kind": "generative_video_notebook_workflow_config",
-  "config_version": "2026_06_24_profile_driven_colab_workflow_v1",
+  "config_version": "2026_06_24_profile_driven_colab_workflow_v3_pilot_paper_only",
   "default_drive_project_root": "/content/drive/MyDrive/SSTW",
   "default_dataset_root_relative": "datasets/generative_video_prompt_suite",
   "default_prompt_suite_path_relative": "datasets/generative_video_prompt_suite/prompt_seed_suite.json",
@@ -8,12 +8,9 @@
     "motion_threshold_calibration": "motion_calibration",
     "generative_video_runtime": "validation_scale",
     "external_baseline_formal_scoring": "validation_scale",
-    "paper_gate_and_package": "validation_scale",
-    "generative_video_model_probe_legacy": "validation_scale"
+    "paper_gate_and_package": "validation_scale"
   },
-  "workflow_profile_aliases": {
-    "fpr01_pilot": "pilot_paper"
-  },
+  "workflow_profile_aliases": {},
   "workflow_profiles": {
     "motion_calibration": {
       "profile_status": "implemented",
@@ -49,7 +46,7 @@
         "replay_and_sketch_gate",
         "claim3_downgrade_gate",
         "statistical_confidence_interval",
-        "fpr01_pilot_gate",
+        "pilot_paper_gate",
         "validation_artifact_rebuild_dry_run",
         "validation_scale_gate"
       ],
@@ -76,7 +73,7 @@
       "bootstrap_iteration_count": 200,
       "disabled_stage_names": [
         "motion_threshold_calibration",
-        "fpr01_pilot_gate"
+        "pilot_paper_gate"
       ],
       "profile_switching_note": "validation_scale 是进入 paper 级运行前的最后完整门禁, 必须完成现代 baseline、内部消融、attack、replay 或 Claim-3 downgrade、CI 和 artifact rebuild。"
     },
@@ -87,7 +84,7 @@
       "runtime_profile": "pilot_paper",
       "result_tier": "pilot_paper",
       "paper_gate_profile": true,
-      "protocol_config_path": "configs/protocol/fpr01_pilot_generative_probe.json",
+      "protocol_config_path": "configs/protocol/pilot_paper_generative_probe.json",
       "drive_run_root_relative": "runs/generative_video_model_probe/pilot_paper",
       "drive_package_dir_relative": "packages/generative_video_model_probe/pilot_paper",
       "drive_log_dir_relative": "logs/generative_video_model_probe/pilot_paper",
@@ -193,40 +190,7 @@
         "replay_and_sketch_gate",
         "claim3_downgrade_gate",
         "statistical_confidence_interval",
-        "fpr01_pilot_gate",
-        "validation_artifact_rebuild_dry_run",
-        "validation_scale_gate",
-        "quick_tests_and_harness",
-        "drive_packaging"
-      ]
-    },
-    "generative_video_model_probe_legacy": {
-      "notebook_path": "paper_workflow/colab_utils/generative_video_model_probe_colab.ipynb",
-      "allowed_workflow_profiles": [
-        "motion_calibration",
-        "validation_scale",
-        "pilot_paper",
-        "full_paper"
-      ],
-      "stage_plan": [
-        "prepare_prompt_suite",
-        "external_baseline_colab_preflight",
-        "wan21_runtime_generation",
-        "formal_metric_scoring",
-        "motion_threshold_calibration_or_reuse_check",
-        "mechanism_postprocess",
-        "pilot_matrix_postprocess",
-        "runtime_attack",
-        "runtime_detection",
-        "external_baseline_source_intake",
-        "external_baseline_comparison",
-        "small_scale_claim_pilot_gate",
-        "validation_internal_ablation",
-        "adaptive_attack_proxy",
-        "replay_and_sketch_gate",
-        "claim3_downgrade_gate",
-        "statistical_confidence_interval",
-        "fpr01_pilot_gate",
+        "pilot_paper_gate",
         "validation_artifact_rebuild_dry_run",
         "validation_scale_gate",
         "quick_tests_and_harness",

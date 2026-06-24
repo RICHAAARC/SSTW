@@ -45,7 +45,7 @@ def _write_low_motion_video(path: Path) -> None:
 @pytest.mark.quick
 def test_formal_metric_runner_builds_video_file_metrics(tmp_path: Path) -> None:
     """formal metric runner 必须读取真实 mp4 并记录语义 metric 未配置。"""
-    run_root = tmp_path / "generative_video_model_probe_colab"
+    run_root = tmp_path / "generative_video_runtime"
     video_path = run_root / "videos" / "tiny.mp4"
     _write_tiny_video(video_path)
     digest = hashlib.sha256(video_path.read_bytes()).hexdigest()
@@ -78,7 +78,7 @@ def test_formal_metric_runner_builds_video_file_metrics(tmp_path: Path) -> None:
 @pytest.mark.quick
 def test_formal_metric_runner_reports_motion_gate_blocking_reason(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """低运动视频应明确记录 motion gate 阻塞原因, 不能笼统归因到 semantic metric。"""
-    run_root = tmp_path / "generative_video_model_probe_colab"
+    run_root = tmp_path / "generative_video_runtime"
     dataset_root = tmp_path / "datasets" / "generative_video_prompt_suite"
     prompt_suite_path = dataset_root / "prompt_seed_suite.json"
     video_path = run_root / "videos" / "low_motion.mp4"
@@ -131,7 +131,7 @@ def test_formal_metric_runner_reports_motion_gate_blocking_reason(tmp_path: Path
 @pytest.mark.quick
 def test_formal_metric_runner_allows_low_motion_for_negative_static_boundary(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """negative_static 样本太静止是预期现象, 不应阻断 formal motion gate。"""
-    run_root = tmp_path / "generative_video_model_probe_colab"
+    run_root = tmp_path / "generative_video_runtime"
     dataset_root = tmp_path / "datasets" / "generative_video_prompt_suite"
     prompt_suite_path = dataset_root / "prompt_seed_suite.json"
     video_path = run_root / "videos" / "static.mp4"
@@ -188,7 +188,7 @@ def test_formal_metric_runner_allows_low_motion_for_negative_static_boundary(tmp
 @pytest.mark.quick
 def test_formal_metric_runner_accepts_clip_semantic_metric(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """formal metric runner 在 CLIP 语义分数达阈值时应解除语义 metric 阻断。"""
-    run_root = tmp_path / "generative_video_model_probe_colab"
+    run_root = tmp_path / "generative_video_runtime"
     dataset_root = tmp_path / "datasets" / "generative_video_prompt_suite"
     prompt_suite_path = dataset_root / "prompt_seed_suite.json"
     video_path = run_root / "videos" / "tiny.mp4"
@@ -348,7 +348,7 @@ def test_clip_semantic_metric_accepts_pooling_output(tmp_path: Path, monkeypatch
 @pytest.mark.quick
 def test_checker_reports_semantic_only_block_after_formal_visual_motion_metrics(tmp_path: Path) -> None:
     """补齐正式质量/运动 metric 后, checker 应只保留正式语义 metric 阻断。"""
-    run_root = tmp_path / "generative_video_model_probe_colab"
+    run_root = tmp_path / "generative_video_runtime"
     video_path = run_root / "videos" / "tiny.mp4"
     _write_tiny_video(video_path)
     digest = hashlib.sha256(video_path.read_bytes()).hexdigest()
@@ -371,7 +371,7 @@ def test_checker_reports_semantic_only_block_after_formal_visual_motion_metrics(
     write_jsonl(run_root / "records" / "external_baseline_records.jsonl", [{"external_baseline_runnable_status": "runnable"}])
     write_json(run_root / "artifacts" / "generation_manifest.json", {"artifact_id": "manifest"})
     write_json(run_root / "artifacts" / "generative_video_colab_runtime_decision.json", {
-        "stage_id": "generative_video_model_probe_colab_runtime",
+        "stage_id": "generative_video_runtime",
         "implementation_decision": "PASS",
         "mechanism_decision": "FAIL",
         "details": {},

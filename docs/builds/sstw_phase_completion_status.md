@@ -253,8 +253,8 @@ generation_records -> videos -> runtime_attack_records -> attacked_videos -> run
 最新 Google Drive package 为:
 
 ```text
-G:\我的云端硬盘\SSTW\packages\generative_video_model_probe\generative_video_model_probe_colab_20260618_153437_e90e82ae.zip
-G:\我的云端硬盘\SSTW\packages\generative_video_model_probe\generative_video_model_probe_colab_20260618_153437_e90e82ae_package_manifest.json
+G:\我的云端硬盘\SSTW\packages\generative_video_model_probe\generative_video_runtime_20260618_153437_e90e82ae.zip
+G:\我的云端硬盘\SSTW\packages\generative_video_model_probe\generative_video_runtime_20260618_153437_e90e82ae_package_manifest.json
 ```
 
 ### 5.2 最新工程证据
@@ -297,8 +297,8 @@ claim 层面: 仍阻塞于 motion_threshold_calibration, 不得进入 final clai
 已新增并运行 `motion_threshold_calibration` 工程入口。最新 Google Drive package 为:
 
 ```text
-G:\我的云端硬盘\SSTW\packages\generative_video_model_probe\generative_video_model_probe_colab_20260618_162447_882754a4.zip
-G:\我的云端硬盘\SSTW\packages\generative_video_model_probe\generative_video_model_probe_colab_20260618_162447_882754a4_package_manifest.json
+G:\我的云端硬盘\SSTW\packages\generative_video_model_probe\generative_video_runtime_20260618_162447_882754a4.zip
+G:\我的云端硬盘\SSTW\packages\generative_video_model_probe\generative_video_runtime_20260618_162447_882754a4_package_manifest.json
 ```
 
 package manifest 已包含 calibration summary:
@@ -438,7 +438,7 @@ minimum_positive_motion_pass_rate_at_threshold: 0.8
 
 ### 9.3 当前推进建议
 
-需要重新执行 `generative_video_model_probe_colab.ipynb` 的 `PROFILE = motion_calibration` 流程。旧 package 不会自动获得新字段, 必须重新运行 formal metric 与 calibration。
+需要重新执行 `motion_threshold_calibration_colab.ipynb` 的 `SSTW_WORKFLOW_PROFILE = motion_calibration` 流程。既有 package 不会自动获得新字段, 必须重新运行 formal metric 与 calibration。
 
 
 ## 2026-06-22 工程推进: prompt-aware robust calibration 防泄漏协议已落地
@@ -549,7 +549,7 @@ blocked_until_motion_threshold_calibration
 
 ### Colab 参数切换
 
-`paper_workflow/colab_utils/generative_video_model_probe_colab.ipynb` 已切换到:
+`paper_workflow/colab_utils/motion_threshold_calibration_colab.ipynb` 已切换到:
 
 ```text
 PROFILE = 'pilot'
@@ -571,7 +571,7 @@ pilot profile 的目标规模为:
 pilot profile 不会重新运行 `motion_threshold_calibration`, 而是复用已经通过的 calibration artifact:
 
 ```text
-runs/generative_video_model_probe_colab/artifacts/motion_threshold_calibration_decision.json
+runs/generative_video_model_probe/motion_calibration/artifacts/motion_threshold_calibration_decision.json
 ```
 
 该约束用于防止 16 条 pilot records 覆盖独立 128 / 64 / 32 calibration split, 造成阈值被误写为 `INSUFFICIENT_SAMPLE`。
@@ -651,8 +651,8 @@ missing_pilot_requirements:
 对应轻量 governed artifacts package 已写入:
 
 ```text
-G:\我的云端硬盘\SSTW\packages\generative_video_model_probe\generative_video_model_probe_colab_20260622_174746_e0f9c79d.zip
-G:\我的云端硬盘\SSTW\packages\generative_video_model_probe\generative_video_model_probe_colab_20260622_174746_e0f9c79d_package_manifest.json
+G:\我的云端硬盘\SSTW\packages\generative_video_model_probe\generative_video_runtime_20260622_174746_e0f9c79d.zip
+G:\我的云端硬盘\SSTW\packages\generative_video_model_probe\generative_video_runtime_20260622_174746_e0f9c79d_package_manifest.json
 include_videos: false
 ```
 
@@ -924,7 +924,7 @@ submission_freeze_allowed: false
 
 ```text
 preflight_package: wan21_flow_adapter_preflight_20260623_064928_839da169.zip
-generative_package: generative_video_model_probe_colab_20260623_134119_839da169.zip
+generative_package: generative_video_runtime_20260623_134119_839da169.zip
 adapter_preflight_decision: PASS
 model_load_status: loaded
 callback_latent_capture_status: captured
@@ -997,7 +997,7 @@ external_baseline_result_used_for_claim = true
 experiments/generative_video_model_probe/validation_scale_gate.py
 configs/protocol/validation_scale_generative_probe.json
 paper_workflow/notebook_utils/generative_video_model_probe_workflow.py::build_validation_scale_gate_command
-paper_workflow/colab_utils/generative_video_model_probe_colab.ipynb PROFILE = validation_scale
+paper_workflow/colab_utils/generative_video_runtime_colab.ipynb SSTW_WORKFLOW_PROFILE = validation_scale
 ```
 
 该 gate 会写出:
@@ -1252,11 +1252,10 @@ calibration split
 新增工程入口包括:
 
 ```text
-configs/protocol/fpr01_pilot_generative_probe.json
-experiments/generative_video_model_probe/fpr01_pilot_gate.py
+configs/protocol/pilot_paper_generative_probe.json
+experiments/generative_video_model_probe/pilot_paper_gate.py
 colab_runtime PROFILE = pilot_paper
-colab_runtime PROFILE = fpr01_pilot  # 兼容旧入口
-notebook workflow build_fpr01_pilot_gate_command
+notebook workflow build_pilot_paper_gate_command
 Google Drive package manifest pilot_paper summary
 ```
 
@@ -1287,7 +1286,7 @@ threshold_protocol: calibration_split_to_frozen_threshold_to_heldout_test_split
 
 根据当前项目推进判断, `pilot_paper` 不能只依赖主方法和 fixed-FPR threshold 输出。由于它被定义为小规模 full paper 协议预演, baseline comparison 和内部消融必须在 gate 前闭合。
 
-本次工程推进将以下检查纳入 `fpr01_pilot_gate`:
+本次工程推进将以下检查纳入 `pilot_paper_gate`:
 
 ```text
 pilot_paper_external_baseline_comparison_ready
@@ -1497,7 +1496,6 @@ paper_workflow/colab_utils/motion_threshold_calibration_colab.ipynb
 paper_workflow/colab_utils/generative_video_runtime_colab.ipynb
 paper_workflow/colab_utils/external_baseline_formal_scoring_colab.ipynb
 paper_workflow/colab_utils/paper_gate_and_package_colab.ipynb
-paper_workflow/colab_utils/generative_video_model_probe_colab.ipynb  # 兼容综合入口
 ```
 
 阶段性状态为:
@@ -1507,9 +1505,9 @@ profile_driven_colab_workflow_config: implemented
 profile_specific_drive_run_root: implemented
 profile_specific_drive_package_dir: implemented
 shared_motion_threshold_artifact_run_root: implemented
-fpr01_pilot_alias_to_pilot_paper: implemented
+workflow_profile_aliases_removed: implemented
 full_paper_profile_registration: design_registered_not_ready
-monolithic_notebook_legacy_mode: retained_for_compatibility
+monolithic_notebook_status: removed
 recommended_split_notebook_workflow: implemented
 ```
 

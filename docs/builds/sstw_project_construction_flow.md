@@ -387,8 +387,7 @@ motion_threshold_calibration_colab.ipynb
 4. `paper_gate_and_package_colab.ipynb` 负责内部消融、adaptive attack proxy、replay/sketch
    或 Claim-3 downgrade、CI、fixed-FPR gate、artifact rebuild 和 Drive package。
 
-`generative_video_model_probe_colab.ipynb` 仅作为兼容综合入口保留。正式推进应优先使用
-拆分 Notebook, 因为拆分后可以在同一 `workflow_profile` 下分阶段复跑、检查和打包,
+旧综合 Notebook 已移除。正式推进只使用拆分 Notebook, 因为拆分后可以在同一 `workflow_profile` 下分阶段复跑、检查和打包,
 避免 runtime、baseline 与 gate 的失败原因混在一个长 Notebook 中。
 
 `pilot_paper` 和 `full_paper` 的协议差异只能是样本规模和评价等级。当前 `full_paper`
@@ -983,7 +982,7 @@ trajectory_sketch_replacement_attempt
 
 ### 15.5 pilot_paper 前置子门禁
 
-`pilot_paper` 不是只跑主方法的缩小版, 而是在 `validation_scale` 已经闭合全部 paper 机制之后执行的小规模 paper 级结果运行。因此在 `fpr01_pilot_gate` 允许报告 pilot 级 `TPR@FPR=0.01` 前, 必须复核以下条件没有在 paper 级运行中退化:
+`pilot_paper` 不是只跑主方法的缩小版, 而是在 `validation_scale` 已经闭合全部 paper 机制之后执行的小规模 paper 级结果运行。因此在 `pilot_paper_gate` 允许报告 pilot 级 `TPR@FPR=0.01` 前, 必须复核以下条件没有在 paper 级运行中退化:
 
 ```text
 validation_scale_gate_decision == PASS
@@ -1683,7 +1682,7 @@ full_paper_run: 只在全部前置 gate 通过后执行
 
 `smoke_rehearsal`、`pilot_rehearsal` 和 `validation_rehearsal` 的结果只能用于排查链路和判断是否进入下一阶段, 不能替代 full_paper 主表。`pilot_paper` 可以产出 pilot_paper 级论文结果, 但不能替代 full_paper 主表。
 
-`fpr01_pilot_rehearsal` 在当前项目中升级为 `pilot_paper`。`pilot_paper` 是小规模跑完整 full_paper 协议并产出 pilot 级论文结果的正式阶段。它可以报告 pilot_paper 级 `TPR@FPR=0.01` 论文主张, 前提是它采用与 full-paper 同构的数据集构造方式:
+`pilot_paper_rehearsal` 在当前项目中升级为 `pilot_paper`。`pilot_paper` 是小规模跑完整 full_paper 协议并产出 pilot 级论文结果的正式阶段。它可以报告 pilot_paper 级 `TPR@FPR=0.01` 论文主张, 前提是它采用与 full-paper 同构的数据集构造方式:
 
 ```text
 calibration split
@@ -2090,7 +2089,7 @@ clone / pull SSTW 仓库
 ```text
 validation_scale
 pilot_paper
-fpr01_pilot
+pilot_paper
 ```
 
 Notebook 必须在真实 GPU 生成前检查现代 baseline command 是否全部配置。若缺少任何一个 command, 应提前阻断, 不允许先生成缺 baseline 的混淆结果包。该规则属于项目特定写法, 目的是保证 `validation_scale` 作为 paper 级最后门禁时已经能够产出完整 baseline comparison 结果。

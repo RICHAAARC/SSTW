@@ -14,7 +14,7 @@ from scripts.check_results.generative_video_colab_result_checker import check_ge
 @pytest.mark.quick
 def test_generative_video_colab_result_checker_distinguishes_evidence_levels(tmp_path: Path) -> None:
     """检查器必须把生成链路成功与机制证据不足区分开。"""
-    run_root = tmp_path / "generative_video_model_probe_colab"
+    run_root = tmp_path / "generative_video_runtime"
     video_path = run_root / "videos" / "sample.mp4"
     video_path.parent.mkdir(parents=True)
     video_path.write_bytes(b"fake mp4 payload")
@@ -42,7 +42,7 @@ def test_generative_video_colab_result_checker_distinguishes_evidence_levels(tmp
     }])
     write_json(run_root / "artifacts" / "generation_manifest.json", {"artifact_id": "manifest"})
     write_json(run_root / "artifacts" / "generative_video_colab_runtime_decision.json", {
-        "stage_id": "generative_video_model_probe_colab_runtime",
+        "stage_id": "generative_video_runtime",
         "implementation_decision": "PASS",
         "mechanism_decision": "FAIL",
         "details": {

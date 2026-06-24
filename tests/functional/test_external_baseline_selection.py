@@ -85,7 +85,7 @@ def test_external_baseline_source_intake_writes_governed_manifests(tmp_path: Pat
 @pytest.mark.quick
 def test_external_baseline_runner_writes_governed_status_outputs(tmp_path: Path) -> None:
     """外部 baseline runner 必须写出 records、table、decision 和 report。"""
-    run_root = tmp_path / "generative_video_model_probe_colab"
+    run_root = tmp_path / "generative_video_runtime"
     audit = write_external_baseline_status_outputs(run_root)
     records = read_jsonl(run_root / "records" / "external_baseline_records.jsonl")
 
@@ -170,7 +170,7 @@ def _write_external_baseline_runtime_fixture(run_root: Path) -> None:
 @pytest.mark.quick
 def test_external_baseline_comparison_runner_uses_external_baseline_adapters(tmp_path: Path) -> None:
     """baseline comparison 必须通过 external_baseline/ adapter 产出 records、table、decision 和 report。"""
-    run_root = tmp_path / "generative_video_model_probe_colab"
+    run_root = tmp_path / "generative_video_runtime"
     _write_external_baseline_runtime_fixture(run_root)
 
     audit = write_external_baseline_comparison_outputs(run_root)
@@ -192,7 +192,7 @@ def test_external_baseline_comparison_runner_uses_external_baseline_adapters(tmp
 @pytest.mark.quick
 def test_modern_external_baseline_formal_command_adapters_write_measured_records(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """现代视频水印 baseline 必须通过正式 command adapter 产出 measured_formal records。"""
-    run_root = tmp_path / "generative_video_model_probe_colab"
+    run_root = tmp_path / "generative_video_runtime"
     _write_external_baseline_runtime_fixture(run_root)
     fake_adapter = tmp_path / "fake_modern_baseline_eval.py"
     fake_adapter.write_text(

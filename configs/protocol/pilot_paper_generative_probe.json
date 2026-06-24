@@ -24,8 +24,7 @@
   "paper_protocol_level": "paper_grade_protocol",
   "paper_result_level": "pilot_paper",
   "pilot_profile_names": [
-    "pilot_paper",
-    "fpr01_pilot"
+    "pilot_paper"
   ],
   "require_external_baseline_comparison_ready": true,
   "require_formal_motion_claim_ready": true,

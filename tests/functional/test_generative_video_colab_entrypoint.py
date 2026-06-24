@@ -82,7 +82,7 @@ def test_motion_calibration_prompt_suite_uses_observability_repair_prompts(tmp_p
     suite = json.loads(Path(summary["prompt_suite_path"]).read_text(encoding="utf-8"))
     prompts_by_id = {item["prompt_id"]: item["prompt_text"].lower() for item in suite["prompts"]}
 
-    assert suite["prompt_suite_id"] == "generative_video_probe_prompt_suite_motion_observability_fpr01_pilot"
+    assert suite["prompt_suite_id"] == "generative_video_probe_prompt_suite_motion_observability_pilot_paper"
 
     # 这两个历史 prompt 在真实 Wan2.1 calibration 中分别只有 3 / 8 和 1 / 8 通过, 因此不能回退。
     assert "large red square slides" not in prompts_by_id["motion_calib_positive_motion_00"]
@@ -140,35 +140,34 @@ def test_validation_scale_profile_expands_pilot_prompts_to_three_seeds(tmp_path:
 
 
 @pytest.mark.quick
-def test_fpr01_pilot_profile_constructs_medium_scale_low_fpr_plan(tmp_path: Path) -> None:
-    """pilot_paper / fpr01_pilot profile 必须构造同一套 calibration/test split 低 FPR 数据集。"""
+def test_pilot_paper_profile_constructs_medium_scale_low_fpr_plan(tmp_path: Path) -> None:
+    """pilot_paper profile 必须构造 calibration/test split 低 FPR 数据集。"""
     output_root = tmp_path / "prompt_suite"
     summary = write_prompt_suite(output_root)
     suite = json.loads(Path(summary["prompt_suite_path"]).read_text(encoding="utf-8"))
-    plan = _build_generation_plan(suite, "fpr01_pilot", "Wan-AI/Wan2.1-T2V-1.3B-Diffusers", None)
+    plan = _build_generation_plan(suite, "pilot_paper", "Wan-AI/Wan2.1-T2V-1.3B-Diffusers", None)
     pilot_paper_plan = _build_generation_plan(suite, "pilot_paper", "Wan-AI/Wan2.1-T2V-1.3B-Diffusers", None)
 
-    fpr01_prompts = [item for item in suite["prompts"] if item.get("prompt_suite_role") == "fpr01_pilot"]
-    fpr01_seeds = [item for item in suite["seeds"] if item.get("prompt_suite_role") == "fpr01_pilot"]
+    pilot_paper_prompts = [item for item in suite["prompts"] if item.get("prompt_suite_role") == "pilot_paper"]
+    pilot_paper_seeds = [item for item in suite["seeds"] if item.get("prompt_suite_role") == "pilot_paper"]
 
-    assert suite["fpr01_pilot_design"]["target_fpr"] == 0.01
-    assert suite["fpr01_pilot_design"]["paper_result_level"] == "pilot_paper"
-    assert suite["fpr01_pilot_design"]["paper_protocol_difference_from_full_paper"] == "sample_scale_only"
-    assert suite["fpr01_pilot_design"]["recommended_runtime_profile"] == "pilot_paper"
-    assert suite["fpr01_pilot_design"]["compatibility_runtime_profile"] == "fpr01_pilot"
-    assert suite["fpr01_pilot_design"]["threshold_protocol"] == "calibration_split_to_frozen_threshold_to_heldout_test_split"
-    assert suite["fpr01_pilot_design"]["target_generation_video_count"] == 168
-    assert suite["fpr01_pilot_design"]["target_calibration_negative_event_count"] == 1008
-    assert suite["fpr01_pilot_design"]["target_heldout_test_negative_event_count"] == 1008
-    assert suite["fpr01_pilot_design"]["target_test_attacked_positive_event_count"] == 252
-    assert len(fpr01_prompts) == 21
-    assert len(fpr01_seeds) == 8
+    assert suite["pilot_paper_design"]["target_fpr"] == 0.01
+    assert suite["pilot_paper_design"]["paper_result_level"] == "pilot_paper"
+    assert suite["pilot_paper_design"]["paper_protocol_difference_from_full_paper"] == "sample_scale_only"
+    assert suite["pilot_paper_design"]["recommended_runtime_profile"] == "pilot_paper"
+    assert suite["pilot_paper_design"]["threshold_protocol"] == "calibration_split_to_frozen_threshold_to_heldout_test_split"
+    assert suite["pilot_paper_design"]["target_generation_video_count"] == 168
+    assert suite["pilot_paper_design"]["target_calibration_negative_event_count"] == 1008
+    assert suite["pilot_paper_design"]["target_heldout_test_negative_event_count"] == 1008
+    assert suite["pilot_paper_design"]["target_test_attacked_positive_event_count"] == 252
+    assert len(pilot_paper_prompts) == 21
+    assert len(pilot_paper_seeds) == 8
     assert len(plan) == 168
     assert len(pilot_paper_plan) == 168
     assert [(item["prompt_id"], item["seed_id"]) for item in pilot_paper_plan] == [(item["prompt_id"], item["seed_id"]) for item in plan]
     assert len({item["prompt_id"] for item in plan}) == 21
-    assert {item["seed_suite_role"] for item in plan} == {"fpr01_pilot"}
-    assert {item["prompt_suite_role"] for item in plan} == {"fpr01_pilot"}
+    assert {item["seed_suite_role"] for item in plan} == {"pilot_paper"}
+    assert {item["prompt_suite_role"] for item in plan} == {"pilot_paper"}
     assert {item["split"] for item in plan} == {"calibration", "test"}
     assert sum(1 for item in plan if item["split"] == "calibration") == 84
     assert sum(1 for item in plan if item["split"] == "test") == 84
@@ -176,8 +175,8 @@ def test_fpr01_pilot_profile_constructs_medium_scale_low_fpr_plan(tmp_path: Path
 
 @pytest.mark.quick
 def test_generative_video_colab_notebook_calls_repository_modules() -> None:
-    """Notebook 只能作为入口, 必须通过统一 workflow profile 调用仓库模块。"""
-    notebook_path = Path("paper_workflow/colab_utils/generative_video_model_probe_colab.ipynb")
+    """runtime Notebook 只能作为入口, 必须通过统一 workflow profile 调用仓库模块。"""
+    notebook_path = Path("paper_workflow/colab_utils/generative_video_runtime_colab.ipynb")
     assert notebook_path.exists()
     notebook = json.loads(notebook_path.read_text(encoding="utf-8"))
     source = "".join("".join(cell.get("source", [])) for cell in notebook["cells"])
@@ -186,7 +185,7 @@ def test_generative_video_colab_notebook_calls_repository_modules() -> None:
     assert "/content/drive/MyDrive/SSTW" in source
     assert "drive.mount('/content/drive')" in source
     assert "SSTW_WORKFLOW_PROFILE" in source
-    assert "NOTEBOOK_ROLE = 'generative_video_model_probe_legacy'" in source
+    assert "NOTEBOOK_ROLE = 'generative_video_runtime'" in source
     assert "default_workflow_profile_for_notebook_role" in source
     assert "resolve_notebook_workflow_profile" in source
     assert "ensure_drive_layout(" in source
@@ -212,17 +211,17 @@ def test_generative_video_colab_notebook_calls_repository_modules() -> None:
     assert "build_pilot_matrix_postprocess_command" in source
     assert "build_runtime_attack_command" in source
     assert "build_runtime_detection_command" in source
-    assert "build_external_baseline_source_intake_command" in source
-    assert "build_external_baseline_comparison_command" in source
     assert "build_small_scale_claim_pilot_gate_command" in source
-    assert "build_validation_internal_ablation_command" in source
-    assert "build_adaptive_attack_command" in source
-    assert "build_replay_and_sketch_gate_command" in source
-    assert "build_claim3_downgrade_command" in source
-    assert "build_statistical_confidence_interval_command" in source
-    assert "build_fpr01_pilot_gate_command" in source
-    assert "build_validation_artifact_rebuild_dry_run_command" in source
-    assert "build_validation_scale_gate_command" in source
+    assert "build_external_baseline_source_intake_command" not in source
+    assert "build_external_baseline_comparison_command" not in source
+    assert "build_validation_internal_ablation_command" not in source
+    assert "build_adaptive_attack_command" not in source
+    assert "build_replay_and_sketch_gate_command" not in source
+    assert "build_claim3_downgrade_command" not in source
+    assert "build_statistical_confidence_interval_command" not in source
+    assert "build_pilot_paper_gate_command" not in source
+    assert "build_validation_artifact_rebuild_dry_run_command" not in source
+    assert "build_validation_scale_gate_command" not in source
     assert "scripts/prepare_generative_video_prompt_suite.py" in helper_text
     assert "experiments.generative_video_model_probe.colab_runtime" in helper_text
     assert "experiments.generative_video_model_probe.formal_metric_runner" in helper_text
@@ -240,7 +239,7 @@ def test_generative_video_colab_notebook_calls_repository_modules() -> None:
     assert "experiments.generative_video_model_probe.replay_and_sketch_gate" in helper_text
     assert "experiments.generative_video_model_probe.claim3_downgrade" in helper_text
     assert "experiments.generative_video_model_probe.statistical_confidence_interval" in helper_text
-    assert "experiments.generative_video_model_probe.fpr01_pilot_gate" in helper_text
+    assert "experiments.generative_video_model_probe.pilot_paper_gate" in helper_text
     assert "experiments.generative_video_model_probe.validation_artifact_rebuild" in helper_text
     assert "experiments.generative_video_model_probe.validation_scale_gate" in helper_text
     assert "scripts/package_results/generative_video_drive_packager.py" in helper_text
@@ -281,7 +280,7 @@ def test_split_colab_notebooks_are_profile_driven() -> None:
     assert "build_external_baseline_comparison_command" not in runtime_source
     assert "build_colab_runtime_command" not in baseline_source
     assert "build_external_baseline_comparison_command" in baseline_source
-    assert "build_fpr01_pilot_gate_command" in gate_source
+    assert "build_pilot_paper_gate_command" in gate_source
     assert "build_validation_scale_gate_command" in gate_source
 
 
@@ -290,7 +289,7 @@ def test_notebook_workflow_profile_config_supports_profile_switching() -> None:
     """统一配置层必须能区分 validation_scale、pilot_paper 和未开放的 full_paper。"""
     assert default_workflow_profile_for_notebook_role("generative_video_runtime") == "validation_scale"
     validation = resolve_notebook_workflow_profile("validation_scale", "paper_gate_and_package")
-    pilot = resolve_notebook_workflow_profile("fpr01_pilot", "paper_gate_and_package")
+    pilot = resolve_notebook_workflow_profile("pilot_paper", "paper_gate_and_package")
     full = resolve_notebook_workflow_profile("full_paper", config_path="configs/paper_workflow/generative_video_notebook_workflows.json", allow_disabled=True)
 
     assert validation["workflow_profile"] == "validation_scale"
@@ -298,17 +297,17 @@ def test_notebook_workflow_profile_config_supports_profile_switching() -> None:
     assert validation["enabled_for_claim"] is False
     assert validation["target_fpr"] == 0.01
     assert "validation_scale_gate" in build_workflow_stage_plan("validation_scale", "paper_gate_and_package")
-    assert "fpr01_pilot_gate" not in build_workflow_stage_plan("validation_scale", "paper_gate_and_package")
+    assert "pilot_paper_gate" not in build_workflow_stage_plan("validation_scale", "paper_gate_and_package")
 
-    assert pilot["requested_workflow_profile"] == "fpr01_pilot"
+    assert pilot["requested_workflow_profile"] == "pilot_paper"
     assert pilot["workflow_profile"] == "pilot_paper"
-    assert pilot["profile_alias_applied"] is True
+    assert pilot["profile_alias_applied"] is False
     assert pilot["result_tier"] == "pilot_paper"
     assert pilot["enabled_for_claim"] is True
     assert pilot["method_sample_count"] == 168
     assert pilot["baseline_sample_count"] == 84
-    assert pilot["protocol_config_path"] == "configs/protocol/fpr01_pilot_generative_probe.json"
-    assert "fpr01_pilot_gate" in build_workflow_stage_plan("pilot_paper", "paper_gate_and_package")
+    assert pilot["protocol_config_path"] == "configs/protocol/pilot_paper_generative_probe.json"
+    assert "pilot_paper_gate" in build_workflow_stage_plan("pilot_paper", "paper_gate_and_package")
     assert "validation_scale_gate" not in build_workflow_stage_plan("pilot_paper", "paper_gate_and_package")
 
     assert full["workflow_profile"] == "full_paper"
@@ -456,10 +455,10 @@ def test_generative_video_drive_layout_uses_sstw_drive_root() -> None:
 @pytest.mark.quick
 def test_generative_video_drive_packager_creates_archive_and_manifest(tmp_path: Path) -> None:
     """Drive packager 必须从已有 run outputs 生成 zip 和 package manifest。"""
-    run_root = tmp_path / "runs" / "generative_video_model_probe_colab"
+    run_root = tmp_path / "runs" / "generative_video_runtime"
     package_dir = tmp_path / "packages"
     write_jsonl(run_root / "records" / "generation_records.jsonl", [{"generation_model_id": "model", "prompt_id": "prompt"}])
-    write_json(run_root / "artifacts" / "generative_video_colab_runtime_decision.json", {"stage_id": "generative_video_model_probe_colab_runtime", "implementation_decision": "PASS", "mechanism_decision": "FAIL"})
+    write_json(run_root / "artifacts" / "generative_video_colab_runtime_decision.json", {"stage_id": "generative_video_runtime", "implementation_decision": "PASS", "mechanism_decision": "FAIL"})
     write_json(run_root / "artifacts" / "generation_manifest.json", {"artifact_id": "manifest"})
     write_json(run_root / "artifacts" / "small_scale_claim_pilot_gate_decision.json", {
         "pilot_gate_decision": "FAIL",
@@ -522,8 +521,7 @@ def test_generative_video_drive_packager_creates_archive_and_manifest(tmp_path: 
         "statistical_confidence_interval_decision": "PASS",
         "ci_total_count": 12,
     })
-    write_json(run_root / "artifacts" / "fpr01_pilot_gate_decision.json", {
-        "fpr01_pilot_gate_decision": "PASS",
+    write_json(run_root / "artifacts" / "pilot_paper_gate_decision.json", {
         "pilot_paper_gate_decision": "PASS",
         "claim_support_status": "pilot_paper_calibrated_heldout_claim_ready",
         "paper_result_level": "pilot_paper",
@@ -531,7 +529,7 @@ def test_generative_video_drive_packager_creates_archive_and_manifest(tmp_path: 
         "paper_protocol_difference_from_full_paper": "sample_scale_only",
         "pilot_paper_protocol_matches_full_paper": True,
         "pilot_paper_claim_allowed": True,
-        "fpr01_pilot_missing_requirement_count": 0,
+        "pilot_paper_missing_requirement_count": 0,
         "threshold_protocol": "calibration_split_to_frozen_threshold_to_heldout_test_split",
         "threshold_source_split": "calibration",
         "test_time_threshold_update_blocked": True,
@@ -601,37 +599,35 @@ def test_generative_video_drive_packager_creates_archive_and_manifest(tmp_path: 
     assert manifest["decision_summary"]["replay_or_sketch_status"] == "claim3_explicitly_downgraded"
     assert manifest["decision_summary"]["statistical_confidence_interval_decision"] == "PASS"
     assert manifest["decision_summary"]["statistical_confidence_interval_total_count"] == 12
-    assert manifest["decision_summary"]["fpr01_pilot_gate_decision"] == "PASS"
     assert manifest["decision_summary"]["pilot_paper_gate_decision"] == "PASS"
-    assert manifest["decision_summary"]["fpr01_pilot_claim_support_status"] == "pilot_paper_calibrated_heldout_claim_ready"
     assert manifest["decision_summary"]["pilot_paper_claim_support_status"] == "pilot_paper_calibrated_heldout_claim_ready"
     assert manifest["decision_summary"]["pilot_paper_result_level"] == "pilot_paper"
     assert manifest["decision_summary"]["pilot_paper_protocol_level"] == "paper_grade_protocol"
     assert manifest["decision_summary"]["pilot_paper_protocol_difference_from_full_paper"] == "sample_scale_only"
     assert manifest["decision_summary"]["pilot_paper_protocol_matches_full_paper"] is True
     assert manifest["decision_summary"]["pilot_paper_claim_allowed"] is True
-    assert manifest["decision_summary"]["fpr01_pilot_missing_requirement_count"] == 0
-    assert manifest["decision_summary"]["fpr01_threshold_protocol"] == "calibration_split_to_frozen_threshold_to_heldout_test_split"
-    assert manifest["decision_summary"]["fpr01_threshold_source_split"] == "calibration"
-    assert manifest["decision_summary"]["fpr01_test_time_threshold_update_blocked"] is True
-    assert manifest["decision_summary"]["fpr01_tpr_at_fpr_01"] == 0.91
-    assert manifest["decision_summary"]["fpr01_calibration_negative_fpr_at_threshold"] == 0.008
-    assert manifest["decision_summary"]["fpr01_heldout_negative_fpr_at_threshold"] == 0.009
-    assert manifest["decision_summary"]["fpr01_observed_negative_fpr_at_threshold"] == 0.009
-    assert manifest["decision_summary"]["fpr01_calibration_negative_event_count"] == 1008
-    assert manifest["decision_summary"]["fpr01_heldout_test_negative_event_count"] == 1008
-    assert manifest["decision_summary"]["fpr01_heldout_negative_event_count"] == 1008
-    assert manifest["decision_summary"]["fpr01_heldout_attacked_positive_event_count"] == 252
-    assert manifest["decision_summary"]["fpr01_attacked_positive_event_count"] == 252
-    assert manifest["decision_summary"]["fpr01_tpr_at_fpr_01_pilot_claim_allowed"] is True
-    assert manifest["decision_summary"]["fpr01_tpr_at_fpr_001_claim_allowed"] is False
+    assert manifest["decision_summary"]["pilot_paper_missing_requirement_count"] == 0
+    assert manifest["decision_summary"]["pilot_paper_threshold_protocol"] == "calibration_split_to_frozen_threshold_to_heldout_test_split"
+    assert manifest["decision_summary"]["pilot_paper_threshold_source_split"] == "calibration"
+    assert manifest["decision_summary"]["pilot_paper_test_time_threshold_update_blocked"] is True
+    assert manifest["decision_summary"]["pilot_paper_tpr_at_fpr_01"] == 0.91
+    assert manifest["decision_summary"]["pilot_paper_calibration_negative_fpr_at_threshold"] == 0.008
+    assert manifest["decision_summary"]["pilot_paper_heldout_negative_fpr_at_threshold"] == 0.009
+    assert manifest["decision_summary"]["pilot_paper_observed_negative_fpr_at_threshold"] == 0.009
+    assert manifest["decision_summary"]["pilot_paper_calibration_negative_event_count"] == 1008
+    assert manifest["decision_summary"]["pilot_paper_heldout_test_negative_event_count"] == 1008
+    assert manifest["decision_summary"]["pilot_paper_heldout_negative_event_count"] == 1008
+    assert manifest["decision_summary"]["pilot_paper_heldout_attacked_positive_event_count"] == 252
+    assert manifest["decision_summary"]["pilot_paper_attacked_positive_event_count"] == 252
+    assert manifest["decision_summary"]["pilot_paper_tpr_at_fpr_01_pilot_claim_allowed"] is True
+    assert manifest["decision_summary"]["pilot_paper_tpr_at_fpr_001_claim_allowed"] is False
     assert manifest["decision_summary"]["validation_artifact_rebuild_dry_run_decision"] == "PASS"
     assert manifest["decision_summary"]["validation_artifact_rebuild_missing_count"] == 0
     assert manifest["decision_summary"]["motion_threshold_calibration_decision"] == "INSUFFICIENT_SAMPLE"
     assert manifest["decision_summary"]["motion_threshold_id"] == "motion_delta_heuristic_v1"
     assert manifest["decision_summary"]["motion_threshold_source_split"] == "heuristic_precalibration"
     assert manifest["decision_summary"]["motion_threshold_calibration_required"] is True
-    assert re.match(r"generative_video_model_probe_colab_\d{8}_\d{6}_[a-z0-9_\-]+\.zip", archive_path.name)
+    assert re.match(r"generative_video_runtime_\d{8}_\d{6}_[a-z0-9_\-]+\.zip", archive_path.name)
     assert manifest["package_batch_id"] == f"{manifest['package_utc_time']}_{manifest['package_short_commit']}"
     assert archive_path.stem.endswith(manifest["package_batch_id"])
     assert manifest_path.stem.endswith(f"{manifest['package_batch_id']}_package_manifest")
@@ -643,11 +639,11 @@ def test_generative_video_drive_packager_creates_archive_and_manifest(tmp_path: 
 @pytest.mark.quick
 def test_generative_video_drive_packager_reports_effective_mechanism_decision(tmp_path: Path) -> None:
     """package manifest 必须区分 runtime 原始机制判定与后处理后的有效机制判定。"""
-    run_root = tmp_path / "runs" / "generative_video_model_probe_colab"
+    run_root = tmp_path / "runs" / "generative_video_runtime"
     package_dir = tmp_path / "packages"
     write_jsonl(run_root / "records" / "generation_records.jsonl", [{"generation_model_id": "model", "prompt_id": "prompt"}])
     write_json(run_root / "artifacts" / "generative_video_colab_runtime_decision.json", {
-        "stage_id": "generative_video_model_probe_colab_runtime",
+        "stage_id": "generative_video_runtime",
         "implementation_decision": "PASS",
         "mechanism_decision": "FAIL",
     })

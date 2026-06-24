@@ -36,6 +36,7 @@ def test_claim3_downgrade_gate_preserves_full_support_when_replay_gate_passed(tm
     run_root = tmp_path / "run"
     write_json(run_root / "artifacts" / "replay_and_sketch_gate_decision.json", {
         "replay_and_sketch_gate_decision": "PASS",
+        "claim3_full_support_allowed": True,
     })
 
     audit = build_claim3_downgrade_audit(run_root)
@@ -43,6 +44,25 @@ def test_claim3_downgrade_gate_preserves_full_support_when_replay_gate_passed(tm
     assert audit["claim3_downgraded"] is False
     assert audit["claim3_full_support_allowed"] is True
     assert audit["replay_or_sketch_status"] == "replay_and_sketch_gate_passed"
+
+
+@pytest.mark.quick
+def test_claim3_downgrade_keeps_downgrade_for_validation_proxy_replay_gate(tmp_path: Path) -> None:
+    """validation proxy 级 replay/sketch gate 通过后, Claim-3 仍不能升级为 full-paper 强支持。"""
+    run_root = tmp_path / "run"
+    write_json(run_root / "artifacts" / "replay_and_sketch_gate_decision.json", {
+        "replay_and_sketch_gate_decision": "PASS",
+        "claim3_full_support_allowed": False,
+        "replay_or_sketch_status": "replay_and_sketch_gate_passed_validation_proxy",
+        "replay_and_sketch_evidence_level": "validation_runtime_trace_proxy",
+    })
+
+    audit = build_claim3_downgrade_audit(run_root)
+
+    assert audit["claim3_downgraded"] is True
+    assert audit["claim3_full_support_allowed"] is False
+    assert audit["replay_or_sketch_status"] == "replay_and_sketch_gate_passed_validation_proxy"
+    assert audit["claim3_downgrade_reason"] == "replay_and_sketch_gate_validation_proxy_only"
 
 
 @pytest.mark.quick

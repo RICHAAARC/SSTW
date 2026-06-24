@@ -64,6 +64,7 @@ def build_claim3_downgrade_audit(run_root: str | Path) -> dict[str, Any]:
     wrong_prompt_records = _read_jsonl(run_root / "records" / "wrong_prompt_replay_records.jsonl")
 
     replay_gate_passed = _decision_pass(replay_decision, "replay_and_sketch_gate_decision")
+    replay_gate_full_support_allowed = replay_decision.get("claim3_full_support_allowed") is True
     authenticated_trajectory_sketch_ready = _records_ready(
         trajectory_sketch_records,
         "trajectory_sketch_verification_status",
@@ -85,17 +86,18 @@ def build_claim3_downgrade_audit(run_root: str | Path) -> dict[str, Any]:
     if not replay_gate_passed:
         missing_replay_requirements.append("replay_and_sketch_gate_decision_pass")
 
-    claim3_downgraded = not replay_gate_passed
+    claim3_downgraded = not (replay_gate_passed and replay_gate_full_support_allowed)
     claim_support_status = (
         "claim3_full_support_available"
-        if replay_gate_passed
+        if not claim3_downgraded
         else "claim3_downgraded_validation_scale_only"
     )
-    replay_or_sketch_status = (
-        "replay_and_sketch_gate_passed"
-        if replay_gate_passed
-        else "claim3_explicitly_downgraded"
-    )
+    if replay_gate_passed and replay_gate_full_support_allowed:
+        replay_or_sketch_status = "replay_and_sketch_gate_passed"
+    elif replay_gate_passed:
+        replay_or_sketch_status = replay_decision.get("replay_or_sketch_status", "replay_and_sketch_gate_passed_validation_proxy")
+    else:
+        replay_or_sketch_status = "claim3_explicitly_downgraded"
 
     return {
         "stage_id": "claim3_downgrade_gate",
@@ -107,9 +109,14 @@ def build_claim3_downgrade_audit(run_root: str | Path) -> dict[str, Any]:
         if replay_gate_passed
         else "owner_side_audit_or_exploratory_replay_analysis",
         "claim3_downgrade_reason": "replay_and_sketch_gate_passed"
-        if replay_gate_passed
-        else "replay_and_sketch_gate_not_yet_implemented_or_not_passed",
-        "claim3_full_support_allowed": replay_gate_passed,
+        if not claim3_downgraded
+        else (
+            "replay_and_sketch_gate_validation_proxy_only"
+            if replay_gate_passed
+            else "replay_and_sketch_gate_not_yet_implemented_or_not_passed"
+        ),
+        "claim3_full_support_allowed": replay_gate_passed and replay_gate_full_support_allowed,
+        "replay_and_sketch_evidence_level": replay_decision.get("replay_and_sketch_evidence_level"),
         "replay_or_sketch_status": replay_or_sketch_status,
         "replay_and_sketch_gate_decision": replay_decision.get("replay_and_sketch_gate_decision"),
         "authenticated_trajectory_sketch_status": "ready"

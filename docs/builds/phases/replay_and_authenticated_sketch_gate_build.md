@@ -141,3 +141,30 @@ top_tier_innovation_claim: replay/sketch gate_required
 ```
 
 `replay/sketch gate` 完成前, full_paper 或投稿叙述不得把 Claim-3 写成强 supported claim。
+
+## 2026-06-24 validation proxy runner 接入
+
+当前已新增 replay/sketch gate 的 validation-scale 工程入口:
+
+```text
+experiments/generative_video_model_probe/replay_and_sketch_gate.py
+records/trajectory_sketch_verification_records.jsonl
+records/replay_uncertainty_records.jsonl
+records/wrong_sampler_replay_records.jsonl
+records/wrong_prompt_replay_records.jsonl
+tables/replay_verification_table.csv
+artifacts/replay_and_sketch_gate_decision.json
+reports/replay_and_sketch_gate_report.md
+```
+
+该 runner 从 `generation_records.jsonl` 与 `trajectory_trace.jsonl` 构造 authenticated trajectory sketch digest、replay uncertainty weight、wrong sampler replay control 和 wrong prompt replay control。它不读取 `S_final` 或最终检测判定分数来决定样本是否可用, 因此不会把最终检测结果反向用于污染过滤。
+
+当前 evidence level 为:
+
+```text
+replay_and_sketch_evidence_level: validation_runtime_trace_proxy
+claim_support_status: replay_and_sketch_validation_proxy_only
+claim3_full_support_allowed: false
+```
+
+这表示 validation-scale 的 replay/sketch records、table、decision 和 report 已具备工程闭环入口, 但还不能把 Claim-3 写成 full-paper 强 supported claim。后续若要解除 Claim-3 降级, 仍需要 full-paper 级 authenticated replay、held-out negative replay split、wrong sampler / wrong prompt / wrong time-grid FPR 审计和质量约束。

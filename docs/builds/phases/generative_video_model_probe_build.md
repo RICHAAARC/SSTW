@@ -532,3 +532,22 @@ artifacts/claim3_downgrade_decision.json
 reports/claim3_downgrade_report.md
 ```
 
+## 2026-06-24 replay/sketch gate validation proxy 接入
+
+validation-scale workflow 已新增 replay/sketch gate 步骤, 位于 adaptive attack proxy 与 Claim-3 downgrade gate 之间:
+
+```text
+runtime detection
+external_baseline adapter comparison
+small_scale_claim_pilot_gate
+validation_internal_ablation
+adaptive_attack validation proxy
+replay/sketch gate validation proxy
+Claim-3 downgrade gate
+statistical_confidence_interval
+validation_artifact_rebuild_dry_run
+validation_scale_gate
+package
+```
+
+新增步骤写出 trajectory sketch verification、replay uncertainty、wrong sampler replay 和 wrong prompt replay 四类 governed records。`validation_artifact_rebuild_dry_run` 与 Google Drive package manifest 已纳入该步骤产物。当前该步骤只解除 validation-scale 工程入口缺口, 不解除 full-paper Claim-3 强支持阻塞。

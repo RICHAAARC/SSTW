@@ -842,3 +842,12 @@ Notebook 与 repository module 的跨边界数据
 | not_final_paper_fpr_0_01 | governance | none | true | false | false | Whether current calibration is not a final paper-level FPR=0.01 claim. |
 | prompt_contamination_audit_record_count | metric | none | true | false | false | Number of prompt contamination audit records emitted. |
 | threshold_stability_audit | artifact | none | true | false | false | Artifact summarizing threshold stability, bootstrap CI, and prompt dominance. |
+| trajectory_sketch_digest_random | random_trace | none | true | false | true | Stable digest for authenticated trajectory sketch verification; suffix marks digest random governance boundary. |
+| replay_uncertainty_weight | metric | none | true | false | false | Weight derived from replay uncertainty proxy for validation replay records. |
+| replay_scheduler_id | governance | none | true | false | false | Scheduler identifier used by replay or sketch validation records. |
+| replay_time_grid_id | governance | none | true | false | false | Time-grid identifier used by replay or sketch validation records. |
+| wrong_prompt_replay_control | governance | none | true | false | false | Control label for wrong-prompt replay validation records. |
+| replay_and_sketch_gate_decision | governance | none | true | true | false | Decision status for replay and authenticated sketch gate. |
+| replay_and_sketch_evidence_level | governance | none | true | true | false | Evidence level for replay and authenticated sketch gate outputs. |
+| replay_control_status | governance | none | true | false | false | Replay control acceptance or rejection status. |
+| replay_and_sketch_missing_requirements | governance | none | true | false | false | Missing requirement names for replay and authenticated sketch gate. |

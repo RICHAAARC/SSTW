@@ -129,7 +129,7 @@ def _replay_or_sketch_ready(run_root: Path) -> tuple[bool, str]:
     """检查 replay/sketch gate 是否闭合, 或 Claim-3 是否已经显式降级。"""
     replay_decision = _read_json(run_root / "artifacts" / "replay_and_sketch_gate_decision.json")
     if _decision_pass(replay_decision, "replay_and_sketch_gate_decision"):
-        return True, "replay_and_sketch_gate_passed"
+        return True, str(replay_decision.get("replay_or_sketch_status") or "replay_and_sketch_gate_passed")
     downgrade_decision = _read_json(run_root / "artifacts" / "claim3_downgrade_decision.json")
     if downgrade_decision.get("claim3_downgraded") is True:
         return True, "claim3_explicitly_downgraded"

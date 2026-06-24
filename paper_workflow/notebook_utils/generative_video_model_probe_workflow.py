@@ -172,6 +172,17 @@ def build_adaptive_attack_command(layout: dict[str, str]) -> list[str]:
     ]
 
 
+def build_replay_and_sketch_gate_command(layout: dict[str, str]) -> list[str]:
+    """构造 replay/sketch gate validation proxy 命令。"""
+    return [
+        sys.executable,
+        "-m",
+        "experiments.generative_video_model_probe.replay_and_sketch_gate",
+        "--run-root",
+        layout["drive_run_root"],
+    ]
+
+
 def build_claim3_downgrade_command(layout: dict[str, str]) -> list[str]:
     """构造 Claim-3 downgrade gate 命令, 明确 replay/sketch 未闭合时的 claim 边界。"""
     return [

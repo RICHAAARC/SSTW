@@ -1213,3 +1213,21 @@ final_detection_score_used_for_filtering: false
 ```
 
 该变更使 validation-scale 结果中“23 个 eligible 样本 + 1 个 formal motion exclusion”能够被正确解释: 若 8 个 prompt 均仍至少保留 2 个 seed, 则 `small_scale_claim_pilot_gate_passed` 不应再因为已剔除样本而失败。后续真实 GPU 复跑仍需重新生成并落盘 artifacts, 本地代码层面已经补充对应回归测试。
+
+## 2026-06-24 replay/sketch gate validation proxy 工程推进
+
+在 validation-scale gate 已通过后, 项目已开始进入 replay/sketch、现代 external baseline 和真实内部消融的后续建设阶段。第一项推进为 replay/sketch gate validation proxy:
+
+```text
+replay_and_sketch_gate_runner: implemented_for_validation_proxy
+trajectory_sketch_verification_records: implemented
+replay_uncertainty_records: implemented
+wrong_sampler_replay_records: implemented
+wrong_prompt_replay_records: implemented
+validation_artifact_rebuild_replay_sketch_inputs: integrated
+colab_workflow_replay_sketch_step: integrated
+package_manifest_replay_sketch_summary: integrated
+claim3_full_support_allowed: false
+```
+
+该状态说明 validation-scale 工程流程可以继续向 full-paper dry-run checker 推进, 但 Claim-3 仍保持降级边界。后续还需要把 validation proxy 升级为 full-paper 级 authenticated replay 和 replay negative FPR 审计。

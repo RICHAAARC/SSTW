@@ -97,6 +97,7 @@ def package_generative_video_colab_run(
     external_baseline_comparison_decision_path = run_root_path / "artifacts" / "external_baseline_comparison_decision.json"
     internal_ablation_decision_path = run_root_path / "artifacts" / "validation_internal_ablation_decision.json"
     adaptive_attack_decision_path = run_root_path / "artifacts" / "adaptive_attack_decision.json"
+    replay_and_sketch_decision_path = run_root_path / "artifacts" / "replay_and_sketch_gate_decision.json"
     claim3_downgrade_decision_path = run_root_path / "artifacts" / "claim3_downgrade_decision.json"
     confidence_interval_decision_path = run_root_path / "artifacts" / "statistical_confidence_interval_decision.json"
     artifact_rebuild_decision_path = run_root_path / "artifacts" / "validation_artifact_rebuild_dry_run_decision.json"
@@ -122,6 +123,7 @@ def package_generative_video_colab_run(
     external_baseline_comparison_decision = _read_json_if_exists(external_baseline_comparison_decision_path)
     internal_ablation_decision = _read_json_if_exists(internal_ablation_decision_path)
     adaptive_attack_decision = _read_json_if_exists(adaptive_attack_decision_path)
+    replay_and_sketch_decision = _read_json_if_exists(replay_and_sketch_decision_path)
     claim3_downgrade_decision = _read_json_if_exists(claim3_downgrade_decision_path)
     confidence_interval_decision = _read_json_if_exists(confidence_interval_decision_path)
     artifact_rebuild_decision = _read_json_if_exists(artifact_rebuild_decision_path)
@@ -184,6 +186,13 @@ def package_generative_video_colab_run(
             "adaptive_attack_decision": adaptive_attack_decision.get("adaptive_attack_decision"),
             "adaptive_attack_record_count": adaptive_attack_decision.get("adaptive_attack_record_count"),
             "adaptive_robustness_claim_allowed": adaptive_attack_decision.get("adaptive_robustness_claim_allowed"),
+            "replay_and_sketch_gate_decision": replay_and_sketch_decision.get("replay_and_sketch_gate_decision"),
+            "replay_and_sketch_evidence_level": replay_and_sketch_decision.get("replay_and_sketch_evidence_level"),
+            "trajectory_sketch_verified_count": replay_and_sketch_decision.get("trajectory_sketch_verified_count"),
+            "replay_uncertainty_ready_count": replay_and_sketch_decision.get("replay_uncertainty_ready_count"),
+            "wrong_sampler_replay_rejected_count": replay_and_sketch_decision.get("wrong_sampler_replay_rejected_count"),
+            "wrong_prompt_replay_rejected_count": replay_and_sketch_decision.get("wrong_prompt_replay_rejected_count"),
+            "replay_and_sketch_claim3_full_support_allowed": replay_and_sketch_decision.get("claim3_full_support_allowed"),
             "claim3_downgrade_decision": claim3_downgrade_decision.get("claim3_downgrade_decision"),
             "claim3_downgraded": claim3_downgrade_decision.get("claim3_downgraded"),
             "claim3_full_support_allowed": claim3_downgrade_decision.get("claim3_full_support_allowed"),

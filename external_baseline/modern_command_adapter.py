@@ -9,10 +9,10 @@ from pathlib import Path
 import shlex
 import subprocess
 import sys
-import tempfile
 from typing import Any, Mapping
 
 from external_baseline.runtime_trace_io import build_comparison_unit_id, comparable_detection_records, safe_float
+from main.core.digest import build_stable_digest
 from main.protocol.flow_evidence_fields import with_flow_evidence_protocol_defaults
 
 
@@ -105,6 +105,43 @@ def _read_official_output(path: Path) -> dict[str, Any]:
     return payload
 
 
+def _write_json(path: Path, payload: Mapping[str, Any]) -> None:
+    """写出外部 baseline 官方命令证据 JSON。
+
+    该函数属于通用工程写法, 目的是让 Colab 冷启动中的第三方命令输出可以随
+    Google Drive package 一起落盘, 后续审计时不只依赖聚合分数。
+    """
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+
+def _write_text(path: Path, value: str) -> None:
+    """写出官方命令 stdout / stderr 文本证据。"""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(value, encoding="utf-8")
+
+
+def _official_command_evidence_paths(
+    run_root: Path,
+    config: ModernBaselineCommandConfig,
+    score_record_id: str,
+) -> dict[str, str]:
+    """构造单条现代 baseline 官方命令的持久化证据路径。
+
+    项目特定要求是: `measured_formal` 不能只保留分数, 还必须保留官方命令输出
+    JSON、stdout / stderr 和受治理 manifest, 以便 `external_baseline_execution_manifest`
+    能证明该结果不是手工表格。
+    """
+    score_suffix = score_record_id.replace("external_baseline_score_", "")
+    evidence_dir = run_root / "artifacts" / "external_baseline_evidence" / config.baseline_name / score_suffix
+    return {
+        "external_baseline_official_output_path": str(evidence_dir / "official_output.json"),
+        "external_baseline_official_stdout_path": str(evidence_dir / "official_stdout.txt"),
+        "external_baseline_official_stderr_path": str(evidence_dir / "official_stderr.txt"),
+        "external_baseline_official_command_manifest_path": str(evidence_dir / "official_command_manifest.json"),
+    }
+
+
 def _extract_score(payload: Mapping[str, Any]) -> float:
     """从常见官方输出字段中提取 baseline score。"""
     for field in (
@@ -127,8 +164,10 @@ def _unsupported_record(
     baseline_record: Mapping[str, Any],
     detection_record: Mapping[str, Any],
     reason: str,
+    evidence_paths: Mapping[str, str] | None = None,
 ) -> dict[str, Any]:
     """构造现代 baseline 无法正式评分时的 governed unsupported record。"""
+    persisted_evidence_paths = dict(evidence_paths or {})
     return with_flow_evidence_protocol_defaults({
         "record_version": "external_baseline_score_v2",
         "external_baseline_score_record_id": build_comparison_unit_id(config.baseline_name, detection_record),
@@ -159,6 +198,7 @@ def _unsupported_record(
         "baseline_score_margin": None,
         "external_baseline_result_used_for_claim": False,
         "claim_support_status": "modern_external_baseline_formal_adapter_not_measured",
+        **persisted_evidence_paths,
     }, trajectory_source_level="external_modern_baseline_official_adapter", claim_support_status="modern_external_baseline_formal_adapter_not_measured")
 
 
@@ -182,6 +222,8 @@ def build_modern_score_records(
 
     timeout_sec = safe_float(os.environ.get("SSTW_EXTERNAL_BASELINE_TIMEOUT_SEC"), 1800.0)
     for detection_record in detection_records:
+        score_record_id = build_comparison_unit_id(config.baseline_name, detection_record)
+        evidence_paths: dict[str, str] = {}
         try:
             source_path = Path(str(detection_record.get("source_video_path") or ""))
             attacked_path = Path(str(detection_record.get("attacked_video_path") or ""))
@@ -189,18 +231,39 @@ def build_modern_score_records(
                 raise FileNotFoundError("source_video_path_missing")
             if not attacked_path.exists():
                 raise FileNotFoundError("attacked_video_path_missing")
-            with tempfile.TemporaryDirectory(prefix=f"sstw_{config.baseline_name}_") as temp_dir:
-                output_json_path = Path(temp_dir) / "official_output.json"
-                argv = _format_command(command_template, root, detection_record, output_json_path)
-                completed = subprocess.run(argv, text=True, capture_output=True, timeout=timeout_sec)
-                if completed.returncode != 0:
-                    raise RuntimeError(f"official_command_failed:{completed.returncode}:{completed.stderr[-500:]}")
-                payload = _read_official_output(output_json_path)
+            evidence_paths = _official_command_evidence_paths(root, config, score_record_id)
+            output_json_path = Path(evidence_paths["external_baseline_official_output_path"])
+            stdout_path = Path(evidence_paths["external_baseline_official_stdout_path"])
+            stderr_path = Path(evidence_paths["external_baseline_official_stderr_path"])
+            command_manifest_path = Path(evidence_paths["external_baseline_official_command_manifest_path"])
+            output_json_path.parent.mkdir(parents=True, exist_ok=True)
+            argv = _format_command(command_template, root, detection_record, output_json_path)
+            completed = subprocess.run(argv, text=True, capture_output=True, timeout=timeout_sec)
+            _write_text(stdout_path, completed.stdout)
+            _write_text(stderr_path, completed.stderr)
+            _write_json(command_manifest_path, {
+                "manifest_kind": "external_baseline_official_command_evidence",
+                "baseline_name": config.baseline_name,
+                "external_baseline_score_record_id": score_record_id,
+                "trajectory_trace_id": detection_record.get("trajectory_trace_id"),
+                "attack_name": detection_record.get("attack_name"),
+                "command_argv_digest": build_stable_digest(argv),
+                "command_executable": argv[0] if argv else "",
+                "command_argument_count": len(argv),
+                "command_return_code": completed.returncode,
+                "official_output_json_path": str(output_json_path),
+                "official_stdout_path": str(stdout_path),
+                "official_stderr_path": str(stderr_path),
+                "claim_support_status": "external_baseline_official_command_evidence",
+            })
+            if completed.returncode != 0:
+                raise RuntimeError(f"official_command_failed:{completed.returncode}:{completed.stderr[-500:]}")
+            payload = _read_official_output(output_json_path)
             score = round(_extract_score(payload), 6)
             method_score = safe_float(detection_record.get("S_runtime_attack_detection"), 0.0)
             records.append(with_flow_evidence_protocol_defaults({
                 "record_version": "external_baseline_score_v2",
-                "external_baseline_score_record_id": build_comparison_unit_id(config.baseline_name, detection_record),
+                "external_baseline_score_record_id": score_record_id,
                 "external_baseline_name": config.baseline_name,
                 "external_baseline_family": baseline_record.get("external_baseline_family") or config.baseline_family,
                 "external_baseline_layer": baseline_record.get("external_baseline_layer"),
@@ -230,7 +293,8 @@ def build_modern_score_records(
                 "baseline_score_margin": round(method_score - score, 6),
                 "external_baseline_result_used_for_claim": True,
                 "claim_support_status": config.claim_support_status,
+                **evidence_paths,
             }, trajectory_source_level="external_modern_baseline_official_adapter", claim_support_status=config.claim_support_status))
         except Exception as exc:
-            records.append(_unsupported_record(config, baseline_record, detection_record, str(exc)))
+            records.append(_unsupported_record(config, baseline_record, detection_record, str(exc), evidence_paths=evidence_paths))
     return records

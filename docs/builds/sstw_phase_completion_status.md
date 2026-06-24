@@ -1431,3 +1431,26 @@ real_modern_baseline_results: pending_user_colab_configuration_and_run
 ```
 
 该更新只改变执行边界和 Notebook 预检逻辑, 不产生新的真实 baseline 结果。当前项目仍需要用户在 Colab 中安装或挂载 5 个现代视频水印 baseline 的官方实现, 配置对应 command adapter, 并把运行日志、配置或官方输出路径填入 `EXTERNAL_BASELINE_EVIDENCE_PATHS`。在这些内容完成前, `validation_scale` 会提前阻断, 不允许继续生成缺现代 baseline 的 paper-gate 结果包。
+
+## 2026-06-24 现代 baseline 官方输出证据持久化
+
+本次继续加固 external baseline 正式 adapter。现代视频水印 baseline command adapter 不再只把官方输出 JSON 读入内存后丢弃, 而是把每条官方命令的输出证据持久化到当前 Colab `run_root`:
+
+```text
+artifacts/external_baseline_evidence/<baseline_id>/<score_digest>/official_output.json
+artifacts/external_baseline_evidence/<baseline_id>/<score_digest>/official_stdout.txt
+artifacts/external_baseline_evidence/<baseline_id>/<score_digest>/official_stderr.txt
+artifacts/external_baseline_evidence/<baseline_id>/<score_digest>/official_command_manifest.json
+```
+
+对应状态为:
+
+```text
+modern_external_baseline_official_output_persistence: implemented
+external_baseline_execution_manifest_auto_evidence_collection: implemented
+formal_evidence_status_when_command_outputs_exist: evidence_paths_bound
+google_drive_package_auditability_for_baseline_outputs: improved
+real_modern_baseline_results: still_pending_colab_run
+```
+
+该更新不会在本地产生真实 baseline 结果, 但会保证未来 Colab 运行完成后, package 中保留每条 `measured_formal` baseline score 的官方输出、stdout / stderr 和命令证据 manifest, 便于后续 claim audit 和 rebuttal-ready evidence index 使用。

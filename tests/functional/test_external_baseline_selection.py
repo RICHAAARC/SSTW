@@ -222,7 +222,12 @@ def test_modern_external_baseline_formal_command_adapters_write_measured_records
     }
     assert formal_records
     assert all(record["external_baseline_result_used_for_claim"] is True for record in formal_records)
+    assert all(Path(record["external_baseline_official_output_path"]).exists() for record in formal_records)
+    assert all(Path(record["external_baseline_official_stdout_path"]).exists() for record in formal_records)
+    assert all(Path(record["external_baseline_official_stderr_path"]).exists() for record in formal_records)
+    assert all(Path(record["external_baseline_official_command_manifest_path"]).exists() for record in formal_records)
     assert all(record.get("S_final") is None for record in records)
     execution_manifest = json.loads((run_root / "artifacts" / "external_baseline_execution_manifest.json").read_text(encoding="utf-8"))
     assert execution_manifest["modern_external_baseline_formal_measured_adapter_count"] == 5
-    assert execution_manifest["formal_evidence_status"] == "formal_rows_without_external_evidence_paths"
+    assert execution_manifest["formal_evidence_status"] == "evidence_paths_bound"
+    assert execution_manifest["evidence_path_count"] >= len(formal_records)

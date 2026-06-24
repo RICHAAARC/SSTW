@@ -95,7 +95,7 @@ Colab 中必须显式配置以下三类内容:
 
    该开关只会对可 git clone 的 source URL 生效。不能 git clone 的论文页面、PDF 或 HTML source 仍需要用户在 Colab 中提供官方命令或手工放置 source snapshot。
 
-3. 外部运行证据路径:
+3. 额外外部运行证据路径:
 
    ```text
    EXTERNAL_BASELINE_EVIDENCE_PATHS = [
@@ -103,6 +103,23 @@ Colab 中必须显式配置以下三类内容:
    ]
    ```
 
-这些 evidence path 应指向官方 baseline 运行日志、配置、输出 JSON、依赖快照或校验文件。adapter 会把路径写入 `artifacts/external_baseline_execution_manifest.json`。没有 evidence path 的 `measured_formal` rows 只能证明 command adapter 写出了受治理 records, 不能单独支撑论文主表 claim。
+这些 evidence path 应指向官方 baseline 运行日志、配置、输出 JSON、依赖快照或校验文件。adapter 会把路径写入 `artifacts/external_baseline_execution_manifest.json`。
+
+同时, 现代 baseline command adapter 会自动把每条官方命令的输出持久化到:
+
+```text
+artifacts/external_baseline_evidence/<baseline_id>/<score_digest>/
+```
+
+该目录包含:
+
+```text
+official_output.json
+official_stdout.txt
+official_stderr.txt
+official_command_manifest.json
+```
+
+这些文件会被自动纳入 `external_baseline_execution_manifest.json` 的 `evidence_paths`。因此 Colab 断开后, 用户仍可以从 Google Drive package 中审计每条 `measured_formal` baseline score 的官方输出来源。若没有自动持久化证据且没有额外 evidence path, `measured_formal` rows 只能证明 command adapter 写出了受治理 records, 不能单独支撑论文主表 claim。
 
 当前 `validation_scale` 已经是进入 paper 级运行前的最后一道完整门禁。因此在 `PROFILE = 'validation_scale'`、`PROFILE = 'pilot_paper'` 或 `PROFILE = 'fpr01_pilot'` 时, Colab notebook 会在 5 个现代 baseline command 缺失时提前阻断, 避免先消耗 GPU 生成视频后才发现 baseline 主表无法闭合。

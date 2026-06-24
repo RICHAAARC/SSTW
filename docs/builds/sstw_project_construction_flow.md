@@ -2038,3 +2038,14 @@ evidence_paths
 ```
 
 其中 evidence paths 应指向 Colab 或 Google Drive 中实际存在的官方 baseline 运行日志、配置、输出 JSON 或依赖快照。没有 evidence paths 的 formal rows 只能作为工程接入证据, 不得直接升级为论文主表 claim。
+
+现代 baseline command adapter 还必须把每条官方命令的输出自动持久化到当前 `run_root`:
+
+```text
+artifacts/external_baseline_evidence/<baseline_id>/<score_digest>/official_output.json
+artifacts/external_baseline_evidence/<baseline_id>/<score_digest>/official_stdout.txt
+artifacts/external_baseline_evidence/<baseline_id>/<score_digest>/official_stderr.txt
+artifacts/external_baseline_evidence/<baseline_id>/<score_digest>/official_command_manifest.json
+```
+
+这些文件属于 Colab 真实运行证据, 会被 `external_baseline_execution_manifest.json` 自动收集到 `evidence_paths`。这样即使 Colab 运行环境断开, Google Drive package 仍保留每条 `measured_formal` external baseline score 的官方输出来源。该机制属于项目特定写法, 目的是防止现代 baseline 对比退化为只保留聚合分数的不可审计表格。

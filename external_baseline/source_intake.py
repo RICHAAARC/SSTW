@@ -15,6 +15,7 @@ TABLE_PLAN_RELATIVE_PATH = Path("plans/external_baseline_table_plan.json")
 INTAKE_MANIFEST_NAME = "external_baseline_intake_manifest.json"
 SOURCE_INSPECTION_NAME = "external_baseline_source_inspection.json"
 CLONE_RESULTS_NAME = "external_baseline_clone_results.json"
+OFFICIAL_COMMAND_EVIDENCE_RELATIVE_ROOT = Path("artifacts/external_baseline_evidence")
 
 MODERN_BASELINE_IDS = {
     "videoshield",
@@ -429,6 +430,29 @@ def existing_evidence_paths(raw_value: str | None = None) -> list[str]:
     return [str(Path(item).resolve()) for item in candidates if Path(item).exists()]
 
 
+def persisted_official_command_evidence_paths(run_root: str | Path) -> list[str]:
+    """收集现代 baseline command adapter 在 run_root 中持久化的官方输出证据。
+
+    该函数属于项目特定写法。它把 Colab 中真实执行第三方 baseline 后留下的
+    `official_output.json`、stdout / stderr 和 command manifest 绑定到 execution manifest,
+    避免 measured_formal records 只剩聚合分数。
+    """
+    evidence_root = Path(run_root) / OFFICIAL_COMMAND_EVIDENCE_RELATIVE_ROOT
+    if not evidence_root.is_dir():
+        return []
+    paths = [
+        path
+        for path in evidence_root.rglob("*")
+        if path.is_file() and path.name in {
+            "official_output.json",
+            "official_stdout.txt",
+            "official_stderr.txt",
+            "official_command_manifest.json",
+        }
+    ]
+    return [str(path.resolve()) for path in sorted(paths)]
+
+
 def summarize_records_for_execution_manifest(records: Iterable[Mapping[str, Any]]) -> dict[str, Any]:
     """从 comparison records 汇总 external baseline execution manifest 所需字段。"""
     materialized = [dict(record) for record in records]
@@ -464,7 +488,14 @@ def build_execution_manifest(
     绑定时, 才能在后续 claim gate 中升级为正式主表证据。
     """
     summary = summarize_records_for_execution_manifest(records)
-    materialized_evidence_paths = list(evidence_paths if evidence_paths is not None else existing_evidence_paths())
+    configured_evidence_paths = list(evidence_paths if evidence_paths is not None else existing_evidence_paths())
+    persisted_evidence_paths = persisted_official_command_evidence_paths(run_root)
+    materialized_evidence_paths = []
+    seen_paths: set[str] = set()
+    for path in [*configured_evidence_paths, *persisted_evidence_paths]:
+        if path not in seen_paths:
+            materialized_evidence_paths.append(path)
+            seen_paths.add(path)
     formal_rows_present = summary["external_baseline_formal_measured_adapter_count"] > 0
     return {
         "artifact_name": "external_baseline_execution_manifest.json",

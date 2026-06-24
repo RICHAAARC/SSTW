@@ -6,6 +6,8 @@ from pathlib import Path, PurePosixPath
 import subprocess
 import sys
 
+from paper_workflow.notebook_utils.streaming_command import run_streaming_command
+
 
 DEFAULT_DRIVE_PROJECT_ROOT = "/content/drive/MyDrive/SSTW"
 DEFAULT_WAN21_PREFLIGHT_MODEL_ID = "Wan-AI/Wan2.1-T2V-1.3B-Diffusers"
@@ -83,5 +85,5 @@ def build_drive_packaging_command(layout: dict[str, str]) -> list[str]:
 
 
 def run_command(command: list[str]) -> subprocess.CompletedProcess[str]:
-    """执行 Notebook 编排命令, 正式输出由仓库模块负责生成。"""
-    return subprocess.run(command, text=True, capture_output=True)
+    """执行 Notebook 编排命令, 并实时显示 repository runner 进度。"""
+    return run_streaming_command(command)

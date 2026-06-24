@@ -8,6 +8,8 @@ import subprocess
 import sys
 from typing import Any, Mapping
 
+from paper_workflow.notebook_utils.streaming_command import run_streaming_command
+
 
 DEFAULT_DRIVE_PROJECT_ROOT = "/content/drive/MyDrive/SSTW"
 DEFAULT_VALIDATION_SCALE_CONFIG = "configs/protocol/validation_scale_generative_probe.json"
@@ -730,5 +732,5 @@ def build_drive_packaging_command(layout: dict[str, str], include_videos: bool =
 
 
 def run_command(command: list[str]) -> subprocess.CompletedProcess[str]:
-    """执行 Notebook 编排命令, 输出仍由仓库脚本负责生成。"""
-    return subprocess.run(command, text=True, capture_output=True)
+    """执行 Notebook 编排命令, 并实时显示 repository runner 进度。"""
+    return run_streaming_command(command)

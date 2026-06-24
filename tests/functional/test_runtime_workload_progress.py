@@ -4,10 +4,12 @@ from __future__ import annotations
 
 import io
 from pathlib import Path
+import sys
 
 import pytest
 
 from main.core.progress import ProgressReporter
+from paper_workflow.notebook_utils.streaming_command import run_streaming_command
 
 
 @pytest.mark.quick
@@ -26,6 +28,22 @@ def test_progress_reporter_prints_runtime_total_from_caller() -> None:
     assert "1/4 (25.0%)" in output
     assert "4/4 (100.0%)" in output
     assert "finish | total=4 runtime_video" in output
+
+
+@pytest.mark.quick
+def test_notebook_command_runner_streams_subprocess_output(capsys: pytest.CaptureFixture[str]) -> None:
+    """Notebook helper 必须流式转发子进程输出, 否则 Colab 中看不到实时工作量进度。"""
+    result = run_streaming_command([
+        sys.executable,
+        "-c",
+        "print('SSTW 工作量进度 | stream_test | 1/1 (100.0%)', flush=True)",
+    ])
+
+    captured = capsys.readouterr()
+    assert result.returncode == 0
+    assert result.stdout == ""
+    assert result.stderr == ""
+    assert "SSTW 工作量进度 | stream_test | 1/1 (100.0%)" in captured.out
 
 
 @pytest.mark.quick
@@ -79,3 +97,17 @@ def test_runtime_runners_use_dynamic_plan_and_record_counts_for_progress() -> No
         source = Path(path_text).read_text(encoding="utf-8")
         for pattern in patterns:
             assert pattern in source, path_text
+
+
+@pytest.mark.quick
+def test_notebook_workflow_helpers_do_not_capture_subprocess_output() -> None:
+    """Colab workflow helper 不得使用 capture_output 缓存长耗时 runner 进度。"""
+    helper_paths = [
+        Path("paper_workflow/notebook_utils/generative_video_model_probe_workflow.py"),
+        Path("paper_workflow/notebook_utils/sampling_time_constraint_workflow.py"),
+        Path("paper_workflow/notebook_utils/flow_model_adapter_preflight_workflow.py"),
+    ]
+    for helper_path in helper_paths:
+        source = helper_path.read_text(encoding="utf-8")
+        assert "run_streaming_command(command)" in source
+        assert "capture_output=True" not in source

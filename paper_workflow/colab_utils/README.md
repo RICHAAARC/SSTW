@@ -246,6 +246,8 @@ external baseline adapter 矩阵: len(baseline_records)
 export SSTW_PROGRESS=0
 ```
 
+Colab Notebook 调用仓库命令时必须使用 `paper_workflow.notebook_utils.streaming_command.run_streaming_command`。该 helper 会逐行转发子进程输出, 避免 `subprocess.run(..., capture_output=True)` 把 `SSTW 工作量进度` 缓存到任务结束后才显示。若长时间没有看到进度, 优先确认 Colab 中的仓库代码已经拉取到包含该 helper 的最新提交。
+
 ## 7. 常见失败原因
 
 1. 未先运行或未保留 `motion_calibration` artifact, 导致 motion threshold reuse 失败。

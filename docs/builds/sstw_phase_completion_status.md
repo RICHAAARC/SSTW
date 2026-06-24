@@ -1231,3 +1231,46 @@ claim3_full_support_allowed: false
 ```
 
 该状态说明 validation-scale 工程流程可以继续向 full-paper dry-run checker 推进, 但 Claim-3 仍保持降级边界。后续还需要把 validation proxy 升级为 full-paper 级 authenticated replay 和 replay negative FPR 审计。
+
+
+## 2026-06-24 FPR=0.01 pilot 工程入口
+
+当前 `generative_video_model_probe` 已新增 `fpr01_pilot` profile, 用于在 validation-scale 与 full-paper 之间补充一个中等规模低 FPR pilot。该 profile 的目标不是替代 full-paper, 而是让项目在进入大规模实验前先获得 pilot 级 `TPR@FPR=0.01` 可报告证据。
+
+该阶段已经按论文同构协议改为:
+
+```text
+calibration split
+-> frozen threshold artifact
+-> held-out test split
+-> tables / figures / claim audit
+```
+
+新增工程入口包括:
+
+```text
+configs/protocol/fpr01_pilot_generative_probe.json
+experiments/generative_video_model_probe/fpr01_pilot_gate.py
+colab_runtime PROFILE = fpr01_pilot
+notebook workflow build_fpr01_pilot_gate_command
+Google Drive package manifest fpr01 summary
+```
+
+当前数据集构造目标为:
+
+```text
+prompt_count: 21
+seed_per_prompt: 8
+calibration_seed_per_prompt: 4
+test_seed_per_prompt: 4
+unique_video_count: 168
+calibration_unique_video_count: 84
+test_unique_video_count: 84
+expected_calibration_negative_event_count: 1008
+expected_heldout_test_negative_event_count: 1008
+expected_heldout_attacked_positive_event_count: 252
+target_fpr: 0.01
+threshold_protocol: calibration_split_to_frozen_threshold_to_heldout_test_split
+```
+
+该阶段通过后只允许报告 `fpr01_pilot_calibrated_heldout_claim_ready` 和 pilot 级 `TPR@FPR=0.01` 结论, 不允许报告 `TPR@FPR=0.001` 或 full-paper 主表结论。

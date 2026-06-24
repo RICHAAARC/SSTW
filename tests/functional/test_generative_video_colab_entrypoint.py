@@ -74,7 +74,7 @@ def test_motion_calibration_prompt_suite_uses_observability_repair_prompts(tmp_p
     suite = json.loads(Path(summary["prompt_suite_path"]).read_text(encoding="utf-8"))
     prompts_by_id = {item["prompt_id"]: item["prompt_text"].lower() for item in suite["prompts"]}
 
-    assert suite["prompt_suite_id"] == "generative_video_probe_prompt_suite_motion_observability_and_pilot_repair"
+    assert suite["prompt_suite_id"] == "generative_video_probe_prompt_suite_motion_observability_fpr01_pilot"
 
     # 这两个历史 prompt 在真实 Wan2.1 calibration 中分别只有 3 / 8 和 1 / 8 通过, 因此不能回退。
     assert "large red square slides" not in prompts_by_id["motion_calib_positive_motion_00"]
@@ -132,6 +132,34 @@ def test_validation_scale_profile_expands_pilot_prompts_to_three_seeds(tmp_path:
 
 
 @pytest.mark.quick
+def test_fpr01_pilot_profile_constructs_medium_scale_low_fpr_plan(tmp_path: Path) -> None:
+    """fpr01_pilot profile 必须构造 calibration/test split 的低 FPR pilot。"""
+    output_root = tmp_path / "prompt_suite"
+    summary = write_prompt_suite(output_root)
+    suite = json.loads(Path(summary["prompt_suite_path"]).read_text(encoding="utf-8"))
+    plan = _build_generation_plan(suite, "fpr01_pilot", "Wan-AI/Wan2.1-T2V-1.3B-Diffusers", None)
+
+    fpr01_prompts = [item for item in suite["prompts"] if item.get("prompt_suite_role") == "fpr01_pilot"]
+    fpr01_seeds = [item for item in suite["seeds"] if item.get("prompt_suite_role") == "fpr01_pilot"]
+
+    assert suite["fpr01_pilot_design"]["target_fpr"] == 0.01
+    assert suite["fpr01_pilot_design"]["threshold_protocol"] == "calibration_split_to_frozen_threshold_to_heldout_test_split"
+    assert suite["fpr01_pilot_design"]["target_generation_video_count"] == 168
+    assert suite["fpr01_pilot_design"]["target_calibration_negative_event_count"] == 1008
+    assert suite["fpr01_pilot_design"]["target_heldout_test_negative_event_count"] == 1008
+    assert suite["fpr01_pilot_design"]["target_test_attacked_positive_event_count"] == 252
+    assert len(fpr01_prompts) == 21
+    assert len(fpr01_seeds) == 8
+    assert len(plan) == 168
+    assert len({item["prompt_id"] for item in plan}) == 21
+    assert {item["seed_suite_role"] for item in plan} == {"fpr01_pilot"}
+    assert {item["prompt_suite_role"] for item in plan} == {"fpr01_pilot"}
+    assert {item["split"] for item in plan} == {"calibration", "test"}
+    assert sum(1 for item in plan if item["split"] == "calibration") == 84
+    assert sum(1 for item in plan if item["split"] == "test") == 84
+
+
+@pytest.mark.quick
 def test_generative_video_colab_notebook_calls_repository_modules() -> None:
     """Notebook 只能作为入口, 必须调用仓库脚本或 experiments 模块生成正式输出。"""
     notebook_path = Path("paper_workflow/colab_utils/generative_video_model_probe_colab.ipynb")
@@ -146,6 +174,8 @@ def test_generative_video_colab_notebook_calls_repository_modules() -> None:
     assert "add_to_git_credential=False" in source
     assert "generative_video_model_probe_workflow" in source
     assert "PROFILE = 'validation_scale'" in source
+    assert "fpr01_pilot" in source
+    assert "TPR@FPR=0.01" in source
     assert "MODEL_ID = 'Wan-AI/Wan2.1-T2V-1.3B-Diffusers'" in source
     assert "build_formal_metric_command" in source
     assert "motion_calibration" in source
@@ -164,6 +194,7 @@ def test_generative_video_colab_notebook_calls_repository_modules() -> None:
     assert "build_replay_and_sketch_gate_command" in source
     assert "build_claim3_downgrade_command" in source
     assert "build_statistical_confidence_interval_command" in source
+    assert "build_fpr01_pilot_gate_command" in source
     assert "build_validation_artifact_rebuild_dry_run_command" in source
     assert "build_validation_scale_gate_command" in source
     assert "scripts/prepare_generative_video_prompt_suite.py" in Path("paper_workflow/notebook_utils/generative_video_model_probe_workflow.py").read_text(encoding="utf-8")
@@ -181,6 +212,7 @@ def test_generative_video_colab_notebook_calls_repository_modules() -> None:
     assert "experiments.generative_video_model_probe.replay_and_sketch_gate" in Path("paper_workflow/notebook_utils/generative_video_model_probe_workflow.py").read_text(encoding="utf-8")
     assert "experiments.generative_video_model_probe.claim3_downgrade" in Path("paper_workflow/notebook_utils/generative_video_model_probe_workflow.py").read_text(encoding="utf-8")
     assert "experiments.generative_video_model_probe.statistical_confidence_interval" in Path("paper_workflow/notebook_utils/generative_video_model_probe_workflow.py").read_text(encoding="utf-8")
+    assert "experiments.generative_video_model_probe.fpr01_pilot_gate" in Path("paper_workflow/notebook_utils/generative_video_model_probe_workflow.py").read_text(encoding="utf-8")
     assert "experiments.generative_video_model_probe.validation_artifact_rebuild" in Path("paper_workflow/notebook_utils/generative_video_model_probe_workflow.py").read_text(encoding="utf-8")
     assert "experiments.generative_video_model_probe.validation_scale_gate" in Path("paper_workflow/notebook_utils/generative_video_model_probe_workflow.py").read_text(encoding="utf-8")
     assert "scripts/package_results/generative_video_drive_packager.py" in Path("paper_workflow/notebook_utils/generative_video_model_probe_workflow.py").read_text(encoding="utf-8")
@@ -268,6 +300,25 @@ def test_generative_video_drive_packager_creates_archive_and_manifest(tmp_path: 
         "statistical_confidence_interval_decision": "PASS",
         "ci_total_count": 12,
     })
+    write_json(run_root / "artifacts" / "fpr01_pilot_gate_decision.json", {
+        "fpr01_pilot_gate_decision": "PASS",
+        "claim_support_status": "fpr01_pilot_calibrated_heldout_claim_ready",
+        "fpr01_pilot_missing_requirement_count": 0,
+        "threshold_protocol": "calibration_split_to_frozen_threshold_to_heldout_test_split",
+        "threshold_source_split": "calibration",
+        "test_time_threshold_update_blocked": True,
+        "tpr_at_fpr_01": 0.91,
+        "calibration_negative_fpr_at_threshold": 0.008,
+        "heldout_negative_fpr_at_threshold": 0.009,
+        "observed_negative_fpr_at_threshold": 0.009,
+        "calibration_negative_event_count": 1008,
+        "heldout_test_negative_event_count": 1008,
+        "heldout_negative_event_count": 1008,
+        "heldout_attacked_positive_event_count": 252,
+        "attacked_positive_event_count": 252,
+        "tpr_at_fpr_01_pilot_claim_allowed": True,
+        "tpr_at_fpr_001_claim_allowed": False,
+    })
     write_json(run_root / "artifacts" / "validation_artifact_rebuild_dry_run_decision.json", {
         "validation_artifact_rebuild_dry_run_decision": "PASS",
         "artifact_rebuild_missing_count": 0,
@@ -322,6 +373,23 @@ def test_generative_video_drive_packager_creates_archive_and_manifest(tmp_path: 
     assert manifest["decision_summary"]["replay_or_sketch_status"] == "claim3_explicitly_downgraded"
     assert manifest["decision_summary"]["statistical_confidence_interval_decision"] == "PASS"
     assert manifest["decision_summary"]["statistical_confidence_interval_total_count"] == 12
+    assert manifest["decision_summary"]["fpr01_pilot_gate_decision"] == "PASS"
+    assert manifest["decision_summary"]["fpr01_pilot_claim_support_status"] == "fpr01_pilot_calibrated_heldout_claim_ready"
+    assert manifest["decision_summary"]["fpr01_pilot_missing_requirement_count"] == 0
+    assert manifest["decision_summary"]["fpr01_threshold_protocol"] == "calibration_split_to_frozen_threshold_to_heldout_test_split"
+    assert manifest["decision_summary"]["fpr01_threshold_source_split"] == "calibration"
+    assert manifest["decision_summary"]["fpr01_test_time_threshold_update_blocked"] is True
+    assert manifest["decision_summary"]["fpr01_tpr_at_fpr_01"] == 0.91
+    assert manifest["decision_summary"]["fpr01_calibration_negative_fpr_at_threshold"] == 0.008
+    assert manifest["decision_summary"]["fpr01_heldout_negative_fpr_at_threshold"] == 0.009
+    assert manifest["decision_summary"]["fpr01_observed_negative_fpr_at_threshold"] == 0.009
+    assert manifest["decision_summary"]["fpr01_calibration_negative_event_count"] == 1008
+    assert manifest["decision_summary"]["fpr01_heldout_test_negative_event_count"] == 1008
+    assert manifest["decision_summary"]["fpr01_heldout_negative_event_count"] == 1008
+    assert manifest["decision_summary"]["fpr01_heldout_attacked_positive_event_count"] == 252
+    assert manifest["decision_summary"]["fpr01_attacked_positive_event_count"] == 252
+    assert manifest["decision_summary"]["fpr01_tpr_at_fpr_01_pilot_claim_allowed"] is True
+    assert manifest["decision_summary"]["fpr01_tpr_at_fpr_001_claim_allowed"] is False
     assert manifest["decision_summary"]["validation_artifact_rebuild_dry_run_decision"] == "PASS"
     assert manifest["decision_summary"]["validation_artifact_rebuild_missing_count"] == 0
     assert manifest["decision_summary"]["motion_threshold_calibration_decision"] == "INSUFFICIENT_SAMPLE"

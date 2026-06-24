@@ -100,6 +100,7 @@ def package_generative_video_colab_run(
     replay_and_sketch_decision_path = run_root_path / "artifacts" / "replay_and_sketch_gate_decision.json"
     claim3_downgrade_decision_path = run_root_path / "artifacts" / "claim3_downgrade_decision.json"
     confidence_interval_decision_path = run_root_path / "artifacts" / "statistical_confidence_interval_decision.json"
+    fpr01_pilot_decision_path = run_root_path / "artifacts" / "fpr01_pilot_gate_decision.json"
     artifact_rebuild_decision_path = run_root_path / "artifacts" / "validation_artifact_rebuild_dry_run_decision.json"
     validation_scale_decision_path = run_root_path / "artifacts" / "validation_scale_gate_decision.json"
     motion_threshold_calibration_decision_path = run_root_path / "artifacts" / "motion_threshold_calibration_decision.json"
@@ -126,6 +127,7 @@ def package_generative_video_colab_run(
     replay_and_sketch_decision = _read_json_if_exists(replay_and_sketch_decision_path)
     claim3_downgrade_decision = _read_json_if_exists(claim3_downgrade_decision_path)
     confidence_interval_decision = _read_json_if_exists(confidence_interval_decision_path)
+    fpr01_pilot_decision = _read_json_if_exists(fpr01_pilot_decision_path)
     artifact_rebuild_decision = _read_json_if_exists(artifact_rebuild_decision_path)
     validation_scale_decision = _read_json_if_exists(validation_scale_decision_path)
     motion_threshold_calibration_decision = _read_json_if_exists(motion_threshold_calibration_decision_path)
@@ -199,6 +201,23 @@ def package_generative_video_colab_run(
             "replay_or_sketch_status": claim3_downgrade_decision.get("replay_or_sketch_status"),
             "statistical_confidence_interval_decision": confidence_interval_decision.get("statistical_confidence_interval_decision"),
             "statistical_confidence_interval_total_count": confidence_interval_decision.get("ci_total_count"),
+            "fpr01_pilot_gate_decision": fpr01_pilot_decision.get("fpr01_pilot_gate_decision"),
+            "fpr01_pilot_claim_support_status": fpr01_pilot_decision.get("claim_support_status"),
+            "fpr01_pilot_missing_requirement_count": fpr01_pilot_decision.get("fpr01_pilot_missing_requirement_count"),
+            "fpr01_threshold_protocol": fpr01_pilot_decision.get("threshold_protocol"),
+            "fpr01_threshold_source_split": fpr01_pilot_decision.get("threshold_source_split"),
+            "fpr01_test_time_threshold_update_blocked": fpr01_pilot_decision.get("test_time_threshold_update_blocked"),
+            "fpr01_tpr_at_fpr_01": fpr01_pilot_decision.get("tpr_at_fpr_01"),
+            "fpr01_calibration_negative_fpr_at_threshold": fpr01_pilot_decision.get("calibration_negative_fpr_at_threshold"),
+            "fpr01_heldout_negative_fpr_at_threshold": fpr01_pilot_decision.get("heldout_negative_fpr_at_threshold"),
+            "fpr01_observed_negative_fpr_at_threshold": fpr01_pilot_decision.get("observed_negative_fpr_at_threshold"),
+            "fpr01_calibration_negative_event_count": fpr01_pilot_decision.get("calibration_negative_event_count"),
+            "fpr01_heldout_test_negative_event_count": fpr01_pilot_decision.get("heldout_test_negative_event_count"),
+            "fpr01_heldout_negative_event_count": fpr01_pilot_decision.get("heldout_negative_event_count"),
+            "fpr01_heldout_attacked_positive_event_count": fpr01_pilot_decision.get("heldout_attacked_positive_event_count"),
+            "fpr01_attacked_positive_event_count": fpr01_pilot_decision.get("attacked_positive_event_count"),
+            "fpr01_tpr_at_fpr_01_pilot_claim_allowed": fpr01_pilot_decision.get("tpr_at_fpr_01_pilot_claim_allowed"),
+            "fpr01_tpr_at_fpr_001_claim_allowed": fpr01_pilot_decision.get("tpr_at_fpr_001_claim_allowed"),
             "validation_artifact_rebuild_dry_run_decision": artifact_rebuild_decision.get("validation_artifact_rebuild_dry_run_decision"),
             "validation_artifact_rebuild_missing_count": artifact_rebuild_decision.get("artifact_rebuild_missing_count"),
             "validation_scale_gate_decision": validation_scale_decision.get("validation_scale_gate_decision"),

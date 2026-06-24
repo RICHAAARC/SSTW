@@ -205,6 +205,17 @@ def build_statistical_confidence_interval_command(layout: dict[str, str]) -> lis
     ]
 
 
+def build_fpr01_pilot_gate_command(layout: dict[str, str]) -> list[str]:
+    """构建 FPR=0.01 pilot gate 命令, 只汇总已落盘 records 并写出冻结阈值。"""
+    return [
+        sys.executable,
+        "-m",
+        "experiments.generative_video_model_probe.fpr01_pilot_gate",
+        "--run-root",
+        layout["drive_run_root"],
+        "--write-outputs",
+    ]
+
 def build_validation_artifact_rebuild_dry_run_command(layout: dict[str, str]) -> list[str]:
     """构造 validation-scale artifact rebuild dry-run 命令。"""
     return [

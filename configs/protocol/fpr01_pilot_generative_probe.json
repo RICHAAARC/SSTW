@@ -1,0 +1,27 @@
+{
+  "stage_id": "fpr01_pilot_generative_probe_gate",
+  "target_fpr": 0.01,
+  "blocked_target_fpr": 0.001,
+  "threshold_protocol": "calibration_split_to_frozen_threshold_to_heldout_test_split",
+  "pilot_profile_names": [
+    "fpr01_pilot"
+  ],
+  "minimum_prompt_count": 21,
+  "minimum_seed_per_prompt": 8,
+  "minimum_calibration_seed_per_prompt": 4,
+  "minimum_test_seed_per_prompt": 4,
+  "minimum_unique_video_count": 168,
+  "minimum_calibration_unique_video_count": 84,
+  "minimum_test_unique_video_count": 84,
+  "minimum_calibration_negative_event_count": 1000,
+  "minimum_heldout_test_negative_event_count": 1000,
+  "minimum_heldout_attacked_positive_event_count": 200,
+  "minimum_negative_family_count": 4,
+  "minimum_calibration_negative_event_count_per_family": 200,
+  "minimum_heldout_negative_event_count_per_family": 200,
+  "minimum_attack_event_count_per_attack": 60,
+  "require_motion_threshold_calibration_ready": true,
+  "require_small_scale_pilot_gate_passed": true,
+  "require_formal_motion_claim_ready": true,
+  "claim_support_status": "fpr01_pilot_protocol_only"
+}

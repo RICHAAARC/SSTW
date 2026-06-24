@@ -715,6 +715,69 @@ Notebook 与 repository module 的跨边界数据
 | quality_guard_status | governance | none | true | false | false | Status indicating whether the quality guard was evaluated or passed for a pilot matrix record. |
 | wrong_key_status | governance | none | true | false | false | Status describing wrong-key separation evidence for a pilot or detection record. |
 | wrong_sampler_replay_status | governance | none | true | false | false | Status describing whether wrong-sampler replay was rejected or not applicable. |
+| fpr01_pilot_gate_decision | governance | none | true | false | false | FPR=0.01 pilot gate 的 PASS / FAIL 判定。 |
+| missing_fpr01_pilot_requirements | governance | none | true | false | false | 阻断 FPR=0.01 pilot claim 的缺失条件列表。 |
+| fpr01_pilot_missing_requirement_count | metric | none | true | false | false | FPR=0.01 pilot gate 的缺失条件数量。 |
+| threshold_protocol | protocol | none | true | false | false | 固定 FPR 阈值构造协议, 例如 calibration split 到 frozen threshold 再到 held-out test split。 |
+| blocked_target_fpr | protocol | none | true | false | false | 当前阶段明确禁止报告的更低 FPR 目标。 |
+| fpr_threshold_value | protocol | none | true | false | false | calibration negative split 冻结得到的 FPR 阈值。 |
+| calibration_negative_fpr_at_threshold | metric | none | true | false | false | calibration negative split 在冻结阈值下的观测 FPR。 |
+| calibration_negative_false_positive_count_at_threshold | metric | none | true | false | false | calibration negative split 在冻结阈值下的 false positive 数量。 |
+| heldout_negative_fpr_at_threshold | metric | none | true | false | false | held-out test negative split 在冻结阈值下的观测 FPR。 |
+| heldout_negative_false_positive_count_at_threshold | metric | none | true | false | false | held-out test negative split 在冻结阈值下的 false positive 数量。 |
+| observed_negative_fpr_at_threshold | metric | none | true | false | false | 对外摘要使用的 negative FPR, 在 fpr01 pilot 中等于 held-out test negative FPR。 |
+| tpr_at_fpr_01 | metric | none | true | false | false | 冻结 FPR=0.01 阈值下的 held-out attacked positive TPR。 |
+| true_positive_count_at_threshold | metric | none | true | false | false | held-out attacked positive split 在冻结阈值下的 true positive 数量。 |
+| tpr_at_fpr_01_pilot_claim_allowed | governance | none | true | false | false | 当前 pilot 是否允许报告 pilot 级 TPR@FPR=0.01 结论。 |
+| tpr_at_fpr_001_claim_allowed | governance | none | true | false | false | 当前结果是否允许报告 TPR@FPR=0.001 结论。 |
+| generation_record_count | metric | none | true | false | false | 当前 run_root 中读取到的 generation record 总数。 |
+| fpr01_generation_record_count | metric | none | true | false | false | 属于 fpr01_pilot profile 的 generation record 数量。 |
+| fpr01_motion_claim_eligible_generation_count | metric | none | true | false | false | 通过 formal motion claim 过滤的 fpr01 generation record 数量。 |
+| fpr01_prompt_count | metric | none | true | false | false | fpr01_pilot 中 motion-eligible prompt 数量。 |
+| fpr01_seed_per_prompt_min | metric | none | true | false | false | fpr01_pilot 中每个 prompt 的最小 seed 覆盖数。 |
+| fpr01_calibration_seed_per_prompt_min | metric | none | true | false | false | fpr01_pilot calibration split 中每个 prompt 的最小 seed 覆盖数。 |
+| fpr01_test_seed_per_prompt_min | metric | none | true | false | false | fpr01_pilot test split 中每个 prompt 的最小 seed 覆盖数。 |
+| fpr01_unique_video_count | metric | none | true | false | false | fpr01_pilot motion-eligible unique video 数量。 |
+| fpr01_calibration_unique_video_count | metric | none | true | false | false | fpr01_pilot calibration split unique video 数量。 |
+| fpr01_test_unique_video_count | metric | none | true | false | false | fpr01_pilot held-out test split unique video 数量。 |
+| calibration_negative_event_count | metric | none | true | false | false | calibration split 中用于冻结阈值的 negative event 数量。 |
+| heldout_test_negative_event_count | metric | none | true | false | false | held-out test split 中用于报告 FPR 的 negative event 数量。 |
+| heldout_attacked_positive_event_count | metric | none | true | false | false | held-out test split 中用于报告 TPR 的 attacked positive event 数量。 |
+| heldout_negative_event_count | metric | none | true | false | false | held-out negative event 数量摘要别名。 |
+| attacked_positive_event_count | metric | none | true | false | false | attacked positive event 数量摘要别名。 |
+| calibration_negative_family_count | metric | none | true | false | false | calibration split 中 negative family 覆盖数量。 |
+| heldout_negative_family_count | metric | none | true | false | false | held-out test split 中 negative family 覆盖数量。 |
+| calibration_negative_event_count_per_family_min | metric | none | true | false | false | calibration split 中每个 negative family 的最小事件数。 |
+| heldout_negative_event_count_per_family_min | metric | none | true | false | false | held-out test split 中每个 negative family 的最小事件数。 |
+| negative_event_count_per_family_min | metric | none | true | false | false | negative family 最小事件数摘要别名。 |
+| calibration_negative_family_event_counts | metric | none | true | false | false | calibration split 中各 negative family 的事件数映射。 |
+| heldout_negative_family_event_counts | metric | none | true | false | false | held-out test split 中各 negative family 的事件数映射。 |
+| attack_event_counts | metric | none | true | false | false | held-out attacked positive split 中各 attack 的事件数映射。 |
+| negative_tail_status | governance | none | true | false | false | negative score tail 是否未膨胀的审计状态。 |
+| minimum_unique_video_count | protocol | none | true | false | false | gate 要求的最小 unique video 数量。 |
+| minimum_calibration_negative_event_count | protocol | none | true | false | false | gate 要求的最小 calibration negative event 数量。 |
+| minimum_heldout_test_negative_event_count | protocol | none | true | false | false | gate 要求的最小 held-out test negative event 数量。 |
+| minimum_heldout_attacked_positive_event_count | protocol | none | true | false | false | gate 要求的最小 held-out attacked positive event 数量。 |
+| minimum_calibration_negative_event_count_per_family | protocol | none | true | false | false | gate 要求的 calibration split 每个 negative family 最小事件数。 |
+| minimum_heldout_negative_event_count_per_family | protocol | none | true | false | false | gate 要求的 held-out split 每个 negative family 最小事件数。 |
+| minimum_attack_event_count_per_attack | protocol | none | true | false | false | gate 要求的每个 attack 最小 held-out positive event 数量。 |
+| next_allowed_action | governance | none | true | false | false | 当前 gate 后允许执行的下一步动作。 |
+| next_forbidden_action | governance | none | true | false | false | 当前 gate 后明确禁止执行的动作。 |
+| fpr01_pilot_claim_support_status | claim | none | true | true | false | package manifest 中记录的 fpr01 pilot claim 支撑状态摘要。 |
+| fpr01_threshold_protocol | protocol | none | true | false | false | package manifest 中记录的 fpr01 threshold protocol 摘要。 |
+| fpr01_threshold_source_split | protocol | none | true | false | false | package manifest 中记录的 fpr01 阈值来源 split 摘要。 |
+| fpr01_test_time_threshold_update_blocked | protocol | none | true | false | false | package manifest 中记录的 fpr01 test-time 阈值更新阻断状态。 |
+| fpr01_tpr_at_fpr_01 | metric | none | true | false | false | package manifest 中记录的 pilot 级 TPR@FPR=0.01 摘要。 |
+| fpr01_calibration_negative_fpr_at_threshold | metric | none | true | false | false | package manifest 中记录的 calibration negative FPR 摘要。 |
+| fpr01_heldout_negative_fpr_at_threshold | metric | none | true | false | false | package manifest 中记录的 held-out negative FPR 摘要。 |
+| fpr01_observed_negative_fpr_at_threshold | metric | none | true | false | false | package manifest 中记录的 observed negative FPR 摘要。 |
+| fpr01_calibration_negative_event_count | metric | none | true | false | false | package manifest 中记录的 calibration negative event 数量摘要。 |
+| fpr01_heldout_test_negative_event_count | metric | none | true | false | false | package manifest 中记录的 held-out test negative event 数量摘要。 |
+| fpr01_heldout_negative_event_count | metric | none | true | false | false | package manifest 中记录的 held-out negative event 数量摘要别名。 |
+| fpr01_heldout_attacked_positive_event_count | metric | none | true | false | false | package manifest 中记录的 held-out attacked positive event 数量摘要。 |
+| fpr01_attacked_positive_event_count | metric | none | true | false | false | package manifest 中记录的 attacked positive event 数量摘要别名。 |
+| fpr01_tpr_at_fpr_01_pilot_claim_allowed | governance | none | true | false | false | package manifest 中记录的 pilot 级 TPR@FPR=0.01 claim 允许状态。 |
+| fpr01_tpr_at_fpr_001_claim_allowed | governance | none | true | false | false | package manifest 中记录的 TPR@FPR=0.001 claim 禁止状态。 |
 | motion_threshold_id | protocol | none | true | false | false | Identifier for the motion threshold used by formal motion gate. |
 | motion_threshold_source_split | protocol | none | true | false | false | Source split or heuristic source used to define the motion threshold. |
 | motion_threshold_calibration_required | governance | none | true | false | false | Whether motion threshold calibration remains required before final claim use. |

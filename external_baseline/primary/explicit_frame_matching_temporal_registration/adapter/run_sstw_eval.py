@@ -14,6 +14,7 @@ from external_baseline.runtime_trace_io import (
     safe_float,
 )
 from main.external_baselines.frame_matching_temporal_registration import compute_registration_cost
+from main.core.progress import ProgressReporter
 from main.protocol.flow_evidence_fields import with_flow_evidence_protocol_defaults
 
 
@@ -69,7 +70,12 @@ def build_score_records(run_root: str | Path, baseline_record: Mapping[str, Any]
     detection_records = comparable_detection_records(run_root)
     trace_groups = load_trace_groups(run_root)
     records: list[dict[str, Any]] = []
-    for detection_record in detection_records:
+    progress = ProgressReporter(f"external_baseline_proxy_scoring:{ADAPTER_NAME}", len(detection_records), "runtime_video")
+    for index, detection_record in enumerate(detection_records):
+        progress.update(
+            index + 1,
+            f"baseline={ADAPTER_NAME} prompt={detection_record.get('prompt_id')} seed={detection_record.get('seed_id')} attack={detection_record.get('attack_name')}",
+        )
         trace_id = str(detection_record.get("trajectory_trace_id") or "")
         reference_sequence = build_reference_sequence(trace_groups.get(trace_id, []))
         observed_sequence = build_observed_sequence(reference_sequence, detection_record)
@@ -103,4 +109,6 @@ def build_score_records(run_root: str | Path, baseline_record: Mapping[str, Any]
             "external_baseline_result_used_for_claim": False,
             "claim_support_status": "external_baseline_proxy_comparison_not_claim_supporting",
         }, trajectory_source_level="external_baseline_adapter_runtime_trace_proxy", claim_support_status="external_baseline_proxy_comparison_not_claim_supporting"))
+    measured_count = sum(1 for record in records if record.get("external_baseline_score_status") == "measured_proxy")
+    progress.finish(f"measured={measured_count} unsupported={len(records) - measured_count}")
     return records

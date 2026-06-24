@@ -12,6 +12,7 @@ from external_baseline.registry import get_adapter
 from external_baseline.runtime_trace_io import comparable_detection_records, read_jsonl, safe_float
 from external_baseline.source_intake import build_execution_manifest, write_source_intake_artifacts
 from main.core.digest import build_stable_digest
+from main.core.progress import ProgressReporter
 from main.external_baselines.baseline_registry import audit_external_baseline_records, build_external_baseline_records
 from main.protocol.flow_evidence_fields import with_flow_evidence_protocol_defaults, with_flow_evidence_protocol_defaults_many
 from main.protocol.record_writer import write_json, write_jsonl
@@ -126,8 +127,13 @@ def build_external_baseline_comparison_records(
     baseline_records = run_external_baseline_status(config_path)
     comparable_records = comparable_detection_records(run_root)
     records: list[dict[str, Any]] = []
-    for baseline_record in baseline_records:
+    progress = ProgressReporter("external_baseline_adapter_matrix", len(baseline_records), "baseline_adapter")
+    for index, baseline_record in enumerate(baseline_records):
         baseline_name = str(baseline_record.get("external_baseline_name") or "")
+        progress.update(
+            index + 1,
+            f"baseline={baseline_name} comparable_runtime_video_count={len(comparable_records)}",
+        )
         adapter = get_adapter(baseline_name)
         if adapter is None or baseline_record.get("external_baseline_runnable_status") != "runnable":
             records.append(_non_run_score_record(baseline_record, len(comparable_records)))
@@ -137,6 +143,7 @@ def build_external_baseline_comparison_records(
             records.extend(adapter_records)
         else:
             records.append(_non_run_score_record({**baseline_record, "external_baseline_not_run_reason": "no_comparable_runtime_detection_records"}, len(comparable_records)))
+    progress.finish(f"comparison_record_count={len(records)}")
     return records
 
 

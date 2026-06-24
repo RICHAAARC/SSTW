@@ -9,6 +9,7 @@ from pathlib import Path
 from statistics import mean
 from typing import Any
 
+from main.core.progress import ProgressReporter
 from main.protocol.flow_evidence_fields import with_flow_evidence_protocol_defaults
 from main.protocol.record_writer import write_json, write_jsonl
 from main.protocol.table_builder import write_csv
@@ -152,8 +153,13 @@ def build_runtime_detection_records(run_root: str | Path) -> list[dict]:
     trajectory_records = _read_jsonl(run_root / "records" / "trajectory_trace.jsonl")
     features_by_trace = _trajectory_features(trajectory_records)
     records: list[dict] = []
+    progress = ProgressReporter("runtime_detection_attacked_video_scan", len(runtime_attack_records), "attacked_video")
 
-    for attack_record in runtime_attack_records:
+    for index, attack_record in enumerate(runtime_attack_records):
+        progress.update(
+            index + 1,
+            f"prompt={attack_record.get('prompt_id')} seed={attack_record.get('seed_id')} attack={attack_record.get('attack_name')}",
+        )
         detection_record = with_flow_evidence_protocol_defaults({
             "record_version": "generative_video_runtime_detection_v1",
             "generation_model_id": attack_record.get("generation_model_id"),
@@ -216,6 +222,8 @@ def build_runtime_detection_records(run_root: str | Path) -> list[dict]:
                 "decision_reason": str(exc),
             })
         records.append(detection_record)
+    ready_count = sum(1 for record in records if record.get("runtime_detection_status") == "ready")
+    progress.finish(f"ready={ready_count} failed={len(records) - ready_count}")
     return records
 
 

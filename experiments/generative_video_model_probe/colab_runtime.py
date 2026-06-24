@@ -16,6 +16,7 @@ from main.protocol.flow_evidence_fields import (
     with_flow_evidence_protocol_defaults,
     with_flow_evidence_protocol_defaults_many,
 )
+from main.core.progress import ProgressReporter
 from main.protocol.record_writer import write_json, write_jsonl
 from main.protocol.table_builder import write_csv
 
@@ -193,6 +194,7 @@ def run_colab_probe(output_root: str | Path, prompt_suite_path: str | Path, prof
     dtype = _select_dtype(torch)
     hf_token_status = "provided" if os.environ.get("HF_TOKEN") else "not_provided"
     plan = _build_generation_plan(prompt_suite, profile, model_id, cross_model_id)
+    progress = ProgressReporter("wan21_runtime_generation", len(plan), "video")
 
     generation_records: list[dict] = []
     trajectory_records: list[dict] = []
@@ -200,6 +202,13 @@ def run_colab_probe(output_root: str | Path, prompt_suite_path: str | Path, prof
     active_pipe_by_model: dict[str, Any] = {}
 
     for index, item in enumerate(plan):
+        progress.update(
+            index + 1,
+            (
+                f"profile={profile} model={item['generation_model_id']} "
+                f"prompt={item['prompt_id']} seed={item['seed_id']}"
+            ),
+        )
         model_for_item = item["generation_model_id"]
         if model_for_item not in active_pipe_by_model:
             active_pipe_by_model[model_for_item] = _load_video_generation_pipeline(model_for_item, dtype)
@@ -295,6 +304,9 @@ def run_colab_probe(output_root: str | Path, prompt_suite_path: str | Path, prof
             "semantic_metric_status": "not_run",
             "metric_failure_reason": "optional_metric_dependencies_not_configured",
         })
+
+    success_count = sum(1 for record in generation_records if record["generation_status"] == "success")
+    progress.finish(f"success={success_count} failed={len(generation_records) - success_count}")
 
     generation_records = [
         with_flow_evidence_protocol_defaults(

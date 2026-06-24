@@ -219,21 +219,32 @@ package 输出应位于:
 
 package 文件名采用 `<utc_time>_<short_commit>` 批次标识, 便于定位同一轮 Colab 产物。
 
-## 6. Notebook 进度显示
+## 6. 真实工作量进度显示
 
-每个 Colab Notebook 都包含本地屏幕进度 helper:
-
-```python
-sstw_show_progress(step_index, step_name)
-```
-
-该 helper 会在每个 code cell 开始时打印:
+长耗时 repository runner 会按实际 plan 或 records 数量输出工作量进度, 而不是按 Notebook cell 数量输出进度。典型显示形式为:
 
 ```text
-SSTW 进度: 当前阶段/总阶段 (百分比) | 已运行分钟数 | 当前阶段名称
+SSTW 工作量进度 | wan21_runtime_generation | 7/24 (29.2%) | elapsed=42.0 min | eta=102.0 min | profile=validation_scale prompt=... seed=...
 ```
 
-在支持 HTML display 的 Colab 环境中, 它还会显示一个轻量进度条。该进度显示只用于人工观察当前 Notebook 执行到哪一步, 不写入正式 records、tables、figures、reports 或 claim artifacts。
+进度总数由运行时实际数据结构自动计算:
+
+```text
+Wan2.1 生成: len(plan)
+formal metric 视频扫描: len(generation_records)
+runtime attack 视频变换: len(eligible_generation_records) * len(attack_names)
+runtime detection 视频扫描: len(runtime_attack_records)
+external baseline adapter 矩阵: len(baseline_records)
+单个 baseline 读取 runtime 视频: len(comparable_detection_records)
+```
+
+因此 `validation_scale`、`pilot_paper` 和未来 `full_paper` 的样本数量不同, 进度总数会自动变化, 不需要在 Notebook 中硬编码 24、168 或 224。
+
+该进度显示只写 stdout, 不写入正式 records、tables、figures、reports、manifests 或 claim artifacts。若自动化环境需要静默运行, 可以设置:
+
+```bash
+export SSTW_PROGRESS=0
+```
 
 ## 7. 常见失败原因
 

@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from experiments.generative_video_model_probe.formal_motion_claim_filter import select_motion_claim_generation_records
+from main.core.progress import ProgressReporter
 from main.protocol.flow_evidence_fields import with_flow_evidence_protocol_defaults
 from main.protocol.record_writer import write_json, write_jsonl
 from main.protocol.table_builder import write_csv
@@ -152,9 +153,17 @@ def build_runtime_attack_records(run_root: str | Path, attack_names: tuple[str, 
     formal_metric_records = _read_jsonl(run_root / "records" / "formal_quality_motion_semantic_records.jsonl")
     selection = select_motion_claim_generation_records(generation_records, formal_metric_records)
     records: list[dict] = []
+    total_attack_jobs = len(selection.eligible_generation_records) * len(attack_names)
+    progress = ProgressReporter("runtime_attack_video_transform", total_attack_jobs, "attack_video")
+    progress_index = 0
     for generation_record in selection.eligible_generation_records:
         source_video_path = _resolve_video_path(run_root, generation_record)
         for attack_name in attack_names:
+            progress_index += 1
+            progress.update(
+                progress_index,
+                f"prompt={generation_record.get('prompt_id')} seed={generation_record.get('seed_id')} attack={attack_name}",
+            )
             record = with_flow_evidence_protocol_defaults({
                 "record_version": "generative_video_runtime_attack_v1",
                 "generation_model_id": generation_record.get("generation_model_id"),
@@ -201,6 +210,8 @@ def build_runtime_attack_records(run_root: str | Path, attack_names: tuple[str, 
                     "attack_runtime_failure_reason": str(exc),
                 })
             records.append(record)
+    ready_count = sum(1 for record in records if record.get("attack_runtime_status") == "ready")
+    progress.finish(f"ready={ready_count} failed={len(records) - ready_count}")
     return records
 
 

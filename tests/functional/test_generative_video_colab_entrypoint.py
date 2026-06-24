@@ -321,32 +321,12 @@ def test_colab_workflow_readme_documents_validation_scale_execution() -> None:
     assert r"G:\我的云端硬盘\SSTW" in text
     assert "不要手写 records" in text
     assert "<utc_time>_<short_commit>" in text
-    assert "sstw_show_progress(step_index, step_name)" in text
-    assert "不写入正式 records、tables、figures、reports 或 claim artifacts" in text
-
-
-@pytest.mark.quick
-def test_all_colab_notebooks_have_stage_progress_display() -> None:
-    """所有 Colab Notebook 必须按 code cell 阶段显示进度, 但进度 helper 不得写正式产物。"""
-    notebook_paths = sorted(Path("paper_workflow/colab_utils").glob("*.ipynb"))
-    assert notebook_paths
-
-    for notebook_path in notebook_paths:
-        notebook = json.loads(notebook_path.read_text(encoding="utf-8"))
-        code_cells = [cell for cell in notebook["cells"] if cell.get("cell_type") == "code"]
-        assert code_cells, notebook_path
-
-        first_code_source = "".join(code_cells[0].get("source", []))
-        whole_source = "".join("".join(cell.get("source", [])) for cell in code_cells)
-        assert "SSTW_NOTEBOOK_PROGRESS_TOTAL" in first_code_source, notebook_path
-        assert "def sstw_show_progress" in first_code_source, notebook_path
-        assert "SSTW 进度:" in first_code_source, notebook_path
-        assert "不写入正式 records、tables、figures、reports 或 claim artifacts" in first_code_source, notebook_path
-
-        for step_index, code_cell in enumerate(code_cells, start=1):
-            cell_source = "".join(code_cell.get("source", []))
-            assert f"sstw_show_progress({step_index}," in cell_source, notebook_path
-        assert whole_source.count("sstw_show_progress(") >= len(code_cells) + 1, notebook_path
+    assert "SSTW 工作量进度" in text
+    assert "Wan2.1 生成: len(plan)" in text
+    assert "runtime detection 视频扫描: len(runtime_attack_records)" in text
+    assert "单个 baseline 读取 runtime 视频: len(comparable_detection_records)" in text
+    assert "不需要在 Notebook 中硬编码 24、168 或 224" in text
+    assert "不写入正式 records、tables、figures、reports、manifests 或 claim artifacts" in text
 
 
 @pytest.mark.quick

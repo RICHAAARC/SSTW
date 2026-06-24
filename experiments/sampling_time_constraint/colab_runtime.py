@@ -13,6 +13,7 @@ from typing import Any
 
 from experiments.generative_video_model_probe.colab_runtime import _export_video, _select_dtype, _sha256_file, _tensor_stats
 from main.generation.sampling_constraint_adapter import apply_latent_sampling_constraint
+from main.core.progress import ProgressReporter
 from main.protocol.flow_evidence_fields import conservative_flow_score, flow_evidence_protocol_defaults
 from main.protocol.record_writer import write_json, write_jsonl
 from main.protocol.table_builder import write_csv
@@ -189,12 +190,17 @@ def run_sampling_constraint_colab_probe(
     model_family = _model_family_from_id(model_id)
     scheduler_id = _scheduler_id_for_model(model_id)
     sampler_signature = _sampler_signature_record(pipe, model_id, scheduler_id)
+    progress = ProgressReporter("sampling_time_constraint_generation", len(plan), "constraint_video")
 
     generation_records: list[dict] = []
     trajectory_records: list[dict] = []
     constraint_records: list[dict] = []
 
     for index, item in enumerate(plan):
+        progress.update(
+            index + 1,
+            f"profile={profile} variant={item['method_variant']} prompt={item['prompt_id']} seed={item['seed_id']}",
+        )
         generator = torch.Generator(device="cuda").manual_seed(int(item["seed_value"]))
         trace_id = f"b6_trace_{index:04d}"
         constraint_trace_id = f"b6_constraint_{index:04d}"
@@ -350,6 +356,7 @@ def run_sampling_constraint_colab_probe(
         constraint_records.extend(step_constraint_records)
 
     successful_count = sum(1 for record in generation_records if record["generation_status"] == "success")
+    progress.finish(f"success={successful_count} failed={len(generation_records) - successful_count}")
     write_jsonl(output_root / "records" / "generation_records.jsonl", generation_records)
     write_jsonl(output_root / "records" / "trajectory_trace.jsonl", trajectory_records)
     write_jsonl(output_root / "records" / "constraint_records.jsonl", constraint_records)

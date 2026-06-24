@@ -13,6 +13,7 @@ from typing import Any, Mapping
 
 from external_baseline.runtime_trace_io import build_comparison_unit_id, comparable_detection_records, safe_float
 from main.core.digest import build_stable_digest
+from main.core.progress import ProgressReporter
 from main.protocol.flow_evidence_fields import with_flow_evidence_protocol_defaults
 
 
@@ -217,11 +218,31 @@ def build_modern_score_records(
     command_template = _command_template(config)
     detection_records = comparable_detection_records(root)
     records: list[dict[str, Any]] = []
+    progress = ProgressReporter(
+        f"external_baseline_formal_scoring:{config.baseline_name}",
+        len(detection_records),
+        "runtime_video",
+    )
     if command_template is None:
-        return [_unsupported_record(config, baseline_record, record, "official_command_not_configured") for record in detection_records]
+        unsupported = []
+        for index, record in enumerate(detection_records):
+            progress.update(
+                index + 1,
+                f"baseline={config.baseline_name} prompt={record.get('prompt_id')} seed={record.get('seed_id')} attack={record.get('attack_name')}",
+            )
+            unsupported.append(_unsupported_record(config, baseline_record, record, "official_command_not_configured"))
+        progress.finish("official_command_not_configured")
+        return unsupported
 
     timeout_sec = safe_float(os.environ.get("SSTW_EXTERNAL_BASELINE_TIMEOUT_SEC"), 1800.0)
-    for detection_record in detection_records:
+    for index, detection_record in enumerate(detection_records):
+        progress.update(
+            index + 1,
+            (
+                f"baseline={config.baseline_name} prompt={detection_record.get('prompt_id')} "
+                f"seed={detection_record.get('seed_id')} attack={detection_record.get('attack_name')}"
+            ),
+        )
         score_record_id = build_comparison_unit_id(config.baseline_name, detection_record)
         evidence_paths: dict[str, str] = {}
         try:
@@ -297,4 +318,6 @@ def build_modern_score_records(
             }, trajectory_source_level="external_modern_baseline_official_adapter", claim_support_status=config.claim_support_status))
         except Exception as exc:
             records.append(_unsupported_record(config, baseline_record, detection_record, str(exc), evidence_paths=evidence_paths))
+    measured_count = sum(1 for record in records if record.get("external_baseline_score_status") == "measured_formal")
+    progress.finish(f"measured={measured_count} unsupported={len(records) - measured_count}")
     return records

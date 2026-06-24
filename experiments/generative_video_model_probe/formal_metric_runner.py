@@ -8,6 +8,7 @@ from pathlib import Path
 
 from main.analysis.semantic_video_metrics import DEFAULT_CLIP_MODEL_ID, DEFAULT_SEMANTIC_THRESHOLD, compute_clip_text_video_similarity
 from main.analysis.video_file_metrics import compute_video_file_metrics
+from main.core.progress import ProgressReporter
 from main.protocol.flow_evidence_fields import with_flow_evidence_protocol_defaults
 from main.protocol.record_writer import write_json, write_jsonl
 from main.protocol.table_builder import write_csv
@@ -205,7 +206,12 @@ def build_formal_metric_records(
     resolved_prompt_suite_path = _resolve_prompt_suite_path(run_root, prompt_suite_path)
     prompt_metadata_by_id, semantic_prompt_source = _load_prompt_metadata(resolved_prompt_suite_path)
     records: list[dict] = []
-    for generation_record in generation_records:
+    progress = ProgressReporter("formal_metric_runtime_video_scan", len(generation_records), "runtime_video")
+    for index, generation_record in enumerate(generation_records):
+        progress.update(
+            index + 1,
+            f"prompt={generation_record.get('prompt_id')} seed={generation_record.get('seed_id')}",
+        )
         video_path = _resolve_video_path(run_root, generation_record)
         metrics = compute_video_file_metrics(video_path)
         visual_ready = metrics.get("visual_quality_metric_status") == "ready"
@@ -258,6 +264,8 @@ def build_formal_metric_records(
             flow_state_admissibility_status="formal_metric_ready" if formal_metric_ready else "formal_metric_blocked",
             claim_support_status="formal_metric_evidence_only" if formal_metric_ready else "formal_metric_blocked",
         ))
+    ready_count = sum(1 for record in records if record.get("formal_metric_result_used_for_claim") is True)
+    progress.finish(f"formal_ready={ready_count} blocked={len(records) - ready_count}")
     return records
 
 

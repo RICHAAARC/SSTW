@@ -372,7 +372,7 @@ Notebook 与 repository module 的跨边界数据
 | external_baseline_score_mean | metric | none | true | false | false | Mean external baseline adapter proxy score in a comparison table. |
 | external_baseline_distance_mean | metric | none | true | false | false | Mean external baseline adapter distance in a comparison table. |
 | baseline_score_margin_mean | metric | none | true | false | false | Mean score margin between SSTW runtime proxy score and external baseline adapter proxy score. |
-| validation_scale_gate_decision | governance | none | true | false | false | Decision for validation-scale generative probe gate before full-paper dry-run. |
+| validation_scale_gate_decision | governance | none | true | false | false | Decision for validation-scale generative probe gate before pilot_paper full-protocol run. |
 | missing_validation_requirements | governance | none | true | false | false | Validation-scale requirements that are not yet satisfied. |
 | validation_missing_requirement_count | metric | none | true | false | false | Count of missing validation-scale requirements. |
 | validation_profile_names | protocol | none | true | false | false | Runtime profile names accepted as validation-scale generation records. |
@@ -771,6 +771,7 @@ Notebook 与 repository module 的跨边界数据
 | next_forbidden_action | governance | none | true | false | false | 当前 gate 后明确禁止执行的动作。 |
 | fpr01_pilot_claim_support_status | claim | none | true | true | false | package manifest 中记录的 fpr01 pilot claim 支撑状态摘要。 |
 | pilot_paper_claim_support_status | claim | none | true | true | false | package manifest 中记录的 pilot_paper claim 支撑状态摘要。 |
+| validation_scale_claim_support_status | claim | none | true | true | false | package manifest 或 pilot_paper gate 中记录的 validation-scale claim 支撑状态摘要。 |
 | pilot_paper_result_level | governance | none | true | true | false | package manifest 中记录的 pilot_paper 结果级别。 |
 | pilot_paper_protocol_level | governance | none | true | true | false | package manifest 中记录的 pilot_paper 协议级别。 |
 | pilot_paper_protocol_difference_from_full_paper | governance | none | true | true | false | package manifest 中记录的 pilot_paper 与 full_paper 差异。 |

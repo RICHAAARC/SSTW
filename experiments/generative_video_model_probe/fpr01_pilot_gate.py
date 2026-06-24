@@ -96,6 +96,7 @@ def _load_config(config_path: str | Path = DEFAULT_FPR01_PILOT_CONFIG) -> dict[s
         "minimum_attack_event_count_per_attack": int(raw.get("minimum_attack_event_count_per_attack", DEFAULT_MINIMUM_ATTACK_EVENT_COUNT_PER_ATTACK)),
         "require_motion_threshold_calibration_ready": bool(raw.get("require_motion_threshold_calibration_ready", True)),
         "require_small_scale_pilot_gate_passed": bool(raw.get("require_small_scale_pilot_gate_passed", True)),
+        "require_validation_scale_gate_passed": bool(raw.get("require_validation_scale_gate_passed", True)),
         "require_formal_motion_claim_ready": bool(raw.get("require_formal_motion_claim_ready", True)),
     }
 
@@ -315,6 +316,7 @@ def build_fpr01_pilot_gate_audit(
     }
 
     pilot_decision = _read_json(run_root / "artifacts" / "small_scale_claim_pilot_gate_decision.json")
+    validation_scale_decision = _read_json(run_root / "artifacts" / "validation_scale_gate_decision.json")
     motion_threshold_decision = _read_json(run_root / "artifacts" / "motion_threshold_calibration_decision.json")
     formal_motion_claim_ready = (
         not config["require_formal_motion_claim_ready"]
@@ -328,9 +330,14 @@ def build_fpr01_pilot_gate_audit(
         not config["require_small_scale_pilot_gate_passed"]
         or pilot_decision.get("pilot_gate_decision") == "PASS"
     )
+    validation_scale_ready = (
+        not config["require_validation_scale_gate_passed"]
+        or validation_scale_decision.get("validation_scale_gate_decision") == "PASS"
+    )
 
     requirement_checks = {
         "small_scale_pilot_gate_passed": small_scale_pilot_ready,
+        "validation_scale_gate_passed": validation_scale_ready,
         "motion_threshold_calibration_ready": motion_threshold_ready,
         "formal_motion_claim_ready": formal_motion_claim_ready,
         "fpr01_profile_generation_records_ready": prompt_count >= config["minimum_prompt_count"]
@@ -381,6 +388,8 @@ def build_fpr01_pilot_gate_audit(
         "fpr01_pilot_missing_requirement_count": len(missing),
         "pilot_profile_names": sorted(profile_names),
         "threshold_protocol": config["threshold_protocol"],
+        "validation_scale_gate_decision": validation_scale_decision.get("validation_scale_gate_decision"),
+        "validation_scale_claim_support_status": validation_scale_decision.get("claim_support_status"),
         "target_fpr": config["target_fpr"],
         "blocked_target_fpr": config["blocked_target_fpr"],
         "threshold_id": "fpr01_pilot_calibrated_threshold_v1" if threshold is not None else None,
@@ -484,7 +493,9 @@ def write_fpr01_pilot_gate_audit(
         "# FPR=0.01 Pilot Paper Gate Report\n\n"
         "该报告由已落盘的 governed records 自动生成, 使用 calibration split 冻结阈值, "
         "再在 held-out test split 上报告 FPR 与 TPR。该报告可支持 pilot_paper 规模的 "
-        "TPR@FPR=0.01 论文级结论。pilot_paper 与 full_paper 的协议同构, 差异只在样本规模和统计置信度, "
+        "TPR@FPR=0.01 论文级结论。pilot_paper 是小规模跑完整 full_paper 协议并产出 "
+        "pilot 级论文结果的阶段, 因此不再需要单独的前置预演阶段。"
+        "pilot_paper 与 full_paper 的协议同构, 差异只在样本规模和统计置信度, "
         "因此该报告不支持 TPR@FPR=0.001 或 full-paper 规模结论。\n\n"
         f"- fpr01_pilot_gate_decision: {audit['fpr01_pilot_gate_decision']}\n"
         f"- pilot_paper_gate_decision: {audit['pilot_paper_gate_decision']}\n"
@@ -492,6 +503,7 @@ def write_fpr01_pilot_gate_audit(
         f"- paper_result_level: {audit['paper_result_level']}\n"
         f"- paper_protocol_difference_from_full_paper: {audit['paper_protocol_difference_from_full_paper']}\n"
         f"- threshold_protocol: {audit['threshold_protocol']}\n"
+        f"- validation_scale_gate_decision: {audit['validation_scale_gate_decision']}\n"
         f"- missing_fpr01_pilot_requirements: {', '.join(audit['missing_fpr01_pilot_requirements']) if audit['missing_fpr01_pilot_requirements'] else 'none'}\n"
         f"- fpr01_generation_record_count: {audit['fpr01_generation_record_count']}\n"
         f"- fpr01_calibration_unique_video_count: {audit['fpr01_calibration_unique_video_count']}\n"

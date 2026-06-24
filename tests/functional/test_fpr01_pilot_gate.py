@@ -22,6 +22,7 @@ def _seed_fpr01_pilot_run(
     prompt_count: int = 21,
     calibration_seed_count: int = 4,
     test_seed_count: int = 4,
+    validation_scale_gate_decision: str | None = "PASS",
 ) -> None:
     """构造轻量 pilot_paper fixture, 不写入任何真实视频文件。
 
@@ -115,6 +116,13 @@ def _seed_fpr01_pilot_run(
         "motion_threshold_id": "motion_delta_calibrated_v1",
         "motion_threshold_source_split": "calibration",
     })
+    if validation_scale_gate_decision is not None:
+        write_json(run_root / "artifacts" / "validation_scale_gate_decision.json", {
+            "validation_scale_gate_decision": validation_scale_gate_decision,
+            "claim_support_status": "validation_scale_ready_for_pilot_paper"
+            if validation_scale_gate_decision == "PASS"
+            else "validation_scale_blocked",
+        })
 
 
 @pytest.mark.quick
@@ -161,6 +169,7 @@ def test_fpr01_pilot_gate_passes_calibrated_heldout_fixture(tmp_path: Path) -> N
     assert audit["paper_protocol_level"] == "paper_grade_protocol"
     assert audit["paper_protocol_difference_from_full_paper"] == "sample_scale_only"
     assert audit["pilot_paper_protocol_matches_full_paper"] is True
+    assert audit["validation_scale_gate_decision"] == "PASS"
     assert audit["threshold_protocol"] == "calibration_split_to_frozen_threshold_to_heldout_test_split"
     assert audit["threshold_source_split"] == "calibration"
     assert audit["test_time_threshold_update_blocked"] is True
@@ -191,6 +200,20 @@ def test_fpr01_pilot_gate_passes_calibrated_heldout_fixture(tmp_path: Path) -> N
     assert (run_root / "thresholds" / "fpr01_pilot_frozen_threshold.json").exists()
     assert (run_root / "artifacts" / "fpr01_pilot_gate_decision.json").exists()
     assert (run_root / "reports" / "fpr01_pilot_gate_report.md").exists()
+
+
+@pytest.mark.quick
+def test_fpr01_pilot_gate_requires_validation_scale_gate(tmp_path: Path) -> None:
+    """pilot_paper 是 full_paper 协议的小规模预演, 因此必须先通过 validation-scale。"""
+    run_root = tmp_path / "run"
+    _seed_fpr01_pilot_run(run_root, validation_scale_gate_decision=None)
+
+    audit = build_fpr01_pilot_gate_audit(run_root)
+
+    assert audit["fpr01_pilot_gate_decision"] == "FAIL"
+    assert audit["pilot_paper_gate_decision"] == "FAIL"
+    assert "validation_scale_gate_passed" in audit["missing_fpr01_pilot_requirements"]
+    assert audit["pilot_paper_claim_allowed"] is False
 
 
 @pytest.mark.quick

@@ -14,7 +14,7 @@ docs/builds/phases/
 本文档的核心目标是:
 
 ```text
-让 Codex 在后续工程实现时, 能按固定接口逐步实现 full_paper dry-run checker、full_paper result checker、modern baseline runner、adaptive attack runner、statistical CI reporter 和 reviewer evidence index builder。
+让 Codex 在后续工程实现时, 能按固定接口逐步实现 pilot_paper gate、full_paper result checker、modern baseline runner、adaptive attack runner、statistical CI reporter 和 reviewer evidence index builder。
 ```
 
 ## 1. 总体工程门禁架构
@@ -23,7 +23,7 @@ full_paper 工程门禁分为六类组件:
 
 | 组件 | 作用 | 产物性质 |
 |---|---|---|
-| `full_paper_dry_run_checker` | 判断 full_paper 是否允许启动 | gate decision |
+| `pilot_paper_generative_probe_gate` | 小规模跑完整 full_paper 协议并产出 pilot 级论文结果, 同时作为 full_paper 前完整流程预演 | gate decision |
 | `modern_external_baseline_runner` | 运行或登记现代外部 baseline | governed records |
 | `flow_specific_adaptive_attack_runner` | 运行 Flow-specific adaptive attacks | governed records |
 | `statistical_confidence_interval_reporter` | 计算低 FPR、TPR 和 cluster-by-video 置信区间 | governed reports |
@@ -37,7 +37,7 @@ full_paper 工程门禁分为六类组件:
 推荐实现路径如下:
 
 ```text
-scripts/check_results/full_paper_dry_run_checker.py
+experiments/generative_video_model_probe/fpr01_pilot_gate.py
 scripts/check_results/full_paper_result_checker.py
 experiments/generative_video_model_probe/external_baseline_runner.py
 experiments/flow_specific_adaptive_attack/runner.py
@@ -45,7 +45,7 @@ experiments/flow_specific_adaptive_attack/table_builder.py
 experiments/flow_specific_adaptive_attack/package_outputs.py
 main/analysis/statistical_confidence_intervals.py
 experiments/submission_freeze_preparation/reviewer_evidence_index.py
-tests/functional/test_full_paper_dry_run_checker.py
+tests/functional/test_fpr01_pilot_gate.py
 tests/functional/test_full_paper_result_checker.py
 tests/functional/test_statistical_confidence_intervals.py
 tests/functional/test_reviewer_evidence_index.py
@@ -53,11 +53,11 @@ tests/functional/test_reviewer_evidence_index.py
 
 若后续实现中选择其他路径, 必须保持语义名称清晰, 并同步更新阶段文档和 harness 可见的路径规则。
 
-## 3. full_paper_dry_run_checker 接口规范
+## 3. pilot_paper_generative_probe_gate 接口规范
 
 ### 3.1 输入
 
-`full_paper_dry_run_checker` 只能读取 planning artifacts, 不读取 held-out test 分数。
+`pilot_paper_generative_probe_gate` 读取已经落盘的 pilot_paper records 与前置 decision artifacts。该 gate 允许读取 pilot_paper 的 held-out test split, 因为它本身就是小规模完整协议执行阶段; 但它不得读取 full_paper held-out test 结果, 也不得把 pilot_paper 结果外推为 full_paper 主表。
 
 必须输入:
 
@@ -65,86 +65,91 @@ tests/functional/test_reviewer_evidence_index.py
 phase_decision_records
 prompt_suite_manifest
 seed_plan_manifest
-generation_manifest
-attack_manifest
-baseline_manifest
-ablation_manifest
-threshold_manifest
-artifact_rebuild_manifest
-resource_budget_manifest
-shard_plan_manifest
+generation_records
+formal_quality_motion_semantic_records
+runtime_detection_records
+small_scale_claim_pilot_matrix_records
+motion_threshold_calibration_decision
+small_scale_claim_pilot_gate_decision
+validation_scale_gate_decision
 ```
 
 可选输入:
 
 ```text
 previous_validation_summary
-external_baseline_preflight_summary
-adaptive_attack_preflight_summary
+external_baseline_comparison_summary
+adaptive_attack_summary
 replay_or_sketch_gate_summary
 ```
 
 ### 3.2 禁止输入
 
 ```text
-heldout_test_event_scores
-heldout_test_detection_scores
+full_paper_heldout_test_event_scores
+full_paper_heldout_test_detection_scores
 manual_table_values
 manually_selected_best_threshold
 ```
 
-这些输入若出现, checker 必须失败, 因为 dry-run 阶段不得接触 test split 检测结果。
+这些输入若出现, checker 必须失败, 因为 pilot_paper 只能使用自己的 calibration/test split, 不能接触 full_paper test split, 也不能手工选择最佳阈值。
 
 ### 3.3 输出
 
 必须输出:
 
 ```text
-artifacts/full_paper_dry_run_decision.json
-reports/full_paper_blocking_report.md
-manifests/full_paper_dry_run_manifest.json
+artifacts/fpr01_pilot_gate_decision.json
+thresholds/fpr01_pilot_frozen_threshold.json
+records/fpr01_pilot_gate_records.jsonl
+tables/fpr01_pilot_gate_table.csv
+reports/fpr01_pilot_gate_report.md
 ```
 
-`full_paper_dry_run_decision.json` 必须至少包含:
+`fpr01_pilot_gate_decision.json` 必须至少包含:
 
 ```text
-full_paper_dry_run_decision
+fpr01_pilot_gate_decision
+pilot_paper_gate_decision
+pilot_paper_claim_allowed
 full_paper_allowed
-blocking_stage
-blocking_requirement
-observed_value
-required_value
-recommended_next_action
+missing_fpr01_pilot_requirements
+next_allowed_action
+next_forbidden_action
 claim_support_status
-planned_calibration_negative_event_count
-planned_heldout_test_negative_event_count
-planned_attacked_positive_event_count
-planned_unique_video_count
-planned_event_count
-shard_plan_status
-resource_budget_status
+validation_scale_gate_decision
+threshold_source_split
+test_time_threshold_update_blocked
+calibration_negative_event_count
+heldout_test_negative_event_count
+heldout_attacked_positive_event_count
+tpr_at_fpr_01
+tpr_at_fpr_001_claim_allowed
 ```
 
 ### 3.4 PASS 条件
 
-只有同时满足以下条件, 才能输出 `full_paper_allowed = true`:
+只有同时满足以下条件, 才能输出 `pilot_paper_claim_allowed = true`。即使该 gate 通过, `full_paper_allowed` 仍必须为 `false`, 因为 pilot_paper 只产出 pilot 级论文结果:
 
 ```text
 all_required_phase_decisions_exist
 all_required_phase_decisions_passed_or_downgraded
 small_scale_claim_pilot_gate_passed
-validation_scale_probe_passed
-modern_external_baseline_plan_complete
-internal_ablation_plan_complete
-adaptive_attack_plan_complete
-replay_or_claim3_downgrade_plan_complete
-threshold_manifest_frozen
-prompt_suite_manifest_frozen
-calibration_negative_event_count_plan_sufficient
-heldout_test_negative_event_count_plan_sufficient
-artifact_rebuild_plan_complete
-resource_budget_status == ready
-checked_in_outputs_blocked
+validation_scale_gate_passed
+motion_threshold_calibration_ready
+formal_motion_claim_ready
+fpr01_profile_generation_records_ready
+fpr01_calibration_split_ready
+fpr01_heldout_test_split_ready
+calibration_negative_event_count_ready
+heldout_test_negative_event_count_ready
+heldout_attacked_positive_event_count_ready
+frozen_threshold_artifact_computable
+heldout_fpr_within_target
+tpr_at_fpr_01_computable
+path_marginal_gain_ready
+negative_tail_not_inflated
+wrong_sampler_replay_rejected
 ```
 
 ## 4. modern_external_baseline_runner 接口规范
@@ -433,7 +438,7 @@ unsupported_claim_blocks_reviewer_evidence_index
 推荐实现顺序:
 
 ```text
-1. full_paper_dry_run_checker
+1. pilot_paper_generative_probe_gate
 2. statistical_confidence_interval_reporter
 3. modern_external_baseline_runner 的 governed non-run record 与 adapter contract
 4. reviewer_evidence_index_builder
@@ -462,7 +467,7 @@ reviewer evidence index 中引用不存在的 artifact
 
 ## 12. external_baseline adapter comparison gate
 
-full-paper dry-run 前必须区分两类 baseline 证据:
+pilot_paper 前必须区分两类 baseline 证据:
 
 ```text
 external_baseline_status_records: 说明 baseline 是否登记、是否可运行、为何 non-run

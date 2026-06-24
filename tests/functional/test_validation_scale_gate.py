@@ -12,7 +12,7 @@ from main.protocol.record_writer import write_json, write_jsonl
 
 @pytest.mark.quick
 def test_validation_scale_gate_blocks_empty_run(tmp_path: Path) -> None:
-    """空 run_root 必须被 validation-scale gate 阻断, 不能进入 full_paper。"""
+    """空 run_root 必须被 validation-scale gate 阻断, 不能进入 pilot_paper。"""
     audit = build_validation_scale_gate_audit(tmp_path / "empty_run")
 
     assert audit["validation_scale_gate_decision"] == "FAIL"
@@ -48,7 +48,7 @@ def test_validation_scale_gate_rejects_pilot_profile_as_validation(tmp_path: Pat
 
 @pytest.mark.quick
 def test_validation_scale_gate_passes_when_all_governed_inputs_exist(tmp_path: Path) -> None:
-    """当 validation-scale 所需 records 和 decision artifacts 齐全时, gate 应允许进入 full_paper dry-run。"""
+    """当 validation-scale 所需 records 和 decision artifacts 齐全时, gate 应允许进入 pilot_paper。"""
     run_root = tmp_path / "run"
     generation_records = []
     for prompt_index in range(8):
@@ -121,12 +121,12 @@ def test_validation_scale_gate_passes_when_all_governed_inputs_exist(tmp_path: P
     audit = write_validation_scale_gate_audit(run_root)
 
     assert audit["validation_scale_gate_decision"] == "PASS"
-    assert audit["claim_support_status"] == "validation_scale_ready_for_full_paper_dry_run"
+    assert audit["claim_support_status"] == "validation_scale_ready_for_pilot_paper"
     assert audit["validation_generation_record_count"] == 24
     assert audit["validation_prompt_count"] == 8
     assert audit["validation_seed_per_prompt_min"] == 3
     assert audit["full_paper_allowed"] is False
-    assert audit["full_paper_next_gate"] == "full_paper_dry_run_checker"
+    assert audit["full_paper_next_gate"] == "pilot_paper_generative_probe_gate"
     assert audit["external_baseline_measured_adapter_count"] == 2
     assert (run_root / "records" / "validation_scale_gate_records.jsonl").exists()
     assert (run_root / "tables" / "validation_scale_gate_table.csv").exists()

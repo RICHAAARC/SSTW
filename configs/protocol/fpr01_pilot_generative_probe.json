@@ -26,6 +26,7 @@
   "minimum_attack_event_count_per_attack": 60,
   "require_motion_threshold_calibration_ready": true,
   "require_small_scale_pilot_gate_passed": true,
+  "require_validation_scale_gate_passed": true,
   "require_formal_motion_claim_ready": true,
   "claim_support_status": "pilot_paper_protocol_only"
 }

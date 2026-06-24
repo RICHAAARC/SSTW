@@ -240,7 +240,7 @@ def build_small_scale_claim_pilot_gate_command(layout: dict[str, str]) -> list[s
 
 
 def build_validation_scale_gate_command(layout: dict[str, str]) -> list[str]:
-    """构造 validation-scale gate 命令, 防止从 pilot 直接跳到 full_paper。"""
+    """构造 validation-scale gate 命令, 防止从 small-scale pilot 直接跳到 pilot_paper 或 full_paper。"""
     return [
         sys.executable,
         "-m",

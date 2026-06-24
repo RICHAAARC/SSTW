@@ -54,9 +54,9 @@ artifact_rebuild_manifest
 禁止把未认证 trajectory logging 当成主证据
 ```
 
-### 1.6 dry-run checker 设计
+### 1.6 pilot_paper gate 设计
 
-full_paper 真实运行前必须先执行 dry-run checker。该 checker 不产生论文结果, 只判断 full_paper 是否允许启动。
+full_paper 真实运行前必须先执行 pilot_paper gate。该 gate 会小规模跑完整 full_paper 协议并产出 pilot 级论文结果; 它不能直接允许 full_paper 主表, 但必须证明完整协议链路已经闭合。
 
 必须输入:
 
@@ -75,7 +75,7 @@ artifact_rebuild_manifest
 必须输出:
 
 ```text
-full_paper_dry_run_decision
+pilot_paper_gate_decision
 full_paper_allowed
 blocking_stage
 blocking_requirement
@@ -104,11 +104,11 @@ per_attack_family_confidence_interval
 
 ### 1.8 失败路径
 
-如果 dry-run checker 失败, 只能产出 diagnostic package:
+如果 pilot_paper gate 失败, 只能产出 diagnostic package:
 
 ```text
 reports/full_paper_blocking_report.md
-artifacts/full_paper_dry_run_decision.json
+artifacts/pilot_paper_gate_decision.json
 manifests/full_paper_diagnostic_manifest.json
 ```
 
@@ -159,7 +159,7 @@ merged_records_not_written_to_checked_in_outputs
 smoke_rehearsal_passed
 pilot_rehearsal_passed
 validation_rehearsal_passed
-full_paper_dry_run_checker_passed
+pilot_paper_generative_probe_gate_passed
 ```
 
 其中 `validation_rehearsal` 必须至少覆盖:
@@ -186,7 +186,7 @@ docs/builds/sstw_full_paper_engineering_gate_spec.md
 优先实现的组件为:
 
 ```text
-full_paper_dry_run_checker
+pilot_paper_generative_probe_gate
 statistical_confidence_interval_reporter
 full_paper_result_checker
 ```
@@ -212,7 +212,7 @@ internal ablation full-scale records 尚未完成
 flow_specific_adaptive_attack_gate 尚未完成
 replay_and_authenticated_sketch_gate 尚未闭合
 paper-level FPR=0.001 大规模阈值协议尚未运行
-full_paper_dry_run_checker 与 full_paper_result_checker 尚未实现
+pilot_paper_generative_probe_gate 工程入口已实现但真实 GPU 结果尚未生成, full_paper_result_checker 尚未实现
 ```
 
 ## 3. 当前查漏补缺状态
@@ -241,4 +241,4 @@ paper_fixed_fpr_0_001_protocol_ready = false
 full_paper_allowed = false
 ```
 
-该状态允许继续实现 full_paper dry-run checker、baseline 状态审计、CI reporter 等工程组件, 但不允许生成主论文结果表或 submission package。
+该状态允许继续实现 pilot_paper gate、baseline 状态审计、CI reporter 等工程组件, 但不允许生成主论文结果表或 submission package。

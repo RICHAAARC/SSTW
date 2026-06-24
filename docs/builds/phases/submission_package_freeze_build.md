@@ -76,7 +76,7 @@ reports/artifact_rebuild_report.md
 ### 1.8 不允许冻结的情况
 
 ```text
-full_paper_dry_run_decision != PASS
+pilot_paper_gate_decision != PASS
 full_paper_result_checker_decision != PASS
 claim_audit_passed != true
 artifact_rebuild_passed != true
@@ -153,7 +153,7 @@ scripts/package_results/submission_freeze_preparation_packager.py
 |---|---|
 | 完成状态 | 结构就绪, 未进入最终冻结 |
 | 主要差距项 | small-scale pilot 已通过, 但上游 pilot_paper、validation-scale 与 full_paper records 不存在, 只能报告 evidence gap。 |
-| 下一步构建方向 | 等待 validation-scale 与 full_paper gate 通过后, 再重建 tables、figures、reports、reviewer evidence index 和 claim audit。 |
+| 下一步构建方向 | 等待 validation-scale、pilot_paper 与 full_paper result checker 通过后, 再重建 tables、figures、reports、reviewer evidence index 和 claim audit。 |
 | full_paper 影响 | 未满足本阶段要求时, 不得把相关结果写入 full_paper supported claim。 |
 
 ### 3.1 快速检查清单
@@ -161,7 +161,7 @@ scripts/package_results/submission_freeze_preparation_packager.py
 ```text
 stage_status: 结构就绪, 未进入最终冻结
 gap_item: small-scale pilot 已通过, 但上游 pilot_paper、validation-scale 与 full_paper records 不存在, 只能报告 evidence gap。
-next_action: 等待 validation-scale 与 full_paper gate 通过后, 再重建 tables、figures、reports、reviewer evidence index 和 claim audit。
+next_action: 等待 validation-scale、pilot_paper 与 full_paper result checker 通过后, 再重建 tables、figures、reports、reviewer evidence index 和 claim audit。
 full_paper_blocking_rule: unresolved_gap_blocks_full_paper_claim
 ```
 

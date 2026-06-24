@@ -26,12 +26,13 @@
 | `flow_model_adapter_preflight` | 已完成前置验证 | Wan2.1 callback、time grid、sampler signature 和 latent displacement proxy 已验证。 | 真实 velocity field 原值未必可访问, 当前主要依赖 proxy。 | 保持 proxy 边界, 如能访问真实 velocity 再升级。 | 满足进入 sampling-time 与 pilot 的接口前置。 |
 | `sampling_time_constraint_probe` | 已完成机制前置验证 | recommended profile 显示 keyed alignment gain 与 wrong-key 分离。 | 尚不能替代 attack matrix、negative family、fixed-FPR path gain。 | 作为 small-scale pilot 前置证据。 | 证明可进入 pilot, 不直接支撑 full_paper。 |
 | `motion_threshold_calibration` | 已完成 engineering calibration | 已有 `motion_delta_calibrated_v1` 可作 pilot guardrail。 | 不是论文级 `TPR@FPR=0.001` fixed-FPR 证据。 | full_paper 前补齐更大 held-out negative 和 CI。 | 影响 motion claim 样本资格过滤。 |
-| `small_scale_claim_pilot_gate` | 已完成 small-scale pilot | 最新 Wan2.1 pilot 原生复跑已达到 16/16 eligible、seed_per_prompt_min=2、runtime attack/detection 48/48 ready、pilot_gate_decision=PASS。 | 它是进入 pilot_paper / validation-scale 的前置, 不是 paper 级结果包。 | 进入 pilot_paper 与 validation-scale generative probe, 并保留 small-scale pilot 作为工作流证据。 | 解除 full experiment 前置阻塞, 但不解除 full_paper 阻塞。 |
-| `pilot_paper` | 工程入口已完成, 真实 GPU 结果待运行 | 已按 full_paper 同构协议接入 21 prompt × 8 seed、calibration split、frozen threshold artifact、held-out test split 和 claim audit。 | 真实 Wan2.1 GPU 结果尚未生成, 现代 baseline / 内部消融可在后续阶段扩展。 | 在 Colab 中运行 `PROFILE = pilot_paper`, 审计 `pilot_paper_calibrated_heldout_claim_ready`。 | 可支撑 pilot_paper 级 `TPR@FPR=0.01`, 但不支撑 `TPR@FPR=0.001` 或 full_paper 规模结论。 |
-| `generative_video_model_probe` | pilot 已通过, pilot_paper / validation-scale 待真实运行 | 生成、attack、detection、postprocess、packager 与协议字段闭包已在 Wan2.1 pilot 中通过。 | pilot_paper 真实结果、validation-scale 样本量、现代外部 baseline runnable 结果、内部消融 full-scale records、论文级 fixed-FPR 尚未完成。 | 构建 pilot_paper / validation-scale generative probe、现代 baseline 状态/adapter、内部消融与 CI reporter。 | 影响主表、baseline comparison、ablation table 和真实模型结论。 |
+| `small_scale_claim_pilot_gate` | 已完成 small-scale pilot | 最新 Wan2.1 pilot 原生复跑已达到 16/16 eligible、seed_per_prompt_min=2、runtime attack/detection 48/48 ready、pilot_gate_decision=PASS。 | 它只判断机制是否值得继续, 不是 paper 级结果包。 | 进入 validation-scale generative probe, 并保留 small-scale pilot 作为工作流证据。 | 解除 validation-scale 前置阻塞, 但不解除 full_paper 阻塞。 |
+| `validation_scale` | 工程入口已完成, 真实 GPU 结果待运行 | 已接入工程稳定性、attack runner、baseline 接口、ablation 接口、claim gate、CI 和 artifact rebuild 汇总。 | 真实 validation-scale 结果尚未生成, replay/sketch 仍未达到 full-paper 强支持。 | 在 Colab 中运行 `PROFILE = validation_scale`, 审计 `validation_scale_ready_for_pilot_paper`。 | 通过后才允许进入 pilot_paper, 但仍不允许直接生成 full_paper 主表。 |
+| `pilot_paper` | 工程入口已完成, 真实 GPU 结果待运行 | 已按 full_paper 同构协议接入 21 prompt × 8 seed、calibration split、frozen threshold artifact、held-out test split 和 claim audit。 | 真实 Wan2.1 GPU 结果尚未生成, 现代 baseline / 内部消融可在后续阶段扩展。 | 在 validation-scale 通过后运行 `PROFILE = pilot_paper`, 审计 `pilot_paper_calibrated_heldout_claim_ready`。 | 它是小规模跑完整 full_paper 协议并产出 pilot 级论文结果的阶段, 可支撑 pilot_paper 级 `TPR@FPR=0.01`, 但不支撑 `TPR@FPR=0.001` 或 full_paper 规模结论。 |
+| `generative_video_model_probe` | pilot 已通过, validation-scale / pilot_paper 待真实运行 | 生成、attack、detection、postprocess、packager 与协议字段闭包已在 Wan2.1 pilot 中通过。 | validation-scale 样本量、pilot_paper 真实结果、现代外部 baseline runnable 结果、内部消融 full-scale records、论文级 fixed-FPR 尚未完成。 | 按 small_scale_claim_pilot -> validation_scale -> pilot_paper 的顺序推进。 | 影响主表、baseline comparison、ablation table 和真实模型结论。 |
 | `replay_and_authenticated_sketch_gate` | 未完成 | digest、manifest、trajectory trace 基础模块存在。 | authenticated sketch、replay uncertainty、wrong prompt replay 未闭合。 | 补齐签名 sketch、replay records 和 checker。 | 影响 Claim-3 强度; 不通过则降级 Claim-3。 |
 | `flow_specific_adaptive_attack_gate` | 未完成 | phase 文档已补建, 但 runner、manifest 与 governed records 尚未完成。 | adaptive attacks、endpoint-preserving resampling、path cancellation 未形成 records。 | 补齐 runner 设计、stress protocol、attack manifest 和 checker。 | full_paper 前必须完成或明确降级。 |
-| `full_paper_result_package_gate` | 未开始 | 仅有文档规范, 尚未实现 dry-run checker / result checker。 | 必须等 validation-scale、现代外部 baseline、adaptive attack、replay/sketch 与 paper-level fixed-FPR 通过后才能运行。 | 建立 dry-run checker、sample-size manifest 和统计 CI reporter。 | 是论文结果包产出前最后阻断 gate。 |
+| `full_paper_run` | 未开始 | 仅有文档规范, 尚无 full_paper 大规模 records。 | 必须等 validation-scale、pilot_paper、现代外部 baseline、adaptive attack、replay/sketch 与 paper-level fixed-FPR 通过后才能运行。 | 使用与 pilot_paper 相同协议扩大样本规模, 产出最终论文主结果。 | 是 submission_package_freeze 前的最终结果来源。 |
 | `submission_package_freeze` | 结构就绪, 未进入最终冻结 | submission freeze runner 和 readiness summary 已存在。 | 上游 full_paper records 不存在, 不得冻结论文结论。 | 等 full_paper 完成后重建 tables、figures、reports。 | 负责最终 claim audit 和 artifact rebuild。 |
 
 ## 3. 2026-06-18 阶段状态更新: 机制前置验证闭合
@@ -754,7 +755,7 @@ core_method_runtime_construction 已具备主要工程骨架
 sampling_time_constraint_probe 已完成机制前置验证
 small_scale_claim_pilot_gate 已完成 small-scale pilot
 generative_video_model_probe 已进入 validation-scale 准备阶段
-full_paper_result_package_gate 未开始, 且在 validation / adaptive attack / baseline / replay-sketch 前不得启动
+full_paper_run 未开始, 且在 validation_scale / pilot_paper / adaptive attack / baseline / replay-sketch 前不得启动
 ```
 
 ### 当前阻塞项
@@ -766,7 +767,7 @@ secondary_blocker: internal_ablation_full_scale_records_not_ready
 secondary_blocker: replay_and_authenticated_sketch_gate_not_closed
 secondary_blocker: flow_specific_adaptive_attack_gate_not_closed
 secondary_blocker: paper_level_fpr_0_001_calibration_not_ready
-secondary_blocker: full_paper_dry_run_checker_not_implemented
+secondary_blocker: pilot_paper_real_gpu_result_not_completed
 ```
 
 ### 下一步允许执行
@@ -779,7 +780,7 @@ internal ablation matrix records
 fixed-FPR and confidence interval reporter
 flow-specific adaptive attack runner design
 replay/sketch verification runner design
-full_paper dry-run checker implementation
+pilot_paper real GPU execution and gate audit
 ```
 
 ### 下一步禁止执行
@@ -812,7 +813,7 @@ claim_support_status = supported_by_small_scale_claim_pilot_records
 ### 当前文档层面已增强的内容
 
 ```text
-full_paper dry-run checker 规范已写入总体流程
+pilot_paper gate 规范已写入总体流程
 统计置信区间与 cluster-by-video interval 要求已写入总体流程
 审稿风险对照矩阵已写入总体流程
 算法原语到 full_paper package 的记录映射已写入算法原语文档
@@ -821,7 +822,7 @@ full_paper dry-run checker 规范已写入总体流程
 ### 当前仍未工程化的门禁
 
 ```text
-full_paper_dry_run_checker: not_implemented
+pilot_paper_generative_probe_gate: implemented_waiting_for_real_gpu_result
 full_paper_result_checker: not_implemented
 modern_external_baseline_runner: governed_status_records_ready_but_main_comparison_not_ready
 flow_specific_adaptive_attack_runner: not_implemented
@@ -866,7 +867,7 @@ submission_freeze_allowed: false
 ```text
 1. 设计并执行 validation-scale generative probe。
 2. 将现代外部 baseline 的 governed status record 扩展为 adapter contract 或明确 non-run protocol gap。
-3. 将 full_paper dry-run checker、baseline runner、adaptive attack runner、CI reporter 和 reviewer evidence index 从文档规范转化为 repository 工程实现。
+3. 将 pilot_paper 真实 GPU 复跑、baseline runner、adaptive attack runner、CI reporter 和 reviewer evidence index 从工程入口转化为 governed records。
 ```
 
 ## 2026-06-23 文档继续增强: full_paper 工程门禁实现规范
@@ -894,7 +895,7 @@ submission_freeze_allowed: false
 后续若继续推进代码实现, 应优先按 `sstw_full_paper_engineering_gate_spec.md` 实现:
 
 ```text
-full_paper_dry_run_checker
+pilot_paper real GPU execution and gate audit
 statistical_confidence_interval_reporter
 modern_external_baseline_runner
 reviewer_evidence_index_builder
@@ -948,7 +949,7 @@ secondary_blocker: internal_ablation_full_scale_records_not_ready
 secondary_blocker: flow_specific_adaptive_attack_gate_not_closed
 secondary_blocker: replay_and_authenticated_sketch_gate_not_closed
 secondary_blocker: paper_level_fpr_0_001_calibration_not_ready
-secondary_blocker: full_paper_dry_run_checker_not_implemented
+secondary_blocker: pilot_paper_real_gpu_result_not_completed
 ```
 
 ### 下一步允许执行
@@ -959,7 +960,7 @@ modern external baseline governed status records and adapter contracts
 internal ablation matrix records
 fixed-FPR and confidence interval reporter
 flow-specific adaptive attack runner design
-full_paper dry-run checker implementation
+pilot_paper real GPU execution and gate audit
 ```
 
 ### 下一步仍禁止执行
@@ -1034,7 +1035,7 @@ validation_confidence_interval_report_ready
 validation_artifact_rebuild_dry_run_ready
 ```
 
-该 gate 通过后, 下一步仍然是 `full_paper_dry_run_checker`, 不是 full_paper result package。
+该 gate 通过后, 下一步仍然是 `pilot_paper_generative_probe_gate`, 不是 full_paper result package。
 
 ## 2026-06-23 validation-scale 后处理闭环工程推进
 
@@ -1083,7 +1084,7 @@ submission_freeze_allowed: false
 adaptive_attack_runner: not_implemented
 replay_and_authenticated_sketch_gate_runner: not_implemented
 modern_external_baseline_real_adapter: not_integrated
-full_paper_dry_run_checker: not_implemented
+pilot_paper_generative_probe_gate: implemented_waiting_for_real_gpu_result
 ```
 
 
@@ -1120,7 +1121,7 @@ validation_external_baseline_comparison_records_ready
 minimum_external_baseline_measured_adapter_count: 2
 ```
 
-下一步仍然是补齐 adaptive attack、replay/sketch 或 Claim-3 降级路径, 然后执行 validation-scale 真实复跑。现代 baseline 的正式对比 adapter 应在 full-paper dry-run 前继续接入。
+下一步仍然是补齐 adaptive attack、replay/sketch 或 Claim-3 降级路径, 然后执行 validation-scale 真实复跑。现代 baseline 的正式对比 adapter 应在 pilot_paper 前继续接入。
 
 
 ## 2026-06-24 external_baseline 接入方式澄清
@@ -1231,12 +1232,12 @@ package_manifest_replay_sketch_summary: integrated
 claim3_full_support_allowed: false
 ```
 
-该状态说明 validation-scale 工程流程可以继续向 full-paper dry-run checker 推进, 但 Claim-3 仍保持降级边界。后续还需要把 validation proxy 升级为 full-paper 级 authenticated replay 和 replay negative FPR 审计。
+该状态说明 validation-scale 工程流程可以继续向 pilot_paper gate 推进, 但 Claim-3 仍保持降级边界。后续还需要把 validation proxy 升级为 full-paper 级 authenticated replay 和 replay negative FPR 审计。
 
 
 ## 2026-06-24 pilot_paper FPR=0.01 工程入口
 
-当前 `generative_video_model_probe` 已新增 `pilot_paper` 语义层级, 用于在 validation-scale 与 full-paper 之间补充一个小样本论文级结果包。该层级不是 workflow-only pilot, 而是采用与 full_paper 同构协议的 pilot-scale paper claim。
+当前 `generative_video_model_probe` 已新增 `pilot_paper` 语义层级, 用于在 validation-scale 之后执行小样本论文级结果包。该层级不是 workflow-only pilot, 而是小规模跑完整 full_paper 协议并产出 pilot 级论文结果。
 
 该阶段协议为:
 

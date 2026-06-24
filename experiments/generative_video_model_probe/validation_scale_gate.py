@@ -213,7 +213,7 @@ def build_validation_scale_gate_audit(
     }
     missing_requirements = [name for name, passed in requirement_checks.items() if not passed]
     gate_decision = "PASS" if not missing_requirements else "FAIL"
-    claim_support_status = "validation_scale_ready_for_full_paper_dry_run" if gate_decision == "PASS" else "validation_scale_blocked"
+    claim_support_status = "validation_scale_ready_for_pilot_paper" if gate_decision == "PASS" else "validation_scale_blocked"
 
     return {
         "stage_id": "validation_scale_generative_probe_gate",
@@ -249,7 +249,7 @@ def build_validation_scale_gate_audit(
         "confidence_interval_status": confidence_interval_status,
         "artifact_rebuild_status": artifact_rebuild_status,
         "full_paper_allowed": False,
-        "full_paper_next_gate": "full_paper_dry_run_checker" if gate_decision == "PASS" else "complete_missing_validation_requirements",
+        "full_paper_next_gate": "pilot_paper_generative_probe_gate" if gate_decision == "PASS" else "complete_missing_validation_requirements",
     }
 
 
@@ -272,7 +272,8 @@ def write_validation_scale_gate_audit(
     report = (
         "# Validation-scale Generative Probe Gate Report\n\n"
         "该报告由已落盘的 governed records 与 decision artifacts 自动生成。它只判断 validation-scale "
-        "是否具备进入 full_paper dry-run checker 的条件, 不生成论文主结果。\n\n"
+        "是否具备进入 pilot_paper 的条件。pilot_paper 是小规模跑完整 full_paper 协议并产出 "
+        "pilot 级论文结果的阶段, 因此不再需要单独的前置预演阶段。\n\n"
         f"- validation_scale_gate_decision: {audit['validation_scale_gate_decision']}\n"
         f"- claim_support_status: {audit['claim_support_status']}\n"
         f"- missing_validation_requirements: {', '.join(audit['missing_validation_requirements']) if audit['missing_validation_requirements'] else 'none'}\n"

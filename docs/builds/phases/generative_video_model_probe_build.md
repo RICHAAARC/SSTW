@@ -367,7 +367,7 @@ artifacts/validation_scale_gate_decision.json
 reports/validation_scale_gate_report.md
 ```
 
-该 gate 的作用是检查 pilot 通过后是否已经具备进入 full_paper dry-run checker 的条件。它只读取已经落盘的 governed records 和 decision artifacts, 不运行 GPU, 也不补造缺失的 baseline、消融、adaptive attack、replay/sketch 或 CI 结果。
+该 gate 的作用是检查 pilot 通过后是否已经具备进入 pilot_paper gate 的条件。它只读取已经落盘的 governed records 和 decision artifacts, 不运行 GPU, 也不补造缺失的 baseline、消融、adaptive attack、replay/sketch 或 CI 结果。
 
 当前 validation-scale gate 检查的最小条件为:
 
@@ -393,7 +393,7 @@ expected_generation_count: 24
 profile_name: validation_scale
 ```
 
-需要强调的是, 即使 `validation_scale_gate_decision = PASS`, 也只表示可以进入 `full_paper_dry_run_checker`; 它仍不允许直接生成 full_paper 论文主表。
+需要强调的是, 即使 `validation_scale_gate_decision = PASS`, 也只表示可以进入 `pilot_paper_generative_probe_gate`; 它仍不允许直接生成 full_paper 论文主表。
 
 ## 2026-06-23 validation-scale 后处理工程闭环
 
@@ -555,7 +555,7 @@ package
 
 ## 2026-06-24 pilot_paper FPR=0.01 工程入口
 
-当前 `generative_video_model_probe` 已新增 `pilot_paper` 语义层级, 用于在 validation-scale 与 full-paper 之间补充一个小样本论文级结果包。该层级不是 workflow-only pilot, 而是采用与 full_paper 同构协议的 pilot-scale paper claim。
+当前 `generative_video_model_probe` 已新增 `pilot_paper` 语义层级, 用于在 validation-scale 通过后执行小样本论文级结果包。该层级不是 workflow-only pilot, 而是小规模跑完整 full_paper 协议并产出 pilot 级论文结果。
 
 该阶段协议为:
 

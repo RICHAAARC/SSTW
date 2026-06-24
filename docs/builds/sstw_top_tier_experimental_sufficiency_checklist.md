@@ -225,7 +225,7 @@ harness 是否通过
 
 | 项目 | 分值 |
 |---|---:|
-| full_paper dry-run checker 已实现并测试通过 | 15 |
+| pilot_paper gate 已实现并测试通过 | 15 |
 | modern external baseline runner 或 governed non-run record 已实现 | 15 |
 | internal ablation matrix 已实现并能重建表格 | 10 |
 | flow-specific adaptive attack runner 已实现 | 15 |
@@ -237,7 +237,7 @@ harness 是否通过
 解释:
 
 ```text
-90-100: 可进入 full_paper 前最终 dry-run
+90-100: 可进入 pilot_paper 或 full_paper 前最终预检
 75-89: 可进入 validation-scale, 但仍需补齐部分 gate
 60-74: 只能作为实验协议验证阶段
 <60: 不应进入论文主结果生产

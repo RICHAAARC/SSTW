@@ -133,16 +133,21 @@ def test_validation_scale_profile_expands_pilot_prompts_to_three_seeds(tmp_path:
 
 @pytest.mark.quick
 def test_fpr01_pilot_profile_constructs_medium_scale_low_fpr_plan(tmp_path: Path) -> None:
-    """fpr01_pilot profile 必须构造 calibration/test split 的低 FPR pilot。"""
+    """pilot_paper / fpr01_pilot profile 必须构造同一套 calibration/test split 低 FPR 数据集。"""
     output_root = tmp_path / "prompt_suite"
     summary = write_prompt_suite(output_root)
     suite = json.loads(Path(summary["prompt_suite_path"]).read_text(encoding="utf-8"))
     plan = _build_generation_plan(suite, "fpr01_pilot", "Wan-AI/Wan2.1-T2V-1.3B-Diffusers", None)
+    pilot_paper_plan = _build_generation_plan(suite, "pilot_paper", "Wan-AI/Wan2.1-T2V-1.3B-Diffusers", None)
 
     fpr01_prompts = [item for item in suite["prompts"] if item.get("prompt_suite_role") == "fpr01_pilot"]
     fpr01_seeds = [item for item in suite["seeds"] if item.get("prompt_suite_role") == "fpr01_pilot"]
 
     assert suite["fpr01_pilot_design"]["target_fpr"] == 0.01
+    assert suite["fpr01_pilot_design"]["paper_result_level"] == "pilot_paper"
+    assert suite["fpr01_pilot_design"]["paper_protocol_difference_from_full_paper"] == "sample_scale_only"
+    assert suite["fpr01_pilot_design"]["recommended_runtime_profile"] == "pilot_paper"
+    assert suite["fpr01_pilot_design"]["compatibility_runtime_profile"] == "fpr01_pilot"
     assert suite["fpr01_pilot_design"]["threshold_protocol"] == "calibration_split_to_frozen_threshold_to_heldout_test_split"
     assert suite["fpr01_pilot_design"]["target_generation_video_count"] == 168
     assert suite["fpr01_pilot_design"]["target_calibration_negative_event_count"] == 1008
@@ -151,6 +156,8 @@ def test_fpr01_pilot_profile_constructs_medium_scale_low_fpr_plan(tmp_path: Path
     assert len(fpr01_prompts) == 21
     assert len(fpr01_seeds) == 8
     assert len(plan) == 168
+    assert len(pilot_paper_plan) == 168
+    assert [(item["prompt_id"], item["seed_id"]) for item in pilot_paper_plan] == [(item["prompt_id"], item["seed_id"]) for item in plan]
     assert len({item["prompt_id"] for item in plan}) == 21
     assert {item["seed_suite_role"] for item in plan} == {"fpr01_pilot"}
     assert {item["prompt_suite_role"] for item in plan} == {"fpr01_pilot"}
@@ -175,6 +182,7 @@ def test_generative_video_colab_notebook_calls_repository_modules() -> None:
     assert "generative_video_model_probe_workflow" in source
     assert "PROFILE = 'validation_scale'" in source
     assert "fpr01_pilot" in source
+    assert "pilot_paper" in source
     assert "TPR@FPR=0.01" in source
     assert "MODEL_ID = 'Wan-AI/Wan2.1-T2V-1.3B-Diffusers'" in source
     assert "build_formal_metric_command" in source
@@ -302,7 +310,13 @@ def test_generative_video_drive_packager_creates_archive_and_manifest(tmp_path: 
     })
     write_json(run_root / "artifacts" / "fpr01_pilot_gate_decision.json", {
         "fpr01_pilot_gate_decision": "PASS",
-        "claim_support_status": "fpr01_pilot_calibrated_heldout_claim_ready",
+        "pilot_paper_gate_decision": "PASS",
+        "claim_support_status": "pilot_paper_calibrated_heldout_claim_ready",
+        "paper_result_level": "pilot_paper",
+        "paper_protocol_level": "paper_grade_protocol",
+        "paper_protocol_difference_from_full_paper": "sample_scale_only",
+        "pilot_paper_protocol_matches_full_paper": True,
+        "pilot_paper_claim_allowed": True,
         "fpr01_pilot_missing_requirement_count": 0,
         "threshold_protocol": "calibration_split_to_frozen_threshold_to_heldout_test_split",
         "threshold_source_split": "calibration",
@@ -374,7 +388,14 @@ def test_generative_video_drive_packager_creates_archive_and_manifest(tmp_path: 
     assert manifest["decision_summary"]["statistical_confidence_interval_decision"] == "PASS"
     assert manifest["decision_summary"]["statistical_confidence_interval_total_count"] == 12
     assert manifest["decision_summary"]["fpr01_pilot_gate_decision"] == "PASS"
-    assert manifest["decision_summary"]["fpr01_pilot_claim_support_status"] == "fpr01_pilot_calibrated_heldout_claim_ready"
+    assert manifest["decision_summary"]["pilot_paper_gate_decision"] == "PASS"
+    assert manifest["decision_summary"]["fpr01_pilot_claim_support_status"] == "pilot_paper_calibrated_heldout_claim_ready"
+    assert manifest["decision_summary"]["pilot_paper_claim_support_status"] == "pilot_paper_calibrated_heldout_claim_ready"
+    assert manifest["decision_summary"]["pilot_paper_result_level"] == "pilot_paper"
+    assert manifest["decision_summary"]["pilot_paper_protocol_level"] == "paper_grade_protocol"
+    assert manifest["decision_summary"]["pilot_paper_protocol_difference_from_full_paper"] == "sample_scale_only"
+    assert manifest["decision_summary"]["pilot_paper_protocol_matches_full_paper"] is True
+    assert manifest["decision_summary"]["pilot_paper_claim_allowed"] is True
     assert manifest["decision_summary"]["fpr01_pilot_missing_requirement_count"] == 0
     assert manifest["decision_summary"]["fpr01_threshold_protocol"] == "calibration_split_to_frozen_threshold_to_heldout_test_split"
     assert manifest["decision_summary"]["fpr01_threshold_source_split"] == "calibration"

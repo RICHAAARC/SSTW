@@ -26,8 +26,9 @@
 | `flow_model_adapter_preflight` | 已完成前置验证 | Wan2.1 callback、time grid、sampler signature 和 latent displacement proxy 已验证。 | 真实 velocity field 原值未必可访问, 当前主要依赖 proxy。 | 保持 proxy 边界, 如能访问真实 velocity 再升级。 | 满足进入 sampling-time 与 pilot 的接口前置。 |
 | `sampling_time_constraint_probe` | 已完成机制前置验证 | recommended profile 显示 keyed alignment gain 与 wrong-key 分离。 | 尚不能替代 attack matrix、negative family、fixed-FPR path gain。 | 作为 small-scale pilot 前置证据。 | 证明可进入 pilot, 不直接支撑 full_paper。 |
 | `motion_threshold_calibration` | 已完成 engineering calibration | 已有 `motion_delta_calibrated_v1` 可作 pilot guardrail。 | 不是论文级 `TPR@FPR=0.001` fixed-FPR 证据。 | full_paper 前补齐更大 held-out negative 和 CI。 | 影响 motion claim 样本资格过滤。 |
-| `small_scale_claim_pilot_gate` | 已完成 small-scale pilot | 最新 Wan2.1 pilot 原生复跑已达到 16/16 eligible、seed_per_prompt_min=2、runtime attack/detection 48/48 ready、pilot_gate_decision=PASS。 | 只能支撑进入 validation-scale, 不能替代 full_paper 或论文级 fixed-FPR。 | 进入 validation-scale generative probe, 并保留 pilot 作为工作流证据。 | 解除 full experiment 前置阻塞, 但不解除 full_paper 阻塞。 |
-| `generative_video_model_probe` | pilot 已通过, validation-scale 未完成 | 生成、attack、detection、postprocess、packager 与协议字段闭包已在 Wan2.1 pilot 中通过。 | validation-scale 样本量、现代外部 baseline runnable 结果、内部消融 full-scale records、论文级 fixed-FPR 尚未完成。 | 构建 validation-scale generative probe、现代 baseline 状态/adapter、内部消融与 CI reporter。 | 影响主表、baseline comparison、ablation table 和真实模型结论。 |
+| `small_scale_claim_pilot_gate` | 已完成 small-scale pilot | 最新 Wan2.1 pilot 原生复跑已达到 16/16 eligible、seed_per_prompt_min=2、runtime attack/detection 48/48 ready、pilot_gate_decision=PASS。 | 它是进入 pilot_paper / validation-scale 的前置, 不是 paper 级结果包。 | 进入 pilot_paper 与 validation-scale generative probe, 并保留 small-scale pilot 作为工作流证据。 | 解除 full experiment 前置阻塞, 但不解除 full_paper 阻塞。 |
+| `pilot_paper` | 工程入口已完成, 真实 GPU 结果待运行 | 已按 full_paper 同构协议接入 21 prompt × 8 seed、calibration split、frozen threshold artifact、held-out test split 和 claim audit。 | 真实 Wan2.1 GPU 结果尚未生成, 现代 baseline / 内部消融可在后续阶段扩展。 | 在 Colab 中运行 `PROFILE = pilot_paper`, 审计 `pilot_paper_calibrated_heldout_claim_ready`。 | 可支撑 pilot_paper 级 `TPR@FPR=0.01`, 但不支撑 `TPR@FPR=0.001` 或 full_paper 规模结论。 |
+| `generative_video_model_probe` | pilot 已通过, pilot_paper / validation-scale 待真实运行 | 生成、attack、detection、postprocess、packager 与协议字段闭包已在 Wan2.1 pilot 中通过。 | pilot_paper 真实结果、validation-scale 样本量、现代外部 baseline runnable 结果、内部消融 full-scale records、论文级 fixed-FPR 尚未完成。 | 构建 pilot_paper / validation-scale generative probe、现代 baseline 状态/adapter、内部消融与 CI reporter。 | 影响主表、baseline comparison、ablation table 和真实模型结论。 |
 | `replay_and_authenticated_sketch_gate` | 未完成 | digest、manifest、trajectory trace 基础模块存在。 | authenticated sketch、replay uncertainty、wrong prompt replay 未闭合。 | 补齐签名 sketch、replay records 和 checker。 | 影响 Claim-3 强度; 不通过则降级 Claim-3。 |
 | `flow_specific_adaptive_attack_gate` | 未完成 | phase 文档已补建, 但 runner、manifest 与 governed records 尚未完成。 | adaptive attacks、endpoint-preserving resampling、path cancellation 未形成 records。 | 补齐 runner 设计、stress protocol、attack manifest 和 checker。 | full_paper 前必须完成或明确降级。 |
 | `full_paper_result_package_gate` | 未开始 | 仅有文档规范, 尚未实现 dry-run checker / result checker。 | 必须等 validation-scale、现代外部 baseline、adaptive attack、replay/sketch 与 paper-level fixed-FPR 通过后才能运行。 | 建立 dry-run checker、sample-size manifest 和统计 CI reporter。 | 是论文结果包产出前最后阻断 gate。 |
@@ -1233,11 +1234,11 @@ claim3_full_support_allowed: false
 该状态说明 validation-scale 工程流程可以继续向 full-paper dry-run checker 推进, 但 Claim-3 仍保持降级边界。后续还需要把 validation proxy 升级为 full-paper 级 authenticated replay 和 replay negative FPR 审计。
 
 
-## 2026-06-24 FPR=0.01 pilot 工程入口
+## 2026-06-24 pilot_paper FPR=0.01 工程入口
 
-当前 `generative_video_model_probe` 已新增 `fpr01_pilot` profile, 用于在 validation-scale 与 full-paper 之间补充一个中等规模低 FPR pilot。该 profile 的目标不是替代 full-paper, 而是让项目在进入大规模实验前先获得 pilot 级 `TPR@FPR=0.01` 可报告证据。
+当前 `generative_video_model_probe` 已新增 `pilot_paper` 语义层级, 用于在 validation-scale 与 full-paper 之间补充一个小样本论文级结果包。该层级不是 workflow-only pilot, 而是采用与 full_paper 同构协议的 pilot-scale paper claim。
 
-该阶段已经按论文同构协议改为:
+该阶段协议为:
 
 ```text
 calibration split
@@ -1251,14 +1252,18 @@ calibration split
 ```text
 configs/protocol/fpr01_pilot_generative_probe.json
 experiments/generative_video_model_probe/fpr01_pilot_gate.py
-colab_runtime PROFILE = fpr01_pilot
+colab_runtime PROFILE = pilot_paper
+colab_runtime PROFILE = fpr01_pilot  # 兼容旧入口
 notebook workflow build_fpr01_pilot_gate_command
-Google Drive package manifest fpr01 summary
+Google Drive package manifest pilot_paper summary
 ```
 
 当前数据集构造目标为:
 
 ```text
+paper_result_level: pilot_paper
+paper_protocol_level: paper_grade_protocol
+paper_protocol_difference_from_full_paper: sample_scale_only
 prompt_count: 21
 seed_per_prompt: 8
 calibration_seed_per_prompt: 4
@@ -1273,4 +1278,4 @@ target_fpr: 0.01
 threshold_protocol: calibration_split_to_frozen_threshold_to_heldout_test_split
 ```
 
-该阶段通过后只允许报告 `fpr01_pilot_calibrated_heldout_claim_ready` 和 pilot 级 `TPR@FPR=0.01` 结论, 不允许报告 `TPR@FPR=0.001` 或 full-paper 主表结论。
+该阶段通过后允许报告 `pilot_paper_calibrated_heldout_claim_ready` 和 pilot_paper 级 `TPR@FPR=0.01` 论文主张。它与 full_paper 的区别只在样本规模和统计置信度, 但仍不允许报告 `TPR@FPR=0.001` 或 full-paper 规模主表结论。

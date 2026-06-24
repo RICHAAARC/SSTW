@@ -4,8 +4,9 @@
 与早期 workflow pilot 不同, 本 gate 明确采用论文实验同构的低 FPR 流程:
 calibration split -> frozen threshold artifact -> held-out test split -> report / claim audit input。
 
-通过该 gate 可以支持 pilot 规模的 TPR@FPR=0.01 结论, 但不能支持 TPR@FPR=0.001
-或 full-paper 规模结论。
+通过该 gate 可以支持 `pilot_paper` 规模的 TPR@FPR=0.01 论文级主张。`pilot_paper`
+与 `full_paper` 使用同构协议, 差异只在样本规模和统计置信度, 因此不能外推为
+TPR@FPR=0.001 或 full-paper 规模结论。
 """
 
 from __future__ import annotations
@@ -30,7 +31,7 @@ from main.protocol.table_builder import write_csv
 
 
 DEFAULT_FPR01_PILOT_CONFIG = "configs/protocol/fpr01_pilot_generative_probe.json"
-DEFAULT_PILOT_PROFILE_NAMES = {"fpr01_pilot"}
+DEFAULT_PILOT_PROFILE_NAMES = {"pilot_paper", "fpr01_pilot"}
 DEFAULT_TARGET_FPR = 0.01
 DEFAULT_MINIMUM_PROMPT_COUNT = 21
 DEFAULT_MINIMUM_SEED_PER_PROMPT = 8
@@ -76,6 +77,9 @@ def _load_config(config_path: str | Path = DEFAULT_FPR01_PILOT_CONFIG) -> dict[s
         "target_fpr": float(raw.get("target_fpr", DEFAULT_TARGET_FPR)),
         "blocked_target_fpr": float(raw.get("blocked_target_fpr", 0.001)),
         "threshold_protocol": raw.get("threshold_protocol", "calibration_split_to_frozen_threshold_to_heldout_test_split"),
+        "paper_result_level": raw.get("paper_result_level", "pilot_paper"),
+        "paper_protocol_level": raw.get("paper_protocol_level", "paper_grade_protocol"),
+        "paper_protocol_difference_from_full_paper": raw.get("paper_protocol_difference_from_full_paper", "sample_scale_only"),
         "minimum_prompt_count": int(raw.get("minimum_prompt_count", DEFAULT_MINIMUM_PROMPT_COUNT)),
         "minimum_seed_per_prompt": int(raw.get("minimum_seed_per_prompt", DEFAULT_MINIMUM_SEED_PER_PROMPT)),
         "minimum_calibration_seed_per_prompt": int(raw.get("minimum_calibration_seed_per_prompt", DEFAULT_MINIMUM_SPLIT_SEED_PER_PROMPT)),
@@ -356,17 +360,23 @@ def build_fpr01_pilot_gate_audit(
     gate_decision = "PASS" if not missing else "FAIL"
 
     if not pilot_generation_records:
-        claim_support_status = "blocked_until_fpr01_pilot_generation_records"
+        claim_support_status = "blocked_until_pilot_paper_generation_records"
     elif missing:
-        claim_support_status = "fpr01_pilot_blocked"
+        claim_support_status = "pilot_paper_blocked"
     else:
-        claim_support_status = "fpr01_pilot_calibrated_heldout_claim_ready"
+        claim_support_status = "pilot_paper_calibrated_heldout_claim_ready"
 
     return {
-        "stage_id": "fpr01_pilot_generative_probe_gate",
+        "stage_id": "pilot_paper_generative_probe_gate",
         "run_root": str(run_root),
         "fpr01_pilot_gate_decision": gate_decision,
+        "pilot_paper_gate_decision": gate_decision,
         "claim_support_status": claim_support_status,
+        "paper_result_level": config["paper_result_level"],
+        "paper_protocol_level": config["paper_protocol_level"],
+        "paper_protocol_difference_from_full_paper": config["paper_protocol_difference_from_full_paper"],
+        "pilot_paper_protocol_matches_full_paper": True,
+        "pilot_paper_claim_allowed": gate_decision == "PASS",
         "missing_fpr01_pilot_requirements": missing,
         "fpr01_pilot_missing_requirement_count": len(missing),
         "pilot_profile_names": sorted(profile_names),
@@ -430,8 +440,8 @@ def build_fpr01_pilot_gate_audit(
         "minimum_calibration_negative_event_count_per_family": config["minimum_calibration_negative_event_count_per_family"],
         "minimum_heldout_negative_event_count_per_family": config["minimum_heldout_negative_event_count_per_family"],
         "minimum_attack_event_count_per_attack": config["minimum_attack_event_count_per_attack"],
-        "next_allowed_action": "report_fpr01_pilot_result_then_plan_full_paper_dry_run" if gate_decision == "PASS" else "complete_missing_fpr01_pilot_requirements",
-        "next_forbidden_action": "do_not_report_tpr_at_fpr_0_001_or_full_paper_claim_from_this_pilot",
+        "next_allowed_action": "report_pilot_paper_result_then_plan_full_paper_scaleup" if gate_decision == "PASS" else "complete_missing_pilot_paper_requirements",
+        "next_forbidden_action": "do_not_report_tpr_at_fpr_0_001_or_full_paper_scale_claim_from_pilot_paper",
     }
 
 
@@ -444,6 +454,8 @@ def _threshold_artifact_from_audit(audit: dict[str, Any]) -> dict[str, Any]:
         "threshold_value": audit.get("fpr_threshold_value"),
         "threshold_source_split": audit.get("threshold_source_split"),
         "target_fpr": audit.get("target_fpr"),
+        "paper_result_level": audit.get("paper_result_level"),
+        "paper_protocol_difference_from_full_paper": audit.get("paper_protocol_difference_from_full_paper"),
         "calibration_negative_event_count": audit.get("calibration_negative_event_count"),
         "calibration_negative_fpr_at_threshold": audit.get("calibration_negative_fpr_at_threshold"),
         "test_time_threshold_update_blocked": True,
@@ -469,12 +481,16 @@ def write_fpr01_pilot_gate_audit(
     write_json(run_root / "thresholds" / "fpr01_pilot_frozen_threshold.json", _threshold_artifact_from_audit(audit))
     write_json(run_root / "artifacts" / "fpr01_pilot_gate_decision.json", audit)
     report = (
-        "# FPR=0.01 Pilot Gate Report\n\n"
+        "# FPR=0.01 Pilot Paper Gate Report\n\n"
         "该报告由已落盘的 governed records 自动生成, 使用 calibration split 冻结阈值, "
-        "再在 held-out test split 上报告 FPR 与 TPR。该报告可支持 pilot 规模的 TPR@FPR=0.01 结论, "
-        "但不支持 TPR@FPR=0.001 或 full-paper 规模结论。\n\n"
+        "再在 held-out test split 上报告 FPR 与 TPR。该报告可支持 pilot_paper 规模的 "
+        "TPR@FPR=0.01 论文级结论。pilot_paper 与 full_paper 的协议同构, 差异只在样本规模和统计置信度, "
+        "因此该报告不支持 TPR@FPR=0.001 或 full-paper 规模结论。\n\n"
         f"- fpr01_pilot_gate_decision: {audit['fpr01_pilot_gate_decision']}\n"
+        f"- pilot_paper_gate_decision: {audit['pilot_paper_gate_decision']}\n"
         f"- claim_support_status: {audit['claim_support_status']}\n"
+        f"- paper_result_level: {audit['paper_result_level']}\n"
+        f"- paper_protocol_difference_from_full_paper: {audit['paper_protocol_difference_from_full_paper']}\n"
         f"- threshold_protocol: {audit['threshold_protocol']}\n"
         f"- missing_fpr01_pilot_requirements: {', '.join(audit['missing_fpr01_pilot_requirements']) if audit['missing_fpr01_pilot_requirements'] else 'none'}\n"
         f"- fpr01_generation_record_count: {audit['fpr01_generation_record_count']}\n"

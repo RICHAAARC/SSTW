@@ -18,12 +18,12 @@ TEST_SEEDS = tuple(f"seed_test_{index:02d}" for index in range(4))
 def _seed_fpr01_pilot_run(
     run_root: Path,
     *,
-    profile: str = "fpr01_pilot",
+    profile: str = "pilot_paper",
     prompt_count: int = 21,
     calibration_seed_count: int = 4,
     test_seed_count: int = 4,
 ) -> None:
-    """构造轻量 fpr01 pilot fixture, 不写入任何真实视频文件。
+    """构造轻量 pilot_paper fixture, 不写入任何真实视频文件。
 
     该 fixture 显式模拟论文同构流程: calibration split 只用于冻结阈值,
     test split 只用于 held-out FPR / TPR 报告。
@@ -119,39 +119,48 @@ def _seed_fpr01_pilot_run(
 
 @pytest.mark.quick
 def test_fpr01_pilot_gate_blocks_empty_run(tmp_path: Path) -> None:
-    """空 run_root 不能被解释为 FPR=0.01 pilot 证据。"""
+    """空 run_root 不能被解释为 FPR=0.01 pilot_paper 证据。"""
     audit = build_fpr01_pilot_gate_audit(tmp_path / "empty")
 
     assert audit["fpr01_pilot_gate_decision"] == "FAIL"
-    assert audit["claim_support_status"] == "blocked_until_fpr01_pilot_generation_records"
+    assert audit["pilot_paper_gate_decision"] == "FAIL"
+    assert audit["claim_support_status"] == "blocked_until_pilot_paper_generation_records"
+    assert audit["paper_result_level"] == "pilot_paper"
     assert audit["tpr_at_fpr_01_pilot_claim_allowed"] is False
+    assert audit["pilot_paper_claim_allowed"] is False
     assert audit["tpr_at_fpr_001_claim_allowed"] is False
     assert "fpr01_profile_generation_records_ready" in audit["missing_fpr01_pilot_requirements"]
 
 
 @pytest.mark.quick
 def test_fpr01_pilot_gate_rejects_validation_scale_profile(tmp_path: Path) -> None:
-    """validation_scale profile 不能冒充 fpr01_pilot profile。"""
+    """validation_scale profile 不能冒充 pilot_paper profile。"""
     run_root = tmp_path / "run"
     _seed_fpr01_pilot_run(run_root, profile="validation_scale")
 
     audit = build_fpr01_pilot_gate_audit(run_root)
 
     assert audit["fpr01_pilot_gate_decision"] == "FAIL"
+    assert audit["pilot_paper_gate_decision"] == "FAIL"
     assert audit["fpr01_generation_record_count"] == 0
     assert "fpr01_profile_generation_records_ready" in audit["missing_fpr01_pilot_requirements"]
 
 
 @pytest.mark.quick
 def test_fpr01_pilot_gate_passes_calibrated_heldout_fixture(tmp_path: Path) -> None:
-    """满足 calibration/test split 与 1000+ held-out negative events 时允许 pilot 级 TPR@FPR=0.01。"""
+    """满足 calibration/test split 与 1000+ held-out negative events 时允许 pilot_paper 级 TPR@FPR=0.01。"""
     run_root = tmp_path / "run"
     _seed_fpr01_pilot_run(run_root)
 
     audit = write_fpr01_pilot_gate_audit(run_root)
 
     assert audit["fpr01_pilot_gate_decision"] == "PASS"
-    assert audit["claim_support_status"] == "fpr01_pilot_calibrated_heldout_claim_ready"
+    assert audit["pilot_paper_gate_decision"] == "PASS"
+    assert audit["claim_support_status"] == "pilot_paper_calibrated_heldout_claim_ready"
+    assert audit["paper_result_level"] == "pilot_paper"
+    assert audit["paper_protocol_level"] == "paper_grade_protocol"
+    assert audit["paper_protocol_difference_from_full_paper"] == "sample_scale_only"
+    assert audit["pilot_paper_protocol_matches_full_paper"] is True
     assert audit["threshold_protocol"] == "calibration_split_to_frozen_threshold_to_heldout_test_split"
     assert audit["threshold_source_split"] == "calibration"
     assert audit["test_time_threshold_update_blocked"] is True
@@ -174,6 +183,7 @@ def test_fpr01_pilot_gate_passes_calibrated_heldout_fixture(tmp_path: Path) -> N
     assert audit["observed_negative_fpr_at_threshold"] == audit["heldout_negative_fpr_at_threshold"]
     assert audit["tpr_at_fpr_01"] == 1.0
     assert audit["tpr_at_fpr_01_pilot_claim_allowed"] is True
+    assert audit["pilot_paper_claim_allowed"] is True
     assert audit["tpr_at_fpr_001_claim_allowed"] is False
     assert audit["full_paper_allowed"] is False
     assert (run_root / "records" / "fpr01_pilot_gate_records.jsonl").exists()

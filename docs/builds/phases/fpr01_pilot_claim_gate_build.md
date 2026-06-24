@@ -1,25 +1,35 @@
-﻿# fpr01_pilot_claim_gate 分阶段构建文档
+﻿# pilot_paper FPR=0.01 claim gate 分阶段构建文档
 
 ## 1. 阶段定位
 
-`fpr01_pilot_claim_gate` 位于 `validation_scale` 与 `full_paper` 之间。该阶段用于补充一个中等规模真实 Wan2.1 pilot, 目标是让项目能够在 pilot 级别形成合规的 `TPR@FPR=0.01` 结论。
+`pilot_paper` 是小样本论文级结果层级, 不是仅用于 workflow progression 的工程预演。该阶段位于 `validation_scale` 与 `full_paper` 之间, 目标是在真实 Wan2.1 上产出可审计的 pilot-scale paper claim, 重点报告 `TPR@FPR=0.01`。
 
-该阶段不等价于 full-paper。它不能支持 `TPR@FPR=0.001`, 也不能生成论文主表或最终 submission package。
-
-## 2. 数据集构造要求
-
-`TPR@FPR=0.01` pilot 必须采用与 full-paper 同构的固定阈值协议:
+`pilot_paper` 与 `full_paper` 的核心区别只允许是样本规模和统计置信度。二者必须共享同一类论文级协议:
 
 ```text
 calibration split
 -> frozen threshold artifact
 -> held-out test split
+-> governed records
 -> tables / figures / claim audit
 ```
 
-当前仓库已在 prompt suite 中新增独立 `fpr01_pilot` profile。该 profile 不复用 `pilot` 或 `validation_scale` prompt, 避免样本角色混淆。
+因此, 通过该阶段可以写成 `pilot_paper` 级论文主张; 但不能外推为 `TPR@FPR=0.001` 或 full-paper 规模主张。
+
+## 2. 数据集构造要求
+
+当前仓库保留 `fpr01_pilot` 作为历史兼容 profile 名称, 新语义推荐入口为:
 
 ```text
+PROFILE = pilot_paper
+```
+
+`pilot_paper` 与兼容入口 `fpr01_pilot` 使用同一套 prompt / seed 数据集。该数据集不复用 `pilot` 或 `validation_scale` prompt, 避免样本角色混淆。
+
+```text
+paper_result_level: pilot_paper
+paper_protocol_level: paper_grade_protocol
+paper_protocol_difference_from_full_paper: sample_scale_only
 prompt_count: 21
 seed_per_prompt: 8
 calibration_seed_per_prompt: 4
@@ -40,7 +50,8 @@ threshold_protocol: calibration_split_to_frozen_threshold_to_heldout_test_split
 ```text
 configs/protocol/fpr01_pilot_generative_probe.json
 experiments/generative_video_model_probe/fpr01_pilot_gate.py
-experiments/generative_video_model_probe/colab_runtime.py PROFILE = fpr01_pilot
+experiments/generative_video_model_probe/colab_runtime.py PROFILE = pilot_paper
+experiments/generative_video_model_probe/colab_runtime.py PROFILE = fpr01_pilot  # 兼容旧入口
 paper_workflow/notebook_utils/generative_video_model_probe_workflow.py::build_fpr01_pilot_gate_command
 paper_workflow/colab_utils/generative_video_model_probe_colab.ipynb
 scripts/package_results/generative_video_drive_packager.py
@@ -58,21 +69,24 @@ artifacts/fpr01_pilot_gate_decision.json
 reports/fpr01_pilot_gate_report.md
 ```
 
+文件名保留 `fpr01_pilot` 是为了保持历史兼容; artifact 内部必须写出 `paper_result_level = pilot_paper` 和 `paper_protocol_difference_from_full_paper = sample_scale_only`。
+
 package manifest 会同步记录:
 
 ```text
-fpr01_pilot_gate_decision
-fpr01_pilot_claim_support_status
-fpr01_threshold_protocol
-fpr01_threshold_source_split
-fpr01_test_time_threshold_update_blocked
+pilot_paper_gate_decision
+pilot_paper_claim_support_status
+pilot_paper_result_level
+pilot_paper_protocol_level
+pilot_paper_protocol_difference_from_full_paper
+pilot_paper_protocol_matches_full_paper
+pilot_paper_claim_allowed
 fpr01_tpr_at_fpr_01
 fpr01_calibration_negative_fpr_at_threshold
 fpr01_heldout_negative_fpr_at_threshold
 fpr01_calibration_negative_event_count
 fpr01_heldout_test_negative_event_count
 fpr01_heldout_attacked_positive_event_count
-fpr01_tpr_at_fpr_01_pilot_claim_allowed
 fpr01_tpr_at_fpr_001_claim_allowed
 ```
 
@@ -106,22 +120,25 @@ small_scale_claim_pilot_gate_decision == PASS
 
 ## 6. Claim 边界
 
-通过该 gate 只允许写为:
+通过该 gate 允许写为:
 
 ```text
-claim_support_status: fpr01_pilot_calibrated_heldout_claim_ready
+paper_result_level: pilot_paper
+paper_protocol_difference_from_full_paper: sample_scale_only
+claim_support_status: pilot_paper_calibrated_heldout_claim_ready
+pilot_paper_claim_allowed: true
 tpr_at_fpr_01_pilot_claim_allowed: true
 tpr_at_fpr_001_claim_allowed: false
 full_paper_allowed: false
 ```
 
-这表示 pilot 级 `TPR@FPR=0.01` 结论已经使用 calibration / held-out split 与冻结阈值协议产生。它的合规性来自实验协议, 与 full-paper 的差异主要是样本规模。
+这表示 pilot_paper 级 `TPR@FPR=0.01` 结论已经使用 calibration / held-out split 与冻结阈值协议产生。它是论文级小样本主张, 不是 workflow-only 证据。full_paper 对同一协议进行更大样本规模、更低 FPR 和更强统计置信度的扩展验证。
 
 禁止将该阶段解释为:
 
 ```text
 TPR@FPR=0.001 已成立
-full-paper fixed-FPR 结果已成立
+full-paper 规模 fixed-FPR 结果已成立
 现代 external baseline 主表对比已完成
 内部消融主表已完成
 submission package 已冻结
@@ -129,4 +146,4 @@ submission package 已冻结
 
 ## 7. 当前完成状态
 
-当前仓库层面已经完成 `fpr01_pilot` 的数据集构造、profile 接入、frozen threshold gate runner、notebook workflow 接入、package manifest 摘要和默认 pytest 覆盖。真实 Wan2.1 GPU 结果尚未生成, 因此该阶段的实验结论仍需用户在 Colab 中以 `PROFILE = 'fpr01_pilot'` 复跑后再审计。
+当前仓库层面已经完成 `pilot_paper` 的数据集构造、profile 接入、frozen threshold gate runner、notebook workflow 接入、package manifest 摘要和默认 pytest 覆盖。真实 Wan2.1 GPU 结果尚未生成, 因此该阶段的实验结论仍需用户在 Colab 中以 `PROFILE = 'pilot_paper'` 复跑后再审计。

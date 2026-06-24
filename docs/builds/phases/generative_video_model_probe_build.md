@@ -553,11 +553,11 @@ package
 新增步骤写出 trajectory sketch verification、replay uncertainty、wrong sampler replay 和 wrong prompt replay 四类 governed records。`validation_artifact_rebuild_dry_run` 与 Google Drive package manifest 已纳入该步骤产物。当前该步骤只解除 validation-scale 工程入口缺口, 不解除 full-paper Claim-3 强支持阻塞。
 
 
-## 2026-06-24 FPR=0.01 pilot 工程入口
+## 2026-06-24 pilot_paper FPR=0.01 工程入口
 
-当前 `generative_video_model_probe` 已新增 `fpr01_pilot` profile, 用于在 validation-scale 与 full-paper 之间补充一个中等规模低 FPR pilot。该 profile 的目标不是替代 full-paper, 而是让项目在进入大规模实验前先获得 pilot 级 `TPR@FPR=0.01` 可报告证据。
+当前 `generative_video_model_probe` 已新增 `pilot_paper` 语义层级, 用于在 validation-scale 与 full-paper 之间补充一个小样本论文级结果包。该层级不是 workflow-only pilot, 而是采用与 full_paper 同构协议的 pilot-scale paper claim。
 
-该阶段已经按论文同构协议改为:
+该阶段协议为:
 
 ```text
 calibration split
@@ -571,14 +571,18 @@ calibration split
 ```text
 configs/protocol/fpr01_pilot_generative_probe.json
 experiments/generative_video_model_probe/fpr01_pilot_gate.py
-colab_runtime PROFILE = fpr01_pilot
+colab_runtime PROFILE = pilot_paper
+colab_runtime PROFILE = fpr01_pilot  # 兼容旧入口
 notebook workflow build_fpr01_pilot_gate_command
-Google Drive package manifest fpr01 summary
+Google Drive package manifest pilot_paper summary
 ```
 
 当前数据集构造目标为:
 
 ```text
+paper_result_level: pilot_paper
+paper_protocol_level: paper_grade_protocol
+paper_protocol_difference_from_full_paper: sample_scale_only
 prompt_count: 21
 seed_per_prompt: 8
 calibration_seed_per_prompt: 4
@@ -593,4 +597,4 @@ target_fpr: 0.01
 threshold_protocol: calibration_split_to_frozen_threshold_to_heldout_test_split
 ```
 
-该阶段通过后只允许报告 `fpr01_pilot_calibrated_heldout_claim_ready` 和 pilot 级 `TPR@FPR=0.01` 结论, 不允许报告 `TPR@FPR=0.001` 或 full-paper 主表结论。
+该阶段通过后允许报告 `pilot_paper_calibrated_heldout_claim_ready` 和 pilot_paper 级 `TPR@FPR=0.01` 论文主张。它与 full_paper 的区别只在样本规模和统计置信度, 但仍不允许报告 `TPR@FPR=0.001` 或 full-paper 规模主表结论。

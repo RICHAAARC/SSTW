@@ -409,6 +409,11 @@ def build_prompt_suite() -> dict:
         "dataset_construction_status": "constructed",
         "dataset_source": "repository_deterministic_prompt_seed_spec",
         "fpr01_pilot_design": {
+            "paper_result_level": "pilot_paper",
+            "paper_protocol_level": "paper_grade_protocol",
+            "paper_protocol_difference_from_full_paper": "sample_scale_only",
+            "recommended_runtime_profile": "pilot_paper",
+            "compatibility_runtime_profile": "fpr01_pilot",
             "target_fpr": 0.01,
             "blocked_target_fpr": 0.001,
             "prompt_count": fpr01_prompt_count,
@@ -422,7 +427,7 @@ def build_prompt_suite() -> dict:
             "target_calibration_negative_event_count": fpr01_prompt_count * 4 * 3 * 4,
             "target_heldout_test_negative_event_count": fpr01_prompt_count * 4 * 3 * 4,
             "threshold_protocol": "calibration_split_to_frozen_threshold_to_heldout_test_split",
-            "claim_support_status": "fpr01_pilot_dataset_constructed_not_generated",
+            "claim_support_status": "pilot_paper_dataset_constructed_not_generated",
             "split": "calibration_and_test"
         },
         "motion_calibration_design": {

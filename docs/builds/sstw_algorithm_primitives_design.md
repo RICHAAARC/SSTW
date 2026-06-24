@@ -172,7 +172,7 @@ TPR@FPR=0.01
 TPR@FPR=0.001
 ```
 
-`FPR=0.001` 要求大规模 negative event。若 negative event 数不足, 只能报告 pilot 或 validation 结果, 不能支撑 full_paper claim。
+`FPR=0.001` 要求大规模 negative event。若 negative event 数不足, 只能报告 pilot_paper 或 validation 结果; 其中 pilot_paper 可以支撑小样本论文级 `TPR@FPR=0.01` 主张, 但不能支撑 full_paper 规模 claim。
 
 ## 10. P8: Authenticated Trajectory Sketch
 

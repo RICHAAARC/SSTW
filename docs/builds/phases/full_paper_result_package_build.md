@@ -204,7 +204,8 @@ stage_status: 未开始, validation-scale 前置阻塞
 ### 2.2 差距项
 
 ```text
-small_scale_claim_pilot_gate 已在 small-scale pilot 级别 PASS, 但不能替代 full_paper
+small_scale_claim_pilot_gate 已在 workflow progression 级别 PASS
+pilot_paper FPR=0.01 真实 GPU 结果尚未生成, 不能替代 full_paper 规模结果
 generative_video_model_probe_validation_passed 尚未成立
 modern external baseline 已进入 governed status / non-run records, 但尚无可进入主表的 runnable 同协议结果
 internal ablation full-scale records 尚未完成
@@ -219,7 +220,7 @@ full_paper_dry_run_checker 与 full_paper_result_checker 尚未实现
 | 项目 | 当前标注 |
 |---|---|
 | 完成状态 | 未开始, validation-scale 前置阻塞 |
-| 主要差距项 | small-scale pilot 已解除, 但 validation-scale、现代外部 baseline 主表对比、内部消融、adaptive attack、replay/sketch、FPR=0.001 和 full_paper checker 仍未闭合。 |
+| 主要差距项 | small-scale pilot 已解除, 但 pilot_paper 真实结果、validation-scale、现代外部 baseline 主表对比、内部消融、adaptive attack、replay/sketch、FPR=0.001 和 full_paper checker 仍未闭合。 |
 | 下一步构建方向 | 先完成 validation-scale generative probe, 同步推进现代外部 baseline adapter、内部消融、adaptive attack、replay/sketch 和 CI reporter。 |
 | full_paper 影响 | 本阶段未通过时, 禁止生成 full_paper 论文结果包。 |
 
@@ -229,6 +230,7 @@ full_paper_dry_run_checker 与 full_paper_result_checker 尚未实现
 
 ```text
 small_scale_claim_pilot_gate_passed = true
+pilot_paper_result_completed = false
 validation_scale_generative_probe_completed = false
 modern_external_baseline_status_records_ready = true
 modern_external_baseline_main_comparison_ready_count = 0

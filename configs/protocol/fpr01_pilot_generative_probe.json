@@ -1,9 +1,13 @@
 {
-  "stage_id": "fpr01_pilot_generative_probe_gate",
+  "stage_id": "pilot_paper_generative_probe_gate",
+  "paper_result_level": "pilot_paper",
+  "paper_protocol_level": "paper_grade_protocol",
+  "paper_protocol_difference_from_full_paper": "sample_scale_only",
   "target_fpr": 0.01,
   "blocked_target_fpr": 0.001,
   "threshold_protocol": "calibration_split_to_frozen_threshold_to_heldout_test_split",
   "pilot_profile_names": [
+    "pilot_paper",
     "fpr01_pilot"
   ],
   "minimum_prompt_count": 21,
@@ -23,5 +27,5 @@
   "require_motion_threshold_calibration_ready": true,
   "require_small_scale_pilot_gate_passed": true,
   "require_formal_motion_claim_ready": true,
-  "claim_support_status": "fpr01_pilot_protocol_only"
+  "claim_support_status": "pilot_paper_protocol_only"
 }

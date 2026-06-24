@@ -61,6 +61,7 @@ def test_claim3_downgrade_keeps_downgrade_for_validation_proxy_replay_gate(tmp_p
 
     assert audit["claim3_downgraded"] is True
     assert audit["claim3_full_support_allowed"] is False
+    assert audit["claim3_allowed_scope"] == "owner_side_audit_or_exploratory_replay_analysis"
     assert audit["replay_or_sketch_status"] == "replay_and_sketch_gate_passed_validation_proxy"
     assert audit["claim3_downgrade_reason"] == "replay_and_sketch_gate_validation_proxy_only"
 

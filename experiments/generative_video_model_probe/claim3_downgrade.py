@@ -106,7 +106,7 @@ def build_claim3_downgrade_audit(run_root: str | Path) -> dict[str, Any]:
         "claim3_downgraded": claim3_downgraded,
         "claim3_original_scope": "robust_replay_verification",
         "claim3_allowed_scope": "robust_replay_verification"
-        if replay_gate_passed
+        if not claim3_downgraded
         else "owner_side_audit_or_exploratory_replay_analysis",
         "claim3_downgrade_reason": "replay_and_sketch_gate_passed"
         if not claim3_downgraded

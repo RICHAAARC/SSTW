@@ -1,4 +1,4 @@
-"""validation-scale 内部消融矩阵后处理。"""
+"""validation-scale 与 pilot_paper 内部消融矩阵后处理。"""
 
 from __future__ import annotations
 
@@ -71,6 +71,8 @@ VALIDATION_ABLATION_VARIANTS = (
         "score_offset": -0.02,
     },
 )
+INTERNAL_ABLATION_PROFILE_NAMES = {"validation_scale", "pilot_paper", "fpr01_pilot"}
+PILOT_PAPER_PROFILE_NAMES = {"pilot_paper", "fpr01_pilot"}
 
 
 def _read_jsonl(path: Path) -> list[dict]:
@@ -87,14 +89,19 @@ def _read_json(path: Path) -> dict:
     return json.loads(path.read_text(encoding="utf-8-sig"))
 
 
-def _validation_trace_ids(run_root: Path) -> set[str]:
-    """获取 validation_scale profile 中成功生成样本的 trace id。"""
+def _profile_trace_map(run_root: Path) -> dict[str, str]:
+    """获取支持内部消融的 profile 生成样本 trace id。
+
+    通用工程写法是通过 `trajectory_trace_id` 把 generation、attack、detection 和 ablation records
+    关联起来。项目特定要求是同一个 runner 同时支持 validation_scale 和 pilot_paper, 防止
+    pilot_paper 只复用 validation proxy 消融结果。
+    """
     generation_records = _read_jsonl(run_root / "records" / "generation_records.jsonl")
     return {
-        str(record.get("trajectory_trace_id"))
+        str(record.get("trajectory_trace_id")): str(record.get("colab_runtime_profile"))
         for record in generation_records
         if record.get("generation_status") == "success"
-        and record.get("colab_runtime_profile") == "validation_scale"
+        and record.get("colab_runtime_profile") in INTERNAL_ABLATION_PROFILE_NAMES
         and record.get("trajectory_trace_id")
     }
 
@@ -118,17 +125,19 @@ def _clip_score(value: float) -> float:
 
 
 def build_validation_internal_ablation_records(run_root: str | Path) -> list[dict]:
-    """从 validation-scale runtime detection records 构建内部消融 proxy records。
+    """从 validation-scale 或 pilot_paper runtime detection records 构建内部消融 proxy records。
 
-    该实现属于 validation-scale 工程预演, 不是 full-paper 正式消融。它复用已经落盘的
-    runtime detection proxy 分数, 为后续真实消融 detector 留出 governed record 形状。
+    该实现属于工程闭环层, 不是 full-paper 正式消融。它复用已经落盘的 runtime detection proxy
+    分数, 为后续真实消融 detector 留出 governed record 形状。若当前 run_root 是 pilot_paper,
+    该函数会在同一批 pilot_paper trace 上写出消融矩阵, 从而支撑 pilot_paper gate 的完整协议检查。
     """
     run_root = Path(run_root)
-    validation_trace_ids = _validation_trace_ids(run_root)
+    profile_by_trace_id = _profile_trace_map(run_root)
+    allowed_trace_ids = set(profile_by_trace_id)
     detection_records = [
         record for record in _read_jsonl(run_root / "records" / "runtime_detection_records.jsonl")
         if record.get("runtime_detection_status") == "ready"
-        and (not validation_trace_ids or str(record.get("trajectory_trace_id")) in validation_trace_ids)
+        and (not allowed_trace_ids or str(record.get("trajectory_trace_id")) in allowed_trace_ids)
     ]
     records: list[dict] = []
     for detection_record in detection_records:
@@ -140,6 +149,7 @@ def build_validation_internal_ablation_records(run_root: str | Path) -> list[dic
             delta = round(ablated_score - score, 6)
             records.append(with_flow_evidence_protocol_defaults({
                 "record_version": "validation_internal_ablation_v1",
+                "ablation_runtime_profile": profile_by_trace_id.get(str(detection_record.get("trajectory_trace_id") or ""), "unknown_profile"),
                 "generation_model_id": detection_record.get("generation_model_id"),
                 "prompt_id": detection_record.get("prompt_id"),
                 "seed_id": detection_record.get("seed_id"),
@@ -163,9 +173,17 @@ def build_validation_internal_ablation_records(run_root: str | Path) -> list[dic
 
 
 def audit_validation_internal_ablation_records(records: list[dict]) -> dict[str, Any]:
-    """审计 validation-scale 内部消融记录覆盖。"""
+    """审计 validation-scale 或 pilot_paper 内部消融记录覆盖。"""
     variants = {str(record.get("method_variant")) for record in records if record.get("method_variant")}
     attacks = {str(record.get("attack_name")) for record in records if record.get("attack_name")}
+    profile_counts: dict[str, int] = {}
+    for record in records:
+        profile = str(record.get("ablation_runtime_profile") or "unknown_profile")
+        profile_counts[profile] = profile_counts.get(profile, 0) + 1
+    pilot_paper_records = [
+        record for record in records
+        if record.get("ablation_runtime_profile") in PILOT_PAPER_PROFILE_NAMES
+    ]
     full_scores = [float(record["validation_ablation_proxy_score"]) for record in records if record.get("method_variant") == "sstw_full_method"]
     ablated_scores = [float(record["validation_ablation_proxy_score"]) for record in records if record.get("method_variant") != "sstw_full_method"]
     score_margin = None
@@ -181,6 +199,8 @@ def audit_validation_internal_ablation_records(records: list[dict]) -> dict[str,
         "validation_internal_ablation_attack_count": len(attacks),
         "validation_internal_ablation_score_margin": score_margin,
         "validation_internal_ablation_evidence_level": "runtime_detection_proxy_ablation",
+        "validation_internal_ablation_profile_counts": profile_counts,
+        "pilot_paper_internal_ablation_record_count": len(pilot_paper_records),
     }
 
 
@@ -194,11 +214,12 @@ def run_validation_internal_ablation(run_root: str | Path) -> dict[str, Any]:
     write_json(run_root / "artifacts" / "validation_internal_ablation_decision.json", audit)
     report = (
         "# Validation Internal Ablation Report\n\n"
-        "该报告由 validation-scale runtime detection proxy records 自动生成。当前结果只用于验证消融矩阵工程闭环, "
-        "不能替代 full-paper 正式消融表。\n\n"
+        "该报告由 validation-scale 或 pilot_paper runtime detection proxy records 自动生成。当前结果用于验证消融矩阵工程闭环, "
+        "pilot_paper 运行时必须覆盖同一批 pilot_paper trace, 但仍不能替代 full-paper 正式消融表。\n\n"
         f"- validation_internal_ablation_decision: {audit['validation_internal_ablation_decision']}\n"
         f"- internal_ablation_record_count: {audit['internal_ablation_record_count']}\n"
         f"- validation_internal_ablation_variant_count: {audit['validation_internal_ablation_variant_count']}\n"
+        f"- pilot_paper_internal_ablation_record_count: {audit['pilot_paper_internal_ablation_record_count']}\n"
         f"- validation_internal_ablation_score_margin: {audit['validation_internal_ablation_score_margin']}\n"
         f"- claim_support_status: {audit['claim_support_status']}\n"
     )
@@ -209,7 +230,7 @@ def run_validation_internal_ablation(run_root: str | Path) -> dict[str, Any]:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="构建 validation-scale 内部消融 proxy records。")
+    parser = argparse.ArgumentParser(description="构建 validation-scale 或 pilot_paper 内部消融 proxy records。")
     parser.add_argument("--run-root", required=True)
     args = parser.parse_args()
     payload = run_validation_internal_ablation(args.run_root)

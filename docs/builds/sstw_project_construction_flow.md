@@ -313,7 +313,7 @@ full_paper_run
 submission_package_freeze
 ```
 
-其中 `replay_and_authenticated_sketch_gate`、`flow_specific_adaptive_attack_gate`、external baseline、internal ablation 与 CI reporter 属于 `validation_scale` 到 `full_paper_run` 之间必须闭合的子门禁, 不再作为 `pilot_paper` 之后的独立线性阶段。`pilot_paper` 的定位是小规模跑完整 full_paper 协议并产出 pilot 级论文结果, 等价于 full_paper 前完整流程预演。
+其中 `replay_and_authenticated_sketch_gate`、`flow_specific_adaptive_attack_gate`、external baseline、internal ablation 与 CI reporter 属于 `validation_scale` 到 `full_paper_run` 之间必须闭合的子门禁, 不再作为 `pilot_paper` 之后的独立线性阶段。`pilot_paper` 的定位是小规模跑完整 full paper 协议并产出 pilot 级论文结果, 等价于 full paper 前完整流程预演。进入 `pilot_paper` gate 前, external_baseline comparison 与内部消融矩阵必须已经覆盖同批 held-out test trace; 否则不能报告 pilot 级 `TPR@FPR=0.01`。
 
 核心原则是:
 
@@ -321,7 +321,7 @@ submission_package_freeze
 先闭合协议, 再闭合状态推断;
 先验证路径证据, 再接入真实 Flow sampler;
 先验证 Flow 模型接口能记录轨迹, 再验证 velocity constraint 进入采样过程;
-先做 pilot gate, 再做 full generation;
+先做 pilot gate, 再补 validation-scale 的 baseline / 消融 / attack 工程闭环, 再做 pilot_paper;
 先控制 negative tail, 再写论文主张;
 所有 supported claims 必须由 frozen records 自动重建。
 ```
@@ -776,7 +776,8 @@ explicit_synchronization_control: explicit_dtw_temporal_alignment, frame_matchin
 1. Wan2.1 主线记录必须标记为 Flow Matching / velocity-field sampler 相关模型。
 2. velocity / flow trajectory proxy 必须参与水印同步证据。
 3. SSTW full method 在 `TPR@FPR=0.01` 下优于外部 baseline 与内部机制 baseline。
-4. 质量、运动和语义指标不能显示不可接受退化。
+4. `pilot_paper` gate 前必须已经生成同批 held-out test trace 的 external_baseline comparison records 和内部消融 records。
+5. 质量、运动和语义指标不能显示不可接受退化。
 
 ---
 
@@ -878,6 +879,22 @@ trajectory_sketch_replacement_attempt
 1. 时间重参数化不变路径证据优于固定 step-index 路径证据。
 2. replay uncertainty weighting 能降低错误 replay 带来的误报风险。
 3. admissibility gate 能限制 adaptive attack 下的 negative score tail。
+
+
+### 15.5 pilot_paper 前置子门禁
+
+`pilot_paper` 不是只跑主方法的缩小版, 而是 full paper 协议的小规模完整预演。因此在 `fpr01_pilot_gate` 允许报告 pilot 级 `TPR@FPR=0.01` 前, 必须满足:
+
+```text
+validation_scale_gate_decision == PASS
+external_baseline_comparison_decision == PASS
+pilot_paper_external_baseline_trace_count_min >= 84
+validation_internal_ablation_decision == PASS
+pilot_paper_internal_ablation_trace_count_min >= 84
+required_internal_ablation_variants covered
+```
+
+显式 DTW 与 frame matching 只能作为同步 control proxy。现代视频水印 baseline 如果尚未 runnable, 必须写出 governed non-run reason, 不能被人工省略或替换成 control proxy。
 
 ---
 

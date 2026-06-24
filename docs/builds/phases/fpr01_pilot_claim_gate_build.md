@@ -1,4 +1,4 @@
-﻿# pilot_paper FPR=0.01 claim gate 分阶段构建文档
+# pilot_paper FPR=0.01 claim gate 分阶段构建文档
 
 ## 1. 阶段定位
 
@@ -45,6 +45,27 @@ threshold_protocol: calibration_split_to_frozen_threshold_to_heldout_test_split
 
 其中 calibration split 只用于估计并冻结 `FPR=0.01` 阈值, held-out test split 只用于报告 negative FPR 和 attacked positive TPR。test split 运行过程中不得更新阈值。
 
+## 2.1 baseline 与内部消融前置要求
+
+`pilot_paper` 本质是小规模跑完整 full paper 协议。因此在执行 `fpr01_pilot_gate` 之前, 同一批 held-out test trace 必须已经写出以下 governed artifacts:
+
+```text
+records/external_baseline_score_records.jsonl
+artifacts/external_baseline_comparison_decision.json
+records/validation_internal_ablation_records.jsonl
+artifacts/validation_internal_ablation_decision.json
+```
+
+当前 runnable external adapter 至少包括:
+
+```text
+explicit_dtw_temporal_alignment
+explicit_frame_matching_temporal_registration
+```
+
+这两个 adapter 是显式同步 control proxy, 用于证明 baseline comparison 链路和同步对照闭合; 它们不能替代 VideoShield、SIGMark、SPDMark、VideoMark / VidSig 或 VideoSeal 等现代视频水印 baseline 的正式论文主表对比。内部消融矩阵至少需要覆盖 `sstw_full_method`、endpoint-only、trajectory-only、去 velocity constraint、去 endpoint-aware control、去 replay uncertainty weighting、去 admissibility 和 generic SSM baseline。若 baseline 或消融缺失, `pilot_paper` gate 必须失败, 不允许先报告 `TPR@FPR=0.01` 再补表。
+
+
 ## 3. 工程入口
 
 ```text
@@ -81,6 +102,11 @@ pilot_paper_protocol_level
 pilot_paper_protocol_difference_from_full_paper
 pilot_paper_protocol_matches_full_paper
 pilot_paper_claim_allowed
+pilot_paper_external_baseline_trace_count
+pilot_paper_external_baseline_trace_count_min
+pilot_paper_internal_ablation_trace_count_min
+pilot_paper_missing_external_baseline_adapter_names
+pilot_paper_missing_internal_ablation_variants
 fpr01_tpr_at_fpr_01
 fpr01_calibration_negative_fpr_at_threshold
 fpr01_heldout_negative_fpr_at_threshold
@@ -116,6 +142,15 @@ negative_tail_status == not_inflated
 wrong_sampler_replay_control_not_equivalent == true
 motion_threshold_calibration_ready == true
 small_scale_claim_pilot_gate_decision == PASS
+validation_scale_gate_decision == PASS
+external_baseline_comparison_decision == PASS
+external_baseline_measured_adapter_count >= 2
+required_external_baseline_adapter_names covered
+pilot_paper_external_baseline_trace_count_min >= 84
+validation_internal_ablation_decision == PASS
+internal_ablation_variant_count >= 8
+required_internal_ablation_variants covered
+pilot_paper_internal_ablation_trace_count_min >= 84
 ```
 
 ## 6. Claim 边界
@@ -132,18 +167,18 @@ tpr_at_fpr_001_claim_allowed: false
 full_paper_allowed: false
 ```
 
-这表示 pilot_paper 级 `TPR@FPR=0.01` 结论已经使用 calibration / held-out split 与冻结阈值协议产生。它是论文级小样本主张, 不是 workflow-only 证据。full_paper 对同一协议进行更大样本规模、更低 FPR 和更强统计置信度的扩展验证。
+这表示 pilot_paper 级 `TPR@FPR=0.01` 结论已经使用 calibration / held-out split 与冻结阈值协议产生, 且同批 held-out test trace 已覆盖 external_baseline comparison records 和内部消融矩阵。它是论文级小样本主张, 不是 workflow-only 证据。full_paper 对同一协议进行更大样本规模、更低 FPR 和更强统计置信度的扩展验证。
 
 禁止将该阶段解释为:
 
 ```text
 TPR@FPR=0.001 已成立
 full-paper 规模 fixed-FPR 结果已成立
-现代 external baseline 主表对比已完成
-内部消融主表已完成
+现代 external baseline full-scale 主表对比已完成
+full-scale 内部消融主表已完成
 submission package 已冻结
 ```
 
 ## 7. 当前完成状态
 
-当前仓库层面已经完成 `pilot_paper` 的数据集构造、profile 接入、frozen threshold gate runner、notebook workflow 接入、package manifest 摘要和默认 pytest 覆盖。真实 Wan2.1 GPU 结果尚未生成, 因此该阶段的实验结论仍需用户在 Colab 中以 `PROFILE = 'pilot_paper'` 复跑后再审计。
+当前仓库层面已经完成 `pilot_paper` 的数据集构造、profile 接入、frozen threshold gate runner、external_baseline comparison 前置检查、内部消融矩阵前置检查、notebook workflow 接入、package manifest 摘要和默认 pytest 覆盖。真实 Wan2.1 GPU 结果尚未生成, 因此该阶段的实验结论仍需用户在 Colab 中以 `PROFILE = 'pilot_paper'` 复跑后再审计。

@@ -44,8 +44,43 @@ def test_validation_internal_ablation_writes_proxy_records(tmp_path: Path) -> No
     assert audit["internal_ablation_record_count"] == len(records)
     assert any(record["method_variant"] == "without_velocity_constraint" for record in records)
     assert all(record["claim_support_status"] == "validation_internal_ablation_proxy_only" for record in records)
+    assert all(record["ablation_runtime_profile"] == "validation_scale" for record in records)
     assert (run_root / "tables" / "validation_internal_ablation_table.csv").exists()
     assert (run_root / "reports" / "validation_internal_ablation_report.md").exists()
+
+
+@pytest.mark.quick
+def test_pilot_paper_internal_ablation_writes_same_profile_records(tmp_path: Path) -> None:
+    """pilot_paper 运行时内部消融必须覆盖 pilot_paper trace, 不能只复用 validation proxy。"""
+    run_root = tmp_path / "run"
+    write_jsonl(run_root / "records" / "generation_records.jsonl", [
+        {
+            "generation_status": "success",
+            "colab_runtime_profile": "pilot_paper",
+            "trajectory_trace_id": "trace_pilot_paper",
+            "prompt_id": "prompt_pilot_paper",
+            "seed_id": "seed_pilot_paper",
+        }
+    ])
+    write_jsonl(run_root / "records" / "runtime_detection_records.jsonl", [
+        {
+            "runtime_detection_status": "ready",
+            "trajectory_trace_id": "trace_pilot_paper",
+            "generation_model_id": "model",
+            "prompt_id": "prompt_pilot_paper",
+            "seed_id": "seed_pilot_paper",
+            "attack_name": "video_compression_runtime",
+            "S_runtime_attack_detection": 0.82,
+            "S_final_conservative": 0.8,
+        }
+    ])
+
+    audit = run_validation_internal_ablation(run_root)
+    records = read_jsonl(run_root / "records" / "validation_internal_ablation_records.jsonl")
+
+    assert audit["validation_internal_ablation_decision"] == "PASS"
+    assert audit["pilot_paper_internal_ablation_record_count"] == len(records)
+    assert all(record["ablation_runtime_profile"] == "pilot_paper" for record in records)
 
 
 @pytest.mark.quick

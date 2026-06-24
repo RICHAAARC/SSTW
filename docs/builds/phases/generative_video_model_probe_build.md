@@ -427,7 +427,7 @@ reports/validation_artifact_rebuild_dry_run_report.md
 该实现的边界是:
 
 ```text
-validation_internal_ablation: 使用 runtime detection proxy 生成 validation 级消融矩阵, 不替代 full-paper 正式消融。
+validation_internal_ablation: 使用 runtime detection proxy 生成 validation-scale 或 pilot_paper 同批 trace 的消融矩阵; validation-scale 结果只用于工程稳定性, pilot_paper 结果用于小样本论文级协议预演, 二者都不替代 full-paper 大规模正式消融。
 statistical_confidence_interval: 只计算 validation runtime detection proxy 的 Wilson 区间, 不替代 FPR=0.001 大规模统计。
 validation_artifact_rebuild: 只检查 validation 产物是否具备 records -> tables / reports 重建闭环, 不生成 full-paper package。
 ```
@@ -436,7 +436,7 @@ Colab workflow 已按以下顺序接入:
 
 ```text
 runtime detection
-validation internal ablation
+validation / pilot_paper internal ablation
 statistical confidence interval
 validation artifact rebuild dry-run
 validation-scale gate
@@ -454,7 +454,7 @@ Colab workflow 已在 runtime detection 之后新增 external baseline compariso
 runtime detection
 external_baseline adapter comparison
 small-scale claim pilot gate
-validation internal ablation
+validation / pilot_paper internal ablation
 statistical confidence interval
 validation artifact rebuild dry-run
 validation-scale gate
@@ -491,7 +491,7 @@ output: external_baseline_score_records + comparison table + decision + report
 claim_boundary: proxy comparison only until modern baseline adapters produce measured records
 ```
 
-该步骤必须位于 runtime detection 之后, 因为 adapter 需要读取真实 attacked video detection 链路产生的 governed records。该步骤必须位于 validation-scale gate 之前, 因为 gate 需要检查 `validation_external_baseline_comparison_records_ready`。
+该步骤必须位于 runtime detection 之后, 因为 adapter 需要读取真实 attacked video detection 链路产生的 governed records。该步骤必须位于 validation-scale gate 和 pilot_paper gate 之前: validation-scale gate 需要检查 `validation_external_baseline_comparison_records_ready`, pilot_paper gate 需要检查同批 held-out test trace 的 `pilot_paper_external_baseline_comparison_ready`。
 
 ## 2026-06-24 validation-scale hard-blocker runner workflow 接入
 
@@ -597,4 +597,29 @@ target_fpr: 0.01
 threshold_protocol: calibration_split_to_frozen_threshold_to_heldout_test_split
 ```
 
-该阶段通过后允许报告 `pilot_paper_calibrated_heldout_claim_ready` 和 pilot_paper 级 `TPR@FPR=0.01` 论文主张。它与 full_paper 的区别只在样本规模和统计置信度, 但仍不允许报告 `TPR@FPR=0.001` 或 full-paper 规模主表结论。
+该阶段通过后允许报告 `pilot_paper_calibrated_heldout_claim_ready` 和 pilot_paper 级 `TPR@FPR=0.01` 论文主张。通过条件不仅包括 calibration / held-out threshold 协议, 还包括 external_baseline comparison 和内部消融矩阵对同批 held-out test trace 的覆盖。它与 full_paper 的区别只在样本规模和统计置信度, 但仍不允许报告 `TPR@FPR=0.001` 或 full-paper 规模主表结论。
+
+
+### 2.11 pilot_paper gate 前置 baseline 与内部消融闭环
+
+在进入真实 `PROFILE = pilot_paper` 复跑前, 当前工程已把 baseline 和内部消融从“后续人工补表”提升为 gate 前置要求。`fpr01_pilot_gate` 会读取:
+
+```text
+artifacts/external_baseline_comparison_decision.json
+records/external_baseline_score_records.jsonl
+artifacts/validation_internal_ablation_decision.json
+records/validation_internal_ablation_records.jsonl
+```
+
+必须满足:
+
+```text
+pilot_paper_external_baseline_comparison_ready == true
+pilot_paper_internal_ablation_matrix_ready == true
+minimum_external_baseline_measured_adapter_count >= 2
+minimum_internal_ablation_variant_count >= 8
+pilot_paper_external_baseline_trace_count_min >= 84
+pilot_paper_internal_ablation_trace_count_min >= 84
+```
+
+这一实现属于项目特定 gate 设计: 它强制 `pilot_paper` 先闭合对比链路和消融链路, 再允许输出 pilot 级 fixed-FPR 论文主张。显式 DTW 与 frame matching 仍只是同步 control proxy, 现代视频水印 baseline 的正式 adapter 仍需在 full-paper 主表前继续接入。

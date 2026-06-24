@@ -44,6 +44,21 @@ DEFAULT_MINIMUM_HELDOUT_ATTACKED_POSITIVE_EVENT_COUNT = 200
 DEFAULT_MINIMUM_NEGATIVE_FAMILY_COUNT = 4
 DEFAULT_MINIMUM_NEGATIVE_EVENT_COUNT_PER_FAMILY = 200
 DEFAULT_MINIMUM_ATTACK_EVENT_COUNT_PER_ATTACK = 60
+DEFAULT_MINIMUM_EXTERNAL_BASELINE_MEASURED_ADAPTER_COUNT = 2
+DEFAULT_REQUIRED_EXTERNAL_BASELINE_ADAPTER_NAMES = (
+    "explicit_dtw_temporal_alignment",
+    "explicit_frame_matching_temporal_registration",
+)
+DEFAULT_REQUIRED_INTERNAL_ABLATION_VARIANTS = (
+    "sstw_full_method",
+    "endpoint_only_control",
+    "trajectory_only_score",
+    "without_velocity_constraint",
+    "without_endpoint_aware_control",
+    "without_replay_uncertainty_weighting",
+    "without_flow_state_admissibility",
+    "generic_ssm_baseline",
+)
 SCORE_FIELDS = (
     "S_final_conservative",
     "S_runtime_attack_detection",
@@ -94,6 +109,14 @@ def _load_config(config_path: str | Path = DEFAULT_FPR01_PILOT_CONFIG) -> dict[s
         "minimum_calibration_negative_event_count_per_family": int(raw.get("minimum_calibration_negative_event_count_per_family", DEFAULT_MINIMUM_NEGATIVE_EVENT_COUNT_PER_FAMILY)),
         "minimum_heldout_negative_event_count_per_family": int(raw.get("minimum_heldout_negative_event_count_per_family", DEFAULT_MINIMUM_NEGATIVE_EVENT_COUNT_PER_FAMILY)),
         "minimum_attack_event_count_per_attack": int(raw.get("minimum_attack_event_count_per_attack", DEFAULT_MINIMUM_ATTACK_EVENT_COUNT_PER_ATTACK)),
+        "minimum_external_baseline_measured_adapter_count": int(raw.get("minimum_external_baseline_measured_adapter_count", DEFAULT_MINIMUM_EXTERNAL_BASELINE_MEASURED_ADAPTER_COUNT)),
+        "minimum_pilot_paper_external_baseline_trace_count": int(raw.get("minimum_pilot_paper_external_baseline_trace_count", DEFAULT_MINIMUM_SPLIT_UNIQUE_VIDEO_COUNT)),
+        "minimum_pilot_paper_internal_ablation_trace_count": int(raw.get("minimum_pilot_paper_internal_ablation_trace_count", DEFAULT_MINIMUM_SPLIT_UNIQUE_VIDEO_COUNT)),
+        "minimum_internal_ablation_variant_count": int(raw.get("minimum_internal_ablation_variant_count", len(DEFAULT_REQUIRED_INTERNAL_ABLATION_VARIANTS))),
+        "required_external_baseline_adapter_names": raw.get("required_external_baseline_adapter_names", list(DEFAULT_REQUIRED_EXTERNAL_BASELINE_ADAPTER_NAMES)),
+        "required_internal_ablation_variants": raw.get("required_internal_ablation_variants", list(DEFAULT_REQUIRED_INTERNAL_ABLATION_VARIANTS)),
+        "require_external_baseline_comparison_ready": bool(raw.get("require_external_baseline_comparison_ready", True)),
+        "require_internal_ablation_matrix_ready": bool(raw.get("require_internal_ablation_matrix_ready", True)),
         "require_motion_threshold_calibration_ready": bool(raw.get("require_motion_threshold_calibration_ready", True)),
         "require_small_scale_pilot_gate_passed": bool(raw.get("require_small_scale_pilot_gate_passed", True)),
         "require_validation_scale_gate_passed": bool(raw.get("require_validation_scale_gate_passed", True)),
@@ -196,6 +219,114 @@ def _records_in_keys(records: Iterable[dict], keys: set[tuple[str, str, str, str
     return [record for record in records if record_identity_key(record) in keys]
 
 
+def _trace_ids(records: Iterable[dict]) -> set[str]:
+    """提取 records 中非空 trajectory trace id, 用于检查 baseline 和消融是否覆盖同一批样本。"""
+    return {str(record.get("trajectory_trace_id")) for record in records if record.get("trajectory_trace_id") not in {None, ""}}
+
+
+def _external_baseline_readiness(
+    run_root: Path,
+    config: dict[str, Any],
+    required_trace_ids: set[str],
+) -> tuple[bool, dict[str, Any]]:
+    """审计 pilot_paper 是否已有 external_baseline adapter comparison 结果。
+
+    这一检查属于项目特定写法。它不把 unsupported modern baseline 当作正向比较证据,
+    只要求已经接入 `external_baseline/` 的 runnable adapter 在 pilot_paper held-out test trace 上
+    写出 governed measured proxy records。
+    """
+    decision = _read_json(run_root / "artifacts" / "external_baseline_comparison_decision.json")
+    records = _read_jsonl(run_root / "records" / "external_baseline_score_records.jsonl")
+    measured_records = [record for record in records if record.get("metric_status") == "measured_proxy"]
+    measured_adapter_names = {str(record.get("external_baseline_name")) for record in measured_records if record.get("external_baseline_name")}
+    required_adapter_names = set(str(name) for name in config["required_external_baseline_adapter_names"])
+    covered_trace_ids = _trace_ids(measured_records) & required_trace_ids
+    missing_adapter_names = sorted(required_adapter_names - measured_adapter_names)
+    trace_ids_by_adapter: dict[str, set[str]] = defaultdict(set)
+    for record in measured_records:
+        adapter_name = str(record.get("external_baseline_name") or "")
+        trace_id = str(record.get("trajectory_trace_id") or "")
+        if adapter_name and trace_id and adapter_name in required_adapter_names:
+            trace_ids_by_adapter[adapter_name].add(trace_id)
+    adapter_trace_counts = {
+        adapter_name: len((trace_ids_by_adapter.get(adapter_name) or set()) & required_trace_ids)
+        for adapter_name in sorted(required_adapter_names)
+    }
+    adapter_trace_count_min = min(adapter_trace_counts.values(), default=0)
+    ready = (
+        decision.get("external_baseline_comparison_decision") == "PASS"
+        and len(measured_adapter_names) >= config["minimum_external_baseline_measured_adapter_count"]
+        and not missing_adapter_names
+        and adapter_trace_count_min >= config["minimum_pilot_paper_external_baseline_trace_count"]
+    )
+    return ready, {
+        "external_baseline_comparison_decision": decision.get("external_baseline_comparison_decision"),
+        "external_baseline_comparison_table_status": decision.get("external_baseline_comparison_table_status"),
+        "external_baseline_measured_adapter_count": len(measured_adapter_names),
+        "external_baseline_measured_adapter_names": sorted(measured_adapter_names),
+        "required_external_baseline_adapter_names": sorted(required_adapter_names),
+        "missing_external_baseline_adapter_names": missing_adapter_names,
+        "pilot_paper_external_baseline_trace_count": len(covered_trace_ids),
+        "pilot_paper_external_baseline_trace_count_min": adapter_trace_count_min,
+        "pilot_paper_external_baseline_trace_counts": adapter_trace_counts,
+        "minimum_pilot_paper_external_baseline_trace_count": config["minimum_pilot_paper_external_baseline_trace_count"],
+        "external_baseline_claim_support_status": decision.get("external_baseline_claim_support_status"),
+    }
+
+
+def _internal_ablation_readiness(
+    run_root: Path,
+    config: dict[str, Any],
+    required_trace_ids: set[str],
+) -> tuple[bool, dict[str, Any]]:
+    """审计 pilot_paper 是否已有内部消融矩阵 records。
+
+    该检查要求每个必须消融变体都覆盖 pilot_paper held-out test trace。这样可以防止只跑了
+    validation proxy 或只跑了部分消融时, 误把 pilot_paper 称为完整 full_paper 协议预演。
+    """
+    decision = _read_json(run_root / "artifacts" / "validation_internal_ablation_decision.json")
+    records = _read_jsonl(run_root / "records" / "validation_internal_ablation_records.jsonl")
+    required_variants = set(str(name) for name in config["required_internal_ablation_variants"])
+    variants = {str(record.get("method_variant")) for record in records if record.get("method_variant")}
+    missing_variants = sorted(required_variants - variants)
+    trace_ids_by_variant: dict[str, set[str]] = defaultdict(set)
+    for record in records:
+        variant = str(record.get("method_variant") or "")
+        trace_id = str(record.get("trajectory_trace_id") or "")
+        if variant and trace_id and variant in required_variants:
+            trace_ids_by_variant[variant].add(trace_id)
+    variant_trace_counts = {
+        variant: len((trace_ids_by_variant.get(variant) or set()) & required_trace_ids)
+        for variant in sorted(required_variants)
+    }
+    variant_trace_count_min = min(variant_trace_counts.values(), default=0)
+    score_margin = decision.get("validation_internal_ablation_score_margin")
+    try:
+        score_margin_value = float(score_margin)
+    except (TypeError, ValueError):
+        score_margin_value = None
+    ready = (
+        decision.get("validation_internal_ablation_decision") == "PASS"
+        and len(variants) >= config["minimum_internal_ablation_variant_count"]
+        and not missing_variants
+        and variant_trace_count_min >= config["minimum_pilot_paper_internal_ablation_trace_count"]
+        and score_margin_value is not None
+        and score_margin_value > 0
+    )
+    return ready, {
+        "validation_internal_ablation_decision": decision.get("validation_internal_ablation_decision"),
+        "internal_ablation_record_count": decision.get("internal_ablation_record_count", len(records)),
+        "validation_internal_ablation_variant_count": len(variants),
+        "required_internal_ablation_variants": sorted(required_variants),
+        "missing_internal_ablation_variants": missing_variants,
+        "pilot_paper_internal_ablation_trace_count_min": variant_trace_count_min,
+        "pilot_paper_internal_ablation_trace_counts": variant_trace_counts,
+        "minimum_pilot_paper_internal_ablation_trace_count": config["minimum_pilot_paper_internal_ablation_trace_count"],
+        "validation_internal_ablation_score_margin": score_margin_value,
+        "internal_ablation_claim_support_status": decision.get("claim_support_status"),
+    }
+
+
 def _negative_family_counts(records: Iterable[dict]) -> Counter[str]:
     """统计可审计 negative family 的样本数。"""
     counter: Counter[str] = Counter()
@@ -252,6 +383,7 @@ def build_fpr01_pilot_gate_audit(
     test_generation_records = _records_by_split(eligible_generation_records, "test")
     calibration_keys = _identity_keys(calibration_generation_records)
     test_keys = _identity_keys(test_generation_records)
+    test_trace_ids = _trace_ids(test_generation_records)
 
     pilot_matrix_records = filter_records_to_motion_claim_eligible(
         _read_jsonl(run_root / "records" / "small_scale_claim_pilot_matrix_records.jsonl"),
@@ -314,6 +446,8 @@ def build_fpr01_pilot_gate_audit(
         for record in heldout_negative_records
         if record.get("negative_tail_status") not in {None, ""}
     }
+    external_baseline_ready, external_baseline_summary = _external_baseline_readiness(run_root, config, test_trace_ids)
+    internal_ablation_ready, internal_ablation_summary = _internal_ablation_readiness(run_root, config, test_trace_ids)
 
     pilot_decision = _read_json(run_root / "artifacts" / "small_scale_claim_pilot_gate_decision.json")
     validation_scale_decision = _read_json(run_root / "artifacts" / "validation_scale_gate_decision.json")
@@ -362,6 +496,8 @@ def build_fpr01_pilot_gate_audit(
         "path_marginal_gain_ready": bool(path_gain_values) and mean(path_gain_values) > 0,
         "negative_tail_not_inflated": bool(negative_tail_statuses & {"not_inflated", "negative_tail_not_inflated", "pass"}),
         "wrong_sampler_replay_rejected": _wrong_sampler_replay_rejected(heldout_negative_records),
+        "pilot_paper_external_baseline_comparison_ready": (not config["require_external_baseline_comparison_ready"]) or external_baseline_ready,
+        "pilot_paper_internal_ablation_matrix_ready": (not config["require_internal_ablation_matrix_ready"]) or internal_ablation_ready,
     }
     missing = [name for name, passed in requirement_checks.items() if not passed]
     gate_decision = "PASS" if not missing else "FAIL"
@@ -390,6 +526,8 @@ def build_fpr01_pilot_gate_audit(
         "threshold_protocol": config["threshold_protocol"],
         "validation_scale_gate_decision": validation_scale_decision.get("validation_scale_gate_decision"),
         "validation_scale_claim_support_status": validation_scale_decision.get("claim_support_status"),
+        **external_baseline_summary,
+        **internal_ablation_summary,
         "target_fpr": config["target_fpr"],
         "blocked_target_fpr": config["blocked_target_fpr"],
         "threshold_id": "fpr01_pilot_calibrated_threshold_v1" if threshold is not None else None,
@@ -449,6 +587,8 @@ def build_fpr01_pilot_gate_audit(
         "minimum_calibration_negative_event_count_per_family": config["minimum_calibration_negative_event_count_per_family"],
         "minimum_heldout_negative_event_count_per_family": config["minimum_heldout_negative_event_count_per_family"],
         "minimum_attack_event_count_per_attack": config["minimum_attack_event_count_per_attack"],
+        "minimum_external_baseline_measured_adapter_count": config["minimum_external_baseline_measured_adapter_count"],
+        "minimum_internal_ablation_variant_count": config["minimum_internal_ablation_variant_count"],
         "next_allowed_action": "report_pilot_paper_result_then_plan_full_paper_scaleup" if gate_decision == "PASS" else "complete_missing_pilot_paper_requirements",
         "next_forbidden_action": "do_not_report_tpr_at_fpr_0_001_or_full_paper_scale_claim_from_pilot_paper",
     }
@@ -504,6 +644,11 @@ def write_fpr01_pilot_gate_audit(
         f"- paper_protocol_difference_from_full_paper: {audit['paper_protocol_difference_from_full_paper']}\n"
         f"- threshold_protocol: {audit['threshold_protocol']}\n"
         f"- validation_scale_gate_decision: {audit['validation_scale_gate_decision']}\n"
+        f"- external_baseline_comparison_decision: {audit['external_baseline_comparison_decision']}\n"
+        f"- external_baseline_measured_adapter_count: {audit['external_baseline_measured_adapter_count']}\n"
+        f"- pilot_paper_external_baseline_trace_count_min: {audit['pilot_paper_external_baseline_trace_count_min']}\n"
+        f"- validation_internal_ablation_decision: {audit['validation_internal_ablation_decision']}\n"
+        f"- validation_internal_ablation_variant_count: {audit['validation_internal_ablation_variant_count']}\n"
         f"- missing_fpr01_pilot_requirements: {', '.join(audit['missing_fpr01_pilot_requirements']) if audit['missing_fpr01_pilot_requirements'] else 'none'}\n"
         f"- fpr01_generation_record_count: {audit['fpr01_generation_record_count']}\n"
         f"- fpr01_calibration_unique_video_count: {audit['fpr01_calibration_unique_video_count']}\n"

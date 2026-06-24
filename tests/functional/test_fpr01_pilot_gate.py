@@ -13,6 +13,17 @@ ATTACKS = ("video_compression_runtime", "temporal_crop_runtime", "frame_rate_res
 NEGATIVE_FAMILIES = ("wrong_key_control", "without_key_control", "wrong_sampler_replay", "trajectory_time_shuffle_control")
 CALIBRATION_SEEDS = tuple(f"seed_calibration_{index:02d}" for index in range(4))
 TEST_SEEDS = tuple(f"seed_test_{index:02d}" for index in range(4))
+EXTERNAL_BASELINE_NAMES = ("explicit_dtw_temporal_alignment", "explicit_frame_matching_temporal_registration")
+INTERNAL_ABLATION_VARIANTS = (
+    "sstw_full_method",
+    "endpoint_only_control",
+    "trajectory_only_score",
+    "without_velocity_constraint",
+    "without_endpoint_aware_control",
+    "without_replay_uncertainty_weighting",
+    "without_flow_state_admissibility",
+    "generic_ssm_baseline",
+)
 
 
 def _seed_fpr01_pilot_run(
@@ -23,6 +34,8 @@ def _seed_fpr01_pilot_run(
     calibration_seed_count: int = 4,
     test_seed_count: int = 4,
     validation_scale_gate_decision: str | None = "PASS",
+    write_external_baseline: bool = True,
+    write_internal_ablation: bool = True,
 ) -> None:
     """构造轻量 pilot_paper fixture, 不写入任何真实视频文件。
 
@@ -33,6 +46,8 @@ def _seed_fpr01_pilot_run(
     formal_records = []
     runtime_detection_records = []
     pilot_matrix_records = []
+    external_baseline_records = []
+    internal_ablation_records = []
     split_seed_pairs = [
         ("calibration", seed_id) for seed_id in CALIBRATION_SEEDS[:calibration_seed_count]
     ] + [
@@ -105,10 +120,49 @@ def _seed_fpr01_pilot_run(
                         "wrong_sampler_replay_status": "replay_rejected" if negative_family == "wrong_sampler_replay" else "not_applicable",
                         "decision": "replay_rejected" if negative_family == "wrong_sampler_replay" else "controlled_negative_below_threshold",
                     })
+                if split_name == "test":
+                    for baseline_name in EXTERNAL_BASELINE_NAMES:
+                        external_baseline_records.append({
+                            **base,
+                            "attack_name": attack_name,
+                            "external_baseline_name": baseline_name,
+                            "metric_status": "measured_proxy",
+                            "external_baseline_score": 0.35,
+                            "external_baseline_distance": 1.85,
+                            "baseline_score_margin": 0.45,
+                            "claim_support_status": "external_baseline_proxy_comparison_not_claim_supporting",
+                        })
+                    for method_variant in INTERNAL_ABLATION_VARIANTS:
+                        internal_ablation_records.append({
+                            **base,
+                            "attack_name": attack_name,
+                            "method_variant": method_variant,
+                            "ablation_runtime_profile": profile,
+                            "validation_ablation_proxy_score": 0.80 if method_variant == "sstw_full_method" else 0.62,
+                            "claim_support_status": "validation_internal_ablation_proxy_only",
+                        })
     write_jsonl(run_root / "records" / "generation_records.jsonl", generation_records)
     write_jsonl(run_root / "records" / "formal_quality_motion_semantic_records.jsonl", formal_records)
     write_jsonl(run_root / "records" / "runtime_detection_records.jsonl", runtime_detection_records)
     write_jsonl(run_root / "records" / "small_scale_claim_pilot_matrix_records.jsonl", pilot_matrix_records)
+    if write_external_baseline:
+        write_jsonl(run_root / "records" / "external_baseline_score_records.jsonl", external_baseline_records)
+        write_json(run_root / "artifacts" / "external_baseline_comparison_decision.json", {
+            "external_baseline_comparison_decision": "PASS",
+            "external_baseline_comparison_table_status": "ready",
+            "external_baseline_measured_adapter_count": len(EXTERNAL_BASELINE_NAMES),
+            "external_baseline_measured_adapter_names": list(EXTERNAL_BASELINE_NAMES),
+            "external_baseline_claim_support_status": "external_baseline_proxy_comparison_not_claim_supporting",
+        })
+    if write_internal_ablation:
+        write_jsonl(run_root / "records" / "validation_internal_ablation_records.jsonl", internal_ablation_records)
+        write_json(run_root / "artifacts" / "validation_internal_ablation_decision.json", {
+            "validation_internal_ablation_decision": "PASS",
+            "internal_ablation_record_count": len(internal_ablation_records),
+            "validation_internal_ablation_variant_count": len(INTERNAL_ABLATION_VARIANTS),
+            "validation_internal_ablation_score_margin": 0.18,
+            "claim_support_status": "validation_internal_ablation_proxy_only",
+        })
     write_json(run_root / "artifacts" / "small_scale_claim_pilot_gate_decision.json", {"pilot_gate_decision": "PASS"})
     write_json(run_root / "artifacts" / "motion_threshold_calibration_decision.json", {
         "motion_threshold_calibration_decision": "PASS",
@@ -170,6 +224,13 @@ def test_fpr01_pilot_gate_passes_calibrated_heldout_fixture(tmp_path: Path) -> N
     assert audit["paper_protocol_difference_from_full_paper"] == "sample_scale_only"
     assert audit["pilot_paper_protocol_matches_full_paper"] is True
     assert audit["validation_scale_gate_decision"] == "PASS"
+    assert audit["external_baseline_comparison_decision"] == "PASS"
+    assert audit["external_baseline_measured_adapter_count"] == 2
+    assert audit["pilot_paper_external_baseline_trace_count"] == 84
+    assert audit["pilot_paper_external_baseline_trace_count_min"] == 84
+    assert audit["validation_internal_ablation_decision"] == "PASS"
+    assert audit["validation_internal_ablation_variant_count"] >= 8
+    assert audit["pilot_paper_internal_ablation_trace_count_min"] == 84
     assert audit["threshold_protocol"] == "calibration_split_to_frozen_threshold_to_heldout_test_split"
     assert audit["threshold_source_split"] == "calibration"
     assert audit["test_time_threshold_update_blocked"] is True
@@ -213,6 +274,20 @@ def test_fpr01_pilot_gate_requires_validation_scale_gate(tmp_path: Path) -> None
     assert audit["fpr01_pilot_gate_decision"] == "FAIL"
     assert audit["pilot_paper_gate_decision"] == "FAIL"
     assert "validation_scale_gate_passed" in audit["missing_fpr01_pilot_requirements"]
+    assert audit["pilot_paper_claim_allowed"] is False
+
+
+@pytest.mark.quick
+def test_fpr01_pilot_gate_requires_external_baseline_and_ablation(tmp_path: Path) -> None:
+    """pilot_paper 是完整协议预演, 因此必须同时具备 baseline comparison 与内部消融矩阵。"""
+    run_root = tmp_path / "run"
+    _seed_fpr01_pilot_run(run_root, write_external_baseline=False, write_internal_ablation=False)
+
+    audit = build_fpr01_pilot_gate_audit(run_root)
+
+    assert audit["fpr01_pilot_gate_decision"] == "FAIL"
+    assert "pilot_paper_external_baseline_comparison_ready" in audit["missing_fpr01_pilot_requirements"]
+    assert "pilot_paper_internal_ablation_matrix_ready" in audit["missing_fpr01_pilot_requirements"]
     assert audit["pilot_paper_claim_allowed"] is False
 
 

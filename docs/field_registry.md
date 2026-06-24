@@ -388,6 +388,9 @@ Notebook 与 repository module 的跨边界数据
 | validation_internal_ablation_attack_count | metric | none | true | false | false | Number of attacks covered by validation-scale internal ablation records. |
 | validation_internal_ablation_score_margin | metric | none | true | false | false | Mean score margin between full method and ablated proxy variants in validation-scale. |
 | validation_internal_ablation_evidence_level | governance | none | true | false | false | Evidence level for validation-scale internal ablation records. |
+| ablation_runtime_profile | protocol | none | true | false | false | Internal ablation record 对应的 runtime profile, 用于区分 validation_scale 与 pilot_paper 覆盖。 |
+| validation_internal_ablation_profile_counts | metric | none | true | false | false | Internal ablation records 按 runtime profile 汇总的数量映射。 |
+| pilot_paper_internal_ablation_record_count | metric | none | true | true | false | Internal ablation records 中属于 pilot_paper / fpr01_pilot profile 的数量。 |
 | validation_ablation_evidence_level | governance | none | true | false | false | Per-record evidence level for validation-scale ablation proxy records. |
 | validation_ablation_source_score | metric | none | true | false | false | Source runtime detection proxy score used by a validation-scale ablation record. |
 | validation_ablation_proxy_score | metric | none | true | false | false | Derived validation-scale ablation proxy score. |
@@ -767,6 +770,22 @@ Notebook 与 repository module 的跨边界数据
 | minimum_calibration_negative_event_count_per_family | protocol | none | true | false | false | gate 要求的 calibration split 每个 negative family 最小事件数。 |
 | minimum_heldout_negative_event_count_per_family | protocol | none | true | false | false | gate 要求的 held-out split 每个 negative family 最小事件数。 |
 | minimum_attack_event_count_per_attack | protocol | none | true | false | false | gate 要求的每个 attack 最小 held-out positive event 数量。 |
+| require_external_baseline_comparison_ready | protocol | none | true | false | false | pilot_paper gate 是否要求 external_baseline adapter comparison 已完成。 |
+| require_internal_ablation_matrix_ready | protocol | none | true | false | false | pilot_paper gate 是否要求内部消融矩阵已完成。 |
+| required_external_baseline_adapter_names | protocol | none | true | false | false | pilot_paper gate 要求出现的 external_baseline adapter 名称列表。 |
+| required_internal_ablation_variants | protocol | none | true | false | false | pilot_paper gate 要求出现的内部消融 method variant 列表。 |
+| minimum_pilot_paper_external_baseline_trace_count | protocol | none | true | false | false | pilot_paper external baseline comparison 要求覆盖的 held-out trace 最小数量。 |
+| minimum_pilot_paper_internal_ablation_trace_count | protocol | none | true | false | false | pilot_paper internal ablation 每个必需变体要求覆盖的 held-out trace 最小数量。 |
+| minimum_internal_ablation_variant_count | protocol | none | true | false | false | pilot_paper gate 要求的内部消融变体最小数量。 |
+| pilot_paper_external_baseline_comparison_ready | governance | none | true | true | false | pilot_paper gate 中 external_baseline comparison 是否满足完整协议预演要求。 |
+| pilot_paper_internal_ablation_matrix_ready | governance | none | true | true | false | pilot_paper gate 中 internal ablation matrix 是否满足完整协议预演要求。 |
+| pilot_paper_external_baseline_trace_count | metric | none | true | true | false | pilot_paper held-out trace 中已有任一 measured external_baseline comparison 的数量。 |
+| pilot_paper_external_baseline_trace_count_min | metric | none | true | true | false | pilot_paper held-out trace 中每个必需 external_baseline adapter 的最小覆盖数量。 |
+| pilot_paper_external_baseline_trace_counts | metric | none | true | false | false | pilot_paper held-out trace 中各必需 external_baseline adapter 的覆盖数量映射。 |
+| pilot_paper_internal_ablation_trace_count_min | metric | none | true | true | false | pilot_paper held-out trace 中每个必需内部消融变体的最小覆盖数量。 |
+| pilot_paper_internal_ablation_trace_counts | metric | none | true | false | false | pilot_paper held-out trace 中各内部消融变体的覆盖数量映射。 |
+| missing_external_baseline_adapter_names | governance | none | true | true | false | pilot_paper gate 中缺失的 required external_baseline adapter 名称列表。 |
+| missing_internal_ablation_variants | governance | none | true | true | false | pilot_paper gate 中缺失的 required internal ablation variant 名称列表。 |
 | next_allowed_action | governance | none | true | false | false | 当前 gate 后允许执行的下一步动作。 |
 | next_forbidden_action | governance | none | true | false | false | 当前 gate 后明确禁止执行的动作。 |
 | fpr01_pilot_claim_support_status | claim | none | true | true | false | package manifest 中记录的 fpr01 pilot claim 支撑状态摘要。 |
@@ -777,6 +796,8 @@ Notebook 与 repository module 的跨边界数据
 | pilot_paper_protocol_difference_from_full_paper | governance | none | true | true | false | package manifest 中记录的 pilot_paper 与 full_paper 差异。 |
 | pilot_paper_protocol_matches_full_paper | governance | none | true | true | false | package manifest 中记录的 pilot_paper 协议同构状态。 |
 | pilot_paper_claim_allowed | governance | none | true | true | false | package manifest 中记录的 pilot_paper claim 允许状态。 |
+| pilot_paper_missing_external_baseline_adapter_names | governance | none | true | true | false | package manifest 中记录的 pilot_paper gate 缺失 external_baseline adapter 名称列表。 |
+| pilot_paper_missing_internal_ablation_variants | governance | none | true | true | false | package manifest 中记录的 pilot_paper gate 缺失内部消融变体列表。 |
 | fpr01_threshold_protocol | protocol | none | true | false | false | package manifest 中记录的 fpr01 threshold protocol 摘要。 |
 | fpr01_threshold_source_split | protocol | none | true | false | false | package manifest 中记录的 fpr01 阈值来源 split 摘要。 |
 | fpr01_test_time_threshold_update_blocked | protocol | none | true | false | false | package manifest 中记录的 fpr01 test-time 阈值更新阻断状态。 |

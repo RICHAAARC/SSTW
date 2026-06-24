@@ -112,7 +112,7 @@ reports/external_baseline_comparison_report.md
 2. adapter score 只使用 callback trajectory records 与 runtime video metadata, 不使用 `S_final` 或最终判定分数做污染过滤或 baseline 打分。
 3. 现代视频水印 baseline 必须通过正式 command adapter 产出 `metric_status = measured_formal`; 官方命令未配置时只能形成 governed unsupported comparison row。
 4. 所有 comparison 表必须从 `external_baseline_score_records.jsonl` 重建, 不能手工写结论。
-5. 显式同步 control 的 `external_baseline_result_used_for_claim` 必须保持 `false`; 现代 baseline 只有 measured_formal records 才能进入 pilot_paper / full_paper 比较审计。
+5. 显式同步 control 的 `external_baseline_result_used_for_claim` 必须保持 `false`; 现代 baseline 只有 measured_formal records 才能进入 validation_scale / pilot_paper / full_paper 比较审计。
 
 ## 当前阶段状态
 
@@ -123,7 +123,7 @@ explicit_frame_matching_temporal_registration_adapter: implemented_proxy_control
 modern_video_watermark_baseline_adapter: formal_command_adapter_integrated_requires_official_command
 required_modern_video_watermark_baselines: videoshield, sigmark, spdmark, videomark_or_vidsig, videoseal
 baseline_comparison_output_chain: implemented
-claim_support_status: formal_results_required_for_pilot_paper
+claim_support_status: formal_results_required_for_validation_scale_and_pilot_paper
 ```
 
 ## 后续工作
@@ -132,7 +132,7 @@ claim_support_status: formal_results_required_for_pilot_paper
 1. 在 Colab 或本地环境中安装每个现代 baseline 的官方源码、权重和命令入口。
 2. 配置 `SSTW_VIDEOSHIELD_EVAL_COMMAND`、`SSTW_SIGMARK_EVAL_COMMAND`、`SSTW_SPDMARK_EVAL_COMMAND`、`SSTW_VIDEOMARK_OR_VIDSIG_EVAL_COMMAND` 和 `SSTW_VIDEOSEAL_EVAL_COMMAND`。
 3. 运行 external_baseline comparison, 使 5 个现代 baseline 均产出 `measured_formal` records。
-4. 仅当全部现代 baseline 都产生 governed measured_formal records 后, 才允许进入 pilot_paper gate。
+4. 仅当全部现代 baseline 都产生 governed measured_formal records 后, 才允许 validation_scale gate 通过并进入 pilot_paper gate。
 ```
 
 
@@ -160,4 +160,4 @@ external_baseline_threshold 或 threshold
 {run_root}
 ```
 
-若命令未配置或输出缺失, adapter 必须写出 unsupported record, 并使 `pilot_paper` gate 失败。该设计保证 `pilot_paper` 与 `full_paper` 的差异只保留为样本规模和 FPR 评价级别, 而不是 baseline 协议缺口。
+若命令未配置或输出缺失, adapter 必须写出 unsupported record, 并使 `validation_scale` 和 `pilot_paper` gate 失败。该设计保证 `pilot_paper` 与后续更大规模 paper 运行的差异只保留为样本规模和 FPR 评价级别, 而不是 baseline 协议缺口。

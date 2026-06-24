@@ -313,7 +313,7 @@ full_paper_run
 submission_package_freeze
 ```
 
-其中 `replay_and_authenticated_sketch_gate`、`flow_specific_adaptive_attack_gate`、external baseline、internal ablation 与 CI reporter 属于 `validation_scale` 到 `full_paper_run` 之间必须闭合的子门禁, 不再作为 `pilot_paper` 之后的独立线性阶段。`pilot_paper` 的定位是小规模跑完整 full paper 协议并产出 pilot 级论文结果, 等价于 full paper 前完整流程预演。进入 `pilot_paper` gate 前, external_baseline comparison 与内部消融矩阵必须已经覆盖同批 held-out test trace; external baseline 必须包含完整现代视频水印 baseline 集合的 measured_formal records。否则不能报告 pilot 级 `TPR@FPR=0.01`。
+其中 `validation_scale` 是进入 paper 级运行前的最后一道完整机制门禁, 不是只检查工程是否能跑通的 smoke 或 dry-run。`replay_and_authenticated_sketch_gate`、`flow_specific_adaptive_attack_gate`、external baseline、internal ablation、CI reporter、artifact rebuild 和 claim audit 都必须在 `validation_scale` 内闭合, 不得推迟到 `pilot_paper` 之后再补。`validation_scale` 必须能在小样本规模上产出 paper 相关的全部 governed artifact 类型: generation / detection records、主方法结果、完整外部 baseline 对比、内部消融、adaptive attack、replay/sketch 或受治理 Claim-3 downgrade、fixed-FPR CI、tables、figures、reports、package manifest 和 claim audit。`pilot_paper` 的定位是在 `validation_scale` 通过后, 使用同构协议执行小规模 paper 级结果运行并报告 pilot 级 `TPR@FPR=0.01`; 它不应再承担补机制、补 baseline 或补消融的职责。
 
 核心原则是:
 
@@ -321,7 +321,7 @@ submission_package_freeze
 先闭合协议, 再闭合状态推断;
 先验证路径证据, 再接入真实 Flow sampler;
 先验证 Flow 模型接口能记录轨迹, 再验证 velocity constraint 进入采样过程;
-先做 pilot gate, 再补 validation-scale 的 baseline / 消融 / attack 工程闭环, 再做 pilot_paper;
+先做 small-scale pilot gate 判断机制是否值得继续, 再让 validation_scale 闭合全部 paper 机制与小样本全结果产出, 最后进入 pilot_paper;
 先控制 negative tail, 再写论文主张;
 所有 supported claims 必须由 frozen records 自动重建。
 ```
@@ -712,7 +712,7 @@ replay failure -> 回退 replay_and_authenticated_sketch_gate 或将 Claim-3 降
 
 ### 13.1 目标
 
-在真实生成式视频模型上验证 SSTW 的轨迹观测、状态空间推断和检测协议是否可运行。该阶段应在 flow model adapter preflight、sampling-time constraint 和 small-scale pilot gate 之后进行。
+在真实生成式视频模型上验证 SSTW 的轨迹观测、状态空间推断、检测协议、外部 baseline、内部消融、adaptive attack、replay/sketch、CI 和 artifact rebuild 是否形成完整 paper 机制闭环。该阶段应在 flow model adapter preflight、sampling-time constraint 和 small-scale pilot gate 之后进行。
 
 ### 13.2 数据集构造
 
@@ -736,9 +736,16 @@ trajectory_only_score
 without_velocity_constraint
 without_endpoint_aware_control
 without_replay_uncertainty_weighting
+without_admissibility_or_flow_state_gate
 explicit_dtw_temporal_alignment
 frame_matching_temporal_registration
 generic_ssm_baseline
+key_agnostic_state_space_baseline
+videoshield
+sigmark
+spdmark
+videomark_or_vidsig
+videoseal
 ```
 
 ### 13.4 外部 baseline
@@ -776,8 +783,33 @@ explicit_synchronization_control: explicit_dtw_temporal_alignment, frame_matchin
 1. Wan2.1 主线记录必须标记为 Flow Matching / velocity-field sampler 相关模型。
 2. velocity / flow trajectory proxy 必须参与水印同步证据。
 3. SSTW full method 在 `TPR@FPR=0.01` 下优于外部 baseline 与内部机制 baseline。
-4. `pilot_paper` gate 前必须已经生成同批 held-out test trace 的 external_baseline comparison records 和内部消融 records。
+4. `validation_scale` gate 前必须已经生成同批小样本 test trace 的 external_baseline comparison records、内部消融 records、adaptive attack records、replay/sketch 或 Claim-3 downgrade records、CI report 和 artifact rebuild report。
 5. 质量、运动和语义指标不能显示不可接受退化。
+6. `validation_scale` 通过后才能进入 `pilot_paper`; 若完整现代 baseline、内部消融或 replay/sketch 机制仍缺失, 只能报告阻断原因, 不能进入 paper 级结果运行。
+
+### 13.6 validation_scale 作为 paper 级前最后门禁
+
+`validation_scale` 的职责是证明 paper 级运行所需的全部机制已经在小样本规模上闭合。它与 `pilot_paper` 的区别不在于机制是否完整, 而在于结果等级: `validation_scale` 产出 validation 级小样本全链路结果, `pilot_paper` 在通过该门禁后产出可报告的 pilot 级 paper 结果。
+
+`validation_scale` 至少必须满足:
+
+```text
+validation_generation_records_ready
+validation_detection_records_ready
+validation_external_baseline_comparison_records_ready
+external_baseline_measured_adapter_count >= 7
+modern_external_baseline_formal_measured_adapter_count >= 5
+validation_internal_ablation_records_ready
+required_internal_ablation_variants covered
+validation_adaptive_attack_records_ready
+validation_replay_or_sketch_records_ready 或受治理 Claim-3 downgrade 已写入
+validation_confidence_interval_report_ready
+validation_tables_figures_reports_ready
+validation_artifact_rebuild_dry_run_ready
+validation_claim_audit_ready
+```
+
+该门禁失败时, 下一步是补齐缺失机制或修正 adapter, 不是进入 `pilot_paper`。显式 DTW 与 frame matching 只能作为同步 control, 不能替代现代视频水印 baseline 的 `measured_formal` records。
 
 ---
 
@@ -883,7 +915,7 @@ trajectory_sketch_replacement_attempt
 
 ### 15.5 pilot_paper 前置子门禁
 
-`pilot_paper` 不是只跑主方法的缩小版, 而是 full paper 协议的小规模完整预演。因此在 `fpr01_pilot_gate` 允许报告 pilot 级 `TPR@FPR=0.01` 前, 必须满足:
+`pilot_paper` 不是只跑主方法的缩小版, 而是在 `validation_scale` 已经闭合全部 paper 机制之后执行的小规模 paper 级结果运行。因此在 `fpr01_pilot_gate` 允许报告 pilot 级 `TPR@FPR=0.01` 前, 必须复核以下条件没有在 paper 级运行中退化:
 
 ```text
 validation_scale_gate_decision == PASS

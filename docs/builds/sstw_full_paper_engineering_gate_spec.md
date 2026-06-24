@@ -19,11 +19,12 @@ docs/builds/phases/
 
 ## 1. 总体工程门禁架构
 
-full_paper 工程门禁分为六类组件:
+paper 级工程门禁分为七类组件:
 
 | 组件 | 作用 | 产物性质 |
 |---|---|---|
-| `pilot_paper_generative_probe_gate` | 小规模跑完整 full_paper 协议并产出 pilot 级论文结果, 同时作为 full_paper 前完整流程预演 | gate decision |
+| `validation_scale_readiness_gate` | 进入 paper 级运行前的最后一道门禁, 在小样本规模上闭合全部 paper 机制并产出完整 validation 级结果包 | gate decision |
+| `pilot_paper_generative_probe_gate` | 在 validation_scale 通过后小规模跑完整 paper 协议并产出 pilot 级论文结果 | gate decision |
 | `modern_external_baseline_runner` | 运行或登记现代外部 baseline | governed records |
 | `flow_specific_adaptive_attack_runner` | 运行 Flow-specific adaptive attacks | governed records |
 | `statistical_confidence_interval_reporter` | 计算低 FPR、TPR 和 cluster-by-video 置信区间 | governed reports |
@@ -438,15 +439,18 @@ unsupported_claim_blocks_reviewer_evidence_index
 推荐实现顺序:
 
 ```text
-1. pilot_paper_generative_probe_gate
-2. statistical_confidence_interval_reporter
-3. modern_external_baseline_runner 的 governed non-run record 与 adapter contract
-4. reviewer_evidence_index_builder
-5. full_paper_result_checker
-6. flow_specific_adaptive_attack_runner
+1. validation_scale_readiness_gate
+2. modern_external_baseline_runner 的正式 command adapter 与 measured_formal records
+3. internal_ablation_matrix_runner
+4. flow_specific_adaptive_attack_runner
+5. replay_and_authenticated_sketch_gate 或受治理 Claim-3 downgrade gate
+6. statistical_confidence_interval_reporter
+7. pilot_paper_generative_probe_gate
+8. reviewer_evidence_index_builder
+9. full_paper_result_checker
 ```
 
-原因是前四项可以先用 validation-scale records 和 mock records 验证治理逻辑, 不需要立即启动大规模 GPU 实验。`flow_specific_adaptive_attack_runner` 成本较高, 应在 pilot 与 validation-scale 流程稳定后实现。
+原因是 `validation_scale` 是进入 paper 级运行前的最后一道机制门禁。所有 paper 相关机制必须先在小样本 validation 规模上产出 governed records、tables、figures、reports 和 claim audit, 再进入 `pilot_paper`。如果 external baseline、内部消融、adaptive attack、replay/sketch、CI 或 artifact rebuild 在 validation-scale 阻断, 后续步骤不得用 paper 级运行补造缺失产物。
 
 ## 11. 不允许的捷径
 

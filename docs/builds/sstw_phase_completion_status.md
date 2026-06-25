@@ -1496,6 +1496,7 @@ paper_workflow/colab_utils/motion_threshold_calibration_colab.ipynb
 paper_workflow/colab_utils/generative_video_runtime_colab.ipynb
 paper_workflow/colab_utils/external_baseline_formal_scoring_colab.ipynb
 paper_workflow/colab_utils/paper_gate_and_package_colab.ipynb
+paper_workflow/colab_utils/validation_scale_formal_gate_colab.ipynb
 ```
 
 阶段性状态为:
@@ -1509,6 +1510,7 @@ workflow_profile_aliases_removed: implemented
 full_paper_profile_registration: design_registered_not_ready
 monolithic_notebook_status: removed
 recommended_split_notebook_workflow: implemented
+validation_scale_single_notebook_gate_test: implemented
 ```
 
 该变更解决的问题是: `validation_scale`、`pilot_paper` 和未来 `full_paper` 不再依赖 Notebook 中多处硬编码路径、样本数量或 profile 集合。切换运行层级时, 用户只需要设置:

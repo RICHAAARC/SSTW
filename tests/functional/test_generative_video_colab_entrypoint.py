@@ -262,6 +262,7 @@ def test_split_colab_notebooks_are_profile_driven() -> None:
         "generative_video_runtime_colab.ipynb": "generative_video_runtime",
         "external_baseline_formal_scoring_colab.ipynb": "external_baseline_formal_scoring",
         "paper_gate_and_package_colab.ipynb": "paper_gate_and_package",
+        "validation_scale_formal_gate_colab.ipynb": "validation_scale_formal_gate",
     }
     for notebook_name, role in expected_roles.items():
         notebook_path = Path("paper_workflow/colab_utils") / notebook_name
@@ -290,12 +291,23 @@ def test_split_colab_notebooks_are_profile_driven() -> None:
     runtime_source = Path("paper_workflow/colab_utils/generative_video_runtime_colab.ipynb").read_text(encoding="utf-8")
     baseline_source = Path("paper_workflow/colab_utils/external_baseline_formal_scoring_colab.ipynb").read_text(encoding="utf-8")
     gate_source = Path("paper_workflow/colab_utils/paper_gate_and_package_colab.ipynb").read_text(encoding="utf-8")
+    validation_gate_source = Path("paper_workflow/colab_utils/validation_scale_formal_gate_colab.ipynb").read_text(encoding="utf-8")
     assert "external_baseline_colab_preflight" in runtime_source
     assert "build_external_baseline_comparison_command" not in runtime_source
     assert "build_colab_runtime_command" not in baseline_source
     assert "build_external_baseline_comparison_command" in baseline_source
     assert "build_pilot_paper_gate_command" in gate_source
     assert "build_validation_scale_gate_command" in gate_source
+    assert "NOTEBOOK_ROLE = 'validation_scale_formal_gate'" in validation_gate_source
+    assert "build_colab_runtime_command" in validation_gate_source
+    assert "build_external_baseline_comparison_command" in validation_gate_source
+    assert "build_validation_internal_ablation_command" in validation_gate_source
+    assert "build_replay_and_sketch_gate_command" in validation_gate_source
+    assert "build_claim3_downgrade_command" in validation_gate_source
+    assert "build_statistical_confidence_interval_command" in validation_gate_source
+    assert "build_validation_artifact_rebuild_dry_run_command" in validation_gate_source
+    assert "build_validation_scale_gate_command" in validation_gate_source
+    assert "build_pilot_paper_gate_command" not in validation_gate_source
 
 
 @pytest.mark.quick
@@ -309,6 +321,7 @@ def test_colab_workflow_readme_documents_validation_scale_execution() -> None:
     assert "generative_video_runtime_colab.ipynb" in text
     assert "external_baseline_formal_scoring_colab.ipynb" in text
     assert "paper_gate_and_package_colab.ipynb" in text
+    assert "validation_scale_formal_gate_colab.ipynb" in text
     assert text.index("motion_threshold_calibration_colab.ipynb") < text.index("generative_video_runtime_colab.ipynb")
     assert text.index("generative_video_runtime_colab.ipynb") < text.index("external_baseline_formal_scoring_colab.ipynb")
     assert text.index("external_baseline_formal_scoring_colab.ipynb") < text.index("paper_gate_and_package_colab.ipynb")
@@ -342,7 +355,9 @@ def test_colab_workflow_readme_documents_validation_scale_execution() -> None:
 def test_notebook_workflow_profile_config_supports_profile_switching() -> None:
     """统一配置层必须能区分 validation_scale、pilot_paper 和未开放的 full_paper。"""
     assert default_workflow_profile_for_notebook_role("generative_video_runtime") == "validation_scale"
+    assert default_workflow_profile_for_notebook_role("validation_scale_formal_gate") == "validation_scale"
     validation = resolve_notebook_workflow_profile("validation_scale", "paper_gate_and_package")
+    validation_single = resolve_notebook_workflow_profile("validation_scale", "validation_scale_formal_gate")
     pilot = resolve_notebook_workflow_profile("pilot_paper", "paper_gate_and_package")
     full = resolve_notebook_workflow_profile("full_paper", config_path="configs/paper_workflow/generative_video_notebook_workflows.json", allow_disabled=True)
 
@@ -353,6 +368,13 @@ def test_notebook_workflow_profile_config_supports_profile_switching() -> None:
     assert "motion_threshold_reuse_check" in build_workflow_stage_plan("validation_scale", "paper_gate_and_package")
     assert "validation_scale_gate" in build_workflow_stage_plan("validation_scale", "paper_gate_and_package")
     assert "pilot_paper_gate" not in build_workflow_stage_plan("validation_scale", "paper_gate_and_package")
+    assert validation_single["notebook_path"] == "paper_workflow/colab_utils/validation_scale_formal_gate_colab.ipynb"
+    assert "wan21_runtime_generation" in build_workflow_stage_plan("validation_scale", "validation_scale_formal_gate")
+    assert "external_baseline_comparison" in build_workflow_stage_plan("validation_scale", "validation_scale_formal_gate")
+    assert "validation_scale_gate" in build_workflow_stage_plan("validation_scale", "validation_scale_formal_gate")
+    assert "pilot_paper_gate" not in build_workflow_stage_plan("validation_scale", "validation_scale_formal_gate")
+    with pytest.raises(ValueError):
+        resolve_notebook_workflow_profile("pilot_paper", "validation_scale_formal_gate")
 
     assert pilot["requested_workflow_profile"] == "pilot_paper"
     assert pilot["workflow_profile"] == "pilot_paper"

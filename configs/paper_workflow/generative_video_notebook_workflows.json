@@ -1,6 +1,6 @@
 {
   "config_kind": "generative_video_notebook_workflow_config",
-  "config_version": "2026_06_24_profile_driven_colab_workflow_v3_pilot_paper_only",
+  "config_version": "2026_06_25_profile_driven_colab_workflow_v4_validation_scale_formal_gate",
   "default_drive_project_root": "/content/drive/MyDrive/SSTW",
   "default_dataset_root_relative": "datasets/generative_video_prompt_suite",
   "default_prompt_suite_path_relative": "datasets/generative_video_prompt_suite/prompt_seed_suite.json",
@@ -8,7 +8,8 @@
     "motion_threshold_calibration": "motion_calibration",
     "generative_video_runtime": "validation_scale",
     "external_baseline_formal_scoring": "validation_scale",
-    "paper_gate_and_package": "validation_scale"
+    "paper_gate_and_package": "validation_scale",
+    "validation_scale_formal_gate": "validation_scale"
   },
   "workflow_profile_aliases": {},
   "workflow_profiles": {
@@ -192,6 +193,35 @@
         "claim3_downgrade_gate",
         "statistical_confidence_interval",
         "pilot_paper_gate",
+        "validation_artifact_rebuild_dry_run",
+        "validation_scale_gate",
+        "quick_tests_and_harness",
+        "drive_packaging"
+      ]
+    },
+    "validation_scale_formal_gate": {
+      "notebook_path": "paper_workflow/colab_utils/validation_scale_formal_gate_colab.ipynb",
+      "allowed_workflow_profiles": [
+        "validation_scale"
+      ],
+      "stage_plan": [
+        "prepare_prompt_suite",
+        "external_baseline_colab_preflight",
+        "wan21_runtime_generation",
+        "formal_metric_scoring",
+        "motion_threshold_reuse_check",
+        "mechanism_postprocess",
+        "pilot_matrix_postprocess",
+        "runtime_attack",
+        "runtime_detection",
+        "small_scale_claim_pilot_gate",
+        "external_baseline_source_intake",
+        "external_baseline_comparison",
+        "validation_internal_ablation",
+        "adaptive_attack_proxy",
+        "replay_and_sketch_gate",
+        "claim3_downgrade_gate",
+        "statistical_confidence_interval",
         "validation_artifact_rebuild_dry_run",
         "validation_scale_gate",
         "quick_tests_and_harness",

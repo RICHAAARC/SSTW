@@ -377,6 +377,17 @@ motion_threshold_calibration_colab.ipynb
 -> paper_gate_and_package_colab.ipynb
 ```
 
+为便于一次性测试 validation-scale 正式门禁, 另提供单 Notebook 入口:
+
+```text
+validation_scale_formal_gate_colab.ipynb
+```
+
+该入口的 role 为 `validation_scale_formal_gate`, 只允许 `validation_scale` profile。它把
+runtime、baseline、internal ablation、replay/sketch 或 Claim-3 downgrade、CI、artifact
+rebuild 和 `validation_scale_gate` 串联在同一个 Colab session 中。该 Notebook 不是旧的
+多 profile 综合入口, 不允许切换到 `pilot_paper` 或 `full_paper`。
+
 其中:
 
 1. `motion_threshold_calibration_colab.ipynb` 只负责独立 calibration split 和阈值冻结。

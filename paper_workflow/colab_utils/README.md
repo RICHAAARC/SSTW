@@ -40,6 +40,46 @@ os.environ["SSTW_DRIVE_PROJECT_ROOT"] = "/content/drive/MyDrive/SSTW"
 
 ## 3. 当前推荐执行顺序
 
+### 3.0 validation-scale 单 Notebook 正式门禁测试
+
+如果目标是一次性检查 `validation_scale` 正式门禁是否具备完整可跑通路径, 可以直接使用:
+
+```text
+paper_workflow/colab_utils/validation_scale_formal_gate_colab.ipynb
+```
+
+该 Notebook 会在同一个 Colab session 中串联:
+
+```text
+prompt suite
+-> external baseline preflight
+-> Wan2.1 runtime generation
+-> formal metric scoring
+-> motion threshold reuse
+-> runtime attack / detection
+-> external baseline source intake / comparison
+-> internal ablation
+-> adaptive attack proxy
+-> replay/sketch gate
+-> Claim-3 downgrade gate
+-> statistical confidence interval
+-> artifact rebuild dry-run
+-> validation_scale_gate
+-> drive packaging
+```
+
+它的 profile 固定为:
+
+```python
+SSTW_WORKFLOW_PROFILE_VALUE = 'validation_scale'
+```
+
+该单 Notebook 不是旧的多 profile 综合 Notebook。它只用于 validation-scale 正式门禁测试,
+不用于 `pilot_paper` 或未来 `full_paper`。如果 Google Drive 中尚未存在已通过的
+`motion_calibration` artifact, 默认会提前失败; 只有显式设置
+`SSTW_RUN_MOTION_CALIBRATION_IF_MISSING=true` 时, 才会先运行长耗时的 motion calibration
+前置流程。
+
 ### 3.1 运动阈值校准
 
 Notebook:

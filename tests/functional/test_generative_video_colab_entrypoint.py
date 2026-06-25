@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import ast
 import json
 from pathlib import Path
 import re
@@ -308,6 +309,25 @@ def test_split_colab_notebooks_are_profile_driven() -> None:
     assert "build_validation_artifact_rebuild_dry_run_command" in validation_gate_source
     assert "build_validation_scale_gate_command" in validation_gate_source
     assert "build_pilot_paper_gate_command" not in validation_gate_source
+
+
+@pytest.mark.quick
+def test_validation_scale_formal_gate_notebook_python_cells_are_syntax_valid() -> None:
+    """validation-scale 单 Notebook 中非 magic Python cell 不应包含断裂字符串。"""
+    notebook_path = Path("paper_workflow/colab_utils/validation_scale_formal_gate_colab.ipynb")
+    notebook = json.loads(notebook_path.read_text(encoding="utf-8"))
+    full_source = "".join("".join(cell.get("source", [])) for cell in notebook["cells"])
+
+    assert "print('\n" not in full_source
+    assert 'print("\n' not in full_source
+
+    for index, cell in enumerate(notebook["cells"]):
+        if cell.get("cell_type") != "code":
+            continue
+        source = "".join(cell.get("source", []))
+        if any(line.lstrip().startswith(("!", "%")) for line in source.splitlines()):
+            continue
+        ast.parse(source, filename=f"{notebook_path}:cell_{index}")
 
 
 @pytest.mark.quick

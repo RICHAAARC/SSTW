@@ -1,0 +1,221 @@
+{
+  "accepted_output_score_fields": [
+    "external_baseline_score",
+    "watermark_score",
+    "detection_score",
+    "score",
+    "bit_accuracy",
+    "confidence",
+    "detected"
+  ],
+  "baseline_command_configs": [
+    {
+      "baseline_id": "videoshield",
+      "colab_source_dir": "/content/SSTW/external_baseline/primary/videoshield/source",
+      "display_name": "VideoShield",
+      "external_baseline_command_env_var": "SSTW_VIDEOSHIELD_EVAL_COMMAND",
+      "official_entrypoint_candidates": [
+        "watermark_embedding_and_extraction.py",
+        "temporal_tamper_localization.py",
+        "spatial_tamper_localization.py"
+      ],
+      "official_repository_branch": "master",
+      "official_repository_url": "https://github.com/hurunyi/VideoShield",
+      "score_output_contract": {
+        "formal_record_policy": "only_command_outputs_are_converted_to_measured_formal_records",
+        "json_object_required": true,
+        "minimum_required_score_field_any_of": [
+          "external_baseline_score",
+          "watermark_score",
+          "detection_score",
+          "score",
+          "bit_accuracy",
+          "confidence",
+          "detected"
+        ]
+      },
+      "source_clone_command": "git clone --branch master https://github.com/hurunyi/VideoShield /content/SSTW/external_baseline/primary/videoshield/source",
+      "source_verification_status": "git_ls_remote_head_verified_2026_06_25",
+      "sstw_eval_command_template": "python /content/SSTW/external_baseline/primary/videoshield/source/run_sstw_eval.py --source-video {source_video_path} --attacked-video {attacked_video_path} --attack-name {attack_name} --output-json {output_json_path}",
+      "sstw_eval_command_template_status": "requires_user_wrapper_after_official_source_install",
+      "verified_head_commit": "a61efa73abb15d30f50ee535c3301cea7dec3075"
+    },
+    {
+      "baseline_id": "sigmark",
+      "colab_source_dir": "/content/SSTW/external_baseline/primary/sigmark/source",
+      "display_name": "SIGMark",
+      "external_baseline_command_env_var": "SSTW_SIGMARK_EVAL_COMMAND",
+      "official_entrypoint_candidates": [
+        "main.py",
+        "apply_disturbances.py",
+        "analyze_extraction_cost.py"
+      ],
+      "official_repository_branch": "main",
+      "official_repository_url": "https://github.com/JeremyZhao1998/SIGMark-release",
+      "score_output_contract": {
+        "formal_record_policy": "only_command_outputs_are_converted_to_measured_formal_records",
+        "json_object_required": true,
+        "minimum_required_score_field_any_of": [
+          "external_baseline_score",
+          "watermark_score",
+          "detection_score",
+          "score",
+          "bit_accuracy",
+          "confidence",
+          "detected"
+        ]
+      },
+      "source_clone_command": "git clone --branch main https://github.com/JeremyZhao1998/SIGMark-release /content/SSTW/external_baseline/primary/sigmark/source",
+      "source_verification_status": "git_ls_remote_head_verified_2026_06_25",
+      "sstw_eval_command_template": "python /content/SSTW/external_baseline/primary/sigmark/source/run_sstw_eval.py --source-video {source_video_path} --attacked-video {attacked_video_path} --attack-name {attack_name} --output-json {output_json_path}",
+      "sstw_eval_command_template_status": "requires_user_wrapper_after_official_source_install",
+      "verified_head_commit": "3713243f2e002cb21bbc3da896094d39b2b528c9"
+    },
+    {
+      "baseline_id": "spdmark",
+      "colab_source_dir": "/content/SSTW/external_baseline/primary/spdmark/source",
+      "display_name": "SPDMark",
+      "external_baseline_command_env_var": "SSTW_SPDMARK_EVAL_COMMAND",
+      "official_entrypoint_candidates": [
+        "ModelScope/generate_watermarked_txt2videos.py",
+        "SVD_xt/generate_watermarked_img2videos.py",
+        "assets/evaluate_robustness_full.py"
+      ],
+      "official_repository_branch": "main",
+      "official_repository_url": "https://github.com/Samar-Fares/SPDMark",
+      "score_output_contract": {
+        "formal_record_policy": "only_command_outputs_are_converted_to_measured_formal_records",
+        "json_object_required": true,
+        "minimum_required_score_field_any_of": [
+          "external_baseline_score",
+          "watermark_score",
+          "detection_score",
+          "score",
+          "bit_accuracy",
+          "confidence",
+          "detected"
+        ]
+      },
+      "source_clone_command": "git clone --branch main https://github.com/Samar-Fares/SPDMark /content/SSTW/external_baseline/primary/spdmark/source",
+      "source_verification_status": "git_ls_remote_head_verified_2026_06_25",
+      "sstw_eval_command_template": "python /content/SSTW/external_baseline/primary/spdmark/source/run_sstw_eval.py --source-video {source_video_path} --attacked-video {attacked_video_path} --attack-name {attack_name} --output-json {output_json_path}",
+      "sstw_eval_command_template_status": "requires_user_wrapper_after_official_source_install",
+      "verified_head_commit": "4d9a894384a8585734b493301fe9d1a4d6abd07c"
+    },
+    {
+      "baseline_id": "videomark",
+      "colab_source_dir": "/content/SSTW/external_baseline/primary/videomark/source",
+      "display_name": "VideoMark",
+      "external_baseline_command_env_var": "SSTW_VIDEOMARK_EVAL_COMMAND",
+      "official_entrypoint_candidates": [
+        "PRC_key_gen.py",
+        "embedding_and_extraction.py",
+        "temporal_tamper.py"
+      ],
+      "official_repository_branch": "main",
+      "official_repository_url": "https://github.com/KYRIE-LI11/VideoMark",
+      "score_output_contract": {
+        "formal_record_policy": "only_command_outputs_are_converted_to_measured_formal_records",
+        "json_object_required": true,
+        "minimum_required_score_field_any_of": [
+          "external_baseline_score",
+          "watermark_score",
+          "detection_score",
+          "score",
+          "bit_accuracy",
+          "confidence",
+          "detected"
+        ]
+      },
+      "source_clone_command": "git clone --branch main https://github.com/KYRIE-LI11/VideoMark /content/SSTW/external_baseline/primary/videomark/source",
+      "source_verification_status": "git_ls_remote_head_verified_2026_06_25",
+      "sstw_eval_command_template": "python /content/SSTW/external_baseline/primary/videomark/source/run_sstw_eval.py --source-video {source_video_path} --attacked-video {attacked_video_path} --attack-name {attack_name} --output-json {output_json_path}",
+      "sstw_eval_command_template_status": "requires_user_wrapper_after_official_source_install",
+      "verified_head_commit": "9f8d78b73ab9f9f055651b1b4f37d68bdb05e7be"
+    },
+    {
+      "baseline_id": "vidsig",
+      "colab_source_dir": "/content/SSTW/external_baseline/primary/vidsig/source",
+      "display_name": "VidSig",
+      "external_baseline_command_env_var": "SSTW_VIDSIG_EVAL_COMMAND",
+      "official_entrypoint_candidates": [
+        "src/generate_ms.py",
+        "src/run_eval.py",
+        "src/attack.py"
+      ],
+      "official_repository_branch": "main",
+      "official_repository_url": "https://github.com/hardenyu21/Video-Signature",
+      "score_output_contract": {
+        "formal_record_policy": "only_command_outputs_are_converted_to_measured_formal_records",
+        "json_object_required": true,
+        "minimum_required_score_field_any_of": [
+          "external_baseline_score",
+          "watermark_score",
+          "detection_score",
+          "score",
+          "bit_accuracy",
+          "confidence",
+          "detected"
+        ]
+      },
+      "source_clone_command": "git clone --branch main https://github.com/hardenyu21/Video-Signature /content/SSTW/external_baseline/primary/vidsig/source",
+      "source_verification_status": "git_ls_remote_head_verified_2026_06_25",
+      "sstw_eval_command_template": "python /content/SSTW/external_baseline/primary/vidsig/source/run_sstw_eval.py --source-video {source_video_path} --attacked-video {attacked_video_path} --attack-name {attack_name} --output-json {output_json_path}",
+      "sstw_eval_command_template_status": "requires_user_wrapper_after_official_source_install",
+      "verified_head_commit": "9d219c47670c30fdaaccd17b24e7783c976a8c66"
+    },
+    {
+      "baseline_id": "videoseal",
+      "colab_source_dir": "/content/SSTW/external_baseline/primary/videoseal/source",
+      "display_name": "VideoSeal",
+      "external_baseline_command_env_var": "SSTW_VIDEOSEAL_EVAL_COMMAND",
+      "official_entrypoint_candidates": [
+        "inference_av.py",
+        "inference_streaming.py",
+        "notebooks/video_inference.ipynb"
+      ],
+      "official_repository_branch": "main",
+      "official_repository_url": "https://github.com/facebookresearch/videoseal",
+      "score_output_contract": {
+        "formal_record_policy": "only_command_outputs_are_converted_to_measured_formal_records",
+        "json_object_required": true,
+        "minimum_required_score_field_any_of": [
+          "external_baseline_score",
+          "watermark_score",
+          "detection_score",
+          "score",
+          "bit_accuracy",
+          "confidence",
+          "detected"
+        ]
+      },
+      "source_clone_command": "git clone --branch main https://github.com/facebookresearch/videoseal /content/SSTW/external_baseline/primary/videoseal/source",
+      "source_verification_status": "git_ls_remote_head_verified_2026_06_25",
+      "sstw_eval_command_template": "python /content/SSTW/external_baseline/primary/videoseal/source/run_sstw_eval.py --source-video {source_video_path} --attacked-video {attacked_video_path} --attack-name {attack_name} --output-json {output_json_path}",
+      "sstw_eval_command_template_status": "requires_user_wrapper_after_official_source_install",
+      "verified_head_commit": "e00b98c7ca77eb1fb5b9b68260e7c6c8fc207a84"
+    }
+  ],
+  "command_configuration_boundary": {
+    "configured_command_source": "SSTW_<BASELINE>_EVAL_COMMAND environment variables or explicit BASELINE_COMMAND_TEMPLATES notebook mapping",
+    "reason": "避免把尚未安装官方代码或尚未编写 wrapper 的 baseline 误判为可运行。",
+    "template_file_auto_applied": false
+  },
+  "config_kind": "modern_external_baseline_colab_command_config",
+  "config_version": "verified_sources_2026_06_25_v1",
+  "formal_result_policy": "fail_closed; this file provides Colab source and wrapper command guidance only, and does not count as configured commands or measured formal baseline evidence",
+  "optional_command_format_tokens": [
+    "run_root",
+    "prompt_id",
+    "seed_id",
+    "trajectory_trace_id"
+  ],
+  "required_command_format_tokens": [
+    "source_video_path",
+    "attacked_video_path",
+    "attack_name",
+    "output_json_path"
+  ],
+  "source_verification_method": "GitHub repository inspection and git ls-remote --heads for configured branch HEAD commits",
+  "verified_at_utc": "2026-06-25T00:00:00Z"
+}

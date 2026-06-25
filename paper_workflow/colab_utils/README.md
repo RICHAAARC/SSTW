@@ -132,6 +132,47 @@ SSTW_VIDEOSEAL_EVAL_COMMAND
 
 这些 command 应由 Notebook 传入 adapter, 并写出 governed comparison records。不要把 baseline 的临时日志手动整理成正式对比表。
 
+Notebook 会额外写出以下配置辅助 artifact:
+
+```text
+artifacts/external_baseline_command_template_summary.json
+```
+
+该 artifact 来自:
+
+```text
+configs/external_baselines/modern_baseline_colab_commands.json
+```
+
+其作用是列出联网核验后的官方仓库 URL、当前已核验 branch HEAD commit、Colab clone 目录、官方入口候选脚本和 `run_sstw_eval.py` wrapper 命令模板。它只帮助配置, 不会自动设置 `SSTW_<BASELINE>_EVAL_COMMAND`, 也不会把 baseline 视为 `measured_formal`。
+
+正式 command 仍必须由用户在 Colab 中显式设置, 例如:
+
+```python
+import os
+os.environ["SSTW_SPDMARK_EVAL_COMMAND"] = (
+    "python /content/SSTW/external_baseline/primary/spdmark/source/run_sstw_eval.py "
+    "--source-video {source_video_path} "
+    "--attacked-video {attacked_video_path} "
+    "--attack-name {attack_name} "
+    "--output-json {output_json_path}"
+)
+```
+
+其中 `run_sstw_eval.py` 必须是真实 wrapper: 它可以调用官方源码、官方权重或官方 detector, 但最终必须把结果写入 `{output_json_path}`。输出 JSON 至少需要包含以下任一字段:
+
+```text
+external_baseline_score
+watermark_score
+detection_score
+score
+bit_accuracy
+confidence
+detected
+```
+
+如果只是 clone 了官方仓库, 但没有能输出上述 JSON 的 wrapper command, preflight 仍应失败。这是刻意保留的 fail-closed 设计, 用于防止把“已找到源码”误判为“已经完成正式 baseline 对比”。
+
 ### 3.4 paper gate 与打包
 
 Notebook:

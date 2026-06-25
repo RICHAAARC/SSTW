@@ -1520,3 +1520,43 @@ SSTW_WORKFLOW_PROFILE=pilot_paper
 ```
 
 当前仍不允许设置 `SSTW_WORKFLOW_PROFILE=full_paper` 进入真实 claim 运行, 因为该 profile 只登记未来同构协议入口, 尚未完成 full-paper 样本规模、FPR=0.001 统计设计和真实大规模 baseline / ablation 结果闭合。
+
+## 2026-06-25 现代 baseline 联网核验与 Colab command 配置辅助
+
+本次推进对 6 个现代视频水印 baseline 的公开仓库、默认 branch 和当前 HEAD commit 进行了联网核验, 并新增 Colab command 配置辅助文件:
+
+```text
+configs/external_baselines/modern_baseline_colab_commands.json
+```
+
+该配置覆盖:
+
+```text
+videoshield
+sigmark
+spdmark
+videomark
+vidsig
+videoseal
+```
+
+新增或固化的 Colab 落盘辅助 artifact 为:
+
+```text
+artifacts/external_baseline_command_template_summary.json
+```
+
+阶段性状态为:
+
+```text
+modern_external_baseline_source_url_verification: completed_for_configured_heads
+modern_external_baseline_colab_command_template_config: implemented
+notebook_command_template_summary_artifact: integrated
+command_template_auto_applied: false
+modern_external_baseline_measured_formal_results: still_pending_real_colab_wrapper_commands
+validation_scale_missing_modern_command_preflight: still_hard_block
+```
+
+该更新解决的问题是: Colab 冷启动失败时, 用户不仅能看到缺少哪些 `SSTW_<BASELINE>_EVAL_COMMAND`, 还能在 Google Drive 中看到每个 baseline 的官方源码位置、clone 目标、官方入口候选脚本和 SSTW wrapper command 模板。
+
+该更新没有绕过 validation-scale 门禁。只有当用户在 Colab 中安装或克隆官方实现、准备权重、编写真实 wrapper, 并显式设置 6 个 `SSTW_<BASELINE>_EVAL_COMMAND` 后, 现代 baseline 才能产出 `measured_formal` records。仅存在 URL、clone plan 或 command 模板不能支撑 baseline comparison claim。

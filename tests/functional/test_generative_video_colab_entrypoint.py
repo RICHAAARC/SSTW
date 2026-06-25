@@ -16,6 +16,7 @@ from paper_workflow.notebook_utils.generative_video_model_probe_workflow import 
     default_workflow_profile_for_notebook_role,
     resolve_notebook_workflow_profile,
     validate_motion_threshold_ready_for_profile,
+    write_modern_baseline_colab_command_config_summary,
     write_external_baseline_colab_preflight_decision,
     write_motion_threshold_reuse_artifact_for_profile,
 )
@@ -202,9 +203,11 @@ def test_generative_video_colab_notebook_calls_repository_modules() -> None:
     assert "REQUIRE_MODERN_BASELINE_COMMANDS_FOR_PAPER_GATE" in source
     assert "SSTW_EXTERNAL_BASELINE_EVIDENCE_PATHS" in source
     assert "build_modern_baseline_command_env" in source
+    assert "write_modern_baseline_colab_command_config_summary" in source
     assert "write_external_baseline_colab_preflight_decision" in source
     assert "validate_modern_baseline_commands_for_profile" in source
     assert "external_baseline_colab_preflight_decision" in helper_text
+    assert "external_baseline_command_template_summary" in helper_text
     assert "write_motion_threshold_reuse_artifact_for_profile" in source
     assert "build_formal_metric_command" in source
     assert "build_motion_threshold_calibration_command" in source
@@ -316,6 +319,9 @@ def test_colab_workflow_readme_documents_validation_scale_execution() -> None:
     assert "SSTW_VIDEOMARK_EVAL_COMMAND" in text
     assert "SSTW_VIDSIG_EVAL_COMMAND" in text
     assert "SSTW_VIDEOSEAL_EVAL_COMMAND" in text
+    assert "modern_baseline_colab_commands.json" in text
+    assert "external_baseline_command_template_summary.json" in text
+    assert "不会自动设置 `SSTW_<BASELINE>_EVAL_COMMAND`" in text
     assert "validation_scale_gate_decision.json" in text
     assert "pilot_paper_gate_decision.json" in text
     assert "/content/drive/MyDrive/SSTW" in text
@@ -431,6 +437,7 @@ def test_profile_specific_layout_reuses_shared_motion_threshold_artifact(tmp_pat
 def test_external_baseline_colab_preflight_uses_protocol_config(tmp_path: Path) -> None:
     """Notebook preflight 必须从 protocol config 读取 6 个现代 baseline 要求并写入 Drive artifact。"""
     layout = build_drive_layout(str(tmp_path / "SSTW"))
+    summary = write_modern_baseline_colab_command_config_summary(layout, profile="validation_scale")
     commands = build_modern_baseline_command_env("validation_scale", {
         "videoshield": "python videoshield.py --output-json {output_json_path}",
         "sigmark": "python sigmark.py --output-json {output_json_path}",
@@ -450,6 +457,8 @@ def test_external_baseline_colab_preflight_uses_protocol_config(tmp_path: Path) 
     assert decision["external_baseline_colab_preflight_required_env_var_count"] == 6
     assert decision["external_baseline_colab_preflight_configured_env_var_count"] == 2
     assert decision["external_baseline_colab_preflight_missing_env_var_count"] == 4
+    assert decision["external_baseline_command_template_config_path"] == "configs/external_baselines/modern_baseline_colab_commands.json"
+    assert Path(str(decision["external_baseline_command_template_summary_path"])).name == "external_baseline_command_template_summary.json"
     assert set(decision["required_modern_external_baseline_adapter_names"]) == {
         "videoshield",
         "sigmark",
@@ -463,6 +472,12 @@ def test_external_baseline_colab_preflight_uses_protocol_config(tmp_path: Path) 
     persisted = json.loads(artifact_path.read_text(encoding="utf-8"))
     assert persisted["run_external_baseline_source_clone"] is True
     assert persisted["claim_support_status"] == "external_baseline_colab_preflight_only_not_claim_evidence"
+    summary_path = Path(layout["drive_run_root"]) / "artifacts" / "external_baseline_command_template_summary.json"
+    assert summary_path.exists()
+    assert summary["command_templates_auto_applied"] is False
+    assert summary["configured_template_row_count"] == 6
+    assert summary["missing_template_row_count"] == 0
+    assert summary["claim_support_status"] == "external_baseline_command_template_summary_only_not_claim_evidence"
 
 
 @pytest.mark.quick

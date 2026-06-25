@@ -15,9 +15,11 @@ DEFAULT_DRIVE_PROJECT_ROOT = "/content/drive/MyDrive/SSTW"
 DEFAULT_VALIDATION_SCALE_CONFIG = "configs/protocol/validation_scale_generative_probe.json"
 DEFAULT_PILOT_PAPER_CONFIG = "configs/protocol/pilot_paper_generative_probe.json"
 DEFAULT_NOTEBOOK_WORKFLOW_CONFIG = "configs/paper_workflow/generative_video_notebook_workflows.json"
+DEFAULT_MODERN_BASELINE_COLAB_COMMAND_CONFIG = "configs/external_baselines/modern_baseline_colab_commands.json"
 DEFAULT_NOTEBOOK_ROLE = "generative_video_runtime"
 PAPER_GATE_PROFILES = {"validation_scale", "pilot_paper"}
 EXTERNAL_BASELINE_COLAB_PREFLIGHT_DECISION = "artifacts/external_baseline_colab_preflight_decision.json"
+EXTERNAL_BASELINE_COMMAND_TEMPLATE_SUMMARY = "artifacts/external_baseline_command_template_summary.json"
 
 
 def _join_drive_path(root: PurePosixPath, relative_path: str) -> str:
@@ -301,6 +303,130 @@ def required_modern_external_baseline_command_requirements(
     ]
 
 
+def load_modern_baseline_colab_command_config(
+    config_path: str | Path = DEFAULT_MODERN_BASELINE_COLAB_COMMAND_CONFIG,
+) -> dict[str, Any]:
+    """读取现代 baseline Colab command 配置辅助文件。
+
+    该配置只保存联网核验后的源码位置、Colab clone 目标和用户 wrapper command 建议。
+    它不等价于正式 baseline 已配置, 也不会自动让 preflight 通过。正式 claim 仍必须由
+    `SSTW_<BASELINE>_EVAL_COMMAND` 指向真实可执行命令, 并产生官方输出 JSON。
+    """
+    config = _read_json(config_path)
+    if not config:
+        raise FileNotFoundError(f"缺少现代 baseline Colab command 配置: {config_path}")
+    return config
+
+
+def _modern_baseline_command_config_rows(
+    config_path: str | Path = DEFAULT_MODERN_BASELINE_COLAB_COMMAND_CONFIG,
+) -> dict[str, dict[str, Any]]:
+    """按 baseline_id 索引 Colab command 配置行。"""
+    config = load_modern_baseline_colab_command_config(config_path)
+    rows = config.get("baseline_command_configs", [])
+    if not isinstance(rows, list):
+        raise TypeError("baseline_command_configs 必须是列表")
+    indexed: dict[str, dict[str, Any]] = {}
+    for row in rows:
+        if not isinstance(row, Mapping):
+            continue
+        baseline_id = str(row.get("baseline_id") or "")
+        if baseline_id:
+            indexed[baseline_id] = dict(row)
+    return indexed
+
+
+def build_modern_baseline_colab_command_config_summary(
+    layout: Mapping[str, str],
+    *,
+    profile: str,
+    protocol_config_path: str | Path | None = None,
+    command_config_path: str | Path = DEFAULT_MODERN_BASELINE_COLAB_COMMAND_CONFIG,
+) -> dict[str, object]:
+    """构造现代 baseline command 配置摘要。
+
+    通用工程写法是把“可查看的配置建议”和“已注入的正式命令”分开。项目特定要求是:
+    validation-scale 与 pilot-paper 必须 fail closed, 因此该摘要只能帮助用户在 Colab
+    中填写 command, 不能替代 `SSTW_<BASELINE>_EVAL_COMMAND`。
+    """
+    config = load_modern_baseline_colab_command_config(command_config_path)
+    config_rows = _modern_baseline_command_config_rows(command_config_path)
+    requirements = required_modern_external_baseline_command_requirements(profile, protocol_config_path)
+    required_baseline_ids = [item["baseline_id"] for item in requirements]
+    rows: list[dict[str, Any]] = []
+    for requirement in requirements:
+        baseline_id = requirement["baseline_id"]
+        env_var = requirement["external_baseline_command_env_var"]
+        row = dict(config_rows.get(baseline_id, {}))
+        rows.append({
+            "baseline_id": baseline_id,
+            "external_baseline_command_env_var": env_var,
+            "command_config_row_status": "configured_in_template_file" if row else "missing_from_template_file",
+            "official_repository_url": row.get("official_repository_url"),
+            "official_repository_branch": row.get("official_repository_branch"),
+            "verified_head_commit": row.get("verified_head_commit"),
+            "source_verification_status": row.get("source_verification_status"),
+            "colab_source_dir": row.get("colab_source_dir"),
+            "source_clone_command": row.get("source_clone_command"),
+            "official_entrypoint_candidates": row.get("official_entrypoint_candidates", []),
+            "sstw_eval_command_template_status": row.get("sstw_eval_command_template_status"),
+            "sstw_eval_command_template": row.get("sstw_eval_command_template"),
+            "score_output_contract": row.get("score_output_contract"),
+        })
+    missing_template_ids = [
+        row["baseline_id"]
+        for row in rows
+        if row["command_config_row_status"] == "missing_from_template_file"
+    ]
+    summary_path = Path(layout["drive_run_root"]) / EXTERNAL_BASELINE_COMMAND_TEMPLATE_SUMMARY
+    return {
+        "artifact_name": "external_baseline_command_template_summary.json",
+        "manifest_kind": "external_baseline_command_template_summary",
+        "profile": profile,
+        "run_root": layout["drive_run_root"],
+        "command_config_path": str(command_config_path),
+        "command_config_kind": config.get("config_kind"),
+        "command_config_version": config.get("config_version"),
+        "verified_at_utc": config.get("verified_at_utc"),
+        "source_verification_method": config.get("source_verification_method"),
+        "formal_result_policy": config.get("formal_result_policy"),
+        "command_templates_auto_applied": False,
+        "required_modern_external_baseline_adapter_names": required_baseline_ids,
+        "required_modern_external_baseline_adapter_count": len(required_baseline_ids),
+        "configured_template_row_count": len(rows) - len(missing_template_ids),
+        "missing_template_row_count": len(missing_template_ids),
+        "missing_template_baseline_ids": missing_template_ids,
+        "accepted_output_score_fields": config.get("accepted_output_score_fields", []),
+        "required_command_format_tokens": config.get("required_command_format_tokens", []),
+        "optional_command_format_tokens": config.get("optional_command_format_tokens", []),
+        "colab_user_action_required": (
+            "安装或克隆官方 baseline 源码, 编写能输出 JSON score 的 wrapper, "
+            "再把 command 写入对应 SSTW_<BASELINE>_EVAL_COMMAND。"
+        ),
+        "summary_path": str(summary_path),
+        "baseline_command_configs": rows,
+        "claim_support_status": "external_baseline_command_template_summary_only_not_claim_evidence",
+    }
+
+
+def write_modern_baseline_colab_command_config_summary(
+    layout: Mapping[str, str],
+    *,
+    profile: str,
+    protocol_config_path: str | Path | None = None,
+    command_config_path: str | Path = DEFAULT_MODERN_BASELINE_COLAB_COMMAND_CONFIG,
+) -> dict[str, object]:
+    """写出 command 配置摘要, 便于 Colab 失败后在 Google Drive 中审计。"""
+    summary = build_modern_baseline_colab_command_config_summary(
+        layout,
+        profile=profile,
+        protocol_config_path=protocol_config_path,
+        command_config_path=command_config_path,
+    )
+    _write_json(Path(layout["drive_run_root"]) / EXTERNAL_BASELINE_COMMAND_TEMPLATE_SUMMARY, summary)
+    return summary
+
+
 def build_modern_baseline_command_env(
     profile: str,
     command_templates: Mapping[str, str],
@@ -380,6 +506,10 @@ def build_external_baseline_colab_preflight_decision(
         "paper_gate_profile": paper_gate_profile,
         "require_modern_baseline_commands_for_paper_gate": bool(require_modern_baseline_commands_for_paper_gate),
         "run_external_baseline_source_clone": bool(run_external_baseline_source_clone),
+        "external_baseline_command_template_config_path": DEFAULT_MODERN_BASELINE_COLAB_COMMAND_CONFIG,
+        "external_baseline_command_template_summary_path": str(
+            Path(layout["drive_run_root"]) / EXTERNAL_BASELINE_COMMAND_TEMPLATE_SUMMARY
+        ),
         "required_modern_external_baseline_adapter_names": [item["baseline_id"] for item in requirements],
         "external_baseline_colab_preflight_required_env_vars": required_env_vars,
         "external_baseline_colab_preflight_configured_env_vars": configured_env_vars,
@@ -421,9 +551,10 @@ def validate_modern_baseline_commands_for_profile(preflight_decision: Mapping[st
     """在 paper gate profile 缺少现代 baseline command 时抛出明确错误。"""
     if preflight_decision.get("external_baseline_colab_preflight_decision") == "FAIL":
         missing = preflight_decision.get("external_baseline_colab_preflight_missing_env_vars")
+        summary_path = preflight_decision.get("external_baseline_command_template_summary_path")
         raise RuntimeError(
             "当前 workflow profile 是 paper gate 或 paper gate 前最后门禁, 必须先在 Colab 配置现代视频水印 baseline command。"
-            f" 缺失: {missing}"
+            f" 缺失: {missing}。可先查看命令配置摘要: {summary_path}"
         )
 
 

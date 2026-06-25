@@ -2106,9 +2106,31 @@ paper_workflow/notebook_utils/generative_video_model_probe_workflow.py::validate
 
 ```text
 artifacts/external_baseline_colab_preflight_decision.json
+artifacts/external_baseline_command_template_summary.json
 ```
 
-该 artifact 只记录 Colab 冷启动 preflight 状态, 不运行第三方 baseline, 不支持论文 claim。它的作用是让用户在 Google Drive 中直接看到缺少哪些现代 baseline command, 避免 Colab 断开后无法定位失败原因。
+其中 `external_baseline_colab_preflight_decision.json` 只记录 Colab 冷启动 preflight 状态, 不运行第三方 baseline, 不支持论文 claim。它的作用是让用户在 Google Drive 中直接看到缺少哪些现代 baseline command, 避免 Colab 断开后无法定位失败原因。
+
+`external_baseline_command_template_summary.json` 由以下配置生成:
+
+```text
+configs/external_baselines/modern_baseline_colab_commands.json
+```
+
+该配置记录联网核验后的现代 baseline 官方仓库 URL、branch HEAD commit、Colab clone 目录、官方入口候选脚本和 SSTW wrapper command 模板。它属于配置辅助层, 不属于正式 baseline 结果层。Notebook 不得把该配置自动提升为已配置 command, 也不得仅因为 source URL 可 clone 就让 `validation_scale` 或 `pilot_paper` preflight 通过。
+
+现代 baseline 从“源码已核验”进入“正式 measured_formal 对比”至少需要满足:
+
+```text
+official_source_or_weights_available
+sstw_eval_wrapper_exists
+SSTW_<BASELINE>_EVAL_COMMAND points_to_real_wrapper
+wrapper_writes_output_json_with_score
+external_baseline_command_manifest_written
+external_baseline_score_records.metric_status == measured_formal
+```
+
+这一区分是项目特定约束, 用于防止把“已联网找到 baseline 仓库”误解释为“baseline comparison 已经完成”。
 
 `external_baseline_execution_manifest.json` 必须记录:
 

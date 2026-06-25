@@ -83,6 +83,34 @@ def test_external_baseline_source_intake_writes_governed_manifests(tmp_path: Pat
 
 
 @pytest.mark.quick
+def test_modern_baseline_colab_command_config_is_guidance_not_claim_evidence() -> None:
+    """联网核验后的 command 配置只能作为 Colab 配置辅助, 不能自动变成正式结果。"""
+    config_path = Path("configs/external_baselines/modern_baseline_colab_commands.json")
+    config = json.loads(config_path.read_text(encoding="utf-8"))
+    rows = {row["baseline_id"]: row for row in config["baseline_command_configs"]}
+
+    required_ids = {"videoshield", "sigmark", "spdmark", "videomark", "vidsig", "videoseal"}
+    assert set(rows) == required_ids
+    assert config["command_configuration_boundary"]["template_file_auto_applied"] is False
+    assert "fail_closed" in config["formal_result_policy"]
+    assert rows["videoshield"]["official_repository_url"] == "https://github.com/hurunyi/VideoShield"
+    assert rows["sigmark"]["official_repository_url"] == "https://github.com/JeremyZhao1998/SIGMark-release"
+    assert rows["spdmark"]["official_repository_url"] == "https://github.com/Samar-Fares/SPDMark"
+    assert rows["videomark"]["official_repository_url"] == "https://github.com/KYRIE-LI11/VideoMark"
+    assert rows["vidsig"]["official_repository_url"] == "https://github.com/hardenyu21/Video-Signature"
+    assert rows["videoseal"]["official_repository_url"] == "https://github.com/facebookresearch/videoseal"
+    for baseline_id, row in rows.items():
+        assert row["external_baseline_command_env_var"] == f"SSTW_{baseline_id.upper()}_EVAL_COMMAND"
+        assert row["source_verification_status"] == "git_ls_remote_head_verified_2026_06_25"
+        assert row["sstw_eval_command_template_status"] == "requires_user_wrapper_after_official_source_install"
+        command = row["sstw_eval_command_template"]
+        for token in config["required_command_format_tokens"]:
+            assert "{" + token + "}" in command
+        assert row["score_output_contract"]["json_object_required"] is True
+        assert "external_baseline_score" in row["score_output_contract"]["minimum_required_score_field_any_of"]
+
+
+@pytest.mark.quick
 def test_external_baseline_runner_writes_governed_status_outputs(tmp_path: Path) -> None:
     """外部 baseline runner 必须写出 records、table、decision 和 report。"""
     run_root = tmp_path / "generative_video_runtime"

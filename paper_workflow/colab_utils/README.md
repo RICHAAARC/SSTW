@@ -57,7 +57,9 @@ prompt suite
 -> formal metric scoring
 -> motion threshold reuse
 -> runtime attack / detection
--> external baseline source intake / comparison
+-> external baseline source intake
+-> official result bundle preflight
+-> external baseline comparison
 -> internal ablation
 -> adaptive attack proxy
 -> replay/sketch gate
@@ -95,6 +97,17 @@ os.environ["SSTW_VALIDATION_SCALE_RUN_THROUGH_TEST"] = "true"
 该模式只跳过 external baseline preflight 的前置中断, 不会伪造第三方 baseline 分数,
 也不会把 `validation_scale_gate_decision` 改成 PASS。严格正式门禁必须保持该变量为
 `false`, 并保证 6 个现代 baseline 的 official command 能真实写出 score JSON。
+
+严格门禁还会默认检查 Google Drive 官方结果包目录:
+
+```text
+/content/drive/MyDrive/SSTW/external_baseline_official_result_bundles/<workflow_profile>
+```
+
+该目录由 `SSTW_EXTERNAL_BASELINE_OFFICIAL_RESULT_BUNDLE_ROOT` 控制。对于无法在当前
+Colab 会话中即时训练或生成的第三方 baseline, 可以先用其官方代码在独立会话中生成
+结果包, 再由本 workflow 读取。结果包仍必须是官方结果, 不能由 SSTW 最终检测分数或
+proxy 分数派生。
 
 ### 3.1 运动阈值校准
 
@@ -168,6 +181,7 @@ paper_workflow/colab_utils/external_baseline_formal_scoring_colab.ipynb
 
 - 读取统一 workflow profile。
 - 执行 external baseline source intake。
+- 执行 official result bundle preflight。
 - 通过正式 command adapter 调用现代视频水印 baseline。
 - 生成 external baseline comparison records。
 - 打包 baseline 对比结果到 Google Drive。
@@ -298,7 +312,62 @@ SSTW_VIDSIG_MSG_DECODER_PATH
 `SSTW_VIDEOSEAL_OFFICIAL_EVAL_COMMAND` 默认可直接调用 VideoSeal 官方 Python API,
 但仍需要 Colab 能成功安装 VideoSeal 依赖并下载其官方 checkpoint。
 
-### 3.3.2 直接方式: 完全自定义 SSTW 外层命令
+### 3.3.2 官方结果包方式: 解决高显存或训练 checkpoint 阻断
+
+部分现代 baseline 不是“任意输入视频 -> detector score”的后处理水印, 而是绑定
+特定生成模型、训练出的 extractor、maintained key / message 或 latent inversion
+流程。对于这类方法, 在同一个 Wan2.1 Colab 会话中强行即时复跑并不一定可行。
+正式 workflow 支持读取由第三方官方代码预先生成的结果包:
+
+```python
+import os
+os.environ["SSTW_EXTERNAL_BASELINE_OFFICIAL_RESULT_BUNDLE_ROOT"] = (
+    "/content/drive/MyDrive/SSTW/external_baseline_official_result_bundles/validation_scale"
+)
+```
+
+每个 baseline 的结果 JSON 可放在以下任一命名位置:
+
+```text
+<bundle_root>/<baseline_id>/records/<prompt_id>__<seed_id>__<attack_name>.json
+<bundle_root>/<baseline_id>/records/<trajectory_trace_id>__<attack_name>.json
+<bundle_root>/<baseline_id>/<prompt_id>/<seed_id>/<attack_name>.json
+<bundle_root>/<baseline_id>/<trajectory_trace_id>/<attack_name>.json
+```
+
+每个 JSON 至少需要包含以下任一 score 字段:
+
+```text
+external_baseline_score
+watermark_score
+detection_score
+score
+bit_accuracy
+confidence
+detected
+```
+
+并建议包含:
+
+```text
+official_result_provenance = "third_party_official_code"
+external_baseline_source_video_path
+external_baseline_attacked_video_path
+external_baseline_generation_model_id
+official_execution_manifest_path
+```
+
+workflow 会写出:
+
+```text
+artifacts/external_baseline_official_result_bundle_preflight_decision.json
+```
+
+若某个 baseline 既没有可直接运行的官方资源, 也没有覆盖全部 runtime comparison unit
+的结果包, 该 preflight 会失败。该失败是正式门禁的一部分, 目的是防止把缺权重、
+缺 checkpoint 或缺官方中间产物的问题延后到 comparison 阶段才暴露。
+
+### 3.3.3 直接方式: 完全自定义 SSTW 外层命令
 
 如果不使用 bridge, 可以设置:
 
@@ -411,6 +480,7 @@ paper_gate_and_package_colab.ipynb
 ```text
 generative_video_colab_runtime_decision.json
 external_baseline_colab_preflight_decision.json
+external_baseline_official_result_bundle_preflight_decision.json
 external_baseline_comparison_decision.json
 validation_internal_ablation_decision.json
 adaptive_attack_decision.json
@@ -482,7 +552,7 @@ os.environ["SSTW_ENABLE_PIPELINE_PROGRESS_BAR"] = "1"
 ## 7. 常见失败原因
 
 1. 未先运行或未保留 `motion_calibration` artifact, 导致 motion threshold reuse 失败。
-2. 没有配置 6 个现代 baseline command, 导致 external baseline preflight 或 paper gate 阻断。
+2. 没有配置 6 个现代 baseline command, 或没有提供完整 official result bundle, 导致 external baseline preflight / bundle preflight / paper gate 阻断。
 3. Colab 冷启动后没有重新 clone 仓库或安装依赖, 导致模块导入失败。
 4. 直接运行 `paper_gate_and_package_colab.ipynb`, 但 runtime 与 baseline artifacts 不存在。
 5. Colab 断开前没有打包到 Google Drive, 导致本地临时结果丢失。

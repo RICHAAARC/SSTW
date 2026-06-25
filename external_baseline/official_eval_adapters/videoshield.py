@@ -17,6 +17,7 @@ from external_baseline.official_eval_adapters.common import (
     extract_score,
     raise_missing_official_artifacts,
     read_json,
+    read_official_result_bundle_if_available,
     run_adapter_main,
 )
 
@@ -36,6 +37,14 @@ def _run_default(args: argparse.Namespace, source_dir: Path, output_json_path: P
     仓库中。若需要自动运行, 应配置 `SSTW_VIDEOSHIELD_NATIVE_EVAL_COMMAND` 指向
     用户维护的官方完整命令。
     """
+    bundled = read_official_result_bundle_if_available(
+        baseline_id=BASELINE_ID,
+        args=args,
+        source_dir=source_dir,
+        output_json_path=output_json_path,
+    )
+    if bundled is not None:
+        return bundled
     result_json = os.environ.get("SSTW_VIDEOSHIELD_RESULT_JSON", "").strip()
     if not result_json:
         raise_missing_official_artifacts(
@@ -67,4 +76,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

@@ -12,7 +12,13 @@ import os
 from pathlib import Path
 from typing import Any
 
-from external_baseline.official_eval_adapters.common import raise_missing_official_artifacts, read_json, run_adapter_main, safe_float
+from external_baseline.official_eval_adapters.common import (
+    raise_missing_official_artifacts,
+    read_json,
+    read_official_result_bundle_if_available,
+    run_adapter_main,
+    safe_float,
+)
 
 
 BASELINE_ID = "videomark"
@@ -36,6 +42,14 @@ def _collect_decode_acc(payload: Any) -> list[float]:
 
 def _run_default(args: argparse.Namespace, source_dir: Path, output_json_path: Path) -> dict[str, Any]:
     """读取 VideoMark 官方 temporal_results JSON。"""
+    bundled = read_official_result_bundle_if_available(
+        baseline_id=BASELINE_ID,
+        args=args,
+        source_dir=source_dir,
+        output_json_path=output_json_path,
+    )
+    if bundled is not None:
+        return bundled
     result_json = Path(os.environ.get("SSTW_VIDEOMARK_TEMPORAL_RESULTS_JSON", "")).expanduser()
     if not result_json.exists():
         raise_missing_official_artifacts(
@@ -74,4 +88,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

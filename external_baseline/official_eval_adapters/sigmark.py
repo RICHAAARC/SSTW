@@ -13,7 +13,11 @@ import os
 from pathlib import Path
 from typing import Any
 
-from external_baseline.official_eval_adapters.common import raise_missing_official_artifacts, run_adapter_main
+from external_baseline.official_eval_adapters.common import (
+    raise_missing_official_artifacts,
+    read_official_result_bundle_if_available,
+    run_adapter_main,
+)
 
 
 BASELINE_ID = "sigmark"
@@ -35,6 +39,14 @@ def _mean_numeric(values: list[Any]) -> float:
 
 def _run_default(args: argparse.Namespace, source_dir: Path, output_json_path: Path) -> dict[str, Any]:
     """读取 SIGMark 官方 bit accuracy npz。"""
+    bundled = read_official_result_bundle_if_available(
+        baseline_id=BASELINE_ID,
+        args=args,
+        source_dir=source_dir,
+        output_json_path=output_json_path,
+    )
+    if bundled is not None:
+        return bundled
     bit_accuracy_npz = Path(os.environ.get("SSTW_SIGMARK_BIT_ACCURACY_NPZ", "")).expanduser()
     if not bit_accuracy_npz.exists():
         raise_missing_official_artifacts(
@@ -79,4 +91,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

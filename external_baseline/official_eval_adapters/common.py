@@ -84,6 +84,111 @@ def write_json(path: str | Path, payload: Mapping[str, Any]) -> None:
     output_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 
+def _safe_path_token(value: Any) -> str:
+    """把 prompt、seed、attack 等字段转换为 bundle 路径可使用的 token。
+
+    该函数属于通用工程写法。项目特定用途是统一 Google Drive 官方 baseline
+    结果包的文件命名, 防止 Colab 冷启动后因为路径命名不一致而找不到同一条
+    prompt / seed / attack 的官方结果。
+    """
+    import re
+
+    text = str(value or "unknown")
+    text = re.sub(r"[^A-Za-z0-9_.-]+", "_", text)
+    return text.strip("_") or "unknown"
+
+
+def official_result_bundle_roots() -> list[Path]:
+    """读取可选的官方结果包根目录列表。
+
+    `SSTW_EXTERNAL_BASELINE_OFFICIAL_RESULT_BUNDLE_ROOTS` 支持多个目录, 用
+    `os.pathsep` 分隔。`SSTW_EXTERNAL_BASELINE_OFFICIAL_RESULT_BUNDLE_ROOT` 和
+    历史短名 `SSTW_EXTERNAL_BASELINE_BUNDLE_ROOT` 保持兼容。
+    """
+    values: list[str] = []
+    multi = os.environ.get("SSTW_EXTERNAL_BASELINE_OFFICIAL_RESULT_BUNDLE_ROOTS", "").strip()
+    if multi:
+        values.extend(item for item in multi.split(os.pathsep) if item.strip())
+    single = os.environ.get("SSTW_EXTERNAL_BASELINE_OFFICIAL_RESULT_BUNDLE_ROOT", "").strip()
+    if single:
+        values.append(single)
+    legacy = os.environ.get("SSTW_EXTERNAL_BASELINE_BUNDLE_ROOT", "").strip()
+    if legacy:
+        values.append(legacy)
+    roots: list[Path] = []
+    seen: set[str] = set()
+    for value in values:
+        path = Path(value).expanduser()
+        key = str(path)
+        if key not in seen:
+            roots.append(path)
+            seen.add(key)
+    return roots
+
+
+def official_bundle_candidate_paths(
+    *,
+    baseline_id: str,
+    args: argparse.Namespace,
+) -> list[Path]:
+    """构造单条 comparison unit 对应的官方结果包候选路径。
+
+    官方结果包用于接收那些无法在当前 Colab L4 会话中重新训练或重新生成的
+    第三方 baseline 结果。它不是 proxy 分数: 每个 JSON 仍必须来自第三方官方
+    代码或官方原生命令, 并保留 `official_execution_manifest_path` 或等价 provenance。
+    """
+    attack = _safe_path_token(args.attack_name)
+    prompt = _safe_path_token(args.prompt_id)
+    seed = _safe_path_token(args.seed_id)
+    trace = _safe_path_token(args.trajectory_trace_id)
+    candidates: list[Path] = []
+    for root in official_result_bundle_roots():
+        baseline_root = root / baseline_id
+        candidates.extend([
+            baseline_root / "records" / f"{prompt}__{seed}__{attack}.json",
+            baseline_root / "records" / f"{trace}__{attack}.json",
+            baseline_root / prompt / seed / f"{attack}.json",
+            baseline_root / trace / f"{attack}.json",
+        ])
+    return candidates
+
+
+def read_official_result_bundle_if_available(
+    *,
+    baseline_id: str,
+    args: argparse.Namespace,
+    source_dir: Path,
+    output_json_path: Path,
+) -> dict[str, Any] | None:
+    """读取 Google Drive 中预先生成的官方 baseline 结果包。
+
+    这一实现属于项目特定写法。它解决的问题是: 部分现代视频水印 baseline
+    需要特定生成模型、训练出的 extractor 或高显存环境, 不能保证在同一个
+    Wan2.1 Colab 会话中即时复跑。正式论文比较仍然允许读取由官方代码离线
+    生成的结果包, 但必须满足两个条件:
+
+    1. JSON 中存在可审计 score 字段。
+    2. JSON 必须声明不是 SSTW proxy, 即 `official_result_provenance` 不能为
+       `sstw_proxy`。
+    """
+    for candidate in official_bundle_candidate_paths(baseline_id=baseline_id, args=args):
+        if not candidate.exists():
+            continue
+        payload = read_json(candidate)
+        validate_score_payload(payload)
+        if payload.get("official_result_provenance") == "sstw_proxy":
+            raise RuntimeError(f"official_result_bundle_proxy_forbidden:{candidate}")
+        return {
+            **payload,
+            "official_adapter_status": "measured_from_official_result_bundle",
+            "official_adapter_baseline_id": baseline_id,
+            "official_source_dir": str(source_dir),
+            "official_result_bundle_path": str(candidate),
+            "official_output_json_path": str(output_json_path),
+        }
+    return None
+
+
 def safe_float(value: Any, default: float = 0.0) -> float:
     """把官方输出中的数值字段安全转换为 float。"""
     try:
@@ -198,4 +303,3 @@ def raise_missing_official_artifacts(baseline_id: str, details: str) -> None:
         "请配置对应 SSTW_<BASELINE>_NATIVE_EVAL_COMMAND, 或在 Google Drive 中提供官方权重、"
         "官方 key / message / maintained info 等可复现实验产物。"
     )
-

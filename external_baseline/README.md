@@ -11,8 +11,9 @@ external baseline 采用“六层接入”方式:
 3. `primary/<baseline_id>/source/` 保存第三方官方源码或用户放置的等价入口, 该目录由 `.gitignore` 排除, 不进入主方法层。
 4. `primary/<baseline_id>/adapter/` 保存本仓库维护的 adapter。adapter 必须暴露 `adapter_status()` 和 `build_score_records(run_root, baseline_record)` 两类接口。
 5. `official_eval_adapters/<baseline_id>.py` 保存 repository 维护的 fail-closed 官方命令 wrapper, 用于把官方源码、官方 API、官方 checkpoint 或官方结果产物转换成 SSTW 统一 JSON。
-6. `experiments/generative_video_model_probe/external_baseline_runner.py` 负责在某次 `run_root` 中调度 adapter, 并把状态记录、比较结果和 `external_baseline_execution_manifest.json` 落盘。
-7. validation gate、artifact rebuild dry-run 和 packager 只读取已落盘 artifacts, 不直接调用第三方源码或 Notebook 临时变量。
+6. `official_result_bundle.py` 检查 Google Drive 中由第三方官方代码预先生成的结果包是否覆盖当前 runtime comparison unit。
+7. `experiments/generative_video_model_probe/external_baseline_runner.py` 负责在某次 `run_root` 中调度 adapter, 并把状态记录、比较结果和 `external_baseline_execution_manifest.json` 落盘。
+8. validation gate、artifact rebuild dry-run 和 packager 只读取已落盘 artifacts, 不直接调用第三方源码或 Notebook 临时变量。
 
 ## 接入规则
 
@@ -22,8 +23,9 @@ external baseline 采用“六层接入”方式:
 4. adapter 不得使用 `S_final` 或最终判定分数进行污染过滤、样本剔除或 baseline 打分。
 5. 当前显式 DTW 与 frame matching adapter 属于工程级同步 control, 用于验证 baseline 对比链路闭合, 不能支持正向论文 claim。
 6. 现代视频水印 baseline 必须通过正式 command adapter 调用官方实现、repository official adapter 或用户配置的等价命令。未配置官方命令或缺少官方权重、key、message、maintained info 时, 只能写出 governed non-run record 和 comparison unsupported row。
-7. source intake 清单只证明 baseline 来源、adapter 和命令边界已被登记, 不等价于 baseline 已完成正式运行。
-8. `external_baseline_execution_manifest.json` 必须记录本次 run_root 的 measured / formal 记录数量、evidence path 状态和 source intake manifest 路径。没有 evidence path 的 formal rows 只能作为工程接入证据, 不能自动升级为论文主表 claim。
+7. 对无法在当前 Colab 会话即时复跑的高显存、训练型或 maintained-info baseline, 可以读取 official result bundle, 但 bundle JSON 必须来自第三方官方代码或官方原生命令, 不能由 SSTW `S_final`、最终判定分数或视频相似度 proxy 派生。
+8. source intake 清单只证明 baseline 来源、adapter 和命令边界已被登记, 不等价于 baseline 已完成正式运行。
+9. `external_baseline_execution_manifest.json` 必须记录本次 run_root 的 measured / formal 记录数量、evidence path 状态和 source intake manifest 路径。没有 evidence path 的 formal rows 只能作为工程接入证据, 不能自动升级为论文主表 claim。
 
 ## 与 `main/` 的职责区别
 
@@ -74,6 +76,45 @@ external_baseline/official_eval_adapters/videoseal.py
 checkpoint、extractor、message、maintained info 或结果文件, wrapper 会失败, 不会输出
 视频相似度、SSTW 分数或其他 proxy 分数。用户也可以通过
 `SSTW_<BASELINE>_NATIVE_EVAL_COMMAND` 覆盖单个 baseline 的官方原生命令。
+
+## 官方结果包
+
+部分现代视频水印 baseline 绑定特定生成模型、训练得到的 extractor、message decoder、
+PRC key 或 maintained info。为了避免 Colab 冷启动丢失权重和中间产物, 正式流程支持
+读取 Google Drive 中的官方结果包:
+
+```text
+SSTW_EXTERNAL_BASELINE_OFFICIAL_RESULT_BUNDLE_ROOT
+SSTW_EXTERNAL_BASELINE_OFFICIAL_RESULT_BUNDLE_ROOTS
+```
+
+单条结果可放在以下任一位置:
+
+```text
+<bundle_root>/<baseline_id>/records/<prompt_id>__<seed_id>__<attack_name>.json
+<bundle_root>/<baseline_id>/records/<trajectory_trace_id>__<attack_name>.json
+<bundle_root>/<baseline_id>/<prompt_id>/<seed_id>/<attack_name>.json
+<bundle_root>/<baseline_id>/<trajectory_trace_id>/<attack_name>.json
+```
+
+每个 JSON 必须包含可审计 score 字段, 例如 `external_baseline_score`、`score`、
+`bit_accuracy`、`confidence` 或 `detected`。若 `official_result_provenance` 被标记为
+`sstw_proxy`, adapter 会直接失败。建议同时记录:
+
+```text
+official_result_provenance = "third_party_official_code"
+external_baseline_source_video_path
+external_baseline_attacked_video_path
+external_baseline_generation_model_id
+official_execution_manifest_path
+```
+
+可用以下命令在当前 `run_root` 上检查结果包是否足以进入严格门禁:
+
+```bash
+python -m external_baseline.official_result_bundle \
+  --run-root /content/drive/MyDrive/SSTW/runs/generative_video_model_probe/validation_scale
+```
 
 ## Source intake 命令
 

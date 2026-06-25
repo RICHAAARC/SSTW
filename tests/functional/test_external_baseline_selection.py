@@ -12,6 +12,7 @@ from main.external_baselines.baseline_registry import audit_external_baseline_re
 from main.external_baselines.explicit_dtw_temporal_alignment import compute_dtw_alignment_cost
 from main.external_baselines.frame_matching_temporal_registration import compute_registration_cost, match_frames
 from experiments.generative_video_model_probe.external_baseline_runner import write_external_baseline_comparison_outputs, write_external_baseline_status_outputs
+from external_baseline.official_result_bundle import build_official_result_bundle_preflight
 from main.protocol.record_writer import read_jsonl, write_jsonl
 from external_baseline.source_intake import build_source_intake_manifest, write_source_intake_artifacts
 
@@ -241,7 +242,11 @@ def test_modern_external_baseline_formal_command_adapters_write_measured_records
         "parser.add_argument('--attacked-video')\n"
         "parser.add_argument('--attack-name')\n"
         "args = parser.parse_args()\n"
-        "json.dump({'external_baseline_score': 0.37, 'detected': True, 'bit_accuracy': 0.91, 'threshold': 0.5}, open(args.output_json, 'w', encoding='utf-8'))\n",
+        "json.dump({'external_baseline_score': 0.37, 'detected': True, 'bit_accuracy': 0.91, 'threshold': 0.5, "
+        "'external_baseline_source_video_path': 'official/source.mp4', "
+        "'external_baseline_attacked_video_path': 'official/attacked.mp4', "
+        "'external_baseline_generation_model_id': 'official_baseline_model', "
+        "'external_baseline_official_execution_mode': 'official_result_bundle'}, open(args.output_json, 'w', encoding='utf-8'))\n",
         encoding="utf-8",
     )
     command = f'{sys.executable} {fake_adapter} --source-video {{source_video_path}} --attacked-video {{attacked_video_path}} --attack-name {{attack_name}} --output-json {{output_json_path}}'
@@ -276,6 +281,9 @@ def test_modern_external_baseline_formal_command_adapters_write_measured_records
     assert all(Path(record["external_baseline_official_stdout_path"]).exists() for record in formal_records)
     assert all(Path(record["external_baseline_official_stderr_path"]).exists() for record in formal_records)
     assert all(Path(record["external_baseline_official_command_manifest_path"]).exists() for record in formal_records)
+    assert all(record["external_baseline_source_video_path"] == "official/source.mp4" for record in formal_records)
+    assert all(record["external_baseline_attacked_video_path"] == "official/attacked.mp4" for record in formal_records)
+    assert all(record["external_baseline_generation_model_id"] == "official_baseline_model" for record in formal_records)
     assert all(record.get("S_final") is None for record in records)
     execution_manifest = json.loads((run_root / "artifacts" / "external_baseline_execution_manifest.json").read_text(encoding="utf-8"))
     assert execution_manifest["modern_external_baseline_formal_measured_adapter_count"] == 6
@@ -348,6 +356,81 @@ def test_modern_external_baseline_bridge_commands_require_real_official_output(t
         for record in formal_records
     ]
     assert all(path.exists() for path in raw_paths)
+
+
+@pytest.mark.quick
+def test_official_result_bundle_preflight_requires_all_modern_baseline_units(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """官方结果包必须覆盖全部 modern baseline 与 runtime comparison unit。"""
+    run_root = tmp_path / "generative_video_runtime"
+    _write_external_baseline_runtime_fixture(run_root)
+    bundle_root = tmp_path / "official_baseline_bundle"
+    monkeypatch.setenv("SSTW_EXTERNAL_BASELINE_OFFICIAL_RESULT_BUNDLE_ROOT", str(bundle_root))
+    monkeypatch.delenv("SSTW_VIDEOSHIELD_RESULT_JSON", raising=False)
+    monkeypatch.delenv("SSTW_SIGMARK_BIT_ACCURACY_NPZ", raising=False)
+    monkeypatch.delenv("SSTW_SPDMARK_EXTRACTOR_PATH", raising=False)
+    monkeypatch.delenv("SSTW_SPDMARK_GT_BITS_PATH", raising=False)
+    monkeypatch.delenv("SSTW_VIDEOMARK_TEMPORAL_RESULTS_JSON", raising=False)
+    monkeypatch.delenv("SSTW_VIDSIG_MSG_DECODER_PATH", raising=False)
+    for baseline_id in ("VIDEOSHIELD", "SIGMARK", "SPDMARK", "VIDEOMARK", "VIDSIG", "VIDEOSEAL"):
+        monkeypatch.delenv(f"SSTW_{baseline_id}_NATIVE_EVAL_COMMAND", raising=False)
+
+    records = read_jsonl(run_root / "records" / "runtime_detection_records.jsonl")
+    for baseline_id in ("videoshield", "sigmark", "spdmark", "videomark", "vidsig", "videoseal"):
+        for record in records:
+            output = (
+                bundle_root
+                / baseline_id
+                / "records"
+                / f"{record['prompt_id']}__{record['seed_id']}__{record['attack_name']}.json"
+            )
+            output.parent.mkdir(parents=True, exist_ok=True)
+            output.write_text(
+                json.dumps({
+                    "external_baseline_score": 0.61,
+                    "detected": True,
+                    "bit_accuracy": 0.93,
+                    "official_result_provenance": "third_party_official_code",
+                    "external_baseline_source_video_path": f"{baseline_id}/source.mp4",
+                    "external_baseline_attacked_video_path": f"{baseline_id}/attacked.mp4",
+                }),
+                encoding="utf-8",
+            )
+
+    audit = build_official_result_bundle_preflight(run_root)
+    assert audit["official_result_bundle_preflight_decision"] == "PASS"
+    assert audit["expected_bundle_result_count"] == 12
+    assert audit["present_bundle_result_count"] == 12
+    assert audit["strict_missing_baselines"] == []
+
+
+@pytest.mark.quick
+def test_official_result_bundle_preflight_fails_when_non_runtime_baseline_bundle_missing(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """除 VideoSeal 这类可直接尝试官方 API 的方法外, 缺 bundle 必须提前暴露。"""
+    run_root = tmp_path / "generative_video_runtime"
+    _write_external_baseline_runtime_fixture(run_root)
+    monkeypatch.setenv("SSTW_EXTERNAL_BASELINE_OFFICIAL_RESULT_BUNDLE_ROOT", str(tmp_path / "missing_bundle"))
+    for env_name in (
+        "SSTW_VIDEOSHIELD_RESULT_JSON",
+        "SSTW_SIGMARK_BIT_ACCURACY_NPZ",
+        "SSTW_SPDMARK_EXTRACTOR_PATH",
+        "SSTW_SPDMARK_GT_BITS_PATH",
+        "SSTW_VIDEOMARK_TEMPORAL_RESULTS_JSON",
+        "SSTW_VIDSIG_MSG_DECODER_PATH",
+    ):
+        monkeypatch.delenv(env_name, raising=False)
+    for baseline_id in ("VIDEOSHIELD", "SIGMARK", "SPDMARK", "VIDEOMARK", "VIDSIG", "VIDEOSEAL"):
+        monkeypatch.delenv(f"SSTW_{baseline_id}_NATIVE_EVAL_COMMAND", raising=False)
+
+    audit = build_official_result_bundle_preflight(run_root)
+    assert audit["official_result_bundle_preflight_decision"] == "FAIL"
+    assert "spdmark" in audit["strict_missing_baselines"]
+    assert audit["missing_bundle_examples"]
 
 
 @pytest.mark.quick

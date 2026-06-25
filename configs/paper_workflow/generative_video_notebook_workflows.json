@@ -1,6 +1,6 @@
 {
   "config_kind": "generative_video_notebook_workflow_config",
-  "config_version": "2026_06_25_profile_driven_colab_workflow_v4_validation_scale_formal_gate",
+  "config_version": "2026_06_25_profile_driven_colab_workflow_v5_external_baseline_bundle_preflight",
   "default_drive_project_root": "/content/drive/MyDrive/SSTW",
   "default_dataset_root_relative": "datasets/generative_video_prompt_suite",
   "default_prompt_suite_path_relative": "datasets/generative_video_prompt_suite/prompt_seed_suite.json",
@@ -173,6 +173,7 @@
       "stage_plan": [
         "external_baseline_colab_preflight",
         "external_baseline_source_intake",
+        "external_baseline_official_result_bundle_preflight",
         "external_baseline_comparison",
         "quick_tests_and_harness",
         "drive_packaging"
@@ -216,6 +217,7 @@
         "runtime_detection",
         "small_scale_claim_pilot_gate",
         "external_baseline_source_intake",
+        "external_baseline_official_result_bundle_preflight",
         "external_baseline_comparison",
         "validation_internal_ablation",
         "adaptive_attack_proxy",

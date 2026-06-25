@@ -14,6 +14,7 @@ from paper_workflow.notebook_utils.generative_video_model_probe_workflow import 
     build_drive_layout,
     build_workflow_stage_plan,
     build_modern_baseline_command_env,
+    build_external_baseline_official_result_bundle_preflight_command,
     build_modern_baseline_official_bridge_command_templates,
     build_modern_baseline_official_bridge_preflight_decision,
     build_repository_official_baseline_eval_command_templates,
@@ -300,11 +301,13 @@ def test_split_colab_notebooks_are_profile_driven() -> None:
     assert "build_external_baseline_comparison_command" not in runtime_source
     assert "build_colab_runtime_command" not in baseline_source
     assert "build_external_baseline_comparison_command" in baseline_source
+    assert "build_external_baseline_official_result_bundle_preflight_command" in baseline_source
     assert "build_pilot_paper_gate_command" in gate_source
     assert "build_validation_scale_gate_command" in gate_source
     assert "NOTEBOOK_ROLE = 'validation_scale_formal_gate'" in validation_gate_source
     assert "build_colab_runtime_command" in validation_gate_source
     assert "build_external_baseline_comparison_command" in validation_gate_source
+    assert "build_external_baseline_official_result_bundle_preflight_command" in validation_gate_source
     assert "build_validation_internal_ablation_command" in validation_gate_source
     assert "build_replay_and_sketch_gate_command" in validation_gate_source
     assert "build_claim3_downgrade_command" in validation_gate_source
@@ -316,6 +319,7 @@ def test_split_colab_notebooks_are_profile_driven() -> None:
     assert "allow_run_through_test=VALIDATION_SCALE_RUN_THROUGH_TEST" in validation_gate_source
     assert "build_repository_official_baseline_eval_command_templates" in validation_gate_source
     assert "SSTW_USE_REPOSITORY_OFFICIAL_BASELINE_ADAPTERS" in validation_gate_source
+    assert "SSTW_EXTERNAL_BASELINE_OFFICIAL_RESULT_BUNDLE_ROOT" in validation_gate_source
 
 
 @pytest.mark.quick
@@ -400,6 +404,7 @@ def test_notebook_workflow_profile_config_supports_profile_switching() -> None:
     assert "pilot_paper_gate" not in build_workflow_stage_plan("validation_scale", "paper_gate_and_package")
     assert validation_single["notebook_path"] == "paper_workflow/colab_utils/validation_scale_formal_gate_colab.ipynb"
     assert "wan21_runtime_generation" in build_workflow_stage_plan("validation_scale", "validation_scale_formal_gate")
+    assert "external_baseline_official_result_bundle_preflight" in build_workflow_stage_plan("validation_scale", "validation_scale_formal_gate")
     assert "external_baseline_comparison" in build_workflow_stage_plan("validation_scale", "validation_scale_formal_gate")
     assert "validation_scale_gate" in build_workflow_stage_plan("validation_scale", "validation_scale_formal_gate")
     assert "pilot_paper_gate" not in build_workflow_stage_plan("validation_scale", "validation_scale_formal_gate")
@@ -681,6 +686,19 @@ def test_repository_official_baseline_eval_adapters_configure_inner_commands(tmp
     assert ready_decision["external_baseline_official_bridge_preflight_decision"] == "PASS"
     assert ready_decision["official_bridge_configured_env_var_count"] == 6
     assert ready_decision["official_bridge_missing_env_vars"] == []
+
+
+@pytest.mark.quick
+def test_external_baseline_official_result_bundle_preflight_command_is_profile_driven(tmp_path: Path) -> None:
+    """官方结果包 preflight 命令必须由 workflow layout 生成, 不能在 Notebook 中硬写路径。"""
+    layout = build_drive_layout(str(tmp_path / "SSTW"), workflow_profile="validation_scale")
+    command = build_external_baseline_official_result_bundle_preflight_command(layout)
+
+    assert command[:3] == [command[0], "-m", "external_baseline.official_result_bundle"]
+    assert "--run-root" in command
+    assert layout["drive_run_root"] in command
+    assert "--output-json" in command
+    assert "external_baseline_official_result_bundle_preflight_decision.json" in command[-1]
 
 
 @pytest.mark.quick

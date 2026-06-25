@@ -22,6 +22,7 @@ PAPER_GATE_PROFILES = {"validation_scale", "pilot_paper"}
 EXTERNAL_BASELINE_COLAB_PREFLIGHT_DECISION = "artifacts/external_baseline_colab_preflight_decision.json"
 EXTERNAL_BASELINE_COMMAND_TEMPLATE_SUMMARY = "artifacts/external_baseline_command_template_summary.json"
 EXTERNAL_BASELINE_OFFICIAL_BRIDGE_PREFLIGHT_DECISION = "artifacts/external_baseline_official_bridge_preflight_decision.json"
+EXTERNAL_BASELINE_OFFICIAL_RESULT_BUNDLE_PREFLIGHT_DECISION = "artifacts/external_baseline_official_result_bundle_preflight_decision.json"
 
 
 def _join_drive_path(root: PurePosixPath, relative_path: str) -> str:
@@ -414,6 +415,7 @@ def build_modern_baseline_colab_command_config_summary(
         "missing_template_row_count": len(missing_template_ids),
         "missing_template_baseline_ids": missing_template_ids,
         "accepted_output_score_fields": config.get("accepted_output_score_fields", []),
+        "official_result_bundle_policy": config.get("official_result_bundle_policy", {}),
         "required_command_format_tokens": config.get("required_command_format_tokens", []),
         "optional_command_format_tokens": config.get("optional_command_format_tokens", []),
         "colab_user_action_required": (
@@ -1008,6 +1010,25 @@ def build_external_baseline_source_intake_command(layout: dict[str, str], execut
     if execute_clone:
         command.append("--execute-clone")
     return command
+
+
+def build_external_baseline_official_result_bundle_preflight_command(layout: dict[str, str]) -> list[str]:
+    """构造现代 baseline 官方结果包完整性检查命令。
+
+    该阶段不生成分数, 只检查当前 run_root 中的 runtime comparison unit 是否都能在
+    `SSTW_EXTERNAL_BASELINE_OFFICIAL_RESULT_BUNDLE_ROOT(S)` 中找到官方结果, 或者当前
+    Colab 会话是否已经具备可直接运行的官方资源。它的作用是把严格门禁的 baseline
+    资源阻断前移到 comparison 前。
+    """
+    return [
+        sys.executable,
+        "-m",
+        "external_baseline.official_result_bundle",
+        "--run-root",
+        layout["drive_run_root"],
+        "--output-json",
+        str(Path(layout["drive_run_root"]) / EXTERNAL_BASELINE_OFFICIAL_RESULT_BUNDLE_PREFLIGHT_DECISION),
+    ]
 
 
 

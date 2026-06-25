@@ -388,11 +388,11 @@ runtime、baseline、internal ablation、replay/sketch 或 Claim-3 downgrade、C
 rebuild 和 `validation_scale_gate` 串联在同一个 Colab session 中。该 Notebook 不是旧的
 多 profile 综合入口, 不允许切换到 `pilot_paper` 或 `full_paper`。
 
-该入口默认启用 `SSTW_VALIDATION_SCALE_RUN_THROUGH_TEST=true`, 用于直接跑通 Colab 工程链路
-并落盘完整阻断原因。该模式只允许跳过 external baseline preflight 的 Notebook 前置中断,
+该入口默认使用 `SSTW_VALIDATION_SCALE_RUN_THROUGH_TEST=false`, 用于执行严格正式门禁。
+若显式设置为 `true`, 只用于跑通 Colab 工程链路并落盘完整阻断原因。该模式只允许跳过 external baseline preflight 的 Notebook 前置中断,
 不得伪造正式 external baseline score, 也不得把缺失官方 baseline 命令的结果解释为
 paper claim。严格正式门禁必须设置 `SSTW_VALIDATION_SCALE_RUN_THROUGH_TEST=false`, 并配置
-6 个真实官方 baseline command。
+6 个真实官方 baseline command 或覆盖全部 comparison unit 的官方结果包。
 
 其中:
 
@@ -400,7 +400,7 @@ paper claim。严格正式门禁必须设置 `SSTW_VALIDATION_SCALE_RUN_THROUGH_
 2. `generative_video_runtime_colab.ipynb` 负责 Wan2.1 生成、formal metrics、阈值复用、
    runtime attack 和 detection, 并在真实 GPU 生成前执行现代 baseline command 预检。
 3. `external_baseline_formal_scoring_colab.ipynb` 只负责外部 baseline source intake、
-   command adapter 运行和 comparison records, 不重新生成视频。
+   official result bundle preflight、command adapter 运行和 comparison records, 不重新生成视频。
 4. `paper_gate_and_package_colab.ipynb` 负责内部消融、adaptive attack proxy、replay/sketch
    或 Claim-3 downgrade、CI、fixed-FPR gate、artifact rebuild 和 Drive package。
 
@@ -1484,6 +1484,7 @@ source_registry
 | source inspection | `external_baseline_source_inspection.json` | 记录第三方 source 中的入口、依赖和许可证候选文件 | 不支持论文 claim |
 | clone results | `external_baseline_clone_results.json` | 记录 clone 计划、已执行 clone 或无法 clone 的原因 | 不支持论文 claim |
 | table plan | `plans/external_baseline_table_plan.json` | 固定 baseline 在主表或 control 表中的角色 | 不支持论文 claim |
+| official result bundle preflight | `artifacts/external_baseline_official_result_bundle_preflight_decision.json` | 检查官方结果包或可直接运行的官方资源是否覆盖当前 comparison unit | 不支持论文 claim, 但可作为严格门禁资源闭合证据 |
 | adapter score records | `records/external_baseline_score_records.jsonl` | 在同一 run_root 上写出 measured_proxy 或 measured_formal records | 仅 measured_formal 可进入正式对比候选 |
 | execution manifest | `artifacts/external_baseline_execution_manifest.json` | 记录 measured / formal 数量、evidence paths、source intake 路径和执行边界 | evidence paths 缺失时不能升级为正式主表 claim |
 
@@ -1501,6 +1502,13 @@ external_baseline_execution_manifest_status == present
 ```
 
 若现代视频水印 baseline 仍处于 `official_command_not_configured`、`manual_source_or_command_required` 或 `unsupported`, 则只能说明 baseline 接入尚未闭合, 不得进入 `pilot_paper` 结果运行。
+
+对于无法在当前 Colab 会话中直接复跑的官方方法, 允许使用
+`SSTW_EXTERNAL_BASELINE_OFFICIAL_RESULT_BUNDLE_ROOT` 指向 Google Drive 官方结果包。结果包
+路径必须按 `<baseline_id>`、`prompt_id` / `seed_id` / `attack_name` 或
+`trajectory_trace_id` 组织, 且每条 JSON 必须包含合法 score 字段和官方来源 provenance。
+该设计只解决“权重、checkpoint 或 maintained info 无法在冷启动会话中即时重建”的工程阻断,
+不允许把 SSTW 最终检测分数写成外部 baseline 分数。
 
 ## 24. Codex 构建执行手册
 

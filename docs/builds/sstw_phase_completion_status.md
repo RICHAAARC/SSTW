@@ -1646,3 +1646,39 @@ VideoSeal 官方依赖和 checkpoint, 或 SSTW_VIDEOSEAL_NATIVE_EVAL_COMMAND
 ```
 
 因此, 当前阶段可以表述为: 6 个现代 baseline 的 SSTW command adapter 和 repository official adapter 已经完成工程接入; 严格正式门禁仍必须通过 Colab 真实运行证明这些 adapter 能基于官方源码、权重或官方结果产物写出 `measured_formal` records。若缺少这些官方输入, validation-scale 会失败, 且该失败是正确的 fail-closed 行为。
+
+## 2026-06-25 官方结果包 preflight 与资源阻断前移
+
+为继续排除 Colab 冷启动中“缺官方权重、checkpoint、官方结果文件或官方原生命令”导致的晚期阻断, 当前工程新增官方结果包读取与完整性检查能力:
+
+```text
+external_baseline/official_result_bundle.py
+SSTW_EXTERNAL_BASELINE_OFFICIAL_RESULT_BUNDLE_ROOT
+SSTW_EXTERNAL_BASELINE_OFFICIAL_RESULT_BUNDLE_ROOTS
+artifacts/external_baseline_official_result_bundle_preflight_decision.json
+```
+
+新增结果包路径约定:
+
+```text
+<bundle_root>/<baseline_id>/records/<prompt_id>__<seed_id>__<attack_name>.json
+<bundle_root>/<baseline_id>/records/<trajectory_trace_id>__<attack_name>.json
+<bundle_root>/<baseline_id>/<prompt_id>/<seed_id>/<attack_name>.json
+<bundle_root>/<baseline_id>/<trajectory_trace_id>/<attack_name>.json
+```
+
+阶段性状态为:
+
+```text
+official_result_bundle_preflight: implemented
+official_result_bundle_reading_in_repository_adapters: implemented
+external_baseline_payload_path_fields: implemented
+validation_scale_formal_gate_bundle_stage: integrated
+google_drive_default_bundle_root: configured_by_notebook
+sstw_proxy_result_bundle: forbidden
+modern_external_baseline_measured_formal_results: still_requires_real_official_command_or_official_bundle
+```
+
+该更新没有降低严格门禁。其作用是把外部资源阻断提前暴露: 若某个 modern baseline 既没有可直接运行的官方资源, 也没有覆盖当前 runtime comparison unit 的官方结果包, `external_baseline_official_result_bundle_preflight_decision.json` 会明确失败。若结果包完整, repository official adapter 可以直接读取官方 JSON 并写入 `measured_formal` comparison records。
+
+重要边界: 官方结果包必须由第三方官方代码或官方原生命令生成, 不能由 SSTW `S_final`、最终判定分数、视频相似度或任意 proxy 分数派生。该能力解决的是 Colab 冷启动和高显存 baseline 的工程可复现问题, 不是允许手写 baseline 结果。

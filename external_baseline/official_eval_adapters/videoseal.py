@@ -12,7 +12,11 @@ from pathlib import Path
 import sys
 from typing import Any
 
-from external_baseline.official_eval_adapters.common import run_adapter_main, safe_float
+from external_baseline.official_eval_adapters.common import (
+    read_official_result_bundle_if_available,
+    run_adapter_main,
+    safe_float,
+)
 
 
 BASELINE_ID = "videoseal"
@@ -64,6 +68,14 @@ def _run_default(args: argparse.Namespace, source_dir: Path, output_json_path: P
     通用工程写法是优先读取已安装包, 其次把官方源码目录加入 `sys.path`。
     项目特定约束是: 分数来自 `model.detect(...)` 的官方输出, 不读取 SSTW 检测分数。
     """
+    bundled = read_official_result_bundle_if_available(
+        baseline_id=BASELINE_ID,
+        args=args,
+        source_dir=source_dir,
+        output_json_path=output_json_path,
+    )
+    if bundled is not None:
+        return bundled
     sys.path.insert(0, str(source_dir))
 
     import torch

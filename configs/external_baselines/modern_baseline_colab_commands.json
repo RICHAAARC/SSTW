@@ -24,6 +24,13 @@
         "description": "该命令在 bridge 内部调用第三方官方实现, 并把官方输出 JSON 写入 {official_output_json_path}。",
         "env_var": "SSTW_VIDEOSHIELD_OFFICIAL_EVAL_COMMAND",
         "fail_closed_policy": "缺少官方源码、官方权重、官方 key/message/maintained info 或官方输出时必须失败, 不允许输出 proxy 分数。",
+        "official_result_bundle_path_convention": [
+          "<bundle_root>/<baseline_id>/records/<prompt_id>__<seed_id>__<attack_name>.json",
+          "<bundle_root>/<baseline_id>/records/<trajectory_trace_id>__<attack_name>.json",
+          "<bundle_root>/<baseline_id>/<prompt_id>/<seed_id>/<attack_name>.json",
+          "<bundle_root>/<baseline_id>/<trajectory_trace_id>/<attack_name>.json"
+        ],
+        "official_result_bundle_supported": true,
         "repository_official_eval_adapter_module": "external_baseline.official_eval_adapters.videoshield",
         "repository_official_eval_command_template": "python -m external_baseline.official_eval_adapters.videoshield --official-source-dir /content/SSTW/external_baseline/primary/videoshield/source --source-video {source_video_path} --attacked-video {attacked_video_path} --attack-name {attack_name} --official-output-json {official_output_json_path} --run-root {run_root} --prompt-id {prompt_id} --seed-id {seed_id} --trajectory-trace-id {trajectory_trace_id}",
         "required_input_tokens": [
@@ -35,6 +42,13 @@
       },
       "official_repository_branch": "master",
       "official_repository_url": "https://github.com/hurunyi/VideoShield",
+      "official_result_bundle_path_convention": [
+        "<bundle_root>/<baseline_id>/records/<prompt_id>__<seed_id>__<attack_name>.json",
+        "<bundle_root>/<baseline_id>/records/<trajectory_trace_id>__<attack_name>.json",
+        "<bundle_root>/<baseline_id>/<prompt_id>/<seed_id>/<attack_name>.json",
+        "<bundle_root>/<baseline_id>/<trajectory_trace_id>/<attack_name>.json"
+      ],
+      "official_result_bundle_supported": true,
       "repository_official_eval_adapter_module": "external_baseline.official_eval_adapters.videoshield",
       "repository_official_eval_command_template": "python -m external_baseline.official_eval_adapters.videoshield --official-source-dir /content/SSTW/external_baseline/primary/videoshield/source --source-video {source_video_path} --attacked-video {attacked_video_path} --attack-name {attack_name} --official-output-json {official_output_json_path} --run-root {run_root} --prompt-id {prompt_id} --seed-id {seed_id} --trajectory-trace-id {trajectory_trace_id}",
       "repository_official_eval_command_template_status": "repository_official_wrapper_ready_fail_closed_requires_official_source_and_artifacts",
@@ -55,6 +69,11 @@
       "source_verification_status": "git_ls_remote_head_verified_2026_06_25",
       "sstw_eval_command_template": "python -m external_baseline.official_command_bridge --baseline-id videoshield --official-source-dir /content/SSTW/external_baseline/primary/videoshield/source --source-video {source_video_path} --attacked-video {attacked_video_path} --attack-name {attack_name} --output-json {output_json_path} --run-root {run_root} --prompt-id {prompt_id} --seed-id {seed_id} --trajectory-trace-id {trajectory_trace_id}",
       "sstw_eval_command_template_status": "repository_bridge_ready_requires_official_eval_command",
+      "strict_gate_resource_resolution_order": [
+        "SSTW_VIDEOSHIELD_NATIVE_EVAL_COMMAND",
+        "repository_official_eval_adapter_default_runtime_when_supported",
+        "SSTW_EXTERNAL_BASELINE_OFFICIAL_RESULT_BUNDLE_ROOT(S)"
+      ],
       "verified_head_commit": "a61efa73abb15d30f50ee535c3301cea7dec3075"
     },
     {
@@ -72,6 +91,13 @@
         "description": "该命令在 bridge 内部调用第三方官方实现, 并把官方输出 JSON 写入 {official_output_json_path}。",
         "env_var": "SSTW_SIGMARK_OFFICIAL_EVAL_COMMAND",
         "fail_closed_policy": "缺少官方源码、官方权重、官方 key/message/maintained info 或官方输出时必须失败, 不允许输出 proxy 分数。",
+        "official_result_bundle_path_convention": [
+          "<bundle_root>/<baseline_id>/records/<prompt_id>__<seed_id>__<attack_name>.json",
+          "<bundle_root>/<baseline_id>/records/<trajectory_trace_id>__<attack_name>.json",
+          "<bundle_root>/<baseline_id>/<prompt_id>/<seed_id>/<attack_name>.json",
+          "<bundle_root>/<baseline_id>/<trajectory_trace_id>/<attack_name>.json"
+        ],
+        "official_result_bundle_supported": true,
         "repository_official_eval_adapter_module": "external_baseline.official_eval_adapters.sigmark",
         "repository_official_eval_command_template": "python -m external_baseline.official_eval_adapters.sigmark --official-source-dir /content/SSTW/external_baseline/primary/sigmark/source --source-video {source_video_path} --attacked-video {attacked_video_path} --attack-name {attack_name} --official-output-json {official_output_json_path} --run-root {run_root} --prompt-id {prompt_id} --seed-id {seed_id} --trajectory-trace-id {trajectory_trace_id}",
         "required_input_tokens": [
@@ -83,6 +109,13 @@
       },
       "official_repository_branch": "main",
       "official_repository_url": "https://github.com/JeremyZhao1998/SIGMark-release",
+      "official_result_bundle_path_convention": [
+        "<bundle_root>/<baseline_id>/records/<prompt_id>__<seed_id>__<attack_name>.json",
+        "<bundle_root>/<baseline_id>/records/<trajectory_trace_id>__<attack_name>.json",
+        "<bundle_root>/<baseline_id>/<prompt_id>/<seed_id>/<attack_name>.json",
+        "<bundle_root>/<baseline_id>/<trajectory_trace_id>/<attack_name>.json"
+      ],
+      "official_result_bundle_supported": true,
       "repository_official_eval_adapter_module": "external_baseline.official_eval_adapters.sigmark",
       "repository_official_eval_command_template": "python -m external_baseline.official_eval_adapters.sigmark --official-source-dir /content/SSTW/external_baseline/primary/sigmark/source --source-video {source_video_path} --attacked-video {attacked_video_path} --attack-name {attack_name} --official-output-json {official_output_json_path} --run-root {run_root} --prompt-id {prompt_id} --seed-id {seed_id} --trajectory-trace-id {trajectory_trace_id}",
       "repository_official_eval_command_template_status": "repository_official_wrapper_ready_fail_closed_requires_official_source_and_artifacts",
@@ -103,6 +136,11 @@
       "source_verification_status": "git_ls_remote_head_verified_2026_06_25",
       "sstw_eval_command_template": "python -m external_baseline.official_command_bridge --baseline-id sigmark --official-source-dir /content/SSTW/external_baseline/primary/sigmark/source --source-video {source_video_path} --attacked-video {attacked_video_path} --attack-name {attack_name} --output-json {output_json_path} --run-root {run_root} --prompt-id {prompt_id} --seed-id {seed_id} --trajectory-trace-id {trajectory_trace_id}",
       "sstw_eval_command_template_status": "repository_bridge_ready_requires_official_eval_command",
+      "strict_gate_resource_resolution_order": [
+        "SSTW_SIGMARK_NATIVE_EVAL_COMMAND",
+        "repository_official_eval_adapter_default_runtime_when_supported",
+        "SSTW_EXTERNAL_BASELINE_OFFICIAL_RESULT_BUNDLE_ROOT(S)"
+      ],
       "verified_head_commit": "3713243f2e002cb21bbc3da896094d39b2b528c9"
     },
     {
@@ -120,6 +158,13 @@
         "description": "该命令在 bridge 内部调用第三方官方实现, 并把官方输出 JSON 写入 {official_output_json_path}。",
         "env_var": "SSTW_SPDMARK_OFFICIAL_EVAL_COMMAND",
         "fail_closed_policy": "缺少官方源码、官方权重、官方 key/message/maintained info 或官方输出时必须失败, 不允许输出 proxy 分数。",
+        "official_result_bundle_path_convention": [
+          "<bundle_root>/<baseline_id>/records/<prompt_id>__<seed_id>__<attack_name>.json",
+          "<bundle_root>/<baseline_id>/records/<trajectory_trace_id>__<attack_name>.json",
+          "<bundle_root>/<baseline_id>/<prompt_id>/<seed_id>/<attack_name>.json",
+          "<bundle_root>/<baseline_id>/<trajectory_trace_id>/<attack_name>.json"
+        ],
+        "official_result_bundle_supported": true,
         "repository_official_eval_adapter_module": "external_baseline.official_eval_adapters.spdmark",
         "repository_official_eval_command_template": "python -m external_baseline.official_eval_adapters.spdmark --official-source-dir /content/SSTW/external_baseline/primary/spdmark/source --source-video {source_video_path} --attacked-video {attacked_video_path} --attack-name {attack_name} --official-output-json {official_output_json_path} --run-root {run_root} --prompt-id {prompt_id} --seed-id {seed_id} --trajectory-trace-id {trajectory_trace_id}",
         "required_input_tokens": [
@@ -131,6 +176,13 @@
       },
       "official_repository_branch": "main",
       "official_repository_url": "https://github.com/Samar-Fares/SPDMark",
+      "official_result_bundle_path_convention": [
+        "<bundle_root>/<baseline_id>/records/<prompt_id>__<seed_id>__<attack_name>.json",
+        "<bundle_root>/<baseline_id>/records/<trajectory_trace_id>__<attack_name>.json",
+        "<bundle_root>/<baseline_id>/<prompt_id>/<seed_id>/<attack_name>.json",
+        "<bundle_root>/<baseline_id>/<trajectory_trace_id>/<attack_name>.json"
+      ],
+      "official_result_bundle_supported": true,
       "repository_official_eval_adapter_module": "external_baseline.official_eval_adapters.spdmark",
       "repository_official_eval_command_template": "python -m external_baseline.official_eval_adapters.spdmark --official-source-dir /content/SSTW/external_baseline/primary/spdmark/source --source-video {source_video_path} --attacked-video {attacked_video_path} --attack-name {attack_name} --official-output-json {official_output_json_path} --run-root {run_root} --prompt-id {prompt_id} --seed-id {seed_id} --trajectory-trace-id {trajectory_trace_id}",
       "repository_official_eval_command_template_status": "repository_official_wrapper_ready_fail_closed_requires_official_source_and_artifacts",
@@ -151,6 +203,11 @@
       "source_verification_status": "git_ls_remote_head_verified_2026_06_25",
       "sstw_eval_command_template": "python -m external_baseline.official_command_bridge --baseline-id spdmark --official-source-dir /content/SSTW/external_baseline/primary/spdmark/source --source-video {source_video_path} --attacked-video {attacked_video_path} --attack-name {attack_name} --output-json {output_json_path} --run-root {run_root} --prompt-id {prompt_id} --seed-id {seed_id} --trajectory-trace-id {trajectory_trace_id}",
       "sstw_eval_command_template_status": "repository_bridge_ready_requires_official_eval_command",
+      "strict_gate_resource_resolution_order": [
+        "SSTW_SPDMARK_NATIVE_EVAL_COMMAND",
+        "repository_official_eval_adapter_default_runtime_when_supported",
+        "SSTW_EXTERNAL_BASELINE_OFFICIAL_RESULT_BUNDLE_ROOT(S)"
+      ],
       "verified_head_commit": "4d9a894384a8585734b493301fe9d1a4d6abd07c"
     },
     {
@@ -168,6 +225,13 @@
         "description": "该命令在 bridge 内部调用第三方官方实现, 并把官方输出 JSON 写入 {official_output_json_path}。",
         "env_var": "SSTW_VIDEOMARK_OFFICIAL_EVAL_COMMAND",
         "fail_closed_policy": "缺少官方源码、官方权重、官方 key/message/maintained info 或官方输出时必须失败, 不允许输出 proxy 分数。",
+        "official_result_bundle_path_convention": [
+          "<bundle_root>/<baseline_id>/records/<prompt_id>__<seed_id>__<attack_name>.json",
+          "<bundle_root>/<baseline_id>/records/<trajectory_trace_id>__<attack_name>.json",
+          "<bundle_root>/<baseline_id>/<prompt_id>/<seed_id>/<attack_name>.json",
+          "<bundle_root>/<baseline_id>/<trajectory_trace_id>/<attack_name>.json"
+        ],
+        "official_result_bundle_supported": true,
         "repository_official_eval_adapter_module": "external_baseline.official_eval_adapters.videomark",
         "repository_official_eval_command_template": "python -m external_baseline.official_eval_adapters.videomark --official-source-dir /content/SSTW/external_baseline/primary/videomark/source --source-video {source_video_path} --attacked-video {attacked_video_path} --attack-name {attack_name} --official-output-json {official_output_json_path} --run-root {run_root} --prompt-id {prompt_id} --seed-id {seed_id} --trajectory-trace-id {trajectory_trace_id}",
         "required_input_tokens": [
@@ -179,6 +243,13 @@
       },
       "official_repository_branch": "main",
       "official_repository_url": "https://github.com/KYRIE-LI11/VideoMark",
+      "official_result_bundle_path_convention": [
+        "<bundle_root>/<baseline_id>/records/<prompt_id>__<seed_id>__<attack_name>.json",
+        "<bundle_root>/<baseline_id>/records/<trajectory_trace_id>__<attack_name>.json",
+        "<bundle_root>/<baseline_id>/<prompt_id>/<seed_id>/<attack_name>.json",
+        "<bundle_root>/<baseline_id>/<trajectory_trace_id>/<attack_name>.json"
+      ],
+      "official_result_bundle_supported": true,
       "repository_official_eval_adapter_module": "external_baseline.official_eval_adapters.videomark",
       "repository_official_eval_command_template": "python -m external_baseline.official_eval_adapters.videomark --official-source-dir /content/SSTW/external_baseline/primary/videomark/source --source-video {source_video_path} --attacked-video {attacked_video_path} --attack-name {attack_name} --official-output-json {official_output_json_path} --run-root {run_root} --prompt-id {prompt_id} --seed-id {seed_id} --trajectory-trace-id {trajectory_trace_id}",
       "repository_official_eval_command_template_status": "repository_official_wrapper_ready_fail_closed_requires_official_source_and_artifacts",
@@ -199,6 +270,11 @@
       "source_verification_status": "git_ls_remote_head_verified_2026_06_25",
       "sstw_eval_command_template": "python -m external_baseline.official_command_bridge --baseline-id videomark --official-source-dir /content/SSTW/external_baseline/primary/videomark/source --source-video {source_video_path} --attacked-video {attacked_video_path} --attack-name {attack_name} --output-json {output_json_path} --run-root {run_root} --prompt-id {prompt_id} --seed-id {seed_id} --trajectory-trace-id {trajectory_trace_id}",
       "sstw_eval_command_template_status": "repository_bridge_ready_requires_official_eval_command",
+      "strict_gate_resource_resolution_order": [
+        "SSTW_VIDEOMARK_NATIVE_EVAL_COMMAND",
+        "repository_official_eval_adapter_default_runtime_when_supported",
+        "SSTW_EXTERNAL_BASELINE_OFFICIAL_RESULT_BUNDLE_ROOT(S)"
+      ],
       "verified_head_commit": "9f8d78b73ab9f9f055651b1b4f37d68bdb05e7be"
     },
     {
@@ -216,6 +292,13 @@
         "description": "该命令在 bridge 内部调用第三方官方实现, 并把官方输出 JSON 写入 {official_output_json_path}。",
         "env_var": "SSTW_VIDSIG_OFFICIAL_EVAL_COMMAND",
         "fail_closed_policy": "缺少官方源码、官方权重、官方 key/message/maintained info 或官方输出时必须失败, 不允许输出 proxy 分数。",
+        "official_result_bundle_path_convention": [
+          "<bundle_root>/<baseline_id>/records/<prompt_id>__<seed_id>__<attack_name>.json",
+          "<bundle_root>/<baseline_id>/records/<trajectory_trace_id>__<attack_name>.json",
+          "<bundle_root>/<baseline_id>/<prompt_id>/<seed_id>/<attack_name>.json",
+          "<bundle_root>/<baseline_id>/<trajectory_trace_id>/<attack_name>.json"
+        ],
+        "official_result_bundle_supported": true,
         "repository_official_eval_adapter_module": "external_baseline.official_eval_adapters.vidsig",
         "repository_official_eval_command_template": "python -m external_baseline.official_eval_adapters.vidsig --official-source-dir /content/SSTW/external_baseline/primary/vidsig/source --source-video {source_video_path} --attacked-video {attacked_video_path} --attack-name {attack_name} --official-output-json {official_output_json_path} --run-root {run_root} --prompt-id {prompt_id} --seed-id {seed_id} --trajectory-trace-id {trajectory_trace_id}",
         "required_input_tokens": [
@@ -227,6 +310,13 @@
       },
       "official_repository_branch": "main",
       "official_repository_url": "https://github.com/hardenyu21/Video-Signature",
+      "official_result_bundle_path_convention": [
+        "<bundle_root>/<baseline_id>/records/<prompt_id>__<seed_id>__<attack_name>.json",
+        "<bundle_root>/<baseline_id>/records/<trajectory_trace_id>__<attack_name>.json",
+        "<bundle_root>/<baseline_id>/<prompt_id>/<seed_id>/<attack_name>.json",
+        "<bundle_root>/<baseline_id>/<trajectory_trace_id>/<attack_name>.json"
+      ],
+      "official_result_bundle_supported": true,
       "repository_official_eval_adapter_module": "external_baseline.official_eval_adapters.vidsig",
       "repository_official_eval_command_template": "python -m external_baseline.official_eval_adapters.vidsig --official-source-dir /content/SSTW/external_baseline/primary/vidsig/source --source-video {source_video_path} --attacked-video {attacked_video_path} --attack-name {attack_name} --official-output-json {official_output_json_path} --run-root {run_root} --prompt-id {prompt_id} --seed-id {seed_id} --trajectory-trace-id {trajectory_trace_id}",
       "repository_official_eval_command_template_status": "repository_official_wrapper_ready_fail_closed_requires_official_source_and_artifacts",
@@ -247,6 +337,11 @@
       "source_verification_status": "git_ls_remote_head_verified_2026_06_25",
       "sstw_eval_command_template": "python -m external_baseline.official_command_bridge --baseline-id vidsig --official-source-dir /content/SSTW/external_baseline/primary/vidsig/source --source-video {source_video_path} --attacked-video {attacked_video_path} --attack-name {attack_name} --output-json {output_json_path} --run-root {run_root} --prompt-id {prompt_id} --seed-id {seed_id} --trajectory-trace-id {trajectory_trace_id}",
       "sstw_eval_command_template_status": "repository_bridge_ready_requires_official_eval_command",
+      "strict_gate_resource_resolution_order": [
+        "SSTW_VIDSIG_NATIVE_EVAL_COMMAND",
+        "repository_official_eval_adapter_default_runtime_when_supported",
+        "SSTW_EXTERNAL_BASELINE_OFFICIAL_RESULT_BUNDLE_ROOT(S)"
+      ],
       "verified_head_commit": "9d219c47670c30fdaaccd17b24e7783c976a8c66"
     },
     {
@@ -264,6 +359,13 @@
         "description": "该命令在 bridge 内部调用第三方官方实现, 并把官方输出 JSON 写入 {official_output_json_path}。",
         "env_var": "SSTW_VIDEOSEAL_OFFICIAL_EVAL_COMMAND",
         "fail_closed_policy": "缺少官方源码、官方权重、官方 key/message/maintained info 或官方输出时必须失败, 不允许输出 proxy 分数。",
+        "official_result_bundle_path_convention": [
+          "<bundle_root>/<baseline_id>/records/<prompt_id>__<seed_id>__<attack_name>.json",
+          "<bundle_root>/<baseline_id>/records/<trajectory_trace_id>__<attack_name>.json",
+          "<bundle_root>/<baseline_id>/<prompt_id>/<seed_id>/<attack_name>.json",
+          "<bundle_root>/<baseline_id>/<trajectory_trace_id>/<attack_name>.json"
+        ],
+        "official_result_bundle_supported": true,
         "repository_official_eval_adapter_module": "external_baseline.official_eval_adapters.videoseal",
         "repository_official_eval_command_template": "python -m external_baseline.official_eval_adapters.videoseal --official-source-dir /content/SSTW/external_baseline/primary/videoseal/source --source-video {source_video_path} --attacked-video {attacked_video_path} --attack-name {attack_name} --official-output-json {official_output_json_path} --run-root {run_root} --prompt-id {prompt_id} --seed-id {seed_id} --trajectory-trace-id {trajectory_trace_id}",
         "required_input_tokens": [
@@ -275,6 +377,13 @@
       },
       "official_repository_branch": "main",
       "official_repository_url": "https://github.com/facebookresearch/videoseal",
+      "official_result_bundle_path_convention": [
+        "<bundle_root>/<baseline_id>/records/<prompt_id>__<seed_id>__<attack_name>.json",
+        "<bundle_root>/<baseline_id>/records/<trajectory_trace_id>__<attack_name>.json",
+        "<bundle_root>/<baseline_id>/<prompt_id>/<seed_id>/<attack_name>.json",
+        "<bundle_root>/<baseline_id>/<trajectory_trace_id>/<attack_name>.json"
+      ],
+      "official_result_bundle_supported": true,
       "repository_official_eval_adapter_module": "external_baseline.official_eval_adapters.videoseal",
       "repository_official_eval_command_template": "python -m external_baseline.official_eval_adapters.videoseal --official-source-dir /content/SSTW/external_baseline/primary/videoseal/source --source-video {source_video_path} --attacked-video {attacked_video_path} --attack-name {attack_name} --official-output-json {official_output_json_path} --run-root {run_root} --prompt-id {prompt_id} --seed-id {seed_id} --trajectory-trace-id {trajectory_trace_id}",
       "repository_official_eval_command_template_status": "repository_official_wrapper_ready_fail_closed_requires_official_source_and_artifacts",
@@ -295,6 +404,11 @@
       "source_verification_status": "git_ls_remote_head_verified_2026_06_25",
       "sstw_eval_command_template": "python -m external_baseline.official_command_bridge --baseline-id videoseal --official-source-dir /content/SSTW/external_baseline/primary/videoseal/source --source-video {source_video_path} --attacked-video {attacked_video_path} --attack-name {attack_name} --output-json {output_json_path} --run-root {run_root} --prompt-id {prompt_id} --seed-id {seed_id} --trajectory-trace-id {trajectory_trace_id}",
       "sstw_eval_command_template_status": "repository_bridge_ready_requires_official_eval_command",
+      "strict_gate_resource_resolution_order": [
+        "SSTW_VIDEOSEAL_NATIVE_EVAL_COMMAND",
+        "repository_official_eval_adapter_default_runtime_when_supported",
+        "SSTW_EXTERNAL_BASELINE_OFFICIAL_RESULT_BUNDLE_ROOT(S)"
+      ],
       "verified_head_commit": "e00b98c7ca77eb1fb5b9b68260e7c6c8fc207a84"
     }
   ],
@@ -311,8 +425,22 @@
     "template_file_auto_applied": "optional_when_SSTW_USE_MODERN_BASELINE_BRIDGE_COMMANDS_true"
   },
   "config_kind": "modern_external_baseline_colab_command_config",
-  "config_version": "verified_sources_with_repository_official_eval_adapters_2026_06_25_v2",
-  "formal_result_policy": "fail_closed; bridge command templates are repository-owned wrappers, and SSTW_<BASELINE>_OFFICIAL_EVAL_COMMAND may point to repository official_eval_adapters only when those wrappers call official source/API or read official result artifacts; missing official artifacts must fail rather than produce proxy scores",
+  "config_version": "verified_sources_with_repository_official_eval_adapters_and_result_bundle_2026_06_25_v3",
+  "formal_result_policy": "fail_closed; bridge command templates are repository-owned wrappers; measured_formal results may come from a native official command, a repository official adapter that calls official source/API, or a Google Drive official result bundle generated by third-party official code; missing or proxy official artifacts must fail rather than produce proxy scores",
+  "official_result_bundle_policy": {
+    "claim_boundary": "结果包只能作为 measured_formal 输入; 不能手写分数, 不能从 SSTW S_final 或最终判定分数派生。",
+    "env_var": "SSTW_EXTERNAL_BASELINE_OFFICIAL_RESULT_BUNDLE_ROOT",
+    "multi_root_env_var": "SSTW_EXTERNAL_BASELINE_OFFICIAL_RESULT_BUNDLE_ROOTS",
+    "path_conventions": [
+      "<bundle_root>/<baseline_id>/records/<prompt_id>__<seed_id>__<attack_name>.json",
+      "<bundle_root>/<baseline_id>/records/<trajectory_trace_id>__<attack_name>.json",
+      "<bundle_root>/<baseline_id>/<prompt_id>/<seed_id>/<attack_name>.json",
+      "<bundle_root>/<baseline_id>/<trajectory_trace_id>/<attack_name>.json"
+    ],
+    "purpose": "用于接收由第三方官方代码在独立会话或高显存机器上生成的 baseline 结果, 避免 Colab 冷启动丢失权重或中间产物。",
+    "required_payload_rule": "每个 JSON 必须包含 external_baseline_score / score / bit_accuracy / confidence / detected 之一, 且 official_result_provenance 不能为 sstw_proxy。",
+    "status": "supported_for_strict_gate_resource_closure"
+  },
   "optional_command_format_tokens": [
     "run_root",
     "prompt_id",

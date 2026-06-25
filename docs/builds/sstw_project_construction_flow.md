@@ -2107,6 +2107,7 @@ paper_workflow/notebook_utils/generative_video_model_probe_workflow.py::validate
 ```text
 artifacts/external_baseline_colab_preflight_decision.json
 artifacts/external_baseline_command_template_summary.json
+artifacts/external_baseline_official_bridge_preflight_decision.json
 ```
 
 其中 `external_baseline_colab_preflight_decision.json` 只记录 Colab 冷启动 preflight 状态, 不运行第三方 baseline, 不支持论文 claim。它的作用是让用户在 Google Drive 中直接看到缺少哪些现代 baseline command, 避免 Colab 断开后无法定位失败原因。
@@ -2131,6 +2132,53 @@ external_baseline_score_records.metric_status == measured_formal
 ```
 
 这一区分是项目特定约束, 用于防止把“已联网找到 baseline 仓库”误解释为“baseline comparison 已经完成”。
+
+### 35.6 repository bridge command 规则
+
+为了减少 Colab 中为 6 个现代 baseline 重复编写 SSTW 外层 I/O wrapper 的成本, 项目提供统一 bridge:
+
+```text
+external_baseline/official_command_bridge.py
+```
+
+bridge 的职责是:
+
+```text
+读取 source_video_path / attacked_video_path / attack_name
+调用用户配置的官方 baseline 命令
+读取官方输出 JSON
+归一化为 SSTW command adapter 接受的 output_json_path
+```
+
+bridge 不是第三方 baseline 算法本体。它不能自行计算视频相似度、不能读取 SSTW `S_final`,
+也不能在缺少官方命令时输出替代分数。正式运行时必须为每个 baseline 提供内部官方命令:
+
+```text
+SSTW_VIDEOSHIELD_OFFICIAL_EVAL_COMMAND
+SSTW_SIGMARK_OFFICIAL_EVAL_COMMAND
+SSTW_SPDMARK_OFFICIAL_EVAL_COMMAND
+SSTW_VIDEOMARK_OFFICIAL_EVAL_COMMAND
+SSTW_VIDSIG_OFFICIAL_EVAL_COMMAND
+SSTW_VIDEOSEAL_OFFICIAL_EVAL_COMMAND
+```
+
+内部官方命令必须把官方输出写入:
+
+```text
+{official_output_json_path}
+```
+
+bridge 再把该输出归一化写入:
+
+```text
+{output_json_path}
+```
+
+Notebook 默认可通过 `SSTW_USE_MODERN_BASELINE_BRIDGE_COMMANDS=true` 使用 repository bridge
+外层命令。若使用 bridge, `external_baseline_official_bridge_preflight_decision.json` 必须在
+真实生成前检查 6 个 `SSTW_<BASELINE>_OFFICIAL_EVAL_COMMAND` 是否齐全。若用户希望完全自定义
+外层命令, 可以设置 `SSTW_USE_MODERN_BASELINE_BRIDGE_COMMANDS=0`, 但此时仍必须保证
+`SSTW_<BASELINE>_EVAL_COMMAND` 直接写出合规 score JSON。
 
 `external_baseline_execution_manifest.json` 必须记录:
 

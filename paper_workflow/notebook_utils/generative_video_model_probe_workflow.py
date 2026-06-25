@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path, PurePosixPath
 import subprocess
 import sys
@@ -20,6 +21,7 @@ DEFAULT_NOTEBOOK_ROLE = "generative_video_runtime"
 PAPER_GATE_PROFILES = {"validation_scale", "pilot_paper"}
 EXTERNAL_BASELINE_COLAB_PREFLIGHT_DECISION = "artifacts/external_baseline_colab_preflight_decision.json"
 EXTERNAL_BASELINE_COMMAND_TEMPLATE_SUMMARY = "artifacts/external_baseline_command_template_summary.json"
+EXTERNAL_BASELINE_OFFICIAL_BRIDGE_PREFLIGHT_DECISION = "artifacts/external_baseline_official_bridge_preflight_decision.json"
 
 
 def _join_drive_path(root: PurePosixPath, relative_path: str) -> str:
@@ -278,6 +280,16 @@ def external_baseline_command_env_var_for(baseline_id: str) -> str:
     return f"SSTW_{baseline_id.upper()}_EVAL_COMMAND"
 
 
+def external_baseline_official_command_env_var_for(baseline_id: str) -> str:
+    """由 baseline_id 推导 bridge 内部官方原生命令环境变量名。
+
+    外层 `SSTW_<BASELINE>_EVAL_COMMAND` 负责满足 SSTW 统一 I/O 契约。
+    内层 `SSTW_<BASELINE>_OFFICIAL_EVAL_COMMAND` 负责真正调用第三方官方实现。
+    两层分离可以避免把 wrapper 壳层误判为已经完成正式 baseline 运行。
+    """
+    return f"SSTW_{baseline_id.upper()}_OFFICIAL_EVAL_COMMAND"
+
+
 def required_modern_external_baseline_command_requirements(
     profile: str,
     config_path: str | Path | None = None,
@@ -298,6 +310,7 @@ def required_modern_external_baseline_command_requirements(
         {
             "baseline_id": baseline_id,
             "external_baseline_command_env_var": external_baseline_command_env_var_for(baseline_id),
+            "official_baseline_command_env_var": external_baseline_official_command_env_var_for(baseline_id),
         }
         for baseline_id in baseline_ids
     ]
@@ -367,6 +380,7 @@ def build_modern_baseline_colab_command_config_summary(
             "verified_head_commit": row.get("verified_head_commit"),
             "source_verification_status": row.get("source_verification_status"),
             "colab_source_dir": row.get("colab_source_dir"),
+            "official_baseline_command_env_var": row.get("official_baseline_command_env_var") or external_baseline_official_command_env_var_for(baseline_id),
             "source_clone_command": row.get("source_clone_command"),
             "official_entrypoint_candidates": row.get("official_entrypoint_candidates", []),
             "sstw_eval_command_template_status": row.get("sstw_eval_command_template_status"),
@@ -425,6 +439,129 @@ def write_modern_baseline_colab_command_config_summary(
     )
     _write_json(Path(layout["drive_run_root"]) / EXTERNAL_BASELINE_COMMAND_TEMPLATE_SUMMARY, summary)
     return summary
+
+
+def build_modern_baseline_official_bridge_command_templates(
+    profile: str,
+    *,
+    protocol_config_path: str | Path | None = None,
+    command_config_path: str | Path = DEFAULT_MODERN_BASELINE_COLAB_COMMAND_CONFIG,
+) -> dict[str, str]:
+    """从配置文件构造 SSTW 外层 bridge command 模板。
+
+    返回值的 key 使用 baseline_id, 可以直接传入 `build_modern_baseline_command_env`。
+    该函数只构造外层 bridge 命令; 真正的官方命令仍必须通过
+    `SSTW_<BASELINE>_OFFICIAL_EVAL_COMMAND` 提供。
+    """
+    rows = _modern_baseline_command_config_rows(command_config_path)
+    templates: dict[str, str] = {}
+    for requirement in required_modern_external_baseline_command_requirements(profile, protocol_config_path):
+        baseline_id = requirement["baseline_id"]
+        template = str(rows.get(baseline_id, {}).get("sstw_eval_command_template") or "").strip()
+        if template:
+            templates[baseline_id] = template
+    return templates
+
+
+def build_modern_baseline_official_bridge_preflight_decision(
+    layout: Mapping[str, str],
+    *,
+    profile: str,
+    command_env: Mapping[str, str] | None = None,
+    use_bridge_commands: bool,
+    require_bridge_official_commands: bool,
+    protocol_config_path: str | Path | None = None,
+    command_config_path: str | Path = DEFAULT_MODERN_BASELINE_COLAB_COMMAND_CONFIG,
+) -> dict[str, object]:
+    """构造官方 bridge 命令预检决策。
+
+    该预检不运行第三方 baseline, 只确认如果 Notebook 使用 bridge 外层命令,
+    对应的官方原生命令是否已经配置。这样可以避免只配置了 bridge 壳层却在
+    external baseline comparison 阶段才发现没有真正官方命令。
+    """
+    requirements = required_modern_external_baseline_command_requirements(profile, protocol_config_path)
+    env_source = dict(os.environ)
+    if command_env:
+        env_source.update({str(key): str(value) for key, value in command_env.items()})
+    rows = _modern_baseline_command_config_rows(command_config_path)
+    required_env_vars = [item["official_baseline_command_env_var"] for item in requirements]
+    configured_env_vars = [env_var for env_var in required_env_vars if str(env_source.get(env_var) or "").strip()]
+    missing_env_vars = [env_var for env_var in required_env_vars if env_var not in configured_env_vars]
+    try:
+        paper_gate_profile = workflow_profile_is_paper_gate(profile)
+    except Exception:
+        paper_gate_profile = profile in PAPER_GATE_PROFILES
+    hard_required = paper_gate_profile and use_bridge_commands and require_bridge_official_commands
+    decision = "FAIL" if hard_required and missing_env_vars else "PASS"
+    if not use_bridge_commands:
+        status = "bridge_commands_disabled_direct_eval_commands_expected"
+    elif not paper_gate_profile:
+        status = "not_required_for_profile"
+    elif not require_bridge_official_commands:
+        status = "requirement_disabled"
+    elif missing_env_vars:
+        status = "official_bridge_commands_missing_for_paper_gate"
+    else:
+        status = "official_bridge_commands_configured_for_paper_gate"
+    return {
+        "artifact_name": "external_baseline_official_bridge_preflight_decision.json",
+        "manifest_kind": "external_baseline_official_bridge_preflight",
+        "profile": profile,
+        "run_root": layout["drive_run_root"],
+        "use_modern_baseline_bridge_commands": bool(use_bridge_commands),
+        "require_bridge_official_commands": bool(require_bridge_official_commands),
+        "external_baseline_official_bridge_preflight_decision": decision,
+        "external_baseline_official_bridge_preflight_status": status,
+        "paper_gate_profile": paper_gate_profile,
+        "required_modern_external_baseline_adapter_names": [item["baseline_id"] for item in requirements],
+        "official_bridge_required_env_vars": required_env_vars,
+        "official_bridge_configured_env_vars": configured_env_vars,
+        "official_bridge_missing_env_vars": missing_env_vars,
+        "official_bridge_required_env_var_count": len(required_env_vars),
+        "official_bridge_configured_env_var_count": len(configured_env_vars),
+        "official_bridge_missing_env_var_count": len(missing_env_vars),
+        "official_bridge_source_dirs": {
+            item["baseline_id"]: str(rows.get(item["baseline_id"], {}).get("colab_source_dir") or "")
+            for item in requirements
+        },
+        "official_bridge_source_dir_check_status": "deferred_to_external_baseline_source_intake",
+        "claim_support_status": "external_baseline_official_bridge_preflight_only_not_claim_evidence",
+    }
+
+
+def write_modern_baseline_official_bridge_preflight_decision(
+    layout: Mapping[str, str],
+    *,
+    profile: str,
+    command_env: Mapping[str, str] | None = None,
+    use_bridge_commands: bool,
+    require_bridge_official_commands: bool,
+    protocol_config_path: str | Path | None = None,
+    command_config_path: str | Path = DEFAULT_MODERN_BASELINE_COLAB_COMMAND_CONFIG,
+) -> dict[str, object]:
+    """写出官方 bridge 命令预检 artifact。"""
+    decision = build_modern_baseline_official_bridge_preflight_decision(
+        layout,
+        profile=profile,
+        command_env=command_env,
+        use_bridge_commands=use_bridge_commands,
+        require_bridge_official_commands=require_bridge_official_commands,
+        protocol_config_path=protocol_config_path,
+        command_config_path=command_config_path,
+    )
+    _write_json(Path(layout["drive_run_root"]) / EXTERNAL_BASELINE_OFFICIAL_BRIDGE_PREFLIGHT_DECISION, decision)
+    return decision
+
+
+def validate_modern_baseline_official_bridge_for_profile(preflight_decision: Mapping[str, object]) -> None:
+    """在 bridge 模式缺少官方原生命令时提前阻断。"""
+    if preflight_decision.get("external_baseline_official_bridge_preflight_decision") == "FAIL":
+        missing = preflight_decision.get("official_bridge_missing_env_vars")
+        raise RuntimeError(
+            "当前启用了现代视频水印 baseline bridge command, 但 bridge 内部缺少真正调用官方实现的命令。"
+            f" 缺失: {missing}。请配置 SSTW_<BASELINE>_OFFICIAL_EVAL_COMMAND, "
+            "其输出必须写入 {official_output_json_path}。"
+        )
 
 
 def build_modern_baseline_command_env(

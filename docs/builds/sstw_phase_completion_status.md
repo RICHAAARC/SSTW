@@ -1560,3 +1560,44 @@ validation_scale_missing_modern_command_preflight: still_hard_block
 该更新解决的问题是: Colab 冷启动失败时, 用户不仅能看到缺少哪些 `SSTW_<BASELINE>_EVAL_COMMAND`, 还能在 Google Drive 中看到每个 baseline 的官方源码位置、clone 目标、官方入口候选脚本和 SSTW wrapper command 模板。
 
 该更新没有绕过 validation-scale 门禁。只有当用户在 Colab 中安装或克隆官方实现、准备权重、编写真实 wrapper, 并显式设置 6 个 `SSTW_<BASELINE>_EVAL_COMMAND` 后, 现代 baseline 才能产出 `measured_formal` records。仅存在 URL、clone plan 或 command 模板不能支撑 baseline comparison claim。
+
+## 2026-06-25 现代 baseline repository bridge command 接入
+
+为推进 `validation_scale` 正式门禁跑通, 当前工程新增统一官方命令桥接器:
+
+```text
+external_baseline/official_command_bridge.py
+```
+
+该桥接器解决的问题是: 6 个现代视频水印 baseline 的官方仓库入口不同, 但 SSTW 需要统一的
+`source_video_path / attacked_video_path / attack_name / output_json_path` command adapter 契约。
+
+新的运行边界为:
+
+```text
+SSTW_<BASELINE>_EVAL_COMMAND:
+  repository bridge 外层命令, 由 Notebook 可自动从配置生成
+
+SSTW_<BASELINE>_OFFICIAL_EVAL_COMMAND:
+  用户配置的真实官方 baseline 命令, 必须调用官方代码或权重
+  并写出 {official_output_json_path}
+```
+
+新增 preflight artifact:
+
+```text
+artifacts/external_baseline_official_bridge_preflight_decision.json
+```
+
+阶段性状态为:
+
+```text
+modern_external_baseline_bridge_outer_command: implemented
+modern_external_baseline_official_inner_command_contract: implemented
+bridge_preflight_hard_blocker: implemented
+fake_score_or_sstw_score_fallback: forbidden
+validation_scale_formal_gate_path: runnable_after_official_inner_commands_configured
+modern_external_baseline_measured_formal_results: still_pending_real_colab_official_commands
+```
+
+该状态表示 validation-scale 的工程阻断已经从“缺 SSTW 外层 wrapper”收敛为“需要用户在 Colab 中为 6 个官方 baseline 配置真实官方命令和权重”。如果这些内部官方命令输出 score JSON, `external_baseline_runner` 会把结果转换为 `measured_formal` records, 并由 `external_baseline_execution_manifest.json` 绑定证据路径。

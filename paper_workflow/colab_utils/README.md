@@ -97,6 +97,9 @@ SSTW_WORKFLOW_PROFILE_VALUE = 'validation_scale'
 
 该 Notebook 是 validation-scale 与 pilot-paper 两个阶段共用的真实生成入口。切换到 pilot-paper 时只改 profile, 不改运行逻辑。
 
+现代 baseline 使用 bridge 模式时, workflow 默认会把 `SSTW_RUN_EXTERNAL_BASELINE_SOURCE_CLONE`
+视为 `true`, 以适配 Colab 冷启动环境。若已经手动挂载或克隆官方源码, 可以显式设置为 `"false"`。
+
 ### 3.3 外部 baseline 正式评分
 
 Notebook:
@@ -146,7 +149,60 @@ configs/external_baselines/modern_baseline_colab_commands.json
 
 其作用是列出联网核验后的官方仓库 URL、当前已核验 branch HEAD commit、Colab clone 目录、官方入口候选脚本和 `run_sstw_eval.py` wrapper 命令模板。它只帮助配置, 不会自动设置 `SSTW_<BASELINE>_EVAL_COMMAND`, 也不会把 baseline 视为 `measured_formal`。
 
-正式 command 仍必须由用户在 Colab 中显式设置, 例如:
+正式 command 有两种配置方式。
+
+### 3.3.1 推荐方式: repository bridge command
+
+默认 Notebook 会使用 repository bridge command 统一 SSTW I/O。此时用户不需要手写
+`SSTW_<BASELINE>_EVAL_COMMAND`, 但必须为每个 baseline 配置真正调用官方实现的内部命令:
+
+```text
+SSTW_VIDEOSHIELD_OFFICIAL_EVAL_COMMAND
+SSTW_SIGMARK_OFFICIAL_EVAL_COMMAND
+SSTW_SPDMARK_OFFICIAL_EVAL_COMMAND
+SSTW_VIDEOMARK_OFFICIAL_EVAL_COMMAND
+SSTW_VIDSIG_OFFICIAL_EVAL_COMMAND
+SSTW_VIDEOSEAL_OFFICIAL_EVAL_COMMAND
+```
+
+内部官方命令必须把官方 detector / extractor 的输出写入:
+
+```text
+{official_output_json_path}
+```
+
+示例:
+
+```python
+import os
+os.environ["SSTW_SPDMARK_OFFICIAL_EVAL_COMMAND"] = (
+    "python /content/SSTW/external_baseline/primary/spdmark/source/<official_eval_script>.py "
+    "--source-video {source_video_path} "
+    "--attacked-video {attacked_video_path} "
+    "--attack-name {attack_name} "
+    "--output-json {official_output_json_path}"
+)
+```
+
+bridge 会读取 `{official_output_json_path}`, 提取 score 字段, 再写出 SSTW 统一的
+`{output_json_path}`。如果缺少内部官方命令, Notebook 会在真实生成前写出:
+
+```text
+artifacts/external_baseline_official_bridge_preflight_decision.json
+```
+
+并提前失败, 防止只配置 wrapper 壳层却没有真实 baseline 分数。
+
+### 3.3.2 直接方式: 完全自定义 SSTW 外层命令
+
+如果不使用 bridge, 可以设置:
+
+```python
+import os
+os.environ["SSTW_USE_MODERN_BASELINE_BRIDGE_COMMANDS"] = "0"
+```
+
+然后直接配置 `SSTW_<BASELINE>_EVAL_COMMAND`, 例如:
 
 ```python
 import os
@@ -159,7 +215,7 @@ os.environ["SSTW_SPDMARK_EVAL_COMMAND"] = (
 )
 ```
 
-其中 `run_sstw_eval.py` 必须是真实 wrapper: 它可以调用官方源码、官方权重或官方 detector, 但最终必须把结果写入 `{output_json_path}`。输出 JSON 至少需要包含以下任一字段:
+其中外层命令必须是真实 wrapper: 它可以调用官方源码、官方权重或官方 detector, 但最终必须把结果写入 `{output_json_path}`。输出 JSON 至少需要包含以下任一字段:
 
 ```text
 external_baseline_score

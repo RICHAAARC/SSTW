@@ -91,7 +91,9 @@ def test_modern_baseline_colab_command_config_is_guidance_not_claim_evidence() -
 
     required_ids = {"videoshield", "sigmark", "spdmark", "videomark", "vidsig", "videoseal"}
     assert set(rows) == required_ids
-    assert config["command_configuration_boundary"]["template_file_auto_applied"] is False
+    assert config["command_configuration_boundary"]["template_file_auto_applied"] == "optional_when_SSTW_USE_MODERN_BASELINE_BRIDGE_COMMANDS_true"
+    assert config["bridge_command_policy"]["bridge_module"] == "external_baseline.official_command_bridge"
+    assert config["bridge_command_policy"]["official_inner_command_env_var_pattern"] == "SSTW_<BASELINE>_OFFICIAL_EVAL_COMMAND"
     assert "fail_closed" in config["formal_result_policy"]
     assert rows["videoshield"]["official_repository_url"] == "https://github.com/hurunyi/VideoShield"
     assert rows["sigmark"]["official_repository_url"] == "https://github.com/JeremyZhao1998/SIGMark-release"
@@ -101,11 +103,13 @@ def test_modern_baseline_colab_command_config_is_guidance_not_claim_evidence() -
     assert rows["videoseal"]["official_repository_url"] == "https://github.com/facebookresearch/videoseal"
     for baseline_id, row in rows.items():
         assert row["external_baseline_command_env_var"] == f"SSTW_{baseline_id.upper()}_EVAL_COMMAND"
+        assert row["official_baseline_command_env_var"] == f"SSTW_{baseline_id.upper()}_OFFICIAL_EVAL_COMMAND"
         assert row["source_verification_status"] == "git_ls_remote_head_verified_2026_06_25"
-        assert row["sstw_eval_command_template_status"] == "requires_user_wrapper_after_official_source_install"
+        assert row["sstw_eval_command_template_status"] == "repository_bridge_ready_requires_official_eval_command"
         command = row["sstw_eval_command_template"]
         for token in config["required_command_format_tokens"]:
             assert "{" + token + "}" in command
+        assert "external_baseline.official_command_bridge" in command
         assert row["score_output_contract"]["json_object_required"] is True
         assert "external_baseline_score" in row["score_output_contract"]["minimum_required_score_field_any_of"]
 
@@ -271,3 +275,70 @@ def test_modern_external_baseline_formal_command_adapters_write_measured_records
     assert execution_manifest["modern_external_baseline_formal_measured_adapter_count"] == 6
     assert execution_manifest["formal_evidence_status"] == "evidence_paths_bound"
     assert execution_manifest["evidence_path_count"] >= len(formal_records)
+
+
+@pytest.mark.quick
+def test_modern_external_baseline_bridge_commands_require_real_official_output(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """repository bridge 只能把官方命令输出归一化为 measured_formal records。"""
+    run_root = tmp_path / "generative_video_runtime"
+    _write_external_baseline_runtime_fixture(run_root)
+    fake_official = tmp_path / "fake_official_detector.py"
+    fake_official.write_text(
+        "import argparse, json\n"
+        "parser = argparse.ArgumentParser()\n"
+        "parser.add_argument('--official-output-json', required=True)\n"
+        "parser.add_argument('--source-video')\n"
+        "parser.add_argument('--attacked-video')\n"
+        "parser.add_argument('--attack-name')\n"
+        "args = parser.parse_args()\n"
+        "json.dump({'score': 0.42, 'detected': True, 'bit_accuracy': 0.88}, open(args.official_output_json, 'w', encoding='utf-8'))\n",
+        encoding="utf-8",
+    )
+    official_command = (
+        f"{sys.executable} {fake_official} "
+        "--source-video {source_video_path} "
+        "--attacked-video {attacked_video_path} "
+        "--attack-name {attack_name} "
+        "--official-output-json {official_output_json_path}"
+    )
+    for baseline_id in ("videoshield", "sigmark", "spdmark", "videomark", "vidsig", "videoseal"):
+        official_source_dir = tmp_path / "official_sources" / baseline_id
+        official_source_dir.mkdir(parents=True)
+        monkeypatch.setenv(f"SSTW_{baseline_id.upper()}_OFFICIAL_EVAL_COMMAND", official_command)
+        bridge_command = (
+            f"{sys.executable} -m external_baseline.official_command_bridge "
+            f"--baseline-id {baseline_id} "
+            f"--official-source-dir {official_source_dir} "
+            "--source-video {source_video_path} "
+            "--attacked-video {attacked_video_path} "
+            "--attack-name {attack_name} "
+            "--output-json {output_json_path} "
+            "--run-root {run_root} "
+            "--prompt-id {prompt_id} "
+            "--seed-id {seed_id} "
+            "--trajectory-trace-id {trajectory_trace_id}"
+        )
+        monkeypatch.setenv(f"SSTW_{baseline_id.upper()}_EVAL_COMMAND", bridge_command)
+
+    audit = write_external_baseline_comparison_outputs(run_root)
+    records = read_jsonl(run_root / "records" / "external_baseline_score_records.jsonl")
+    formal_records = [record for record in records if record.get("metric_status") == "measured_formal"]
+
+    assert audit["modern_external_baseline_formal_measured_adapter_count"] == 6
+    assert set(audit["modern_external_baseline_formal_measured_adapter_names"]) == {
+        "videoshield",
+        "sigmark",
+        "spdmark",
+        "videomark",
+        "vidsig",
+        "videoseal",
+    }
+    assert formal_records
+    assert all(record["external_baseline_score"] == 0.42 for record in formal_records)
+    raw_paths = [
+        Path(record["external_baseline_official_output_path"]).with_name(
+            Path(record["external_baseline_official_output_path"]).stem + "_official_raw.json"
+        )
+        for record in formal_records
+    ]
+    assert all(path.exists() for path in raw_paths)

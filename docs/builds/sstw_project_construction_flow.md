@@ -2180,6 +2180,17 @@ Notebook 默认可通过 `SSTW_USE_MODERN_BASELINE_BRIDGE_COMMANDS=true` 使用 
 外层命令, 可以设置 `SSTW_USE_MODERN_BASELINE_BRIDGE_COMMANDS=0`, 但此时仍必须保证
 `SSTW_<BASELINE>_EVAL_COMMAND` 直接写出合规 score JSON。
 
+命令优先级约束为:
+
+```text
+显式 SSTW_<BASELINE>_EVAL_COMMAND
+  > baseline_id 对应的 repository bridge 模板
+```
+
+因此, 用户也可以在保持 `SSTW_USE_MODERN_BASELINE_BRIDGE_COMMANDS=true` 的情况下, 只对某些
+baseline 提供直接外层命令。preflight 必须按 baseline 逐项判断: 使用 bridge 的 baseline
+要求 `SSTW_<BASELINE>_OFFICIAL_EVAL_COMMAND`, 使用直接外层命令的 baseline 不再要求内部官方命令。
+
 `external_baseline_execution_manifest.json` 必须记录:
 
 ```text

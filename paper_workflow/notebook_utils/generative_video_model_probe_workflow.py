@@ -463,6 +463,16 @@ def build_modern_baseline_official_bridge_command_templates(
     return templates
 
 
+def _is_modern_baseline_official_bridge_command(command_template: str) -> bool:
+    """判断外层 command 是否调用 repository bridge。
+
+    该判断只用于 preflight 路由: 如果用户已经提供直接调用第三方 baseline 的
+    `SSTW_<BASELINE>_EVAL_COMMAND`, 则不应再强制要求内部
+    `SSTW_<BASELINE>_OFFICIAL_EVAL_COMMAND`。
+    """
+    return "external_baseline.official_command_bridge" in command_template
+
+
 def build_modern_baseline_official_bridge_preflight_decision(
     layout: Mapping[str, str],
     *,
@@ -484,9 +494,39 @@ def build_modern_baseline_official_bridge_preflight_decision(
     if command_env:
         env_source.update({str(key): str(value) for key, value in command_env.items()})
     rows = _modern_baseline_command_config_rows(command_config_path)
-    required_env_vars = [item["official_baseline_command_env_var"] for item in requirements]
-    configured_env_vars = [env_var for env_var in required_env_vars if str(env_source.get(env_var) or "").strip()]
-    missing_env_vars = [env_var for env_var in required_env_vars if env_var not in configured_env_vars]
+    required_env_vars: list[str] = []
+    configured_env_vars: list[str] = []
+    missing_env_vars: list[str] = []
+    bridge_baseline_ids: list[str] = []
+    direct_eval_baseline_ids: list[str] = []
+    no_outer_command_baseline_ids: list[str] = []
+    effective_outer_command_source: dict[str, str] = {}
+    for item in requirements:
+        baseline_id = item["baseline_id"]
+        outer_env_var = item["external_baseline_command_env_var"]
+        official_env_var = item["official_baseline_command_env_var"]
+        outer_from_env = str(env_source.get(outer_env_var) or "").strip()
+        outer_from_baseline_id = str(env_source.get(baseline_id) or "").strip()
+        if not outer_from_env and not outer_from_baseline_id and use_bridge_commands:
+            outer_from_baseline_id = str(rows.get(baseline_id, {}).get("sstw_eval_command_template") or "").strip()
+        effective_outer_command = outer_from_env or outer_from_baseline_id
+        if outer_from_env:
+            effective_outer_command_source[baseline_id] = outer_env_var
+        elif outer_from_baseline_id:
+            effective_outer_command_source[baseline_id] = "baseline_id_template"
+        else:
+            effective_outer_command_source[baseline_id] = "missing"
+            no_outer_command_baseline_ids.append(baseline_id)
+            continue
+        if _is_modern_baseline_official_bridge_command(effective_outer_command):
+            bridge_baseline_ids.append(baseline_id)
+            required_env_vars.append(official_env_var)
+            if str(env_source.get(official_env_var) or "").strip():
+                configured_env_vars.append(official_env_var)
+            else:
+                missing_env_vars.append(official_env_var)
+        else:
+            direct_eval_baseline_ids.append(baseline_id)
     try:
         paper_gate_profile = workflow_profile_is_paper_gate(profile)
     except Exception:
@@ -499,6 +539,8 @@ def build_modern_baseline_official_bridge_preflight_decision(
         status = "not_required_for_profile"
     elif not require_bridge_official_commands:
         status = "requirement_disabled"
+    elif not bridge_baseline_ids:
+        status = "official_bridge_not_required_for_direct_eval_commands"
     elif missing_env_vars:
         status = "official_bridge_commands_missing_for_paper_gate"
     else:
@@ -514,6 +556,10 @@ def build_modern_baseline_official_bridge_preflight_decision(
         "external_baseline_official_bridge_preflight_status": status,
         "paper_gate_profile": paper_gate_profile,
         "required_modern_external_baseline_adapter_names": [item["baseline_id"] for item in requirements],
+        "official_bridge_planned_bridge_baseline_ids": bridge_baseline_ids,
+        "official_bridge_direct_eval_baseline_ids": direct_eval_baseline_ids,
+        "official_bridge_no_outer_command_baseline_ids": no_outer_command_baseline_ids,
+        "official_bridge_effective_outer_command_source": effective_outer_command_source,
         "official_bridge_required_env_vars": required_env_vars,
         "official_bridge_configured_env_vars": configured_env_vars,
         "official_bridge_missing_env_vars": missing_env_vars,
@@ -572,14 +618,15 @@ def build_modern_baseline_command_env(
     """构造现代 baseline command 环境变量映射。
 
     `command_templates` 可以使用 baseline_id 作为 key, 也可以直接使用环境变量名
-    作为 key。这样 Notebook 只需要维护用户可编辑的短变量, 具体 hard gate 清单
-    始终来自 protocol config。
+    作为 key。环境变量名优先级更高, 因此用户在 Colab 中显式设置的
+    `SSTW_<BASELINE>_EVAL_COMMAND` 可以覆盖默认 bridge 模板。这样 Notebook 只需要
+    维护用户可编辑的短变量, 具体 hard gate 清单始终来自 protocol config。
     """
     env: dict[str, str] = {}
     for requirement in required_modern_external_baseline_command_requirements(profile, config_path):
         baseline_id = requirement["baseline_id"]
         env_var = requirement["external_baseline_command_env_var"]
-        env[env_var] = str(command_templates.get(baseline_id) or command_templates.get(env_var) or "")
+        env[env_var] = str(command_templates.get(env_var) or command_templates.get(baseline_id) or "")
     return env
 
 

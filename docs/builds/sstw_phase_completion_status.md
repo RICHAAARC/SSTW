@@ -1595,9 +1595,15 @@ artifacts/external_baseline_official_bridge_preflight_decision.json
 modern_external_baseline_bridge_outer_command: implemented
 modern_external_baseline_official_inner_command_contract: implemented
 bridge_preflight_hard_blocker: implemented
+direct_eval_command_override_bridge_template: implemented
 fake_score_or_sstw_score_fallback: forbidden
 validation_scale_formal_gate_path: runnable_after_official_inner_commands_configured
 modern_external_baseline_measured_formal_results: still_pending_real_colab_official_commands
 ```
 
 该状态表示 validation-scale 的工程阻断已经从“缺 SSTW 外层 wrapper”收敛为“需要用户在 Colab 中为 6 个官方 baseline 配置真实官方命令和权重”。如果这些内部官方命令输出 score JSON, `external_baseline_runner` 会把结果转换为 `measured_formal` records, 并由 `external_baseline_execution_manifest.json` 绑定证据路径。
+
+补充约束: 显式设置的 `SSTW_<BASELINE>_EVAL_COMMAND` 优先级高于默认 bridge 模板。因此,
+validation-scale 正式门禁同时支持两条可跑通路径: `repository bridge + SSTW_<BASELINE>_OFFICIAL_EVAL_COMMAND`
+和 `SSTW_<BASELINE>_EVAL_COMMAND` 直接写出合规 score JSON。preflight 必须逐 baseline 判断,
+不能因为默认启用了 bridge 就误阻断已经配置直接外层命令的 baseline。

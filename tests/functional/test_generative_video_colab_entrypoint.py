@@ -13,6 +13,8 @@ from paper_workflow.notebook_utils.generative_video_model_probe_workflow import 
     build_drive_layout,
     build_workflow_stage_plan,
     build_modern_baseline_command_env,
+    build_modern_baseline_official_bridge_command_templates,
+    build_modern_baseline_official_bridge_preflight_decision,
     default_workflow_profile_for_notebook_role,
     resolve_notebook_workflow_profile,
     validate_motion_threshold_ready_for_profile,
@@ -513,6 +515,88 @@ def test_external_baseline_colab_preflight_passes_when_all_commands_configured(t
         "SSTW_VIDSIG_EVAL_COMMAND",
         "SSTW_VIDEOSEAL_EVAL_COMMAND",
     }
+
+
+@pytest.mark.quick
+def test_modern_baseline_direct_eval_command_overrides_bridge_template(tmp_path: Path) -> None:
+    """用户显式配置直接 command 时, 不应被默认 bridge 模板覆盖或误要求内部官方命令。"""
+    layout = build_drive_layout(str(tmp_path / "SSTW"))
+    bridge_templates = build_modern_baseline_official_bridge_command_templates("validation_scale")
+    baseline_ids = ("videoshield", "sigmark", "spdmark", "videomark", "vidsig", "videoseal")
+    direct_templates = {
+        f"SSTW_{baseline_id.upper()}_EVAL_COMMAND": (
+            f"python direct_{baseline_id}.py --source {{source_video_path}} "
+            f"--attacked {{attacked_video_path}} --output-json {{output_json_path}}"
+        )
+        for baseline_id in baseline_ids
+    }
+    command_source = {**bridge_templates, **direct_templates}
+
+    command_env = build_modern_baseline_command_env("validation_scale", command_source)
+    bridge_decision = build_modern_baseline_official_bridge_preflight_decision(
+        layout,
+        profile="validation_scale",
+        command_env=command_source,
+        use_bridge_commands=True,
+        require_bridge_official_commands=True,
+    )
+
+    assert command_env["SSTW_SPDMARK_EVAL_COMMAND"].startswith("python direct_spdmark.py")
+    assert "external_baseline.official_command_bridge" not in command_env["SSTW_SPDMARK_EVAL_COMMAND"]
+    assert bridge_decision["external_baseline_official_bridge_preflight_decision"] == "PASS"
+    assert bridge_decision["external_baseline_official_bridge_preflight_status"] == (
+        "official_bridge_not_required_for_direct_eval_commands"
+    )
+    assert bridge_decision["official_bridge_required_env_vars"] == []
+    assert bridge_decision["official_bridge_missing_env_vars"] == []
+    assert set(bridge_decision["official_bridge_direct_eval_baseline_ids"]) == set(baseline_ids)
+    assert bridge_decision["official_bridge_planned_bridge_baseline_ids"] == []
+
+
+@pytest.mark.quick
+def test_modern_baseline_bridge_preflight_requires_official_inner_commands(tmp_path: Path) -> None:
+    """使用 repository bridge 外层命令时, paper gate 必须检查内部官方命令。"""
+    layout = build_drive_layout(str(tmp_path / "SSTW"))
+    bridge_templates = build_modern_baseline_official_bridge_command_templates("validation_scale")
+    baseline_ids = ("videoshield", "sigmark", "spdmark", "videomark", "vidsig", "videoseal")
+
+    missing_decision = build_modern_baseline_official_bridge_preflight_decision(
+        layout,
+        profile="validation_scale",
+        command_env=bridge_templates,
+        use_bridge_commands=True,
+        require_bridge_official_commands=True,
+    )
+
+    assert missing_decision["external_baseline_official_bridge_preflight_decision"] == "FAIL"
+    assert missing_decision["external_baseline_official_bridge_preflight_status"] == (
+        "official_bridge_commands_missing_for_paper_gate"
+    )
+    assert set(missing_decision["official_bridge_planned_bridge_baseline_ids"]) == set(baseline_ids)
+    assert missing_decision["official_bridge_required_env_var_count"] == 6
+    assert missing_decision["official_bridge_missing_env_var_count"] == 6
+
+    official_inner_commands = {
+        f"SSTW_{baseline_id.upper()}_OFFICIAL_EVAL_COMMAND": (
+            f"python official_{baseline_id}.py --source {{source_video_path}} "
+            f"--attacked {{attacked_video_path}} --output-json {{official_output_json_path}}"
+        )
+        for baseline_id in baseline_ids
+    }
+    ready_decision = build_modern_baseline_official_bridge_preflight_decision(
+        layout,
+        profile="validation_scale",
+        command_env={**bridge_templates, **official_inner_commands},
+        use_bridge_commands=True,
+        require_bridge_official_commands=True,
+    )
+
+    assert ready_decision["external_baseline_official_bridge_preflight_decision"] == "PASS"
+    assert ready_decision["external_baseline_official_bridge_preflight_status"] == (
+        "official_bridge_commands_configured_for_paper_gate"
+    )
+    assert ready_decision["official_bridge_configured_env_var_count"] == 6
+    assert ready_decision["official_bridge_missing_env_vars"] == []
 
 
 @pytest.mark.quick

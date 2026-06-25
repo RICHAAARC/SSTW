@@ -215,6 +215,13 @@ os.environ["SSTW_SPDMARK_EVAL_COMMAND"] = (
 )
 ```
 
+注意: 即使 `SSTW_USE_MODERN_BASELINE_BRIDGE_COMMANDS` 保持默认启用, 用户显式设置的
+`SSTW_<BASELINE>_EVAL_COMMAND` 也会优先于 repository bridge 模板。此时
+`external_baseline_official_bridge_preflight_decision.json` 会把对应 baseline 记录为
+`official_bridge_direct_eval_baseline_ids`, 不再额外要求该 baseline 的
+`SSTW_<BASELINE>_OFFICIAL_EVAL_COMMAND`。该设计用于支持两种等价的正式接入路径:
+一种是 repository bridge + 官方内部命令, 另一种是用户自定义外层命令直接写出 SSTW 合规 JSON。
+
 其中外层命令必须是真实 wrapper: 它可以调用官方源码、官方权重或官方 detector, 但最终必须把结果写入 `{output_json_path}`。输出 JSON 至少需要包含以下任一字段:
 
 ```text

@@ -383,6 +383,9 @@ def build_modern_baseline_colab_command_config_summary(
             "official_baseline_command_env_var": row.get("official_baseline_command_env_var") or external_baseline_official_command_env_var_for(baseline_id),
             "source_clone_command": row.get("source_clone_command"),
             "official_entrypoint_candidates": row.get("official_entrypoint_candidates", []),
+            "repository_official_eval_adapter_module": row.get("repository_official_eval_adapter_module"),
+            "repository_official_eval_command_template_status": row.get("repository_official_eval_command_template_status"),
+            "repository_official_eval_command_template": row.get("repository_official_eval_command_template"),
             "sstw_eval_command_template_status": row.get("sstw_eval_command_template_status"),
             "sstw_eval_command_template": row.get("sstw_eval_command_template"),
             "score_output_contract": row.get("score_output_contract"),
@@ -414,8 +417,9 @@ def build_modern_baseline_colab_command_config_summary(
         "required_command_format_tokens": config.get("required_command_format_tokens", []),
         "optional_command_format_tokens": config.get("optional_command_format_tokens", []),
         "colab_user_action_required": (
-            "安装或克隆官方 baseline 源码, 编写能输出 JSON score 的 wrapper, "
-            "再把 command 写入对应 SSTW_<BASELINE>_EVAL_COMMAND。"
+            "安装或克隆官方 baseline 源码, 提供官方权重、key/message/maintained info 或官方结果产物。"
+            "默认 repository official adapter 会 fail closed; 若需要覆盖, 可配置 SSTW_<BASELINE>_NATIVE_EVAL_COMMAND "
+            "或直接配置 SSTW_<BASELINE>_EVAL_COMMAND。"
         ),
         "summary_path": str(summary_path),
         "baseline_command_configs": rows,
@@ -460,6 +464,30 @@ def build_modern_baseline_official_bridge_command_templates(
         template = str(rows.get(baseline_id, {}).get("sstw_eval_command_template") or "").strip()
         if template:
             templates[baseline_id] = template
+    return templates
+
+
+def build_repository_official_baseline_eval_command_templates(
+    profile: str,
+    *,
+    protocol_config_path: str | Path | None = None,
+    command_config_path: str | Path = DEFAULT_MODERN_BASELINE_COLAB_COMMAND_CONFIG,
+) -> dict[str, str]:
+    """从配置文件构造 repository official adapter 命令模板。
+
+    返回值的 key 是 `SSTW_<BASELINE>_OFFICIAL_EVAL_COMMAND`。这些命令是 bridge
+    内部命令, 会调用 `external_baseline/official_eval_adapters/` 下的 fail-closed
+    wrapper。项目特定约束是: wrapper 只允许调用第三方官方源码/API或读取官方结果产物,
+    缺少官方依赖时必须失败。
+    """
+    rows = _modern_baseline_command_config_rows(command_config_path)
+    templates: dict[str, str] = {}
+    for requirement in required_modern_external_baseline_command_requirements(profile, protocol_config_path):
+        baseline_id = requirement["baseline_id"]
+        env_var = requirement["official_baseline_command_env_var"]
+        template = str(rows.get(baseline_id, {}).get("repository_official_eval_command_template") or "").strip()
+        if template:
+            templates[env_var] = template
     return templates
 
 

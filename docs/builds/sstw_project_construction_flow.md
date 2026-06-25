@@ -2135,7 +2135,7 @@ artifacts/external_baseline_official_bridge_preflight_decision.json
 configs/external_baselines/modern_baseline_colab_commands.json
 ```
 
-该配置记录联网核验后的现代 baseline 官方仓库 URL、branch HEAD commit、Colab clone 目录、官方入口候选脚本和 SSTW wrapper command 模板。它属于配置辅助层, 不属于正式 baseline 结果层。Notebook 不得把该配置自动提升为已配置 command, 也不得仅因为 source URL 可 clone 就让 `validation_scale` 或 `pilot_paper` preflight 通过。
+该配置记录联网核验后的现代 baseline 官方仓库 URL、branch HEAD commit、Colab clone 目录、官方入口候选脚本、SSTW bridge command 模板和 repository official adapter command 模板。它属于配置辅助层, 不属于正式 baseline 结果层。Notebook 可以用 repository official adapter 自动补齐 `SSTW_<BASELINE>_OFFICIAL_EVAL_COMMAND`, 但这只表示“命令入口已配置”, 不表示“官方 baseline 已测量”。只有该命令真实调用官方源码/API或读取官方结果产物并写出 score JSON 后, 才能生成 `measured_formal` records。
 
 现代 baseline 从“源码已核验”进入“正式 measured_formal 对比”至少需要满足:
 
@@ -2143,6 +2143,7 @@ configs/external_baselines/modern_baseline_colab_commands.json
 official_source_or_weights_available
 sstw_eval_wrapper_exists
 SSTW_<BASELINE>_EVAL_COMMAND points_to_real_wrapper
+SSTW_<BASELINE>_OFFICIAL_EVAL_COMMAND points_to_official_source_or_repository_fail_closed_adapter
 wrapper_writes_output_json_with_score
 external_baseline_command_manifest_written
 external_baseline_score_records.metric_status == measured_formal
@@ -2184,6 +2185,19 @@ SSTW_VIDEOSEAL_OFFICIAL_EVAL_COMMAND
 ```text
 {official_output_json_path}
 ```
+
+当前项目提供 6 个 repository official adapter 作为内部命令入口:
+
+```text
+external_baseline/official_eval_adapters/videoshield.py
+external_baseline/official_eval_adapters/sigmark.py
+external_baseline/official_eval_adapters/spdmark.py
+external_baseline/official_eval_adapters/videomark.py
+external_baseline/official_eval_adapters/vidsig.py
+external_baseline/official_eval_adapters/videoseal.py
+```
+
+这些 adapter 的职责是把官方仓库源码、官方 API、官方 checkpoint 或官方结果产物转换为 SSTW 统一 JSON。它们不是替代 baseline。缺少官方源码、权重、key、message、maintained info 或官方结果文件时必须 fail closed, 不能产生 proxy 分数。若官方仓库提供更合适的原生命令, 用户可以通过 `SSTW_<BASELINE>_NATIVE_EVAL_COMMAND` 覆盖单个 adapter 的内部执行逻辑。
 
 bridge 再把该输出归一化写入:
 

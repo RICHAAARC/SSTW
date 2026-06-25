@@ -1610,3 +1610,39 @@ modern_external_baseline_measured_formal_results: still_pending_real_colab_offic
 validation-scale 正式门禁同时支持两条可跑通路径: `repository bridge + SSTW_<BASELINE>_OFFICIAL_EVAL_COMMAND`
 和 `SSTW_<BASELINE>_EVAL_COMMAND` 直接写出合规 score JSON。preflight 必须逐 baseline 判断,
 不能因为默认启用了 bridge 就误阻断已经配置直接外层命令的 baseline。
+
+## 2026-06-25 repository official eval adapters 接入
+
+为满足 `validation_scale` 严格正式门禁对 6 个现代视频水印 baseline 的统一接入要求, 当前仓库新增 fail-closed 的 repository official adapter 入口:
+
+```text
+external_baseline/official_eval_adapters/videoshield.py
+external_baseline/official_eval_adapters/sigmark.py
+external_baseline/official_eval_adapters/spdmark.py
+external_baseline/official_eval_adapters/videomark.py
+external_baseline/official_eval_adapters/vidsig.py
+external_baseline/official_eval_adapters/videoseal.py
+```
+
+这些 adapter 解决的问题是: Notebook 可以自动配置 6 个 `SSTW_<BASELINE>_OFFICIAL_EVAL_COMMAND`, 不再需要用户手写 bridge 内部命令模板。它们仍然保持严格边界:
+
+```text
+repository_official_eval_adapter: implemented
+SSTW_USE_REPOSITORY_OFFICIAL_BASELINE_ADAPTERS: default_true_in_validation_scale_formal_gate
+missing_official_source_or_weight_behavior: fail_closed
+fake_score_or_proxy_score_fallback: forbidden
+modern_external_baseline_measured_formal_results: pending_real_colab_official_artifacts_or_checkpoints
+```
+
+当前真实运行仍需要 Colab 提供第三方官方源码和对应官方产物。典型额外输入包括:
+
+```text
+SSTW_VIDEOSHIELD_RESULT_JSON 或 SSTW_VIDEOSHIELD_NATIVE_EVAL_COMMAND
+SSTW_SIGMARK_BIT_ACCURACY_NPZ 或 SSTW_SIGMARK_NATIVE_EVAL_COMMAND
+SSTW_SPDMARK_EXTRACTOR_PATH + SSTW_SPDMARK_GT_BITS_PATH 或 SSTW_SPDMARK_NATIVE_EVAL_COMMAND
+SSTW_VIDEOMARK_TEMPORAL_RESULTS_JSON 或 SSTW_VIDEOMARK_NATIVE_EVAL_COMMAND
+SSTW_VIDSIG_MSG_DECODER_PATH 或 SSTW_VIDSIG_NATIVE_EVAL_COMMAND
+VideoSeal 官方依赖和 checkpoint, 或 SSTW_VIDEOSEAL_NATIVE_EVAL_COMMAND
+```
+
+因此, 当前阶段可以表述为: 6 个现代 baseline 的 SSTW command adapter 和 repository official adapter 已经完成工程接入; 严格正式门禁仍必须通过 Colab 真实运行证明这些 adapter 能基于官方源码、权重或官方结果产物写出 `measured_formal` records。若缺少这些官方输入, validation-scale 会失败, 且该失败是正确的 fail-closed 行为。

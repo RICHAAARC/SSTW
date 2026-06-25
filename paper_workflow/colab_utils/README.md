@@ -80,22 +80,21 @@ SSTW_WORKFLOW_PROFILE_VALUE = 'validation_scale'
 `SSTW_RUN_MOTION_CALIBRATION_IF_MISSING=true` 时, 才会先运行长耗时的 motion calibration
 前置流程。
 
-为了满足“直接用 Notebook 跑通工程链路测试”的需求, 该 Notebook 默认启用:
+当前 validation-scale 单 Notebook 默认执行严格正式门禁, 因此默认设置为:
 
 ```python
-SSTW_VALIDATION_SCALE_RUN_THROUGH_TEST = "true"
+SSTW_VALIDATION_SCALE_RUN_THROUGH_TEST = "false"
+```
+
+若只想测试工程链路并落盘阻断原因, 可以显式打开 run-through test:
+
+```python
+os.environ["SSTW_VALIDATION_SCALE_RUN_THROUGH_TEST"] = "true"
 ```
 
 该模式只跳过 external baseline preflight 的前置中断, 不会伪造第三方 baseline 分数,
-也不会把 `validation_scale_gate_decision` 改成 PASS。若 6 个真实官方 baseline command
-尚未配置, Notebook 会继续运行到最终打包阶段, 但相关 artifacts 会如实记录
-`external_baseline_official_bridge_preflight_decision = FAIL` 和
-`validation_scale_gate_decision = FAIL`。如果要执行严格正式门禁, 请先配置真实官方命令,
-再设置:
-
-```python
-os.environ["SSTW_VALIDATION_SCALE_RUN_THROUGH_TEST"] = "false"
-```
+也不会把 `validation_scale_gate_decision` 改成 PASS。严格正式门禁必须保持该变量为
+`false`, 并保证 6 个现代 baseline 的 official command 能真实写出 score JSON。
 
 ### 3.1 运动阈值校准
 
@@ -204,7 +203,7 @@ artifacts/external_baseline_command_template_summary.json
 configs/external_baselines/modern_baseline_colab_commands.json
 ```
 
-其作用是列出联网核验后的官方仓库 URL、当前已核验 branch HEAD commit、Colab clone 目录、官方入口候选脚本和 `run_sstw_eval.py` wrapper 命令模板。它只帮助配置, 不会自动设置 `SSTW_<BASELINE>_EVAL_COMMAND`, 也不会把 baseline 视为 `measured_formal`。
+其作用是列出联网核验后的官方仓库 URL、当前已核验 branch HEAD commit、Colab clone 目录、官方入口候选脚本、外层 bridge 命令模板和 repository official adapter 命令模板。它只帮助配置, 不会把 baseline 视为 `measured_formal`; 只有实际执行官方命令并写出合法 score JSON 后, `external_baseline_runner` 才会写出 `measured_formal` records。
 
 正式 command 有两种配置方式。
 
@@ -221,6 +220,28 @@ SSTW_VIDEOMARK_OFFICIAL_EVAL_COMMAND
 SSTW_VIDSIG_OFFICIAL_EVAL_COMMAND
 SSTW_VIDEOSEAL_OFFICIAL_EVAL_COMMAND
 ```
+
+当前仓库已经提供 6 个 fail-closed 的 repository official adapter。validation-scale 单
+Notebook 默认设置:
+
+```python
+os.environ["SSTW_USE_REPOSITORY_OFFICIAL_BASELINE_ADAPTERS"] = "true"
+```
+
+此时 Notebook 会自动把 6 个 `SSTW_<BASELINE>_OFFICIAL_EVAL_COMMAND` 指向:
+
+```text
+external_baseline/official_eval_adapters/videoshield.py
+external_baseline/official_eval_adapters/sigmark.py
+external_baseline/official_eval_adapters/spdmark.py
+external_baseline/official_eval_adapters/videomark.py
+external_baseline/official_eval_adapters/vidsig.py
+external_baseline/official_eval_adapters/videoseal.py
+```
+
+这些 adapter 不是替代 baseline, 只负责把官方仓库源码、官方 API、官方 checkpoint
+或官方结果产物转换成 SSTW 统一 JSON。若缺少第三方官方权重、key、message、
+maintained info 或官方输出文件, adapter 会直接失败, 不会输出 proxy 分数。
 
 内部官方命令必须把官方 detector / extractor 的输出写入:
 
@@ -249,6 +270,33 @@ artifacts/external_baseline_official_bridge_preflight_decision.json
 ```
 
 并提前失败, 防止只配置 wrapper 壳层却没有真实 baseline 分数。
+
+若某个官方仓库有更适合当前 Colab 环境的原生命令, 可以只覆盖该 baseline 的内部
+native 命令, 变量模式为 `SSTW_<BASELINE>_NATIVE_EVAL_COMMAND`。例如:
+
+```python
+os.environ["SSTW_SPDMARK_NATIVE_EVAL_COMMAND"] = (
+    "python /content/SSTW/external_baseline/primary/spdmark/source/<official_eval_script>.py "
+    "--source-video {source_video_path} "
+    "--attacked-video {attacked_video_path} "
+    "--attack-name {attack_name} "
+    "--output-json {official_output_json_path}"
+)
+```
+
+常见需要额外提供的官方产物包括:
+
+```text
+SSTW_VIDEOSHIELD_RESULT_JSON
+SSTW_SIGMARK_BIT_ACCURACY_NPZ
+SSTW_SPDMARK_EXTRACTOR_PATH
+SSTW_SPDMARK_GT_BITS_PATH
+SSTW_VIDEOMARK_TEMPORAL_RESULTS_JSON
+SSTW_VIDSIG_MSG_DECODER_PATH
+```
+
+`SSTW_VIDEOSEAL_OFFICIAL_EVAL_COMMAND` 默认可直接调用 VideoSeal 官方 Python API,
+但仍需要 Colab 能成功安装 VideoSeal 依赖并下载其官方 checkpoint。
 
 ### 3.3.2 直接方式: 完全自定义 SSTW 外层命令
 

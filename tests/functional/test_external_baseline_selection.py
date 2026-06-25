@@ -106,6 +106,12 @@ def test_modern_baseline_colab_command_config_is_guidance_not_claim_evidence() -
         assert row["official_baseline_command_env_var"] == f"SSTW_{baseline_id.upper()}_OFFICIAL_EVAL_COMMAND"
         assert row["source_verification_status"] == "git_ls_remote_head_verified_2026_06_25"
         assert row["sstw_eval_command_template_status"] == "repository_bridge_ready_requires_official_eval_command"
+        assert row["repository_official_eval_command_template_status"] == (
+            "repository_official_wrapper_ready_fail_closed_requires_official_source_and_artifacts"
+        )
+        assert row["repository_official_eval_adapter_module"] == f"external_baseline.official_eval_adapters.{baseline_id}"
+        assert f"external_baseline.official_eval_adapters.{baseline_id}" in row["repository_official_eval_command_template"]
+        assert "{official_output_json_path}" in row["repository_official_eval_command_template"]
         command = row["sstw_eval_command_template"]
         for token in config["required_command_format_tokens"]:
             assert "{" + token + "}" in command
@@ -342,3 +348,15 @@ def test_modern_external_baseline_bridge_commands_require_real_official_output(t
         for record in formal_records
     ]
     assert all(path.exists() for path in raw_paths)
+
+
+@pytest.mark.quick
+def test_repository_official_eval_adapters_are_tracked_fail_closed_entrypoints() -> None:
+    """6 个现代 baseline 必须有可导入的 repository official adapter 入口。"""
+    import importlib
+
+    for baseline_id in ("videoshield", "sigmark", "spdmark", "videomark", "vidsig", "videoseal"):
+        module = importlib.import_module(f"external_baseline.official_eval_adapters.{baseline_id}")
+        assert callable(module.main)
+        assert module.BASELINE_ID == baseline_id
+        assert module.REQUIRED_SOURCE_FILES

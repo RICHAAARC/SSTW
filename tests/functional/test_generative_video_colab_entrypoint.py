@@ -16,6 +16,7 @@ from paper_workflow.notebook_utils.generative_video_model_probe_workflow import 
     build_modern_baseline_command_env,
     build_modern_baseline_official_bridge_command_templates,
     build_modern_baseline_official_bridge_preflight_decision,
+    build_repository_official_baseline_eval_command_templates,
     default_workflow_profile_for_notebook_role,
     resolve_notebook_workflow_profile,
     validate_modern_baseline_commands_for_profile,
@@ -313,6 +314,8 @@ def test_split_colab_notebooks_are_profile_driven() -> None:
     assert "build_pilot_paper_gate_command" not in validation_gate_source
     assert "VALIDATION_SCALE_RUN_THROUGH_TEST" in validation_gate_source
     assert "allow_run_through_test=VALIDATION_SCALE_RUN_THROUGH_TEST" in validation_gate_source
+    assert "build_repository_official_baseline_eval_command_templates" in validation_gate_source
+    assert "SSTW_USE_REPOSITORY_OFFICIAL_BASELINE_ADAPTERS" in validation_gate_source
 
 
 @pytest.mark.quick
@@ -361,7 +364,9 @@ def test_colab_workflow_readme_documents_validation_scale_execution() -> None:
     assert "SSTW_VIDEOSEAL_EVAL_COMMAND" in text
     assert "modern_baseline_colab_commands.json" in text
     assert "external_baseline_command_template_summary.json" in text
-    assert "不会自动设置 `SSTW_<BASELINE>_EVAL_COMMAND`" in text
+    assert "repository official adapter" in text
+    assert "SSTW_USE_REPOSITORY_OFFICIAL_BASELINE_ADAPTERS" in text
+    assert "SSTW_<BASELINE>_NATIVE_EVAL_COMMAND" in text
     assert "validation_scale_gate_decision.json" in text
     assert "pilot_paper_gate_decision.json" in text
     assert "/content/drive/MyDrive/SSTW" in text
@@ -642,6 +647,38 @@ def test_modern_baseline_bridge_preflight_requires_official_inner_commands(tmp_p
     assert ready_decision["external_baseline_official_bridge_preflight_status"] == (
         "official_bridge_commands_configured_for_paper_gate"
     )
+    assert ready_decision["official_bridge_configured_env_var_count"] == 6
+    assert ready_decision["official_bridge_missing_env_vars"] == []
+
+
+@pytest.mark.quick
+def test_repository_official_baseline_eval_adapters_configure_inner_commands(tmp_path: Path) -> None:
+    """repository official adapter 应能一次性补齐 6 个 bridge 内部官方命令。"""
+    layout = build_drive_layout(str(tmp_path / "SSTW"))
+    outer_bridge_templates = build_modern_baseline_official_bridge_command_templates("validation_scale")
+    inner_official_templates = build_repository_official_baseline_eval_command_templates("validation_scale")
+    baseline_ids = ("videoshield", "sigmark", "spdmark", "videomark", "vidsig", "videoseal")
+
+    assert set(inner_official_templates) == {
+        f"SSTW_{baseline_id.upper()}_OFFICIAL_EVAL_COMMAND"
+        for baseline_id in baseline_ids
+    }
+    for baseline_id in baseline_ids:
+        command = inner_official_templates[f"SSTW_{baseline_id.upper()}_OFFICIAL_EVAL_COMMAND"]
+        assert f"external_baseline.official_eval_adapters.{baseline_id}" in command
+        assert "{official_output_json_path}" in command
+        assert "{source_video_path}" in command
+        assert "{attacked_video_path}" in command
+
+    ready_decision = build_modern_baseline_official_bridge_preflight_decision(
+        layout,
+        profile="validation_scale",
+        command_env={**outer_bridge_templates, **inner_official_templates},
+        use_bridge_commands=True,
+        require_bridge_official_commands=True,
+    )
+
+    assert ready_decision["external_baseline_official_bridge_preflight_decision"] == "PASS"
     assert ready_decision["official_bridge_configured_env_var_count"] == 6
     assert ready_decision["official_bridge_missing_env_vars"] == []
 

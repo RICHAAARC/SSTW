@@ -18,6 +18,8 @@ from paper_workflow.notebook_utils.generative_video_model_probe_workflow import 
     build_modern_baseline_official_bridge_preflight_decision,
     default_workflow_profile_for_notebook_role,
     resolve_notebook_workflow_profile,
+    validate_modern_baseline_commands_for_profile,
+    validate_modern_baseline_official_bridge_for_profile,
     validate_motion_threshold_ready_for_profile,
     write_modern_baseline_colab_command_config_summary,
     write_external_baseline_colab_preflight_decision,
@@ -309,6 +311,8 @@ def test_split_colab_notebooks_are_profile_driven() -> None:
     assert "build_validation_artifact_rebuild_dry_run_command" in validation_gate_source
     assert "build_validation_scale_gate_command" in validation_gate_source
     assert "build_pilot_paper_gate_command" not in validation_gate_source
+    assert "VALIDATION_SCALE_RUN_THROUGH_TEST" in validation_gate_source
+    assert "allow_run_through_test=VALIDATION_SCALE_RUN_THROUGH_TEST" in validation_gate_source
 
 
 @pytest.mark.quick
@@ -342,6 +346,7 @@ def test_colab_workflow_readme_documents_validation_scale_execution() -> None:
     assert "external_baseline_formal_scoring_colab.ipynb" in text
     assert "paper_gate_and_package_colab.ipynb" in text
     assert "validation_scale_formal_gate_colab.ipynb" in text
+    assert "SSTW_VALIDATION_SCALE_RUN_THROUGH_TEST" in text
     assert text.index("motion_threshold_calibration_colab.ipynb") < text.index("generative_video_runtime_colab.ipynb")
     assert text.index("generative_video_runtime_colab.ipynb") < text.index("external_baseline_formal_scoring_colab.ipynb")
     assert text.index("external_baseline_formal_scoring_colab.ipynb") < text.index("paper_gate_and_package_colab.ipynb")
@@ -639,6 +644,38 @@ def test_modern_baseline_bridge_preflight_requires_official_inner_commands(tmp_p
     )
     assert ready_decision["official_bridge_configured_env_var_count"] == 6
     assert ready_decision["official_bridge_missing_env_vars"] == []
+
+
+@pytest.mark.quick
+def test_validation_scale_run_through_test_keeps_preflight_fail_but_does_not_raise(tmp_path: Path) -> None:
+    """run-through test 只能放行 Notebook 工程链路, 不能把 FAIL preflight 改成 PASS。"""
+    layout = build_drive_layout(str(tmp_path / "SSTW"))
+    bridge_templates = build_modern_baseline_official_bridge_command_templates("validation_scale")
+    bridge_decision = build_modern_baseline_official_bridge_preflight_decision(
+        layout,
+        profile="validation_scale",
+        command_env=bridge_templates,
+        use_bridge_commands=True,
+        require_bridge_official_commands=True,
+    )
+
+    assert bridge_decision["external_baseline_official_bridge_preflight_decision"] == "FAIL"
+    with pytest.raises(RuntimeError):
+        validate_modern_baseline_official_bridge_for_profile(bridge_decision)
+    validate_modern_baseline_official_bridge_for_profile(bridge_decision, allow_run_through_test=True)
+
+    external_decision = write_external_baseline_colab_preflight_decision(
+        layout,
+        profile="validation_scale",
+        command_env={},
+        require_modern_baseline_commands_for_paper_gate=True,
+        run_external_baseline_source_clone=True,
+        evidence_paths=[],
+    )
+    assert external_decision["external_baseline_colab_preflight_decision"] == "FAIL"
+    with pytest.raises(RuntimeError):
+        validate_modern_baseline_commands_for_profile(external_decision)
+    validate_modern_baseline_commands_for_profile(external_decision, allow_run_through_test=True)
 
 
 @pytest.mark.quick

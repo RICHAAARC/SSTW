@@ -599,9 +599,20 @@ def write_modern_baseline_official_bridge_preflight_decision(
     return decision
 
 
-def validate_modern_baseline_official_bridge_for_profile(preflight_decision: Mapping[str, object]) -> None:
-    """在 bridge 模式缺少官方原生命令时提前阻断。"""
+def validate_modern_baseline_official_bridge_for_profile(
+    preflight_decision: Mapping[str, object],
+    *,
+    allow_run_through_test: bool = False,
+) -> None:
+    """在 bridge 模式缺少官方原生命令时提前阻断。
+
+    `allow_run_through_test` 只用于 Colab 工程链路跑通测试。开启后仍会保留 FAIL
+    preflight artifact, 后续 external baseline records 也不能升级为正式论文 claim。
+    该参数不能用于 paper 结果冻结。
+    """
     if preflight_decision.get("external_baseline_official_bridge_preflight_decision") == "FAIL":
+        if allow_run_through_test:
+            return
         missing = preflight_decision.get("official_bridge_missing_env_vars")
         raise RuntimeError(
             "当前启用了现代视频水印 baseline bridge command, 但 bridge 内部缺少真正调用官方实现的命令。"
@@ -731,9 +742,19 @@ def write_external_baseline_colab_preflight_decision(
     return decision
 
 
-def validate_modern_baseline_commands_for_profile(preflight_decision: Mapping[str, object]) -> None:
-    """在 paper gate profile 缺少现代 baseline command 时抛出明确错误。"""
+def validate_modern_baseline_commands_for_profile(
+    preflight_decision: Mapping[str, object],
+    *,
+    allow_run_through_test: bool = False,
+) -> None:
+    """在 paper gate profile 缺少现代 baseline command 时抛出明确错误。
+
+    `allow_run_through_test` 只允许 Notebook 完成工程链路测试, 不改变 preflight
+    decision, 不把缺失 baseline command 解释为正式 claim 支持。
+    """
     if preflight_decision.get("external_baseline_colab_preflight_decision") == "FAIL":
+        if allow_run_through_test:
+            return
         missing = preflight_decision.get("external_baseline_colab_preflight_missing_env_vars")
         summary_path = preflight_decision.get("external_baseline_command_template_summary_path")
         raise RuntimeError(

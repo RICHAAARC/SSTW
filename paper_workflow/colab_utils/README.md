@@ -80,6 +80,23 @@ SSTW_WORKFLOW_PROFILE_VALUE = 'validation_scale'
 `SSTW_RUN_MOTION_CALIBRATION_IF_MISSING=true` 时, 才会先运行长耗时的 motion calibration
 前置流程。
 
+为了满足“直接用 Notebook 跑通工程链路测试”的需求, 该 Notebook 默认启用:
+
+```python
+SSTW_VALIDATION_SCALE_RUN_THROUGH_TEST = "true"
+```
+
+该模式只跳过 external baseline preflight 的前置中断, 不会伪造第三方 baseline 分数,
+也不会把 `validation_scale_gate_decision` 改成 PASS。若 6 个真实官方 baseline command
+尚未配置, Notebook 会继续运行到最终打包阶段, 但相关 artifacts 会如实记录
+`external_baseline_official_bridge_preflight_decision = FAIL` 和
+`validation_scale_gate_decision = FAIL`。如果要执行严格正式门禁, 请先配置真实官方命令,
+再设置:
+
+```python
+os.environ["SSTW_VALIDATION_SCALE_RUN_THROUGH_TEST"] = "false"
+```
+
 ### 3.1 运动阈值校准
 
 Notebook:

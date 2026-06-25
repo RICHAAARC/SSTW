@@ -388,6 +388,12 @@ runtime、baseline、internal ablation、replay/sketch 或 Claim-3 downgrade、C
 rebuild 和 `validation_scale_gate` 串联在同一个 Colab session 中。该 Notebook 不是旧的
 多 profile 综合入口, 不允许切换到 `pilot_paper` 或 `full_paper`。
 
+该入口默认启用 `SSTW_VALIDATION_SCALE_RUN_THROUGH_TEST=true`, 用于直接跑通 Colab 工程链路
+并落盘完整阻断原因。该模式只允许跳过 external baseline preflight 的 Notebook 前置中断,
+不得伪造正式 external baseline score, 也不得把缺失官方 baseline 命令的结果解释为
+paper claim。严格正式门禁必须设置 `SSTW_VALIDATION_SCALE_RUN_THROUGH_TEST=false`, 并配置
+6 个真实官方 baseline command。
+
 其中:
 
 1. `motion_threshold_calibration_colab.ipynb` 只负责独立 calibration split 和阈值冻结。

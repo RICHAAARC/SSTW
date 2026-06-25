@@ -1511,6 +1511,7 @@ full_paper_profile_registration: design_registered_not_ready
 monolithic_notebook_status: removed
 recommended_split_notebook_workflow: implemented
 validation_scale_single_notebook_gate_test: implemented
+validation_scale_run_through_test_without_fake_claim: implemented
 ```
 
 该变更解决的问题是: `validation_scale`、`pilot_paper` 和未来 `full_paper` 不再依赖 Notebook 中多处硬编码路径、样本数量或 profile 集合。切换运行层级时, 用户只需要设置:

@@ -22,6 +22,8 @@ PAPER_GATE_PROFILES = {"validation_scale", "pilot_paper"}
 EXTERNAL_BASELINE_COLAB_PREFLIGHT_DECISION = "artifacts/external_baseline_colab_preflight_decision.json"
 EXTERNAL_BASELINE_COMMAND_TEMPLATE_SUMMARY = "artifacts/external_baseline_command_template_summary.json"
 EXTERNAL_BASELINE_OFFICIAL_BRIDGE_PREFLIGHT_DECISION = "artifacts/external_baseline_official_bridge_preflight_decision.json"
+EXTERNAL_BASELINE_OFFICIAL_RESOURCE_BOOTSTRAP_DECISION = "artifacts/external_baseline_official_resource_bootstrap_decision.json"
+EXTERNAL_BASELINE_OFFICIAL_BUNDLE_GENERATION_DECISION = "artifacts/external_baseline_official_bundle_generation_decision.json"
 EXTERNAL_BASELINE_OFFICIAL_RESULT_BUNDLE_PREFLIGHT_DECISION = "artifacts/external_baseline_official_result_bundle_preflight_decision.json"
 
 
@@ -209,6 +211,11 @@ def build_drive_layout(
         "drive_run_root": _join_drive_path(root, str(workflow["drive_run_root_relative"])),
         "drive_package_dir": _join_drive_path(root, str(workflow["drive_package_dir_relative"])),
         "drive_log_dir": _join_drive_path(root, str(workflow["drive_log_dir_relative"])),
+        "external_baseline_resource_root": _join_drive_path(root, "resources/external_baseline"),
+        "external_baseline_official_result_bundle_root": _join_drive_path(
+            root,
+            f"external_baseline_official_result_bundles/{workflow['workflow_profile']}",
+        ),
         "motion_threshold_artifact_run_root": _join_drive_path(
             root,
             str(workflow.get("motion_threshold_artifact_run_root_relative") or workflow["drive_run_root_relative"]),
@@ -1009,6 +1016,58 @@ def build_external_baseline_source_intake_command(layout: dict[str, str], execut
     ]
     if execute_clone:
         command.append("--execute-clone")
+    return command
+
+
+def build_external_baseline_official_resource_bootstrap_command(
+    layout: dict[str, str],
+    *,
+    allow_network: bool = True,
+) -> list[str]:
+    """构造现代 baseline 官方资源自动准备命令。
+
+    该阶段属于 Colab 冷启动修复层。它会尝试下载公开 checkpoint、安装可公开安装的
+    官方依赖, 并把能回写到 Notebook 父进程的环境变量落盘到 bootstrap artifact。
+    对没有公开权重或超出当前 GPU 资源的 baseline, 它只能写出明确阻断原因, 不能
+    生成 proxy 分数。
+    """
+    command = [
+        sys.executable,
+        "-m",
+        "external_baseline.official_resource_bootstrap",
+        "--run-root",
+        layout["drive_run_root"],
+        "--resource-root",
+        layout["external_baseline_resource_root"],
+    ]
+    if not allow_network:
+        command.append("--disable-network")
+    return command
+
+
+def build_external_baseline_official_bundle_generation_command(
+    layout: dict[str, str],
+    *,
+    generate_auto_supported: bool = True,
+) -> list[str]:
+    """构造现代 baseline official bundle 自动生成命令。
+
+    该命令只对仓库能真实调用官方 API 的 baseline 生成 bundle。当前主要用于
+    VideoSeal 这类 post-hoc 官方 API 可自动下载 checkpoint 的方法。其它需要
+    高显存、训练 extractor、PRC key 或 maintained info 的 baseline 会写入计划
+    和阻断说明, 不会被伪造成 measured_formal。
+    """
+    command = [
+        sys.executable,
+        "-m",
+        "external_baseline.official_bundle_generator",
+        "--run-root",
+        layout["drive_run_root"],
+        "--bundle-root",
+        layout["external_baseline_official_result_bundle_root"],
+    ]
+    if generate_auto_supported:
+        command.append("--generate-auto-supported")
     return command
 
 

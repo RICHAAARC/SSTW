@@ -12,6 +12,8 @@ from main.external_baselines.baseline_registry import audit_external_baseline_re
 from main.external_baselines.explicit_dtw_temporal_alignment import compute_dtw_alignment_cost
 from main.external_baselines.frame_matching_temporal_registration import compute_registration_cost, match_frames
 from experiments.generative_video_model_probe.external_baseline_runner import write_external_baseline_comparison_outputs, write_external_baseline_status_outputs
+from external_baseline.official_bundle_generator import build_official_bundle_generation_plan
+from external_baseline.official_resource_bootstrap import bootstrap_official_resources
 from external_baseline.official_result_bundle import build_official_result_bundle_preflight
 from main.protocol.record_writer import read_jsonl, write_jsonl
 from external_baseline.source_intake import build_source_intake_manifest, write_source_intake_artifacts
@@ -119,6 +121,61 @@ def test_modern_baseline_colab_command_config_is_guidance_not_claim_evidence() -
         assert "external_baseline.official_command_bridge" in command
         assert row["score_output_contract"]["json_object_required"] is True
         assert "external_baseline_score" in row["score_output_contract"]["minimum_required_score_field_any_of"]
+
+
+@pytest.mark.quick
+def test_official_resource_requirements_define_auto_and_manual_boundaries() -> None:
+    """官方资源要求配置必须区分可自动补齐项和必须手动提供的官方产物。"""
+    config_path = Path("configs/external_baselines/official_resource_requirements.json")
+    config = json.loads(config_path.read_text(encoding="utf-8"))
+    rows = {row["baseline_id"]: row for row in config["resource_rows"]}
+
+    assert set(rows) == {"videoshield", "sigmark", "spdmark", "videomark", "vidsig", "videoseal"}
+    assert rows["videoseal"]["automatic_bundle_generation_supported_by_sstw"] is True
+    assert rows["videoseal"]["colab_l4_auto_bundle_status"] == "auto_bundle_supported"
+    assert rows["spdmark"]["automatic_bundle_generation_supported_by_sstw"] is False
+    assert rows["spdmark"]["colab_l4_auto_bundle_status"] == "blocked_by_missing_public_trained_weights"
+    assert rows["sigmark"]["colab_l4_auto_bundle_status"] == "blocked_by_official_gpu_memory_requirement"
+    assert "sstw_proxy" not in json.dumps(config, ensure_ascii=False)
+
+
+@pytest.mark.quick
+def test_official_bundle_generation_plan_is_fail_closed_about_auto_blocked_baselines(tmp_path: Path) -> None:
+    """official bundle generator 只能自动生成官方可支持的方法, 不能把缺资源 baseline 伪装为可自动生成。"""
+    run_root = tmp_path / "generative_video_runtime"
+    _write_external_baseline_runtime_fixture(run_root)
+    plan = build_official_bundle_generation_plan(run_root, tmp_path / "official_bundles")
+
+    assert plan["runtime_comparison_unit_count"] == 2
+    assert plan["baseline_count"] == 6
+    assert plan["auto_supported_baselines"] == ["videoseal"]
+    assert "spdmark" in plan["auto_blocked_baselines"]
+    assert "sigmark" in plan["auto_blocked_baselines"]
+    assert plan["auto_blocked_baseline_count"] == 5
+    spdmark_row = next(row for row in plan["plan_rows"] if row["baseline_id"] == "spdmark")
+    assert spdmark_row["automatic_bundle_generation_supported_by_sstw"] is False
+    assert spdmark_row["resource_blocker"]
+
+
+@pytest.mark.quick
+def test_official_resource_bootstrap_writes_repair_artifact_without_network(tmp_path: Path) -> None:
+    """bootstrap 在禁止网络时仍必须落盘可审计修复计划和环境变量更新。"""
+    run_root = tmp_path / "runs" / "validation_scale"
+    decision = bootstrap_official_resources(
+        run_root,
+        resource_root=tmp_path / "resources" / "external_baseline",
+        allow_network=False,
+        source_root=tmp_path / "external_baseline" / "primary",
+    )
+
+    artifact_path = run_root / "artifacts" / "external_baseline_official_resource_bootstrap_decision.json"
+    assert artifact_path.exists()
+    assert decision["official_resource_bootstrap_decision"] == "PASS"
+    assert "videoseal" in decision["ready_baselines"]
+    assert "spdmark" in decision["manual_official_resource_required_baselines"]
+    assert decision["manual_official_resource_required_count"] >= 4
+    assert decision["strict_gate_auto_resource_closure"] is False
+    assert decision["environment_updates"]["SSTW_EXTERNAL_BASELINE_RESOURCE_ROOT"].endswith("external_baseline")
 
 
 @pytest.mark.quick

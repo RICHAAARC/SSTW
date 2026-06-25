@@ -1682,3 +1682,47 @@ modern_external_baseline_measured_formal_results: still_requires_real_official_c
 该更新没有降低严格门禁。其作用是把外部资源阻断提前暴露: 若某个 modern baseline 既没有可直接运行的官方资源, 也没有覆盖当前 runtime comparison unit 的官方结果包, `external_baseline_official_result_bundle_preflight_decision.json` 会明确失败。若结果包完整, repository official adapter 可以直接读取官方 JSON 并写入 `measured_formal` comparison records。
 
 重要边界: 官方结果包必须由第三方官方代码或官方原生命令生成, 不能由 SSTW `S_final`、最终判定分数、视频相似度或任意 proxy 分数派生。该能力解决的是 Colab 冷启动和高显存 baseline 的工程可复现问题, 不是允许手写 baseline 结果。
+
+## 2026-06-25 官方资源 bootstrap 与自动 official bundle 生成接入
+
+根据“检查不通过后应自动补齐可补齐资源”的要求, 当前工程继续把 external baseline
+流程从“只做 preflight”推进为“先自动修复, 再严格门禁”。
+
+新增入口包括:
+
+```text
+configs/external_baselines/official_resource_requirements.json
+external_baseline/official_resource_bootstrap.py
+external_baseline/official_bundle_generator.py
+paper_workflow/notebook_utils/generative_video_model_probe_workflow.py::build_external_baseline_official_resource_bootstrap_command
+paper_workflow/notebook_utils/generative_video_model_probe_workflow.py::build_external_baseline_official_bundle_generation_command
+```
+
+Notebook workflow 已增加以下阶段:
+
+```text
+external_baseline_source_intake
+-> external_baseline_official_resource_bootstrap
+-> external_baseline_official_bundle_generation
+-> external_baseline_official_result_bundle_preflight
+-> external_baseline_comparison
+```
+
+阶段性状态为:
+
+```text
+official_resource_bootstrap: implemented
+public_resource_auto_download_path: implemented_for_supported_resources
+videoseal_official_bundle_auto_generation: implemented
+vidsig_public_checkpoint_bootstrap: implemented_as_resource_download_when_network_allowed
+manual_official_resource_required_artifact: implemented_for_resource_heavy_or_unpublished_weight_baselines
+strict_gate_fake_pass: forbidden
+validation_scale_formal_gate_notebook_auto_repair_path: integrated
+```
+
+该更新的含义是: Colab 冷启动时不再只告诉用户缺少官方资源, 而是会先尝试自动安装
+公开依赖、下载公开 checkpoint, 并为可自动支持的 baseline 生成 official bundle。若某个
+baseline 客观需要未公开训练权重、高显存官方生成流程、PRC key 或 maintained info,
+workflow 会写出 `manual_official_resource_required`, 仍然不会把该 baseline 伪造成
+`measured_formal`。因此严格 validation-scale 通过条件没有降低: 6 个现代 baseline
+最终仍必须由官方源码、官方 API、官方 checkpoint 或官方结果包产出可审计 score records。

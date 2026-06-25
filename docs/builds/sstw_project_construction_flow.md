@@ -2133,6 +2133,9 @@ paper_workflow/notebook_utils/generative_video_model_probe_workflow.py::validate
 artifacts/external_baseline_colab_preflight_decision.json
 artifacts/external_baseline_command_template_summary.json
 artifacts/external_baseline_official_bridge_preflight_decision.json
+artifacts/external_baseline_official_resource_bootstrap_decision.json
+artifacts/external_baseline_official_bundle_generation_decision.json
+artifacts/external_baseline_official_result_bundle_preflight_decision.json
 ```
 
 其中 `external_baseline_colab_preflight_decision.json` 只记录 Colab 冷启动 preflight 状态, 不运行第三方 baseline, 不支持论文 claim。它的作用是让用户在 Google Drive 中直接看到缺少哪些现代 baseline command, 避免 Colab 断开后无法定位失败原因。
@@ -2253,3 +2256,33 @@ artifacts/external_baseline_evidence/<baseline_id>/<score_digest>/official_comma
 ```
 
 这些文件属于 Colab 真实运行证据, 会被 `external_baseline_execution_manifest.json` 自动收集到 `evidence_paths`。这样即使 Colab 运行环境断开, Google Drive package 仍保留每条 `measured_formal` external baseline score 的官方输出来源。该机制属于项目特定写法, 目的是防止现代 baseline 对比退化为只保留聚合分数的不可审计表格。
+
+### 35.7 官方资源 bootstrap 与 official bundle 自动生成规则
+
+validation-scale 与 pilot-paper 的外部 baseline 流程不得停留在“只检查缺什么”。在
+runtime detection records 已经落盘后, Notebook 必须按以下顺序推进:
+
+```text
+external_baseline_source_intake
+-> external_baseline_official_resource_bootstrap
+-> external_baseline_official_bundle_generation
+-> external_baseline_official_result_bundle_preflight
+-> external_baseline_comparison
+```
+
+其中:
+
+1. `external_baseline_official_resource_bootstrap` 尝试自动安装或下载公开可获得的官方资源,
+   例如 VideoSeal 官方 API 依赖、VidSig 公开 checkpoint 等。
+2. `external_baseline_official_bundle_generation` 只对当前仓库可以真实调用官方 API 的
+   baseline 生成 official bundle。当前主要适用于 VideoSeal 这类 post-hoc 官方水印方法。
+3. 对需要高显存生成模型、训练得到的 extractor、PRC key、maintained info 或官方中间产物的
+   baseline, 自动流程必须写出 `manual_official_resource_required`, 不得用 SSTW 的
+   `S_final`、最终判定分数、视频相似度或随机数生成替代分数。
+4. `external_baseline_official_result_bundle_preflight` 只能在官方资源或官方结果包覆盖当前
+   comparison unit 时通过。失败时必须保留缺口 artifact, 作为 validation-scale 阻断依据。
+
+该规则的目标是让 Colab 冷启动具备“能自动补齐的就自动补齐”的工程能力, 同时保持论文
+baseline 对比的 fail-closed 边界。严格门禁通过的前提仍然是 6 个现代 baseline 最终都产出
+`measured_formal` records, 且 evidence path 可以追溯到官方源码、官方 API、官方 checkpoint
+或官方结果包。

@@ -58,6 +58,8 @@ prompt suite
 -> motion threshold reuse
 -> runtime attack / detection
 -> external baseline source intake
+-> official resource bootstrap
+-> automatic official bundle generation
 -> official result bundle preflight
 -> external baseline comparison
 -> internal ablation
@@ -98,7 +100,23 @@ os.environ["SSTW_VALIDATION_SCALE_RUN_THROUGH_TEST"] = "true"
 也不会把 `validation_scale_gate_decision` 改成 PASS。严格正式门禁必须保持该变量为
 `false`, 并保证 6 个现代 baseline 的 official command 能真实写出 score JSON。
 
-严格门禁还会默认检查 Google Drive 官方结果包目录:
+严格门禁不是只做前置检查。Notebook 在 runtime detection 记录生成后会继续执行
+`external_baseline_official_resource_bootstrap` 和
+`external_baseline_official_bundle_generation`:
+
+```text
+检查失败前先尝试自动补齐公开资源
+-> 下载可公开获得的 checkpoint 或依赖
+-> 为可自动支持的 baseline 生成 official bundle
+-> 再执行 official result bundle preflight
+```
+
+当前可自动生成完整 official bundle 的路径主要是 VideoSeal 这类官方 API 可后处理嵌入 /
+检测的方法。对 SIGMark、SPDMark、VideoShield、VideoMark 或 VidSig 中需要高显存、训练
+extractor、PRC key、maintained info 或官方生成中间产物的方法, workflow 会写出明确
+`manual_official_resource_required` 阻断, 而不会伪造 pass。
+
+严格门禁会默认检查 Google Drive 官方结果包目录:
 
 ```text
 /content/drive/MyDrive/SSTW/external_baseline_official_result_bundles/<workflow_profile>
@@ -181,6 +199,8 @@ paper_workflow/colab_utils/external_baseline_formal_scoring_colab.ipynb
 
 - 读取统一 workflow profile。
 - 执行 external baseline source intake。
+- 执行 official resource bootstrap, 自动补齐可公开下载的资源。
+- 执行 automatic official bundle generation, 生成可自动支持 baseline 的官方结果包。
 - 执行 official result bundle preflight。
 - 通过正式 command adapter 调用现代视频水印 baseline。
 - 生成 external baseline comparison records。
@@ -209,6 +229,8 @@ Notebook 会额外写出以下配置辅助 artifact:
 
 ```text
 artifacts/external_baseline_command_template_summary.json
+artifacts/external_baseline_official_resource_bootstrap_decision.json
+artifacts/external_baseline_official_bundle_generation_decision.json
 ```
 
 该 artifact 来自:
@@ -360,8 +382,15 @@ official_execution_manifest_path
 workflow 会写出:
 
 ```text
+artifacts/external_baseline_official_resource_bootstrap_decision.json
+artifacts/external_baseline_official_bundle_generation_decision.json
 artifacts/external_baseline_official_result_bundle_preflight_decision.json
 ```
+
+`external_baseline_official_resource_bootstrap_decision.json` 会记录哪些 baseline 已由
+Colab 自动补齐资源, 哪些 baseline 仍需要官方 bundle、官方 checkpoint、训练权重或更高显存
+环境。`external_baseline_official_bundle_generation_decision.json` 会记录自动生成了哪些
+official bundle, 以及哪些 baseline 因官方资源边界无法自动生成。
 
 若某个 baseline 既没有可直接运行的官方资源, 也没有覆盖全部 runtime comparison unit
 的结果包, 该 preflight 会失败。该失败是正式门禁的一部分, 目的是防止把缺权重、
@@ -480,6 +509,8 @@ paper_gate_and_package_colab.ipynb
 ```text
 generative_video_colab_runtime_decision.json
 external_baseline_colab_preflight_decision.json
+external_baseline_official_resource_bootstrap_decision.json
+external_baseline_official_bundle_generation_decision.json
 external_baseline_official_result_bundle_preflight_decision.json
 external_baseline_comparison_decision.json
 validation_internal_ablation_decision.json

@@ -4,16 +4,18 @@
 
 ## 接入方式
 
-external baseline 采用“六层接入”方式:
+external baseline 采用分层接入方式:
 
 1. `source_registry.json` 登记 baseline 身份、方法家族、源码状态、adapter 路径、结果状态和 claim 边界。
 2. `external_baseline_intake_manifest.json`、`external_baseline_source_inspection.json`、`external_baseline_clone_results.json` 和 `plans/external_baseline_table_plan.json` 记录 source intake、源码检查、clone 计划和主表角色。
 3. `primary/<baseline_id>/source/` 保存第三方官方源码或用户放置的等价入口, 该目录由 `.gitignore` 排除, 不进入主方法层。
 4. `primary/<baseline_id>/adapter/` 保存本仓库维护的 adapter。adapter 必须暴露 `adapter_status()` 和 `build_score_records(run_root, baseline_record)` 两类接口。
 5. `official_eval_adapters/<baseline_id>.py` 保存 repository 维护的 fail-closed 官方命令 wrapper, 用于把官方源码、官方 API、官方 checkpoint 或官方结果产物转换成 SSTW 统一 JSON。
-6. `official_result_bundle.py` 检查 Google Drive 中由第三方官方代码预先生成的结果包是否覆盖当前 runtime comparison unit。
-7. `experiments/generative_video_model_probe/external_baseline_runner.py` 负责在某次 `run_root` 中调度 adapter, 并把状态记录、比较结果和 `external_baseline_execution_manifest.json` 落盘。
-8. validation gate、artifact rebuild dry-run 和 packager 只读取已落盘 artifacts, 不直接调用第三方源码或 Notebook 临时变量。
+6. `official_resource_bootstrap.py` 在 Colab 冷启动中自动补齐可公开获得的官方资源, 并对无法自动补齐的 baseline 写出 `manual_official_resource_required`。
+7. `official_bundle_generator.py` 为可由官方 API 自动支持的 baseline 生成 official bundle, 同时为高显存或缺训练权重 baseline 写出不能自动生成的原因。
+8. `official_result_bundle.py` 检查 Google Drive 中由第三方官方代码预先生成的结果包是否覆盖当前 runtime comparison unit。
+9. `experiments/generative_video_model_probe/external_baseline_runner.py` 负责在某次 `run_root` 中调度 adapter, 并把状态记录、比较结果和 `external_baseline_execution_manifest.json` 落盘。
+10. validation gate、artifact rebuild dry-run 和 packager 只读取已落盘 artifacts, 不直接调用第三方源码或 Notebook 临时变量。
 
 ## 接入规则
 
@@ -112,9 +114,24 @@ official_execution_manifest_path
 可用以下命令在当前 `run_root` 上检查结果包是否足以进入严格门禁:
 
 ```bash
+python -m external_baseline.official_resource_bootstrap \
+  --run-root /content/drive/MyDrive/SSTW/runs/generative_video_model_probe/validation_scale \
+  --resource-root /content/drive/MyDrive/SSTW/resources/external_baseline
+
+python -m external_baseline.official_bundle_generator \
+  --run-root /content/drive/MyDrive/SSTW/runs/generative_video_model_probe/validation_scale \
+  --bundle-root /content/drive/MyDrive/SSTW/external_baseline_official_result_bundles/validation_scale \
+  --generate-auto-supported
+
 python -m external_baseline.official_result_bundle \
   --run-root /content/drive/MyDrive/SSTW/runs/generative_video_model_probe/validation_scale
 ```
+
+上述顺序体现严格门禁的修复策略: 不是只检查失败, 而是先自动准备可公开资源、再自动生成
+可由官方 API 支持的 official bundle、最后执行 fail-closed preflight。若某个 baseline
+的官方仓库未公开训练权重、需要大显存生成模型、需要 PRC key / maintained info 或需要
+离线官方中间产物, bootstrap 与 bundle generator 会写出明确阻断原因, 不会用 SSTW
+检测分数或视频相似度伪造结果。
 
 ## Source intake 命令
 

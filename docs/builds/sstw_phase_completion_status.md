@@ -551,7 +551,7 @@ blocked_until_motion_threshold_calibration
 
 ### Colab 参数切换
 
-`paper_workflow/colab_utils/motion_threshold_calibration_colab.ipynb` 已切换到:
+`paper_workflow/colab_notebooks/motion_threshold_calibration_colab.ipynb` 已切换到:
 
 ```text
 PROFILE = 'pilot'
@@ -999,7 +999,7 @@ external_baseline_result_used_for_claim = true
 experiments/generative_video_model_probe/validation_scale_gate.py
 configs/protocol/validation_scale_generative_probe.json
 paper_workflow/notebook_utils/generative_video_model_probe_workflow.py::build_validation_scale_gate_command
-paper_workflow/colab_utils/generative_video_runtime_colab.ipynb SSTW_WORKFLOW_PROFILE = validation_scale
+paper_workflow/colab_notebooks/generative_video_runtime_colab.ipynb SSTW_WORKFLOW_PROFILE = validation_scale
 ```
 
 该 gate 会写出:
@@ -1464,7 +1464,7 @@ real_modern_baseline_results: still_pending_colab_run
 
 ## 2026-06-24 Colab workflow profile 配置化重构
 
-本次工程重构将生成式视频主线的 Colab 执行入口从“单 Notebook 多处手写 profile 分支”调整为“统一 workflow profile 配置 + 拆分 Notebook role”的方式。
+本次工程重构将生成式视频主线的 Colab 执行入口从“拆分 Notebook 多处手写 profile 分支”调整为“统一 workflow profile 配置 + 拆分 Notebook role”的方式。
 
 新增统一配置文件:
 
@@ -1495,11 +1495,10 @@ workflow_stage_plan
 新增或重构的 Notebook 入口为:
 
 ```text
-paper_workflow/colab_utils/motion_threshold_calibration_colab.ipynb
-paper_workflow/colab_utils/generative_video_runtime_colab.ipynb
-paper_workflow/colab_utils/external_baseline_formal_scoring_colab.ipynb
-paper_workflow/colab_utils/paper_gate_and_package_colab.ipynb
-paper_workflow/colab_utils/validation_scale_formal_gate_colab.ipynb
+paper_workflow/colab_notebooks/motion_threshold_calibration_colab.ipynb
+paper_workflow/colab_notebooks/generative_video_runtime_colab.ipynb
+paper_workflow/colab_notebooks/external_baseline_formal_scoring_colab.ipynb
+paper_workflow/colab_notebooks/paper_gate_and_package_colab.ipynb
 ```
 
 阶段性状态为:
@@ -1513,8 +1512,8 @@ workflow_profile_aliases_removed: implemented
 full_paper_profile_registration: design_registered_not_ready
 monolithic_notebook_status: removed
 recommended_split_notebook_workflow: implemented
-validation_scale_single_notebook_gate_test: implemented
-validation_scale_run_through_test_without_fake_claim: implemented
+validation_scale_single_notebook_gate_test: removed_split_workflow_required
+validation_scale_run_through_test_without_fake_claim: removed_with_monolithic_notebook
 ```
 
 该变更解决的问题是: `validation_scale`、`pilot_paper` 和未来 `full_paper` 不再依赖 Notebook 中多处硬编码路径、样本数量或 profile 集合。切换运行层级时, 用户只需要设置:
@@ -1603,7 +1602,7 @@ modern_external_baseline_official_inner_command_contract: implemented
 bridge_preflight_hard_blocker: implemented
 direct_eval_command_override_bridge_template: implemented
 fake_score_or_sstw_score_fallback: forbidden
-validation_scale_formal_gate_path: runnable_after_official_inner_commands_configured
+validation_scale_split_notebook_path: runnable_after_official_inner_commands_configured
 modern_external_baseline_measured_formal_results: still_pending_real_colab_official_commands
 ```
 
@@ -1631,7 +1630,7 @@ external_baseline/official_eval_adapters/videoseal.py
 
 ```text
 repository_official_eval_adapter: implemented
-SSTW_USE_REPOSITORY_OFFICIAL_BASELINE_ADAPTERS: default_true_in_validation_scale_formal_gate
+SSTW_USE_REPOSITORY_OFFICIAL_BASELINE_ADAPTERS: default_true_in_external_baseline_formal_scoring
 missing_official_source_or_weight_behavior: fail_closed
 fake_score_or_proxy_score_fallback: forbidden
 modern_external_baseline_measured_formal_results: pending_real_colab_official_artifacts_or_checkpoints
@@ -1676,7 +1675,7 @@ artifacts/external_baseline_official_result_bundle_preflight_decision.json
 official_result_bundle_preflight: implemented
 official_result_bundle_reading_in_repository_adapters: implemented
 external_baseline_payload_path_fields: implemented
-validation_scale_formal_gate_bundle_stage: integrated
+validation_scale_split_baseline_bundle_stage: integrated
 google_drive_default_bundle_root: configured_by_notebook
 sstw_proxy_result_bundle: forbidden
 modern_external_baseline_measured_formal_results: still_requires_real_official_command_or_repository_generated_official_cache
@@ -1720,7 +1719,7 @@ videoseal_official_bundle_auto_generation: implemented
 vidsig_public_checkpoint_bootstrap: implemented_as_resource_download_when_network_allowed
 manual_official_resource_required_artifact: implemented_for_resource_heavy_or_unpublished_weight_baselines
 strict_gate_fake_pass: forbidden
-validation_scale_formal_gate_notebook_auto_repair_path: integrated
+external_baseline_formal_scoring_notebook_auto_repair_path: integrated
 ```
 
 该更新的含义是: Colab 冷启动时不再只告诉用户缺少官方资源, 而是会先尝试自动安装

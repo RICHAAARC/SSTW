@@ -372,21 +372,10 @@ motion_threshold_calibration_colab.ipynb
 -> paper_gate_and_package_colab.ipynb
 ```
 
-为便于一次性测试 validation_scale 正式门禁, 另提供单 Notebook 入口:
-
-```text
-validation_scale_formal_gate_colab.ipynb
-```
-
-该入口的 role 为 `validation_scale_formal_gate`, 只允许 `validation_scale` profile。它把
-runtime、baseline、internal ablation、replay/sketch 或 Claim-3 downgrade、CI、artifact
-rebuild 和 `validation_scale_gate` 串联在同一个 Colab session 中。该 Notebook 不是旧的
-多 profile 综合入口, 不允许切换到 `pilot_paper` 或 `full_paper`。
-
-该入口默认使用 `SSTW_VALIDATION_SCALE_RUN_THROUGH_TEST=false`, 用于执行严格小样本全流程打通门禁。
-若显式设置为 `true`, 只用于跑通 Colab 工程链路并落盘完整阻断原因。该模式只允许跳过 external baseline preflight 的 Notebook 前置中断,
-不得伪造正式 external baseline score, 也不得把缺失官方 baseline 命令的结果解释为
-paper claim。严格门禁必须设置 `SSTW_VALIDATION_SCALE_RUN_THROUGH_TEST=false`, 并通过本项目完成 6 个现代 baseline 的 clone / build / run / adapt / record。若某个 baseline 只能在高显存或特殊依赖环境中运行, 也必须通过本项目记录 source intake、构建命令、运行命令、adapter 输出和 governed non-run reason, 不接受外部补交结果。
+当前不保留 `validation_scale` 单 Notebook 全流程入口。严格门禁必须通过拆分 Notebook
+逐段执行, 并通过本项目完成 6 个现代 baseline 的 clone / build / run / adapt / record。
+若某个 baseline 只能在高显存或特殊依赖环境中运行, 也必须通过本项目记录 source intake、
+构建命令、运行命令、adapter 输出和 governed non-run reason, 不接受外部补交结果。
 
 其中:
 

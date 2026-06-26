@@ -1,6 +1,6 @@
 {
   "config_kind": "generative_video_notebook_workflow_config",
-  "config_version": "2026_06_26_profile_driven_colab_workflow_v7_validation_scale_preflight_gate",
+  "config_version": "2026_06_26_profile_driven_colab_workflow_v8_split_notebook_layout",
   "default_dataset_root_relative": "datasets/generative_video_prompt_suite",
   "default_drive_project_root": "/content/drive/MyDrive/SSTW",
   "default_prompt_suite_path_relative": "datasets/generative_video_prompt_suite/prompt_seed_suite.json",
@@ -8,8 +8,7 @@
     "external_baseline_formal_scoring": "validation_scale",
     "generative_video_runtime": "validation_scale",
     "motion_threshold_calibration": "motion_calibration",
-    "paper_gate_and_package": "validation_scale",
-    "validation_scale_formal_gate": "validation_scale"
+    "paper_gate_and_package": "validation_scale"
   },
   "notebook_roles": {
     "external_baseline_formal_scoring": {
@@ -18,7 +17,7 @@
         "pilot_paper",
         "full_paper"
       ],
-      "notebook_path": "paper_workflow/colab_utils/external_baseline_formal_scoring_colab.ipynb",
+      "notebook_path": "paper_workflow/colab_notebooks/external_baseline_formal_scoring_colab.ipynb",
       "stage_plan": [
         "external_baseline_colab_preflight",
         "external_baseline_source_intake",
@@ -37,7 +36,7 @@
         "pilot_paper",
         "full_paper"
       ],
-      "notebook_path": "paper_workflow/colab_utils/generative_video_runtime_colab.ipynb",
+      "notebook_path": "paper_workflow/colab_notebooks/generative_video_runtime_colab.ipynb",
       "stage_plan": [
         "prepare_prompt_suite",
         "external_baseline_colab_preflight",
@@ -57,7 +56,7 @@
       "allowed_workflow_profiles": [
         "motion_calibration"
       ],
-      "notebook_path": "paper_workflow/colab_utils/motion_threshold_calibration_colab.ipynb",
+      "notebook_path": "paper_workflow/colab_notebooks/motion_threshold_calibration_colab.ipynb",
       "stage_plan": [
         "prepare_prompt_suite",
         "wan21_runtime_generation",
@@ -73,7 +72,7 @@
         "pilot_paper",
         "full_paper"
       ],
-      "notebook_path": "paper_workflow/colab_utils/paper_gate_and_package_colab.ipynb",
+      "notebook_path": "paper_workflow/colab_notebooks/paper_gate_and_package_colab.ipynb",
       "stage_plan": [
         "motion_threshold_reuse_check",
         "validation_internal_ablation",
@@ -85,43 +84,6 @@
         "data_split_and_leakage_guard",
         "pilot_paper_gate",
         "pilot_paper_to_full_paper_transition_decision",
-        "validation_artifact_rebuild_dry_run",
-        "validation_scale_gate",
-        "validation_scale_to_pilot_paper_transition_decision",
-        "validation_scale_gate_figure_builder",
-        "validation_scale_package_manifest_builder",
-        "quick_tests_and_harness",
-        "drive_packaging"
-      ]
-    },
-    "validation_scale_formal_gate": {
-      "allowed_workflow_profiles": [
-        "validation_scale"
-      ],
-      "notebook_path": "paper_workflow/colab_utils/validation_scale_formal_gate_colab.ipynb",
-      "stage_plan": [
-        "prepare_prompt_suite",
-        "external_baseline_colab_preflight",
-        "wan21_runtime_generation",
-        "formal_metric_scoring",
-        "motion_threshold_reuse_check",
-        "mechanism_postprocess",
-        "pilot_matrix_postprocess",
-        "runtime_attack",
-        "runtime_detection",
-        "small_scale_claim_pilot_gate",
-        "external_baseline_source_intake",
-        "external_baseline_official_resource_bootstrap",
-        "external_baseline_official_bundle_generation",
-        "external_baseline_official_result_bundle_preflight",
-        "external_baseline_comparison",
-        "external_baseline_self_containment_decision",
-        "validation_internal_ablation",
-        "adaptive_attack_proxy",
-        "replay_and_sketch_gate",
-        "claim3_downgrade_gate",
-        "statistical_confidence_interval",
-        "data_split_and_leakage_guard",
         "validation_artifact_rebuild_dry_run",
         "validation_scale_gate",
         "validation_scale_to_pilot_paper_transition_decision",

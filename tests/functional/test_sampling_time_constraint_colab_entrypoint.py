@@ -186,7 +186,7 @@ def test_generation_model_config_uses_wan21_as_sstw_tc_primary() -> None:
 @pytest.mark.quick
 def test_sampling_time_constraint_colab_notebook_calls_repository_modules() -> None:
     """B6 Notebook 只能作为入口, 必须调用仓库模块生成正式输出。"""
-    notebook_path = Path("paper_workflow/colab_utils/sampling_time_constraint_colab.ipynb")
+    notebook_path = Path("paper_workflow/colab_notebooks/sampling_time_constraint_colab.ipynb")
     assert notebook_path.exists()
     notebook = json.loads(notebook_path.read_text(encoding="utf-8"))
     source = "".join("".join(cell.get("source", [])) for cell in notebook["cells"])

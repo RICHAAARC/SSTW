@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import ast
 import json
 from pathlib import Path
 import re
@@ -187,7 +186,7 @@ def test_pilot_paper_profile_constructs_medium_scale_low_fpr_plan(tmp_path: Path
 @pytest.mark.quick
 def test_generative_video_colab_notebook_calls_repository_modules() -> None:
     """runtime Notebook 只能作为入口, 必须通过统一 workflow profile 调用仓库模块。"""
-    notebook_path = Path("paper_workflow/colab_utils/generative_video_runtime_colab.ipynb")
+    notebook_path = Path("paper_workflow/colab_notebooks/generative_video_runtime_colab.ipynb")
     assert notebook_path.exists()
     notebook = json.loads(notebook_path.read_text(encoding="utf-8"))
     source = "".join("".join(cell.get("source", [])) for cell in notebook["cells"])
@@ -269,10 +268,9 @@ def test_split_colab_notebooks_are_profile_driven() -> None:
         "generative_video_runtime_colab.ipynb": "generative_video_runtime",
         "external_baseline_formal_scoring_colab.ipynb": "external_baseline_formal_scoring",
         "paper_gate_and_package_colab.ipynb": "paper_gate_and_package",
-        "validation_scale_formal_gate_colab.ipynb": "validation_scale_formal_gate",
     }
     for notebook_name, role in expected_roles.items():
-        notebook_path = Path("paper_workflow/colab_utils") / notebook_name
+        notebook_path = Path("paper_workflow/colab_notebooks") / notebook_name
         assert notebook_path.exists()
         notebook = json.loads(notebook_path.read_text(encoding="utf-8"))
         source = "".join("".join(cell.get("source", [])) for cell in notebook["cells"])
@@ -295,10 +293,9 @@ def test_split_colab_notebooks_are_profile_driven() -> None:
         assert "pilot_paper_results" not in source
         assert "full_paper_results" not in source
 
-    runtime_source = Path("paper_workflow/colab_utils/generative_video_runtime_colab.ipynb").read_text(encoding="utf-8")
-    baseline_source = Path("paper_workflow/colab_utils/external_baseline_formal_scoring_colab.ipynb").read_text(encoding="utf-8")
-    gate_source = Path("paper_workflow/colab_utils/paper_gate_and_package_colab.ipynb").read_text(encoding="utf-8")
-    validation_gate_source = Path("paper_workflow/colab_utils/validation_scale_formal_gate_colab.ipynb").read_text(encoding="utf-8")
+    runtime_source = Path("paper_workflow/colab_notebooks/generative_video_runtime_colab.ipynb").read_text(encoding="utf-8")
+    baseline_source = Path("paper_workflow/colab_notebooks/external_baseline_formal_scoring_colab.ipynb").read_text(encoding="utf-8")
+    gate_source = Path("paper_workflow/colab_notebooks/paper_gate_and_package_colab.ipynb").read_text(encoding="utf-8")
     assert "external_baseline_colab_preflight" in runtime_source
     assert "build_external_baseline_comparison_command" not in runtime_source
     assert "build_colab_runtime_command" not in baseline_source
@@ -308,52 +305,28 @@ def test_split_colab_notebooks_are_profile_driven() -> None:
     assert "build_external_baseline_official_result_bundle_preflight_command" in baseline_source
     assert "build_pilot_paper_gate_command" in gate_source
     assert "build_validation_scale_gate_command" in gate_source
-    assert "NOTEBOOK_ROLE = 'validation_scale_formal_gate'" in validation_gate_source
-    assert "build_colab_runtime_command" in validation_gate_source
-    assert "build_external_baseline_comparison_command" in validation_gate_source
-    assert "build_external_baseline_official_resource_bootstrap_command" in validation_gate_source
-    assert "build_external_baseline_official_bundle_generation_command" in validation_gate_source
-    assert "build_external_baseline_official_result_bundle_preflight_command" in validation_gate_source
-    assert "build_validation_internal_ablation_command" in validation_gate_source
-    assert "build_replay_and_sketch_gate_command" in validation_gate_source
-    assert "build_claim3_downgrade_command" in validation_gate_source
-    assert "build_statistical_confidence_interval_command" in validation_gate_source
-    assert "build_validation_artifact_rebuild_dry_run_command" in validation_gate_source
-    assert "build_validation_scale_gate_command" in validation_gate_source
-    assert "build_pilot_paper_gate_command" not in validation_gate_source
-    assert "VALIDATION_SCALE_RUN_THROUGH_TEST" in validation_gate_source
-    assert "allow_run_through_test=VALIDATION_SCALE_RUN_THROUGH_TEST" in validation_gate_source
-    assert "build_repository_official_baseline_eval_command_templates" in validation_gate_source
-    assert "SSTW_USE_REPOSITORY_OFFICIAL_BASELINE_ADAPTERS" in validation_gate_source
-    assert "SSTW_EXTERNAL_BASELINE_OFFICIAL_RESULT_BUNDLE_ROOT" in validation_gate_source
-    assert "SSTW_ALLOW_EXTERNAL_BASELINE_RESOURCE_NETWORK" in validation_gate_source
-    assert "SSTW_GENERATE_AUTO_SUPPORTED_OFFICIAL_BUNDLES" in validation_gate_source
-    assert "apply_env_updates_from_artifact" in validation_gate_source
+    assert not Path("paper_workflow/colab_notebooks/validation_scale_formal_gate_colab.ipynb").exists()
+    assert not list(Path("paper_workflow/colab_utils").glob("*.ipynb"))
 
 
 @pytest.mark.quick
-def test_validation_scale_formal_gate_notebook_python_cells_are_syntax_valid() -> None:
-    """validation-scale 单 Notebook 中非 magic Python cell 不应包含断裂字符串。"""
-    notebook_path = Path("paper_workflow/colab_utils/validation_scale_formal_gate_colab.ipynb")
-    notebook = json.loads(notebook_path.read_text(encoding="utf-8"))
-    full_source = "".join("".join(cell.get("source", [])) for cell in notebook["cells"])
+def test_colab_notebooks_are_separated_from_python_helpers() -> None:
+    """Notebook 入口必须与 Python helper 分目录保存。"""
 
-    assert "print('\n" not in full_source
-    assert 'print("\n' not in full_source
+    notebook_dir = Path("paper_workflow/colab_notebooks")
+    helper_dir = Path("paper_workflow/colab_utils")
 
-    for index, cell in enumerate(notebook["cells"]):
-        if cell.get("cell_type") != "code":
-            continue
-        source = "".join(cell.get("source", []))
-        if any(line.lstrip().startswith(("!", "%")) for line in source.splitlines()):
-            continue
-        ast.parse(source, filename=f"{notebook_path}:cell_{index}")
+    assert notebook_dir.exists()
+    assert helper_dir.exists()
+    assert list(notebook_dir.glob("*.ipynb"))
+    assert not list(helper_dir.glob("*.ipynb"))
+    assert not (notebook_dir / "validation_scale_formal_gate_colab.ipynb").exists()
 
 
 @pytest.mark.quick
 def test_colab_workflow_readme_documents_validation_scale_execution() -> None:
     """Colab workflow README 必须说明 validation-scale 执行顺序、profile 切换和 Drive 落盘边界。"""
-    readme_path = Path("paper_workflow/colab_utils/README.md")
+    readme_path = Path("paper_workflow/colab_notebooks/README.md")
     assert readme_path.exists()
     text = readme_path.read_text(encoding="utf-8")
 
@@ -361,8 +334,9 @@ def test_colab_workflow_readme_documents_validation_scale_execution() -> None:
     assert "generative_video_runtime_colab.ipynb" in text
     assert "external_baseline_formal_scoring_colab.ipynb" in text
     assert "paper_gate_and_package_colab.ipynb" in text
-    assert "validation_scale_formal_gate_colab.ipynb" in text
-    assert "SSTW_VALIDATION_SCALE_RUN_THROUGH_TEST" in text
+    assert "当前不保留单 Notebook 全流程入口" in text
+    assert "validation_scale_formal_gate_colab.ipynb" not in text
+    assert "SSTW_VALIDATION_SCALE_RUN_THROUGH_TEST" not in text
     assert text.index("motion_threshold_calibration_colab.ipynb") < text.index("generative_video_runtime_colab.ipynb")
     assert text.index("generative_video_runtime_colab.ipynb") < text.index("external_baseline_formal_scoring_colab.ipynb")
     assert text.index("external_baseline_formal_scoring_colab.ipynb") < text.index("paper_gate_and_package_colab.ipynb")
@@ -398,9 +372,7 @@ def test_colab_workflow_readme_documents_validation_scale_execution() -> None:
 def test_notebook_workflow_profile_config_supports_profile_switching() -> None:
     """统一配置层必须能区分 validation_scale、pilot_paper 和未开放的 full_paper。"""
     assert default_workflow_profile_for_notebook_role("generative_video_runtime") == "validation_scale"
-    assert default_workflow_profile_for_notebook_role("validation_scale_formal_gate") == "validation_scale"
     validation = resolve_notebook_workflow_profile("validation_scale", "paper_gate_and_package")
-    validation_single = resolve_notebook_workflow_profile("validation_scale", "validation_scale_formal_gate")
     pilot = resolve_notebook_workflow_profile("pilot_paper", "paper_gate_and_package")
     full = resolve_notebook_workflow_profile("full_paper", config_path="configs/paper_workflow/generative_video_notebook_workflows.json", allow_disabled=True)
 
@@ -411,16 +383,11 @@ def test_notebook_workflow_profile_config_supports_profile_switching() -> None:
     assert "motion_threshold_reuse_check" in build_workflow_stage_plan("validation_scale", "paper_gate_and_package")
     assert "validation_scale_gate" in build_workflow_stage_plan("validation_scale", "paper_gate_and_package")
     assert "pilot_paper_gate" not in build_workflow_stage_plan("validation_scale", "paper_gate_and_package")
-    assert validation_single["notebook_path"] == "paper_workflow/colab_utils/validation_scale_formal_gate_colab.ipynb"
-    assert "wan21_runtime_generation" in build_workflow_stage_plan("validation_scale", "validation_scale_formal_gate")
-    assert "external_baseline_official_resource_bootstrap" in build_workflow_stage_plan("validation_scale", "validation_scale_formal_gate")
-    assert "external_baseline_official_bundle_generation" in build_workflow_stage_plan("validation_scale", "validation_scale_formal_gate")
-    assert "external_baseline_official_result_bundle_preflight" in build_workflow_stage_plan("validation_scale", "validation_scale_formal_gate")
-    assert "external_baseline_comparison" in build_workflow_stage_plan("validation_scale", "validation_scale_formal_gate")
-    assert "validation_scale_gate" in build_workflow_stage_plan("validation_scale", "validation_scale_formal_gate")
-    assert "pilot_paper_gate" not in build_workflow_stage_plan("validation_scale", "validation_scale_formal_gate")
-    with pytest.raises(ValueError):
-        resolve_notebook_workflow_profile("pilot_paper", "validation_scale_formal_gate")
+    assert validation["notebook_path"] == "paper_workflow/colab_notebooks/paper_gate_and_package_colab.ipynb"
+    with pytest.raises(KeyError):
+        default_workflow_profile_for_notebook_role("validation_scale_formal_gate")
+    with pytest.raises(KeyError):
+        resolve_notebook_workflow_profile("validation_scale", "validation_scale_formal_gate")
 
     assert pilot["requested_workflow_profile"] == "pilot_paper"
     assert pilot["workflow_profile"] == "pilot_paper"

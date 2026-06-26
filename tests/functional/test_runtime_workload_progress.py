@@ -130,7 +130,8 @@ def test_third_party_progress_output_tail_is_visible_on_failure(
 @pytest.mark.quick
 def test_colab_notebooks_do_not_use_cell_level_progress_as_runtime_progress() -> None:
     """Notebook 不应再维护 code cell 级进度, 避免误导真实样本进度判断。"""
-    for notebook_path in sorted(Path("paper_workflow/colab_utils").glob("*.ipynb")):
+    assert not list(Path("paper_workflow/colab_utils").glob("*.ipynb"))
+    for notebook_path in sorted(Path("paper_workflow/colab_notebooks").glob("*.ipynb")):
         source = notebook_path.read_text(encoding="utf-8")
         assert "SSTW_NOTEBOOK_PROGRESS_TOTAL" not in source, notebook_path
         assert "sstw_show_progress(" not in source, notebook_path

@@ -34,7 +34,7 @@ def test_wan21_preflight_workflow_uses_dedicated_drive_layout() -> None:
 @pytest.mark.quick
 def test_wan21_preflight_colab_notebook_calls_repository_module() -> None:
     """preflight Notebook 只能作为入口, 必须调用仓库模块生成正式输出。"""
-    notebook_path = Path("paper_workflow/colab_utils/wan21_flow_adapter_preflight_colab.ipynb")
+    notebook_path = Path("paper_workflow/colab_notebooks/wan21_flow_adapter_preflight_colab.ipynb")
     assert notebook_path.exists()
     notebook = json.loads(notebook_path.read_text(encoding="utf-8"))
     source = "".join("".join(cell.get("source", [])) for cell in notebook["cells"])

@@ -20,10 +20,10 @@ configs/generation/seeds.json
 configs/external_baselines/external_baselines.json
 configs/paper_workflow/generative_video_notebook_workflows.json
 experiments/generative_video_model_probe/
-paper_workflow/colab_utils/motion_threshold_calibration_colab.ipynb
-paper_workflow/colab_utils/generative_video_runtime_colab.ipynb
-paper_workflow/colab_utils/external_baseline_formal_scoring_colab.ipynb
-paper_workflow/colab_utils/paper_gate_and_package_colab.ipynb
+paper_workflow/colab_notebooks/motion_threshold_calibration_colab.ipynb
+paper_workflow/colab_notebooks/generative_video_runtime_colab.ipynb
+paper_workflow/colab_notebooks/external_baseline_formal_scoring_colab.ipynb
+paper_workflow/colab_notebooks/paper_gate_and_package_colab.ipynb
 ```
 
 ### 1.3 构建任务
@@ -249,7 +249,7 @@ usage: frozen_engineering_motion_threshold_for_small_scale_pilot
 experiments/generative_video_model_probe/attack_runner.py
 experiments/generative_video_model_probe/detection_runner.py
 paper_workflow/notebook_utils/generative_video_model_probe_workflow.py
-paper_workflow/colab_utils/generative_video_runtime_colab.ipynb
+paper_workflow/colab_notebooks/generative_video_runtime_colab.ipynb
 scripts/package_results/generative_video_drive_packager.py
 ```
 

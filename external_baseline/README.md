@@ -222,7 +222,7 @@ artifacts/external_baseline_colab_preflight_decision.json
 现代 baseline 正式运行应优先使用:
 
 ```text
-paper_workflow/colab_utils/external_baseline_formal_scoring_colab.ipynb
+paper_workflow/colab_notebooks/external_baseline_formal_scoring_colab.ipynb
 ```
 
 该 Notebook 的职责是读取同一 `workflow_profile` 的 `drive_run_root`, 执行 source intake、

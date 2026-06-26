@@ -407,7 +407,7 @@ def test_notebook_workflow_profile_config_supports_profile_switching() -> None:
     assert validation["workflow_profile"] == "validation_scale"
     assert validation["result_tier"] == "validation_scale"
     assert validation["enabled_for_claim"] is False
-    assert validation["target_fpr"] == 0.01
+    assert validation["target_fpr"] == 0.10
     assert "motion_threshold_reuse_check" in build_workflow_stage_plan("validation_scale", "paper_gate_and_package")
     assert "validation_scale_gate" in build_workflow_stage_plan("validation_scale", "paper_gate_and_package")
     assert "pilot_paper_gate" not in build_workflow_stage_plan("validation_scale", "paper_gate_and_package")

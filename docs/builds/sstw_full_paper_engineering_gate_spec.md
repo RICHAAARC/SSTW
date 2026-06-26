@@ -23,7 +23,7 @@ paper 级工程门禁分为七类组件:
 
 | 组件 | 作用 | 产物性质 |
 |---|---|---|
-| `validation_scale_readiness_gate` | 进入 paper 级运行前的最后一道门禁, 在小样本规模上闭合全部 paper 机制并产出完整 validation 级结果包 | gate decision |
+| `validation_scale_readiness_gate` | 进入 paper 级运行前的小样本全流程打通门禁, 以 FPR=0.10 级别验证完整论文产物链路是否可生成 | gate decision |
 | `pilot_paper_generative_probe_gate` | 在 validation_scale 通过后小规模跑完整 paper 协议并产出 pilot 级论文结果 | gate decision |
 | `modern_external_baseline_runner` | 运行或登记现代外部 baseline | governed records |
 | `flow_specific_adaptive_attack_runner` | 运行 Flow-specific adaptive attacks | governed records |
@@ -54,9 +54,69 @@ tests/functional/test_reviewer_evidence_index.py
 
 若后续实现中选择其他路径, 必须保持语义名称清晰, 并同步更新阶段文档和 harness 可见的路径规则。
 
-## 3. pilot_paper_generative_probe_gate 接口规范
+## 3. validation_scale_readiness_gate 接口规范
+
+`validation_scale` 的正式定义是“小样本全流程打通验证”。它不是 full_paper 效果证明, 也不是只检查单个 runner 是否能启动的 smoke test。该 gate 的功能是作为 paper 级前的全流程打通层, 在 `FPR=0.10` 小样本口径下提前验证 `pilot_paper` 和 `full_paper` 会需要的产物类型是否都能由本项目自动生成。
 
 ### 3.1 输入
+
+必须输入:
+
+```text
+generation_records
+formal_quality_motion_semantic_records
+runtime_attack_records
+runtime_detection_records
+external_baseline_records
+external_baseline_score_records
+validation_internal_ablation_records
+adaptive_attack_records
+statistical_confidence_interval_decision
+validation_artifact_rebuild_dry_run_decision
+small_scale_claim_pilot_gate_decision
+motion_threshold_calibration_decision
+```
+
+### 3.2 输出
+
+必须输出:
+
+```text
+records/validation_scale_gate_records.jsonl
+tables/validation_scale_gate_table.csv
+figures/validation_scale_gate_figure.json
+artifacts/validation_scale_gate_decision.json
+reports/validation_scale_gate_report.md
+manifests/validation_scale_package_manifest.json
+```
+
+其中 `figures/validation_scale_gate_figure.json` 可以是最小诊断图 manifest, 但必须由 records 重建, 不能手工填写。若当前实现暂未生成该图, checker 必须把它列为操作手册执行闭环缺口。
+
+### 3.3 PASS 条件
+
+只有同时满足以下条件, 才能进入 `pilot_paper` 或 `full_paper`:
+
+```text
+target_fpr == 0.10
+all_required_phase_decisions_exist
+all_required_phase_decisions_passed_or_explicitly_downgraded
+external_baseline_self_contained_outputs_ready
+modern_external_baseline_formal_measured_adapter_count >= 6
+external_baseline_measured_adapter_count >= 8
+internal_ablation_records_ready
+adaptive_attack_records_ready
+replay_or_sketch_records_ready_or_claim3_downgraded
+confidence_interval_report_ready
+artifact_rebuild_dry_run_ready
+claim_audit_or_claim_boundary_report_ready
+package_manifest_ready
+```
+
+`validation_scale` 通过后仍不得声明 `TPR@FPR=0.001` 或 full_paper 主表结论。它只能说明 paper 级结果生产流程已经小样本跑通。
+
+## 4. pilot_paper_generative_probe_gate 接口规范
+
+### 4.1 输入
 
 `pilot_paper_generative_probe_gate` 读取已经落盘的 pilot_paper records 与前置 decision artifacts。该 gate 允许读取 pilot_paper 的 held-out test split, 因为它本身就是小规模完整协议执行阶段; 但它不得读取 full_paper held-out test 结果, 也不得把 pilot_paper 结果外推为 full_paper 主表。
 
@@ -84,7 +144,7 @@ adaptive_attack_summary
 replay_or_sketch_gate_summary
 ```
 
-### 3.2 禁止输入
+### 4.2 禁止输入
 
 ```text
 full_paper_heldout_test_event_scores
@@ -95,7 +155,7 @@ manually_selected_best_threshold
 
 这些输入若出现, checker 必须失败, 因为 pilot_paper 只能使用自己的 calibration/test split, 不能接触 full_paper test split, 也不能手工选择最佳阈值。
 
-### 3.3 输出
+### 4.3 输出
 
 必须输出:
 
@@ -128,7 +188,7 @@ tpr_at_fpr_01
 tpr_at_fpr_001_claim_allowed
 ```
 
-### 3.4 PASS 条件
+### 4.4 PASS 条件
 
 只有同时满足以下条件, 才能输出 `pilot_paper_claim_allowed = true`。即使该 gate 通过, `full_paper_allowed` 仍必须为 `false`, 因为 pilot_paper 只产出 pilot 级论文结果:
 
@@ -153,9 +213,9 @@ negative_tail_not_inflated
 wrong_sampler_replay_rejected
 ```
 
-## 4. modern_external_baseline_runner 接口规范
+## 5. modern_external_baseline_runner 接口规范
 
-### 4.1 baseline 分层
+### 5.1 baseline 分层
 
 runner 必须支持至少三种 baseline 状态:
 
@@ -167,7 +227,19 @@ protocol_incompatible_with_governed_reason
 
 不得静默删除现代 baseline。无法运行时也必须写出 governed record。
 
-### 4.2 记录字段
+现代 baseline 的正式运行路径必须是项目内自包含产出:
+
+```text
+project_clone
+project_build
+project_run
+project_adapt
+project_record
+```
+
+不允许把外部补交 result bundle、手写 JSON、NPZ 分数文件、论文表格数字或 SSTW proxy 分数转换为主表 baseline 结果。若官方资源无法在项目流程内获得, runner 必须写出 `non_runnable_with_governed_reason`。
+
+### 5.2 记录字段
 
 每个 baseline 必须写出:
 
@@ -184,11 +256,16 @@ external_baseline_attack_manifest_compatible
 external_baseline_protocol_gap
 external_baseline_not_run_reason
 external_baseline_result_used_for_claim
+external_baseline_project_clone_status
+external_baseline_project_build_status
+external_baseline_project_run_status
+external_baseline_project_adapt_status
+external_baseline_project_record_status
 ```
 
 其中, `external_baseline_result_used_for_claim` 只有在 baseline 真实运行且协议兼容时才允许为 true。
 
-### 4.3 主表准入
+### 5.3 主表准入
 
 进入主表的 baseline 必须满足:
 
@@ -203,9 +280,9 @@ external_baseline_result_used_for_claim == true
 
 若只引用外部论文数字, 只能进入 related work 或 supplementary discussion, 不能进入主表胜负判断。
 
-## 5. flow_specific_adaptive_attack_runner 接口规范
+## 6. flow_specific_adaptive_attack_runner 接口规范
 
-### 5.1 攻击者知识层级
+### 6.1 攻击者知识层级
 
 runner 至少应覆盖:
 
@@ -215,7 +292,7 @@ gray_box_sampler_signature_attacker
 white_box_oracle_limited_flow_attacker
 ```
 
-### 5.2 攻击目标
+### 6.2 攻击目标
 
 至少应覆盖:
 
@@ -228,7 +305,7 @@ trajectory_sketch_replacement
 public_negative_tail_probe
 ```
 
-### 5.3 必须记录字段
+### 6.3 必须记录字段
 
 ```text
 adaptive_attack_name
@@ -247,7 +324,7 @@ adaptive_attack_success_status
 adaptive_attack_claim_support_status
 ```
 
-### 5.4 claim 降级
+### 6.4 claim 降级
 
 若 adaptive attack records 不存在或 checker 不通过, full_paper 只能声明:
 
@@ -261,9 +338,9 @@ robustness_validated_under_non_adaptive_video_attacks
 robust_to_flow_specific_adaptive_attacks
 ```
 
-## 6. statistical_confidence_interval_reporter 接口规范
+## 7. statistical_confidence_interval_reporter 接口规范
 
-### 6.1 必须报告
+### 7.1 必须报告
 
 ```text
 binomial_confidence_interval_for_fpr
@@ -275,7 +352,7 @@ per_negative_family_confidence_interval
 per_prompt_family_confidence_interval
 ```
 
-### 6.2 输入记录
+### 7.2 输入记录
 
 ```text
 records/event_scores.jsonl
@@ -285,7 +362,7 @@ records/ablation_scores.jsonl
 manifests/full_paper_package_manifest.json
 ```
 
-### 6.3 统计口径
+### 7.3 统计口径
 
 报告必须同时保留:
 
@@ -300,7 +377,7 @@ negative_family_level_metric
 
 若 event count 足够但 unique video count 不足, 必须输出统计可信度降级原因。
 
-### 6.4 低 FPR 样本量阻断
+### 7.4 低 FPR 样本量阻断
 
 当 `heldout_test_negative_event_count < 50000` 时, reporter 必须输出:
 
@@ -311,11 +388,14 @@ sample_size_insufficient_for_fpr_0_001_claim
 
 此时 `full_paper_result_checker` 不得允许 `TPR@FPR=0.001` 进入主 claim。
 
-## 7. full_paper_result_checker 接口规范
+## 8. full_paper_result_checker 接口规范
 
-### 7.1 输入
+`full_paper_result_checker` 必须读取 `configs/protocol/full_paper_generative_probe.json` 作为正式协议来源。若运行目录、Notebook 参数或 manifest 与该配置冲突, checker 必须以配置为准并 fail closed。
+
+### 8.1 输入
 
 ```text
+configs/protocol/full_paper_generative_probe.json
 records/event_scores.jsonl
 records/trajectory_traces.jsonl
 records/thresholds.jsonl
@@ -333,7 +413,7 @@ reports/artifact_rebuild_report.json
 manifests/full_paper_package_manifest.json
 ```
 
-### 7.2 检查项
+### 8.2 检查项
 
 ```text
 threshold_source_split == calibration
@@ -356,7 +436,7 @@ claim_audit_passed == true
 artifact_rebuild_passed == true
 ```
 
-### 7.3 输出
+### 8.3 输出
 
 ```text
 artifacts/full_paper_result_decision.json
@@ -375,16 +455,16 @@ claim_downgrade_recommendation
 submission_freeze_allowed
 ```
 
-## 8. reviewer_evidence_index_builder 接口规范
+## 9. reviewer_evidence_index_builder 接口规范
 
-### 8.1 输出
+### 9.1 输出
 
 ```text
 reports/reviewer_evidence_index.json
 reports/reviewer_evidence_index.md
 ```
 
-### 8.2 每条 evidence index 记录
+### 9.2 每条 evidence index 记录
 
 ```text
 reviewer_question_id
@@ -400,7 +480,7 @@ evidence_status
 claim_downgrade_if_missing
 ```
 
-### 8.3 必须覆盖的问题
+### 9.3 必须覆盖的问题
 
 ```text
 why_not_endpoint_only
@@ -417,7 +497,7 @@ why_replay_or_sketch_evidence_is_trustworthy
 why_results_are_reproducible
 ```
 
-## 9. 验收测试要求
+## 10. 验收测试要求
 
 每个组件实现后, 至少需要轻量 functional tests 覆盖:
 
@@ -434,7 +514,7 @@ unsupported_claim_blocks_reviewer_evidence_index
 
 这些测试必须使用 `tmp_path` 构造最小 records 和 manifests, 不得写入 checked-in `outputs/`。
 
-## 10. Codex 实现顺序
+## 11. Codex 实现顺序
 
 推荐实现顺序:
 
@@ -450,9 +530,9 @@ unsupported_claim_blocks_reviewer_evidence_index
 9. full_paper_result_checker
 ```
 
-原因是 `validation_scale` 是进入 paper 级运行前的最后一道机制门禁。所有 paper 相关机制必须先在小样本 validation 规模上产出 governed records、tables、figures、reports 和 claim audit, 再进入 `pilot_paper`。如果 external baseline、内部消融、adaptive attack、replay/sketch、CI 或 artifact rebuild 在 validation-scale 阻断, 后续步骤不得用 paper 级运行补造缺失产物。
+原因是 `validation_scale` 是进入 paper 级运行前的小样本全流程打通层。所有 paper 相关机制必须先在 FPR=0.10 小样本口径下产出 governed records、tables、figures、reports、manifests 和 claim audit, 再进入 `pilot_paper` 或 `full_paper`。如果 external baseline、内部消融、adaptive attack、replay/sketch、CI 或 artifact rebuild 在 validation-scale 阻断, 后续步骤不得用 paper 级运行补造缺失产物。
 
-## 11. 不允许的捷径
+## 12. 不允许的捷径
 
 以下行为必须视为阻断:
 
@@ -469,13 +549,13 @@ reviewer evidence index 中引用不存在的 artifact
 这些规则的目的不是增加流程复杂度, 而是防止项目在投稿阶段因为实验不充分、证据不可复现或 claim 过度而被拒稿。
 
 
-## 12. external_baseline adapter comparison gate
+## 13. external_baseline adapter comparison gate
 
 pilot_paper 前必须区分两类 baseline 证据:
 
 ```text
 external_baseline_status_records: 说明 baseline 是否登记、是否可运行、为何 non-run
-external_baseline_comparison_records: 说明 adapter 是否在同一 run_root 上产出可重建 comparison 结果
+external_baseline_comparison_records: 说明 adapter 是否在同一 run_root 上通过项目内 clone / build / run / adapt / record 产出可重建 comparison 结果
 external_baseline_source_intake_manifest: 说明第三方 source、adapter 和官方命令配置边界
 external_baseline_execution_manifest: 说明本次 baseline comparison 的 execution boundary、formal rows 和 evidence paths
 ```
@@ -495,11 +575,11 @@ modern_video_watermark_baselines: measured_formal 或 unsupported_with_reason
 用 unsupported modern baseline row 声明 SSTW 优于该 baseline
 缺少 external_baseline_score_records.jsonl 时进入 baseline comparison claim
 缺少 external_baseline_execution_manifest.json 时进入 baseline comparison claim
-缺少 source intake / source inspection / clone results 清单时进入 validation_scale PASS
+缺少 source intake / source inspection / clone / build / run / adapt / record 清单时进入 validation_scale PASS
 ```
 
 
-### 12.1 external_baseline 正式 claim 升级条件
+### 13.1 external_baseline 正式 claim 升级条件
 
 external baseline comparison 从 proxy control 升级为 full-paper claim evidence 前, checker 必须同时看到以下证据:
 
@@ -513,6 +593,11 @@ metric_status: measured
 modern_external_baseline_formal_measured_adapter_count >= 6
 missing_modern_external_baseline_formal_adapter_names == []
 external_baseline_execution_manifest.json: present
+external_baseline_project_clone_status: completed
+external_baseline_project_build_status: completed
+external_baseline_project_run_status: completed
+external_baseline_project_adapt_status: completed
+external_baseline_project_record_status: completed
 claim_support_status: baseline_ready_for_main_comparison
 ```
 

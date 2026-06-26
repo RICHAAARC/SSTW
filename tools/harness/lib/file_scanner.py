@@ -17,6 +17,14 @@ SKIP_DIRECTORY_NAMES = {
     "build",
 }
 
+SKIP_FILE_NAMES = {
+    "acl.txt",
+}
+
+SKIP_FILE_SUFFIXES = {
+    ".tmp",
+}
+
 BINARY_SUFFIXES = {
     ".png", ".jpg", ".jpeg", ".gif", ".webp", ".pdf", ".zip", ".tar", ".gz", ".7z", ".exe", ".dll", ".so", ".pyc", ".pyd",
 }
@@ -41,7 +49,11 @@ DEFAULT_GOVERNED_SCAN_ROOTS = (
 def should_skip_path(path: str | Path) -> bool:
     """判断路径是否属于缓存、输出或构建产物。"""
     candidate = Path(path)
-    return any(part in SKIP_DIRECTORY_NAMES for part in candidate.parts)
+    return (
+        any(part in SKIP_DIRECTORY_NAMES for part in candidate.parts)
+        or candidate.name in SKIP_FILE_NAMES
+        or candidate.suffix.lower() in SKIP_FILE_SUFFIXES
+    )
 
 
 def iter_text_files(root: str | Path) -> Iterator[Path]:

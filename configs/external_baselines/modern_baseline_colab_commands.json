@@ -14,6 +14,7 @@
       "colab_source_dir": "/content/SSTW/external_baseline/primary/videoshield/source",
       "display_name": "VideoShield",
       "external_baseline_command_env_var": "SSTW_VIDEOSHIELD_EVAL_COMMAND",
+      "external_supplemental_result_bundle_allowed": false,
       "official_baseline_command_env_var": "SSTW_VIDEOSHIELD_OFFICIAL_EVAL_COMMAND",
       "official_entrypoint_candidates": [
         "watermark_embedding_and_extraction.py",
@@ -49,6 +50,7 @@
         "<bundle_root>/<baseline_id>/<trajectory_trace_id>/<attack_name>.json"
       ],
       "official_result_bundle_supported": true,
+      "repository_generated_result_cache_allowed": true,
       "repository_official_eval_adapter_module": "external_baseline.official_eval_adapters.videoshield",
       "repository_official_eval_command_template": "python -m external_baseline.official_eval_adapters.videoshield --official-source-dir /content/SSTW/external_baseline/primary/videoshield/source --source-video {source_video_path} --attacked-video {attacked_video_path} --attack-name {attack_name} --official-output-json {official_output_json_path} --run-root {run_root} --prompt-id {prompt_id} --seed-id {seed_id} --trajectory-trace-id {trajectory_trace_id}",
       "repository_official_eval_command_template_status": "repository_official_wrapper_ready_fail_closed_requires_official_source_and_artifacts",
@@ -72,7 +74,7 @@
       "strict_gate_resource_resolution_order": [
         "SSTW_VIDEOSHIELD_NATIVE_EVAL_COMMAND",
         "repository_official_eval_adapter_default_runtime_when_supported",
-        "SSTW_EXTERNAL_BASELINE_OFFICIAL_RESULT_BUNDLE_ROOT(S)"
+        "repository_generated_official_bundle_cache"
       ],
       "verified_head_commit": "a61efa73abb15d30f50ee535c3301cea7dec3075"
     },
@@ -81,6 +83,7 @@
       "colab_source_dir": "/content/SSTW/external_baseline/primary/sigmark/source",
       "display_name": "SIGMark",
       "external_baseline_command_env_var": "SSTW_SIGMARK_EVAL_COMMAND",
+      "external_supplemental_result_bundle_allowed": false,
       "official_baseline_command_env_var": "SSTW_SIGMARK_OFFICIAL_EVAL_COMMAND",
       "official_entrypoint_candidates": [
         "main.py",
@@ -116,6 +119,7 @@
         "<bundle_root>/<baseline_id>/<trajectory_trace_id>/<attack_name>.json"
       ],
       "official_result_bundle_supported": true,
+      "repository_generated_result_cache_allowed": true,
       "repository_official_eval_adapter_module": "external_baseline.official_eval_adapters.sigmark",
       "repository_official_eval_command_template": "python -m external_baseline.official_eval_adapters.sigmark --official-source-dir /content/SSTW/external_baseline/primary/sigmark/source --source-video {source_video_path} --attacked-video {attacked_video_path} --attack-name {attack_name} --official-output-json {official_output_json_path} --run-root {run_root} --prompt-id {prompt_id} --seed-id {seed_id} --trajectory-trace-id {trajectory_trace_id}",
       "repository_official_eval_command_template_status": "repository_official_wrapper_ready_fail_closed_requires_official_source_and_artifacts",
@@ -139,7 +143,7 @@
       "strict_gate_resource_resolution_order": [
         "SSTW_SIGMARK_NATIVE_EVAL_COMMAND",
         "repository_official_eval_adapter_default_runtime_when_supported",
-        "SSTW_EXTERNAL_BASELINE_OFFICIAL_RESULT_BUNDLE_ROOT(S)"
+        "repository_generated_official_bundle_cache"
       ],
       "verified_head_commit": "3713243f2e002cb21bbc3da896094d39b2b528c9"
     },
@@ -148,6 +152,7 @@
       "colab_source_dir": "/content/SSTW/external_baseline/primary/spdmark/source",
       "display_name": "SPDMark",
       "external_baseline_command_env_var": "SSTW_SPDMARK_EVAL_COMMAND",
+      "external_supplemental_result_bundle_allowed": false,
       "official_baseline_command_env_var": "SSTW_SPDMARK_OFFICIAL_EVAL_COMMAND",
       "official_entrypoint_candidates": [
         "ModelScope/generate_watermarked_txt2videos.py",
@@ -183,6 +188,7 @@
         "<bundle_root>/<baseline_id>/<trajectory_trace_id>/<attack_name>.json"
       ],
       "official_result_bundle_supported": true,
+      "repository_generated_result_cache_allowed": true,
       "repository_official_eval_adapter_module": "external_baseline.official_eval_adapters.spdmark",
       "repository_official_eval_command_template": "python -m external_baseline.official_eval_adapters.spdmark --official-source-dir /content/SSTW/external_baseline/primary/spdmark/source --source-video {source_video_path} --attacked-video {attacked_video_path} --attack-name {attack_name} --official-output-json {official_output_json_path} --run-root {run_root} --prompt-id {prompt_id} --seed-id {seed_id} --trajectory-trace-id {trajectory_trace_id}",
       "repository_official_eval_command_template_status": "repository_official_wrapper_ready_fail_closed_requires_official_source_and_artifacts",
@@ -206,7 +212,7 @@
       "strict_gate_resource_resolution_order": [
         "SSTW_SPDMARK_NATIVE_EVAL_COMMAND",
         "repository_official_eval_adapter_default_runtime_when_supported",
-        "SSTW_EXTERNAL_BASELINE_OFFICIAL_RESULT_BUNDLE_ROOT(S)"
+        "repository_generated_official_bundle_cache"
       ],
       "verified_head_commit": "4d9a894384a8585734b493301fe9d1a4d6abd07c"
     },
@@ -215,6 +221,7 @@
       "colab_source_dir": "/content/SSTW/external_baseline/primary/videomark/source",
       "display_name": "VideoMark",
       "external_baseline_command_env_var": "SSTW_VIDEOMARK_EVAL_COMMAND",
+      "external_supplemental_result_bundle_allowed": false,
       "official_baseline_command_env_var": "SSTW_VIDEOMARK_OFFICIAL_EVAL_COMMAND",
       "official_entrypoint_candidates": [
         "PRC_key_gen.py",
@@ -250,6 +257,7 @@
         "<bundle_root>/<baseline_id>/<trajectory_trace_id>/<attack_name>.json"
       ],
       "official_result_bundle_supported": true,
+      "repository_generated_result_cache_allowed": true,
       "repository_official_eval_adapter_module": "external_baseline.official_eval_adapters.videomark",
       "repository_official_eval_command_template": "python -m external_baseline.official_eval_adapters.videomark --official-source-dir /content/SSTW/external_baseline/primary/videomark/source --source-video {source_video_path} --attacked-video {attacked_video_path} --attack-name {attack_name} --official-output-json {official_output_json_path} --run-root {run_root} --prompt-id {prompt_id} --seed-id {seed_id} --trajectory-trace-id {trajectory_trace_id}",
       "repository_official_eval_command_template_status": "repository_official_wrapper_ready_fail_closed_requires_official_source_and_artifacts",
@@ -273,7 +281,7 @@
       "strict_gate_resource_resolution_order": [
         "SSTW_VIDEOMARK_NATIVE_EVAL_COMMAND",
         "repository_official_eval_adapter_default_runtime_when_supported",
-        "SSTW_EXTERNAL_BASELINE_OFFICIAL_RESULT_BUNDLE_ROOT(S)"
+        "repository_generated_official_bundle_cache"
       ],
       "verified_head_commit": "9f8d78b73ab9f9f055651b1b4f37d68bdb05e7be"
     },
@@ -282,6 +290,7 @@
       "colab_source_dir": "/content/SSTW/external_baseline/primary/vidsig/source",
       "display_name": "VidSig",
       "external_baseline_command_env_var": "SSTW_VIDSIG_EVAL_COMMAND",
+      "external_supplemental_result_bundle_allowed": false,
       "official_baseline_command_env_var": "SSTW_VIDSIG_OFFICIAL_EVAL_COMMAND",
       "official_entrypoint_candidates": [
         "src/generate_ms.py",
@@ -317,6 +326,7 @@
         "<bundle_root>/<baseline_id>/<trajectory_trace_id>/<attack_name>.json"
       ],
       "official_result_bundle_supported": true,
+      "repository_generated_result_cache_allowed": true,
       "repository_official_eval_adapter_module": "external_baseline.official_eval_adapters.vidsig",
       "repository_official_eval_command_template": "python -m external_baseline.official_eval_adapters.vidsig --official-source-dir /content/SSTW/external_baseline/primary/vidsig/source --source-video {source_video_path} --attacked-video {attacked_video_path} --attack-name {attack_name} --official-output-json {official_output_json_path} --run-root {run_root} --prompt-id {prompt_id} --seed-id {seed_id} --trajectory-trace-id {trajectory_trace_id}",
       "repository_official_eval_command_template_status": "repository_official_wrapper_ready_fail_closed_requires_official_source_and_artifacts",
@@ -340,7 +350,7 @@
       "strict_gate_resource_resolution_order": [
         "SSTW_VIDSIG_NATIVE_EVAL_COMMAND",
         "repository_official_eval_adapter_default_runtime_when_supported",
-        "SSTW_EXTERNAL_BASELINE_OFFICIAL_RESULT_BUNDLE_ROOT(S)"
+        "repository_generated_official_bundle_cache"
       ],
       "verified_head_commit": "9d219c47670c30fdaaccd17b24e7783c976a8c66"
     },
@@ -349,6 +359,7 @@
       "colab_source_dir": "/content/SSTW/external_baseline/primary/videoseal/source",
       "display_name": "VideoSeal",
       "external_baseline_command_env_var": "SSTW_VIDEOSEAL_EVAL_COMMAND",
+      "external_supplemental_result_bundle_allowed": false,
       "official_baseline_command_env_var": "SSTW_VIDEOSEAL_OFFICIAL_EVAL_COMMAND",
       "official_entrypoint_candidates": [
         "inference_av.py",
@@ -384,6 +395,7 @@
         "<bundle_root>/<baseline_id>/<trajectory_trace_id>/<attack_name>.json"
       ],
       "official_result_bundle_supported": true,
+      "repository_generated_result_cache_allowed": true,
       "repository_official_eval_adapter_module": "external_baseline.official_eval_adapters.videoseal",
       "repository_official_eval_command_template": "python -m external_baseline.official_eval_adapters.videoseal --official-source-dir /content/SSTW/external_baseline/primary/videoseal/source --source-video {source_video_path} --attacked-video {attacked_video_path} --attack-name {attack_name} --official-output-json {official_output_json_path} --run-root {run_root} --prompt-id {prompt_id} --seed-id {seed_id} --trajectory-trace-id {trajectory_trace_id}",
       "repository_official_eval_command_template_status": "repository_official_wrapper_ready_fail_closed_requires_official_source_and_artifacts",
@@ -407,7 +419,7 @@
       "strict_gate_resource_resolution_order": [
         "SSTW_VIDEOSEAL_NATIVE_EVAL_COMMAND",
         "repository_official_eval_adapter_default_runtime_when_supported",
-        "SSTW_EXTERNAL_BASELINE_OFFICIAL_RESULT_BUNDLE_ROOT(S)"
+        "repository_generated_official_bundle_cache"
       ],
       "verified_head_commit": "e00b98c7ca77eb1fb5b9b68260e7c6c8fc207a84"
     }
@@ -425,11 +437,24 @@
     "template_file_auto_applied": "optional_when_SSTW_USE_MODERN_BASELINE_BRIDGE_COMMANDS_true"
   },
   "config_kind": "modern_external_baseline_colab_command_config",
-  "config_version": "verified_sources_with_repository_official_eval_adapters_and_result_bundle_2026_06_25_v3",
-  "formal_result_policy": "fail_closed; bridge command templates are repository-owned wrappers; measured_formal results may come from a native official command, a repository official adapter that calls official source/API, or a Google Drive official result bundle generated by third-party official code; missing or proxy official artifacts must fail rather than produce proxy scores",
+  "config_version": "project_self_contained_external_baseline_commands_2026_06_26_v4",
+  "external_baseline_result_production_contract": {
+    "externally_supplied_result_bundle_allowed": false,
+    "project_owned_output_required": true,
+    "repository_generated_cache_allowed": true,
+    "required_sequence": [
+      "clone",
+      "build",
+      "run",
+      "adapt",
+      "record"
+    ]
+  },
+  "formal_result_policy": "fail_closed; measured_formal results must be produced by this repository through clone / build / run / adapt / record. A repository-generated official bundle may be used only as an internal cache with provenance; externally supplied result bundles, manual score files, paper numbers, and SSTW proxy scores are forbidden.",
   "official_result_bundle_policy": {
-    "claim_boundary": "结果包只能作为 measured_formal 输入; 不能手写分数, 不能从 SSTW S_final 或最终判定分数派生。",
+    "claim_boundary": "结果包只能作为本项目 workflow 生成的内部缓存; 不能作为外部补交结果, 不能手写分数, 不能从 SSTW S_final 或最终判定分数派生。",
     "env_var": "SSTW_EXTERNAL_BASELINE_OFFICIAL_RESULT_BUNDLE_ROOT",
+    "externally_supplied_result_bundle_allowed": false,
     "multi_root_env_var": "SSTW_EXTERNAL_BASELINE_OFFICIAL_RESULT_BUNDLE_ROOTS",
     "path_conventions": [
       "<bundle_root>/<baseline_id>/records/<prompt_id>__<seed_id>__<attack_name>.json",
@@ -437,9 +462,10 @@
       "<bundle_root>/<baseline_id>/<prompt_id>/<seed_id>/<attack_name>.json",
       "<bundle_root>/<baseline_id>/<trajectory_trace_id>/<attack_name>.json"
     ],
-    "purpose": "用于接收由第三方官方代码在独立会话或高显存机器上生成的 baseline 结果, 避免 Colab 冷启动丢失权重或中间产物。",
+    "purpose": "用于缓存本项目 clone / build / run 官方代码后生成的 baseline 输出, 避免同一 run_root 重复计算; 不用于接收外部补交结果。",
+    "repository_generated_cache_allowed": true,
     "required_payload_rule": "每个 JSON 必须包含 external_baseline_score / score / bit_accuracy / confidence / detected 之一, 且 official_result_provenance 不能为 sstw_proxy。",
-    "status": "supported_for_strict_gate_resource_closure"
+    "status": "repository_generated_cache_only_not_external_submission"
   },
   "optional_command_format_tokens": [
     "run_root",

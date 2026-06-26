@@ -331,8 +331,10 @@ def write_validation_scale_gate_audit(
     report = (
         "# Validation-scale Generative Probe Gate Report\n\n"
         "该报告由已落盘的 governed records 与 decision artifacts 自动生成。它只判断 validation-scale "
-        "是否具备进入 pilot_paper 的条件。pilot_paper 是小规模跑完整 full_paper 协议并产出 "
-        "pilot 级论文结果的阶段, 因此不再需要单独的前置预演阶段。\n\n"
+        "是否已经作为 paper 级前的小样本全流程打通层完成闭环。该层级使用较低成本的 FPR=0.10 "
+        "预演口径验证 records、tables、figures、reports、manifests、baseline、消融、attack、CI "
+        "和 artifact rebuild 是否能够完整产出。它不支撑效果主张, 但通过后才允许进入 pilot_paper "
+        "或 full_paper 的后续结果生产流程。\n\n"
         f"- validation_scale_gate_decision: {audit['validation_scale_gate_decision']}\n"
         f"- claim_support_status: {audit['claim_support_status']}\n"
         f"- missing_validation_requirements: {', '.join(audit['missing_validation_requirements']) if audit['missing_validation_requirements'] else 'none'}\n"

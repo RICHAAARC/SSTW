@@ -1,19 +1,41 @@
 {
+  "allow_effect_size_claims": false,
   "artifact_rebuild_dry_run_required": true,
+  "claim_support_status": "validation_scale_rehearsal_only_not_effect_size_claim_evidence",
+  "external_baseline_prohibited_result_sources": [
+    "externally_supplied_result_bundle",
+    "manual_result_json",
+    "manual_npz_score_file",
+    "paper_number_only",
+    "sstw_proxy_score"
+  ],
+  "external_baseline_result_production_contract": "project_clone_build_run_adapt_record",
   "fixed_low_fpr_ci_report_required": true,
   "minimum_attack_count": 3,
   "minimum_external_baseline_measured_adapter_count": 8,
   "minimum_modern_external_baseline_formal_adapter_count": 6,
   "minimum_prompt_count": 8,
   "minimum_seed_per_prompt": 3,
+  "next_allowed_result_profiles_after_pass": [
+    "pilot_paper",
+    "full_paper"
+  ],
+  "paper_gate_preflight_layer": true,
+  "paper_protocol_difference_from_full_paper": "smaller_sample_scale_and_fpr_0_10_rehearsal_only",
+  "paper_protocol_difference_from_pilot_paper": "smaller_sample_scale_and_fpr_0_10_rehearsal_only",
+  "paper_result_level": "validation_scale",
+  "repository_generated_external_baseline_cache_allowed": true,
   "require_adaptive_attack_records": true,
   "require_artifact_rebuild_dry_run": true,
+  "require_complete_result_artifact_skeleton": true,
   "require_confidence_interval_report": true,
   "require_external_baseline_comparison_records": true,
+  "require_external_baseline_self_contained_outputs": true,
   "require_external_baseline_status_records": true,
-  "require_internal_ablation_records": true,
   "require_formal_motion_claim_ready": true,
+  "require_internal_ablation_records": true,
   "require_motion_threshold_calibration_ready": true,
+  "require_pilot_paper_and_full_paper_blocked_until_pass": true,
   "require_replay_or_sketch_records_or_claim3_downgrade": true,
   "require_small_scale_pilot_gate_passed": true,
   "required_modern_external_baseline_adapter_names": [
@@ -25,7 +47,10 @@
     "videoseal"
   ],
   "stage_id": "validation_scale_generative_probe_gate",
+  "target_fpr": 0.1,
   "validation_profile_names": [
     "validation_scale"
-  ]
+  ],
+  "validation_scale_definition": "small_sample_full_pipeline_rehearsal",
+  "validation_scale_role": "paper_grade_preflight_full_pipeline_gate"
 }

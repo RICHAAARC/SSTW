@@ -36,6 +36,19 @@ reproducibility_evidence_sufficient
 
 若任一项缺失, 论文可以继续作为 validation 或 workshop 版本推进, 但不应直接生成 full_paper 结果包。
 
+### 1.1 四层结果产出梯度
+
+顶刊顶会实验不应把“方法能运行”“小样本能跑通”“pilot 级论文结果”和“正式 full_paper 结果”混为一类。本项目统一采用以下四层结果产出梯度:
+
+| 层级 | 目标 FPR | 样本规模 | 主要作用 | 是否允许支撑效果主张 |
+|---|---:|---|---|---|
+| `method_mechanism_validation` | 不固定 | 最小机制样本 | 验证 SSTW 方法机制、状态空间证据、轨迹观测和基础 runner 是否可运行。 | 否 |
+| `validation_scale` | `0.10` | 小样本 | 小样本全流程打通验证, 属于 paper 级前的全流程打通层。它必须产出与论文协议同构的 records、tables、figures、reports、manifests、baseline、消融、attack、CI 和 artifact rebuild 文件, 用于提前发现 pilot_paper / full_paper 的阻断。 | 否 |
+| `pilot_paper` | `0.01` | 小规模论文协议 | 以较小成本产出 FPR=1% 级别的 paper 协议结果, 检查 full_paper 同构协议在真实模型上的可报告性。 | 仅允许 pilot 级主张 |
+| `full_paper` | `0.001` | 正式规模论文协议 | 产出 FPR=0.1% 级别正式论文主结果, 包含主表、主图、CI、claim audit、artifact rebuild 和 reviewer evidence index。 | 是 |
+
+`validation_scale` 是进入 `pilot_paper` 和 `full_paper` 的硬门禁。它通过只说明论文协议产物链路已经小样本跑通, 不说明 SSTW 的效果已经达到投稿主张。
+
 ## 2. 机制证据核查
 
 | 核查项 | 必须回答的问题 | 必须证据 |
@@ -79,6 +92,8 @@ bootstrap_confidence_interval_for_tpr_at_fpr_available
 cluster_by_video_confidence_interval_available
 ```
 
+这些要求必须在 `configs/protocol/full_paper_generative_probe.json` 中以协议配置形式登记。Notebook、临时 CLI 参数或手工记录不能降低该配置中的样本量、阈值来源和 CI 要求。
+
 若 negative event 数量不足, 只能写为:
 
 ```text
@@ -110,6 +125,18 @@ external_baseline_protocol_gap
 external_baseline_output_record_status
 external_baseline_result_used_for_claim
 ```
+
+外部 baseline 的正式结果必须由本项目自包含产出:
+
+```text
+project_clone
+project_build
+project_run
+project_adapt
+project_record
+```
+
+允许本项目在 Colab 或受治理运行环境中 clone GitHub 官方代码、安装依赖、下载公开权重、调用官方 API 或官方命令, 但最终 records、tables 和 reports 必须由本项目流程写出。禁止把外部补交的 result bundle、手写 JSON、NPZ 分数文件、论文表格数字或 SSTW proxy 分数作为主表 baseline 结果。
 
 如果只比较 image watermark、frame watermark 或 endpoint-only control, 则 baseline 充分性不通过。
 

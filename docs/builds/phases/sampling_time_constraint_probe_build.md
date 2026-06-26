@@ -130,7 +130,7 @@ wrong-key application_evidence_direction_cosine mean: -0.000084
 下一步应进入:
 
 ```text
-small_scale_claim_pilot_gate
+small_scale_mechanism_pilot_check
 ```
 
 

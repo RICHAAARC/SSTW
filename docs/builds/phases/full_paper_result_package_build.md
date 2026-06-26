@@ -1,6 +1,6 @@
-# full_paper_result_package_gate 分阶段构建流程
+# full_paper_result_checker 分阶段构建流程
 
-本文档记录 `full_paper_result_package_gate` 的构建流程与当前完成情况。该阶段是论文结果包产出前的最后阻断 gate, 目标是保证 full_paper 在大规模 `TPR@FPR=0.001` 条件下运行时不会因为前序协议、数据、baseline、消融或攻击缺口产生阻断。
+本文档记录 `full_paper_result_checker` 的构建流程与当前完成情况。该阶段是论文结果包产出前的正式结果充分性阻断 gate, 目标是保证 full_paper 在大规模 `TPR@FPR=0.001` 条件下运行时不会因为前序协议、数据、baseline、消融或攻击缺口产生阻断。
 
 ## 1. 本阶段构建流程
 
@@ -11,13 +11,18 @@
 ### 1.2 进入条件
 
 ```text
-small_scale_claim_pilot_gate_passed = true
-generative_video_model_probe_validation_passed = true
+mechanism_validation_passed = true
+validation_scale_gate_passed = true
+stage_transition_decision_passed = true
+pilot_paper_gate_passed = true
+external_baseline_self_containment_decision_passed = true
+data_split_and_leakage_guard_passed = true
 modern_external_baseline_records_ready = true
 internal_ablation_matrix_ready = true
 flow_specific_adaptive_attack_gate_passed = true
 replay_and_authenticated_sketch_gate_ready_or_claim3_downgraded = true
 paper_fixed_fpr_0_001_protocol_ready = true
+statistical_confidence_interval_decision_passed = true
 artifact_rebuild_dry_run_passed = true
 ```
 
@@ -50,7 +55,7 @@ artifact_rebuild_manifest
 禁止在 full_paper run 中动态新增 prompt
 禁止用 held-out test 更新 threshold
 禁止把 pilot records 写入主论文表格
-禁止跳过 external baseline 或 adaptive attack gate
+禁止跳过 external baseline self-containment、data split leakage guard 或 adaptive attack gate
 禁止把未认证 trajectory logging 当成主证据
 ```
 
@@ -161,7 +166,7 @@ merged_records_not_written_to_checked_in_outputs
 smoke_rehearsal_passed
 pilot_rehearsal_passed
 validation_rehearsal_passed
-pilot_paper_generative_probe_gate_passed
+pilot_paper_gate_passed
 ```
 
 其中 `validation_rehearsal` 必须至少覆盖:
@@ -188,7 +193,7 @@ docs/builds/sstw_full_paper_engineering_gate_spec.md
 优先实现的组件为:
 
 ```text
-pilot_paper_generative_probe_gate
+pilot_paper_gate
 statistical_confidence_interval_reporter
 full_paper_result_checker
 ```
@@ -200,43 +205,43 @@ full_paper_result_checker
 ### 2.1 当前完成状态
 
 ```text
-stage_status: 未开始, validation-scale 前置阻塞
+stage_status: 未开始, validation_scale 前置阻塞
 ```
 
 ### 2.2 差距项
 
 ```text
-small_scale_claim_pilot_gate 已在 workflow progression 级别 PASS
+历史 small-scale 机制 pilot 已在 workflow progression 级别 PASS, 但不再作为主干门禁
 pilot_paper FPR=0.01 真实 GPU 结果尚未生成, 不能替代 full_paper 规模结果
-generative_video_model_probe_validation_passed 尚未成立
-external baseline proxy comparison 链路已接入 pilot_paper gate, 但现代 baseline 正式主表 adapter 仍未闭合
+validation_scale_gate_passed 尚未成立
+external baseline comparison 链路已接入 pilot_paper gate, 但现代 baseline 项目内自包含 measured_formal 主表 adapter 仍未闭合
 internal ablation 已接入 pilot_paper gate, full-scale records 尚未完成
 flow_specific_adaptive_attack_gate 尚未完成
 replay_and_authenticated_sketch_gate 尚未闭合
 paper-level FPR=0.001 大规模阈值协议尚未运行
-pilot_paper_generative_probe_gate 工程入口已实现但真实 GPU 结果尚未生成, full_paper_result_checker 尚未实现
+pilot_paper_gate 工程入口已实现但真实 GPU 结果尚未生成, full_paper_result_checker 尚未实现
 ```
 
 ## 3. 当前查漏补缺状态
 
 | 项目 | 当前标注 |
 |---|---|
-| 完成状态 | 未开始, validation-scale 前置阻塞 |
-| 主要差距项 | small-scale pilot 已解除, pilot_paper gate 已要求 baseline proxy comparison 与内部消融覆盖同批 trace, 但 pilot_paper 真实结果、validation-scale、现代外部 baseline 正式主表对比、full-scale 内部消融、adaptive attack、replay/sketch、FPR=0.001 和 full_paper checker 仍未闭合。 |
-| 下一步构建方向 | 先完成 validation-scale generative probe, 同步推进现代外部 baseline adapter、内部消融、adaptive attack、replay/sketch 和 CI reporter。 |
+| 完成状态 | 未开始, validation_scale 前置阻塞 |
+| 主要差距项 | 历史 small-scale 机制 pilot 已解除, pilot_paper gate 已要求 baseline comparison 与内部消融覆盖同批 trace, 但 pilot_paper 真实结果、validation_scale、现代外部 baseline 正式主表对比、full-scale 内部消融、adaptive attack、replay/sketch、FPR=0.001 和 full_paper_result_checker 仍未闭合。 |
+| 下一步构建方向 | 先完成 validation_scale 小样本全流程打通验证, 同步推进现代外部 baseline adapter、内部消融、adaptive attack、replay/sketch 和 CI reporter。 |
 | full_paper 影响 | 本阶段未通过时, 禁止生成 full_paper 论文结果包。 |
 
 ### 3.1 2026-06-23 最新阶段边界
 
-最新 Wan2.1 small-scale pilot 复跑已经通过, 因此本阶段的阻塞原因不再是 pilot 未完成。当前阻塞点已经前移到 validation-scale 和论文级证据充分性:
+最新 Wan2.1 small-scale pilot 复跑已经通过, 因此本阶段的阻塞原因不再是 pilot 未完成。当前阻塞点已经前移到 validation_scale 和论文级证据充分性:
 
 ```text
-small_scale_claim_pilot_gate_passed = true
+mechanism_validation_passed = true
 pilot_paper_result_completed = false
-validation_scale_generative_probe_completed = false
+validation_scale_full_pipeline_completed = false
 modern_external_baseline_status_records_ready = true
-external_baseline_proxy_comparison_gate_ready = true
-modern_external_baseline_main_comparison_ready_count = 0
+external_baseline_self_containment_decision_ready = false
+modern_external_baseline_measured_formal_ready_count = 0
 pilot_paper_internal_ablation_gate_ready = true
 internal_ablation_full_scale_records_ready = false
 flow_specific_adaptive_attack_gate_passed = false

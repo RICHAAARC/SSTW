@@ -14,7 +14,7 @@ calibration split
 -> tables / figures / claim audit
 ```
 
-因此, 通过该阶段可以写成 `pilot_paper` 级论文主张; 但不能外推为 `TPR@FPR=0.001` 或 full-paper 规模主张。
+因此, 通过该阶段可以写成 `pilot_paper` 级论文主张; 但不能外推为 `TPR@FPR=0.001` 或 full_paper 规模主张。
 
 ## 2. 数据集构造要求
 
@@ -69,7 +69,7 @@ vidsig
 videoseal
 ```
 
-其中显式 DTW 与 frame matching 只能写出 `measured_proxy` control records; 6 个现代视频水印 baseline 必须通过正式 command adapter 写出 `metric_status = measured_formal` records。内部消融矩阵至少需要覆盖 `sstw_full_method`、endpoint-only、trajectory-only、去 velocity constraint、去 endpoint-aware control、去 replay uncertainty weighting、去 admissibility 和 generic SSM baseline。若任何现代 baseline 或消融缺失, `pilot_paper` gate 必须失败, 不允许先报告 `TPR@FPR=0.01` 再补表。
+其中显式 DTW 与 frame matching 只能写出 `measured_proxy` control records; 6 个现代视频水印 baseline 必须通过项目内 clone / build / run / adapt / record 和正式 adapter 写出 `metric_status = measured_formal` records。内部消融矩阵至少需要覆盖 `sstw_full_method`、endpoint-only、trajectory-only、去 velocity constraint、去 endpoint-aware control、去 replay uncertainty weighting、去 admissibility 和 generic SSM baseline。若任何现代 baseline 或消融缺失, `pilot_paper` gate 必须失败, 不允许先报告 `TPR@FPR=0.01` 再补表。
 
 
 ## 3. 工程入口
@@ -146,9 +146,12 @@ path_marginal_gain_at_fixed_fpr > 0
 negative_tail_status == not_inflated
 wrong_sampler_replay_control_not_equivalent == true
 motion_threshold_calibration_ready == true
-small_scale_claim_pilot_gate_decision == PASS
+method_mechanism_validation_decision == PASS
 validation_scale_gate_decision == PASS
+stage_transition_decision == PASS
+data_split_and_leakage_guard_decision == PASS
 external_baseline_comparison_decision == PASS
+external_baseline_self_containment_decision == PASS
 external_baseline_measured_adapter_count >= 8
 modern_external_baseline_formal_measured_adapter_count >= 6
 required_external_baseline_adapter_names covered
@@ -180,7 +183,7 @@ full_paper_allowed: false
 
 ```text
 TPR@FPR=0.001 已成立
-full-paper 规模 fixed-FPR 结果已成立
+full_paper 规模 fixed-FPR 结果已成立
 现代 external baseline full-scale 主表对比已完成
 full-scale 内部消融主表已完成
 submission package 已冻结

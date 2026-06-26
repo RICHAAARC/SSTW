@@ -146,7 +146,7 @@ stage_status: 未完成
 
 ### 2.2 已有基础
 
-当前总体流程中已经定义该阶段。sampling-time、trajectory observation、runtime attack、runtime detection 和 small-scale pilot gate 中也已有部分 wrong-key / wrong-sampler control 字段。最新 small-scale pilot 已通过, 因此本阶段下一步可以从“等待 pilot”改为“构建 validation-scale adaptive attack manifest 与 runner”。
+当前总体流程中已经定义该阶段。sampling-time、trajectory observation、runtime attack、runtime detection 和 small-scale pilot gate 中也已有部分 wrong-key / wrong-sampler control 字段。最新 small-scale pilot 已通过, 因此本阶段下一步可以从“等待 pilot”改为“构建 validation_scale adaptive attack manifest 与 runner”。
 
 ### 2.3 差距项
 
@@ -164,7 +164,7 @@ stage_status: 未完成
 |---|---|
 | 完成状态 | 未完成 |
 | 主要差距项 | adaptive attack runner、manifest、negative tail audit 均未闭合。 |
-| 下一步构建方向 | 在 validation-scale 中实现 adaptive attack runner、attack manifest、negative tail audit 和对应 checker。 |
+| 下一步构建方向 | 在 validation_scale 中实现 adaptive attack runner、attack manifest、negative tail audit 和对应 checker。 |
 | full_paper 影响 | 未通过本阶段时, full_paper 不能声明 Flow-specific adaptive attack robustness。 |
 
 ### 3.1 2026-06-23 最新阶段边界
@@ -172,7 +172,7 @@ stage_status: 未完成
 当前 small-scale pilot 已经解除前置阻塞, 但这不等于 adaptive robustness 已成立。本阶段仍必须补齐独立的 Flow-specific adaptive attack 证据:
 
 ```text
-small_scale_claim_pilot_gate_passed = true
+method_mechanism_validation_passed = true
 adaptive_attack_runner_ready = false
 adaptive_attack_manifest_ready = false
 endpoint_path_decoupling_records_ready = false
@@ -181,11 +181,11 @@ adaptive_negative_tail_audit_ready = false
 adaptive_robustness_claim_allowed = false
 ```
 
-下一步应优先在 validation-scale 中构建最小可运行 adaptive attack runner, 覆盖 `scheduler_change`、`time_grid_jitter`、`wrong_sampler_replay`、`endpoint_path_decoupling` 与 `path_response_cancellation` 的受控记录。若该阶段持续缺失, full_paper 只能报告普通视频攻击鲁棒性, 不能报告 Flow-specific adaptive attack robustness。
+下一步应优先在 validation_scale 中构建最小可运行 adaptive attack runner, 覆盖 `scheduler_change`、`time_grid_jitter`、`wrong_sampler_replay`、`endpoint_path_decoupling` 与 `path_response_cancellation` 的受控记录。若该阶段持续缺失, full_paper 只能报告普通视频攻击鲁棒性, 不能报告 Flow-specific adaptive attack robustness。
 
 ### 3.2 2026-06-24 validation proxy runner
 
-当前已新增 validation-scale adaptive attack proxy runner:
+当前已新增 validation_scale adaptive attack proxy runner:
 
 ```text
 experiments/generative_video_model_probe/adaptive_attack_runner.py
@@ -195,7 +195,7 @@ artifacts/adaptive_attack_decision.json
 reports/adaptive_attack_report.md
 ```
 
-该 runner 覆盖 scheduler change、time grid jitter、wrong sampler replay、endpoint-path decoupling、path response cancellation 和 trajectory sketch replacement attempt。其作用是闭合 validation-scale 的 governed records 入口, 不是 full-paper Flow-specific adaptive robustness 证明。
+该 runner 覆盖 scheduler change、time grid jitter、wrong sampler replay、endpoint-path decoupling、path response cancellation 和 trajectory sketch replacement attempt。其作用是闭合 validation_scale 的 governed records 入口, 不是 full_paper Flow-specific adaptive robustness 证明。
 
 当前阶段边界更新为:
 
@@ -206,5 +206,5 @@ adaptive_negative_tail_audit_ready = false
 adaptive_robustness_claim_allowed = false
 ```
 
-后续 full-paper 前仍需用真实 adaptive negative split、真实 quality guard 和 fixed-FPR negative tail audit 替换 validation proxy。
+后续 full_paper 前仍需用真实 adaptive negative split、真实 quality guard 和 fixed-FPR negative tail audit 替换 validation proxy。
 

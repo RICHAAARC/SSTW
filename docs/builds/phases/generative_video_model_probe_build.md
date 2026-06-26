@@ -1,14 +1,14 @@
-# generative_video_model_probe 分阶段构建流程
+# generative_video_model_probe 实现 package 构建流程
 
-本文档是 SSTW 分阶段构建流程文档。文档结构固定为: 先说明本阶段构建流程, 再说明当前阶段具体完成情况。
+本文档是 SSTW 分阶段构建流程文档。文档结构固定为: 先说明本实现 package 构建流程, 再说明当前具体完成情况。`generative_video_model_probe` 不再作为独立主门禁使用, 只表示真实生成式视频模型实验 package。阶段放行必须服从主干门禁: `protocol_governance -> mechanism_validation -> validation_scale -> pilot_paper -> full_paper -> submission_freeze`。
 
 本阶段文档服从 `docs/builds/sstw_project_construction_flow.md` 与 `docs/builds/sstw_method_mechanism_design.md`。阶段完成情况只描述仓库当前可观察的工程、配置、测试和文档状态, 不把临时实验输出写成论文结论。
 
-## 1. 本阶段构建流程
+## 1. 本实现 package 构建流程
 
 ### 1.1 阶段目标
 
-该阶段在真实生成式视频模型上验证 SSTW 的轨迹观测、状态空间推断、外部 baseline 和检测协议是否可运行。该阶段应在 `flow_model_adapter_preflight`、`sampling_time_constraint_probe` 与 `small_scale_claim_pilot_gate` 之后进行。该阶段必须服务于 Wan2.1 主线, 轻量模型只能作为工程预验证或 fallback probe。
+该实现 package 在真实生成式视频模型上验证 SSTW 的轨迹观测、状态空间推断、外部 baseline 和检测协议是否可运行。它应在 `flow_model_adapter_preflight`、`sampling_time_constraint_probe` 与 small-scale 机制 pilot 检查之后使用, 但不再单独放行 paper 阶段。它必须服务于 Wan2.1 主线, 轻量模型只能作为工程预验证或 fallback probe。
 
 ### 1.2 输入
 
@@ -83,9 +83,9 @@ generic_ssm_baseline
 4. full_paper 前置验证必须确认 `TPR@FPR=0.001` 的大规模 records、threshold 和 held-out negative 协议可运行。
 5. 质量、运动和语义指标不显示不可接受退化。
 
-### 1.8 validation-scale 运行要求
+### 1.8 validation_scale 运行要求
 
-在进入 paper 级结果运行前, 本阶段必须先完成 validation-scale 运行。validation-scale 是最后一道 paper-readiness 门禁, 不要求达到 full_paper 样本量, 但必须完成 paper 相关的全部机制构建, 并能够在小样本规模上产出全部结果类型。
+在进入 paper 级结果运行前, 本实现 package 必须先服务于 `validation_scale` 运行。`validation_scale` 是 paper 级前的小样本全流程打通门禁, 不支持正式效果主张。它不要求达到 full_paper 样本量, 但必须完成 paper 相关的全部机制构建, 并能够在小样本规模上产出全部结果类型。
 
 必须覆盖:
 
@@ -124,11 +124,11 @@ external_baseline_protocol_gap
 external_baseline_result_used_for_claim
 ```
 
-若 baseline 不能运行, 也必须生成 governed record, 不能静默缺失。但在 `validation_scale` 作为 paper 级前最后门禁时, 必需现代 baseline 只能用 `measured_formal` records 支撑通过; governed non-run record 只能解释阻断原因, 不能替代正式对比结果。
+若 baseline 不能运行, 也必须生成 governed record, 不能静默缺失。但在 `validation_scale` 作为 paper 级前小样本全流程打通门禁时, 必需现代 baseline 只能用 `measured_formal` records 支撑通过; governed non-run record 只能解释阻断原因, 不能替代正式对比结果。
 
-### 1.10 validation-scale 充分性矩阵
+### 1.10 validation_scale 充分性矩阵
 
-pilot PASS 后不得直接进入 full_paper。必须先执行 validation-scale 真实模型实验, 用较小但覆盖完整的矩阵验证全链路:
+历史 small-scale pilot PASS 后不得直接进入 full_paper。必须先执行 `validation_scale` 真实模型实验, 用较小但覆盖完整的矩阵验证全链路:
 
 ```text
 validation_generation_records_ready
@@ -146,11 +146,11 @@ validation_artifact_rebuild_dry_run_ready
 validation_claim_audit_ready
 ```
 
-validation-scale 不要求达到 full_paper 的最终样本量, 但必须覆盖 paper 协议的所有机制和所有产物类型。若某一类产物在 validation-scale 阻断, 不允许进入 `pilot_paper`; 此时只能继续修复缺失机制、adapter 或门禁规则。
+`validation_scale` 不要求达到 full_paper 的最终样本量, 但必须覆盖 paper 协议的所有机制和所有产物类型。若某一类产物在 validation_scale 阻断, 不允许进入 `pilot_paper`; 此时只能继续修复缺失机制、adapter 或门禁规则。validation_scale 通过只是进入 pilot_paper 的必要条件, full_paper 仍需 pilot_paper_gate 与 full_paper_result_checker。
 
 ### 1.11 现代 baseline 最小接入组合
 
-本阶段进入 `pilot_paper` 前, 至少需要确认以下 baseline 组合已经通过正式 adapter 产出同批 comparison records。对必需现代视频水印 baseline 而言, `governed non-run reason` 只能作为阻断解释, 不能作为 `validation_scale` 通过依据:
+本实现 package 进入 `pilot_paper` 前, 至少需要确认以下 baseline 组合已经通过项目内 clone / build / run / adapt / record 与正式 adapter 产出同批 comparison records。对必需现代视频水印 baseline 而言, `governed non-run reason` 只能作为阻断解释, 不能作为 `validation_scale` 通过依据:
 
 ```text
 in_generation_or_diffusion_video_watermark_baseline
@@ -168,7 +168,7 @@ external_baseline_not_run_reason
 claim_downgrade_recommendation
 ```
 
-并阻止 `validation_scale` 通过, 同时阻止 `pilot_paper` 和后续主对比表生成。
+并阻止 `validation_scale` 通过, 同时阻止 `pilot_paper`、`full_paper` 和后续主对比表生成。
 
 ### 1.12 baseline runner 工程规范索引
 
@@ -184,6 +184,12 @@ docs/builds/sstw_full_paper_engineering_gate_spec.md
 external_baseline_runnable_status == runnable
 external_baseline_adapter_status == ready
 external_baseline_output_record_status == governed_records_written
+external_baseline_project_clone_status == completed
+external_baseline_project_build_status == completed
+external_baseline_project_run_status == completed
+external_baseline_project_adapt_status == completed
+external_baseline_project_record_status == completed
+metric_status == measured_formal
 external_baseline_result_used_for_claim == true
 ```
 
@@ -193,7 +199,7 @@ external_baseline_result_used_for_claim == true
 
 ### 2.1 已有工程文件
 
-当前仓库已有 generative video probe 相关模块:
+当前仓库已有 generative video implementation package 相关模块:
 
 ```text
 experiments/generative_video_model_probe/generation_runner.py
@@ -270,7 +276,7 @@ runtime_detection_ready_count: 48
 small_scale_pilot_claim_support_status: blocked_until_motion_threshold_calibration
 ```
 
-该历史状态表示工程层面已经从真实视频生成推进到攻击、检测、gate 和 package 的完整闭环, 但当时正式实验结论仍等待 `motion_threshold_calibration` 完成。当前最新 motion calibration 与 pilot profile 均已 PASS, 因此本阶段下一步不再是重算 pilot gate, 而是进入 validation-scale 规划与工程门禁构建。
+该历史状态表示工程层面已经从真实视频生成推进到攻击、检测、gate 和 package 的完整闭环, 但当时正式实验结论仍等待 `motion_threshold_calibration` 完成。当前最新 motion calibration 与 pilot profile 均已 PASS, 因此本阶段下一步不再是重算 pilot gate, 而是进入 validation_scale 规划与工程门禁构建。
 
 ### 2.5 formal motion claim 过滤边界
 
@@ -323,17 +329,17 @@ strong visible displacement in every frame
 
 | 项目 | 当前标注 |
 |---|---|
-| 完成状态 | pilot 已通过, validation-scale 未完成 |
-| 主要差距项 | validation-scale 尚未运行; 现代外部 baseline 目前只有 governed 状态记录, 尚无可进主表的 runnable 结果。 |
-| 下一步构建方向 | 构建 validation-scale 真实模型实验、现代 baseline adapter contract、内部消融和 fixed-FPR CI reporter。 |
+| 完成状态 | pilot 已通过, validation_scale 未完成 |
+| 主要差距项 | validation_scale 尚未运行; 现代外部 baseline 目前只有 governed 状态记录, 尚无可进主表的 runnable 结果。 |
+| 下一步构建方向 | 构建 validation_scale 真实模型小样本全流程打通实验、现代 baseline adapter contract、内部消融和 fixed-FPR CI reporter。 |
 | full_paper 影响 | 未满足本阶段要求时, 不得把相关结果写入 full_paper supported claim。 |
 
 ### 3.1 快速检查清单
 
 ```text
-stage_status: pilot 已通过, validation-scale 未完成
-gap_item: validation-scale 尚未运行; 现代外部 baseline 目前只有 governed 状态记录, 尚无可进主表的 runnable 结果。
-next_action: 构建 validation-scale 真实模型实验、现代 baseline adapter contract、内部消融和 fixed-FPR CI reporter。
+stage_status: pilot 已通过, validation_scale 未完成
+gap_item: validation_scale 尚未运行; 现代外部 baseline 目前只有 governed 状态记录, 尚无可进主表的 runnable 结果。
+next_action: 构建 validation_scale 真实模型实验、现代 baseline adapter contract、内部消融和 fixed-FPR CI reporter。
 full_paper_blocking_rule: unresolved_gap_blocks_full_paper_claim
 ```
 
@@ -351,26 +357,26 @@ generative_video_runtime_20260623_134119_839da169.zip
 ```text
 implementation_decision: PASS
 effective_mechanism_decision: PASS
-mechanism_decision_source: small_scale_claim_pilot_gate
-small_scale_pilot_gate_decision: PASS
+mechanism_decision_source: small_scale_mechanism_pilot_check
+small_scale_mechanism_pilot_decision: PASS
 runtime_attack_decision: PASS
 runtime_detection_decision: PASS
 record_protocol_missing_failures: []
 ```
 
-当前阶段下一步不再是修复 pilot, 而是执行 validation-scale 设计和工程化门禁:
+当前阶段下一步不再是修复 pilot, 而是执行 validation_scale 设计和工程化门禁:
 
 ```text
-validation-scale prompt / seed / attack manifest
+validation_scale prompt / seed / attack manifest
 modern external baseline governed status and adapter contract
 internal ablation matrix
 fixed-FPR threshold protocol
 statistical confidence interval reporter
 ```
 
-## 2026-06-23 validation-scale gate 工程入口
+## 2026-06-23 validation_scale gate 工程入口
 
-当前仓库已新增 validation-scale gate 自动审计入口:
+当前仓库已新增 validation_scale gate 自动审计入口:
 
 ```text
 experiments/generative_video_model_probe/validation_scale_gate.py
@@ -383,10 +389,10 @@ reports/validation_scale_gate_report.md
 
 该 gate 的作用是检查 pilot 通过后是否已经具备进入 paper 级结果运行的条件。它只读取已经落盘的 governed records 和 decision artifacts, 不运行 GPU, 也不补造缺失的 baseline、消融、adaptive attack、replay/sketch、CI、tables、figures、reports 或 claim audit 结果。
 
-当前 validation-scale gate 检查的最小条件为:
+当前 validation_scale gate 检查的最小条件为:
 
 ```text
-small_scale_claim_pilot_gate_passed
+small_scale_mechanism_pilot_check_passed
 validation_generation_records_ready
 validation_attack_records_ready
 validation_detection_records_ready
@@ -411,11 +417,11 @@ expected_generation_count: 24
 profile_name: validation_scale
 ```
 
-需要强调的是, `validation_scale_gate_decision = PASS` 表示 paper 级运行的全部机制已经在小样本规模上闭合, 因而可以进入 `pilot_paper_generative_probe_gate`; 它仍不允许直接生成 full_paper 规模论文主表, 但它必须已经能产出小样本全结果包。
+需要强调的是, `validation_scale_gate_decision = PASS` 表示 paper 级运行的全部机制已经在小样本规模上闭合, 因而可以进入 `pilot_paper_gate`; 它仍不允许直接生成 full_paper 规模论文主表, 但它必须已经能产出小样本全结果包。
 
-## 2026-06-23 validation-scale 后处理工程闭环
+## 2026-06-23 validation_scale 后处理工程闭环
 
-为延后真实 GPU 复跑但继续推进工程闭环, 当前仓库已补齐三个不依赖重新生成视频的 validation-scale 后处理入口:
+为延后真实 GPU 复跑但继续推进工程闭环, 当前仓库已补齐三个不依赖重新生成视频的 validation_scale 后处理入口:
 
 ```text
 experiments/generative_video_model_probe/validation_internal_ablation.py
@@ -445,9 +451,9 @@ reports/validation_artifact_rebuild_dry_run_report.md
 该实现的边界是:
 
 ```text
-validation_internal_ablation: 使用 runtime detection proxy 生成 validation-scale 或 pilot_paper 同批 trace 的消融矩阵; validation-scale 结果只用于工程稳定性, pilot_paper 结果用于小样本论文级协议预演, 二者都不替代 full-paper 大规模正式消融。
+validation_internal_ablation: 使用 runtime detection proxy 生成 validation_scale 或 pilot_paper 同批 trace 的消融矩阵; validation_scale 结果只用于工程稳定性, pilot_paper 结果用于小样本论文级协议预演, 二者都不替代 full_paper 大规模正式消融。
 statistical_confidence_interval: 只计算 validation runtime detection proxy 的 Wilson 区间, 不替代 FPR=0.001 大规模统计。
-validation_artifact_rebuild: 只检查 validation 产物是否具备 records -> tables / reports 重建闭环, 不生成 full-paper package。
+validation_artifact_rebuild: 只检查 validation 产物是否具备 records -> tables / reports 重建闭环, 不生成 full_paper package。
 ```
 
 Colab workflow 已按以下顺序接入:
@@ -457,11 +463,11 @@ runtime detection
 validation / pilot_paper internal ablation
 statistical confidence interval
 validation artifact rebuild dry-run
-validation-scale gate
+validation_scale gate
 package to Google Drive
 ```
 
-因此, 后续真实复跑可以延后; 在复跑发生后, 新增后处理会自动把 validation-scale 缺口显式落盘, 而不是让缺口停留在人工判断。
+因此, 后续真实复跑可以延后; 在复跑发生后, 新增后处理会自动把 validation_scale 缺口显式落盘, 而不是让缺口停留在人工判断。
 
 
 ## 2026-06-23 external_baseline adapter comparison 接入
@@ -471,11 +477,11 @@ Colab workflow 已在 runtime detection 之后新增 external baseline compariso
 ```text
 runtime detection
 external_baseline adapter comparison
-small-scale claim pilot gate
+small-scale mechanism pilot check
 validation / pilot_paper internal ablation
 statistical confidence interval
 validation artifact rebuild dry-run
-validation-scale gate
+validation_scale gate
 package to Google Drive
 ```
 
@@ -494,7 +500,7 @@ artifacts/external_baseline_comparison_decision.json
 reports/external_baseline_comparison_report.md
 ```
 
-该实现的职责是闭合外部 baseline 对比工程链路。显式 DTW 与 frame matching 仍只是同步 control proxy; `pilot_paper` 和 `full_paper` 必须额外要求 VideoShield、SigMark、SPDMark、VideoMark、VidSig 与 VideoSeal 通过正式 command adapter 产出 `measured_formal` records。
+该实现的职责是闭合外部 baseline 对比工程链路。显式 DTW 与 frame matching 仍只是同步 control proxy; `pilot_paper` 和 `full_paper` 必须额外要求 VideoShield、SigMark、SPDMark、VideoMark、VidSig 与 VideoSeal 通过项目内 clone / build / run / adapt / record 和正式 adapter 产出 `measured_formal` records。
 
 
 ### external_baseline adapter comparison 运行语义
@@ -509,11 +515,11 @@ output: external_baseline_score_records + comparison table + decision + report
 claim_boundary: proxy comparison only until modern baseline adapters produce measured records
 ```
 
-该步骤必须位于 runtime detection 之后, 因为 adapter 需要读取真实 attacked video detection 链路产生的 governed records。该步骤必须位于 validation-scale gate 和 pilot_paper gate 之前: validation-scale gate 需要检查 `validation_external_baseline_comparison_records_ready`, pilot_paper gate 需要检查同批 held-out test trace 的 `pilot_paper_external_baseline_comparison_ready`。
+该步骤必须位于 runtime detection 之后, 因为 adapter 需要读取真实 attacked video detection 链路产生的 governed records。该步骤必须位于 validation_scale gate 和 pilot_paper gate 之前: validation_scale gate 需要检查 `validation_external_baseline_comparison_records_ready`, pilot_paper gate 需要检查同批 held-out test trace 的 `pilot_paper_external_baseline_comparison_ready`。
 
-## 2026-06-24 validation-scale hard-blocker runner workflow 接入
+## 2026-06-24 validation_scale hard-blocker runner workflow 接入
 
-当前 validation-scale notebook workflow 已接入两个硬阻断 runner:
+当前 validation_scale notebook workflow 已接入两个硬阻断 runner:
 
 ```text
 experiments.generative_video_model_probe.adaptive_attack_runner
@@ -525,7 +531,7 @@ experiments.generative_video_model_probe.claim3_downgrade
 ```text
 runtime detection
 external_baseline adapter comparison
-small_scale_claim_pilot_gate
+small_scale_mechanism_pilot_check
 validation_internal_ablation
 adaptive_attack validation proxy
 Claim-3 downgrade gate
@@ -535,7 +541,7 @@ validation_scale_gate
 package
 ```
 
-其中 adaptive attack runner 只提供 validation proxy records, 不支撑 full-paper adaptive robustness claim。Claim-3 downgrade gate 只允许 validation-scale 合规继续, 不替代最终必须实现的 replay/sketch gate。
+其中 adaptive attack runner 只提供 validation proxy records, 不支撑 full_paper adaptive robustness claim。Claim-3 downgrade gate 只允许 validation_scale 合规继续, 不替代最终必须实现的 replay/sketch gate。
 
 新增落盘产物包括:
 
@@ -552,12 +558,12 @@ reports/claim3_downgrade_report.md
 
 ## 2026-06-24 replay/sketch gate validation proxy 接入
 
-validation-scale workflow 已新增 replay/sketch gate 步骤, 位于 adaptive attack proxy 与 Claim-3 downgrade gate 之间:
+validation_scale workflow 已新增 replay/sketch gate 步骤, 位于 adaptive attack proxy 与 Claim-3 downgrade gate 之间:
 
 ```text
 runtime detection
 external_baseline adapter comparison
-small_scale_claim_pilot_gate
+small_scale_mechanism_pilot_check
 validation_internal_ablation
 adaptive_attack validation proxy
 replay/sketch gate validation proxy
@@ -568,12 +574,12 @@ validation_scale_gate
 package
 ```
 
-新增步骤写出 trajectory sketch verification、replay uncertainty、wrong sampler replay 和 wrong prompt replay 四类 governed records。`validation_artifact_rebuild_dry_run` 与 Google Drive package manifest 已纳入该步骤产物。当前该步骤只解除 validation-scale 工程入口缺口, 不解除 full-paper Claim-3 强支持阻塞。
+新增步骤写出 trajectory sketch verification、replay uncertainty、wrong sampler replay 和 wrong prompt replay 四类 governed records。`validation_artifact_rebuild_dry_run` 与 Google Drive package manifest 已纳入该步骤产物。当前该步骤只解除 validation_scale 工程入口缺口, 不解除 full_paper Claim-3 强支持阻塞。
 
 
 ## 2026-06-24 pilot_paper FPR=0.01 工程入口
 
-当前 `generative_video_model_probe` 已新增 `pilot_paper` 语义层级, 用于在 validation-scale 通过后执行小样本论文级结果包。该层级不是 workflow-only pilot, 而是小规模跑完整 full_paper 协议并产出 pilot 级论文结果。
+当前 `generative_video_model_probe` 已新增 `pilot_paper` 语义层级, 用于在 validation_scale 通过后执行小样本论文级结果包。该层级不是 workflow-only pilot, 而是小规模跑完整 full_paper 协议并产出 pilot 级论文结果。
 
 该阶段协议为:
 
@@ -614,7 +620,7 @@ target_fpr: 0.01
 threshold_protocol: calibration_split_to_frozen_threshold_to_heldout_test_split
 ```
 
-该阶段通过后允许报告 `pilot_paper_calibrated_heldout_claim_ready` 和 pilot_paper 级 `TPR@FPR=0.01` 论文主张。通过条件不仅包括 calibration / held-out threshold 协议, 还包括 external_baseline comparison 和内部消融矩阵对同批 held-out test trace 的覆盖。它与 full_paper 的区别只在样本规模和统计置信度, 但仍不允许报告 `TPR@FPR=0.001` 或 full-paper 规模主表结论。
+该阶段通过后允许报告 `pilot_paper_calibrated_heldout_claim_ready` 和 pilot_paper 级 `TPR@FPR=0.01` 论文主张。通过条件不仅包括 calibration / held-out threshold 协议, 还包括 external_baseline comparison 和内部消融矩阵对同批 held-out test trace 的覆盖。它与 full_paper 的区别只在样本规模和统计置信度, 但仍不允许报告 `TPR@FPR=0.001` 或 full_paper 规模主表结论。
 
 
 ### 2.11 pilot_paper gate 前置 baseline 与内部消融闭环
@@ -640,12 +646,12 @@ pilot_paper_external_baseline_trace_count_min >= 84
 pilot_paper_internal_ablation_trace_count_min >= 84
 ```
 
-这一实现属于项目特定 gate 设计: 它强制 `validation_scale` 先闭合对比链路和消融链路, 再允许 `pilot_paper` 输出 pilot 级 fixed-FPR 论文主张。显式 DTW 与 frame matching 仍只是同步 control proxy, 现代视频水印 baseline 的正式 adapter 必须在 `validation_scale` 通过前产出 `measured_formal` records。
+这一实现属于项目特定 gate 设计: 它强制 `validation_scale` 先闭合对比链路和消融链路, 再允许 `pilot_paper` 输出 pilot 级 fixed-FPR 论文主张。显式 DTW 与 frame matching 仍只是同步 control proxy, 现代视频水印 baseline 的正式 adapter 必须在 `validation_scale` 通过前基于项目内 clone / build / run / adapt / record 产出 `measured_formal` records。
 
 
 ### 2.12 现代视频水印 baseline 正式 adapter 要求
 
-`pilot_paper` 与后续更大规模 paper 运行的差异只允许是样本规模和 FPR 评价级别。因此 `validation_scale` 通过前必须完成完整现代 baseline adapter 配置, 并在小样本上真实产出 comparison records。当前工程已接入以下正式 command adapter 边界:
+`pilot_paper` 与后续更大规模 paper 运行的差异只允许是样本规模和 FPR 评价级别。因此 `validation_scale` 通过前必须完成完整现代 baseline 自包含执行链路, 并在小样本上通过项目内 clone / build / run / adapt / record 真实产出 comparison records。当前工程已接入以下正式 adapter 边界:
 
 ```text
 videoshield
@@ -682,7 +688,7 @@ configs/paper_workflow/generative_video_notebook_workflows.json
 ```text
 motion_threshold_calibration_colab.ipynb: 只运行 motion calibration split 并冻结 threshold artifact
 generative_video_runtime_colab.ipynb: 运行 Wan2.1 生成、formal metrics、motion threshold 复用、attack 和 detection
-external_baseline_formal_scoring_colab.ipynb: 运行现代 baseline command adapter 和 comparison records
+external_baseline_formal_scoring_colab.ipynb: 运行现代 baseline 自包含执行链路、adapter 和 comparison records
 paper_gate_and_package_colab.ipynb: 运行 internal ablation、adaptive attack、replay/sketch 或 Claim-3 downgrade、CI、gate 和 package
 ```
 

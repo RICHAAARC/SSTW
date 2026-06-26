@@ -87,7 +87,7 @@ endpoint_only_control
 | 项目 | 当前标注 |
 |---|---|
 | 完成状态 | 部分完成 |
-| 主要差距项 | path evidence 独立性和 fixed-FPR marginal gain 仍需 pilot/full validation。 |
+| 主要差距项 | path evidence 独立性和 fixed-FPR marginal gain 仍需 pilot_paper / full_paper validation。 |
 | 下一步构建方向 | 强化 endpoint/path redundancy audit、wrong sampler replay control 和 trajectory-only safety。 |
 | full_paper 影响 | 未满足本阶段要求时, 不得把相关结果写入 full_paper supported claim。 |
 
@@ -95,7 +95,7 @@ endpoint_only_control
 
 ```text
 stage_status: 部分完成
-gap_item: path evidence 独立性和 fixed-FPR marginal gain 仍需 pilot/full validation。
+gap_item: path evidence 独立性和 fixed-FPR marginal gain 仍需 pilot_paper / full_paper validation。
 next_action: 强化 endpoint/path redundancy audit、wrong sampler replay control 和 trajectory-only safety。
 full_paper_blocking_rule: unresolved_gap_blocks_full_paper_claim
 ```

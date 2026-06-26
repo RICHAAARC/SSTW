@@ -1,12 +1,12 @@
-# small_scale_claim_pilot_gate 分阶段构建流程
+# small_scale_mechanism_pilot_check 分阶段构建流程
 
-本文档记录 `small_scale_claim_pilot_gate` 阶段的构建流程与当前完成情况。本文档只描述工程、协议、records 和 artifact 状态, 不直接支撑论文最终 claim。当前项目已额外引入 `pilot_paper` 作为小样本论文级结果层级; 二者不能混用。
+本文档保留旧文件名 `small_scale_claim_pilot_gate_build.md`, 但当前语义已经调整为 `small_scale_mechanism_pilot_check`。该检查不再作为主干门禁, 只作为 `mechanism_validation` 下的小样本机制检查记录。本文档只描述工程、协议、records 和 artifact 状态, 不直接支撑论文最终 claim。当前项目已额外引入 `pilot_paper` 作为小样本论文级结果层级; 二者不能混用。
 
 ## 1. 本阶段构建流程
 
 ### 1.1 阶段目标
 
-该阶段在进入大规模真实生成实验前, 以较小成本验证主要 claim 是否有成立迹象。该阶段不产生论文级结果表格, 但决定是否进入 validation-scale 和后续 `pilot_paper` / full generation 主实验。
+该检查在进入 `validation_scale` 前, 以较小成本验证主要 claim 是否有成立迹象。该检查不产生论文级结果表格, 也不能直接决定是否进入 `pilot_paper` 或 full generation 主实验。small-scale pilot 通过后只允许进入 `validation_scale`; `validation_scale` 通过后, 才允许进入 `pilot_paper`。
 
 ### 1.2 建议规模
 
@@ -56,9 +56,9 @@ wrong_key_score_separation_passed = true
 wrong_sampler_replay_control_not_equivalent = true
 ```
 
-### 1.6 进入 full validation 的升级条件
+### 1.6 进入 validation_scale 的升级条件
 
-small-scale pilot 通过只表示可以进入 validation-scale 或 `pilot_paper` 构建, 不表示可以进入 full_paper。进入 validation-scale 还必须确认:
+small-scale pilot 通过只表示可以进入 `validation_scale` 构建, 不表示可以进入 `pilot_paper` 或 `full_paper`。进入 `validation_scale` 还必须确认:
 
 ```text
 all_pilot_records_are_governed = true
@@ -70,13 +70,13 @@ replay_or_claim3_downgrade_plan_exists = true
 artifact_rebuild_dry_run_plan_exists = true
 ```
 
-若上述任一条件不满足, pilot 即使分数通过, 也只能继续补齐工程流程, 不能进入 full_paper。
+若上述任一条件不满足, small-scale pilot 即使分数通过, 也只能继续补齐工程流程并进入 `validation_scale`, 不能直接进入 `pilot_paper` 或 `full_paper`。
 
 ## 2. 当前阶段完成情况
 
 ### 2.1 当前阶段判定
 
-`small_scale_claim_pilot_gate` 当前判定为:
+`small_scale_mechanism_pilot_check` 当前判定为:
 
 ```text
 structure_ready / protocol_ready / external_validation_required
@@ -143,7 +143,7 @@ run_cross_model: false
 6 method variants
 ```
 
-pilot 失败时不得进入 full experiment。pilot 通过后, 才允许进入 `generative_video_model_probe` 的完整真实模型实验。
+small-scale pilot 失败时不得进入 `validation_scale`。small-scale pilot 通过后, 只允许进入 `validation_scale` 的小样本全流程打通验证, 不允许直接进入 `pilot_paper` 或 full experiment。
 
 ### 2.4 motion threshold calibration 冻结策略
 
@@ -481,23 +481,23 @@ prompt_suite_id: generative_video_probe_prompt_suite_motion_observability_and_pi
 
 | 项目 | 当前标注 |
 |---|---|
-| 完成状态 | 已完成 small-scale pilot, 可进入 validation-scale |
-| 主要差距项 | 本阶段阻塞已解除; 剩余差距转移到 pilot_paper、validation-scale、现代外部 baseline 主表对比、内部消融和论文级 fixed-FPR。 |
-| 下一步构建方向 | 进入 pilot_paper / validation-scale generative probe, 同步补现代外部 baseline、内部消融和 CI reporter。 |
+| 完成状态 | 已完成 small-scale pilot, 可进入 validation_scale |
+| 主要差距项 | 本阶段阻塞已解除; 剩余差距转移到 validation_scale、pilot_paper、现代外部 baseline 主表对比、内部消融和论文级 fixed-FPR。 |
+| 下一步构建方向 | 进入 validation_scale, 并在 validation_scale 通过后进入 pilot_paper, 同步补现代外部 baseline、内部消融和 CI reporter。 |
 | full_paper 影响 | 未满足本阶段要求时, 不得把相关结果写入 full_paper supported claim。 |
 
 ### 3.1 快速检查清单
 
 ```text
-stage_status: 已完成 small-scale pilot, 可进入 validation-scale
-gap_item: 本阶段阻塞已解除; 剩余差距转移到 pilot_paper、validation-scale、现代外部 baseline 主表对比、内部消融和论文级 fixed-FPR。
-next_action: 进入 pilot_paper / validation-scale generative probe, 同步补现代外部 baseline、内部消融和 CI reporter。
+stage_status: 已完成 small-scale pilot, 可进入 validation_scale
+gap_item: 本阶段阻塞已解除; 剩余差距转移到 validation_scale、pilot_paper、现代外部 baseline 主表对比、内部消融和论文级 fixed-FPR。
+next_action: 进入 validation_scale, 并在 validation_scale 通过后进入 pilot_paper, 同步补现代外部 baseline、内部消融和 CI reporter。
 full_paper_blocking_rule: unresolved_gap_blocks_full_paper_claim
 ```
 
-## 4. pilot 结果使用边界
+## 4. small-scale pilot 结果使用边界
 
-small-scale pilot 的作用是判断是否值得进入 validation-scale 或 pilot_paper, 不是产出论文主结果。pilot_paper 是后续独立结果层级, 必须使用 calibration / held-out split 和 frozen threshold artifact。即使 small-scale pilot PASS, 也必须遵守:
+small-scale pilot 的作用是判断是否值得进入 validation_scale, 不是产出论文主结果, 也不是进入 pilot_paper 的直接门票。pilot_paper 是后续独立结果层级, 必须使用 calibration / held-out split 和 frozen threshold artifact。即使 small-scale pilot PASS, 也必须遵守:
 
 ```text
 pilot_records_not_used_for_main_detection_table
@@ -507,11 +507,11 @@ pilot_baseline_results_not_used_as_external_main_comparison
 pilot_attack_results_not_used_as_full_robustness_claim
 ```
 
-small-scale pilot PASS 后的下一步是 pilot_paper 或 validation-scale generative video probe, 不是 full_paper。若 Codex 检测到用户或脚本试图从 small-scale pilot 直接生成 full_paper package, 应将其标记为阶段跳跃。
+small-scale pilot PASS 后的下一步只能是 validation_scale, 不是 pilot_paper 或 full_paper。validation_scale 通过后, 才能通过 stage transition decision 进入 pilot_paper。若 Codex 检测到用户或脚本试图从 small-scale pilot 直接生成 full_paper package, 应将其标记为阶段跳跃。
 
-## 5. pilot 通过后的 validation 准入清单
+## 5. small-scale pilot 通过后的 validation_scale 准入清单
 
-pilot 通过后, 进入 validation-scale 前仍需确认:
+small-scale pilot 通过后, 进入 validation_scale 前仍需确认:
 
 ```text
 validation_prompt_manifest_prepared
@@ -524,7 +524,7 @@ validation_artifact_rebuild_plan_prepared
 validation_resource_budget_checked
 ```
 
-上述条件缺失时, 只能补齐 validation 规划, 不能进入 full_paper。
+上述条件缺失时, 只能补齐 validation 规划, 不能进入 pilot_paper 或 full_paper。
 
 
 ## 2026-06-23 最新原生复跑状态
@@ -542,7 +542,7 @@ runtime_detection_ready_count: 48
 protocol_missing_failures: []
 ```
 
-本阶段现在的结论是: 可以进入 validation-scale generative video probe。该结论不能被解释为 full_paper ready, 也不能用于生成最终 `TPR@FPR=0.001` 主表。
+本阶段现在的结论是: 可以进入 validation_scale 小样本全流程打通验证。该结论不能被解释为 full_paper ready, 也不能用于生成最终 `TPR@FPR=0.001` 主表。
 
 ## 2026-06-24 formal motion exclusion gate 判定修复
 
@@ -562,4 +562,4 @@ formal_motion_claim_status = blocked_by_formal_motion_consistency
   仅表示没有足够 positive motion eligible records 支撑 motion claim。
 ```
 
-该修复不依赖 `S_final`、`S_final_conservative` 或任何最终检测判定分数, 因此不违反污染过滤约束。它只改变 gate 对已被剔除样本的阶段级解释, 不改变样本级过滤逻辑。对于 validation-scale 风格的 8 prompt × 3 seed 运行, 如果 1 个样本被剔除后仍保持 `seed_per_prompt_min >= 2`, pilot gate 可以继续通过并把剔除数量写入审计字段。
+该修复不依赖 `S_final`、`S_final_conservative` 或任何最终检测判定分数, 因此不违反污染过滤约束。它只改变 gate 对已被剔除样本的阶段级解释, 不改变样本级过滤逻辑。对于 validation_scale 风格的 8 prompt × 3 seed 运行, 如果 1 个样本被剔除后仍保持 `seed_per_prompt_min >= 2`, pilot gate 可以继续通过并把剔除数量写入审计字段。

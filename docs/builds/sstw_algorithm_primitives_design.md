@@ -197,7 +197,7 @@ Sign_server(hash)
 4. 验证 replay negative 与 sampler-mismatch negative 的 FPR tail 受控。
 5. 在证据不足时触发 Claim-3 downgrade, 防止 unsupported robust replay verification claim。
 
-因此, 项目可以短期使用 `Claim-3 downgrade gate` 推进 validation-scale, 但最终若要把 Claim-3 作为强创新性贡献, 必须实现并通过 `replay/sketch gate`。
+因此, 项目可以短期使用 `Claim-3 downgrade gate` 推进 validation_scale, 但最终若要把 Claim-3 作为强创新性贡献, 必须实现并通过 `replay/sketch gate`。
 
 ## 11. P9: Baseline-Separated Evaluation
 

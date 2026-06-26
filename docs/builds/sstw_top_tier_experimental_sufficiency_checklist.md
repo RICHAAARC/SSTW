@@ -47,7 +47,15 @@ reproducibility_evidence_sufficient
 | `pilot_paper` | `0.01` | 小规模论文协议 | 以较小成本产出 FPR=1% 级别的 paper 协议结果, 检查 full_paper 同构协议在真实模型上的可报告性。 | 仅允许 pilot 级主张 |
 | `full_paper` | `0.001` | 正式规模论文协议 | 产出 FPR=0.1% 级别正式论文主结果, 包含主表、主图、CI、claim audit、artifact rebuild 和 reviewer evidence index。 | 是 |
 
-`validation_scale` 是进入 `pilot_paper` 和 `full_paper` 的硬门禁。它通过只说明论文协议产物链路已经小样本跑通, 不说明 SSTW 的效果已经达到投稿主张。
+`validation_scale` 是进入 `pilot_paper` 和后续 `full_paper` 流程的硬门禁。它通过只说明论文协议产物链路已经小样本跑通, 不说明 SSTW 的效果已经达到投稿主张。`validation_scale` 是 `full_paper` 的必要条件但不是充分条件; `full_paper` 仍需要 `pilot_paper_gate`、`full_paper_result_checker`、CI、claim audit、artifact rebuild 和 submission freeze 相关检查通过。
+
+主干门禁只保留:
+
+```text
+protocol_governance -> mechanism_validation -> validation_scale -> pilot_paper -> full_paper -> submission_freeze
+```
+
+历史 `small_scale_claim_pilot_gate` 只作为 `mechanism_validation` 下的小样本机制检查记录, 不再作为主干门禁。`generative_video_model_probe` 只表示真实生成式视频模型实现 package, 不再作为独立门禁。
 
 ## 2. 机制证据核查
 
@@ -124,6 +132,13 @@ external_baseline_adapter_status
 external_baseline_protocol_gap
 external_baseline_output_record_status
 external_baseline_result_used_for_claim
+metric_status
+```
+
+进入正式主表的 modern external baseline 必须统一使用:
+
+```text
+metric_status == measured_formal
 ```
 
 外部 baseline 的正式结果必须由本项目自包含产出:
@@ -136,7 +151,7 @@ project_adapt
 project_record
 ```
 
-允许本项目在 Colab 或受治理运行环境中 clone GitHub 官方代码、安装依赖、下载公开权重、调用官方 API 或官方命令, 但最终 records、tables 和 reports 必须由本项目流程写出。禁止把外部补交的 result bundle、手写 JSON、NPZ 分数文件、论文表格数字或 SSTW proxy 分数作为主表 baseline 结果。
+允许本项目在 Colab 或受治理运行环境中 clone GitHub 官方代码、安装依赖、下载公开权重、调用官方 API 或官方命令, 但最终 records、tables 和 reports 必须由本项目流程写出。禁止把外部补交的 result bundle、手写 JSON、NPZ 分数文件、论文表格数字或 SSTW proxy 分数作为主表 baseline 结果。governed non-run record 只能解释阻断原因, 不能替代正式 `measured_formal` baseline。
 
 如果只比较 image watermark、frame watermark 或 endpoint-only control, 则 baseline 充分性不通过。
 
@@ -217,7 +232,7 @@ run_command_recorded
 
 | 风险 | 阻断规则 |
 |---|---|
-| 只有 pilot, 没有 full validation | 不允许 full_paper |
+| 只有 pilot, 没有 validation_scale 与 full_paper_result_checker | 不允许 full_paper |
 | 只有内部 baseline, 没有现代外部 baseline | 不允许 full_paper |
 | 只有 TPR@FPR=0.01, 没有 TPR@FPR=0.001 | 降级低 FPR claim |
 | 只有 event count, 没有 unique video count | 降级统计可信度 claim |
@@ -253,21 +268,22 @@ harness 是否通过
 | 项目 | 分值 |
 |---|---:|
 | pilot_paper gate 已实现并测试通过 | 15 |
-| modern external baseline runner 或 governed non-run record 已实现 | 15 |
+| modern external baseline self-contained runner 已实现, 且 non-run record 仅作为阻断记录而不替代 measured_formal | 15 |
 | internal ablation matrix 已实现并能重建表格 | 10 |
 | flow-specific adaptive attack runner 已实现 | 15 |
 | statistical confidence interval reporter 已实现 | 15 |
-| full_paper result checker 已实现 | 15 |
+| full_paper_result_checker 已实现 | 15 |
 | reviewer evidence index builder 已实现 | 10 |
 | artifact rebuild 与 claim audit 全链路通过 | 5 |
+| stage transition / external baseline self-containment / data split leakage 三个轻量判定已实现 | 5 |
 
 解释:
 
 ```text
 90-100: 可进入 pilot_paper 或 full_paper 前最终预检
-75-89: 可进入 validation-scale, 但仍需补齐部分 gate
+75-89: 可进入 validation_scale, 但仍需补齐部分 gate
 60-74: 只能作为实验协议验证阶段
 <60: 不应进入论文主结果生产
 ```
 
-若某个项目只有文档描述, 没有 repository checker、runner 或 reporter, 则该项目记 0 分。该评分用于防止把“手册完整”误判为“实验系统已经具备 full_paper 产出能力”。
+若某个项目只有文档描述, 没有 repository checker、runner、reporter 或轻量 decision artifact, 则该项目记 0 分。评分表中最后一项为加分型治理项, 总分计算时可将总分归一到 100。该评分用于防止把“手册完整”误判为“实验系统已经具备 full_paper 产出能力”。

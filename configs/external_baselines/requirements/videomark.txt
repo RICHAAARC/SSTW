@@ -1,0 +1,12 @@
+# VideoMark 官方 PRC key、embedding / extraction 与 temporal tamper 流程通用依赖。
+# 具体模型权重、PRC key 和 temporal_results 必须由项目内官方流程生成。
+torch
+torchvision
+diffusers
+transformers
+accelerate
+numpy
+scipy
+opencv-python
+imageio
+imageio-ffmpeg

@@ -25,6 +25,7 @@ EXTERNAL_BASELINE_COMMAND_TEMPLATE_SUMMARY = "artifacts/external_baseline_comman
 EXTERNAL_BASELINE_OFFICIAL_BRIDGE_PREFLIGHT_DECISION = "artifacts/external_baseline_official_bridge_preflight_decision.json"
 EXTERNAL_BASELINE_OFFICIAL_RESOURCE_BOOTSTRAP_DECISION = "artifacts/external_baseline_official_resource_bootstrap_decision.json"
 EXTERNAL_BASELINE_OFFICIAL_BUNDLE_GENERATION_DECISION = "artifacts/external_baseline_official_bundle_generation_decision.json"
+EXTERNAL_BASELINE_OFFICIAL_RUNTIME_CLOSURE_REQUIREMENTS = "artifacts/external_baseline_official_runtime_closure_requirements.json"
 EXTERNAL_BASELINE_OFFICIAL_RESULT_BUNDLE_PREFLIGHT_DECISION = "artifacts/external_baseline_official_result_bundle_preflight_decision.json"
 
 
@@ -1103,6 +1104,37 @@ def build_external_baseline_official_bundle_generation_command(
     ]
     if generate_auto_supported:
         command.append("--generate-auto-supported")
+    return command
+
+
+def build_external_baseline_official_runtime_closure_command(
+    layout: dict[str, str],
+    *,
+    baseline_id: str | None = None,
+) -> list[str]:
+    """构造现代 baseline 真实运行闭合要求预检命令。
+
+    该命令只写出 source、requirements、runtime inputs、官方资源和 official bundle
+    cache 的缺口清单。它不会运行第三方 baseline, 因此可以在 Colab 正式 scoring
+    前安全执行, 用于把“缺哪个文件或配置”明确落盘。
+    """
+    command = [
+        sys.executable,
+        "-m",
+        "external_baseline.official_runtime_closure",
+        "--run-root",
+        layout["drive_run_root"],
+        "--repo-root",
+        ".",
+        "--resource-root",
+        layout["external_baseline_resource_root"],
+        "--official-result-bundle-root",
+        layout["external_baseline_official_result_bundle_root"],
+        "--output-json",
+        str(Path(layout["drive_run_root"]) / EXTERNAL_BASELINE_OFFICIAL_RUNTIME_CLOSURE_REQUIREMENTS),
+    ]
+    if baseline_id:
+        command.extend(["--baseline-id", baseline_id])
     return command
 
 

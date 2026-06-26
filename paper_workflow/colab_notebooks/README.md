@@ -164,6 +164,7 @@ Notebook 会额外写出以下配置辅助 artifact:
 ```text
 artifacts/external_baseline_command_template_summary.json
 artifacts/external_baseline_official_resource_bootstrap_decision.json
+artifacts/external_baseline_official_runtime_closure_requirements.json
 artifacts/external_baseline_official_bundle_generation_decision.json
 ```
 
@@ -195,6 +196,15 @@ paper_workflow/colab_notebooks/sigmark_formal_reference_colab.ipynb
 ```text
 clone / build / run / adapt / bundle / unified_formal_record_conversion
 ```
+
+每个独立 Notebook 会先安装对应的 baseline requirements 文件:
+
+```text
+configs/external_baselines/requirements/<baseline_id>.txt
+```
+
+若需要临时跳过该安装步骤, 可设置 `SSTW_INSTALL_BASELINE_REQUIREMENTS=false`;
+但这只适合调试已安装环境, 正式 Colab 冷启动运行应保持默认启用。
 
 也就是在项目内克隆官方源码、运行 source intake、调用仓库 official adapter 或官方 API,
 并以同一 `prompt_id / seed_id / attack_name / trajectory_trace_id` runtime comparison unit
@@ -383,6 +393,7 @@ workflow 会写出:
 
 ```text
 artifacts/external_baseline_official_resource_bootstrap_decision.json
+artifacts/external_baseline_official_runtime_closure_requirements.json
 artifacts/external_baseline_official_bundle_generation_decision.json
 artifacts/external_baseline_official_result_bundle_preflight_decision.json
 ```
@@ -391,6 +402,20 @@ artifacts/external_baseline_official_result_bundle_preflight_decision.json
 Colab 自动补齐资源, 哪些 baseline 仍需要官方 bundle、官方 checkpoint、训练权重或更高显存
 环境。`external_baseline_official_bundle_generation_decision.json` 会记录自动生成了哪些
 official bundle, 以及哪些 baseline 因官方资源边界无法自动生成。
+
+`external_baseline_official_runtime_closure_requirements.json` 是真实运行闭合要求清单,
+由以下配置生成:
+
+```text
+configs/external_baselines/official_runtime_closure_requirements.json
+configs/external_baselines/requirements/<baseline_id>.txt
+```
+
+该 artifact 会逐个 baseline 检查官方源码关键文件、requirements 文件、默认 Drive
+资源路径、runtime videos、official bundle cache 和命令环境变量。若 Google Drive
+中已经存在配置声明的默认资源文件, Notebook 会自动应用 artifact 中的
+`environment_updates`, 因而不需要在 cell 中重复手动填写路径。该 artifact 仍然只是
+preflight 产物, 不能替代 `metric_status: measured_formal`。
 
 若某个 baseline 既没有可直接运行的官方资源, 也没有覆盖全部 runtime comparison unit
 的结果包, 该 preflight 会失败。该失败是正式门禁的一部分, 目的是防止把缺权重、
@@ -510,6 +535,7 @@ paper_gate_and_package_colab.ipynb
 generative_video_colab_runtime_decision.json
 external_baseline_colab_preflight_decision.json
 external_baseline_official_resource_bootstrap_decision.json
+external_baseline_official_runtime_closure_requirements.json
 external_baseline_official_bundle_generation_decision.json
 external_baseline_official_result_bundle_preflight_decision.json
 external_baseline_comparison_decision.json

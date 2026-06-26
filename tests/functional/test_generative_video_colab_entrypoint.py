@@ -308,6 +308,8 @@ def test_split_colab_notebooks_are_profile_driven() -> None:
     assert "build_external_baseline_comparison_command" in baseline_source
     assert "build_external_baseline_official_resource_bootstrap_command" in baseline_source
     assert "build_external_baseline_official_bundle_generation_command" in baseline_source
+    assert "build_external_baseline_official_runtime_closure_command" in baseline_source
+    assert "external_baseline_official_runtime_closure_requirements.json" in baseline_source
     assert "build_external_baseline_official_result_bundle_preflight_command" in baseline_source
     assert "build_pilot_paper_gate_command" in gate_source
     assert "build_validation_scale_gate_command" in gate_source

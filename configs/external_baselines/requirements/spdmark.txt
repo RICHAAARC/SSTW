@@ -1,0 +1,11 @@
+# SPDMark 官方 decoder / extractor 检测流程通用依赖。
+# trained extractor、decoder 和 ground-truth bits 不在本仓库中, 必须由官方流程或项目内资源目录提供。
+torch
+torchvision
+diffusers
+transformers
+accelerate
+numpy
+opencv-python
+imageio
+imageio-ffmpeg

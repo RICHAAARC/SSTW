@@ -1,0 +1,9 @@
+# VidSig 官方 checkpoint 与 attack.py wrapper 运行依赖。
+# checkpoint 仍必须来自官方公开资源或项目内 official resource bootstrap。
+gdown
+torch
+torchvision
+numpy
+imageio
+imageio-ffmpeg
+opencv-python

@@ -15,6 +15,10 @@ from experiments.generative_video_model_probe.external_baseline_runner import wr
 from external_baseline.official_bundle_generator import build_official_bundle_generation_plan
 from external_baseline.official_resource_bootstrap import bootstrap_official_resources
 from external_baseline.official_result_bundle import build_official_result_bundle_preflight
+from external_baseline.official_runtime_closure import (
+    build_official_runtime_closure_requirements,
+    load_official_runtime_closure_requirements,
+)
 from main.protocol.record_writer import read_jsonl, write_jsonl
 from external_baseline.source_intake import build_source_intake_manifest, write_source_intake_artifacts
 
@@ -137,6 +141,81 @@ def test_official_resource_requirements_define_auto_and_manual_boundaries() -> N
     assert rows["spdmark"]["colab_l4_auto_bundle_status"] == "blocked_by_missing_public_trained_weights"
     assert rows["sigmark"]["colab_l4_auto_bundle_status"] == "blocked_by_official_gpu_memory_requirement"
     assert "sstw_proxy" not in json.dumps(config, ensure_ascii=False)
+
+
+@pytest.mark.quick
+def test_official_runtime_closure_requirements_are_first_class_colab_config() -> None:
+    """真实运行闭合要求必须有独立配置和每个 baseline 的 requirements 文件。"""
+    config = load_official_runtime_closure_requirements()
+    rows = {row["baseline_id"]: row for row in config["baseline_runtime_requirements"]}
+
+    assert config["config_kind"] == "modern_external_baseline_official_runtime_closure_requirements"
+    assert set(rows) == {"videoshield", "sigmark", "spdmark", "videomark", "vidsig", "videoseal"}
+    assert config["self_containment_rule"].startswith("external baseline 必须在项目内 clone")
+    assert rows["videoseal"]["automatic_bundle_generation_supported_by_sstw"] is True
+    assert rows["videoseal"]["colab_default_can_attempt_without_user_files"] is True
+    for baseline_id, row in rows.items():
+        assert row["external_supplemental_result_bundle_allowed"] is False
+        assert row["official_baseline_command_env_var"] == f"SSTW_{baseline_id.upper()}_OFFICIAL_EVAL_COMMAND"
+        assert row["external_baseline_command_env_var"] == f"SSTW_{baseline_id.upper()}_EVAL_COMMAND"
+        assert row["native_command_env_var"] == f"SSTW_{baseline_id.upper()}_NATIVE_EVAL_COMMAND"
+        assert Path(row["requirements_file"]).exists()
+
+
+@pytest.mark.quick
+def test_official_runtime_closure_preflight_fails_with_actionable_missing_inputs(tmp_path: Path) -> None:
+    """缺少真实 runtime 输入时, 新预检必须明确失败而不是伪装为可运行。"""
+    run_root = tmp_path / "runs" / "generative_video_model_probe" / "validation_scale"
+
+    audit = build_official_runtime_closure_requirements(
+        run_root,
+        repo_root=Path("."),
+        resource_root=tmp_path / "resources" / "external_baseline",
+        official_result_bundle_root=tmp_path / "external_baseline_official_result_bundles" / "validation_scale",
+    )
+
+    assert audit["official_runtime_closure_decision"] == "FAIL"
+    assert audit["runtime_input_audit"]["runtime_input_ready"] is False
+    assert "records/runtime_detection_records.jsonl" in audit["runtime_input_audit"]["missing_runtime_requirements"]
+    assert audit["runtime_closure_blocked_count"] == 6
+    assert set(audit["runtime_closure_blocked_baselines"]) == {
+        "videoshield",
+        "sigmark",
+        "spdmark",
+        "videomark",
+        "vidsig",
+        "videoseal",
+    }
+
+
+@pytest.mark.quick
+def test_official_runtime_closure_preflight_binds_existing_default_drive_resources(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """默认 Drive 资源路径存在时, 预检应自动给 Notebook 父进程提供环境变量更新。"""
+    run_root = tmp_path / "runs" / "generative_video_model_probe" / "validation_scale"
+    _write_external_baseline_runtime_fixture(run_root)
+    resource_root = tmp_path / "resources" / "external_baseline"
+    decoder = resource_root / "vidsig" / "nested" / "dec_48b_whit.torchscript.pt"
+    decoder.parent.mkdir(parents=True)
+    decoder.write_bytes(b"vidsig-decoder")
+    for env_name in ("SSTW_VIDSIG_MSG_DECODER_PATH", "SSTW_VIDSIG_VAE_CHECKPOINT_PATH"):
+        monkeypatch.delenv(env_name, raising=False)
+
+    audit = build_official_runtime_closure_requirements(
+        run_root,
+        repo_root=Path("."),
+        resource_root=resource_root,
+        official_result_bundle_root=tmp_path / "external_baseline_official_result_bundles" / "validation_scale",
+        baseline_id="vidsig",
+    )
+
+    assert audit["baseline_count"] == 1
+    assert audit["environment_updates"]["SSTW_VIDSIG_MSG_DECODER_PATH"] == str(decoder)
+    vidsig_row = audit["baseline_runtime_rows"][0]
+    assert vidsig_row["baseline_id"] == "vidsig"
+    assert vidsig_row["resource_requirement"]["resource_requirements"][0]["effective_resource_path_exists"] is True
 
 
 @pytest.mark.quick

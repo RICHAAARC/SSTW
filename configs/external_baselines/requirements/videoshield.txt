@@ -1,0 +1,12 @@
+# VideoShield 官方 generation / inversion / maintained-info 流程通用依赖。
+# wm_info、latent inversion 输出或 official result JSON 必须来自项目内 clone / build / run / adapt 链路。
+torch
+torchvision
+diffusers
+transformers
+accelerate
+numpy
+scipy
+opencv-python
+imageio
+imageio-ffmpeg

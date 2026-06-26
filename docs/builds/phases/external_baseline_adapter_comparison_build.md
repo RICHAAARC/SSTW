@@ -97,6 +97,9 @@ external_baseline/source_registry.json
 external_baseline/registry.py
 external_baseline/runtime_trace_io.py
 external_baseline/modern_command_adapter.py
+external_baseline/official_runtime_closure.py
+configs/external_baselines/official_runtime_closure_requirements.json
+configs/external_baselines/requirements/<baseline_id>.txt
 external_baseline/primary/explicit_dtw_temporal_alignment/adapter/run_sstw_eval.py
 external_baseline/primary/explicit_frame_matching_temporal_registration/adapter/run_sstw_eval.py
 external_baseline/primary/videoshield/adapter/run_sstw_eval.py
@@ -118,6 +121,7 @@ reports/external_baseline_status_report.md
 
 records/external_baseline_score_records.jsonl
 tables/external_baseline_comparison_table.csv
+artifacts/external_baseline_official_runtime_closure_requirements.json
 artifacts/external_baseline_comparison_decision.json
 artifacts/external_baseline_self_containment_decision.json
 reports/external_baseline_comparison_report.md
@@ -148,11 +152,13 @@ claim_support_status: measured_formal_self_contained_results_required_for_valida
 
 ```text
 1. 在 Colab 或等价受治理运行环境中, 由本项目 clone / build 每个现代 baseline 的官方源码、权重和依赖。
-2. 配置 `SSTW_VIDEOSHIELD_EVAL_COMMAND`、`SSTW_SIGMARK_EVAL_COMMAND`、`SSTW_SPDMARK_EVAL_COMMAND`、`SSTW_VIDEOMARK_EVAL_COMMAND`、`SSTW_VIDSIG_EVAL_COMMAND` 和 `SSTW_VIDEOSEAL_EVAL_COMMAND`, 或配置 repository bridge + official inner command。
-3. 按顺序运行 6 个 `*_formal_reference_colab.ipynb`, 以同一 prompt / seed / attack 协议为锚点, 让每个 baseline 在自己的 Notebook 内完成官方流程、生成项目内 official bundle, 并默认调用统一 runner 转写当前可用的 `measured_formal` records。
-4. 在 6 个 official bundle 全部完成后运行 `paper_workflow/colab_notebooks/external_baseline_formal_scoring_colab.ipynb`, 执行全量统一转写、self-containment 判定和打包。
-5. 写出 `artifacts/external_baseline_self_containment_decision.json`, 逐 baseline 记录 clone / build / run / adapt / record 状态。
-6. 仅当全部现代 baseline 都产生项目内自包含 governed `measured_formal` records 后, 才允许 validation_scale gate 通过; validation_scale 通过后还必须生成 validation_scale_to_pilot_paper_transition_decision 才能进入 pilot_paper, full_paper 仍需 pilot_paper gate、pilot_paper_to_full_paper_transition_decision 与 full_paper_result_checker。
+2. 通过 `configs/external_baselines/official_runtime_closure_requirements.json` 和 `configs/external_baselines/requirements/<baseline_id>.txt` 明确每个 baseline 的真实运行要求; 6 个 formal reference Notebook 默认会安装各自的 requirements 文件。
+3. 运行 `external_baseline.official_runtime_closure`, 写出 `artifacts/external_baseline_official_runtime_closure_requirements.json`; 若 Google Drive 默认资源路径已存在, Notebook 应自动应用其中的 `environment_updates`。
+4. 配置 `SSTW_VIDEOSHIELD_EVAL_COMMAND`、`SSTW_SIGMARK_EVAL_COMMAND`、`SSTW_SPDMARK_EVAL_COMMAND`、`SSTW_VIDEOMARK_EVAL_COMMAND`、`SSTW_VIDSIG_EVAL_COMMAND` 和 `SSTW_VIDEOSEAL_EVAL_COMMAND`, 或配置 repository bridge + official inner command。
+5. 按顺序运行 6 个 `*_formal_reference_colab.ipynb`, 以同一 prompt / seed / attack 协议为锚点, 让每个 baseline 在自己的 Notebook 内完成官方流程、生成项目内 official bundle, 并默认调用统一 runner 转写当前可用的 `measured_formal` records。
+6. 在 6 个 official bundle 全部完成后运行 `paper_workflow/colab_notebooks/external_baseline_formal_scoring_colab.ipynb`, 执行全量统一转写、self-containment 判定和打包。
+7. 写出 `artifacts/external_baseline_self_containment_decision.json`, 逐 baseline 记录 clone / build / run / adapt / record 状态。
+8. 仅当全部现代 baseline 都产生项目内自包含 governed `measured_formal` records 后, 才允许 validation_scale gate 通过; validation_scale 通过后还必须生成 validation_scale_to_pilot_paper_transition_decision 才能进入 pilot_paper, full_paper 仍需 pilot_paper gate、pilot_paper_to_full_paper_transition_decision 与 full_paper_result_checker。
 ```
 
 

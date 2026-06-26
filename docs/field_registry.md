@@ -1072,3 +1072,17 @@ Notebook 与 repository module 的跨边界数据
 | replay_and_sketch_evidence_level | governance | none | true | true | false | Evidence level for replay and authenticated sketch gate outputs. |
 | replay_control_status | governance | none | true | false | false | Replay control acceptance or rejection status. |
 | replay_and_sketch_missing_requirements | governance | none | true | false | false | Missing requirement names for replay and authenticated sketch gate. |
+
+| official_runtime_closure_decision | governance | none | true | false | false | Decision for the modern external baseline runtime closure requirements preflight. |
+| official_runtime_closure_status | governance | none | true | false | false | Status explaining whether selected modern external baselines are ready to attempt formal reference execution. |
+| runtime_closure_ready_count | metric | none | true | false | false | Number of selected modern external baselines with source, requirements, runtime inputs, and one formal execution path available. |
+| runtime_closure_blocked_count | metric | none | true | false | false | Number of selected modern external baselines blocked by missing runtime requirements. |
+| runtime_closure_ready_baselines | governance | none | true | false | false | Baseline identifiers ready to attempt formal reference execution. |
+| runtime_closure_blocked_baselines | governance | none | true | false | false | Baseline identifiers blocked by missing runtime requirements. |
+| runtime_closure_missing_requirements | governance | none | true | false | false | Per-baseline list of missing runtime closure requirements. |
+| official_runtime_closure_requirements | artifact | none | true | false | false | Artifact describing source, requirements, runtime input, resource, command, and official bundle readiness for modern external baselines. |
+| requirements_file_path | artifact | none | true | false | false | Path to a baseline-specific requirements file used by runtime closure preflight. |
+| requirements_file_exists | governance | none | true | false | false | Whether a baseline-specific requirements file exists. |
+| official_source_ready | governance | none | true | false | false | Whether a baseline official source directory contains required source files. |
+| required_resource_ready | governance | none | true | false | false | Whether required baseline resource environment variables or default Drive resource files are available. |
+| environment_updates | artifact | none | true | false | false | Environment variable updates emitted by a preflight artifact for the Notebook parent process. |

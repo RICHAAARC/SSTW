@@ -1,0 +1,12 @@
+# SIGMark 官方 HunyuanVideo / blind extraction 流程通用依赖。
+# 官方推荐高显存环境, Colab L4 默认不保证可完成完整生成流程。
+torch
+torchvision
+diffusers
+transformers
+accelerate
+numpy
+opencv-python
+decord
+imageio
+imageio-ffmpeg

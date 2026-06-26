@@ -19,6 +19,7 @@ import subprocess
 import sys
 from typing import Any, Mapping
 
+from external_baseline.official_runtime_closure import write_official_runtime_closure_requirements
 from external_baseline.runtime_trace_io import build_comparison_unit_id, comparable_detection_records
 from paper_workflow.notebook_utils import generative_video_model_probe_workflow as probe_workflow
 
@@ -67,6 +68,7 @@ class ModernExternalBaselineFormalReferenceConfig:
     generate_auto_supported_bundle: bool
     allow_existing_official_bundle_as_reference_input: bool
     max_records: int | None
+    run_official_runtime_closure_preflight: bool
     run_official_result_bundle_preflight: bool
     run_external_baseline_comparison_after_reference: bool
     run_self_containment_after_reference: bool
@@ -162,6 +164,7 @@ def build_default_config_from_env(baseline_id: str, repo_root: str | Path = ".")
             "false",
         ).lower() == "true",
         max_records=max_records,
+        run_official_runtime_closure_preflight=os.environ.get("SSTW_RUN_OFFICIAL_RUNTIME_CLOSURE_PREFLIGHT", "true").lower() == "true",
         run_official_result_bundle_preflight=os.environ.get("SSTW_RUN_OFFICIAL_RESULT_BUNDLE_PREFLIGHT_AFTER_REFERENCE", "true").lower() == "true",
         run_external_baseline_comparison_after_reference=os.environ.get("SSTW_RUN_EXTERNAL_BASELINE_COMPARISON_AFTER_REFERENCE", "true").lower() == "true",
         run_self_containment_after_reference=os.environ.get("SSTW_RUN_SELF_CONTAINMENT_AFTER_REFERENCE", "true").lower() == "true",
@@ -298,6 +301,49 @@ def _run_official_resource_bootstrap(
         "applied_environment_update_keys": sorted(str(key) for key in environment_updates)
         if isinstance(environment_updates, Mapping)
         else [],
+    }
+
+
+def _run_official_runtime_closure_preflight(
+    layout: Mapping[str, str],
+    config: ModernExternalBaselineFormalReferenceConfig,
+) -> dict[str, Any]:
+    """写出真实运行闭合要求 artifact, 并自动绑定已存在的默认 Drive 资源。
+
+    该阶段只检查 source、requirements、runtime inputs、官方资源与 official bundle
+    cache 是否齐备。它不运行第三方 baseline, 也不生成 `measured_formal` 分数。
+    若 Google Drive 中已存在配置文件声明的默认资源路径, 该函数会把对应
+    `SSTW_*` 环境变量注入当前 Notebook 进程, 避免用户在每个 baseline cell 中
+    反复手动填路径。
+    """
+
+    payload = write_official_runtime_closure_requirements(
+        layout["drive_run_root"],
+        repo_root=config.repo_root,
+        resource_root=layout["external_baseline_resource_root"],
+        official_result_bundle_root=layout["external_baseline_official_result_bundle_root"],
+        baseline_id=config.baseline_id,
+    )
+    environment_updates = payload.get("environment_updates", {})
+    if isinstance(environment_updates, Mapping):
+        for key, value in environment_updates.items():
+            if value:
+                os.environ[str(key)] = str(value)
+    return {
+        "stage_id": "external_baseline_official_runtime_closure_requirements",
+        "stage_status": payload.get("official_runtime_closure_decision"),
+        "decision_path": str(
+            Path(layout["drive_run_root"])
+            / "artifacts"
+            / "external_baseline_official_runtime_closure_requirements.json"
+        ),
+        "runtime_closure_ready_count": payload.get("runtime_closure_ready_count"),
+        "runtime_closure_blocked_count": payload.get("runtime_closure_blocked_count"),
+        "runtime_closure_blocked_baselines": payload.get("runtime_closure_blocked_baselines", []),
+        "applied_environment_update_keys": sorted(str(key) for key in environment_updates)
+        if isinstance(environment_updates, Mapping)
+        else [],
+        "claim_support_status": "official_runtime_requirements_preflight_only_not_claim_evidence",
     }
 
 
@@ -692,6 +738,11 @@ def run_modern_external_baseline_formal_reference_plan(
         if config.run_official_resource_bootstrap
         else {"stage_id": "external_baseline_official_resource_bootstrap", "stage_status": "SKIPPED"}
     )
+    runtime_closure_preflight_result = (
+        _run_official_runtime_closure_preflight(layout, config)
+        if config.run_official_runtime_closure_preflight
+        else {"stage_id": "external_baseline_official_runtime_closure_requirements", "stage_status": "SKIPPED"}
+    )
     official_source_dir = official_source_dir_for_baseline(config.baseline_id, repo_root=repo_root)
     records = comparable_detection_records(run_root)
     if config.max_records is not None:
@@ -748,6 +799,7 @@ def run_modern_external_baseline_formal_reference_plan(
         "formal_reference_status": reference_status,
         "source_intake_result": source_intake_result,
         "resource_bootstrap_result": resource_bootstrap_result,
+        "runtime_closure_preflight_result": runtime_closure_preflight_result,
         "reference_manifest": reference_manifest,
         "followup_results": followup_results,
         "created_at_utc": _utc_now(),

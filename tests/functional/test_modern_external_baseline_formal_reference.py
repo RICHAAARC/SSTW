@@ -50,6 +50,7 @@ def test_modern_external_baseline_default_config_is_validation_scale(monkeypatch
     assert config.generate_auto_supported_bundle is True
     assert config.allow_existing_official_bundle_as_reference_input is False
     assert config.max_records is None
+    assert config.run_official_runtime_closure_preflight is True
     assert config.run_official_result_bundle_preflight is True
     assert config.run_external_baseline_comparison_after_reference is True
     assert config.run_self_containment_after_reference is True
@@ -127,6 +128,8 @@ def test_six_baseline_formal_reference_notebooks_call_repository_helpers() -> No
         assert "drive.mount('/content/drive')" in source
         assert "SSTW_WORKFLOW_PROFILE_VALUE = 'validation_scale'" in source
         assert "NOTEBOOK_ROLE = 'external_baseline_formal_scoring'" in source
+        assert f"configs/external_baselines/requirements/{baseline_id}.txt" in source
+        assert "SSTW_INSTALL_BASELINE_REQUIREMENTS" in source
         assert f"from paper_workflow.colab_utils.{baseline_id}_formal_reference import" in source
         assert f"run_default_{baseline_id}_formal_reference_plan" in source
         assert "formal_reference_decision" in source
@@ -146,6 +149,8 @@ def test_formal_reference_helper_runs_bundle_then_unified_measured_formal_scorin
     assert "same_prompt_seed_attack_runtime_comparison_unit" in helper_text
     assert "SSTW_DISABLE_OFFICIAL_RESULT_BUNDLE_READ" in helper_text
     assert "build_external_baseline_official_resource_bootstrap_command" in helper_text
+    assert "external_baseline_official_runtime_closure_requirements" in helper_text
+    assert "write_official_runtime_closure_requirements" in helper_text
     assert "build_modern_baseline_command_env" in helper_text
     assert "external_baseline_unified_measured_formal_scoring" in helper_text
     assert "build_external_baseline_comparison_command" in helper_text

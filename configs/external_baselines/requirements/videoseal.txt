@@ -1,0 +1,9 @@
+# VideoSeal 官方 API 与视频 I/O 运行依赖。
+# 该文件只描述 Colab 真实运行前需要安装的第三方依赖, 不代表已经产出 measured_formal 结果。
+git+https://github.com/facebookresearch/videoseal
+av
+torch
+torchvision
+imageio
+imageio-ffmpeg
+opencv-python

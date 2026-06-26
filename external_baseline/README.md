@@ -13,9 +13,10 @@ external baseline 采用分层接入方式:
 5. `official_eval_adapters/<baseline_id>.py` 保存 repository 维护的 fail-closed 官方命令 wrapper, 用于把官方源码、官方 API、官方 checkpoint 或本项目生成的官方结果缓存转换成 SSTW 统一 JSON。
 6. `official_resource_bootstrap.py` 在 Colab 冷启动中自动补齐可公开获得的官方资源, 并对无法自动补齐的 baseline 写出 `manual_official_resource_required` 或 `non_runnable_with_governed_reason`。
 7. `official_bundle_generator.py` 为可由官方 API 自动支持的 baseline 生成 repository-owned official bundle cache, 同时为高显存或缺训练权重 baseline 写出不能自动生成的原因。
-8. `official_result_bundle.py` 检查本项目 workflow 生成的官方结果缓存或当前会话可运行资源是否覆盖当前 runtime comparison unit。
-9. `experiments/generative_video_model_probe/external_baseline_runner.py` 负责在某次 `run_root` 中调度 adapter, 并把状态记录、比较结果和 `external_baseline_execution_manifest.json` 落盘。
-10. validation gate、artifact rebuild dry-run 和 packager 只读取已落盘 artifacts, 不直接调用第三方源码或 Notebook 临时变量。
+8. `official_runtime_closure.py` 根据 `configs/external_baselines/official_runtime_closure_requirements.json` 检查真实运行所需的 source、requirements、runtime videos、官方资源和 official bundle cache, 并写出可由 Notebook 读取的环境变量修复建议。
+9. `official_result_bundle.py` 检查本项目 workflow 生成的官方结果缓存或当前会话可运行资源是否覆盖当前 runtime comparison unit。
+10. `experiments/generative_video_model_probe/external_baseline_runner.py` 负责在某次 `run_root` 中调度 adapter, 并把状态记录、比较结果和 `external_baseline_execution_manifest.json` 落盘。
+11. validation gate、artifact rebuild dry-run 和 packager 只读取已落盘 artifacts, 不直接调用第三方源码或 Notebook 临时变量。
 
 ## 接入规则
 
@@ -123,6 +124,11 @@ python -m external_baseline.official_resource_bootstrap \
   --run-root /content/drive/MyDrive/SSTW/runs/generative_video_model_probe/validation_scale \
   --resource-root /content/drive/MyDrive/SSTW/resources/external_baseline
 
+python -m external_baseline.official_runtime_closure \
+  --run-root /content/drive/MyDrive/SSTW/runs/generative_video_model_probe/validation_scale \
+  --resource-root /content/drive/MyDrive/SSTW/resources/external_baseline \
+  --official-result-bundle-root /content/drive/MyDrive/SSTW/external_baseline_official_result_bundles/validation_scale
+
 python -m external_baseline.official_bundle_generator \
   --run-root /content/drive/MyDrive/SSTW/runs/generative_video_model_probe/validation_scale \
   --bundle-root /content/drive/MyDrive/SSTW/external_baseline_official_result_bundles/validation_scale \
@@ -132,11 +138,39 @@ python -m external_baseline.official_result_bundle \
   --run-root /content/drive/MyDrive/SSTW/runs/generative_video_model_probe/validation_scale
 ```
 
-上述顺序体现严格门禁的修复策略: 不是只检查失败, 而是先自动准备可公开资源、再自动生成
-可由官方 API 支持的 repository-owned official bundle cache、最后执行 fail-closed preflight。若某个 baseline
+上述顺序体现严格门禁的修复策略: 不是只检查失败, 而是先自动准备可公开资源、再落盘真实运行闭合要求、
+再自动生成可由官方 API 支持的 repository-owned official bundle cache、最后执行 fail-closed preflight。若某个 baseline
 的官方仓库未公开训练权重、需要大显存生成模型、需要 PRC key / maintained info 或需要
 项目内官方中间产物, bootstrap 与 bundle generator 会写出明确阻断原因, 不会用 SSTW
 检测分数或视频相似度伪造结果, 也不会要求用户外部补交分数文件。
+
+真实运行闭合要求配置位于:
+
+```text
+configs/external_baselines/official_runtime_closure_requirements.json
+configs/external_baselines/requirements/<baseline_id>.txt
+```
+
+`official_runtime_closure.py` 会在 `run_root/artifacts/` 下写出:
+
+```text
+external_baseline_official_runtime_closure_requirements.json
+```
+
+该 artifact 的性质是“可运行性与缺口清单”, 不是论文结果。它会说明:
+
+1. 当前 `runtime_detection_records.jsonl`、`generation_records.jsonl`、`videos/` 和 `attacked_videos/` 是否存在。
+2. 每个 baseline 的官方源码目录和关键入口文件是否存在。
+3. 每个 baseline 的 requirements 文件是否存在。
+4. 默认 Google Drive 资源目录中是否存在可自动绑定到 `SSTW_*` 环境变量的官方资源。
+5. official bundle cache 是否已经覆盖全部 runtime comparison units。
+
+若 artifact 中出现 `environment_updates`, Notebook 会自动应用这些更新。该机制只减少手动填路径,
+不会把资源文件或配置文件升级为 `metric_status: measured_formal`。正式结果仍必须由
+external baseline runner 读取 official adapter 输出后写入 `external_baseline_score_records.jsonl`。
+
+6 个独立 formal reference Notebook 默认会安装对应的 requirements 文件。若在已安装环境中调试,
+可以设置 `SSTW_INSTALL_BASELINE_REQUIREMENTS=false` 跳过该步骤; 正式 Colab 冷启动运行不应跳过。
 
 ## Source intake 命令
 

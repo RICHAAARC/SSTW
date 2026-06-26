@@ -4,9 +4,10 @@
 与早期 workflow pilot 不同, 本 gate 明确采用论文实验同构的低 FPR 流程:
 calibration split -> frozen threshold artifact -> held-out test split -> report / claim audit input。
 
-通过该 gate 可以支持 `pilot_paper` 规模的 TPR@FPR=0.01 论文级主张。`pilot_paper`
-与 `full_paper` 使用同构协议, 差异只在样本规模和统计置信度, 因此不能外推为
-TPR@FPR=0.001 或 full-paper 规模结论。
+通过该 gate 可以支持当前 protocol config 指定 target_fpr 下的 `pilot_paper`
+规模论文级主张。`pilot_paper` 与 `full_paper` 使用同构协议, 差异只在样本规模、
+统计置信度和 protocol config 指定的 FPR 口径, 因此不能外推为更低 FPR 或
+full-paper 规模结论。
 """
 
 from __future__ import annotations
@@ -32,7 +33,6 @@ from main.protocol.table_builder import write_csv
 
 DEFAULT_PILOT_PAPER_CONFIG = "configs/protocol/pilot_paper_generative_probe.json"
 DEFAULT_PILOT_PROFILE_NAMES = {"pilot_paper"}
-DEFAULT_TARGET_FPR = 0.01
 DEFAULT_MINIMUM_PROMPT_COUNT = 21
 DEFAULT_MINIMUM_SEED_PER_PROMPT = 8
 DEFAULT_MINIMUM_SPLIT_SEED_PER_PROMPT = 4
@@ -87,6 +87,28 @@ def _read_json(path: Path) -> dict:
     return json.loads(path.read_text(encoding="utf-8-sig"))
 
 
+def _required_float(raw: dict[str, Any], field_name: str, config_path: Path) -> float:
+    """从 protocol config 读取必填 float 字段, 缺失时 fail-closed。"""
+    if field_name not in raw:
+        raise KeyError(f"pilot_paper protocol config 缺少必填字段 {field_name}: {config_path}")
+    return float(raw[field_name])
+
+
+def _optional_float(raw: dict[str, Any], field_name: str) -> float | None:
+    """从 protocol config 读取可选 float 字段。"""
+    value = raw.get(field_name)
+    if value in {None, ""}:
+        return None
+    return float(value)
+
+
+def _format_fpr(value: float | None) -> str:
+    """把 FPR 数值格式化为报告中的稳定短文本。"""
+    if value is None:
+        return "未配置"
+    return f"{float(value):g}"
+
+
 def _read_validation_scale_artifact(run_root: Path, relative_path: str) -> dict:
     """读取 validation_scale 上游 artifact。
 
@@ -109,12 +131,18 @@ def _read_jsonl(path: Path) -> list[dict]:
 
 
 def _load_config(config_path: str | Path = DEFAULT_PILOT_PAPER_CONFIG) -> dict[str, Any]:
-    """读取 pilot_paper gate 配置, 缺失时使用保守默认值。"""
-    raw = _read_json(Path(config_path))
+    """读取 pilot_paper gate 配置。
+
+    target_fpr 是 paper gate 的核心语义, 必须来自 protocol config。这里不再提供
+    脚本内置默认值, 避免 validation_scale / pilot_paper / full_paper 切换时出现脚本
+    默认值覆盖配置的问题。
+    """
+    path = Path(config_path)
+    raw = _read_json(path)
     return {
         "pilot_profile_names": raw.get("pilot_profile_names", sorted(DEFAULT_PILOT_PROFILE_NAMES)),
-        "target_fpr": float(raw.get("target_fpr", DEFAULT_TARGET_FPR)),
-        "blocked_target_fpr": float(raw.get("blocked_target_fpr", 0.001)),
+        "target_fpr": _required_float(raw, "target_fpr", path),
+        "blocked_target_fpr": _optional_float(raw, "blocked_target_fpr"),
         "threshold_protocol": raw.get("threshold_protocol", "calibration_split_to_frozen_threshold_to_heldout_test_split"),
         "paper_result_level": raw.get("paper_result_level", "pilot_paper"),
         "paper_protocol_level": raw.get("paper_protocol_level", "paper_grade_protocol"),
@@ -538,7 +566,7 @@ def build_pilot_paper_gate_audit(
         and attack_event_count_per_attack_min >= config["minimum_attack_event_count_per_attack"],
         "frozen_threshold_artifact_computable": threshold is not None and calibration_fpr is not None,
         "heldout_fpr_within_target": heldout_fpr is not None and heldout_fpr <= config["target_fpr"],
-        "tpr_at_fpr_01_computable": tpr_at_fpr is not None,
+        "tpr_at_target_fpr_computable": tpr_at_fpr is not None,
         "path_marginal_gain_ready": bool(path_gain_values) and mean(path_gain_values) > 0,
         "negative_tail_not_inflated": bool(negative_tail_statuses & {"not_inflated", "negative_tail_not_inflated", "pass"}),
         "wrong_sampler_replay_rejected": _wrong_sampler_replay_rejected(heldout_negative_records),
@@ -585,9 +613,12 @@ def build_pilot_paper_gate_audit(
         "heldout_negative_fpr_at_threshold": heldout_fpr,
         "heldout_negative_false_positive_count_at_threshold": heldout_false_positive_count,
         "observed_negative_fpr_at_threshold": heldout_fpr,
+        "tpr_at_target_fpr": tpr_at_fpr,
         "tpr_at_fpr_01": tpr_at_fpr,
         "true_positive_count_at_threshold": true_positive_count,
+        "target_fpr_claim_allowed": gate_decision == "PASS",
         "tpr_at_fpr_01_pilot_claim_allowed": gate_decision == "PASS",
+        "blocked_target_fpr_claim_allowed": False,
         "tpr_at_fpr_001_claim_allowed": False,
         "full_paper_allowed": False,
         "generation_record_count": len(generation_records),
@@ -637,7 +668,7 @@ def build_pilot_paper_gate_audit(
         "minimum_modern_external_baseline_formal_adapter_count": config["minimum_modern_external_baseline_formal_adapter_count"],
         "minimum_internal_ablation_variant_count": config["minimum_internal_ablation_variant_count"],
         "next_allowed_action": "report_pilot_paper_result_then_plan_full_paper_scaleup" if gate_decision == "PASS" else "complete_missing_pilot_paper_requirements",
-        "next_forbidden_action": "do_not_report_tpr_at_fpr_0_001_or_full_paper_scale_claim_from_pilot_paper",
+        "next_forbidden_action": "do_not_report_blocked_target_fpr_or_full_paper_scale_claim_from_pilot_paper",
     }
 
 
@@ -676,14 +707,16 @@ def write_pilot_paper_gate_audit(
     write_csv(run_root / "tables" / "pilot_paper_gate_table.csv", [record])
     write_json(run_root / "thresholds" / "pilot_paper_frozen_threshold.json", _threshold_artifact_from_audit(audit))
     write_json(run_root / "artifacts" / "pilot_paper_gate_decision.json", audit)
+    target_fpr_text = _format_fpr(audit.get("target_fpr"))
+    blocked_target_fpr_text = _format_fpr(audit.get("blocked_target_fpr"))
     report = (
         "# pilot_paper fixed-FPR Paper Gate Report\n\n"
         "该报告由已落盘的 governed records 自动生成, 使用 calibration split 冻结阈值, "
         "再在 held-out test split 上报告 FPR 与 TPR。该报告可支持 pilot_paper 规模的 "
-        "TPR@FPR=0.01 论文级结论。pilot_paper 是小规模跑完整 full_paper 协议并产出 "
+        f"TPR@target_fpr={target_fpr_text} 论文级结论。pilot_paper 是小规模跑完整 full_paper 协议并产出 "
         "pilot 级论文结果的阶段, 因此不再需要单独的前置预演阶段。"
         "pilot_paper 与 full_paper 的协议同构, 差异只在样本规模和统计置信度, "
-        "因此该报告不支持 TPR@FPR=0.001 或 full-paper 规模结论。\n\n"
+        f"因此该报告不支持 blocked_target_fpr={blocked_target_fpr_text} 或 full-paper 规模结论。\n\n"
         f"- pilot_paper_gate_decision: {audit['pilot_paper_gate_decision']}\n"
         f"- claim_support_status: {audit['claim_support_status']}\n"
         f"- paper_result_level: {audit['paper_result_level']}\n"
@@ -706,6 +739,11 @@ def write_pilot_paper_gate_audit(
         f"- heldout_attacked_positive_event_count: {audit['heldout_attacked_positive_event_count']}\n"
         f"- calibration_negative_fpr_at_threshold: {audit['calibration_negative_fpr_at_threshold']}\n"
         f"- heldout_negative_fpr_at_threshold: {audit['heldout_negative_fpr_at_threshold']}\n"
+        f"- target_fpr: {target_fpr_text}\n"
+        f"- tpr_at_target_fpr: {audit['tpr_at_target_fpr']}\n"
+        f"- target_fpr_claim_allowed: {str(audit['target_fpr_claim_allowed']).lower()}\n"
+        f"- blocked_target_fpr: {blocked_target_fpr_text}\n"
+        f"- blocked_target_fpr_claim_allowed: {str(audit['blocked_target_fpr_claim_allowed']).lower()}\n"
         f"- tpr_at_fpr_01: {audit['tpr_at_fpr_01']}\n"
         f"- tpr_at_fpr_001_claim_allowed: {str(audit['tpr_at_fpr_001_claim_allowed']).lower()}\n"
         f"- full_paper_allowed: {str(audit['full_paper_allowed']).lower()}\n"

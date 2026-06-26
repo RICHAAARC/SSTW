@@ -8,6 +8,27 @@ from hashlib import sha256
 from pathlib import Path
 
 
+DEFAULT_PILOT_PAPER_CONFIG = "configs/protocol/pilot_paper_generative_probe.json"
+
+
+def _read_json(path: str | Path) -> dict:
+    """读取 protocol config, 并兼容 UTF-8 BOM。"""
+    input_path = Path(path)
+    if not input_path.exists():
+        raise FileNotFoundError(f"缺少 protocol config: {input_path}")
+    payload = json.loads(input_path.read_text(encoding="utf-8-sig"))
+    if not isinstance(payload, dict):
+        raise TypeError(f"JSON 顶层必须是对象: {input_path}")
+    return payload
+
+
+def _required_float(config: dict, field_name: str, config_path: str | Path) -> float:
+    """从 protocol config 读取必填 float 字段。"""
+    if field_name not in config:
+        raise KeyError(f"protocol config 缺少必填字段 {field_name}: {config_path}")
+    return float(config[field_name])
+
+
 PROMPT_ITEMS = [
     {
         "prompt_id": "motion_object_pan",
@@ -400,8 +421,9 @@ def _build_motion_calibration_prompts() -> list[dict]:
     return prompts
 
 
-def build_prompt_suite() -> dict:
+def build_prompt_suite(pilot_paper_config_path: str | Path = DEFAULT_PILOT_PAPER_CONFIG) -> dict:
     """构造独立于测试运行的 prompt suite, 便于 Colab 重复使用。"""
+    pilot_paper_config = _read_json(pilot_paper_config_path)
     pilot_paper_prompt_count = len(PILOT_PAPER_PROMPT_ITEMS)
     pilot_paper_seed_count = len(PILOT_PAPER_SEED_ITEMS)
     suite = {
@@ -409,12 +431,12 @@ def build_prompt_suite() -> dict:
         "dataset_construction_status": "constructed",
         "dataset_source": "repository_deterministic_prompt_seed_spec",
         "pilot_paper_design": {
-            "paper_result_level": "pilot_paper",
-            "paper_protocol_level": "paper_grade_protocol",
-            "paper_protocol_difference_from_full_paper": "sample_scale_only",
+            "paper_result_level": pilot_paper_config.get("paper_result_level", "pilot_paper"),
+            "paper_protocol_level": pilot_paper_config.get("paper_protocol_level", "paper_grade_protocol"),
+            "paper_protocol_difference_from_full_paper": pilot_paper_config.get("paper_protocol_difference_from_full_paper", "sample_scale_only"),
             "recommended_runtime_profile": "pilot_paper",
-            "target_fpr": 0.01,
-            "blocked_target_fpr": 0.001,
+            "target_fpr": _required_float(pilot_paper_config, "target_fpr", pilot_paper_config_path),
+            "blocked_target_fpr": _required_float(pilot_paper_config, "blocked_target_fpr", pilot_paper_config_path),
             "prompt_count": pilot_paper_prompt_count,
             "seed_count": pilot_paper_seed_count,
             "calibration_seed_count": sum(1 for item in PILOT_PAPER_SEED_ITEMS if item.get("split") == "calibration"),
@@ -425,7 +447,7 @@ def build_prompt_suite() -> dict:
             "target_negative_family_count": 4,
             "target_calibration_negative_event_count": pilot_paper_prompt_count * 4 * 3 * 4,
             "target_heldout_test_negative_event_count": pilot_paper_prompt_count * 4 * 3 * 4,
-            "threshold_protocol": "calibration_split_to_frozen_threshold_to_heldout_test_split",
+            "threshold_protocol": pilot_paper_config.get("threshold_protocol", "calibration_split_to_frozen_threshold_to_heldout_test_split"),
             "claim_support_status": "pilot_paper_dataset_constructed_not_generated",
             "split": "calibration_and_test"
         },
@@ -447,11 +469,14 @@ def build_prompt_suite() -> dict:
     return suite
 
 
-def write_prompt_suite(output_root: str | Path) -> dict:
+def write_prompt_suite(
+    output_root: str | Path,
+    pilot_paper_config_path: str | Path = DEFAULT_PILOT_PAPER_CONFIG,
+) -> dict:
     """写出 prompt suite 数据集, 不执行任何模型测试。"""
     output_root = Path(output_root)
     output_root.mkdir(parents=True, exist_ok=True)
-    suite = build_prompt_suite()
+    suite = build_prompt_suite(pilot_paper_config_path)
     path = output_root / "prompt_seed_suite.json"
     path.write_text(json.dumps(suite, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     manifest = {
@@ -460,7 +485,12 @@ def write_prompt_suite(output_root: str | Path) -> dict:
         "dataset_construction_status": suite["dataset_construction_status"],
         "dataset_source": suite["dataset_source"],
         "output_paths": [str(path)],
-        "rebuild_command": f"python scripts/prepare_generative_video_prompt_suite.py --output-root {output_root.as_posix()}",
+        "input_paths": [str(pilot_paper_config_path)],
+        "rebuild_command": (
+            f"python scripts/prepare_generative_video_prompt_suite.py "
+            f"--output-root {output_root.as_posix()} "
+            f"--pilot-paper-config-path {pilot_paper_config_path}"
+        ),
     }
     manifest_path = output_root / "prompt_seed_suite_manifest.json"
     manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
@@ -470,8 +500,14 @@ def write_prompt_suite(output_root: str | Path) -> dict:
 def main() -> None:
     parser = argparse.ArgumentParser(description="构造 B5 Colab prompt / seed 数据集。")
     parser.add_argument("--output-root", default="outputs/datasets/generative_video_prompt_suite")
+    parser.add_argument("--pilot-paper-config-path", default=DEFAULT_PILOT_PAPER_CONFIG)
     args = parser.parse_args()
-    print(json.dumps(write_prompt_suite(args.output_root), ensure_ascii=False, indent=2, sort_keys=True))
+    print(json.dumps(
+        write_prompt_suite(args.output_root, args.pilot_paper_config_path),
+        ensure_ascii=False,
+        indent=2,
+        sort_keys=True,
+    ))
 
 
 if __name__ == "__main__":

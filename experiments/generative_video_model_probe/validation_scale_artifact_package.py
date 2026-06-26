@@ -93,6 +93,8 @@ def build_validation_scale_gate_figure(run_root: str | Path) -> dict[str, Any]:
         "run_root": str(run_root),
         "source_artifact_paths": [str(decision_path)],
         "validation_scale_gate_decision": decision.get("validation_scale_gate_decision", "missing"),
+        "paper_result_level": decision.get("paper_result_level"),
+        "target_fpr": decision.get("target_fpr"),
         "claim_support_status": "validation_scale_diagnostic_figure_not_effect_size_claim",
         "encoding": {
             "x": "requirement_name",
@@ -151,6 +153,8 @@ def build_validation_scale_package_manifest(run_root: str | Path) -> dict[str, A
         if decision_ready
         else "validation_scale_package_blocked",
         "validation_scale_gate_decision": validation_gate.get("validation_scale_gate_decision"),
+        "paper_result_level": validation_gate.get("paper_result_level"),
+        "target_fpr": validation_gate.get("target_fpr"),
         "external_baseline_self_containment_decision": self_containment.get("external_baseline_self_containment_decision"),
         "data_split_and_leakage_guard_decision": data_guard.get("data_split_and_leakage_guard_decision"),
         "validation_scale_to_pilot_paper_transition_decision": transition.get("validation_scale_to_pilot_paper_transition_decision"),
@@ -173,6 +177,8 @@ def write_validation_scale_package_manifest(run_root: str | Path) -> dict[str, A
         "它不包含人工填写的效果结论。\n\n"
         f"- validation_scale_package_manifest_decision: {manifest['validation_scale_package_manifest_decision']}\n"
         f"- validation_scale_gate_decision: {manifest['validation_scale_gate_decision']}\n"
+        f"- paper_result_level: {manifest['paper_result_level']}\n"
+        f"- target_fpr: {manifest['target_fpr']}\n"
         f"- external_baseline_self_containment_decision: {manifest['external_baseline_self_containment_decision']}\n"
         f"- data_split_and_leakage_guard_decision: {manifest['data_split_and_leakage_guard_decision']}\n"
         f"- validation_scale_to_pilot_paper_transition_decision: {manifest['validation_scale_to_pilot_paper_transition_decision']}\n"

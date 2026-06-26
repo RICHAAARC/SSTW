@@ -13,11 +13,43 @@ from main.protocol.record_writer import write_json, write_jsonl
 from main.protocol.table_builder import write_csv
 
 
+DEFAULT_PROTOCOL_CONFIG = "configs/protocol/validation_scale_generative_probe.json"
+
+
+def _read_json(path: Path) -> dict[str, Any]:
+    """读取 JSON config 或 artifact, 并兼容 UTF-8 BOM。"""
+    if not path.exists():
+        return {}
+    payload = json.loads(path.read_text(encoding="utf-8-sig"))
+    if not isinstance(payload, dict):
+        raise TypeError(f"JSON 顶层必须是对象: {path}")
+    return payload
+
+
 def _read_jsonl(path: Path) -> list[dict]:
     """读取 JSONL records, 文件不存在时返回空列表。"""
     if not path.exists():
         return []
     return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
+
+
+def _load_profile_context(config_path: str | Path) -> dict[str, Any]:
+    """从 protocol config 读取当前 CI 报告所属的 profile 语义。"""
+    config = _read_json(Path(config_path))
+    if "target_fpr" not in config:
+        raise KeyError(f"protocol config 缺少 target_fpr: {config_path}")
+    return {
+        "target_fpr": float(config["target_fpr"]),
+        "paper_result_level": config.get("paper_result_level", "validation_scale"),
+        "target_fpr_source_config_path": str(config_path),
+    }
+
+
+def _format_fpr(value: float | None) -> str:
+    """把 FPR 数值格式化为报告中的稳定短文本。"""
+    if value is None:
+        return "未配置"
+    return f"{float(value):g}"
 
 
 def _wilson_interval(success_count: int, total_count: int, z_value: float = 1.96) -> tuple[float | None, float | None]:
@@ -34,9 +66,13 @@ def _wilson_interval(success_count: int, total_count: int, z_value: float = 1.96
     return round(max(0.0, center - spread), 6), round(min(1.0, center + spread), 6)
 
 
-def build_statistical_confidence_interval_records(run_root: str | Path) -> list[dict]:
+def build_statistical_confidence_interval_records(
+    run_root: str | Path,
+    config_path: str | Path = DEFAULT_PROTOCOL_CONFIG,
+) -> list[dict]:
     """从 runtime detection records 构建 validation-scale 置信区间 records。"""
     run_root = Path(run_root)
+    profile_context = _load_profile_context(config_path)
     detection_records = [
         record for record in _read_jsonl(run_root / "records" / "runtime_detection_records.jsonl")
         if record.get("runtime_detection_status") == "ready"
@@ -48,6 +84,7 @@ def build_statistical_confidence_interval_records(run_root: str | Path) -> list[
     record = with_flow_evidence_protocol_defaults({
         "record_version": "validation_statistical_confidence_interval_v1",
         "statistical_confidence_interval_family": "runtime_detection_detectable_rate",
+        **profile_context,
         "ci_success_count": detectable_count,
         "ci_total_count": total_count,
         "ci_point_estimate": rate,
@@ -74,6 +111,9 @@ def audit_statistical_confidence_interval_records(records: list[dict]) -> dict[s
         "statistical_confidence_interval_decision": decision,
         "claim_support_status": "validation_ci_proxy_only" if decision == "PASS" else "validation_ci_blocked",
         "ci_record_count": len(records),
+        "paper_result_level": record.get("paper_result_level"),
+        "target_fpr": record.get("target_fpr"),
+        "target_fpr_source_config_path": record.get("target_fpr_source_config_path"),
         "ci_total_count": total_count,
         "ci_success_count": record.get("ci_success_count"),
         "ci_point_estimate": record.get("ci_point_estimate"),
@@ -84,19 +124,26 @@ def audit_statistical_confidence_interval_records(records: list[dict]) -> dict[s
     }
 
 
-def run_statistical_confidence_interval_reporter(run_root: str | Path) -> dict[str, Any]:
+def run_statistical_confidence_interval_reporter(
+    run_root: str | Path,
+    config_path: str | Path = DEFAULT_PROTOCOL_CONFIG,
+) -> dict[str, Any]:
     """写出 validation-scale CI records、table、decision 和 report。"""
     run_root = Path(run_root)
-    records = build_statistical_confidence_interval_records(run_root)
+    records = build_statistical_confidence_interval_records(run_root, config_path)
     audit = audit_statistical_confidence_interval_records(records)
     write_jsonl(run_root / "records" / "statistical_confidence_interval_records.jsonl", records)
     write_csv(run_root / "tables" / "statistical_confidence_interval_table.csv", records)
     write_json(run_root / "artifacts" / "statistical_confidence_interval_decision.json", audit)
+    target_fpr_text = _format_fpr(audit.get("target_fpr"))
     report = (
         "# Statistical Confidence Interval Report\n\n"
-        "该报告只为 validation-scale runtime detection proxy 计算轻量 Wilson 区间。"
-        "它不是 full-paper FPR=0.001 统计报告。\n\n"
+        "该报告只为当前 profile 的 runtime detection proxy 计算轻量 Wilson 区间。"
+        f"当前 profile 的 target_fpr={target_fpr_text}, 该数值来自 protocol config。"
+        "本报告不会自动替代更低 FPR profile 的正式大规模统计报告。\n\n"
         f"- statistical_confidence_interval_decision: {audit['statistical_confidence_interval_decision']}\n"
+        f"- paper_result_level: {audit['paper_result_level']}\n"
+        f"- target_fpr: {target_fpr_text}\n"
         f"- ci_total_count: {audit['ci_total_count']}\n"
         f"- ci_point_estimate: {audit['ci_point_estimate']}\n"
         f"- ci_wilson_lower: {audit['ci_wilson_lower']}\n"
@@ -112,8 +159,9 @@ def run_statistical_confidence_interval_reporter(run_root: str | Path) -> dict[s
 def main() -> None:
     parser = argparse.ArgumentParser(description="生成 validation-scale 统计置信区间报告。")
     parser.add_argument("--run-root", required=True)
+    parser.add_argument("--config-path", default=DEFAULT_PROTOCOL_CONFIG)
     args = parser.parse_args()
-    payload = run_statistical_confidence_interval_reporter(args.run_root)
+    payload = run_statistical_confidence_interval_reporter(args.run_root, args.config_path)
     print(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True))
 
 

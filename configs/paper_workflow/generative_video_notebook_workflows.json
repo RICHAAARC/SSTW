@@ -115,8 +115,7 @@
       "profile_switching_note": "full_paper 只登记未来同构协议入口, 当前不得作为可运行 claim profile 使用。",
       "protocol_config_path": "configs/protocol/full_paper_generative_probe.json",
       "result_tier": "full_paper",
-      "runtime_profile": "full_paper",
-      "target_fpr": 0.001
+      "runtime_profile": "full_paper"
     },
     "motion_calibration": {
       "baseline_sample_count": 0,
@@ -183,8 +182,7 @@
       "profile_switching_note": "pilot_paper 是小规模跑完整 full paper 协议并产出 pilot 级论文结果, 与 full_paper 的差异只允许是样本规模和评价等级。",
       "protocol_config_path": "configs/protocol/pilot_paper_generative_probe.json",
       "result_tier": "pilot_paper",
-      "runtime_profile": "pilot_paper",
-      "target_fpr": 0.01
+      "runtime_profile": "pilot_paper"
     },
     "validation_scale": {
       "baseline_sample_count": 24,
@@ -215,11 +213,10 @@
       "paper_gate_preflight_layer": true,
       "paper_gate_profile": true,
       "profile_status": "implemented_small_sample_full_pipeline_rehearsal_requires_self_contained_baselines",
-      "profile_switching_note": "validation_scale 是 paper 级前的小样本全流程打通层, 以 FPR=0.10 级别验证所有 records、tables、figures、reports、manifests、baseline、消融、attack、CI 和 artifact rebuild 能闭环; 它不支撑效果主张, 通过后只能生成 validation_scale_to_pilot_paper_transition_decision 并进入 pilot_paper, 不能直接进入 full_paper。",
+      "profile_switching_note": "validation_scale 是 paper 级前的小样本全流程打通层, 使用 protocol_config_path 指向的 validation_scale protocol config 中的 target_fpr 口径验证所有 records、tables、figures、reports、manifests、baseline、消融、attack、CI 和 artifact rebuild 能闭环; 它不支撑效果主张, 通过后只能生成 validation_scale_to_pilot_paper_transition_decision 并进入 pilot_paper, 不能直接进入 full_paper。",
       "protocol_config_path": "configs/protocol/validation_scale_generative_probe.json",
       "result_tier": "validation_scale",
-      "runtime_profile": "validation_scale",
-      "target_fpr": 0.1
+      "runtime_profile": "validation_scale"
     }
   }
 }

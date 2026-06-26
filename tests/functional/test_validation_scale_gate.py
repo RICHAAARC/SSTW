@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 
 import pytest
@@ -179,9 +180,12 @@ def test_validation_scale_gate_passes_when_all_governed_inputs_exist(tmp_path: P
     })
 
     audit = write_validation_scale_gate_audit(run_root)
+    protocol = json.loads(Path("configs/protocol/validation_scale_generative_probe.json").read_text(encoding="utf-8"))
 
     assert audit["validation_scale_gate_decision"] == "PASS"
     assert audit["claim_support_status"] == "validation_scale_ready_for_pilot_paper"
+    assert audit["paper_result_level"] == "validation_scale"
+    assert audit["target_fpr"] == protocol["target_fpr"]
     assert audit["validation_generation_record_count"] == 24
     assert audit["validation_prompt_count"] == 8
     assert audit["validation_seed_per_prompt_min"] == 3

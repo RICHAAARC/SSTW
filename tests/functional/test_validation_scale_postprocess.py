@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
@@ -95,8 +96,12 @@ def test_statistical_confidence_interval_reporter_writes_wilson_interval(tmp_pat
 
     audit = run_statistical_confidence_interval_reporter(run_root)
     records = read_jsonl(run_root / "records" / "statistical_confidence_interval_records.jsonl")
+    protocol = json.loads(Path("configs/protocol/validation_scale_generative_probe.json").read_text(encoding="utf-8"))
 
     assert audit["statistical_confidence_interval_decision"] == "PASS"
+    assert audit["paper_result_level"] == "validation_scale"
+    assert audit["target_fpr"] == protocol["target_fpr"]
+    assert records[0]["target_fpr"] == protocol["target_fpr"]
     assert audit["ci_total_count"] == 3
     assert audit["ci_success_count"] == 2
     assert 0 <= audit["ci_wilson_lower"] <= audit["ci_wilson_upper"] <= 1

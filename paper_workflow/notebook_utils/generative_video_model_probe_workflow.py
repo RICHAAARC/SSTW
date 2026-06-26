@@ -15,6 +15,7 @@ from paper_workflow.notebook_utils.streaming_command import run_streaming_comman
 DEFAULT_DRIVE_PROJECT_ROOT = "/content/drive/MyDrive/SSTW"
 DEFAULT_VALIDATION_SCALE_CONFIG = "configs/protocol/validation_scale_generative_probe.json"
 DEFAULT_PILOT_PAPER_CONFIG = "configs/protocol/pilot_paper_generative_probe.json"
+DEFAULT_FULL_PAPER_CONFIG = "configs/protocol/full_paper_generative_probe.json"
 DEFAULT_NOTEBOOK_WORKFLOW_CONFIG = "configs/paper_workflow/generative_video_notebook_workflows.json"
 DEFAULT_MODERN_BASELINE_COLAB_COMMAND_CONFIG = "configs/external_baselines/modern_baseline_colab_commands.json"
 DEFAULT_NOTEBOOK_ROLE = "generative_video_runtime"
@@ -101,7 +102,7 @@ def resolve_notebook_workflow_profile(
     profiles = config.get("workflow_profiles", {})
     if canonical_profile not in profiles:
         raise KeyError(f"未知 workflow profile: {profile}")
-    profile_config = dict(profiles[canonical_profile])
+    profile_config = _merge_protocol_target_fpr(canonical_profile, dict(profiles[canonical_profile]))
     role_config: dict[str, Any] = {}
     if notebook_role:
         roles = config.get("notebook_roles", {})
@@ -261,6 +262,40 @@ def _read_json(path: str | Path) -> dict:
     return payload
 
 
+def _merge_protocol_target_fpr(profile: str, profile_config: dict[str, Any]) -> dict[str, Any]:
+    """把 paper gate profile 的 target_fpr 绑定到 protocol config。
+
+    该函数属于项目特定治理写法。它保留 workflow profile 对 Drive 路径、样本规模和
+    阶段计划的管理职责, 但把 `validation_scale`、`pilot_paper` 和 `full_paper`
+    的 fixed-FPR 口径统一交给各自 protocol config。若 workflow config 与 protocol
+    config 同时声明了不同的 `target_fpr`, 直接失败, 防止后续 Notebook 切换 profile
+    时出现不同 fixed-FPR 语义漂移。
+    """
+    should_bind_protocol_fpr = bool(profile_config.get("paper_gate_profile")) or profile in {
+        "validation_scale",
+        "pilot_paper",
+        "full_paper",
+    }
+    protocol_config_path = str(profile_config.get("protocol_config_path") or "")
+    if not should_bind_protocol_fpr or not protocol_config_path:
+        return profile_config
+    protocol_config = _read_json(protocol_config_path)
+    if "target_fpr" not in protocol_config:
+        return profile_config
+    protocol_target_fpr = float(protocol_config["target_fpr"])
+    workflow_target_fpr = profile_config.get("target_fpr")
+    if workflow_target_fpr is not None and abs(float(workflow_target_fpr) - protocol_target_fpr) > 1e-12:
+        raise ValueError(
+            f"workflow profile {profile} 的 target_fpr={workflow_target_fpr} 与 "
+            f"protocol config {protocol_config_path} 的 target_fpr={protocol_target_fpr} 不一致。"
+        )
+    merged = dict(profile_config)
+    merged["target_fpr"] = protocol_target_fpr
+    merged["protocol_target_fpr"] = protocol_target_fpr
+    merged["target_fpr_source_config_path"] = protocol_config_path
+    return merged
+
+
 def _write_json(path: str | Path, payload: Mapping[str, object]) -> None:
     """写出 Colab preflight artifact, 使冷启动失败也能在 Google Drive 中审计原因。"""
     output_path = Path(path)
@@ -270,12 +305,10 @@ def _write_json(path: str | Path, payload: Mapping[str, object]) -> None:
 
 def _config_path_for_profile(profile: str) -> str:
     """根据运行 profile 选择现代 baseline 要求来源。"""
-    try:
-        return protocol_config_path_for_profile(profile)
-    except Exception:
-        pass
     if profile == "pilot_paper":
         return DEFAULT_PILOT_PAPER_CONFIG
+    if profile == "full_paper":
+        return DEFAULT_FULL_PAPER_CONFIG
     return DEFAULT_VALIDATION_SCALE_CONFIG
 
 
@@ -957,13 +990,15 @@ def build_motion_threshold_calibration_command(layout: dict[str, str]) -> list[s
 
 
 def build_mechanism_postprocess_command(layout: dict[str, str]) -> list[str]:
-    """构造 B5 Colab 机制后处理命令, 从已有 governed records 重建后处理 artifacts。"""
+    """构造 B5 Colab 机制后处理命令, target_fpr 由当前 protocol config 决定。"""
     return [
         sys.executable,
         "-m",
         "experiments.generative_video_model_probe.postprocess_runner",
         "--run-root",
         layout["drive_run_root"],
+        "--config-path",
+        layout["protocol_config_path"],
     ]
 
 
@@ -1176,24 +1211,28 @@ def build_claim3_downgrade_command(layout: dict[str, str]) -> list[str]:
 
 
 def build_statistical_confidence_interval_command(layout: dict[str, str]) -> list[str]:
-    """构造 validation-scale 统计置信区间报告命令。"""
+    """构造当前 profile 的统计置信区间报告命令。"""
     return [
         sys.executable,
         "-m",
         "experiments.generative_video_model_probe.statistical_confidence_interval",
         "--run-root",
         layout["drive_run_root"],
+        "--config-path",
+        layout["protocol_config_path"],
     ]
 
 
 def build_pilot_paper_gate_command(layout: dict[str, str]) -> list[str]:
-    """构建 pilot_paper FPR=0.01 gate 命令, 只汇总已落盘 records 并写出冻结阈值。"""
+    """构建当前 profile 的 fixed-FPR gate 命令, fixed-FPR 口径来自 protocol config。"""
     return [
         sys.executable,
         "-m",
         "experiments.generative_video_model_probe.pilot_paper_gate",
         "--run-root",
         layout["drive_run_root"],
+        "--config-path",
+        layout["protocol_config_path"],
         "--write-outputs",
     ]
 
@@ -1221,13 +1260,15 @@ def build_small_scale_claim_pilot_gate_command(layout: dict[str, str]) -> list[s
 
 
 def build_validation_scale_gate_command(layout: dict[str, str]) -> list[str]:
-    """构造 validation-scale gate 命令, 防止从 small-scale pilot 直接跳到 paper 级结果运行。"""
+    """构造 validation-scale gate 命令, target_fpr 口径来自 validation protocol config。"""
     return [
         sys.executable,
         "-m",
         "experiments.generative_video_model_probe.validation_scale_gate",
         "--run-root",
         layout["drive_run_root"],
+        "--config-path",
+        layout["protocol_config_path"],
         "--write-outputs",
     ]
 

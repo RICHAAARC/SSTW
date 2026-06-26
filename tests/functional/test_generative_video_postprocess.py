@@ -58,10 +58,12 @@ def test_generative_video_postprocess_builds_proxy_records(tmp_path: Path) -> No
     })
 
     summary = postprocess_colab_run(run_root)
+    validation_protocol = json.loads(Path("configs/protocol/validation_scale_generative_probe.json").read_text(encoding="utf-8"))
 
     assert summary["mechanism_score_record_count"] == 16
     assert summary["controlled_negative_record_count"] == 12
     assert summary["quality_proxy_record_count"] == 4
+    assert summary["target_fpr"] == validation_protocol["target_fpr"]
     assert summary["mechanism_postprocess_decision"] == "PASS"
     assert summary["mechanism_decision"] == "FAIL"
     assert summary["formal_claim_status"] == "blocked_until_formal_quality_motion_semantic_metrics"

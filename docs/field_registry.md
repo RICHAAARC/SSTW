@@ -99,6 +99,8 @@ Notebook 与 repository module 的跨边界数据
 | key_state_admissibility_status | metric | none | true | false | false | Admissibility gate status. |
 | negative_state_over_threshold_count | metric | none | true | false | false | Negative state rescue count above threshold. |
 | target_fpr | protocol | none | true | false | false | Fixed low-FPR target. |
+| target_fpr_source_config_path | protocol | none | true | false | false | 当前 target_fpr 的来源 protocol config 路径。 |
+| protocol_target_fpr | protocol | none | false | false | false | Notebook workflow profile 解析时从 protocol config 合并得到的 target_fpr。 |
 | threshold_id | protocol | none | true | false | false | Threshold identifier. |
 | threshold_source_split | protocol | none | true | false | false | Split used to calibrate threshold. |
 | threshold_value | protocol | none | true | false | false | Calibrated threshold value. |
@@ -485,6 +487,8 @@ Notebook 与 repository module 的跨边界数据
 | external_baseline_distance_mean | metric | none | true | false | false | Mean external baseline adapter distance in a comparison table. |
 | baseline_score_margin_mean | metric | none | true | false | false | Mean score margin between SSTW runtime proxy score and external baseline adapter proxy score. |
 | validation_scale_gate_decision | governance | none | true | false | false | Decision for validation-scale generative probe gate before pilot_paper full-protocol run. |
+| validation_scale_result_level | governance | none | true | true | false | package manifest 中记录的 validation_scale 结果级别。 |
+| validation_scale_target_fpr | protocol | none | true | false | false | package manifest 中记录的 validation_scale protocol config target_fpr 摘要。 |
 | missing_validation_requirements | governance | none | true | false | false | Validation-scale requirements that are not yet satisfied. |
 | validation_missing_requirement_count | metric | none | true | false | false | Count of missing validation-scale requirements. |
 | validation_profile_names | protocol | none | true | false | false | Runtime profile names accepted as validation-scale generation records. |
@@ -845,9 +849,12 @@ Notebook 与 repository module 的跨边界数据
 | heldout_negative_fpr_at_threshold | metric | none | true | false | false | held-out test negative split 在冻结阈值下的观测 FPR。 |
 | heldout_negative_false_positive_count_at_threshold | metric | none | true | false | false | held-out test negative split 在冻结阈值下的 false positive 数量。 |
 | observed_negative_fpr_at_threshold | metric | none | true | false | false | 对外摘要使用的 negative FPR, 在 pilot_paper 中等于 held-out test negative FPR。 |
+| tpr_at_target_fpr | metric | none | true | false | false | 当前 protocol config 指定 target_fpr 下的 held-out attacked positive TPR。 |
 | tpr_at_fpr_01 | metric | none | true | false | false | 冻结 FPR=0.01 阈值下的 held-out attacked positive TPR。 |
 | true_positive_count_at_threshold | metric | none | true | false | false | held-out attacked positive split 在冻结阈值下的 true positive 数量。 |
+| target_fpr_claim_allowed | governance | none | true | false | false | 当前 protocol config 指定 target_fpr 下的 claim 是否允许报告。 |
 | tpr_at_fpr_01_pilot_claim_allowed | governance | none | true | false | false | 当前 pilot_paper 是否允许报告 pilot_paper 级 TPR@FPR=0.01 结论。 |
+| blocked_target_fpr_claim_allowed | governance | none | true | false | false | 当前阶段对 blocked_target_fpr 级 claim 是否允许报告, pilot_paper 中必须为 false。 |
 | tpr_at_fpr_001_claim_allowed | governance | none | true | false | false | 当前结果是否允许报告 TPR@FPR=0.001 结论。 |
 | generation_record_count | metric | none | true | false | false | 当前 run_root 中读取到的 generation record 总数。 |
 | pilot_paper_generation_record_count | metric | none | true | false | false | 属于 pilot_paper profile 的 generation record 数量。 |
@@ -914,6 +921,11 @@ Notebook 与 repository module 的跨边界数据
 | pilot_paper_threshold_protocol | protocol | none | true | false | false | package manifest 中记录的 pilot_paper threshold protocol 摘要。 |
 | pilot_paper_threshold_source_split | protocol | none | true | false | false | package manifest 中记录的 pilot_paper 阈值来源 split 摘要。 |
 | pilot_paper_test_time_threshold_update_blocked | protocol | none | true | false | false | package manifest 中记录的 pilot_paper test-time 阈值更新阻断状态。 |
+| pilot_paper_target_fpr | protocol | none | true | false | false | package manifest 中记录的 pilot_paper protocol config target_fpr 摘要。 |
+| pilot_paper_tpr_at_target_fpr | metric | none | true | false | false | package manifest 中记录的当前 target_fpr 下 pilot_paper TPR 摘要。 |
+| pilot_paper_target_fpr_claim_allowed | governance | none | true | false | false | package manifest 中记录的当前 target_fpr claim 允许状态。 |
+| pilot_paper_blocked_target_fpr | protocol | none | true | false | false | package manifest 中记录的 pilot_paper blocked_target_fpr 摘要。 |
+| pilot_paper_blocked_target_fpr_claim_allowed | governance | none | true | false | false | package manifest 中记录的 blocked_target_fpr claim 禁止状态。 |
 | pilot_paper_tpr_at_fpr_01 | metric | none | true | false | false | package manifest 中记录的 pilot_paper 级 TPR@FPR=0.01 摘要。 |
 | pilot_paper_calibration_negative_fpr_at_threshold | metric | none | true | false | false | package manifest 中记录的 calibration negative FPR 摘要。 |
 | pilot_paper_heldout_negative_fpr_at_threshold | metric | none | true | false | false | package manifest 中记录的 held-out negative FPR 摘要。 |

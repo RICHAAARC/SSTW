@@ -42,6 +42,20 @@ def _read_json(path: Path) -> dict:
     return json.loads(path.read_text(encoding="utf-8-sig"))
 
 
+def _required_float(raw: dict, field_name: str, config_path: Path) -> float:
+    """从 validation-scale protocol config 读取必填 float 字段。"""
+    if field_name not in raw:
+        raise KeyError(f"validation-scale protocol config 缺少必填字段 {field_name}: {config_path}")
+    return float(raw[field_name])
+
+
+def _format_fpr(value: float | None) -> str:
+    """把 FPR 数值格式化为报告中的稳定短文本。"""
+    if value is None:
+        return "未配置"
+    return f"{float(value):g}"
+
+
 def _read_jsonl(path: Path) -> list[dict]:
     """读取 JSONL records, 文件不存在时返回空列表。"""
     if not path.exists():
@@ -50,11 +64,13 @@ def _read_jsonl(path: Path) -> list[dict]:
 
 
 def _load_config(config_path: str | Path = DEFAULT_VALIDATION_SCALE_CONFIG) -> dict:
-    """读取 validation-scale 门禁配置, 文件缺失时使用保守默认值。"""
+    """读取 validation-scale 门禁配置。"""
     path = Path(config_path)
     config = _read_json(path)
     return {
         "validation_profile_names": config.get("validation_profile_names", sorted(DEFAULT_VALIDATION_PROFILE_NAMES)),
+        "target_fpr": _required_float(config, "target_fpr", path),
+        "paper_result_level": config.get("paper_result_level", "validation_scale"),
         "minimum_prompt_count": int(config.get("minimum_prompt_count", DEFAULT_MINIMUM_PROMPT_COUNT)),
         "minimum_seed_per_prompt": int(config.get("minimum_seed_per_prompt", DEFAULT_MINIMUM_SEED_PER_PROMPT)),
         "minimum_attack_count": int(config.get("minimum_attack_count", DEFAULT_MINIMUM_ATTACK_COUNT)),
@@ -272,6 +288,8 @@ def build_validation_scale_gate_audit(
         "run_root": str(run_root),
         "validation_scale_gate_decision": gate_decision,
         "claim_support_status": claim_support_status,
+        "paper_result_level": config["paper_result_level"],
+        "target_fpr": config["target_fpr"],
         "missing_validation_requirements": missing_requirements,
         "validation_missing_requirement_count": len(missing_requirements),
         "validation_profile_names": sorted(validation_profile_names),
@@ -336,16 +354,20 @@ def write_validation_scale_gate_audit(
     write_jsonl(run_root / "records" / "validation_scale_gate_records.jsonl", [record])
     write_csv(run_root / "tables" / "validation_scale_gate_table.csv", [record])
     write_json(run_root / "artifacts" / "validation_scale_gate_decision.json", audit)
+    target_fpr_text = _format_fpr(audit.get("target_fpr"))
     report = (
         "# Validation-scale Generative Probe Gate Report\n\n"
         "该报告由已落盘的 governed records 与 decision artifacts 自动生成。它只判断 validation-scale "
-        "是否已经作为 paper 级前的小样本全流程打通层完成闭环。该层级使用较低成本的 FPR=0.10 "
+        "是否已经作为 paper 级前的小样本全流程打通层完成闭环。该层级使用当前 protocol config "
+        f"指定的 target_fpr={target_fpr_text} "
         "预演口径验证 records、tables、figures、reports、manifests、baseline、消融、attack、CI "
         "和 artifact rebuild 是否能够完整产出。它不支撑效果主张, 通过后只能生成 "
         "validation_scale_to_pilot_paper_transition_decision 并进入 pilot_paper; "
         "不能直接进入 full_paper。\n\n"
         f"- validation_scale_gate_decision: {audit['validation_scale_gate_decision']}\n"
         f"- claim_support_status: {audit['claim_support_status']}\n"
+        f"- paper_result_level: {audit['paper_result_level']}\n"
+        f"- target_fpr: {target_fpr_text}\n"
         f"- missing_validation_requirements: {', '.join(audit['missing_validation_requirements']) if audit['missing_validation_requirements'] else 'none'}\n"
         f"- validation_generation_record_count: {audit['validation_generation_record_count']}\n"
         f"- validation_prompt_count: {audit['validation_prompt_count']}\n"

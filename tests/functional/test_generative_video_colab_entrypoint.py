@@ -12,6 +12,7 @@ import pytest
 from paper_workflow.notebook_utils.generative_video_model_probe_workflow import (
     build_drive_layout,
     build_workflow_stage_plan,
+    build_mechanism_postprocess_command,
     build_modern_baseline_command_env,
     build_external_baseline_official_bundle_generation_command,
     build_external_baseline_official_resource_bootstrap_command,
@@ -19,6 +20,9 @@ from paper_workflow.notebook_utils.generative_video_model_probe_workflow import 
     build_modern_baseline_official_bridge_command_templates,
     build_modern_baseline_official_bridge_preflight_decision,
     build_repository_official_baseline_eval_command_templates,
+    build_statistical_confidence_interval_command,
+    build_pilot_paper_gate_command,
+    build_validation_scale_gate_command,
     default_workflow_profile_for_notebook_role,
     resolve_notebook_workflow_profile,
     validate_modern_baseline_commands_for_profile,
@@ -161,7 +165,9 @@ def test_pilot_paper_profile_constructs_medium_scale_low_fpr_plan(tmp_path: Path
     pilot_paper_prompts = [item for item in suite["prompts"] if item.get("prompt_suite_role") == "pilot_paper"]
     pilot_paper_seeds = [item for item in suite["seeds"] if item.get("prompt_suite_role") == "pilot_paper"]
 
-    assert suite["pilot_paper_design"]["target_fpr"] == 0.01
+    pilot_protocol = json.loads(Path("configs/protocol/pilot_paper_generative_probe.json").read_text(encoding="utf-8"))
+    assert suite["pilot_paper_design"]["target_fpr"] == pilot_protocol["target_fpr"]
+    assert suite["pilot_paper_design"]["blocked_target_fpr"] == pilot_protocol["blocked_target_fpr"]
     assert suite["pilot_paper_design"]["paper_result_level"] == "pilot_paper"
     assert suite["pilot_paper_design"]["paper_protocol_difference_from_full_paper"] == "sample_scale_only"
     assert suite["pilot_paper_design"]["recommended_runtime_profile"] == "pilot_paper"
@@ -375,11 +381,16 @@ def test_notebook_workflow_profile_config_supports_profile_switching() -> None:
     validation = resolve_notebook_workflow_profile("validation_scale", "paper_gate_and_package")
     pilot = resolve_notebook_workflow_profile("pilot_paper", "paper_gate_and_package")
     full = resolve_notebook_workflow_profile("full_paper", config_path="configs/paper_workflow/generative_video_notebook_workflows.json", allow_disabled=True)
+    validation_protocol = json.loads(Path(validation["protocol_config_path"]).read_text(encoding="utf-8"))
+    pilot_protocol = json.loads(Path(pilot["protocol_config_path"]).read_text(encoding="utf-8"))
+    full_protocol = json.loads(Path(full["protocol_config_path"]).read_text(encoding="utf-8"))
 
     assert validation["workflow_profile"] == "validation_scale"
     assert validation["result_tier"] == "validation_scale"
     assert validation["enabled_for_claim"] is False
-    assert validation["target_fpr"] == 0.10
+    assert validation["target_fpr"] == validation_protocol["target_fpr"]
+    assert validation["protocol_target_fpr"] == validation_protocol["target_fpr"]
+    assert validation["target_fpr_source_config_path"] == validation["protocol_config_path"]
     assert "motion_threshold_reuse_check" in build_workflow_stage_plan("validation_scale", "paper_gate_and_package")
     assert "validation_scale_gate" in build_workflow_stage_plan("validation_scale", "paper_gate_and_package")
     assert "pilot_paper_gate" not in build_workflow_stage_plan("validation_scale", "paper_gate_and_package")
@@ -397,6 +408,8 @@ def test_notebook_workflow_profile_config_supports_profile_switching() -> None:
     assert pilot["method_sample_count"] == 168
     assert pilot["baseline_sample_count"] == 84
     assert pilot["protocol_config_path"] == "configs/protocol/pilot_paper_generative_probe.json"
+    assert pilot["target_fpr"] == pilot_protocol["target_fpr"]
+    assert pilot["protocol_target_fpr"] == pilot_protocol["target_fpr"]
     assert "motion_threshold_reuse_check" in build_workflow_stage_plan("pilot_paper", "paper_gate_and_package")
     assert "pilot_paper_gate" in build_workflow_stage_plan("pilot_paper", "paper_gate_and_package")
     assert "validation_scale_gate" not in build_workflow_stage_plan("pilot_paper", "paper_gate_and_package")
@@ -405,6 +418,8 @@ def test_notebook_workflow_profile_config_supports_profile_switching() -> None:
     assert full["profile_status"] == "design_registered_not_ready"
     assert full["enabled_for_run"] is False
     assert full["enabled_for_claim"] is False
+    assert full["target_fpr"] == full_protocol["target_fpr"]
+    assert full["protocol_target_fpr"] == full_protocol["target_fpr"]
     with pytest.raises(RuntimeError):
         resolve_notebook_workflow_profile("full_paper", "paper_gate_and_package")
 
@@ -432,6 +447,34 @@ def test_profile_specific_drive_layout_prevents_result_mixing(tmp_path: Path) ->
     assert pilot_layout["motion_threshold_artifact_run_root"].endswith("/runs/generative_video_model_probe/motion_calibration")
     assert pilot_layout["runtime_profile"] == "pilot_paper"
     assert validation_layout["drive_run_root"] != pilot_layout["drive_run_root"]
+
+
+@pytest.mark.quick
+def test_profile_specific_commands_pass_protocol_config_path(tmp_path: Path) -> None:
+    """Notebook helper 构造的 gate/postprocess 命令必须显式携带当前 profile 的 protocol config。"""
+    validation_layout = build_drive_layout(
+        str(tmp_path / "SSTW"),
+        workflow_profile="validation_scale",
+        notebook_role="paper_gate_and_package",
+    )
+    pilot_layout = build_drive_layout(
+        str(tmp_path / "SSTW"),
+        workflow_profile="pilot_paper",
+        notebook_role="paper_gate_and_package",
+    )
+
+    validation_commands = [
+        build_mechanism_postprocess_command(validation_layout),
+        build_statistical_confidence_interval_command(validation_layout),
+        build_validation_scale_gate_command(validation_layout),
+    ]
+    pilot_command = build_pilot_paper_gate_command(pilot_layout)
+
+    for command in validation_commands:
+        assert "--config-path" in command
+        assert command[command.index("--config-path") + 1] == "configs/protocol/validation_scale_generative_probe.json"
+    assert "--config-path" in pilot_command
+    assert pilot_command[pilot_command.index("--config-path") + 1] == "configs/protocol/pilot_paper_generative_probe.json"
 
 
 @pytest.mark.quick
@@ -736,6 +779,8 @@ def test_generative_video_drive_packager_creates_archive_and_manifest(tmp_path: 
     """Drive packager 必须从已有 run outputs 生成 zip 和 package manifest。"""
     run_root = tmp_path / "runs" / "generative_video_runtime"
     package_dir = tmp_path / "packages"
+    validation_protocol = json.loads(Path("configs/protocol/validation_scale_generative_probe.json").read_text(encoding="utf-8"))
+    pilot_protocol = json.loads(Path("configs/protocol/pilot_paper_generative_probe.json").read_text(encoding="utf-8"))
     write_jsonl(run_root / "records" / "generation_records.jsonl", [{"generation_model_id": "model", "prompt_id": "prompt"}])
     write_json(run_root / "artifacts" / "generative_video_colab_runtime_decision.json", {"stage_id": "generative_video_runtime", "implementation_decision": "PASS", "mechanism_decision": "FAIL"})
     write_json(run_root / "artifacts" / "generation_manifest.json", {"artifact_id": "manifest"})
@@ -767,6 +812,8 @@ def test_generative_video_drive_packager_creates_archive_and_manifest(tmp_path: 
     write_json(run_root / "artifacts" / "validation_scale_gate_decision.json", {
         "validation_scale_gate_decision": "FAIL",
         "claim_support_status": "validation_scale_blocked",
+        "paper_result_level": "validation_scale",
+        "target_fpr": validation_protocol["target_fpr"],
         "validation_missing_requirement_count": 5,
         "validation_generation_record_count": 0,
         "validation_prompt_count": 0,
@@ -812,6 +859,11 @@ def test_generative_video_drive_packager_creates_archive_and_manifest(tmp_path: 
         "threshold_protocol": "calibration_split_to_frozen_threshold_to_heldout_test_split",
         "threshold_source_split": "calibration",
         "test_time_threshold_update_blocked": True,
+        "target_fpr": pilot_protocol["target_fpr"],
+        "tpr_at_target_fpr": 0.91,
+        "target_fpr_claim_allowed": True,
+        "blocked_target_fpr": pilot_protocol["blocked_target_fpr"],
+        "blocked_target_fpr_claim_allowed": False,
         "tpr_at_fpr_01": 0.91,
         "calibration_negative_fpr_at_threshold": 0.008,
         "heldout_negative_fpr_at_threshold": 0.009,
@@ -857,6 +909,8 @@ def test_generative_video_drive_packager_creates_archive_and_manifest(tmp_path: 
     assert manifest["decision_summary"]["runtime_detection_ready_count"] == 48
     assert manifest["decision_summary"]["validation_scale_gate_decision"] == "FAIL"
     assert manifest["decision_summary"]["validation_scale_claim_support_status"] == "validation_scale_blocked"
+    assert manifest["decision_summary"]["validation_scale_result_level"] == "validation_scale"
+    assert manifest["decision_summary"]["validation_scale_target_fpr"] == validation_protocol["target_fpr"]
     assert manifest["decision_summary"]["validation_missing_requirement_count"] == 5
     assert manifest["decision_summary"]["external_baseline_comparison_decision"] == "PASS"
     assert manifest["decision_summary"]["external_baseline_comparison_record_count"] == 96
@@ -889,6 +943,11 @@ def test_generative_video_drive_packager_creates_archive_and_manifest(tmp_path: 
     assert manifest["decision_summary"]["pilot_paper_threshold_protocol"] == "calibration_split_to_frozen_threshold_to_heldout_test_split"
     assert manifest["decision_summary"]["pilot_paper_threshold_source_split"] == "calibration"
     assert manifest["decision_summary"]["pilot_paper_test_time_threshold_update_blocked"] is True
+    assert manifest["decision_summary"]["pilot_paper_target_fpr"] == pilot_protocol["target_fpr"]
+    assert manifest["decision_summary"]["pilot_paper_tpr_at_target_fpr"] == 0.91
+    assert manifest["decision_summary"]["pilot_paper_target_fpr_claim_allowed"] is True
+    assert manifest["decision_summary"]["pilot_paper_blocked_target_fpr"] == pilot_protocol["blocked_target_fpr"]
+    assert manifest["decision_summary"]["pilot_paper_blocked_target_fpr_claim_allowed"] is False
     assert manifest["decision_summary"]["pilot_paper_tpr_at_fpr_01"] == 0.91
     assert manifest["decision_summary"]["pilot_paper_calibration_negative_fpr_at_threshold"] == 0.008
     assert manifest["decision_summary"]["pilot_paper_heldout_negative_fpr_at_threshold"] == 0.009

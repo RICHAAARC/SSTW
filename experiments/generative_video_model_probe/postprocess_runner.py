@@ -14,6 +14,7 @@ from main.protocol.record_writer import write_json, write_jsonl
 from main.protocol.table_builder import write_csv
 
 
+DEFAULT_PROTOCOL_CONFIG = "configs/protocol/validation_scale_generative_probe.json"
 METHOD_VARIANTS = (
     "key_conditioned_state_space_with_trajectory",
     "generic_state_space_with_trajectory",
@@ -27,6 +28,31 @@ def _read_jsonl(path: Path) -> list[dict]:
     if not path.exists():
         return []
     return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
+
+
+def _read_json(path: Path) -> dict:
+    """读取 JSON config 或 artifact, 并兼容 UTF-8 BOM。"""
+    if not path.exists():
+        return {}
+    payload = json.loads(path.read_text(encoding="utf-8-sig"))
+    if not isinstance(payload, dict):
+        raise TypeError(f"JSON 顶层必须是对象: {path}")
+    return payload
+
+
+def _load_target_fpr(config_path: str | Path, target_fpr_override: float | None = None) -> float:
+    """从 protocol config 读取当前 profile 的 target_fpr。
+
+    `target_fpr_override` 仅用于显式调试或旧命令兼容。正式 Notebook 编排应传入
+    `--config-path`, 避免在脚本默认值中硬写 validation_scale / pilot_paper /
+    full_paper 的 FPR 口径。
+    """
+    if target_fpr_override is not None:
+        return float(target_fpr_override)
+    config = _read_json(Path(config_path))
+    if "target_fpr" not in config:
+        raise KeyError(f"protocol config 缺少 target_fpr: {config_path}")
+    return float(config["target_fpr"])
 
 
 def _safe_divide(numerator: float, denominator: float) -> float:
@@ -302,9 +328,14 @@ def _build_decision(
     }
 
 
-def postprocess_colab_run(run_root: str | Path, target_fpr: float = 0.01) -> dict:
+def postprocess_colab_run(
+    run_root: str | Path,
+    target_fpr: float | None = None,
+    config_path: str | Path = DEFAULT_PROTOCOL_CONFIG,
+) -> dict:
     """读取 Colab run_root 并写出机制后处理 artifacts。"""
     run_root = Path(run_root)
+    resolved_target_fpr = _load_target_fpr(config_path, target_fpr)
     generation_records = _read_jsonl(run_root / "records" / "generation_records.jsonl")
     trajectory_records = _read_jsonl(run_root / "records" / "trajectory_trace.jsonl")
     successful_generation_records = [
@@ -315,7 +346,7 @@ def postprocess_colab_run(run_root: str | Path, target_fpr: float = 0.01) -> dic
     control_records = _build_control_records(successful_generation_records, trajectory_features)
     quality_proxy_records = _build_quality_proxy_records(successful_generation_records, trajectory_features)
     formal_metric_records = _read_jsonl(run_root / "records" / "formal_quality_motion_semantic_records.jsonl")
-    threshold_payload = _build_threshold_payload(control_records, target_fpr)
+    threshold_payload = _build_threshold_payload(control_records, resolved_target_fpr)
     decision = _build_decision(mechanism_records, control_records, quality_proxy_records, threshold_payload, formal_metric_records)
 
     write_jsonl(run_root / "records" / "mechanism_score_records.jsonl", mechanism_records)
@@ -331,6 +362,8 @@ def postprocess_colab_run(run_root: str | Path, target_fpr: float = 0.01) -> dic
         "可用于推进工作流, 但不能单独支撑论文正式机制 claim。\n\n"
         f"- mechanism_postprocess_decision: {decision['mechanism_postprocess_decision']}\n"
         f"- formal mechanism_decision: {decision['mechanism_decision']}\n"
+        f"- target_fpr: {resolved_target_fpr:g}\n"
+        f"- target_fpr_source_config_path: {config_path}\n"
         f"- formal_claim_status: {decision['details']['formal_claim_status']}\n"
     )
     report_path = run_root / "reports" / "generative_video_mechanism_postprocess_report.md"
@@ -342,6 +375,8 @@ def postprocess_colab_run(run_root: str | Path, target_fpr: float = 0.01) -> dic
         "mechanism_score_record_count": len(mechanism_records),
         "controlled_negative_record_count": len(control_records),
         "quality_proxy_record_count": len(quality_proxy_records),
+        "target_fpr": resolved_target_fpr,
+        "target_fpr_source_config_path": str(config_path),
         "threshold_status": threshold_payload["threshold_status"],
         "mechanism_postprocess_decision": decision["mechanism_postprocess_decision"],
         "mechanism_decision": decision["mechanism_decision"],
@@ -352,9 +387,10 @@ def postprocess_colab_run(run_root: str | Path, target_fpr: float = 0.01) -> dic
 def main() -> None:
     parser = argparse.ArgumentParser(description="对 B5 Colab 输出进行机制后处理。")
     parser.add_argument("--run-root", required=True)
-    parser.add_argument("--target-fpr", type=float, default=0.01)
+    parser.add_argument("--config-path", default=DEFAULT_PROTOCOL_CONFIG)
+    parser.add_argument("--target-fpr", type=float, default=None)
     args = parser.parse_args()
-    payload = postprocess_colab_run(args.run_root, args.target_fpr)
+    payload = postprocess_colab_run(args.run_root, target_fpr=args.target_fpr, config_path=args.config_path)
     print(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True))
 
 

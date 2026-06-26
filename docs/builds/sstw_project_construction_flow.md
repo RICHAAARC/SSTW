@@ -308,7 +308,7 @@ submission_package_freeze
 
 `mechanism_validation` 聚合以下机制前置与实现 phase: `synthetic_state_inference_sanity`、`real_video_latent_transfer_check`、`state_space_inference_formalization`、`trajectory_observation_core_probe`、`flow_model_adapter_preflight`、`sampling_time_constraint_probe`、`motion_threshold_calibration`、历史 small-scale 机制 pilot 记录和真实生成式视频模型实现包。`small_scale_claim_pilot_gate` 不再作为主干门禁使用, 只能作为机制层的历史小样本检查记录; `generative_video_model_probe` 不再作为独立门禁使用, 只表示真实生成式视频模型实验的实现 package。
 
-其中 `validation_scale` 重新定义为“小样本全流程打通验证”, 是进入 paper 级运行前的全流程打通层。它不是效果充分性证明, 而是以 `FPR=0.10` 级别的低成本口径跑通与论文协议同构的全部产物链路。`replay_and_authenticated_sketch_gate`、`flow_specific_adaptive_attack_gate`、external baseline、internal ablation、CI reporter、artifact rebuild 和 claim audit 都必须在 `validation_scale` 中形成可落盘、可检查、可失败闭环, 不得推迟到 `pilot_paper` 或 `full_paper` 后再补。`validation_scale` 必须能在小样本规模上产出 paper 相关的全部 governed artifact 类型: generation / detection records、主方法结果、完整外部 baseline 对比、内部消融、adaptive attack、replay/sketch 或受治理 Claim-3 downgrade、fixed-FPR CI、tables、figures、reports、package manifest 和 claim audit。只有 `validation_scale` 通过并生成 `validation_scale_to_pilot_paper_transition_decision` 后, 才允许进入 `pilot_paper`; `validation_scale` 不能直接允许进入 `full_paper`。`full_paper` 仍必须等待 `pilot_paper`、`pilot_paper_to_full_paper_transition_decision`、`full_paper_result_checker`、CI、claim audit、artifact rebuild 和 submission freeze 相关门禁通过。`pilot_paper` 的定位是在 `validation_scale` 通过后, 使用同构协议执行 FPR=1% 小规模 paper 级结果运行并报告 pilot 级 `TPR@FPR=0.01`; 它不应再承担补机制、补 baseline 或补消融的职责。
+其中 `validation_scale` 重新定义为“小样本全流程打通验证”, 是进入 paper 级运行前的全流程打通层。它不是效果充分性证明, 而是使用 `configs/protocol/validation_scale_generative_probe.json` 中 `target_fpr` 指定的低成本口径跑通与论文协议同构的全部产物链路。`replay_and_authenticated_sketch_gate`、`flow_specific_adaptive_attack_gate`、external baseline、internal ablation、CI reporter、artifact rebuild 和 claim audit 都必须在 `validation_scale` 中形成可落盘、可检查、可失败闭环, 不得推迟到 `pilot_paper` 或 `full_paper` 后再补。`validation_scale` 必须能在小样本规模上产出 paper 相关的全部 governed artifact 类型: generation / detection records、主方法结果、完整外部 baseline 对比、内部消融、adaptive attack、replay/sketch 或受治理 Claim-3 downgrade、fixed-FPR CI、tables、figures、reports、package manifest 和 claim audit。只有 `validation_scale` 通过并生成 `validation_scale_to_pilot_paper_transition_decision` 后, 才允许进入 `pilot_paper`; `validation_scale` 不能直接允许进入 `full_paper`。`full_paper` 仍必须等待 `pilot_paper`、`pilot_paper_to_full_paper_transition_decision`、`full_paper_result_checker`、CI、claim audit、artifact rebuild 和 submission freeze 相关门禁通过。`pilot_paper` 的定位是在 `validation_scale` 通过后, 使用同构协议执行 FPR=1% 小规模 paper 级结果运行并报告 pilot 级 `TPR@FPR=0.01`; 它不应再承担补机制、补 baseline 或补消融的职责。
 
 核心原则是:
 
@@ -897,7 +897,7 @@ explicit_synchronization_control: explicit_dtw_temporal_alignment, frame_matchin
 
 ### 13.6 validation_scale 作为 paper 级前小样本全流程打通层
 
-`validation_scale` 的职责是证明 paper 级运行所需的全部机制和产物链路已经在小样本规模上闭合。它采用 `FPR=0.10` 作为全流程打通口径, 目标是以最小成本提前发现 baseline、消融、attack、CI、artifact rebuild、claim audit 和 package 阻断。它与 `pilot_paper` 的区别在于结果等级和评价口径: `validation_scale` 产出 validation 级小样本全链路结果且不支撑效果主张, `pilot_paper` 在通过该门禁后产出可报告的 FPR=1% pilot 级 paper 结果。
+`validation_scale` 的职责是证明 paper 级运行所需的全部机制和产物链路已经在小样本规模上闭合。它采用 validation_scale protocol config 中的 `target_fpr` 作为全流程打通口径, 目标是以最小成本提前发现 baseline、消融、attack、CI、artifact rebuild、claim audit 和 package 阻断。它与 `pilot_paper` 的区别在于结果等级和评价口径: `validation_scale` 产出 validation 级小样本全链路结果且不支撑效果主张, `pilot_paper` 在通过该门禁后产出可报告的 FPR=1% pilot 级 paper 结果。
 
 `validation_scale` 至少必须满足:
 
@@ -1744,7 +1744,7 @@ full_paper 必须按以下顺序执行, 不得并行跳过 gate。`validation_sc
 
 ## 29. 大规模 full_paper 可运行性预演与分片执行
 
-full_paper 目标包含 `TPR@FPR=0.001` 级别评估, 因此不能把一次超大规模运行作为首次端到端验证。Codex 必须在 full_paper 前至少完成 `validation_scale`, 用 `FPR=0.10` 小样本全流程打通验证证明数据、模型、攻击、检测、baseline、消融、统计和打包链路不会阻断; 随后通过 `pilot_paper` 产出 FPR=1% 小规模论文协议结果。
+full_paper 目标包含 `TPR@FPR=0.001` 级别评估, 因此不能把一次超大规模运行作为首次端到端验证。Codex 必须在 full_paper 前至少完成 `validation_scale`, 用 validation_scale protocol config 指定的 target_fpr 小样本全流程打通验证证明数据、模型、攻击、检测、baseline、消融、统计和打包链路不会阻断; 随后通过 `pilot_paper` 产出由 pilot_paper protocol config 指定 target_fpr 的小规模论文协议结果。
 
 ### 29.1 分级预演规模
 

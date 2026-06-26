@@ -1,4 +1,5 @@
-﻿from pathlib import Path
+﻿import json
+from pathlib import Path
 
 import pytest
 
@@ -200,10 +201,14 @@ def _seed_pilot_paper_run(
 def test_pilot_paper_gate_blocks_empty_run(tmp_path: Path) -> None:
     """空 run_root 不能被解释为 pilot_paper fixed-FPR paper 证据。"""
     audit = build_pilot_paper_gate_audit(tmp_path / "empty")
+    protocol = json.loads(Path("configs/protocol/pilot_paper_generative_probe.json").read_text(encoding="utf-8"))
 
     assert audit["pilot_paper_gate_decision"] == "FAIL"
     assert audit["claim_support_status"] == "blocked_until_pilot_paper_generation_records"
     assert audit["paper_result_level"] == "pilot_paper"
+    assert audit["target_fpr"] == protocol["target_fpr"]
+    assert audit["tpr_at_target_fpr"] is None
+    assert audit["target_fpr_claim_allowed"] is False
     assert audit["tpr_at_fpr_01_pilot_claim_allowed"] is False
     assert audit["pilot_paper_claim_allowed"] is False
     assert audit["tpr_at_fpr_001_claim_allowed"] is False
@@ -225,7 +230,7 @@ def test_pilot_paper_gate_rejects_validation_scale_profile(tmp_path: Path) -> No
 
 @pytest.mark.quick
 def test_pilot_paper_gate_passes_calibrated_heldout_fixture(tmp_path: Path) -> None:
-    """满足 calibration/test split 与 1000+ held-out negative events 时允许 pilot_paper 级 TPR@FPR=0.01。"""
+    """满足 calibration/test split 与 1000+ held-out negative events 时允许 pilot_paper 级 TPR@target_fpr。"""
     run_root = tmp_path / "run"
     _seed_pilot_paper_run(run_root)
 
@@ -265,12 +270,15 @@ def test_pilot_paper_gate_passes_calibrated_heldout_fixture(tmp_path: Path) -> N
     assert audit["calibration_negative_event_count_per_family_min"] == 252
     assert audit["heldout_negative_event_count_per_family_min"] == 252
     assert audit["attack_event_count_per_attack_min"] == 84
-    assert audit["calibration_negative_fpr_at_threshold"] <= 0.01
-    assert audit["heldout_negative_fpr_at_threshold"] <= 0.01
+    assert audit["calibration_negative_fpr_at_threshold"] <= audit["target_fpr"]
+    assert audit["heldout_negative_fpr_at_threshold"] <= audit["target_fpr"]
     assert audit["observed_negative_fpr_at_threshold"] == audit["heldout_negative_fpr_at_threshold"]
+    assert audit["tpr_at_target_fpr"] == 1.0
+    assert audit["target_fpr_claim_allowed"] is True
     assert audit["tpr_at_fpr_01"] == 1.0
     assert audit["tpr_at_fpr_01_pilot_claim_allowed"] is True
     assert audit["pilot_paper_claim_allowed"] is True
+    assert audit["blocked_target_fpr_claim_allowed"] is False
     assert audit["tpr_at_fpr_001_claim_allowed"] is False
     assert audit["full_paper_allowed"] is False
     assert (run_root / "records" / "pilot_paper_gate_records.jsonl").exists()

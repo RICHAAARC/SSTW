@@ -487,6 +487,9 @@ Notebook 与 repository module 的跨边界数据
 | official_source_layout_status | governance | none | true | false | false | 官方源码运行布局状态, 例如 VideoSeal root config 是否可解析。 |
 | official_source_layout_audit | artifact | none | false | false | false | 官方源码运行布局审计对象, 用于说明 Notebook/Colab 运行前置条件。 |
 | official_source_runtime_cwd | artifact | none | true | false | false | 调用官方 API 时临时使用的官方源码工作目录。 |
+| official_video_io_backend | artifact | none | true | false | false | official baseline wrapper 使用的视频文件 I/O 后端。 |
+| colab_torch_stack_policy | governance | none | false | false | false | Colab 中是否保持预装 torch / torchvision 运行栈不被 requirements 覆盖。 |
+| video_io_backend | artifact | none | false | false | false | 视频张量 I/O helper 返回的实际后端名称。 |
 | required_working_directory | artifact | none | false | false | false | 第三方官方代码加载模型或配置时要求的工作目录。 |
 | runtime_cwd_policy | governance | none | false | false | false | 第三方官方代码加载阶段的临时 cwd 切换策略。 |
 | source_root_config_paths | artifact | none | false | false | false | 官方源码根目录下需要被相对路径解析的配置文件列表。 |

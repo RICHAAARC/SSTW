@@ -1,10 +1,23 @@
 # VideoSeal 官方 API 与视频 I/O 运行依赖。
 # 该文件只描述 Colab 真实运行前需要安装的第三方依赖, 不代表已经产出 measured_formal 结果。
-git+https://github.com/facebookresearch/videoseal
+# Colab 已预装 torch / torchvision, 此处不重复安装, 避免破坏 CUDA 运行栈。
+# VideoSeal 官方源码由 source intake clone 到 external_baseline/primary/videoseal/source, 此处不再 pip 安装 git 包。
 av
-torch
-torchvision
 ffmpeg-python
 imageio
 imageio-ffmpeg
 opencv-python
+omegaconf
+einops
+timm==0.9.16
+decord
+PyWavelets
+pytorch-msssim
+safetensors
+scikit-image
+scipy
+transformers
+pandas
+pycocotools
+lpips
+calflops

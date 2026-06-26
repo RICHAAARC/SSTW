@@ -25,6 +25,27 @@ import zipfile
 DEFAULT_RESOURCE_REQUIREMENTS = "configs/external_baselines/official_resource_requirements.json"
 VIDSIG_GOOGLE_DRIVE_FILE_ID = "1XFyzeX6T0iHgcxSN_DxvjLFy1EXZye-Q"
 DEFAULT_PRIMARY_SOURCE_ROOT = "external_baseline/primary"
+VIDEOSEAL_COLAB_LIGHTWEIGHT_DEPENDENCIES = (
+    "av",
+    "ffmpeg-python",
+    "imageio",
+    "imageio-ffmpeg",
+    "opencv-python",
+    "omegaconf",
+    "einops",
+    "timm==0.9.16",
+    "decord",
+    "PyWavelets",
+    "pytorch-msssim",
+    "safetensors",
+    "scikit-image",
+    "scipy",
+    "transformers",
+    "pandas",
+    "pycocotools",
+    "lpips",
+    "calflops",
+)
 
 
 def _read_json(path: str | Path) -> dict[str, Any]:
@@ -147,7 +168,6 @@ def bootstrap_vidsig(resource_root: Path, *, allow_network: bool) -> dict[str, A
         sys.executable,
         "-m",
         "gdown",
-        "--id",
         VIDSIG_GOOGLE_DRIVE_FILE_ID,
         "-O",
         str(archive_path),
@@ -172,21 +192,16 @@ def bootstrap_vidsig(resource_root: Path, *, allow_network: bool) -> dict[str, A
 def bootstrap_videoseal(resource_root: Path, *, allow_network: bool, source_root: Path) -> dict[str, Any]:
     """准备 VideoSeal 官方 API 运行环境。
 
-    VideoSeal 官方 `videoseal.load(...)` 会自动下载 checkpoint。因此这里不强制下载,
-    但会在 Colab 冷启动中尝试安装官方源码或官方包依赖, 避免后续 bundle generation
-    因缺少 Python package 直接失败。
+    VideoSeal 官方 `videoseal.load(...)` 会自动下载 checkpoint。因此这里不强制下载。
+    为适配 Colab 预装 CUDA 栈, 这里只安装轻量依赖, 不 pip 安装 torch、torchvision
+    或 VideoSeal 官方 git 包。官方源码由 source intake clone 后通过 `sys.path` 使用。
     """
     baseline_root = resource_root / "videoseal"
     baseline_root.mkdir(parents=True, exist_ok=True)
     source_dir = source_root / "videoseal" / "source"
     install_results: list[dict[str, Any]] = []
-    if source_dir.is_dir() and ((source_dir / "pyproject.toml").exists() or (source_dir / "setup.py").exists()):
-        install_results.append(_pip_install_target(str(source_dir), allow_network=allow_network, timeout_sec=2400))
-    else:
-        install_results.append(_pip_install_target("git+https://github.com/facebookresearch/videoseal", allow_network=allow_network, timeout_sec=2400))
-    # torchvision 的视频读写在 Colab 中通常需要 PyAV。安装失败不会伪造 ready,
-    # 后续 official bundle generator 仍会 fail closed。
-    install_results.append(_pip_install_target("av", allow_network=allow_network, timeout_sec=900))
+    for dependency in VIDEOSEAL_COLAB_LIGHTWEIGHT_DEPENDENCIES:
+        install_results.append(_pip_install_target(dependency, allow_network=allow_network, timeout_sec=900))
     failed = [item for item in install_results if item.get("install_status") == "install_failed"]
     return {
         "baseline_id": "videoseal",
@@ -194,8 +209,9 @@ def bootstrap_videoseal(resource_root: Path, *, allow_network: bool, source_root
         "resource_mode": "official_api_auto_download_on_first_use",
         "resource_dir": str(baseline_root),
         "official_source_dir": str(source_dir),
+        "colab_torch_stack_policy": "preserve_preinstalled_torch_and_torchvision",
         "install_results": install_results,
-        "missing_after_bootstrap": [] if not failed else ["videoseal_python_package_or_av_dependency"],
+        "missing_after_bootstrap": [] if not failed else ["videoseal_lightweight_python_dependencies"],
     }
 
 

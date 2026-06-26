@@ -17,6 +17,7 @@ from external_baseline.official_eval_adapters.common import (
     run_adapter_main,
     safe_float,
 )
+from external_baseline.video_tensor_io import read_video_tchw_uint8
 from external_baseline.videoseal_official_runtime import (
     ensure_videoseal_official_runtime_layout,
     videoseal_official_source_cwd,
@@ -84,7 +85,6 @@ def _run_default(args: argparse.Namespace, source_dir: Path, output_json_path: P
     sys.path.insert(0, str(source_dir))
 
     import torch
-    import torchvision
     import videoseal
 
     device = os.environ.get("SSTW_VIDEOSEAL_DEVICE") or ("cuda" if torch.cuda.is_available() else "cpu")
@@ -94,7 +94,7 @@ def _run_default(args: argparse.Namespace, source_dir: Path, output_json_path: P
     video_model.eval()
     video_model.to(device)
 
-    video, _, info = torchvision.io.read_video(str(args.attacked_video), output_format="TCHW")
+    video, info = read_video_tchw_uint8(args.attacked_video, empty_error="videoseal_attacked_video_empty")
     if video.numel() == 0:
         raise RuntimeError("videoseal_attacked_video_empty")
     video = video.float().to(device) / 255.0
@@ -133,6 +133,7 @@ def _run_default(args: argparse.Namespace, source_dir: Path, output_json_path: P
         "official_source_dir": str(source_dir),
         "official_source_layout_status": source_layout_audit["layout_status"],
         "official_source_runtime_cwd": source_layout_audit["required_working_directory"],
+        "official_video_io_backend": info.get("video_io_backend"),
         "official_model_name": model_name,
         "official_video_frame_count": int(video.shape[0]),
         "official_video_fps": float(info.get("video_fps") or 0.0),

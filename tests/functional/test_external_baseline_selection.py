@@ -13,12 +13,14 @@ from main.external_baselines.explicit_dtw_temporal_alignment import compute_dtw_
 from main.external_baselines.frame_matching_temporal_registration import compute_registration_cost, match_frames
 from experiments.generative_video_model_probe.external_baseline_runner import write_external_baseline_comparison_outputs, write_external_baseline_status_outputs
 from external_baseline.official_bundle_generator import build_official_bundle_generation_plan
+import external_baseline.official_resource_bootstrap as official_resource_bootstrap
 from external_baseline.official_resource_bootstrap import bootstrap_official_resources
 from external_baseline.official_result_bundle import build_official_result_bundle_preflight
 from external_baseline.official_runtime_closure import (
     build_official_runtime_closure_requirements,
     load_official_runtime_closure_requirements,
 )
+from external_baseline.video_tensor_io import read_video_tchw_uint8, write_video_tchw
 from external_baseline.videoseal_official_runtime import (
     ensure_videoseal_official_runtime_layout,
     inspect_videoseal_official_runtime_layout,
@@ -159,13 +161,23 @@ def test_official_runtime_closure_requirements_are_first_class_colab_config() ->
     assert config["self_containment_rule"].startswith("external baseline 必须在项目内 clone")
     assert rows["videoseal"]["automatic_bundle_generation_supported_by_sstw"] is True
     assert rows["videoseal"]["colab_default_can_attempt_without_user_files"] is True
-    assert "ffmpeg-python" in Path(rows["videoseal"]["requirements_file"]).read_text(encoding="utf-8")
+    videoseal_requirements = Path(rows["videoseal"]["requirements_file"]).read_text(encoding="utf-8")
+    assert "ffmpeg-python" in videoseal_requirements
+    assert "git+https://github.com/facebookresearch/videoseal" not in videoseal_requirements
     for baseline_id, row in rows.items():
         assert row["external_supplemental_result_bundle_allowed"] is False
         assert row["official_baseline_command_env_var"] == f"SSTW_{baseline_id.upper()}_OFFICIAL_EVAL_COMMAND"
         assert row["external_baseline_command_env_var"] == f"SSTW_{baseline_id.upper()}_EVAL_COMMAND"
         assert row["native_command_env_var"] == f"SSTW_{baseline_id.upper()}_NATIVE_EVAL_COMMAND"
-        assert Path(row["requirements_file"]).exists()
+        requirements_file = Path(row["requirements_file"])
+        assert requirements_file.exists()
+        requirement_lines = [
+            line.strip()
+            for line in requirements_file.read_text(encoding="utf-8").splitlines()
+            if line.strip() and not line.strip().startswith("#")
+        ]
+        assert "torch" not in requirement_lines
+        assert "torchvision" not in requirement_lines
 
 
 @pytest.mark.quick
@@ -200,6 +212,26 @@ def test_videoseal_official_runtime_layout_fails_closed_without_official_config(
     with pytest.raises(FileNotFoundError, match="videoseal_official_config_missing"):
         ensure_videoseal_official_runtime_layout(source_dir)
     assert not (source_dir / "videoseal" / "configs" / "attenuation.yaml").exists()
+
+
+@pytest.mark.quick
+def test_external_baseline_video_tensor_io_uses_imageio_backend(tmp_path: Path) -> None:
+    """VideoSeal bundle I/O 必须避开 Colab 中不稳定的 torchvision 视频接口。"""
+    import torch
+
+    video_path = tmp_path / "sample.mp4"
+    video = torch.zeros((3, 3, 16, 16), dtype=torch.float32)
+    video[1, 0] = 1.0
+
+    write_info = write_video_tchw(video_path, video, fps=8.0)
+    decoded, read_info = read_video_tchw_uint8(video_path)
+
+    assert video_path.exists()
+    assert write_info["video_io_backend"] == "imageio_v3"
+    assert read_info["video_io_backend"] == "imageio_v3"
+    assert decoded.ndim == 4
+    assert decoded.shape[1] == 3
+    assert decoded.shape[0] >= 1
 
 
 @pytest.mark.quick
@@ -295,6 +327,50 @@ def test_official_resource_bootstrap_writes_repair_artifact_without_network(tmp_
     assert decision["manual_official_resource_required_count"] >= 4
     assert decision["strict_gate_auto_resource_closure"] is False
     assert decision["environment_updates"]["SSTW_EXTERNAL_BASELINE_RESOURCE_ROOT"].endswith("external_baseline")
+
+
+@pytest.mark.quick
+def test_official_resource_bootstrap_preserves_colab_torch_stack(tmp_path: Path) -> None:
+    """VideoSeal bootstrap 不应通过 pip 安装 torch / torchvision 或官方 git 包破坏 Colab 运行栈。"""
+    row = official_resource_bootstrap.bootstrap_videoseal(
+        tmp_path / "resources" / "external_baseline",
+        allow_network=False,
+        source_root=tmp_path / "external_baseline" / "primary",
+    )
+    install_targets = [item["install_target"] for item in row["install_results"]]
+
+    assert row["colab_torch_stack_policy"] == "preserve_preinstalled_torch_and_torchvision"
+    assert "torch" not in install_targets
+    assert "torchvision" not in install_targets
+    assert not any(str(target).startswith("git+https://github.com/facebookresearch/videoseal") for target in install_targets)
+
+
+@pytest.mark.quick
+def test_vidsig_bootstrap_uses_gdown_positional_file_id(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """gdown 新版 Colab 环境不再接受 `--id`, bootstrap 必须使用位置参数。"""
+    commands: list[list[str]] = []
+
+    monkeypatch.setattr(
+        official_resource_bootstrap,
+        "_ensure_gdown",
+        lambda: {"tool": "gdown", "status": "already_available"},
+    )
+
+    def fake_run_command(command: list[str], *, timeout_sec: int = 1800) -> dict[str, object]:
+        commands.append(command)
+        return {"command": command, "return_code": 2, "stdout_tail": "", "stderr_tail": "test"}
+
+    monkeypatch.setattr(official_resource_bootstrap, "_run_command", fake_run_command)
+
+    row = official_resource_bootstrap.bootstrap_vidsig(tmp_path / "resources" / "external_baseline", allow_network=True)
+
+    assert row["bootstrap_status"] == "manual_official_resource_required"
+    assert commands
+    assert "--id" not in commands[0]
+    assert official_resource_bootstrap.VIDSIG_GOOGLE_DRIVE_FILE_ID in commands[0]
 
 
 @pytest.mark.quick

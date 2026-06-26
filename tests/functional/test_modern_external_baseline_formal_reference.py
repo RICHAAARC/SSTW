@@ -136,6 +136,9 @@ def test_six_baseline_formal_reference_notebooks_call_repository_helpers() -> No
         assert "measured_formal" in source
         assert "pytest -q" in source
         assert "tools/harness/run_all_audits.py" in source
+        assert "pip install -U imageio" not in source
+        assert "pip install -U -r" not in source
+        assert " av torchvision " not in source
         assert "write_jsonl(" not in source
         assert "runtime_detection_records.jsonl" not in source
 

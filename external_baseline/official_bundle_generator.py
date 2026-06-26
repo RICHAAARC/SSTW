@@ -20,6 +20,7 @@ import sys
 from typing import Any, Mapping
 
 from external_baseline.runtime_trace_io import comparable_detection_records
+from external_baseline.video_tensor_io import read_video_tchw_uint8, write_video_tchw
 from external_baseline.videoseal_official_runtime import (
     ensure_videoseal_official_runtime_layout,
     videoseal_official_source_cwd,
@@ -81,16 +82,6 @@ def _load_resource_rows(config_path: str | Path = DEFAULT_RESOURCE_REQUIREMENTS)
     }
 
 
-def _video_uint8_thwc(video: Any) -> Any:
-    """把 `[T, C, H, W]` 或 `[T, H, W, C]` 视频张量转换为 uint8 THWC。"""
-    import torch
-
-    if video.ndim == 4 and video.shape[1] in {1, 3}:
-        video = video.permute(0, 2, 3, 1)
-    video = video.detach().float().cpu().clamp(0.0, 1.0)
-    return (video * 255.0).round().to(torch.uint8)
-
-
 def _apply_video_tensor_attack(video: Any, attack_name: str) -> Any:
     """对官方 baseline 水印视频应用与 SSTW runtime attack 对齐的轻量文件级攻击。
 
@@ -145,7 +136,6 @@ def generate_videoseal_official_bundle(
     `model.detect`, 不使用 SSTW detection score。
     """
     import torch
-    import torchvision
 
     source_path = Path(source_dir or os.environ.get("SSTW_VIDEOSEAL_SOURCE_DIR", "/content/SSTW/external_baseline/primary/videoseal/source"))
     source_layout_audit = ensure_videoseal_official_runtime_layout(source_path)
@@ -177,7 +167,7 @@ def generate_videoseal_official_bundle(
             source_video_path = Path(str(record.get("source_video_path") or ""))
             if not source_video_path.exists():
                 raise FileNotFoundError(f"source_video_missing:{source_video_path}")
-            video, _, info = torchvision.io.read_video(str(source_video_path), output_format="TCHW")
+            video, info = read_video_tchw_uint8(source_video_path, empty_error="source_video_empty")
             if video.numel() == 0:
                 raise RuntimeError("source_video_empty")
             fps = float(info.get("video_fps") or 8.0)
@@ -197,8 +187,8 @@ def generate_videoseal_official_bundle(
             baseline_source_video = baseline_video_dir / f"{video_stem}_watermarked.mp4"
             baseline_attacked_video = baseline_video_dir / f"{video_stem}_attacked.mp4"
             baseline_video_dir.mkdir(parents=True, exist_ok=True)
-            torchvision.io.write_video(str(baseline_source_video), _video_uint8_thwc(watermarked), fps=fps)
-            torchvision.io.write_video(str(baseline_attacked_video), _video_uint8_thwc(attacked), fps=fps)
+            write_video_tchw(baseline_source_video, watermarked, fps=fps)
+            write_video_tchw(baseline_attacked_video, attacked, fps=fps)
             with torch.no_grad():
                 detected_outputs = model.detect(attacked, is_video=True)
             preds = detected_outputs.get("preds")
@@ -218,6 +208,7 @@ def generate_videoseal_official_bundle(
                 "official_result_provenance": "repository_generated_from_third_party_official_code",
                 "official_baseline_id": "videoseal",
                 "official_source_layout_status": source_layout_audit["layout_status"],
+                "official_video_io_backend": info.get("video_io_backend"),
                 "external_baseline_generation_model_id": "videoseal_official_api",
                 "external_baseline_source_video_path": str(baseline_source_video),
                 "external_baseline_attacked_video_path": str(baseline_attacked_video),
@@ -249,6 +240,7 @@ def generate_videoseal_official_bundle(
         "official_api": "videoseal.load/embed/detect",
         "official_source_dir": str(source_path),
         "official_source_layout_audit": source_layout_audit,
+        "official_video_io_backend": "imageio_v3",
         "official_model_name": model_name,
         "device": device,
         "input_runtime_detection_record_count": len(records),

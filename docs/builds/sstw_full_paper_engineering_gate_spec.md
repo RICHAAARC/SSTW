@@ -512,6 +512,8 @@ submission_freeze_allowed
 
 ## 9. reviewer_evidence_index_builder 接口规范
 
+`reviewer_evidence_index_builder` 必须在 `full_paper_result_checker_decision == PASS` 或明确的 downgrade decision 落盘后运行。它只索引已经由 checker 确认可使用的 claims、tables、figures、reports 和 manifests, 不能把尚未通过的 full_paper 结果提前包装成审稿证据。
+
 ### 9.1 输出
 
 ```text
@@ -681,11 +683,13 @@ unsupported_claim_blocks_reviewer_evidence_index
 9. stage_transition_decision, 先生成 validation_scale_to_pilot_paper_transition_decision
 10. pilot_paper_gate
 11. pilot_paper_to_full_paper_transition_decision
-12. reviewer_evidence_index_builder
-13. full_paper_result_checker
+12. full_paper_result_checker
+13. reviewer_evidence_index_builder
+14. full_paper_to_submission_freeze_transition_decision
+15. submission_package_freeze
 ```
 
-原因是 `validation_scale` 是进入 paper 级运行前的小样本全流程打通层。所有 paper 相关机制必须先在 FPR=0.10 小样本口径下产出 governed records、tables、figures、reports、manifests 和 claim audit, 再由 `stage_transition_decision` 生成 `validation_scale_to_pilot_paper_transition_decision`, 之后才能进入 `pilot_paper` 或继续准备 `full_paper` 后续流程; `full_paper` claim 仍由 `full_paper_result_checker` 放行。如果 external baseline、内部消融、adaptive attack、replay/sketch、CI 或 artifact rebuild 在 validation_scale 阻断, 后续步骤不得用 paper 级运行补造缺失产物。
+原因是 `validation_scale` 是进入 paper 级运行前的小样本全流程打通层。所有 paper 相关机制必须先在 FPR=0.10 小样本口径下产出 governed records、tables、figures、reports、manifests 和 claim audit, 再由 `stage_transition_decision` 生成 `validation_scale_to_pilot_paper_transition_decision`, 之后才能进入 `pilot_paper` 或继续准备 `full_paper` 后续流程; `full_paper` claim 仍由 `full_paper_result_checker` 放行。如果 external baseline、内部消融、adaptive attack、replay/sketch、CI 或 artifact rebuild 在 validation_scale 阻断, 后续步骤不得用 paper 级运行补造缺失产物。`reviewer_evidence_index_builder` 必须晚于 `full_paper_result_checker`, 因为它只能索引已经由 checker 确认的 claims、tables、figures、reports 和 manifests, 不能在 claim 未通过前提前构造审稿证据。
 
 ## 13. 不允许的捷径
 

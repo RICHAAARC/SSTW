@@ -403,7 +403,15 @@ paper claim。严格门禁必须设置 `SSTW_VALIDATION_SCALE_RUN_THROUGH_TEST=f
 
 `pilot_paper` 和 `full_paper` 的协议差异只能是样本规模和评价等级。当前 `full_paper`
 已通过 `configs/protocol/full_paper_generative_probe.json` 登记正式协议要求, 但 workflow profile
-仍保持不可运行状态, 不允许作为 claim profile 使用, 直到 `validation_scale` 和后续 full_paper_result_checker 均通过。
+在前置门禁闭合前只能作为协议配置和 checker 目标, 不允许作为 claim profile 或 submission source 使用。
+
+必须区分以下 3 个状态, 避免形成“full_paper 必须先运行, 但又要等 full_paper_result_checker 先通过”的循环表述:
+
+```text
+full_paper_run_allowed: 只表示允许启动 full_paper 规模结果生产, 需要 validation_scale_gate、validation_scale_to_pilot_paper_transition_decision、pilot_paper_gate、pilot_paper_to_full_paper_transition_decision 和 full_paper 运行前置门禁通过。
+full_paper_claim_allowed: 只表示允许把 full_paper 结果写成正式论文 claim, 需要 full_paper records 生成后由 full_paper_result_checker 判定 PASS。
+submission_freeze_allowed: 只表示允许冻结投稿包, 需要 full_paper_result_checker、reviewer_evidence_index_builder、full_paper_to_submission_freeze_transition_decision、claim audit 和 artifact rebuild 全部通过。
+```
 
 `configs/protocol/full_paper_generative_probe.json` 是正式规模论文协议配置的唯一入口。该配置至少必须固定:
 
@@ -419,6 +427,8 @@ minimum_modern_external_baseline_formal_adapter_count >= 6
 minimum_external_baseline_measured_adapter_count >= 8
 minimum_internal_ablation_variant_count >= 8
 require_validation_scale_gate_passed == true
+require_validation_scale_to_pilot_paper_transition_decision == true
+require_pilot_paper_gate_passed == true
 require_pilot_paper_to_full_paper_transition_decision == true
 require_external_baseline_self_containment_decision == true
 require_data_split_and_leakage_guard == true

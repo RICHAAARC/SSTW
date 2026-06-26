@@ -22,6 +22,12 @@ configs/paper_workflow/generative_video_notebook_workflows.json
 experiments/generative_video_model_probe/
 paper_workflow/colab_notebooks/motion_threshold_calibration_colab.ipynb
 paper_workflow/colab_notebooks/generative_video_runtime_colab.ipynb
+paper_workflow/colab_notebooks/videoseal_formal_reference_colab.ipynb
+paper_workflow/colab_notebooks/vidsig_formal_reference_colab.ipynb
+paper_workflow/colab_notebooks/videomark_formal_reference_colab.ipynb
+paper_workflow/colab_notebooks/videoshield_formal_reference_colab.ipynb
+paper_workflow/colab_notebooks/spdmark_formal_reference_colab.ipynb
+paper_workflow/colab_notebooks/sigmark_formal_reference_colab.ipynb
 paper_workflow/colab_notebooks/external_baseline_formal_scoring_colab.ipynb
 paper_workflow/colab_notebooks/paper_gate_and_package_colab.ipynb
 ```
@@ -258,6 +264,7 @@ scripts/package_results/generative_video_drive_packager.py
 ```text
 motion_threshold_calibration_colab.ipynb
 -> generative_video_runtime_colab.ipynb
+-> 6 个 modern external baseline formal reference Notebook
 -> external_baseline_formal_scoring_colab.ipynb
 -> paper_gate_and_package_colab.ipynb
 ```
@@ -677,7 +684,8 @@ SSTW_VIDEOSEAL_EVAL_COMMAND
 
 ### 2.13 profile-driven Notebook 重构状态
 
-当前 Colab workflow 已从单一综合 Notebook 拆分为职责明确的 4 个推荐入口, 并由统一配置控制 profile 切换:
+当前 Colab workflow 已从单一综合 Notebook 拆分为 runtime、6 个 baseline formal reference、
+formal scoring 和 paper gate 等职责明确入口, 并由统一配置控制 profile 切换:
 
 ```text
 configs/paper_workflow/generative_video_notebook_workflows.json
@@ -688,7 +696,8 @@ configs/paper_workflow/generative_video_notebook_workflows.json
 ```text
 motion_threshold_calibration_colab.ipynb: 只运行 motion calibration split 并冻结 threshold artifact
 generative_video_runtime_colab.ipynb: 运行 Wan2.1 生成、formal metrics、motion threshold 复用、attack 和 detection
-external_baseline_formal_scoring_colab.ipynb: 运行现代 baseline 自包含执行链路、adapter 和 comparison records
+6 个 modern external baseline formal reference Notebook: 分别运行对应 baseline 的官方流程、生成项目内 official bundle, 并默认调用统一 runner 转写当前可用的 measured_formal records
+external_baseline_formal_scoring_colab.ipynb: 在 6 个 official bundle 完成后运行全量统一转写、self-containment 判定和打包
 paper_gate_and_package_colab.ipynb: 运行 internal ablation、adaptive attack、replay/sketch 或 Claim-3 downgrade、CI、gate 和 package
 ```
 

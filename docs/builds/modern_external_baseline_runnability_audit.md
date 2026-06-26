@@ -61,5 +61,6 @@ external_baseline/official_eval_adapters/<baseline>.py
 2. 官方权重、key、message 或生成中间产物。
 3. `SSTW_<BASELINE>_NATIVE_EVAL_COMMAND` 或等价项目内 official bundle 生成逻辑。
 4. 覆盖全部 `validation_scale` runtime comparison units 的 score JSON。
-5. `external_baseline_formal_scoring_colab.ipynb` 生成 `measured_formal` records。
+5. 6 个 independent formal reference Notebook 先各自生成项目内 official bundle, 并默认调用统一 runner 转写当前可用的 `measured_formal` records。
+6. `external_baseline_formal_scoring_colab.ipynb` 在 6 个 official bundle 全部完成后执行全量统一转写、self-containment 判定和打包。
 6. `external_baseline_self_containment_decision.json` 通过。

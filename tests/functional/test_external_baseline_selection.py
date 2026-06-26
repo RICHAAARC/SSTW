@@ -436,6 +436,16 @@ def test_official_result_bundle_preflight_requires_all_modern_baseline_units(
 
     records = read_jsonl(run_root / "records" / "runtime_detection_records.jsonl")
     for baseline_id in ("videoshield", "sigmark", "spdmark", "videomark", "vidsig", "videoseal"):
+        manifest_path = bundle_root / baseline_id / "official_reference_execution_manifest.json"
+        manifest_path.parent.mkdir(parents=True, exist_ok=True)
+        manifest_path.write_text(
+            json.dumps({
+                "manifest_kind": "test_repository_generated_official_bundle_manifest",
+                "baseline_id": baseline_id,
+                "claim_support_status": "test_fixture_only",
+            }),
+            encoding="utf-8",
+        )
         for record in records:
             output = (
                 bundle_root
@@ -449,7 +459,8 @@ def test_official_result_bundle_preflight_requires_all_modern_baseline_units(
                     "external_baseline_score": 0.61,
                     "detected": True,
                     "bit_accuracy": 0.93,
-                    "official_result_provenance": "third_party_official_code",
+                    "official_result_provenance": "repository_generated_from_third_party_official_code",
+                    "official_execution_manifest_path": str(manifest_path),
                     "external_baseline_source_video_path": f"{baseline_id}/source.mp4",
                     "external_baseline_attacked_video_path": f"{baseline_id}/attacked.mp4",
                 }),
@@ -488,6 +499,49 @@ def test_official_result_bundle_preflight_fails_when_non_runtime_baseline_bundle
     assert audit["official_result_bundle_preflight_decision"] == "FAIL"
     assert "spdmark" in audit["strict_missing_baselines"]
     assert audit["missing_bundle_examples"]
+
+
+@pytest.mark.quick
+def test_official_result_bundle_preflight_rejects_external_supplement_bundle(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """旧外部补交式 bundle 不能作为 measured_formal 的项目内缓存输入。"""
+    run_root = tmp_path / "generative_video_runtime"
+    _write_external_baseline_runtime_fixture(run_root)
+    bundle_root = tmp_path / "official_baseline_bundle"
+    monkeypatch.setenv("SSTW_EXTERNAL_BASELINE_OFFICIAL_RESULT_BUNDLE_ROOT", str(bundle_root))
+    for env_name in (
+        "SSTW_VIDEOSHIELD_RESULT_JSON",
+        "SSTW_SIGMARK_BIT_ACCURACY_NPZ",
+        "SSTW_SPDMARK_EXTRACTOR_PATH",
+        "SSTW_SPDMARK_GT_BITS_PATH",
+        "SSTW_VIDEOMARK_TEMPORAL_RESULTS_JSON",
+        "SSTW_VIDSIG_MSG_DECODER_PATH",
+    ):
+        monkeypatch.delenv(env_name, raising=False)
+    for baseline_id in ("VIDEOSHIELD", "SIGMARK", "SPDMARK", "VIDEOMARK", "VIDSIG", "VIDEOSEAL"):
+        monkeypatch.delenv(f"SSTW_{baseline_id}_NATIVE_EVAL_COMMAND", raising=False)
+
+    record = read_jsonl(run_root / "records" / "runtime_detection_records.jsonl")[0]
+    output = bundle_root / "videoshield" / "records" / f"{record['prompt_id']}__{record['seed_id']}__{record['attack_name']}.json"
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text(
+        json.dumps({
+            "external_baseline_score": 0.61,
+            "detected": True,
+            "official_result_provenance": "third_party_official_code",
+        }),
+        encoding="utf-8",
+    )
+
+    audit = build_official_result_bundle_preflight(run_root)
+    invalid_reasons = [
+        str(row.get("invalid_bundle_reason") or "")
+        for row in audit["missing_bundle_examples"]
+    ]
+    assert audit["official_result_bundle_preflight_decision"] == "FAIL"
+    assert any("official_result_bundle_not_repository_generated" in reason for reason in invalid_reasons)
 
 
 @pytest.mark.quick

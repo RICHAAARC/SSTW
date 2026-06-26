@@ -25,6 +25,7 @@ SCORE_FIELDS = (
     "confidence",
     "detected",
 )
+REPOSITORY_GENERATED_OFFICIAL_PROVENANCE = "repository_generated_from_third_party_official_code"
 
 
 def build_parser(description: str) -> argparse.ArgumentParser:
@@ -133,9 +134,10 @@ def official_bundle_candidate_paths(
 ) -> list[Path]:
     """构造单条 comparison unit 对应的官方结果包候选路径。
 
-    官方结果包用于接收那些无法在当前 Colab L4 会话中重新训练或重新生成的
-    第三方 baseline 结果。它不是 proxy 分数: 每个 JSON 仍必须来自第三方官方
-    代码或官方原生命令, 并保留 `official_execution_manifest_path` 或等价 provenance。
+    官方结果包用于缓存由本项目 workflow 调用第三方官方代码、官方 API 或官方
+    原生命令后产生的结果。它不是外部补交分数: 每个 JSON 必须由项目内
+    clone / build / run / adapt / record 链路生成, 并保留
+    `official_execution_manifest_path`。
     """
     attack = _safe_path_token(args.attack_name)
     prompt = _safe_path_token(args.prompt_id)
@@ -153,6 +155,28 @@ def official_bundle_candidate_paths(
     return candidates
 
 
+def validate_repository_generated_bundle(payload: Mapping[str, Any], candidate: str | Path) -> None:
+    """校验 official bundle 只能来自项目内自包含生成链路。
+
+    该函数属于项目特定门禁: 读取 official bundle cache 是为了避免重复运行高显存
+    baseline, 不是为了接受外部补交 JSON。旧的 `third_party_official_code` 只表示
+    “来自第三方官方代码”, 但不能证明由本项目 workflow 生成, 因此不能继续作为
+    正式 `measured_formal` 输入。
+    """
+
+    provenance = str(payload.get("official_result_provenance") or "")
+    if provenance != REPOSITORY_GENERATED_OFFICIAL_PROVENANCE:
+        raise RuntimeError(
+            "official_result_bundle_not_repository_generated:"
+            f"{candidate}:{provenance or 'missing_official_result_provenance'}"
+        )
+    manifest_path = str(payload.get("official_execution_manifest_path") or "")
+    if not manifest_path:
+        raise RuntimeError(f"official_result_bundle_missing_execution_manifest:{candidate}")
+    if not Path(manifest_path).exists():
+        raise RuntimeError(f"official_result_bundle_execution_manifest_missing:{candidate}:{manifest_path}")
+
+
 def read_official_result_bundle_if_available(
     *,
     baseline_id: str,
@@ -160,24 +184,27 @@ def read_official_result_bundle_if_available(
     source_dir: Path,
     output_json_path: Path,
 ) -> dict[str, Any] | None:
-    """读取 Google Drive 中预先生成的官方 baseline 结果包。
+    """读取 Google Drive 中由本项目 workflow 生成的官方 baseline 结果包。
 
     这一实现属于项目特定写法。它解决的问题是: 部分现代视频水印 baseline
     需要特定生成模型、训练出的 extractor 或高显存环境, 不能保证在同一个
-    Wan2.1 Colab 会话中即时复跑。正式论文比较仍然允许读取由官方代码离线
-    生成的结果包, 但必须满足两个条件:
+    Wan2.1 Colab 会话中即时复跑。正式论文比较允许读取项目内 official bundle
+    cache, 但必须满足三个条件:
 
     1. JSON 中存在可审计 score 字段。
-    2. JSON 必须声明不是 SSTW proxy, 即 `official_result_provenance` 不能为
-       `sstw_proxy`。
+    2. `official_result_provenance` 必须是
+       `repository_generated_from_third_party_official_code`。
+    3. `official_execution_manifest_path` 必须存在, 用于证明该 bundle 来自项目内
+       clone / build / run / adapt 链路。
     """
+    if os.environ.get("SSTW_DISABLE_OFFICIAL_RESULT_BUNDLE_READ", "").strip().lower() in {"1", "true", "yes"}:
+        return None
     for candidate in official_bundle_candidate_paths(baseline_id=baseline_id, args=args):
         if not candidate.exists():
             continue
         payload = read_json(candidate)
         validate_score_payload(payload)
-        if payload.get("official_result_provenance") == "sstw_proxy":
-            raise RuntimeError(f"official_result_bundle_proxy_forbidden:{candidate}")
+        validate_repository_generated_bundle(payload, candidate)
         return {
             **payload,
             "official_adapter_status": "measured_from_official_result_bundle",

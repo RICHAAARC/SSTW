@@ -2,8 +2,9 @@
 
 该模块的职责是为每个现代视频水印 baseline 提供独立 Notebook 可调用的
 clone / build / run / adapt / bundle 闭环。Notebook 只调用这里的函数, 不直接
-手写正式 records。正式 `measured_formal` records 仍由
-`experiments.generative_video_model_probe.external_baseline_runner` 统一生成。
+手写正式 records。official bundle 生成后, 仍由
+`experiments.generative_video_model_probe.external_baseline_runner` 统一转写为
+`measured_formal` records。
 """
 
 from __future__ import annotations
@@ -18,7 +19,7 @@ import subprocess
 import sys
 from typing import Any, Mapping
 
-from external_baseline.runtime_trace_io import comparable_detection_records
+from external_baseline.runtime_trace_io import build_comparison_unit_id, comparable_detection_records
 from paper_workflow.notebook_utils import generative_video_model_probe_workflow as probe_workflow
 
 
@@ -50,8 +51,9 @@ class ModernExternalBaselineFormalReferenceConfig:
     """描述单个 modern baseline 官方参考运行的最小配置。
 
     通用工程写法是将 Colab 中可编辑的环境变量收敛到 dataclass, 由 helper
-    统一解析路径、命令和产物位置。项目特定要求是该配置只生成 official bundle
-    与 manifest, 不直接生成 `measured_formal` records。
+    统一解析路径、命令和产物位置。项目特定要求是 Notebook 只触发仓库 helper:
+    先生成 official bundle 与 manifest, 再调用统一 runner 转写 `measured_formal`
+    records, 不能在 Notebook cell 中手工拼接正式结果。
     """
 
     baseline_id: str
@@ -61,7 +63,9 @@ class ModernExternalBaselineFormalReferenceConfig:
     execute_source_clone: bool
     run_source_intake: bool
     allow_network: bool
+    run_official_resource_bootstrap: bool
     generate_auto_supported_bundle: bool
+    allow_existing_official_bundle_as_reference_input: bool
     max_records: int | None
     run_official_result_bundle_preflight: bool
     run_external_baseline_comparison_after_reference: bool
@@ -151,11 +155,16 @@ def build_default_config_from_env(baseline_id: str, repo_root: str | Path = ".")
         execute_source_clone=os.environ.get("SSTW_RUN_EXTERNAL_BASELINE_SOURCE_CLONE", "true").lower() == "true",
         run_source_intake=os.environ.get("SSTW_RUN_EXTERNAL_BASELINE_SOURCE_INTAKE", "true").lower() == "true",
         allow_network=os.environ.get("SSTW_ALLOW_EXTERNAL_BASELINE_RESOURCE_NETWORK", "true").lower() == "true",
+        run_official_resource_bootstrap=os.environ.get("SSTW_RUN_OFFICIAL_RESOURCE_BOOTSTRAP_AFTER_REFERENCE", "true").lower() == "true",
         generate_auto_supported_bundle=os.environ.get("SSTW_GENERATE_AUTO_SUPPORTED_OFFICIAL_BUNDLES", "true").lower() == "true",
+        allow_existing_official_bundle_as_reference_input=os.environ.get(
+            "SSTW_ALLOW_EXISTING_OFFICIAL_BUNDLE_AS_REFERENCE_INPUT",
+            "false",
+        ).lower() == "true",
         max_records=max_records,
         run_official_result_bundle_preflight=os.environ.get("SSTW_RUN_OFFICIAL_RESULT_BUNDLE_PREFLIGHT_AFTER_REFERENCE", "true").lower() == "true",
-        run_external_baseline_comparison_after_reference=os.environ.get("SSTW_RUN_EXTERNAL_BASELINE_COMPARISON_AFTER_REFERENCE", "false").lower() == "true",
-        run_self_containment_after_reference=os.environ.get("SSTW_RUN_SELF_CONTAINMENT_AFTER_REFERENCE", "false").lower() == "true",
+        run_external_baseline_comparison_after_reference=os.environ.get("SSTW_RUN_EXTERNAL_BASELINE_COMPARISON_AFTER_REFERENCE", "true").lower() == "true",
+        run_self_containment_after_reference=os.environ.get("SSTW_RUN_SELF_CONTAINMENT_AFTER_REFERENCE", "true").lower() == "true",
     )
 
 
@@ -255,6 +264,43 @@ def _run_source_intake(layout: Mapping[str, str], config: ModernExternalBaseline
     }
 
 
+def _run_official_resource_bootstrap(
+    layout: Mapping[str, str],
+    config: ModernExternalBaselineFormalReferenceConfig,
+) -> dict[str, Any]:
+    """在单 baseline Notebook 内执行官方资源准备阶段。
+
+    该阶段属于项目特定的 build 边界: 它只尝试准备公开可获得的官方依赖、checkpoint
+    或资源路径, 并把无法自动准备的 baseline 写成受治理阻断原因。它不能生成或伪造
+    baseline 分数。
+    """
+
+    command = probe_workflow.build_external_baseline_official_resource_bootstrap_command(
+        dict(layout),
+        allow_network=config.allow_network,
+    )
+    completed = _run_command(command, cwd=config.repo_root)
+    decision_path = Path(layout["drive_run_root"]) / "artifacts" / "external_baseline_official_resource_bootstrap_decision.json"
+    payload = _read_json(decision_path) if decision_path.exists() else {}
+    environment_updates = payload.get("environment_updates", {})
+    if isinstance(environment_updates, Mapping):
+        for key, value in environment_updates.items():
+            if value:
+                os.environ[str(key)] = str(value)
+    return {
+        "stage_id": "external_baseline_official_resource_bootstrap",
+        "command": command,
+        "return_code": completed.returncode,
+        "stdout_tail": completed.stdout[-2000:],
+        "stderr_tail": completed.stderr[-2000:],
+        "stage_status": "PASS" if completed.returncode == 0 else "FAIL",
+        "decision_path": str(decision_path),
+        "applied_environment_update_keys": sorted(str(key) for key in environment_updates)
+        if isinstance(environment_updates, Mapping)
+        else [],
+    }
+
+
 def _adapter_module_for_baseline(baseline_id: str) -> str:
     """返回 repository official eval adapter 的 Python module 名称。"""
 
@@ -297,7 +343,12 @@ def build_official_adapter_command(
     ]
 
 
-def _enrich_official_bundle_payload(path: Path, manifest_path: Path, baseline_id: str) -> dict[str, Any]:
+def _enrich_official_bundle_payload(
+    path: Path,
+    manifest_path: Path,
+    baseline_id: str,
+    detection_record: Mapping[str, Any] | None = None,
+) -> dict[str, Any]:
     """为官方 bundle JSON 补充本项目运行 manifest provenance。
 
     该函数只补充 provenance 字段, 不改写官方分数。这样 official bundle 可以被后续
@@ -305,11 +356,31 @@ def _enrich_official_bundle_payload(path: Path, manifest_path: Path, baseline_id
     """
 
     payload = _read_json(path)
+    protocol_fields: dict[str, Any] = {}
+    if detection_record is not None:
+        protocol_fields = {
+            "official_reference_protocol_anchor": "same_prompt_seed_attack_runtime_comparison_unit",
+            "runtime_comparison_unit_id": build_comparison_unit_id(baseline_id, detection_record),
+            "prompt_id": detection_record.get("prompt_id"),
+            "seed_id": detection_record.get("seed_id"),
+            "attack_name": detection_record.get("attack_name"),
+            "trajectory_trace_id": detection_record.get("trajectory_trace_id"),
+            "source_video_path": detection_record.get("source_video_path"),
+            "attacked_video_path": detection_record.get("attacked_video_path"),
+        }
+    existing_provenance = str(payload.get("official_result_provenance") or "")
+    repository_provenance = "repository_generated_from_third_party_official_code"
     enriched = {
         **payload,
+        **{
+            key: value
+            for key, value in protocol_fields.items()
+            if payload.get(key) is None or payload.get(key) == ""
+        },
         "official_baseline_id": payload.get("official_baseline_id") or baseline_id,
-        "official_result_provenance": payload.get("official_result_provenance")
-        or "repository_generated_from_third_party_official_code",
+        "official_result_provenance": repository_provenance
+        if existing_provenance in {"", "third_party_official_code"}
+        else existing_provenance,
         "official_execution_manifest_path": payload.get("official_execution_manifest_path") or str(manifest_path),
     }
     _write_json(path, enriched)
@@ -324,6 +395,7 @@ def _run_generic_repository_official_adapter(
     official_source_dir: Path,
     repo_root: Path,
     max_records: int | None,
+    allow_existing_official_bundle_as_reference_input: bool,
 ) -> dict[str, Any]:
     """对非 VideoSeal baseline 逐条调用 repository official adapter。
 
@@ -344,6 +416,8 @@ def _run_generic_repository_official_adapter(
         "PYTHONPATH": str(repo_root) + os.pathsep + os.environ.get("PYTHONPATH", ""),
         "SSTW_EXTERNAL_BASELINE_OFFICIAL_RESULT_BUNDLE_ROOT": str(bundle_root),
     }
+    if not allow_existing_official_bundle_as_reference_input:
+        env["SSTW_DISABLE_OFFICIAL_RESULT_BUNDLE_READ"] = "true"
 
     for index, record in enumerate(records, start=1):
         output_json_path = build_official_bundle_record_path(bundle_root, baseline_id, record)
@@ -372,7 +446,7 @@ def _run_generic_repository_official_adapter(
             "command_return_code": completed.returncode,
         }
         if completed.returncode == 0 and output_json_path.exists():
-            payload = _enrich_official_bundle_payload(output_json_path, manifest_path, baseline_id)
+            payload = _enrich_official_bundle_payload(output_json_path, manifest_path, baseline_id, record)
             successes.append({
                 **row,
                 "official_adapter_status": payload.get("official_adapter_status"),
@@ -390,6 +464,7 @@ def _run_generic_repository_official_adapter(
         "run_root": str(run_root),
         "bundle_root": str(bundle_root),
         "official_source_dir": str(official_source_dir),
+        "allow_existing_official_bundle_as_reference_input": bool(allow_existing_official_bundle_as_reference_input),
         "input_runtime_detection_record_count": len(records),
         "generated_bundle_record_count": len(successes),
         "failed_bundle_record_count": len(failures),
@@ -402,7 +477,17 @@ def _run_generic_repository_official_adapter(
     for success in successes:
         path = Path(success["official_output_json_path"])
         if path.exists():
-            _enrich_official_bundle_payload(path, manifest_path, baseline_id)
+            matching_record = next(
+                (
+                    record
+                    for record in records
+                    if str(record.get("prompt_id") or "") == str(success.get("prompt_id") or "")
+                    and str(record.get("seed_id") or "") == str(success.get("seed_id") or "")
+                    and str(record.get("attack_name") or "") == str(success.get("attack_name") or "")
+                ),
+                None,
+            )
+            _enrich_official_bundle_payload(path, manifest_path, baseline_id, matching_record)
     return manifest
 
 
@@ -442,11 +527,97 @@ def _run_videoseal_reference(
     for record in comparable_detection_records(run_root)[: max_records or None]:
         output_json_path = build_official_bundle_record_path(bundle_root, "videoseal", record)
         if output_json_path.exists():
-            _enrich_official_bundle_payload(output_json_path, manifest_path, "videoseal")
+            _enrich_official_bundle_payload(output_json_path, manifest_path, "videoseal", record)
     return {
         **manifest,
         "manifest_kind": "modern_external_baseline_formal_reference_execution_manifest",
         "official_source_dir": str(official_source_dir),
+    }
+
+
+def _build_unified_formal_scoring_environment(
+    layout: Mapping[str, str],
+    config: ModernExternalBaselineFormalReferenceConfig,
+) -> dict[str, str]:
+    """构造统一 measured_formal 转写阶段需要的环境变量。
+
+    各 baseline Notebook 只生成自己的 official bundle。统一转写仍复用
+    `external_baseline_runner` 和现代 command adapter, 因此这里必须为 6 个现代
+    baseline 同时注入外层 bridge command 和内层 repository official adapter command。
+    已由用户显式设置的环境变量保持最高优先级。
+    """
+
+    bridge_templates = probe_workflow.build_modern_baseline_official_bridge_command_templates(config.workflow_profile)
+    repository_official_templates = probe_workflow.build_repository_official_baseline_eval_command_templates(
+        config.workflow_profile,
+    )
+    command_template_source: dict[str, str] = {}
+    command_template_source.update(bridge_templates)
+    command_template_source.update(repository_official_templates)
+    command_template_source.update({key: value for key, value in os.environ.items() if value})
+    outer_command_env = probe_workflow.build_modern_baseline_command_env(
+        config.workflow_profile,
+        command_template_source,
+    )
+    env: dict[str, str] = {
+        "PYTHONPATH": str(config.repo_root) + os.pathsep + os.environ.get("PYTHONPATH", ""),
+        "SSTW_EXTERNAL_BASELINE_OFFICIAL_RESULT_BUNDLE_ROOT": layout["external_baseline_official_result_bundle_root"],
+        "SSTW_EXTERNAL_BASELINE_EVIDENCE_PATHS": os.pathsep.join([
+            layout["external_baseline_official_result_bundle_root"],
+            *[
+                item
+                for item in os.environ.get("SSTW_EXTERNAL_BASELINE_EVIDENCE_PATHS", "").split(os.pathsep)
+                if item
+            ],
+        ]),
+    }
+    env.update(repository_official_templates)
+    env.update(outer_command_env)
+    for key, value in os.environ.items():
+        if key.startswith("SSTW_") and value:
+            env[key] = value
+    return env
+
+
+def _write_unified_formal_scoring_preflight_artifacts(
+    layout: Mapping[str, str],
+    config: ModernExternalBaselineFormalReferenceConfig,
+    scoring_env: Mapping[str, str],
+) -> dict[str, Any]:
+    """为单 baseline Notebook 写出统一转写前的 command preflight artifacts。"""
+
+    summary = probe_workflow.write_modern_baseline_colab_command_config_summary(
+        layout,
+        profile=config.workflow_profile,
+    )
+    bridge_decision = probe_workflow.write_modern_baseline_official_bridge_preflight_decision(
+        layout,
+        profile=config.workflow_profile,
+        command_env=scoring_env,
+        use_bridge_commands=True,
+        require_bridge_official_commands=True,
+    )
+    command_env = {
+        key: value
+        for key, value in scoring_env.items()
+        if key.startswith("SSTW_") and key.endswith("_EVAL_COMMAND") and "_OFFICIAL_" not in key
+    }
+    baseline_preflight = probe_workflow.write_external_baseline_colab_preflight_decision(
+        layout,
+        profile=config.workflow_profile,
+        command_env=command_env,
+        require_modern_baseline_commands_for_paper_gate=True,
+        run_external_baseline_source_clone=config.execute_source_clone,
+        evidence_paths=[layout["external_baseline_official_result_bundle_root"]],
+    )
+    return {
+        "stage_id": "external_baseline_unified_formal_scoring_preflight",
+        "command_template_summary_path": str(Path(layout["drive_run_root"]) / "artifacts" / "external_baseline_command_template_summary.json"),
+        "bridge_preflight_decision": bridge_decision.get("external_baseline_official_bridge_preflight_decision"),
+        "external_baseline_colab_preflight_decision": baseline_preflight.get("external_baseline_colab_preflight_decision"),
+        "required_modern_external_baseline_adapter_names": summary.get("required_modern_external_baseline_adapter_names", []),
+        "configured_command_env_var_count": baseline_preflight.get("external_baseline_colab_preflight_configured_env_var_count"),
+        "claim_support_status": "formal_scoring_preflight_only_not_claim_evidence",
     }
 
 
@@ -464,7 +635,7 @@ def _run_optional_followup_commands(
         ))
     if config.run_external_baseline_comparison_after_reference:
         commands.append((
-            "external_baseline_comparison",
+            "external_baseline_unified_measured_formal_scoring",
             probe_workflow.build_external_baseline_comparison_command(dict(layout)),
         ))
     if config.run_self_containment_after_reference:
@@ -474,10 +645,8 @@ def _run_optional_followup_commands(
         ))
 
     rows: list[dict[str, Any]] = []
-    env = {
-        "SSTW_EXTERNAL_BASELINE_OFFICIAL_RESULT_BUNDLE_ROOT": layout["external_baseline_official_result_bundle_root"],
-        "PYTHONPATH": str(config.repo_root) + os.pathsep + os.environ.get("PYTHONPATH", ""),
-    }
+    env = _build_unified_formal_scoring_environment(layout, config)
+    rows.append(_write_unified_formal_scoring_preflight_artifacts(layout, config, env))
     for stage_id, command in commands:
         completed = _run_command(command, cwd=config.repo_root, env=env)
         rows.append({
@@ -496,8 +665,10 @@ def run_modern_external_baseline_formal_reference_plan(
 ) -> dict[str, Any]:
     """执行单个 modern external baseline 的官方参考 bundle 生成计划。
 
-    该函数只生成官方结果缓存和执行 manifest。若需要正式 `measured_formal` records,
-    后续必须运行 `external_baseline_runner`, 由统一 command adapter 读取这些 bundle。
+    该函数按同一 prompt / seed / attack comparison unit 生成官方结果缓存和执行
+    manifest。默认会继续调用 `external_baseline_runner`, 由统一 command adapter
+    读取这些 bundle 并转写为 `measured_formal` records。若其它 baseline 的 bundle
+    尚未完成, 统一转写会为它们保留 governed unsupported rows。
     """
 
     repo_root = Path(config.repo_root).resolve()
@@ -515,6 +686,11 @@ def run_modern_external_baseline_formal_reference_plan(
         _run_source_intake(layout, config)
         if config.run_source_intake
         else {"stage_id": "external_baseline_source_intake", "stage_status": "SKIPPED"}
+    )
+    resource_bootstrap_result = (
+        _run_official_resource_bootstrap(layout, config)
+        if config.run_official_resource_bootstrap
+        else {"stage_id": "external_baseline_official_resource_bootstrap", "stage_status": "SKIPPED"}
     )
     official_source_dir = official_source_dir_for_baseline(config.baseline_id, repo_root=repo_root)
     records = comparable_detection_records(run_root)
@@ -539,6 +715,7 @@ def run_modern_external_baseline_formal_reference_plan(
             official_source_dir=official_source_dir,
             repo_root=repo_root,
             max_records=config.max_records,
+            allow_existing_official_bundle_as_reference_input=config.allow_existing_official_bundle_as_reference_input,
         )
 
     followup_results = _run_optional_followup_commands(layout, config)
@@ -570,6 +747,7 @@ def run_modern_external_baseline_formal_reference_plan(
         "formal_reference_decision": reference_decision,
         "formal_reference_status": reference_status,
         "source_intake_result": source_intake_result,
+        "resource_bootstrap_result": resource_bootstrap_result,
         "reference_manifest": reference_manifest,
         "followup_results": followup_results,
         "created_at_utc": _utc_now(),
@@ -591,4 +769,3 @@ def run_default_modern_external_baseline_formal_reference_plan(
     return run_modern_external_baseline_formal_reference_plan(
         build_default_config_from_env(baseline_id, repo_root=repo_root)
     )
-

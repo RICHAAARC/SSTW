@@ -1,9 +1,10 @@
-"""现代外部 baseline 官方结果包完整性检查。
+"""现代外部 baseline 项目内 official bundle cache 完整性检查。
 
 该模块属于 external_baseline 工程边界。它不生成第三方分数, 只检查
-Google Drive 或本地目录中是否已经存在由第三方官方代码生成的结果 JSON。
-这样可以把“缺权重 / 缺 checkpoint / 缺官方结果文件”的阻断提前暴露,
-避免 validation-scale 正式门禁在长时间 GPU 运行结束后才失败。
+Google Drive 或本地目录中是否已经存在由本项目 workflow 调用第三方官方代码、
+官方 API 或官方原生命令生成的结果 JSON。这样可以把“缺权重 / 缺 checkpoint /
+缺项目内 official bundle cache”的阻断提前暴露, 避免 validation-scale 正式门禁
+在长时间 GPU 运行结束后才失败。
 """
 
 from __future__ import annotations
@@ -19,6 +20,7 @@ from external_baseline.official_eval_adapters.common import (
     official_bundle_candidate_paths,
     official_result_bundle_roots,
     read_json,
+    validate_repository_generated_bundle,
     validate_score_payload,
 )
 from external_baseline.runtime_trace_io import comparable_detection_records
@@ -74,17 +76,26 @@ def _as_args(record: dict[str, Any]) -> SimpleNamespace:
     )
 
 
-def _find_valid_bundle_path(baseline_id: str, record: dict[str, Any]) -> Path | None:
-    """查找并校验单条 comparison unit 的官方结果 JSON。"""
+def _find_valid_bundle_path(baseline_id: str, record: dict[str, Any]) -> tuple[Path | None, str | None]:
+    """查找并校验单条 comparison unit 的项目内 official bundle JSON。
+
+    找到旧格式或外部补交 bundle 时不直接中断整个 preflight, 而是把该条视为无效
+    bundle 并返回原因。这样 Colab 仍能写出 fail-closed artifact, 便于用户修复。
+    """
+
+    last_invalid_reason: str | None = None
     for candidate in official_bundle_candidate_paths(baseline_id=baseline_id, args=_as_args(record)):
         if not candidate.exists():
             continue
-        payload = read_json(candidate)
-        validate_score_payload(payload)
-        if payload.get("official_result_provenance") == "sstw_proxy":
-            raise RuntimeError(f"official_result_bundle_proxy_forbidden:{candidate}")
-        return candidate
-    return None
+        try:
+            payload = read_json(candidate)
+            validate_score_payload(payload)
+            validate_repository_generated_bundle(payload, candidate)
+        except Exception as exc:
+            last_invalid_reason = f"{candidate}:{exc}"
+            continue
+        return candidate, None
+    return None, last_invalid_reason
 
 
 def build_official_result_bundle_preflight(
@@ -110,7 +121,7 @@ def build_official_result_bundle_preflight(
         baseline_expected = len(detection_records)
         for record in detection_records:
             expected_count += 1
-            bundle_path = _find_valid_bundle_path(baseline_id, record)
+            bundle_path, invalid_reason = _find_valid_bundle_path(baseline_id, record)
             if bundle_path is not None:
                 present_count += 1
                 baseline_present += 1
@@ -128,6 +139,7 @@ def build_official_result_bundle_preflight(
                             args=_as_args(record),
                         )
                     ],
+                    "invalid_bundle_reason": invalid_reason,
                 })
         rows.append({
             "baseline_id": baseline_id,

@@ -210,7 +210,7 @@ def generate_videoseal_official_bundle(
                 "bit_accuracy": round(float(bit_acc), 6) if bit_acc is not None else None,
                 "detected": confidence >= float(os.environ.get("SSTW_VIDEOSEAL_DETECTION_THRESHOLD", "0.5")),
                 "threshold": float(os.environ.get("SSTW_VIDEOSEAL_DETECTION_THRESHOLD", "0.5")),
-                "official_result_provenance": "third_party_official_code",
+                "official_result_provenance": "repository_generated_from_third_party_official_code",
                 "official_baseline_id": "videoseal",
                 "external_baseline_generation_model_id": "videoseal_official_api",
                 "external_baseline_source_video_path": str(baseline_source_video),

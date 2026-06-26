@@ -368,6 +368,7 @@ Notebook 只能通过 `paper_workflow/notebook_utils/generative_video_model_prob
 ```text
 motion_threshold_calibration_colab.ipynb
 -> generative_video_runtime_colab.ipynb
+-> 6 个 modern external baseline formal reference Notebook
 -> external_baseline_formal_scoring_colab.ipynb
 -> paper_gate_and_package_colab.ipynb
 ```
@@ -382,9 +383,9 @@ motion_threshold_calibration_colab.ipynb
 1. `motion_threshold_calibration_colab.ipynb` 只负责独立 calibration split 和阈值冻结。
 2. `generative_video_runtime_colab.ipynb` 负责 Wan2.1 生成、formal metrics、阈值复用、
    runtime attack 和 detection, 并在真实 GPU 生成前执行现代 baseline command 预检。
-3. `external_baseline_formal_scoring_colab.ipynb` 只负责外部 baseline source intake、
-   repository-generated result cache preflight、command adapter 运行和 comparison records, 不重新生成视频, 也不接收外部补交结果包。
-4. `paper_gate_and_package_colab.ipynb` 负责内部消融、adaptive attack proxy、replay/sketch
+3. 6 个 modern external baseline formal reference Notebook 分别负责对应 baseline 的 source intake、clone / build / run / adapt、official bundle 生成, 并默认调用统一 runner 将已完成 bundle 转写为 `measured_formal` records。
+4. `external_baseline_formal_scoring_colab.ipynb` 负责全量统一转写、repository-generated result cache preflight、self-containment 判定和打包, 不重新生成视频, 也不接收外部补交结果包。
+5. `paper_gate_and_package_colab.ipynb` 负责内部消融、adaptive attack proxy、replay/sketch
    或 Claim-3 downgrade、CI、fixed-FPR gate、artifact rebuild 和 Drive package。
 
 旧综合 Notebook 已移除。正式推进只使用拆分 Notebook, 因为拆分后可以在同一 `workflow_profile` 下分阶段复跑、检查和打包,
@@ -2248,7 +2249,7 @@ artifacts/external_baseline_official_result_bundle_preflight_decision.json
 configs/external_baselines/modern_baseline_colab_commands.json
 ```
 
-该配置记录联网核验后的现代 baseline 官方仓库 URL、branch HEAD commit、Colab clone 目录、官方入口候选脚本、SSTW bridge command 模板和 repository official adapter command 模板。它属于配置辅助层, 不属于正式 baseline 结果层。Notebook 可以用 repository official adapter 自动补齐 `SSTW_<BASELINE>_OFFICIAL_EVAL_COMMAND`, 但这只表示“命令入口已配置”, 不表示“官方 baseline 已测量”。只有该命令真实调用官方源码/API或读取官方结果产物并写出 score JSON 后, 才能生成 `measured_formal` records。
+该配置记录联网核验后的现代 baseline 官方仓库 URL、branch HEAD commit、Colab clone 目录、官方入口候选脚本、SSTW bridge command 模板和 repository official adapter command 模板。它属于配置辅助层, 不属于正式 baseline 结果层。Notebook 可以用 repository official adapter 自动补齐 `SSTW_<BASELINE>_OFFICIAL_EVAL_COMMAND`, 但这只表示“命令入口已配置”, 不表示“官方 baseline 已测量”。只有该命令真实调用官方源码/API, 或读取由本项目 workflow 生成且带 `official_execution_manifest_path` 的 official bundle cache, 并写出 score JSON 后, 才能生成 `measured_formal` records。
 
 现代 baseline 从“源码已核验”进入“正式 measured_formal 对比”至少需要满足:
 
@@ -2310,7 +2311,7 @@ external_baseline/official_eval_adapters/vidsig.py
 external_baseline/official_eval_adapters/videoseal.py
 ```
 
-这些 adapter 的职责是把官方仓库源码、官方 API、官方 checkpoint 或官方结果产物转换为 SSTW 统一 JSON。它们不是替代 baseline。缺少官方源码、权重、key、message、maintained info 或官方结果文件时必须 fail closed, 不能产生 proxy 分数。若官方仓库提供更合适的原生命令, 用户可以通过 `SSTW_<BASELINE>_NATIVE_EVAL_COMMAND` 覆盖单个 adapter 的内部执行逻辑。
+这些 adapter 的职责是把官方仓库源码、官方 API、官方 checkpoint 或项目内 official bundle cache 转换为 SSTW 统一 JSON。它们不是替代 baseline。缺少官方源码、权重、key、message、maintained info 或项目内 official bundle cache 时必须 fail closed, 不能产生 proxy 分数。若官方仓库提供更合适的原生命令, 用户可以通过 `SSTW_<BASELINE>_NATIVE_EVAL_COMMAND` 覆盖单个 adapter 的内部执行逻辑。
 
 bridge 再把该输出归一化写入:
 

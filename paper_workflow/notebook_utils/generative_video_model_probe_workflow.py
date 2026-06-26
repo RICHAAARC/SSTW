@@ -426,7 +426,7 @@ def build_modern_baseline_colab_command_config_summary(
         "required_command_format_tokens": config.get("required_command_format_tokens", []),
         "optional_command_format_tokens": config.get("optional_command_format_tokens", []),
         "colab_user_action_required": (
-            "安装或克隆官方 baseline 源码, 提供官方权重、key/message/maintained info 或官方结果产物。"
+            "安装或克隆官方 baseline 源码, 提供官方权重、key/message/maintained info, 或运行项目内 official bundle cache 生成流程。"
             "默认 repository official adapter 会 fail closed; 若需要覆盖, 可配置 SSTW_<BASELINE>_NATIVE_EVAL_COMMAND "
             "或直接配置 SSTW_<BASELINE>_EVAL_COMMAND。"
         ),
@@ -486,7 +486,7 @@ def build_repository_official_baseline_eval_command_templates(
 
     返回值的 key 是 `SSTW_<BASELINE>_OFFICIAL_EVAL_COMMAND`。这些命令是 bridge
     内部命令, 会调用 `external_baseline/official_eval_adapters/` 下的 fail-closed
-    wrapper。项目特定约束是: wrapper 只允许调用第三方官方源码/API或读取官方结果产物,
+    wrapper。项目特定约束是: wrapper 只允许调用第三方官方源码/API或读取项目内 official bundle cache,
     缺少官方依赖时必须失败。
     """
     rows = _modern_baseline_command_config_rows(command_config_path)

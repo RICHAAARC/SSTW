@@ -74,8 +74,9 @@ external_baseline/official_eval_adapters/vidsig.py
 external_baseline/official_eval_adapters/videoseal.py
 ```
 
-这些 wrapper 是 fail-closed 入口。它们只允许调用官方源码/API或读取官方产物。若缺少第三方
-checkpoint、extractor、message、maintained info 或结果文件, wrapper 会失败, 不会输出
+这些 wrapper 是 fail-closed 入口。它们只允许调用官方源码/API或读取由本项目 workflow
+生成的 official bundle cache。若缺少第三方 checkpoint、extractor、message、
+maintained info 或项目内 official bundle cache, wrapper 会失败, 不会输出
 视频相似度、SSTW 分数或其他 proxy 分数。用户也可以通过
 `SSTW_<BASELINE>_NATIVE_EVAL_COMMAND` 覆盖单个 baseline 的官方原生命令。
 
@@ -90,7 +91,8 @@ SSTW_EXTERNAL_BASELINE_OFFICIAL_RESULT_BUNDLE_ROOT
 SSTW_EXTERNAL_BASELINE_OFFICIAL_RESULT_BUNDLE_ROOTS
 ```
 
-单条结果可放在以下任一位置:
+单条结果只能由 formal reference Notebook、repository official adapter 或 official
+bundle generator 写入, 命名位置可采用以下任一形式:
 
 ```text
 <bundle_root>/<baseline_id>/records/<prompt_id>__<seed_id>__<attack_name>.json
@@ -100,8 +102,11 @@ SSTW_EXTERNAL_BASELINE_OFFICIAL_RESULT_BUNDLE_ROOTS
 ```
 
 每个 JSON 必须包含可审计 score 字段, 例如 `external_baseline_score`、`score`、
-`bit_accuracy`、`confidence` 或 `detected`。若 `official_result_provenance` 被标记为
-`sstw_proxy`, adapter 会直接失败。建议同时记录:
+`bit_accuracy`、`confidence` 或 `detected`。同时, `official_result_provenance`
+必须为 `repository_generated_from_third_party_official_code`, 且
+`official_execution_manifest_path` 必须指向已落盘 manifest。旧的
+`third_party_official_code`、手写 JSON、NPZ 分数文件或 SSTW proxy 分数都会被视为
+不满足正式 `measured_formal` 输入要求。
 
 ```text
 official_result_provenance = "repository_generated_from_third_party_official_code"
@@ -130,7 +135,7 @@ python -m external_baseline.official_result_bundle \
 上述顺序体现严格门禁的修复策略: 不是只检查失败, 而是先自动准备可公开资源、再自动生成
 可由官方 API 支持的 repository-owned official bundle cache、最后执行 fail-closed preflight。若某个 baseline
 的官方仓库未公开训练权重、需要大显存生成模型、需要 PRC key / maintained info 或需要
-离线官方中间产物, bootstrap 与 bundle generator 会写出明确阻断原因, 不会用 SSTW
+项目内官方中间产物, bootstrap 与 bundle generator 会写出明确阻断原因, 不会用 SSTW
 检测分数或视频相似度伪造结果, 也不会要求用户外部补交分数文件。
 
 ## Source intake 命令
@@ -174,7 +179,7 @@ Colab 中必须显式配置以下三类内容:
 
    该开关只会对可 git clone 的 source URL 生效。不能 git clone 的论文页面、PDF 或 HTML source 仍需要用户在 Colab 中提供官方命令或手工放置 source snapshot。
 
-3. 额外外部运行证据路径:
+3. 额外项目内运行证据路径:
 
    ```text
    EXTERNAL_BASELINE_EVIDENCE_PATHS = [
@@ -182,7 +187,10 @@ Colab 中必须显式配置以下三类内容:
    ]
    ```
 
-这些 evidence path 应指向官方 baseline 运行日志、配置、输出 JSON、依赖快照或校验文件。adapter 会把路径写入 `artifacts/external_baseline_execution_manifest.json`。
+这些 evidence path 只能指向本项目 workflow 产生或收集的官方 baseline 运行日志、配置、
+输出 JSON、依赖快照或校验文件。adapter 会把路径写入
+`artifacts/external_baseline_execution_manifest.json`, 但这些路径不能替代
+`metric_status: measured_formal` records。
 
 同时, 现代 baseline command adapter 会自动把每条官方命令的输出持久化到:
 
@@ -219,18 +227,37 @@ artifacts/external_baseline_colab_preflight_decision.json
 
 ## 独立 baseline Notebook
 
-现代 baseline 正式运行应优先使用:
+现代 baseline 正式运行应先逐个运行 6 个 formal reference Notebook:
+
+```text
+paper_workflow/colab_notebooks/videoseal_formal_reference_colab.ipynb
+paper_workflow/colab_notebooks/vidsig_formal_reference_colab.ipynb
+paper_workflow/colab_notebooks/videomark_formal_reference_colab.ipynb
+paper_workflow/colab_notebooks/videoshield_formal_reference_colab.ipynb
+paper_workflow/colab_notebooks/spdmark_formal_reference_colab.ipynb
+paper_workflow/colab_notebooks/sigmark_formal_reference_colab.ipynb
+```
+
+每个 Notebook 都读取同一 `workflow_profile` 的 `drive_run_root`, 以同一
+`prompt_id / seed_id / attack_name / trajectory_trace_id` runtime comparison unit
+为锚点, 在自己的 baseline 内完成 source intake、project clone / build / run /
+adapt、official bundle 生成, 然后默认调用统一 external baseline runner 将当前可用
+bundle 转写为 `metric_status: measured_formal` records。若其它 baseline bundle 尚未
+完成, 统一 runner 会写出 governed unsupported rows; 这些 rows 只能作为阻断记录,
+不能替代正式 baseline 结果。
+
+6 个 official bundle 全部完成后, 再运行:
 
 ```text
 paper_workflow/colab_notebooks/external_baseline_formal_scoring_colab.ipynb
 ```
 
-该 Notebook 的职责是读取同一 `workflow_profile` 的 `drive_run_root`, 执行 source intake、
-project clone / build / run / adapt / record、command adapter 和 comparison records 生成。它不重新生成 Wan2.1 视频, 也不执行最终
-paper gate。这样可以把三类失败原因分离:
+该 Notebook 的职责是全量统一转写、self-containment 判定和打包。它不重新生成
+baseline 官方视频或官方中间产物, 不重新生成 Wan2.1 视频, 也不执行最终 paper gate。
+这样可以把三类失败原因分离:
 
 1. `generative_video_runtime_colab.ipynb`: 主方法生成、attack 和 detection 是否成功。
-2. `external_baseline_formal_scoring_colab.ipynb`: 现代视频水印 baseline 官方命令和 evidence 是否成功。
+2. 6 个 `*_formal_reference_colab.ipynb` 与 `external_baseline_formal_scoring_colab.ipynb`: 现代视频水印 baseline official bundle、统一转写和 self-containment 是否成功。
 3. `paper_gate_and_package_colab.ipynb`: validation-scale、pilot-paper 或 full-paper gate 是否满足论文协议。
 
 Notebook 的 profile、Drive 目录和 stage plan 均由以下配置控制:

@@ -193,11 +193,12 @@ paper_workflow/colab_notebooks/sigmark_formal_reference_colab.ipynb
 这些 Notebook 的职责是:
 
 ```text
-clone / build / run / adapt / bundle
+clone / build / run / adapt / bundle / unified_formal_record_conversion
 ```
 
 也就是在项目内克隆官方源码、运行 source intake、调用仓库 official adapter 或官方 API,
-并把每个 runtime comparison unit 的官方结果写入:
+并以同一 `prompt_id / seed_id / attack_name / trajectory_trace_id` runtime comparison unit
+为锚点, 把每个 baseline 的官方结果写入:
 
 ```text
 /content/drive/MyDrive/SSTW/external_baseline_official_result_bundles/validation_scale
@@ -205,16 +206,25 @@ clone / build / run / adapt / bundle
 
 其产物性质必须明确区分:
 
-- `*_formal_reference_decision.json` 只说明该 baseline 的 official bundle 是否生成完整。
-- `official_reference_execution_manifest.json` 只记录 clone / build / run / adapt 过程证据。
-- 这些 Notebook 不直接生成 `metric_status: measured_formal` records。
-- `measured_formal` 只能由 `external_baseline_formal_scoring_colab.ipynb` 中的统一 external baseline runner 生成。
+- `*_formal_reference_decision.json` 说明该 baseline 的 official bundle 是否生成完整。
+- `official_reference_execution_manifest.json` 记录 clone / build / run / adapt 过程证据。
+- Notebook cell 不直接手写 `metric_status: measured_formal` records。
+- 每个 baseline Notebook 默认会继续调用统一 external baseline runner, 将当前已完成的 official bundle
+  转写为 `metric_status: measured_formal` records。
+- 若其它 baseline 的 official bundle 尚未完成, 统一转写会为它们保留 governed unsupported rows;
+  这些 rows 只是阻断记录, 不能替代正式 baseline 结果。
 
-因此, 6 个独立 Notebook 通过后, 还必须继续运行:
+因此, 每个独立 Notebook 的执行闭环是:
 
 ```text
-paper_workflow/colab_notebooks/external_baseline_formal_scoring_colab.ipynb
+official_reference_notebook
+-> official bundle
+-> external_baseline_runner unified measured_formal conversion
 ```
+
+`external_baseline_formal_scoring_colab.ipynb` 仍然保留, 作用是当 6 个 baseline 的 official bundle
+已经全部存在时, 重新执行一次全量统一转写、self-containment 判定和打包; 它不重新生成
+baseline 官方视频或官方中间产物。
 
 最终必须检查:
 
@@ -246,8 +256,8 @@ SSTW_VIDSIG_OFFICIAL_EVAL_COMMAND
 SSTW_VIDEOSEAL_OFFICIAL_EVAL_COMMAND
 ```
 
-当前仓库已经提供 6 个 fail-closed 的 repository official adapter。validation-scale 单
-Notebook 默认设置:
+当前仓库已经提供 6 个 fail-closed 的 repository official adapter。external baseline scoring Notebook
+和 6 个独立 formal reference Notebook 默认设置:
 
 ```python
 os.environ["SSTW_USE_REPOSITORY_OFFICIAL_BASELINE_ADAPTERS"] = "true"
@@ -265,7 +275,7 @@ external_baseline/official_eval_adapters/videoseal.py
 ```
 
 这些 adapter 不是替代 baseline, 只负责把官方仓库源码、官方 API、官方 checkpoint
-或官方结果产物转换成 SSTW 统一 JSON。若缺少第三方官方权重、key、message、
+或项目内 official bundle cache 转换成 SSTW 统一 JSON。若缺少第三方官方权重、key、message、
 maintained info 或官方输出文件, adapter 会直接失败, 不会输出 proxy 分数。
 
 内部官方命令必须把官方 detector / extractor 的输出写入:
@@ -328,7 +338,7 @@ SSTW_VIDSIG_MSG_DECODER_PATH
 部分现代 baseline 不是“任意输入视频 -> detector score”的后处理水印, 而是绑定
 特定生成模型、训练出的 extractor、maintained key / message 或 latent inversion
 流程。对于这类方法, 在同一个 Wan2.1 Colab 会话中强行即时复跑并不一定可行。
-正式 workflow 支持读取由第三方官方代码预先生成的结果包:
+正式 workflow 支持读取由本项目 workflow 调用官方代码生成的 official bundle cache:
 
 ```python
 import os
@@ -337,7 +347,8 @@ os.environ["SSTW_EXTERNAL_BASELINE_OFFICIAL_RESULT_BUNDLE_ROOT"] = (
 )
 ```
 
-每个 baseline 的结果 JSON 可放在以下任一命名位置:
+每个 baseline 的结果 JSON 只能由 formal reference Notebook、repository official adapter
+或 official bundle generator 写入, 命名位置可采用以下任一形式:
 
 ```text
 <bundle_root>/<baseline_id>/records/<prompt_id>__<seed_id>__<attack_name>.json
@@ -346,7 +357,7 @@ os.environ["SSTW_EXTERNAL_BASELINE_OFFICIAL_RESULT_BUNDLE_ROOT"] = (
 <bundle_root>/<baseline_id>/<trajectory_trace_id>/<attack_name>.json
 ```
 
-每个 JSON 至少需要包含以下任一 score 字段:
+每个 JSON 必须由项目内 official bundle cache 生成流程写出, 且至少包含以下任一 score 字段:
 
 ```text
 external_baseline_score
@@ -358,10 +369,10 @@ confidence
 detected
 ```
 
-并建议包含:
+同时必须包含:
 
 ```text
-official_result_provenance = "third_party_official_code"
+official_result_provenance = "repository_generated_from_third_party_official_code"
 external_baseline_source_video_path
 external_baseline_attacked_video_path
 external_baseline_generation_model_id
@@ -585,7 +596,7 @@ os.environ["SSTW_ENABLE_PIPELINE_PROGRESS_BAR"] = "1"
 ## 7. 常见失败原因
 
 1. 未先运行或未保留 `motion_calibration` artifact, 导致 motion threshold reuse 失败。
-2. 没有配置 6 个现代 baseline command, 或没有提供完整 official result bundle, 导致 external baseline preflight / bundle preflight / paper gate 阻断。
+2. 没有配置 6 个现代 baseline command, 或缺少完整的项目内 official bundle cache, 导致 external baseline preflight / bundle preflight / paper gate 阻断。
 3. Colab 冷启动后没有重新 clone 仓库或安装依赖, 导致模块导入失败。
 4. 直接运行 `paper_gate_and_package_colab.ipynb`, 但 runtime 与 baseline artifacts 不存在。
 5. Colab 断开前没有打包到 Google Drive, 导致本地临时结果丢失。

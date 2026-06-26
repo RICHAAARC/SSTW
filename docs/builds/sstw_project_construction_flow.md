@@ -308,7 +308,7 @@ submission_package_freeze
 
 `mechanism_validation` 聚合以下机制前置与实现 phase: `synthetic_state_inference_sanity`、`real_video_latent_transfer_check`、`state_space_inference_formalization`、`trajectory_observation_core_probe`、`flow_model_adapter_preflight`、`sampling_time_constraint_probe`、`motion_threshold_calibration`、历史 small-scale 机制 pilot 记录和真实生成式视频模型实现包。`small_scale_claim_pilot_gate` 不再作为主干门禁使用, 只能作为机制层的历史小样本检查记录; `generative_video_model_probe` 不再作为独立门禁使用, 只表示真实生成式视频模型实验的实现 package。
 
-其中 `validation_scale` 重新定义为“小样本全流程打通验证”, 是进入 paper 级运行前的全流程打通层。它不是效果充分性证明, 而是以 `FPR=0.10` 级别的低成本口径跑通与论文协议同构的全部产物链路。`replay_and_authenticated_sketch_gate`、`flow_specific_adaptive_attack_gate`、external baseline、internal ablation、CI reporter、artifact rebuild 和 claim audit 都必须在 `validation_scale` 中形成可落盘、可检查、可失败闭环, 不得推迟到 `pilot_paper` 或 `full_paper` 后再补。`validation_scale` 必须能在小样本规模上产出 paper 相关的全部 governed artifact 类型: generation / detection records、主方法结果、完整外部 baseline 对比、内部消融、adaptive attack、replay/sketch 或受治理 Claim-3 downgrade、fixed-FPR CI、tables、figures、reports、package manifest 和 claim audit。只有 `validation_scale` 通过并生成 `validation_scale_to_pilot_paper_transition_decision` 后, 才允许进入 `pilot_paper` 或继续准备 `full_paper` 后续结果生产流程; 但 `validation_scale` 只是必要条件, 不是 `full_paper` 的充分条件。`full_paper` 仍必须等待 `pilot_paper`、`pilot_paper_to_full_paper_transition_decision`、`full_paper_result_checker`、CI、claim audit、artifact rebuild 和 submission freeze 相关门禁通过。`pilot_paper` 的定位是在 `validation_scale` 通过后, 使用同构协议执行 FPR=1% 小规模 paper 级结果运行并报告 pilot 级 `TPR@FPR=0.01`; 它不应再承担补机制、补 baseline 或补消融的职责。
+其中 `validation_scale` 重新定义为“小样本全流程打通验证”, 是进入 paper 级运行前的全流程打通层。它不是效果充分性证明, 而是以 `FPR=0.10` 级别的低成本口径跑通与论文协议同构的全部产物链路。`replay_and_authenticated_sketch_gate`、`flow_specific_adaptive_attack_gate`、external baseline、internal ablation、CI reporter、artifact rebuild 和 claim audit 都必须在 `validation_scale` 中形成可落盘、可检查、可失败闭环, 不得推迟到 `pilot_paper` 或 `full_paper` 后再补。`validation_scale` 必须能在小样本规模上产出 paper 相关的全部 governed artifact 类型: generation / detection records、主方法结果、完整外部 baseline 对比、内部消融、adaptive attack、replay/sketch 或受治理 Claim-3 downgrade、fixed-FPR CI、tables、figures、reports、package manifest 和 claim audit。只有 `validation_scale` 通过并生成 `validation_scale_to_pilot_paper_transition_decision` 后, 才允许进入 `pilot_paper`; `validation_scale` 不能直接允许进入 `full_paper`。`full_paper` 仍必须等待 `pilot_paper`、`pilot_paper_to_full_paper_transition_decision`、`full_paper_result_checker`、CI、claim audit、artifact rebuild 和 submission freeze 相关门禁通过。`pilot_paper` 的定位是在 `validation_scale` 通过后, 使用同构协议执行 FPR=1% 小规模 paper 级结果运行并报告 pilot 级 `TPR@FPR=0.01`; 它不应再承担补机制、补 baseline 或补消融的职责。
 
 核心原则是:
 
@@ -903,7 +903,7 @@ explicit_synchronization_control: explicit_dtw_temporal_alignment, frame_matchin
 3. 在 `pilot_paper` 层, SSTW full method 可以报告 `TPR@FPR=0.01` 级别的 pilot 对比; `validation_scale` 只负责小样本全流程打通, 不支持效果主张。
 4. `validation_scale` gate 前必须已经生成同批小样本 test trace 的 external_baseline comparison records、内部消融 records、adaptive attack records、replay/sketch 或 Claim-3 downgrade records、CI report 和 artifact rebuild report。
 5. 质量、运动和语义指标不能显示不可接受退化。
-6. `validation_scale` 通过并生成 `validation_scale_to_pilot_paper_transition_decision` 后才能进入 `pilot_paper` 或继续准备 `full_paper`; 但 full_paper claim 仍需 `pilot_paper_gate`、`full_paper_result_checker` 和轻量判定通过。若完整现代 baseline、内部消融或 replay/sketch 机制仍缺失, 只能报告阻断原因, 不能进入 paper 级结果运行。
+6. `validation_scale` 通过并生成 `validation_scale_to_pilot_paper_transition_decision` 后只能进入 `pilot_paper`; 不得直接进入 `full_paper`。full_paper claim 仍需 `pilot_paper_gate`、`pilot_paper_to_full_paper_transition_decision`、`full_paper_result_checker` 和轻量判定通过。若完整现代 baseline、内部消融或 replay/sketch 机制仍缺失, 只能报告阻断原因, 不能进入 paper 级结果运行。
 
 ### 13.6 validation_scale 作为 paper 级前小样本全流程打通层
 
@@ -1577,7 +1577,7 @@ claim_not_supported
 |---|---|---|
 | `structure_checker` | 检查目录、配置、字段和入口是否存在 | 否 |
 | `mechanism_validation_checker` | 检查机制 records 与历史 small-scale pilot 记录是否足以进入 validation_scale | 否 |
-| `validation_checker` | 检查 validation_scale 小样本全流程、baseline、攻击、消融、CI、artifact rebuild 和 claim audit 是否闭合 | 否, 只允许在生成 validation_scale_to_pilot_paper_transition_decision 后进入 pilot_paper 或继续准备 full_paper |
+| `validation_checker` | 检查 validation_scale 小样本全流程、baseline、攻击、消融、CI、artifact rebuild 和 claim audit 是否闭合 | 否, 只允许在生成 validation_scale_to_pilot_paper_transition_decision 后进入 pilot_paper, 不能直接进入 full_paper |
 | `pilot_paper_gate` | 小规模跑完整 full_paper 协议, 检查 calibration、frozen threshold、held-out test、表格、图和 claim audit 是否闭合 | 是, 但评价等级仅为 pilot_paper |
 | `full_paper_result_checker` | 检查 full_paper records、阈值、表格、图、报告和 claim audit | 是 |
 
@@ -2090,21 +2090,21 @@ submission_freeze_allowed = false
 当前操作手册已经定义 validation_scale、pilot_paper 和 full_paper 的语义顺序, 但仍必须显式保留以下工程缺口, 防止把文档完整误判为执行闭环已经完成:
 
 ```text
-validation_scale_gate_figure_builder: not_implemented
-validation_scale_package_manifest_builder: not_implemented
-stage_transition_decision_common_checker: not_implemented
-validation_scale_to_pilot_paper_transition_decision: not_implemented
-pilot_paper_to_full_paper_transition_decision: not_implemented
-full_paper_to_submission_freeze_transition_decision: not_implemented
-external_baseline_self_containment_decision: not_implemented
-data_split_and_leakage_guard: not_implemented
+validation_scale_gate_figure_builder: implemented_in experiments/generative_video_model_probe/validation_scale_artifact_package.py
+validation_scale_package_manifest_builder: implemented_in experiments/generative_video_model_probe/validation_scale_artifact_package.py
+stage_transition_decision_common_checker: implemented_in scripts/check_results/stage_transition_decision.py
+validation_scale_to_pilot_paper_transition_decision: implemented_in scripts/check_results/stage_transition_decision.py
+pilot_paper_to_full_paper_transition_decision: implemented_in scripts/check_results/stage_transition_decision.py
+full_paper_to_submission_freeze_transition_decision: implemented_in scripts/check_results/stage_transition_decision.py
+external_baseline_self_containment_decision: implemented_in scripts/check_results/external_baseline_self_containment_decision.py
+data_split_and_leakage_guard: implemented_in scripts/check_results/data_split_and_leakage_guard.py
 full_paper_result_checker: not_implemented
 reviewer_evidence_index_builder: not_implemented
-external_baseline_project_clone_manifest: incomplete
-external_baseline_project_build_manifest: incomplete
-external_baseline_project_run_manifest: incomplete
-external_baseline_project_adapt_manifest: incomplete
-external_baseline_project_record_manifest: incomplete
+external_baseline_project_clone_manifest: checked_by external_baseline_self_containment_decision, real Colab evidence still pending until measured_formal run
+external_baseline_project_build_manifest: checked_by external_baseline_self_containment_decision, real Colab evidence still pending until measured_formal run
+external_baseline_project_run_manifest: checked_by external_baseline_self_containment_decision, real Colab evidence still pending until measured_formal run
+external_baseline_project_adapt_manifest: checked_by external_baseline_self_containment_decision, real Colab evidence still pending until measured_formal run
+external_baseline_project_record_manifest: checked_by external_baseline_self_containment_decision, real Colab evidence still pending until measured_formal run
 ```
 
 这些缺口的处理规则是: 可以继续完善 repository runner、checker、reporter 和 builder, 但不得用手工文件、外部补交结果或 Notebook 临时变量填补正式 evidence path。

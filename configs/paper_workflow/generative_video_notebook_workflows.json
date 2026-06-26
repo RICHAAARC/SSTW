@@ -26,6 +26,7 @@
         "external_baseline_official_bundle_generation",
         "external_baseline_official_result_bundle_preflight",
         "external_baseline_comparison",
+        "external_baseline_self_containment_decision",
         "quick_tests_and_harness",
         "drive_packaging"
       ]
@@ -80,9 +81,15 @@
         "replay_and_sketch_gate",
         "claim3_downgrade_gate",
         "statistical_confidence_interval",
+        "external_baseline_self_containment_decision",
+        "data_split_and_leakage_guard",
         "pilot_paper_gate",
+        "pilot_paper_to_full_paper_transition_decision",
         "validation_artifact_rebuild_dry_run",
         "validation_scale_gate",
+        "validation_scale_to_pilot_paper_transition_decision",
+        "validation_scale_gate_figure_builder",
+        "validation_scale_package_manifest_builder",
         "quick_tests_and_harness",
         "drive_packaging"
       ]
@@ -108,13 +115,18 @@
         "external_baseline_official_bundle_generation",
         "external_baseline_official_result_bundle_preflight",
         "external_baseline_comparison",
+        "external_baseline_self_containment_decision",
         "validation_internal_ablation",
         "adaptive_attack_proxy",
         "replay_and_sketch_gate",
         "claim3_downgrade_gate",
         "statistical_confidence_interval",
+        "data_split_and_leakage_guard",
         "validation_artifact_rebuild_dry_run",
         "validation_scale_gate",
+        "validation_scale_to_pilot_paper_transition_decision",
+        "validation_scale_gate_figure_builder",
+        "validation_scale_package_manifest_builder",
         "quick_tests_and_harness",
         "drive_packaging"
       ]
@@ -137,7 +149,7 @@
       "minimum_clean_negative_count": null,
       "motion_threshold_artifact_run_root_relative": "runs/generative_video_model_probe/motion_calibration",
       "paper_gate_profile": true,
-      "profile_status": "design_registered_requires_validation_scale_gate_and_full_paper_protocol",
+      "profile_status": "design_registered_not_ready",
       "profile_switching_note": "full_paper 只登记未来同构协议入口, 当前不得作为可运行 claim profile 使用。",
       "protocol_config_path": "configs/protocol/full_paper_generative_probe.json",
       "result_tier": "full_paper",
@@ -189,7 +201,10 @@
       "bootstrap_iteration_count": 1000,
       "disabled_stage_names": [
         "motion_threshold_calibration",
-        "validation_scale_gate"
+        "validation_scale_gate",
+        "validation_scale_gate_figure_builder",
+        "validation_scale_package_manifest_builder",
+        "validation_scale_to_pilot_paper_transition_decision"
       ],
       "drive_log_dir_relative": "logs/generative_video_model_probe/pilot_paper",
       "drive_package_dir_relative": "packages/generative_video_model_probe/pilot_paper",
@@ -215,7 +230,8 @@
       "claim_support_status": "validation_scale_rehearsal_only_not_effect_size_claim_evidence",
       "disabled_stage_names": [
         "motion_threshold_calibration",
-        "pilot_paper_gate"
+        "pilot_paper_gate",
+        "pilot_paper_to_full_paper_transition_decision"
       ],
       "drive_log_dir_relative": "logs/generative_video_model_probe/validation_scale",
       "drive_package_dir_relative": "packages/generative_video_model_probe/validation_scale",
@@ -227,10 +243,17 @@
       "method_sample_count": 24,
       "minimum_clean_negative_count": 0,
       "motion_threshold_artifact_run_root_relative": "runs/generative_video_model_probe/motion_calibration",
+      "next_allowed_result_profiles_after_pass": [
+        "pilot_paper"
+      ],
+      "next_forbidden_result_profiles_after_pass": [
+        "full_paper",
+        "submission_freeze"
+      ],
       "paper_gate_preflight_layer": true,
       "paper_gate_profile": true,
       "profile_status": "implemented_small_sample_full_pipeline_rehearsal_requires_self_contained_baselines",
-      "profile_switching_note": "validation_scale 是 paper 级前的小样本全流程打通层, 以 FPR=0.10 级别验证所有 records、tables、figures、reports、manifests、baseline、消融、attack、CI 和 artifact rebuild 能闭环; 它不支撑效果主张, 但通过后才允许进入 pilot_paper 或 full_paper。",
+      "profile_switching_note": "validation_scale 是 paper 级前的小样本全流程打通层, 以 FPR=0.10 级别验证所有 records、tables、figures、reports、manifests、baseline、消融、attack、CI 和 artifact rebuild 能闭环; 它不支撑效果主张, 通过后只能生成 validation_scale_to_pilot_paper_transition_decision 并进入 pilot_paper, 不能直接进入 full_paper。",
       "protocol_config_path": "configs/protocol/validation_scale_generative_probe.json",
       "result_tier": "validation_scale",
       "runtime_profile": "validation_scale",

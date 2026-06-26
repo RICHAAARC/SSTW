@@ -1766,13 +1766,17 @@ project_record
 
 不再接受外部补交 result bundle、手写 JSON、NPZ 分数文件、论文表格数字或 SSTW proxy 分数作为主表 baseline 证据。若某个现代 baseline 无法在项目流程内获得官方权重、checkpoint、maintained info 或运行环境, checker 必须写出 `non_runnable_with_governed_reason`, 并阻断 `validation_scale` PASS。
 
-当前操作手册执行闭环仍有以下缺口:
+当前操作手册执行闭环在本轮已补齐 validation_scale 相关 builder 与轻量判定实现, 仍有以下缺口:
 
 ```text
-validation_scale_gate 当前已写出 records / table / decision / report, 但 validation_scale_gate_figure.json 和 validation_scale_package_manifest.json 仍需工程化补齐
+validation_scale_gate_figure.json: implemented_in experiments/generative_video_model_probe/validation_scale_artifact_package.py
+validation_scale_package_manifest.json: implemented_in experiments/generative_video_model_probe/validation_scale_artifact_package.py
+stage_transition_decision: implemented_in scripts/check_results/stage_transition_decision.py
+external_baseline_self_containment_decision: implemented_in scripts/check_results/external_baseline_self_containment_decision.py
+data_split_and_leakage_guard: implemented_in scripts/check_results/data_split_and_leakage_guard.py
 full_paper_result_checker 仍未实现
 reviewer_evidence_index_builder 仍未实现
-external_baseline project_clone / project_build / project_run / project_adapt / project_record 的逐 baseline manifest 仍需进一步工程化
+external_baseline project_clone / project_build / project_run / project_adapt / project_record 已有轻量 checker, 但真实 Colab measured_formal 运行证据仍需在 validation_scale GPU run 中产出
 ```
 
 当前阶段结论:
@@ -1801,7 +1805,7 @@ generative_video_model_probe -> implementation package, 不作为独立门禁
 protocol_governance -> mechanism_validation -> validation_scale -> pilot_paper -> full_paper -> submission_freeze
 ```
 
-同时新增三个轻量判定, 它们不新增重型实验阶段, 只负责 fail-closed 阶段跳转和证据边界:
+同时新增并实现三个轻量判定, 它们不新增重型实验阶段, 只负责 fail-closed 阶段跳转和证据边界:
 
 ```text
 stage_transition_decision
@@ -1809,6 +1813,6 @@ external_baseline_self_containment_decision
 data_split_and_leakage_guard
 ```
 
-其中 `stage_transition_decision` 必须在实现时拆成阶段明确的跳转判定: `validation_scale_to_pilot_paper_transition_decision`、`pilot_paper_to_full_paper_transition_decision` 和 `full_paper_to_submission_freeze_transition_decision`。这些判定只能在 source gate 已 PASS 后生成, 并由 target gate 消费, 不得反向作为 source gate 自身 PASS 条件。
+其中 `stage_transition_decision` 已拆成阶段明确的跳转判定: `validation_scale_to_pilot_paper_transition_decision`、`pilot_paper_to_full_paper_transition_decision` 和 `full_paper_to_submission_freeze_transition_decision`。这些判定只能在 source gate 已 PASS 后生成, 并由 target gate 消费, 不得反向作为 source gate 自身 PASS 条件。
 
 external baseline 的正式主表证据统一要求 `metric_status == measured_formal`, 且必须由项目内 clone / build / run / adapt / record 产出。governed non-run record 只能作为阻断记录或 limitation 说明, 不能替代 measured_formal baseline。

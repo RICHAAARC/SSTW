@@ -128,6 +128,14 @@ def test_validation_scale_gate_passes_when_all_governed_inputs_exist(tmp_path: P
         "modern_external_baseline_formal_measured_adapter_names": sorted(MODERN_EXTERNAL_BASELINE_NAMES),
         "external_baseline_claim_support_status": "external_baseline_formal_and_proxy_records_written",
     })
+    write_json(run_root / "artifacts" / "external_baseline_self_containment_decision.json", {
+        "external_baseline_self_containment_decision": "PASS",
+        "claim_support_status": "external_baseline_self_contained_measured_formal_ready",
+    })
+    write_json(run_root / "artifacts" / "data_split_and_leakage_guard_decision.json", {
+        "data_split_and_leakage_guard_decision": "PASS",
+        "claim_support_status": "data_split_and_leakage_guard_passed",
+    })
     write_jsonl(run_root / "records" / "validation_internal_ablation_records.jsonl", [
         {"method_variant": "without_velocity_constraint", "ablation_status": "ready"},
     ])
@@ -183,6 +191,8 @@ def test_validation_scale_gate_passes_when_all_governed_inputs_exist(tmp_path: P
     assert audit["full_paper_next_gate"] == "pilot_paper_generative_probe_gate"
     assert audit["external_baseline_measured_adapter_count"] == 8
     assert audit["modern_external_baseline_formal_measured_adapter_count"] == 6
+    assert audit["external_baseline_self_containment_decision"] == "PASS"
+    assert audit["data_split_and_leakage_guard_decision"] == "PASS"
     assert audit["missing_modern_external_baseline_formal_adapter_names"] == []
     assert (run_root / "records" / "validation_scale_gate_records.jsonl").exists()
     assert (run_root / "tables" / "validation_scale_gate_table.csv").exists()

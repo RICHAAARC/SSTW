@@ -109,7 +109,7 @@ reports/validation_scale_gate_report.md
 manifests/validation_scale_package_manifest.json
 ```
 
-其中 `figures/validation_scale_gate_figure.json` 可以是最小诊断图 manifest, 但必须由 records 重建, 不能手工填写。若当前实现暂未生成该图, checker 必须把它列为操作手册执行闭环缺口。
+其中 `figures/validation_scale_gate_figure.json` 可以是最小诊断图 manifest, 但必须由 records 和 `validation_scale_gate_decision.json` 重建, 不能手工填写。当前实现路径为 `experiments/generative_video_model_probe/validation_scale_artifact_package.py`。
 
 ### 3.3 PASS 条件
 
@@ -689,7 +689,7 @@ unsupported_claim_blocks_reviewer_evidence_index
 15. submission_package_freeze
 ```
 
-原因是 `validation_scale` 是进入 paper 级运行前的小样本全流程打通层。所有 paper 相关机制必须先在 FPR=0.10 小样本口径下产出 governed records、tables、figures、reports、manifests 和 claim audit, 再由 `stage_transition_decision` 生成 `validation_scale_to_pilot_paper_transition_decision`, 之后才能进入 `pilot_paper` 或继续准备 `full_paper` 后续流程; `full_paper` claim 仍由 `full_paper_result_checker` 放行。如果 external baseline、内部消融、adaptive attack、replay/sketch、CI 或 artifact rebuild 在 validation_scale 阻断, 后续步骤不得用 paper 级运行补造缺失产物。`reviewer_evidence_index_builder` 必须晚于 `full_paper_result_checker`, 因为它只能索引已经由 checker 确认的 claims、tables、figures、reports 和 manifests, 不能在 claim 未通过前提前构造审稿证据。
+原因是 `validation_scale` 是进入 paper 级运行前的小样本全流程打通层。所有 paper 相关机制必须先在 FPR=0.10 小样本口径下产出 governed records、tables、figures、reports、manifests 和 claim audit, 再由 `stage_transition_decision` 生成 `validation_scale_to_pilot_paper_transition_decision`, 之后只能进入 `pilot_paper`; 不能直接进入 `full_paper`。`full_paper` claim 仍由 `pilot_paper_to_full_paper_transition_decision` 和 `full_paper_result_checker` 放行。如果 external baseline、内部消融、adaptive attack、replay/sketch、CI 或 artifact rebuild 在 validation_scale 阻断, 后续步骤不得用 paper 级运行补造缺失产物。`reviewer_evidence_index_builder` 必须晚于 `full_paper_result_checker`, 因为它只能索引已经由 checker 确认的 claims、tables、figures、reports 和 manifests, 不能在 claim 未通过前提前构造审稿证据。
 
 ## 13. 不允许的捷径
 

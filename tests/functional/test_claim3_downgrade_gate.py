@@ -165,6 +165,14 @@ def test_validation_scale_gate_accepts_claim3_downgrade_path(tmp_path: Path) -> 
         "modern_external_baseline_formal_measured_adapter_names": sorted(MODERN_EXTERNAL_BASELINE_NAMES),
         "external_baseline_claim_support_status": "external_baseline_formal_and_proxy_records_written",
     })
+    write_json(run_root / "artifacts" / "external_baseline_self_containment_decision.json", {
+        "external_baseline_self_containment_decision": "PASS",
+        "claim_support_status": "external_baseline_self_contained_measured_formal_ready",
+    })
+    write_json(run_root / "artifacts" / "data_split_and_leakage_guard_decision.json", {
+        "data_split_and_leakage_guard_decision": "PASS",
+        "claim_support_status": "data_split_and_leakage_guard_passed",
+    })
     write_json(run_root / "artifacts" / "validation_internal_ablation_decision.json", {
         "validation_internal_ablation_decision": "PASS",
         "claim_support_status": "validation_internal_ablation_ready",

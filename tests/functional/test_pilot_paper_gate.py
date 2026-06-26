@@ -189,6 +189,11 @@ def _seed_pilot_paper_run(
             if validation_scale_gate_decision == "PASS"
             else "validation_scale_blocked",
         })
+        if validation_scale_gate_decision == "PASS":
+            write_json(run_root / "artifacts" / "validation_scale_to_pilot_paper_transition_decision.json", {
+                "validation_scale_to_pilot_paper_transition_decision": "PASS",
+                "claim_support_status": "validation_scale_ready_to_enter_pilot_paper",
+            })
 
 
 @pytest.mark.quick
@@ -233,6 +238,7 @@ def test_pilot_paper_gate_passes_calibrated_heldout_fixture(tmp_path: Path) -> N
     assert audit["paper_protocol_difference_from_full_paper"] == "sample_scale_only"
     assert audit["pilot_paper_protocol_matches_full_paper"] is True
     assert audit["validation_scale_gate_decision"] == "PASS"
+    assert audit["validation_scale_to_pilot_paper_transition_decision"] == "PASS"
     assert audit["external_baseline_comparison_decision"] == "PASS"
     assert audit["external_baseline_measured_adapter_count"] == 8
     assert audit["modern_external_baseline_formal_measured_adapter_count"] == 6

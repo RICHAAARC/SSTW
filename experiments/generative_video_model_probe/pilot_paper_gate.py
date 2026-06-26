@@ -87,6 +87,20 @@ def _read_json(path: Path) -> dict:
     return json.loads(path.read_text(encoding="utf-8-sig"))
 
 
+def _read_validation_scale_artifact(run_root: Path, relative_path: str) -> dict:
+    """读取 validation_scale 上游 artifact。
+
+    Colab 中 `validation_scale` 与 `pilot_paper` 使用隔离 run_root。pilot_paper gate
+    需要消费 validation_scale 的 gate 和 transition decision, 因此先查当前 run_root
+    中是否已有复用副本, 再查同级 `validation_scale` run_root。
+    """
+    local_path = run_root / relative_path
+    if local_path.exists():
+        return _read_json(local_path)
+    sibling_path = run_root.parent / "validation_scale" / relative_path
+    return _read_json(sibling_path)
+
+
 def _read_jsonl(path: Path) -> list[dict]:
     """读取 JSONL records, 文件不存在时返回空列表。"""
     if not path.exists():
@@ -133,6 +147,7 @@ def _load_config(config_path: str | Path = DEFAULT_PILOT_PAPER_CONFIG) -> dict[s
         "require_motion_threshold_calibration_ready": bool(raw.get("require_motion_threshold_calibration_ready", True)),
         "require_small_scale_pilot_gate_passed": bool(raw.get("require_small_scale_pilot_gate_passed", True)),
         "require_validation_scale_gate_passed": bool(raw.get("require_validation_scale_gate_passed", True)),
+        "require_validation_scale_to_pilot_paper_transition_decision": bool(raw.get("require_validation_scale_to_pilot_paper_transition_decision", True)),
         "require_formal_motion_claim_ready": bool(raw.get("require_formal_motion_claim_ready", True)),
     }
 
@@ -475,7 +490,8 @@ def build_pilot_paper_gate_audit(
     internal_ablation_ready, internal_ablation_summary = _internal_ablation_readiness(run_root, config, test_trace_ids)
 
     pilot_decision = _read_json(run_root / "artifacts" / "small_scale_claim_pilot_gate_decision.json")
-    validation_scale_decision = _read_json(run_root / "artifacts" / "validation_scale_gate_decision.json")
+    validation_scale_decision = _read_validation_scale_artifact(run_root, "artifacts/validation_scale_gate_decision.json")
+    validation_scale_to_pilot_transition = _read_validation_scale_artifact(run_root, "artifacts/validation_scale_to_pilot_paper_transition_decision.json")
     motion_threshold_decision = _read_json(run_root / "artifacts" / "motion_threshold_calibration_decision.json")
     formal_motion_claim_ready = (
         not config["require_formal_motion_claim_ready"]
@@ -493,10 +509,15 @@ def build_pilot_paper_gate_audit(
         not config["require_validation_scale_gate_passed"]
         or validation_scale_decision.get("validation_scale_gate_decision") == "PASS"
     )
+    validation_scale_to_pilot_transition_ready = (
+        not config["require_validation_scale_to_pilot_paper_transition_decision"]
+        or validation_scale_to_pilot_transition.get("validation_scale_to_pilot_paper_transition_decision") == "PASS"
+    )
 
     requirement_checks = {
         "small_scale_pilot_gate_passed": small_scale_pilot_ready,
         "validation_scale_gate_passed": validation_scale_ready,
+        "validation_scale_to_pilot_paper_transition_decision_passed": validation_scale_to_pilot_transition_ready,
         "motion_threshold_calibration_ready": motion_threshold_ready,
         "formal_motion_claim_ready": formal_motion_claim_ready,
         "pilot_paper_profile_generation_records_ready": prompt_count >= config["minimum_prompt_count"]
@@ -550,6 +571,7 @@ def build_pilot_paper_gate_audit(
         "threshold_protocol": config["threshold_protocol"],
         "validation_scale_gate_decision": validation_scale_decision.get("validation_scale_gate_decision"),
         "validation_scale_claim_support_status": validation_scale_decision.get("claim_support_status"),
+        "validation_scale_to_pilot_paper_transition_decision": validation_scale_to_pilot_transition.get("validation_scale_to_pilot_paper_transition_decision"),
         **external_baseline_summary,
         **internal_ablation_summary,
         "target_fpr": config["target_fpr"],
@@ -668,6 +690,7 @@ def write_pilot_paper_gate_audit(
         f"- paper_protocol_difference_from_full_paper: {audit['paper_protocol_difference_from_full_paper']}\n"
         f"- threshold_protocol: {audit['threshold_protocol']}\n"
         f"- validation_scale_gate_decision: {audit['validation_scale_gate_decision']}\n"
+        f"- validation_scale_to_pilot_paper_transition_decision: {audit['validation_scale_to_pilot_paper_transition_decision']}\n"
         f"- external_baseline_comparison_decision: {audit['external_baseline_comparison_decision']}\n"
         f"- external_baseline_measured_adapter_count: {audit['external_baseline_measured_adapter_count']}\n"
         f"- modern_external_baseline_formal_measured_adapter_count: {audit['modern_external_baseline_formal_measured_adapter_count']}\n"

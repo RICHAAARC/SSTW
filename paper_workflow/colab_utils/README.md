@@ -78,7 +78,8 @@ prompt suite
 SSTW_WORKFLOW_PROFILE_VALUE = 'validation_scale'
 ```
 
-该单 Notebook 不是旧的多 profile 综合 Notebook。它只用于 validation-scale 正式门禁测试,
+该单 Notebook 不是旧的多 profile 综合 Notebook。Colab 侧只能通过本目录中的 Notebook
+入口运行 validation-scale, 不应在 Colab 临时 cell 中绕过 repository modules。该 Notebook 只用于 validation-scale 正式门禁测试,
 不用于 `pilot_paper` 或未来 `full_paper`。如果 Google Drive 中尚未存在已通过的
 `motion_calibration` artifact, 默认会提前失败; 只有显式设置
 `SSTW_RUN_MOTION_CALIBRATION_IF_MISSING=true` 时, 才会先运行长耗时的 motion calibration
@@ -513,17 +514,30 @@ external_baseline_official_resource_bootstrap_decision.json
 external_baseline_official_bundle_generation_decision.json
 external_baseline_official_result_bundle_preflight_decision.json
 external_baseline_comparison_decision.json
+external_baseline_self_containment_decision.json
 validation_internal_ablation_decision.json
 adaptive_attack_decision.json
 replay_and_sketch_gate_decision.json
 claim3_downgrade_decision.json
 statistical_confidence_interval_decision.json
+data_split_and_leakage_guard_decision.json
 validation_artifact_rebuild_dry_run_decision.json
 validation_scale_gate_decision.json
-pilot_paper_gate_decision.json
+validation_scale_to_pilot_paper_transition_decision.json
 ```
 
-在 validation-scale 中, `pilot_paper_gate_decision.json` 可能不会生成或不会作为当前 gate 的核心判定。切换到 `pilot_paper` 后, 需要重点检查 `pilot_paper_gate_decision.json`。
+在 validation-scale 中, `pilot_paper_gate_decision.json` 不应作为当前 gate 的核心判定。
+`validation_scale_gate_decision.json == PASS` 后只能生成
+`validation_scale_to_pilot_paper_transition_decision.json`, 然后进入 `pilot_paper`;
+不能直接进入 `full_paper`。切换到 `pilot_paper` 后, 才需要重点检查
+`pilot_paper_gate_decision.json`。
+
+validation-scale 还应生成以下派生产物:
+
+```text
+figures/validation_scale_gate_figure.json
+manifests/validation_scale_package_manifest.json
+```
 
 package 输出应位于:
 

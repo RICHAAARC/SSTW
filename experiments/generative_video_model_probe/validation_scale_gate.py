@@ -61,6 +61,7 @@ def _load_config(config_path: str | Path = DEFAULT_VALIDATION_SCALE_CONFIG) -> d
         "require_small_scale_pilot_gate_passed": bool(config.get("require_small_scale_pilot_gate_passed", True)),
         "require_external_baseline_status_records": bool(config.get("require_external_baseline_status_records", True)),
         "require_external_baseline_comparison_records": bool(config.get("require_external_baseline_comparison_records", True)),
+        "require_external_baseline_self_containment_decision": bool(config.get("require_external_baseline_self_containment_decision", True)),
         "minimum_external_baseline_measured_adapter_count": int(config.get("minimum_external_baseline_measured_adapter_count", DEFAULT_MINIMUM_EXTERNAL_BASELINE_MEASURED_ADAPTER_COUNT)),
         "minimum_modern_external_baseline_formal_adapter_count": int(config.get("minimum_modern_external_baseline_formal_adapter_count", DEFAULT_MINIMUM_MODERN_EXTERNAL_BASELINE_FORMAL_ADAPTER_COUNT)),
         "required_modern_external_baseline_adapter_names": list(config.get("required_modern_external_baseline_adapter_names", DEFAULT_REQUIRED_MODERN_EXTERNAL_BASELINE_ADAPTER_NAMES)),
@@ -71,6 +72,7 @@ def _load_config(config_path: str | Path = DEFAULT_VALIDATION_SCALE_CONFIG) -> d
         "require_replay_or_sketch_records_or_claim3_downgrade": bool(config.get("require_replay_or_sketch_records_or_claim3_downgrade", True)),
         "require_confidence_interval_report": bool(config.get("require_confidence_interval_report", True)),
         "require_artifact_rebuild_dry_run": bool(config.get("require_artifact_rebuild_dry_run", True)),
+        "require_data_split_and_leakage_guard": bool(config.get("require_data_split_and_leakage_guard", True)),
     }
 
 
@@ -212,6 +214,8 @@ def build_validation_scale_gate_audit(
     runtime_attack_decision = _read_json(run_root / "artifacts" / "runtime_attack_decision.json")
     runtime_detection_decision = _read_json(run_root / "artifacts" / "runtime_detection_decision.json")
     motion_threshold_decision = _read_json(run_root / "artifacts" / "motion_threshold_calibration_decision.json")
+    external_baseline_self_containment_decision = _read_json(run_root / "artifacts" / "external_baseline_self_containment_decision.json")
+    data_split_decision = _read_json(run_root / "artifacts" / "data_split_and_leakage_guard_decision.json")
 
     prompt_count = len(_unique_nonempty(validation_generation_records, "prompt_id"))
     seed_per_prompt_min = _seed_per_prompt_min(validation_generation_records)
@@ -251,6 +255,8 @@ def build_validation_scale_gate_audit(
         "validation_detection_records_ready": _decision_pass(runtime_detection_decision, "runtime_detection_decision") and runtime_detection_ready_count >= runtime_attack_ready_count > 0,
         "validation_external_baseline_status_records_ready": (not config["require_external_baseline_status_records"]) or external_baseline_audit.get("external_baseline_status_decision") == "PASS",
         "validation_external_baseline_comparison_records_ready": (not config["require_external_baseline_comparison_records"]) or external_baseline_comparison_ready,
+        "validation_external_baseline_self_containment_ready": (not config["require_external_baseline_self_containment_decision"]) or external_baseline_self_containment_decision.get("external_baseline_self_containment_decision") == "PASS",
+        "validation_data_split_and_leakage_guard_ready": (not config["require_data_split_and_leakage_guard"]) or data_split_decision.get("data_split_and_leakage_guard_decision") == "PASS",
         "validation_internal_ablation_records_ready": (not config["require_internal_ablation_records"]) or internal_ablation_ready,
         "validation_adaptive_attack_records_ready": (not config["require_adaptive_attack_records"]) or adaptive_attack_ready,
         "validation_replay_or_sketch_records_ready": (not config["require_replay_or_sketch_records_or_claim3_downgrade"]) or replay_or_sketch_ready,
@@ -299,6 +305,8 @@ def build_validation_scale_gate_audit(
         "required_modern_external_baseline_adapter_names": sorted(config["required_modern_external_baseline_adapter_names"]),
         "missing_modern_external_baseline_formal_adapter_names": missing_modern_external_baseline_formal_adapter_names,
         "external_baseline_comparison_status": external_baseline_comparison_status,
+        "external_baseline_self_containment_decision": external_baseline_self_containment_decision.get("external_baseline_self_containment_decision"),
+        "data_split_and_leakage_guard_decision": data_split_decision.get("data_split_and_leakage_guard_decision"),
         "minimum_external_baseline_measured_adapter_count": config["minimum_external_baseline_measured_adapter_count"],
         "internal_ablation_record_count": internal_ablation_record_count,
         "internal_ablation_status": internal_ablation_status,
@@ -333,8 +341,9 @@ def write_validation_scale_gate_audit(
         "该报告由已落盘的 governed records 与 decision artifacts 自动生成。它只判断 validation-scale "
         "是否已经作为 paper 级前的小样本全流程打通层完成闭环。该层级使用较低成本的 FPR=0.10 "
         "预演口径验证 records、tables、figures、reports、manifests、baseline、消融、attack、CI "
-        "和 artifact rebuild 是否能够完整产出。它不支撑效果主张, 但通过后才允许进入 pilot_paper "
-        "或 full_paper 的后续结果生产流程。\n\n"
+        "和 artifact rebuild 是否能够完整产出。它不支撑效果主张, 通过后只能生成 "
+        "validation_scale_to_pilot_paper_transition_decision 并进入 pilot_paper; "
+        "不能直接进入 full_paper。\n\n"
         f"- validation_scale_gate_decision: {audit['validation_scale_gate_decision']}\n"
         f"- claim_support_status: {audit['claim_support_status']}\n"
         f"- missing_validation_requirements: {', '.join(audit['missing_validation_requirements']) if audit['missing_validation_requirements'] else 'none'}\n"
@@ -347,6 +356,8 @@ def write_validation_scale_gate_audit(
         f"- external_baseline_comparison_record_count: {audit['external_baseline_comparison_record_count']}\n"
         f"- external_baseline_measured_adapter_count: {audit['external_baseline_measured_adapter_count']}\n"
         f"- modern_external_baseline_formal_measured_adapter_count: {audit['modern_external_baseline_formal_measured_adapter_count']}\n"
+        f"- external_baseline_self_containment_decision: {audit['external_baseline_self_containment_decision']}\n"
+        f"- data_split_and_leakage_guard_decision: {audit['data_split_and_leakage_guard_decision']}\n"
         f"- missing_modern_external_baseline_formal_adapter_names: {', '.join(audit['missing_modern_external_baseline_formal_adapter_names']) if audit['missing_modern_external_baseline_formal_adapter_names'] else 'none'}\n"
         f"- full_paper_allowed: {str(audit['full_paper_allowed']).lower()}\n"
     )

@@ -1103,6 +1103,34 @@ def build_external_baseline_comparison_command(layout: dict[str, str]) -> list[s
         "comparison",
     ]
 
+
+def build_external_baseline_self_containment_decision_command(layout: dict[str, str]) -> list[str]:
+    """构造 external baseline 自包含产出判定命令。
+
+    该命令只读取 comparison records、source intake manifests 和官方命令 evidence,
+    检查 6 个现代 baseline 是否由项目内 clone / build / run / adapt / record 产出
+    `measured_formal` 结果。non-run record 会被保留为阻断原因, 不能替代正式结果。
+    """
+    return [
+        sys.executable,
+        "scripts/check_results/external_baseline_self_containment_decision.py",
+        "--run-root",
+        layout["drive_run_root"],
+        "--config-path",
+        layout["protocol_config_path"],
+    ]
+
+
+def build_data_split_and_leakage_guard_command(layout: dict[str, str]) -> list[str]:
+    """构造数据切分与泄漏检查命令。"""
+    return [
+        sys.executable,
+        "scripts/check_results/data_split_and_leakage_guard.py",
+        "--run-root",
+        layout["drive_run_root"],
+    ]
+
+
 def build_validation_internal_ablation_command(layout: dict[str, str]) -> list[str]:
     """构造 validation-scale 内部消融矩阵后处理命令。"""
     return [
@@ -1193,7 +1221,7 @@ def build_small_scale_claim_pilot_gate_command(layout: dict[str, str]) -> list[s
 
 
 def build_validation_scale_gate_command(layout: dict[str, str]) -> list[str]:
-    """构造 validation-scale gate 命令, 防止从 small-scale pilot 直接跳到 pilot_paper 或 full_paper。"""
+    """构造 validation-scale gate 命令, 防止从 small-scale pilot 直接跳到 paper 级结果运行。"""
     return [
         sys.executable,
         "-m",
@@ -1201,6 +1229,59 @@ def build_validation_scale_gate_command(layout: dict[str, str]) -> list[str]:
         "--run-root",
         layout["drive_run_root"],
         "--write-outputs",
+    ]
+
+
+def build_stage_transition_decision_command(layout: dict[str, str], transition_id: str) -> list[str]:
+    """构造主干阶段跳转判定命令。"""
+    return [
+        sys.executable,
+        "scripts/check_results/stage_transition_decision.py",
+        "--run-root",
+        layout["drive_run_root"],
+        "--transition",
+        transition_id,
+    ]
+
+
+def build_validation_scale_to_pilot_paper_transition_decision_command(layout: dict[str, str]) -> list[str]:
+    """构造 validation_scale -> pilot_paper 轻量跳转判定命令。"""
+    return build_stage_transition_decision_command(layout, "validation_scale_to_pilot_paper")
+
+
+def build_pilot_paper_to_full_paper_transition_decision_command(layout: dict[str, str]) -> list[str]:
+    """构造 pilot_paper -> full_paper 轻量跳转判定命令。"""
+    return build_stage_transition_decision_command(layout, "pilot_paper_to_full_paper")
+
+
+def build_full_paper_to_submission_freeze_transition_decision_command(layout: dict[str, str]) -> list[str]:
+    """构造 full_paper -> submission_freeze 轻量跳转判定命令。"""
+    return build_stage_transition_decision_command(layout, "full_paper_to_submission_freeze")
+
+
+def build_validation_scale_gate_figure_builder_command(layout: dict[str, str]) -> list[str]:
+    """构造 validation_scale gate 诊断图 manifest 重建命令。"""
+    return [
+        sys.executable,
+        "-m",
+        "experiments.generative_video_model_probe.validation_scale_artifact_package",
+        "--run-root",
+        layout["drive_run_root"],
+        "--mode",
+        "figure",
+    ]
+
+
+def build_validation_scale_package_manifest_builder_command(layout: dict[str, str]) -> list[str]:
+    """构造 validation_scale package manifest 重建命令。"""
+    return [
+        sys.executable,
+        "-m",
+        "experiments.generative_video_model_probe.validation_scale_artifact_package",
+        "--run-root",
+        layout["drive_run_root"],
+        "--mode",
+        "manifest",
     ]
 
 

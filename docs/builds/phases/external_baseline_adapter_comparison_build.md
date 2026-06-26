@@ -151,7 +151,7 @@ claim_support_status: measured_formal_self_contained_results_required_for_valida
 2. 配置 `SSTW_VIDEOSHIELD_EVAL_COMMAND`、`SSTW_SIGMARK_EVAL_COMMAND`、`SSTW_SPDMARK_EVAL_COMMAND`、`SSTW_VIDEOMARK_EVAL_COMMAND`、`SSTW_VIDSIG_EVAL_COMMAND` 和 `SSTW_VIDEOSEAL_EVAL_COMMAND`, 或配置 repository bridge + official inner command。
 3. 运行 `paper_workflow/colab_utils/external_baseline_formal_scoring_colab.ipynb`, 使 6 个现代 baseline 均经由 project_run / project_adapt / project_record 产出 `measured_formal` records。
 4. 写出 `artifacts/external_baseline_self_containment_decision.json`, 逐 baseline 记录 clone / build / run / adapt / record 状态。
-5. 仅当全部现代 baseline 都产生项目内自包含 governed `measured_formal` records 后, 才允许 validation_scale gate 通过; validation_scale 通过后才能进入 pilot_paper, full_paper 仍需 pilot_paper gate 与 full_paper_result_checker。
+5. 仅当全部现代 baseline 都产生项目内自包含 governed `measured_formal` records 后, 才允许 validation_scale gate 通过; validation_scale 通过后还必须生成 validation_scale_to_pilot_paper_transition_decision 才能进入 pilot_paper, full_paper 仍需 pilot_paper gate、pilot_paper_to_full_paper_transition_decision 与 full_paper_result_checker。
 ```
 
 

@@ -47,7 +47,7 @@ reproducibility_evidence_sufficient
 | `pilot_paper` | `0.01` | 小规模论文协议 | 以较小成本产出 FPR=1% 级别的 paper 协议结果, 检查 full_paper 同构协议在真实模型上的可报告性。 | 仅允许 pilot 级主张 |
 | `full_paper` | `0.001` | 正式规模论文协议 | 产出 FPR=0.1% 级别正式论文主结果, 包含主表、主图、CI、claim audit、artifact rebuild 和 reviewer evidence index。 | 是 |
 
-`validation_scale` 是进入 `pilot_paper` 和后续 `full_paper` 流程的硬门禁。它通过只说明论文协议产物链路已经小样本跑通, 不说明 SSTW 的效果已经达到投稿主张。`validation_scale` 是 `full_paper` 的必要条件但不是充分条件; `full_paper` 仍需要 `pilot_paper_gate`、`full_paper_result_checker`、CI、claim audit、artifact rebuild 和 submission freeze 相关检查通过。
+`validation_scale` 是进入 `pilot_paper` 和后续 `full_paper` 流程的硬门禁。它通过只说明论文协议产物链路已经小样本跑通, 不说明 SSTW 的效果已经达到投稿主张。进入 `pilot_paper` 还必须在 `validation_scale` PASS 后生成 `validation_scale_to_pilot_paper_transition_decision`。`validation_scale` 是 `full_paper` 的必要条件但不是充分条件; `full_paper` 仍需要 `pilot_paper_gate`、`pilot_paper_to_full_paper_transition_decision`、`full_paper_result_checker`、CI、claim audit、artifact rebuild 和 submission freeze 相关检查通过。
 
 主干门禁只保留:
 
@@ -280,10 +280,10 @@ harness 是否通过
 解释:
 
 ```text
-90-100: 可进入 pilot_paper 或 full_paper 前最终预检
+90-100: 可作为进入下一主干阶段前的工程化预检, 仍必须遵守 protocol_governance -> mechanism_validation -> validation_scale -> pilot_paper -> full_paper -> submission_freeze 顺序
 75-89: 可进入 validation_scale, 但仍需补齐部分 gate
 60-74: 只能作为实验协议验证阶段
 <60: 不应进入论文主结果生产
 ```
 
-若某个项目只有文档描述, 没有 repository checker、runner、reporter 或轻量 decision artifact, 则该项目记 0 分。评分表中最后一项为加分型治理项, 总分计算时可将总分归一到 100。该评分用于防止把“手册完整”误判为“实验系统已经具备 full_paper 产出能力”。
+若某个项目只有文档描述, 没有 repository checker、runner、reporter 或轻量 decision artifact, 则该项目记 0 分。评分表原始项合计为 105 分, 最后一项为加分型治理项; 对外报告 readiness 时必须写出 `raw_readiness_score` 和 `normalized_readiness_score = min(raw_readiness_score, 100)`, 不得用加分项绕过任何主干门禁。该评分用于防止把“手册完整”误判为“实验系统已经具备 full_paper 产出能力”。

@@ -13,8 +13,9 @@
 ```text
 mechanism_validation_passed = true
 validation_scale_gate_passed = true
-stage_transition_decision_passed = true
+validation_scale_to_pilot_paper_transition_decision_passed = true
 pilot_paper_gate_passed = true
+pilot_paper_to_full_paper_transition_decision_passed = true
 external_baseline_self_containment_decision_passed = true
 data_split_and_leakage_guard_passed = true
 modern_external_baseline_records_ready = true

@@ -146,7 +146,7 @@ validation_artifact_rebuild_dry_run_ready
 validation_claim_audit_ready
 ```
 
-`validation_scale` 不要求达到 full_paper 的最终样本量, 但必须覆盖 paper 协议的所有机制和所有产物类型。若某一类产物在 validation_scale 阻断, 不允许进入 `pilot_paper`; 此时只能继续修复缺失机制、adapter 或门禁规则。validation_scale 通过只是进入 pilot_paper 的必要条件, full_paper 仍需 pilot_paper_gate 与 full_paper_result_checker。
+`validation_scale` 不要求达到 full_paper 的最终样本量, 但必须覆盖 paper 协议的所有机制和所有产物类型。若某一类产物在 validation_scale 阻断, 不允许进入 `pilot_paper`; 此时只能继续修复缺失机制、adapter 或门禁规则。validation_scale 通过只是进入 pilot_paper 的必要条件, 还必须生成 validation_scale_to_pilot_paper_transition_decision; full_paper 仍需 pilot_paper_gate、pilot_paper_to_full_paper_transition_decision 与 full_paper_result_checker。
 
 ### 1.11 现代 baseline 最小接入组合
 
@@ -292,7 +292,7 @@ formal_metric_blocking_reason: formal_motion_consistency_not_ready
 ```text
 保留在 generation_records 与 formal records 中
 不物理删除原始视频
-不进入 pilot matrix claim evidence
+不进入 small_scale_mechanism_pilot_check claim evidence
 不计入 prompt / seed 覆盖率
 不计入 runtime attack / detection claim-ready 统计
 ```
@@ -387,7 +387,7 @@ artifacts/validation_scale_gate_decision.json
 reports/validation_scale_gate_report.md
 ```
 
-该 gate 的作用是检查 pilot 通过后是否已经具备进入 paper 级结果运行的条件。它只读取已经落盘的 governed records 和 decision artifacts, 不运行 GPU, 也不补造缺失的 baseline、消融、adaptive attack、replay/sketch、CI、tables、figures、reports 或 claim audit 结果。
+该 gate 的作用是检查 small_scale_mechanism_pilot_check 通过后是否已经具备进入 paper 级前小样本全流程打通验证的条件。它只读取已经落盘的 governed records 和 decision artifacts, 不运行 GPU, 也不补造缺失的 baseline、消融、adaptive attack、replay/sketch、CI、tables、figures、reports 或 claim audit 结果。
 
 当前 validation_scale gate 检查的最小条件为:
 
@@ -417,7 +417,7 @@ expected_generation_count: 24
 profile_name: validation_scale
 ```
 
-需要强调的是, `validation_scale_gate_decision = PASS` 表示 paper 级运行的全部机制已经在小样本规模上闭合, 因而可以进入 `pilot_paper_gate`; 它仍不允许直接生成 full_paper 规模论文主表, 但它必须已经能产出小样本全结果包。
+需要强调的是, `validation_scale_gate_decision = PASS` 表示 paper 级运行的全部机制已经在小样本规模上闭合, 因而可以生成 `validation_scale_to_pilot_paper_transition_decision` 并进入 `pilot_paper_gate`; 它仍不允许直接生成 full_paper 规模论文主表, 但它必须已经能产出小样本全结果包。
 
 ## 2026-06-23 validation_scale 后处理工程闭环
 
@@ -579,7 +579,7 @@ package
 
 ## 2026-06-24 pilot_paper FPR=0.01 工程入口
 
-当前 `generative_video_model_probe` 已新增 `pilot_paper` 语义层级, 用于在 validation_scale 通过后执行小样本论文级结果包。该层级不是 workflow-only pilot, 而是小规模跑完整 full_paper 协议并产出 pilot 级论文结果。
+当前 `generative_video_model_probe` 已新增 `pilot_paper` 语义层级, 用于在 validation_scale 通过并生成 validation_scale_to_pilot_paper_transition_decision 后执行小样本论文级结果包。该层级不是 workflow-only pilot, 而是小规模跑完整 full_paper 协议并产出 pilot 级论文结果。
 
 该阶段协议为:
 

@@ -6,7 +6,7 @@
 
 ### 1.1 阶段目标
 
-该检查在进入 `validation_scale` 前, 以较小成本验证主要 claim 是否有成立迹象。该检查不产生论文级结果表格, 也不能直接决定是否进入 `pilot_paper` 或 full generation 主实验。small-scale pilot 通过后只允许进入 `validation_scale`; `validation_scale` 通过后, 才允许进入 `pilot_paper`。
+该检查在进入 `validation_scale` 前, 以较小成本验证主要 claim 是否有成立迹象。该检查不产生论文级结果表格, 也不能直接决定是否进入 `pilot_paper` 或 `full_paper`。`small_scale_mechanism_pilot_check` 通过后只允许进入 `validation_scale`; `validation_scale` 通过并生成 `validation_scale_to_pilot_paper_transition_decision` 后, 才允许进入 `pilot_paper`。
 
 ### 1.2 建议规模
 
@@ -58,7 +58,7 @@ wrong_sampler_replay_control_not_equivalent = true
 
 ### 1.6 进入 validation_scale 的升级条件
 
-small-scale pilot 通过只表示可以进入 `validation_scale` 构建, 不表示可以进入 `pilot_paper` 或 `full_paper`。进入 `validation_scale` 还必须确认:
+`small_scale_mechanism_pilot_check` 通过只表示可以进入 `validation_scale` 构建, 不表示可以进入 `pilot_paper` 或 `full_paper`。进入 `validation_scale` 还必须确认:
 
 ```text
 all_pilot_records_are_governed = true
@@ -70,7 +70,7 @@ replay_or_claim3_downgrade_plan_exists = true
 artifact_rebuild_dry_run_plan_exists = true
 ```
 
-若上述任一条件不满足, small-scale pilot 即使分数通过, 也只能继续补齐工程流程并进入 `validation_scale`, 不能直接进入 `pilot_paper` 或 `full_paper`。
+若上述任一条件不满足, `small_scale_mechanism_pilot_check` 即使分数通过, 也只能继续补齐工程流程并进入 `validation_scale`, 不能直接进入 `pilot_paper` 或 `full_paper`。
 
 ## 2. 当前阶段完成情况
 
@@ -102,7 +102,7 @@ missing_mechanism_requirements: []
 
 ### 2.2 pilot 必须回答的问题
 
-pilot 不能重复证明 callback 是否能工作, 而应验证 claim 是否值得扩展到 full experiment。必须重点检查:
+pilot 不能重复证明 callback 是否能工作, 而应验证机制证据是否值得扩展到 `validation_scale`、`pilot_paper` 和 `full_paper` 主干阶段。必须重点检查:
 
 ```text
 path_marginal_gain_at_fixed_fpr > 0
@@ -143,7 +143,7 @@ run_cross_model: false
 6 method variants
 ```
 
-small-scale pilot 失败时不得进入 `validation_scale`。small-scale pilot 通过后, 只允许进入 `validation_scale` 的小样本全流程打通验证, 不允许直接进入 `pilot_paper` 或 full experiment。
+`small_scale_mechanism_pilot_check` 失败时不得进入 `validation_scale`。`small_scale_mechanism_pilot_check` 通过后, 只允许进入 `validation_scale` 的小样本全流程打通验证, 不允许直接进入 `pilot_paper` 或 `full_paper`。
 
 ### 2.4 motion threshold calibration 冻结策略
 
@@ -217,7 +217,7 @@ wrong_sampler_replay_ready
 replay_uncertainty_ready
 ```
 
-这说明当前 Wan2.1 pilot 生成链路和 proxy 后处理可继续支撑 workflow progression, 但仍不能进入 full experiment 或 final paper claim。下一步应补齐 pilot postprocess / runner, 产生 attack、negative family、wrong-sampler replay 和 replay uncertainty governed records。
+这说明当前 Wan2.1 pilot 生成链路和 proxy 后处理可继续支撑 workflow progression, 但仍不能进入 `full_paper` 或最终论文 claim。下一步应补齐 pilot postprocess / runner, 产生 attack、negative family、wrong-sampler replay 和 replay uncertainty governed records。
 
 ### 2.6 pilot matrix proxy postprocess 状态
 
@@ -264,7 +264,7 @@ claim_support_status: blocked_until_motion_threshold_calibration
 pilot_gate_decision: FAIL
 ```
 
-该结果表示 pilot 矩阵的 proxy 后处理记录已经补齐, 但仍不能进入 full experiment 或 final paper claim。阻塞原因不再是矩阵缺失, 而是 formal motion gate 仍使用 `heuristic_precalibration` 阈值, 需要后续 `motion_threshold_calibration` 阶段。
+该结果表示 pilot 矩阵的 proxy 后处理记录已经补齐, 但仍不能进入 `full_paper` 或最终论文 claim。阻塞原因不再是矩阵缺失, 而是 formal motion gate 仍使用 `heuristic_precalibration` 阈值, 需要后续 `motion_threshold_calibration` 阶段。
 
 ### 2.7 runtime video-file attack runner 状态
 
@@ -433,7 +433,7 @@ missing_pilot_requirements:
   - formal_motion_claim_ready
 ```
 
-该历史结果表示当时 16 条生成记录中只有 15 条可用于 motion claim。由于 `heldout_rotation_scene` 只剩 1 个合格 seed, 当时 pilot 的 seed 覆盖率不足, 因此不能进入 full experiment。该阻塞已由后续原生复跑解除。
+该历史结果表示当时 16 条生成记录中只有 15 条可用于 motion claim。由于 `heldout_rotation_scene` 只剩 1 个合格 seed, 当时 pilot 的 seed 覆盖率不足, 因此不能进入 `full_paper`。该阻塞已由后续原生复跑解除。
 
 ### 2.11 heldout pilot prompt 可观测运动修复
 
@@ -483,7 +483,7 @@ prompt_suite_id: generative_video_probe_prompt_suite_motion_observability_and_pi
 |---|---|
 | 完成状态 | 已完成 small-scale pilot, 可进入 validation_scale |
 | 主要差距项 | 本阶段阻塞已解除; 剩余差距转移到 validation_scale、pilot_paper、现代外部 baseline 主表对比、内部消融和论文级 fixed-FPR。 |
-| 下一步构建方向 | 进入 validation_scale, 并在 validation_scale 通过后进入 pilot_paper, 同步补现代外部 baseline、内部消融和 CI reporter。 |
+| 下一步构建方向 | 进入 validation_scale, 并在 validation_scale 通过后生成 validation_scale_to_pilot_paper_transition_decision 再进入 pilot_paper, 同步补现代外部 baseline、内部消融和 CI reporter。 |
 | full_paper 影响 | 未满足本阶段要求时, 不得把相关结果写入 full_paper supported claim。 |
 
 ### 3.1 快速检查清单
@@ -491,13 +491,13 @@ prompt_suite_id: generative_video_probe_prompt_suite_motion_observability_and_pi
 ```text
 stage_status: 已完成 small-scale pilot, 可进入 validation_scale
 gap_item: 本阶段阻塞已解除; 剩余差距转移到 validation_scale、pilot_paper、现代外部 baseline 主表对比、内部消融和论文级 fixed-FPR。
-next_action: 进入 validation_scale, 并在 validation_scale 通过后进入 pilot_paper, 同步补现代外部 baseline、内部消融和 CI reporter。
+next_action: 进入 validation_scale, 并在 validation_scale 通过后生成 validation_scale_to_pilot_paper_transition_decision 再进入 pilot_paper, 同步补现代外部 baseline、内部消融和 CI reporter。
 full_paper_blocking_rule: unresolved_gap_blocks_full_paper_claim
 ```
 
 ## 4. small-scale pilot 结果使用边界
 
-small-scale pilot 的作用是判断是否值得进入 validation_scale, 不是产出论文主结果, 也不是进入 pilot_paper 的直接门票。pilot_paper 是后续独立结果层级, 必须使用 calibration / held-out split 和 frozen threshold artifact。即使 small-scale pilot PASS, 也必须遵守:
+`small_scale_mechanism_pilot_check` 的作用是判断是否值得进入 validation_scale, 不是产出论文主结果, 也不是进入 pilot_paper 的直接门票。pilot_paper 是后续独立结果层级, 必须使用 calibration / held-out split 和 frozen threshold artifact。即使 `small_scale_mechanism_pilot_check` PASS, 也必须遵守:
 
 ```text
 pilot_records_not_used_for_main_detection_table
@@ -507,11 +507,11 @@ pilot_baseline_results_not_used_as_external_main_comparison
 pilot_attack_results_not_used_as_full_robustness_claim
 ```
 
-small-scale pilot PASS 后的下一步只能是 validation_scale, 不是 pilot_paper 或 full_paper。validation_scale 通过后, 才能通过 stage transition decision 进入 pilot_paper。若 Codex 检测到用户或脚本试图从 small-scale pilot 直接生成 full_paper package, 应将其标记为阶段跳跃。
+`small_scale_mechanism_pilot_check` PASS 后的下一步只能是 validation_scale, 不是 pilot_paper 或 full_paper。validation_scale 通过后, 才能通过 `validation_scale_to_pilot_paper_transition_decision` 进入 pilot_paper。若 Codex 检测到用户或脚本试图从 `small_scale_mechanism_pilot_check` 直接生成 full_paper package, 应将其标记为阶段跳跃。
 
-## 5. small-scale pilot 通过后的 validation_scale 准入清单
+## 5. small_scale_mechanism_pilot_check 通过后的 validation_scale 准入清单
 
-small-scale pilot 通过后, 进入 validation_scale 前仍需确认:
+`small_scale_mechanism_pilot_check` 通过后, 进入 validation_scale 前仍需确认:
 
 ```text
 validation_prompt_manifest_prepared
@@ -524,7 +524,7 @@ validation_artifact_rebuild_plan_prepared
 validation_resource_budget_checked
 ```
 
-上述条件缺失时, 只能补齐 validation 规划, 不能进入 pilot_paper 或 full_paper。
+上述条件缺失时, 只能补齐 validation 规划, 不能进入 `pilot_paper` 或 `full_paper`。
 
 
 ## 2026-06-23 最新原生复跑状态

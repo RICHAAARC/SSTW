@@ -22,15 +22,15 @@
 |---|---|---|---|---|---|
 | `protocol_governance_foundation` | 已完成当前阶段, 持续维护 | 协议、字段注册、测试分层、harness 审计已可运行。 | 新增 baseline、full_paper 和 replay 字段时仍需同步 registry 与 schema。 | 随后续阶段增量维护字段闭包。 | 是所有结果包的前置条件。 |
 | `synthetic_state_inference_sanity` | 部分完成 | synthetic runner、state-space 模块和轻量机制测试已存在。 | 不能支撑真实 Flow Matching 视频主 claim。 | 保持为 state inference sanity 与 regression test。 | 只作为机制合理性证据。 |
-| `real_video_latent_transfer_check` | 部分完成 | VAE/视频链路模块和 runner 已存在。 | 真实视频 VAE 大规模低误报验证不足。 | 在 pilot 通过后补齐 real-video transfer validation。 | 影响 endpoint robustness 与视频链路可信度。 |
+| `real_video_latent_transfer_check` | 部分完成 | VAE/视频链路模块和 runner 已存在。 | 真实视频 VAE 大规模低误报验证不足。 | 在 validation_scale 与 pilot_paper 前置闭合后补齐 real-video transfer validation。 | 影响 endpoint robustness 与视频链路可信度。 |
 | `state_space_inference_formalization` | 部分完成 | state variable、transition、observation、admissibility 结构已拆分。 | generic SSM、Mamba-style temporal fusion、key-agnostic 对比仍需 full-scale governed records。 | 强化 formal ablation 与 negative tail audit。 | 影响 Claim-2 的状态后验贡献。 |
 | `trajectory_observation_core_probe` | 部分完成 | trajectory observation、velocity projection、correlation audit 入口已存在。 | path evidence 独立增益仍需 pilot_paper / full_paper 证明。 | 绑定 endpoint、path、velocity 三证据并跑消融。 | 影响 Claim-2 是否成立。 |
 | `flow_model_adapter_preflight` | 已完成前置验证 | Wan2.1 callback、time grid、sampler signature 和 latent displacement proxy 已验证。 | 真实 velocity field 原值未必可访问, 当前主要依赖 proxy。 | 保持 proxy 边界, 如能访问真实 velocity 再升级。 | 满足进入 sampling-time 与 pilot 的接口前置。 |
-| `sampling_time_constraint_probe` | 已完成机制前置验证 | recommended profile 显示 keyed alignment gain 与 wrong-key 分离。 | 尚不能替代 attack matrix、negative family、fixed-FPR path gain。 | 作为 small-scale pilot 前置证据。 | 证明可进入 pilot, 不直接支撑 full_paper。 |
+| `sampling_time_constraint_probe` | 已完成机制前置验证 | recommended profile 显示 keyed alignment gain 与 wrong-key 分离。 | 尚不能替代 attack matrix、negative family、fixed-FPR path gain。 | 作为 small_scale_mechanism_pilot_check 前置证据。 | 证明可进入 mechanism_validation 后续检查, 不直接支撑 full_paper。 |
 | `motion_threshold_calibration` | 已完成 engineering calibration | 已有 `motion_delta_calibrated_v1` 可作 pilot guardrail。 | 不是论文级 `TPR@FPR=0.001` fixed-FPR 证据。 | full_paper 前补齐更大 held-out negative 和 CI。 | 影响 motion claim 样本资格过滤。 |
 | `small_scale_mechanism_pilot_check` | 已完成 small-scale pilot, 作为 mechanism_validation 子检查保留 | 最新 Wan2.1 pilot 原生复跑已达到 16/16 eligible、seed_per_prompt_min=2、runtime attack/detection 48/48 ready、pilot_gate_decision=PASS。 | 它只判断机制是否值得继续, 不是主干门禁, 也不是 paper 级结果包。 | 进入 validation_scale 小样本全流程打通验证, 并保留 small-scale pilot 作为工作流证据。 | 只能解除 validation_scale 的机制前置缺口, 不能直接放行 pilot_paper 或 full_paper。 |
-| `validation_scale` | paper 级前小样本全流程打通门禁已完成硬阻断实现, 真实运行待复跑 | 已重新定义为 FPR=10% 小样本全流程打通层, 必须闭合完整现代 external_baseline formal records、内部消融、adaptive attack、replay/sketch 或受治理 Claim-3 downgrade、CI、tables、figures、reports、manifests、artifact rebuild 和 claim audit。 | 真实 validation_scale 结果尚未生成; 6 个现代 baseline 仍需由本项目 clone / build / run / adapt / record 产出 measured_formal, 不接受外部补交结果。 | 先配置并运行现代 baseline 自包含产出链路, 然后在 Colab 中运行 `PROFILE = validation_scale`。 | 通过后才允许进入 pilot_paper 或继续准备 full_paper; 但 full_paper claim 仍需 pilot_paper、full_paper_result_checker 和轻量判定通过。若 baseline / ablation / replay / CI / artifact rebuild 任一缺失, 不得进入 paper 级结果运行。 |
-| `pilot_paper` | 工程入口已完成, 真实 GPU 结果待运行 | 已按 full_paper 同构协议接入 21 prompt × 8 seed、calibration split、frozen threshold artifact、held-out test split、完整现代 external_baseline 自包含 measured_formal adapter 前置检查、内部消融矩阵前置检查和 claim audit。 | 真实 Wan2.1 GPU 结果尚未生成; 6 个现代 baseline 需要在 Colab / 本地通过项目内 clone / build / run / adapt / record 后才能产出 measured_formal。 | 在 validation_scale 通过后运行 `PROFILE = pilot_paper`, 审计 `pilot_paper_calibrated_heldout_claim_ready`, 同时要求 `modern_external_baseline_formal_measured_adapter_count >= 6` 与 `pilot_paper_internal_ablation_matrix_ready`。 | 它是小规模跑完整 full_paper 协议并产出 pilot 级论文结果的阶段, 可支撑 pilot_paper 级 `TPR@FPR=0.01`, 但不支撑 `TPR@FPR=0.001` 或 full_paper 规模结论。 |
+| `validation_scale` | paper 级前小样本全流程打通门禁已完成硬阻断实现, 真实运行待复跑 | 已重新定义为 FPR=10% 小样本全流程打通层, 必须闭合完整现代 external_baseline formal records、内部消融、adaptive attack、replay/sketch 或受治理 Claim-3 downgrade、CI、tables、figures、reports、manifests、artifact rebuild 和 claim audit。 | 真实 validation_scale 结果尚未生成; 6 个现代 baseline 仍需由本项目 clone / build / run / adapt / record 产出 measured_formal, 不接受外部补交结果。 | 先配置并运行现代 baseline 自包含产出链路, 然后在 Colab 中运行 `PROFILE = validation_scale`。 | 通过并生成 validation_scale_to_pilot_paper_transition_decision 后才允许进入 pilot_paper 或继续准备 full_paper; 但 full_paper claim 仍需 pilot_paper、full_paper_result_checker 和轻量判定通过。若 baseline / ablation / replay / CI / artifact rebuild 任一缺失, 不得进入 paper 级结果运行。 |
+| `pilot_paper` | 工程入口已完成, 真实 GPU 结果待运行 | 已按 full_paper 同构协议接入 21 prompt × 8 seed、calibration split、frozen threshold artifact、held-out test split、完整现代 external_baseline 自包含 measured_formal adapter 前置检查、内部消融矩阵前置检查和 claim audit。 | 真实 Wan2.1 GPU 结果尚未生成; 6 个现代 baseline 需要在 Colab / 本地通过项目内 clone / build / run / adapt / record 后才能产出 measured_formal。 | 在 validation_scale 通过并生成 validation_scale_to_pilot_paper_transition_decision 后运行 `PROFILE = pilot_paper`, 审计 `pilot_paper_calibrated_heldout_claim_ready`, 同时要求 `modern_external_baseline_formal_measured_adapter_count >= 6` 与 `pilot_paper_internal_ablation_matrix_ready`。 | 它是小规模跑完整 full_paper 协议并产出 pilot 级论文结果的阶段, 可支撑 pilot_paper 级 `TPR@FPR=0.01`, 但不支撑 `TPR@FPR=0.001` 或 full_paper 规模结论。 |
 | `generative_video_model_probe` | 作为实现 package 保留, validation_scale 真实运行待复跑 | 生成、attack、detection、postprocess、external_baseline source intake、项目内自包含 baseline adapter、内部消融 runner、packager 与协议字段闭包已接入。 | 现代外部 baseline measured_formal、完整内部消融、replay/sketch、CI、tables / figures / reports 和 claim audit 尚未以同一 validation run 通过。 | 按 validation_scale -> pilot_paper -> full_paper 的主干门禁顺序推进。 | 只提供实现 package; 是否允许进入 pilot_paper、full_paper 由主干门禁和轻量判定决定。 |
 | `replay_and_authenticated_sketch_gate` | 未完成 | digest、manifest、trajectory trace 基础模块存在。 | authenticated sketch、replay uncertainty、wrong prompt replay 未闭合。 | 补齐签名 sketch、replay records 和 checker。 | 影响 Claim-3 强度; 不通过则降级 Claim-3。 |
 | `flow_specific_adaptive_attack_gate` | 未完成 | phase 文档已补建, 但 runner、manifest 与 governed records 尚未完成。 | adaptive attacks、endpoint-preserving resampling、path cancellation 未形成 records。 | 补齐 runner 设计、stress protocol、attack manifest 和 checker。 | full_paper 前必须完成或明确降级。 |
@@ -50,7 +50,7 @@ sampling_time_constraint_probe: structure_ready / mechanism_ready / protocol_rea
 small_scale_claim_pilot_gate: structure_ready / protocol_ready / external_validation_required
 ```
 
-该判定不能等同于“所有论文 claim 已经完成”。当前尚未完成 small-scale claim pilot, 因此不能进入 full experiment, 也不能声明最终 `TPR@FPR=0.01`、baseline comparison、ablation table 或 submission claim 已经成立。
+该判定不能等同于“所有论文 claim 已经完成”。当前尚未完成 small-scale claim pilot, 因此不能进入 `full_paper` 相关结果运行, 也不能声明最终 `TPR@FPR=0.01`、baseline comparison、ablation table 或 submission claim 已经成立。
 
 ### 3.2 已完成的机制证据
 
@@ -108,9 +108,9 @@ wrong-key application_evidence_direction_cosine mean: -0.000084
 
 ```text
 small_scale_claim_pilot_gate: 尚未运行 pilot split, 不能证明 attack / negative family / wrong-sampler replay 下的 claim 稳定性
-generative_video_model_probe: 尚未进入 full experiment, 不能产生最终主论文表格
+generative_video_model_probe: 尚未进入 `full_paper` 相关结果运行, 不能产生最终主论文表格
 replay_and_authenticated_sketch_gate: authenticated sketch 与 replay uncertainty 仍需进一步闭合
-submission_package_freeze: 只能等待 pilot / full experiment governed records 后再冻结
+submission_package_freeze: 只能等待 pilot_paper / full_paper governed records 后再冻结
 ```
 
 ### 3.4 阶段推进规则
@@ -124,7 +124,7 @@ small_scale_claim_pilot_gate
 下一步不允许直接进入:
 
 ```text
-generative_video_model_probe full experiment
+generative_video_model_probe full_paper 相关结果运行
 submission_package_freeze final claim
 ```
 
@@ -199,7 +199,7 @@ seed_per_prompt_min: 2
 missing_pilot_requirements: 8
 ```
 
-已满足的部分是 Wan2.1 pilot 生成覆盖和 proxy workflow progression。尚未满足的部分是 attack matrix、negative family、method variant、path marginal gain、negative tail、wrong-key separation、wrong-sampler replay 和 replay uncertainty。因此下一步应实现 pilot postprocess / runner, 不应进入 full experiment。
+已满足的部分是 Wan2.1 pilot 生成覆盖和 proxy workflow progression。尚未满足的部分是 attack matrix、negative family、method variant、path marginal gain、negative tail、wrong-key separation、wrong-sampler replay 和 replay uncertainty。因此下一步应实现 pilot postprocess / runner, 不应进入 `full_paper` 相关结果运行。
 
 ### 4.5 small-scale claim pilot matrix proxy 补齐状态
 
@@ -240,7 +240,7 @@ small_scale_pilot_missing_requirement_count: 0
 small_scale_pilot_claim_support_status: blocked_until_motion_threshold_calibration
 ```
 
-该结果说明真实文件级 attack runner 与 attacked video 落盘链路已经具备工程可运行性。当前仍不应进入 full experiment, 因为 formal motion threshold 仍为 heuristic guardrail, 且 runtime attacked videos 尚未接入正式 detection / scoring 表。
+该结果说明真实文件级 attack runner 与 attacked video 落盘链路已经具备工程可运行性。当前仍不应进入 `full_paper` 相关结果运行, 因为 formal motion threshold 仍为 heuristic guardrail, 且 runtime attacked videos 尚未接入正式 detection / scoring 表。
 
 ## 5. 2026-06-18 阶段状态更新: runtime attack 到 runtime detection 工程闭环
 
@@ -289,7 +289,7 @@ motion_threshold_calibration_required: true
 
 ```text
 工程层面: generation / attack / detection / package 已闭合。
-claim 层面: 仍阻塞于 motion_threshold_calibration, 不得进入 final claim 或 full experiment 结论冻结。
+claim 层面: 仍阻塞于 motion_threshold_calibration, 不得进入最终 claim 或 `full_paper` 结论冻结。
 ```
 
 ## 6. 2026-06-19 阶段状态更新: motion threshold calibration 已执行但未通过
@@ -594,7 +594,7 @@ submission package freeze
 final TPR@FPR=0.01 / 0.001 claim
 ```
 
-是否继续进入 full experiment, 必须由新的 pilot gate 结果决定。
+是否继续进入 `validation_scale`, 必须由 small_scale_mechanism_pilot_check 结果决定。
 
 
 ## 2026-06-23 阶段状态更新: small-scale pilot formal motion 过滤已修复
@@ -1808,5 +1808,7 @@ stage_transition_decision
 external_baseline_self_containment_decision
 data_split_and_leakage_guard
 ```
+
+其中 `stage_transition_decision` 必须在实现时拆成阶段明确的跳转判定: `validation_scale_to_pilot_paper_transition_decision`、`pilot_paper_to_full_paper_transition_decision` 和 `full_paper_to_submission_freeze_transition_decision`。这些判定只能在 source gate 已 PASS 后生成, 并由 target gate 消费, 不得反向作为 source gate 自身 PASS 条件。
 
 external baseline 的正式主表证据统一要求 `metric_status == measured_formal`, 且必须由项目内 clone / build / run / adapt / record 产出。governed non-run record 只能作为阻断记录或 limitation 说明, 不能替代 measured_formal baseline。

@@ -53,7 +53,7 @@ Google Drive package 可以落盘并复核
 
 ### 2.2 证据边界
 
-该阶段只证明真实 Flow Matching 视频生成接口可承接 SSTW trajectory records。它不直接证明最终 watermark detection 指标, 也不直接支持 `TPR@FPR=0.01` 或 full experiment claim。
+该阶段只证明真实 Flow Matching 视频生成接口可承接 SSTW trajectory records。它不直接证明最终 watermark detection 指标, 也不直接支持 `TPR@FPR=0.01` 或 `full_paper` claim。
 
 后续阶段应继续使用 governed records 中的:
 

@@ -148,7 +148,7 @@ wrong_sampler_replay_control_not_equivalent == true
 motion_threshold_calibration_ready == true
 method_mechanism_validation_decision == PASS
 validation_scale_gate_decision == PASS
-stage_transition_decision == PASS
+validation_scale_to_pilot_paper_transition_decision == PASS
 data_split_and_leakage_guard_decision == PASS
 external_baseline_comparison_decision == PASS
 external_baseline_self_containment_decision == PASS

@@ -20,6 +20,10 @@ import sys
 from typing import Any, Mapping
 
 from external_baseline.runtime_trace_io import comparable_detection_records
+from external_baseline.videoseal_official_runtime import (
+    ensure_videoseal_official_runtime_layout,
+    videoseal_official_source_cwd,
+)
 from main.core.progress import ProgressReporter
 
 
@@ -144,8 +148,8 @@ def generate_videoseal_official_bundle(
     import torchvision
 
     source_path = Path(source_dir or os.environ.get("SSTW_VIDEOSEAL_SOURCE_DIR", "/content/SSTW/external_baseline/primary/videoseal/source"))
-    if source_path.exists():
-        sys.path.insert(0, str(source_path))
+    source_layout_audit = ensure_videoseal_official_runtime_layout(source_path)
+    sys.path.insert(0, str(source_path))
     import videoseal
 
     root = Path(run_root)
@@ -155,7 +159,8 @@ def generate_videoseal_official_bundle(
         records = records[:max_records]
     device = os.environ.get("SSTW_VIDEOSEAL_DEVICE") or ("cuda" if torch.cuda.is_available() else "cpu")
     model_name = os.environ.get("SSTW_VIDEOSEAL_MODEL_NAME", "videoseal")
-    model = videoseal.load(model_name)
+    with videoseal_official_source_cwd(source_path):
+        model = videoseal.load(model_name)
     model.eval()
     model.to(device)
 
@@ -212,6 +217,7 @@ def generate_videoseal_official_bundle(
                 "threshold": float(os.environ.get("SSTW_VIDEOSEAL_DETECTION_THRESHOLD", "0.5")),
                 "official_result_provenance": "repository_generated_from_third_party_official_code",
                 "official_baseline_id": "videoseal",
+                "official_source_layout_status": source_layout_audit["layout_status"],
                 "external_baseline_generation_model_id": "videoseal_official_api",
                 "external_baseline_source_video_path": str(baseline_source_video),
                 "external_baseline_attacked_video_path": str(baseline_attacked_video),
@@ -241,6 +247,8 @@ def generate_videoseal_official_bundle(
         "bundle_root": str(bundle),
         "official_repository_url": "https://github.com/facebookresearch/videoseal",
         "official_api": "videoseal.load/embed/detect",
+        "official_source_dir": str(source_path),
+        "official_source_layout_audit": source_layout_audit,
         "official_model_name": model_name,
         "device": device,
         "input_runtime_detection_record_count": len(records),

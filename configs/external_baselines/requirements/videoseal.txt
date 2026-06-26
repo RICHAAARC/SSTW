@@ -4,6 +4,7 @@ git+https://github.com/facebookresearch/videoseal
 av
 torch
 torchvision
+ffmpeg-python
 imageio
 imageio-ffmpeg
 opencv-python

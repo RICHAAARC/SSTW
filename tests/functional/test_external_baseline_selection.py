@@ -19,6 +19,11 @@ from external_baseline.official_runtime_closure import (
     build_official_runtime_closure_requirements,
     load_official_runtime_closure_requirements,
 )
+from external_baseline.videoseal_official_runtime import (
+    ensure_videoseal_official_runtime_layout,
+    inspect_videoseal_official_runtime_layout,
+    videoseal_official_source_cwd,
+)
 from main.protocol.record_writer import read_jsonl, write_jsonl
 from external_baseline.source_intake import build_source_intake_manifest, write_source_intake_artifacts
 
@@ -154,12 +159,47 @@ def test_official_runtime_closure_requirements_are_first_class_colab_config() ->
     assert config["self_containment_rule"].startswith("external baseline 必须在项目内 clone")
     assert rows["videoseal"]["automatic_bundle_generation_supported_by_sstw"] is True
     assert rows["videoseal"]["colab_default_can_attempt_without_user_files"] is True
+    assert "ffmpeg-python" in Path(rows["videoseal"]["requirements_file"]).read_text(encoding="utf-8")
     for baseline_id, row in rows.items():
         assert row["external_supplemental_result_bundle_allowed"] is False
         assert row["official_baseline_command_env_var"] == f"SSTW_{baseline_id.upper()}_OFFICIAL_EVAL_COMMAND"
         assert row["external_baseline_command_env_var"] == f"SSTW_{baseline_id.upper()}_EVAL_COMMAND"
         assert row["native_command_env_var"] == f"SSTW_{baseline_id.upper()}_NATIVE_EVAL_COMMAND"
         assert Path(row["requirements_file"]).exists()
+
+
+@pytest.mark.quick
+def test_videoseal_official_runtime_layout_requires_source_root_config(tmp_path: Path) -> None:
+    """VideoSeal 官方源码加载必须以源码根目录作为临时 cwd 解析官方配置。"""
+    source_dir = tmp_path / "videoseal_source"
+    (source_dir / "videoseal").mkdir(parents=True)
+    (source_dir / "configs").mkdir()
+    (source_dir / "configs" / "attenuation.yaml").write_text("jnd_1_1: {}\n", encoding="utf-8")
+
+    audit = ensure_videoseal_official_runtime_layout(source_dir)
+
+    assert audit["layout_decision"] == "PASS"
+    assert audit["layout_status"] == "official_source_root_config_ready"
+    previous_cwd = Path.cwd()
+    with videoseal_official_source_cwd(source_dir):
+        assert Path.cwd() == source_dir.resolve()
+        assert Path("configs/attenuation.yaml").is_file()
+    assert Path.cwd() == previous_cwd
+
+
+@pytest.mark.quick
+def test_videoseal_official_runtime_layout_fails_closed_without_official_config(tmp_path: Path) -> None:
+    """缺少官方 attenuation.yaml 时必须阻断, 不能生成临时配置伪装为正式 baseline。"""
+    source_dir = tmp_path / "videoseal_source"
+    (source_dir / "videoseal").mkdir(parents=True)
+
+    audit = inspect_videoseal_official_runtime_layout(source_dir)
+
+    assert audit["layout_decision"] == "FAIL"
+    assert audit["layout_status"] == "official_required_config_missing"
+    with pytest.raises(FileNotFoundError, match="videoseal_official_config_missing"):
+        ensure_videoseal_official_runtime_layout(source_dir)
+    assert not (source_dir / "videoseal" / "configs" / "attenuation.yaml").exists()
 
 
 @pytest.mark.quick

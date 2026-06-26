@@ -17,6 +17,10 @@ from external_baseline.official_eval_adapters.common import (
     run_adapter_main,
     safe_float,
 )
+from external_baseline.videoseal_official_runtime import (
+    ensure_videoseal_official_runtime_layout,
+    videoseal_official_source_cwd,
+)
 
 
 BASELINE_ID = "videoseal"
@@ -76,6 +80,7 @@ def _run_default(args: argparse.Namespace, source_dir: Path, output_json_path: P
     )
     if bundled is not None:
         return bundled
+    source_layout_audit = ensure_videoseal_official_runtime_layout(source_dir)
     sys.path.insert(0, str(source_dir))
 
     import torch
@@ -84,7 +89,8 @@ def _run_default(args: argparse.Namespace, source_dir: Path, output_json_path: P
 
     device = os.environ.get("SSTW_VIDEOSEAL_DEVICE") or ("cuda" if torch.cuda.is_available() else "cpu")
     model_name = os.environ.get("SSTW_VIDEOSEAL_MODEL_NAME", "videoseal")
-    video_model = videoseal.load(model_name)
+    with videoseal_official_source_cwd(source_dir):
+        video_model = videoseal.load(model_name)
     video_model.eval()
     video_model.to(device)
 
@@ -125,6 +131,8 @@ def _run_default(args: argparse.Namespace, source_dir: Path, output_json_path: P
         "official_adapter_status": "measured_by_videoseal_official_api",
         "official_adapter_baseline_id": BASELINE_ID,
         "official_source_dir": str(source_dir),
+        "official_source_layout_status": source_layout_audit["layout_status"],
+        "official_source_runtime_cwd": source_layout_audit["required_working_directory"],
         "official_model_name": model_name,
         "official_video_frame_count": int(video.shape[0]),
         "official_video_fps": float(info.get("video_fps") or 0.0),

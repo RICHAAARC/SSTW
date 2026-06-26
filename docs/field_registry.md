@@ -482,6 +482,21 @@ Notebook 与 repository module 的跨边界数据
 | method_id | protocol | none | true | false | false | Stable identifier for a method or baseline in comparison tables. |
 | method_role | protocol | none | true | false | false | Role of a method or baseline in comparison tables. |
 | metric_status | governance | none | true | false | false | Whether a comparison row or record contains measured proxy metrics or remains unsupported. |
+| official_source_dir | artifact | none | true | false | false | VideoSeal 或其他 external baseline 官方源码目录。 |
+| official_source_dir_exists | governance | none | true | false | false | 官方源码目录是否存在。 |
+| official_source_layout_status | governance | none | true | false | false | 官方源码运行布局状态, 例如 VideoSeal root config 是否可解析。 |
+| official_source_layout_audit | artifact | none | false | false | false | 官方源码运行布局审计对象, 用于说明 Notebook/Colab 运行前置条件。 |
+| official_source_runtime_cwd | artifact | none | true | false | false | 调用官方 API 时临时使用的官方源码工作目录。 |
+| required_working_directory | artifact | none | false | false | false | 第三方官方代码加载模型或配置时要求的工作目录。 |
+| runtime_cwd_policy | governance | none | false | false | false | 第三方官方代码加载阶段的临时 cwd 切换策略。 |
+| source_root_config_paths | artifact | none | false | false | false | 官方源码根目录下需要被相对路径解析的配置文件列表。 |
+| package_fallback_config_paths | artifact | none | false | false | false | 官方包目录下可作为后备解析位置的配置文件列表。 |
+| missing_required_config_paths | artifact | none | false | false | false | 官方源码运行布局审计中缺失的必要配置路径。 |
+| config_relative_path | artifact | none | false | false | false | 官方源码运行布局审计中配置文件相对路径。 |
+| config_path | artifact | none | false | false | false | 官方源码运行布局审计中配置文件完整路径。 |
+| config_file_exists | governance | none | false | false | false | 官方源码运行布局审计中配置文件是否存在。 |
+| layout_decision | governance | none | false | false | false | 官方源码运行布局审计 PASS/FAIL 判定。 |
+| layout_status | governance | none | false | false | false | 官方源码运行布局审计的具体状态。 |
 | proposed_method_score_mean | metric | none | true | false | false | Mean SSTW runtime detection proxy score in an external baseline comparison table. |
 | external_baseline_score_mean | metric | none | true | false | false | Mean external baseline adapter proxy score in a comparison table. |
 | external_baseline_distance_mean | metric | none | true | false | false | Mean external baseline adapter distance in a comparison table. |

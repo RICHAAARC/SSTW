@@ -9,6 +9,7 @@
 3. 不要手写 records, 也不要把 Colab 中临时整理的表格当作论文证据。
 4. 当前 Colab 主流程只使用新的 profile-driven workflow。旧的诊断 Notebook 可以用于排查, 但不作为 paper workflow 的正式执行顺序。
 5. 默认 Drive 根目录为 `/content/drive/MyDrive/SSTW`, Windows 本地映射通常对应 `G:\我的云端硬盘\SSTW`。
+6. Notebook 的热路径必须使用阶段 zip 交接: 先把前置阶段 zip 从 Drive 复制到 `/content` 本地解压, 后续 runner 只读写本地 workspace, 阶段结束后再把单个 zip 和 manifest 写回 Drive。
 
 ## 2. Colab 冷启动准备
 
@@ -37,6 +38,40 @@ os.environ["SSTW_DRIVE_PROJECT_ROOT"] = "/content/drive/MyDrive/SSTW"
 ```
 
 除非需要隔离实验, 否则建议保持默认目录, 便于在本地通过 `G:\我的云端硬盘\SSTW` 检查落盘结果。
+
+## 2.1 阶段 zip 交接与本地 workspace
+
+为避免 Colab 对 Google Drive 大量小文件循环读取触发限制, 所有正式 Notebook 默认启用:
+
+```python
+os.environ["SSTW_COLAB_STAGE_IO_MODE"] = "local_zip"
+```
+
+启用后路径语义如下:
+
+```text
+Google Drive: 只保存阶段 zip、stage package manifest、旧版审阅 package zip 和少量资源 checkpoint。
+/content/SSTW_stage_workspace: 当前 Notebook 的本地热路径, runner 在这里读写 records、artifacts、videos 和 official bundle。
+/content/SSTW_stage_packages: 当前 Colab 会话复制过来的 zip 缓存。
+```
+
+每个阶段完成后会额外写出阶段交接包:
+
+```text
+/content/drive/MyDrive/SSTW/stage_packages/<workflow_profile>/<stage_package_id>/stage_package_latest.zip
+/content/drive/MyDrive/SSTW/stage_packages/<workflow_profile>/<stage_package_id>/stage_package_latest_manifest.json
+```
+
+后续 Notebook 不应直接从:
+
+```text
+/content/drive/MyDrive/SSTW/runs/...
+/content/drive/MyDrive/SSTW/external_baseline_official_result_bundles/...
+```
+
+循环读取大量小文件。正确流程是复制 latest zip 到本地、解压、在本地路径继续运行。
+旧版 `packages/.../*.zip` 仍可作为人工审阅包保留, 但 Notebook 间自动交接以
+`stage_packages/.../*latest.zip` 为准。
 
 ## 3. 当前推荐执行顺序
 
@@ -86,7 +121,8 @@ SSTW_WORKFLOW_PROFILE_VALUE = ''
 主要落盘位置:
 
 ```text
-/content/drive/MyDrive/SSTW/runs/generative_video_model_probe/motion_calibration
+/content/SSTW_stage_workspace/runs/generative_video_model_probe/motion_calibration
+/content/drive/MyDrive/SSTW/stage_packages/motion_calibration/motion_threshold_calibration_colab
 /content/drive/MyDrive/SSTW/packages/generative_video_model_probe/motion_calibration
 ```
 
@@ -108,7 +144,7 @@ paper_workflow/colab_notebooks/generative_video_runtime_colab.ipynb
 - 记录 latent / time grid / sampler signature / velocity proxy 或 latent displacement proxy。
 - 复用 motion threshold artifact。
 - 执行 formal metric、attack runner、detection runner 和 small-scale claim pilot gate。
-- 打包当前 run 到 Google Drive。
+- 将当前本地 run root 打包为阶段 zip 并保存到 Google Drive。
 
 当前 validation-scale 配置:
 
@@ -211,7 +247,13 @@ configs/external_baselines/requirements/<baseline_id>.txt
 为锚点, 把每个 baseline 的官方结果写入:
 
 ```text
-/content/drive/MyDrive/SSTW/external_baseline_official_result_bundles/validation_scale
+/content/SSTW_stage_workspace/external_baseline_official_result_bundles/validation_scale
+```
+
+阶段完成后, 该本地 official bundle 会随对应 baseline 的阶段 zip 写入:
+
+```text
+/content/drive/MyDrive/SSTW/stage_packages/validation_scale/external_baseline_formal_reference_<baseline_id>
 ```
 
 其产物性质必须明确区分:
@@ -571,6 +613,11 @@ package 输出应位于:
 ```
 
 package 文件名采用 `<utc_time>_<short_commit>` 批次标识, 便于定位同一轮 Colab 产物。
+Notebook 间复用优先读取阶段交接包:
+
+```text
+/content/drive/MyDrive/SSTW/stage_packages/<workflow_profile>/<stage_package_id>/*latest.zip
+```
 
 ## 6. 真实工作量进度显示
 

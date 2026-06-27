@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 import re
+import shutil
 import zipfile
 
 import pytest
@@ -31,6 +32,12 @@ from paper_workflow.notebook_utils.generative_video_model_probe_workflow import 
     write_modern_baseline_colab_command_config_summary,
     write_external_baseline_colab_preflight_decision,
     write_motion_threshold_reuse_artifact_for_profile,
+)
+from paper_workflow.colab_utils.stage_package_sync import (
+    activate_local_stage_layout,
+    hydrate_stage_package,
+    publish_colab_stage_package,
+    stage_package_id_for_notebook,
 )
 from experiments.generative_video_model_probe.colab_runtime import _build_generation_plan
 from scripts.package_results.generative_video_drive_packager import package_generative_video_colab_run
@@ -205,6 +212,10 @@ def test_generative_video_colab_notebook_calls_repository_modules() -> None:
     assert "default_workflow_profile_for_notebook_role" in source
     assert "resolve_notebook_workflow_profile" in source
     assert "ensure_drive_layout(" in source
+    assert "SSTW_COLAB_STAGE_IO_MODE" in source
+    assert "prepare_colab_stage_layout" in source
+    assert "publish_colab_stage_package" in source
+    assert "active_local_layout" in source
     assert "workflow_profile=WORKFLOW_PROFILE" in source
     assert "stage_enabled(" in source
     assert "workflow_stage_enabled" in source
@@ -292,6 +303,10 @@ def test_split_colab_notebooks_are_profile_driven() -> None:
         assert "SSTW_WORKFLOW_PROFILE" in source
         assert "resolve_notebook_workflow_profile" in source
         assert "workflow_profile=WORKFLOW_PROFILE" in source
+        assert "SSTW_COLAB_STAGE_IO_MODE" in source
+        assert "prepare_colab_stage_layout" in source
+        assert "publish_colab_stage_package" in source
+        assert "active_local_layout" in source
         assert "stage_enabled(" in source
         assert "drive.mount('/content/drive')" in source
         assert "git clone" in source
@@ -332,6 +347,23 @@ def test_colab_notebooks_are_separated_from_python_helpers() -> None:
 
 
 @pytest.mark.quick
+def test_formal_reference_notebooks_use_stage_zip_handoff() -> None:
+    """每个 baseline 参考 Notebook 必须启用阶段 zip 交接, 避免循环读取 Drive 小文件。"""
+
+    notebook_dir = Path("paper_workflow/colab_notebooks")
+    for baseline_id in ("videoseal", "vidsig", "videomark", "videoshield", "spdmark", "sigmark"):
+        notebook_path = notebook_dir / f"{baseline_id}_formal_reference_colab.ipynb"
+        assert notebook_path.exists()
+        notebook = json.loads(notebook_path.read_text(encoding="utf-8"))
+        source = "".join("".join(cell.get("source", [])) for cell in notebook["cells"])
+
+        assert "SSTW_COLAB_STAGE_IO_MODE" in source
+        assert "local_zip" in source
+        assert "stage_package_publish_result" in source
+        assert f"BASELINE_ID = '{baseline_id}'" in source
+
+
+@pytest.mark.quick
 def test_colab_workflow_readme_documents_validation_scale_execution() -> None:
     """Colab workflow README 必须说明 validation-scale 执行顺序、profile 切换和 Drive 落盘边界。"""
     readme_path = Path("paper_workflow/colab_notebooks/README.md")
@@ -350,6 +382,9 @@ def test_colab_workflow_readme_documents_validation_scale_execution() -> None:
     assert text.index("external_baseline_formal_scoring_colab.ipynb") < text.index("paper_gate_and_package_colab.ipynb")
     assert "SSTW_WORKFLOW_PROFILE_VALUE = 'validation_scale'" in text
     assert "SSTW_WORKFLOW_PROFILE_VALUE = 'pilot_paper'" in text
+    assert "SSTW_COLAB_STAGE_IO_MODE" in text
+    assert "stage_packages" in text
+    assert "/content/SSTW_stage_workspace" in text
     assert "不要把该 Notebook 切换到 `validation_scale` 或 `pilot_paper`" in text
     assert "SSTW_VIDEOSHIELD_EVAL_COMMAND" in text
     assert "SSTW_SIGMARK_EVAL_COMMAND" in text
@@ -449,6 +484,62 @@ def test_profile_specific_drive_layout_prevents_result_mixing(tmp_path: Path) ->
     assert pilot_layout["motion_threshold_artifact_run_root"].endswith("/runs/generative_video_model_probe/motion_calibration")
     assert pilot_layout["runtime_profile"] == "pilot_paper"
     assert validation_layout["drive_run_root"] != pilot_layout["drive_run_root"]
+
+
+@pytest.mark.quick
+def test_stage_package_sync_round_trips_local_run_without_drive_small_file_reads(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """阶段 zip 交接应把本地 run_root 打包成 Drive 单 zip, 后续再复制 zip 本地解压复用。"""
+
+    monkeypatch.setenv("SSTW_COLAB_STAGE_IO_MODE", "local_zip")
+    monkeypatch.setenv("SSTW_LOCAL_STAGE_PACKAGE_CACHE_ROOT", str(tmp_path / "local_package_cache"))
+    drive_root = tmp_path / "drive" / "SSTW"
+    layout = build_drive_layout(
+        str(drive_root),
+        workflow_profile="validation_scale",
+        notebook_role="generative_video_runtime",
+    )
+    local_layout = activate_local_stage_layout(
+        layout,
+        notebook_role="generative_video_runtime",
+        local_workspace_root=tmp_path / "local_workspace",
+    )
+    run_root = Path(local_layout["drive_run_root"])
+    write_jsonl(run_root / "records" / "generation_records.jsonl", [
+        {"generation_status": "success", "prompt_id": "prompt_a", "seed_id": "seed_a"},
+    ])
+    write_json(run_root / "artifacts" / "generative_video_colab_runtime_decision.json", {
+        "stage_id": "generative_video_runtime",
+        "implementation_decision": "PASS",
+    })
+    video_path = run_root / "videos" / "sample.mp4"
+    video_path.parent.mkdir(parents=True, exist_ok=True)
+    video_path.write_bytes(b"sample-video")
+
+    published = publish_colab_stage_package(
+        local_layout,
+        notebook_role="generative_video_runtime",
+        include_videos=True,
+    )
+
+    assert published["stage_package_publish_status"] == "published"
+    assert Path(published["drive_stage_package_zip"]).exists()
+    assert Path(published["latest_drive_stage_package_zip"]).exists()
+    assert published["stage_package_entry_count"] >= 3
+    assert published["stage_package_id"] == stage_package_id_for_notebook("generative_video_runtime")
+
+    shutil.rmtree(run_root)
+    restored = hydrate_stage_package(
+        local_layout,
+        "generative_video_runtime_colab",
+        required=True,
+    )
+
+    assert restored["stage_package_restore_status"] == "restored"
+    assert (run_root / "records" / "generation_records.jsonl").exists()
+    assert (run_root / "videos" / "sample.mp4").exists()
 
 
 @pytest.mark.quick

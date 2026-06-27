@@ -489,6 +489,26 @@ Notebook 与 repository module 的跨边界数据
 | official_source_runtime_cwd | artifact | none | true | false | false | 调用官方 API 时临时使用的官方源码工作目录。 |
 | official_video_io_backend | artifact | none | true | false | false | official baseline wrapper 使用的视频文件 I/O 后端。 |
 | colab_torch_stack_policy | governance | none | false | false | false | Colab 中是否保持预装 torch / torchvision 运行栈不被 requirements 覆盖。 |
+| stage_package_handoff_mode | governance | none | true | false | false | Colab Notebook 是否启用本地 workspace 与阶段 zip 交接, 例如 local_zip。 |
+| stage_package_id | artifact | none | true | false | false | Notebook 阶段 zip 交接包的稳定语义 ID。 |
+| stage_package_dir | artifact | none | true | false | false | 阶段 zip 交接包在 Google Drive 中的归档目录。 |
+| local_stage_workspace_root | artifact | none | true | false | false | Colab 中用于热路径读写的本地 workspace 根目录。 |
+| local_stage_package_cache_root | artifact | none | true | false | false | Colab 中缓存从 Drive 复制来的阶段 zip 的本地目录。 |
+| stage_package_restore_status | governance | none | true | false | false | 前置阶段 zip 是否已恢复到本地 workspace。 |
+| stage_package_source_kind | governance | none | false | false | false | 恢复阶段包时使用的是新阶段 zip 还是 legacy Drive package zip。 |
+| stage_package_publish_status | governance | none | true | false | false | 当前阶段 zip 是否已发布到 Google Drive。 |
+| stage_package_archive_sha256 | artifact | none | true | false | false | 阶段 zip 文件的 sha256 摘要, 用于校验交接包完整性。 |
+| stage_package_entry_count | metric | none | true | false | false | 阶段 zip 中归档的文件条目数量。 |
+| stage_package_source_root_count | metric | none | true | false | false | 生成阶段 zip 时纳入的本地源目录数量。 |
+| stage_package_source_roots | artifact | none | false | false | false | 生成阶段 zip 时纳入的本地源目录和 zip 内归档根路径列表。 |
+| local_stage_package_zip | artifact | none | true | false | false | 阶段 zip 在 Colab 本地缓存中的路径。 |
+| drive_stage_package_zip | artifact | none | true | false | false | 阶段 zip 在 Google Drive 中的时间戳归档路径。 |
+| latest_drive_stage_package_zip | artifact | none | true | false | false | 阶段 zip 在 Google Drive 中的 latest 交接路径。 |
+| stage_package_manifest_path | artifact | none | true | false | false | 阶段 zip manifest 在 Google Drive 中的时间戳归档路径。 |
+| latest_stage_package_manifest_path | artifact | none | true | false | false | 阶段 zip manifest 在 Google Drive 中的 latest 交接路径。 |
+| required_stage_package_ids | governance | none | false | false | false | 当前 Notebook 必须先恢复的前置阶段包 ID 列表。 |
+| optional_stage_package_ids | governance | none | false | false | false | 当前 Notebook 可恢复但不强制存在的阶段包 ID 列表。 |
+| restored_stage_package_count | metric | none | false | false | false | 当前 Notebook 已成功恢复到本地 workspace 的阶段包数量。 |
 | video_io_backend | artifact | none | false | false | false | 视频张量 I/O helper 返回的实际后端名称。 |
 | required_working_directory | artifact | none | false | false | false | 第三方官方代码加载模型或配置时要求的工作目录。 |
 | runtime_cwd_policy | governance | none | false | false | false | 第三方官方代码加载阶段的临时 cwd 切换策略。 |

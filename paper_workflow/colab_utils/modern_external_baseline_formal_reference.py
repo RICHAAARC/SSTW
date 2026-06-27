@@ -21,6 +21,10 @@ from typing import Any, Mapping
 
 from external_baseline.official_runtime_closure import write_official_runtime_closure_requirements
 from external_baseline.runtime_trace_io import build_comparison_unit_id, comparable_detection_records
+from paper_workflow.colab_utils.stage_package_sync import (
+    prepare_colab_stage_layout,
+    publish_colab_stage_package,
+)
 from paper_workflow.notebook_utils import generative_video_model_probe_workflow as probe_workflow
 
 
@@ -723,6 +727,11 @@ def run_modern_external_baseline_formal_reference_plan(
         workflow_profile=config.workflow_profile,
         notebook_role=DEFAULT_NOTEBOOK_ROLE_FOR_LAYOUT,
     )
+    layout = prepare_colab_stage_layout(
+        layout,
+        notebook_role=DEFAULT_NOTEBOOK_ROLE_FOR_LAYOUT,
+        baseline_id=config.baseline_id,
+    )
     run_root = Path(layout["drive_run_root"])
     bundle_root = Path(layout["external_baseline_official_result_bundle_root"])
     os.environ["SSTW_EXTERNAL_BASELINE_OFFICIAL_RESULT_BUNDLE_ROOT"] = str(bundle_root)
@@ -808,6 +817,14 @@ def run_modern_external_baseline_formal_reference_plan(
         else "official_reference_bundle_blocked_not_claim_evidence",
     }
     decision_path = run_root / "artifacts" / "external_baseline_formal_reference" / f"{config.baseline_id}_formal_reference_decision.json"
+    _write_json(decision_path, decision)
+    package_manifest = publish_colab_stage_package(
+        layout,
+        notebook_role=DEFAULT_NOTEBOOK_ROLE_FOR_LAYOUT,
+        baseline_id=config.baseline_id,
+        include_videos=True,
+    )
+    decision["stage_package_publish_result"] = package_manifest
     _write_json(decision_path, decision)
     return decision
 

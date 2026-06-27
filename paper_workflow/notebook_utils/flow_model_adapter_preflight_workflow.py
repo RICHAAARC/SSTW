@@ -25,6 +25,10 @@ def build_drive_layout(drive_project_root: str = DEFAULT_DRIVE_PROJECT_ROOT) -> 
         "drive_run_root": (root / "runs" / "wan21_flow_adapter_preflight").as_posix(),
         "drive_package_dir": (root / "packages" / "wan21_flow_adapter_preflight").as_posix(),
         "drive_log_dir": (root / "logs" / "wan21_flow_adapter_preflight").as_posix(),
+        "workflow_profile": "wan21_flow_adapter_preflight",
+        "runtime_profile": "wan21_flow_adapter_preflight",
+        "result_tier": "preflight",
+        "notebook_role": "wan21_flow_adapter_preflight",
     }
 
 

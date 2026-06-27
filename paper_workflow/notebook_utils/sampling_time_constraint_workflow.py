@@ -22,6 +22,10 @@ def build_drive_layout(drive_project_root: str = DEFAULT_DRIVE_PROJECT_ROOT) -> 
         "drive_package_dir": (root / "packages" / "sampling_time_constraint").as_posix(),
         "drive_log_dir": (root / "logs" / "sampling_time_constraint").as_posix(),
         "prompt_suite_path": (root / "datasets" / "generative_video_prompt_suite" / "prompt_seed_suite.json").as_posix(),
+        "workflow_profile": "sampling_time_constraint",
+        "runtime_profile": "recommended",
+        "result_tier": "sampling_time_constraint_colab_probe",
+        "notebook_role": "sampling_time_constraint",
     }
 
 

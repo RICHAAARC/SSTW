@@ -46,6 +46,10 @@ def test_wan21_preflight_colab_notebook_calls_repository_module() -> None:
     assert "git pull --ff-only" in source
     assert "git+https://github.com/huggingface/diffusers" in source
     assert "flow_model_adapter_preflight_workflow" in source
+    assert "SSTW_COLAB_STAGE_IO_MODE" in source
+    assert "prepare_colab_stage_layout" in source
+    assert "publish_colab_stage_package" in source
+    assert "active_local_layout" in source
     assert "Wan-AI/Wan2.1-T2V-1.3B-Diffusers" in source or "DEFAULT_WAN21_PREFLIGHT_MODEL_ID" in source
     assert "HF_TOKEN" in source
     assert "pytest -q" in source

@@ -133,6 +133,23 @@ def latest_stage_package_zip(
     return candidates[0] if candidates else None
 
 
+def _stage_package_source_workflow_profile(
+    layout: Mapping[str, str],
+    stage_package_id: str,
+) -> str:
+    """返回恢复某个阶段包时应使用的来源 profile。
+
+    通用写法是从当前 Notebook 的 workflow profile 读取前置阶段包。项目特定例外是
+    `motion_threshold_calibration_colab`: 它属于独立 calibration split, 后续
+    validation / pilot / full profile 都必须复用 `motion_calibration` 中冻结的阈值,
+    不能到当前 evaluation profile 下查找或重新估计阈值。
+    """
+
+    if sanitize_filename_token(stage_package_id) == "motion_threshold_calibration_colab":
+        return "motion_calibration"
+    return str(layout.get("workflow_profile") or layout.get("runtime_profile") or "default")
+
+
 def activate_local_stage_layout(
     layout: Mapping[str, str],
     *,
@@ -244,14 +261,16 @@ def hydrate_stage_package(
     *,
     required: bool = True,
     allow_legacy_drive_package: bool = False,
+    source_workflow_profile: str | None = None,
 ) -> dict[str, Any]:
     """从 Drive 复制单个阶段 zip 到本地并解压。"""
 
     drive_project_root = str(layout.get("drive_project_root") or "/content/drive/MyDrive/SSTW")
-    workflow_profile = str(layout.get("workflow_profile") or layout.get("runtime_profile") or "default")
+    target_workflow_profile = str(layout.get("workflow_profile") or layout.get("runtime_profile") or "default")
+    source_profile = source_workflow_profile or _stage_package_source_workflow_profile(layout, stage_package_id)
     local_cache_root = Path(str(layout.get("local_stage_package_cache_root") or DEFAULT_LOCAL_PACKAGE_CACHE_ROOT))
     local_workspace_root = Path(str(layout.get("local_stage_workspace_root") or DEFAULT_LOCAL_WORKSPACE_ROOT))
-    source_zip = latest_stage_package_zip(drive_project_root, workflow_profile, stage_package_id)
+    source_zip = latest_stage_package_zip(drive_project_root, source_profile, stage_package_id)
     source_kind = "stage_package"
 
     if source_zip is None and allow_legacy_drive_package:
@@ -264,15 +283,17 @@ def hydrate_stage_package(
         if required:
             raise FileNotFoundError(
                 "缺少阶段 zip 包, 为避免 Google Drive 小文件循环读取, 请先完成并发布阶段包: "
-                f"{stage_package_id}"
+                f"{stage_package_id}; source_workflow_profile={source_profile}"
             )
         return {
             "stage_package_id": stage_package_id,
             "stage_package_restore_status": "missing_optional",
+            "stage_package_source_workflow_profile": source_profile,
+            "stage_package_target_workflow_profile": target_workflow_profile,
             "required": False,
         }
 
-    local_cache_dir = local_cache_root / workflow_profile / sanitize_filename_token(stage_package_id)
+    local_cache_dir = local_cache_root / source_profile / sanitize_filename_token(stage_package_id)
     local_cache_dir.mkdir(parents=True, exist_ok=True)
     local_zip = local_cache_dir / source_zip.name
     shutil.copy2(source_zip, local_zip)
@@ -290,6 +311,8 @@ def hydrate_stage_package(
         "stage_package_id": stage_package_id,
         "stage_package_restore_status": "restored",
         "stage_package_source_kind": source_kind,
+        "stage_package_source_workflow_profile": source_profile,
+        "stage_package_target_workflow_profile": target_workflow_profile,
         "drive_stage_package_zip": str(source_zip),
         "local_stage_package_zip": str(local_zip),
         "local_stage_workspace_root": str(local_workspace_root),
@@ -355,13 +378,22 @@ def hydrate_stage_packages_for_notebook(
                 stage_package_id,
                 required=True,
                 allow_legacy_drive_package=allow_legacy and stage_package_id == "generative_video_runtime_colab",
+                source_workflow_profile=_stage_package_source_workflow_profile(layout, stage_package_id),
             )
         )
     for stage_package_id in optional:
-        rows.append(hydrate_stage_package(layout, stage_package_id, required=False))
+        rows.append(
+            hydrate_stage_package(
+                layout,
+                stage_package_id,
+                required=False,
+                source_workflow_profile=_stage_package_source_workflow_profile(layout, stage_package_id),
+            )
+        )
+    restore_status = "restored_required_packages" if required or optional else "no_required_stage_packages"
     return {
         "stage_package_handoff_mode": "local_zip",
-        "stage_package_restore_status": "restored_required_packages",
+        "stage_package_restore_status": restore_status,
         "required_stage_package_ids": required,
         "optional_stage_package_ids": optional,
         "restored_stage_package_count": sum(1 for row in rows if row.get("stage_package_restore_status") == "restored"),
@@ -505,6 +537,7 @@ def publish_colab_stage_package(
         "baseline_id": baseline_id or "",
         "workflow_profile": workflow_profile,
         "stage_package_handoff_mode": "local_zip",
+        "stage_package_publish_status": "published",
         "package_batch_id": package_batch_id,
         "package_utc_time": package_utc_time,
         "package_short_commit": package_short_commit,

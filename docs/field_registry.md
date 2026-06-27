@@ -496,6 +496,8 @@ Notebook 与 repository module 的跨边界数据
 | local_stage_package_cache_root | artifact | none | true | false | false | Colab 中缓存从 Drive 复制来的阶段 zip 的本地目录。 |
 | stage_package_restore_status | governance | none | true | false | false | 前置阶段 zip 是否已恢复到本地 workspace。 |
 | stage_package_source_kind | governance | none | false | false | false | 恢复阶段包时使用的是新阶段 zip 还是 legacy Drive package zip。 |
+| stage_package_source_workflow_profile | governance | none | false | false | false | 恢复阶段包时实际读取的来源 workflow profile, 用于表达 motion calibration 等跨 profile 复用规则。 |
+| stage_package_target_workflow_profile | governance | none | false | false | false | 当前 Notebook 正在运行的目标 workflow profile, 用于审计跨 profile 阶段包恢复。 |
 | stage_package_publish_status | governance | none | true | false | false | 当前阶段 zip 是否已发布到 Google Drive。 |
 | stage_package_archive_sha256 | artifact | none | true | false | false | 阶段 zip 文件的 sha256 摘要, 用于校验交接包完整性。 |
 | stage_package_entry_count | metric | none | true | false | false | 阶段 zip 中归档的文件条目数量。 |

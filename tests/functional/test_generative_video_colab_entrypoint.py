@@ -36,6 +36,7 @@ from paper_workflow.notebook_utils.generative_video_model_probe_workflow import 
 from paper_workflow.colab_utils.stage_package_sync import (
     activate_local_stage_layout,
     hydrate_stage_package,
+    prepare_colab_stage_layout,
     publish_colab_stage_package,
     stage_package_id_for_notebook,
 )
@@ -527,6 +528,8 @@ def test_stage_package_sync_round_trips_local_run_without_drive_small_file_reads
     assert published["stage_package_publish_status"] == "published"
     assert Path(published["drive_stage_package_zip"]).exists()
     assert Path(published["latest_drive_stage_package_zip"]).exists()
+    latest_manifest = json.loads(Path(published["latest_stage_package_manifest_path"]).read_text(encoding="utf-8"))
+    assert latest_manifest["stage_package_publish_status"] == "published"
     assert published["stage_package_entry_count"] >= 3
     assert published["stage_package_id"] == stage_package_id_for_notebook("generative_video_runtime")
 
@@ -540,6 +543,87 @@ def test_stage_package_sync_round_trips_local_run_without_drive_small_file_reads
     assert restored["stage_package_restore_status"] == "restored"
     assert (run_root / "records" / "generation_records.jsonl").exists()
     assert (run_root / "videos" / "sample.mp4").exists()
+
+
+@pytest.mark.quick
+def test_validation_scale_restores_motion_calibration_stage_package_from_calibration_profile(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """validation_scale 应从 motion_calibration profile 恢复冻结阈值阶段包。
+
+    该测试覆盖项目特定规则: motion threshold 是独立 calibration split 的产物,
+    后续 evaluation profile 只能复用该冻结包, 不能在当前 profile 下查找同名阶段包。
+    """
+
+    drive_root = tmp_path / "drive" / "SSTW"
+    monkeypatch.setenv("SSTW_COLAB_STAGE_IO_MODE", "local_zip")
+    monkeypatch.setenv("SSTW_LOCAL_STAGE_PACKAGE_CACHE_ROOT", str(tmp_path / "local_package_cache"))
+
+    calibration_drive_layout = build_drive_layout(
+        str(drive_root),
+        workflow_profile="motion_calibration",
+        notebook_role="motion_threshold_calibration",
+    )
+    calibration_local_layout = activate_local_stage_layout(
+        calibration_drive_layout,
+        notebook_role="motion_threshold_calibration",
+        local_workspace_root=tmp_path / "calibration_workspace",
+    )
+    calibration_run_root = Path(calibration_local_layout["drive_run_root"])
+    write_json(calibration_run_root / "artifacts" / "motion_threshold_calibration_decision.json", {
+        "stage_id": "motion_threshold_calibration",
+        "motion_threshold_calibration_ready": True,
+        "motion_threshold_calibration_decision": "PASS",
+        "motion_threshold_id": "motion_delta_calibrated_v1",
+        "motion_threshold_source_split": "calibration",
+        "motion_delta_threshold": 0.010607,
+        "claim_support_status": "motion_threshold_engineering_calibrated",
+    })
+
+    published = publish_colab_stage_package(
+        calibration_local_layout,
+        notebook_role="motion_threshold_calibration",
+        include_videos=False,
+    )
+
+    assert published["workflow_profile"] == "motion_calibration"
+    assert Path(published["latest_drive_stage_package_zip"]).exists()
+    assert not (
+        drive_root
+        / "stage_packages"
+        / "validation_scale"
+        / "motion_threshold_calibration_colab"
+        / "stage_package_latest.zip"
+    ).exists()
+
+    monkeypatch.setenv("SSTW_LOCAL_STAGE_WORKSPACE_ROOT", str(tmp_path / "validation_workspace"))
+    validation_drive_layout = build_drive_layout(
+        str(drive_root),
+        workflow_profile="validation_scale",
+        notebook_role="generative_video_runtime",
+    )
+    validation_local_layout = prepare_colab_stage_layout(
+        validation_drive_layout,
+        notebook_role="generative_video_runtime",
+    )
+
+    restored_decision_path = (
+        Path(validation_local_layout["motion_threshold_artifact_run_root"])
+        / "artifacts"
+        / "motion_threshold_calibration_decision.json"
+    )
+    restore_manifest = json.loads(Path(validation_local_layout["stage_package_restore_decision_path"]).read_text(encoding="utf-8"))
+    restored_decision = json.loads(restored_decision_path.read_text(encoding="utf-8"))
+
+    assert restored_decision_path.exists()
+    assert restored_decision["motion_threshold_calibration_decision"] == "PASS"
+    assert restore_manifest["required_stage_package_ids"] == ["motion_threshold_calibration_colab"]
+    assert restore_manifest["stage_package_restore_rows"][0]["stage_package_source_workflow_profile"] == "motion_calibration"
+    assert restore_manifest["stage_package_restore_rows"][0]["stage_package_target_workflow_profile"] == "validation_scale"
+    assert "stage_packages/motion_calibration/motion_threshold_calibration_colab" in (
+        restore_manifest["stage_package_restore_rows"][0]["drive_stage_package_zip"].replace("\\", "/")
+    )
 
 
 @pytest.mark.quick

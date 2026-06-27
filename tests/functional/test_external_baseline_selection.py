@@ -164,6 +164,9 @@ def test_official_runtime_closure_requirements_are_first_class_colab_config() ->
     videoseal_requirements = Path(rows["videoseal"]["requirements_file"]).read_text(encoding="utf-8")
     assert "ffmpeg-python" in videoseal_requirements
     assert "git+https://github.com/facebookresearch/videoseal" not in videoseal_requirements
+    vidsig_requirements = Path(rows["vidsig"]["requirements_file"]).read_text(encoding="utf-8")
+    assert "augly==1.0.0" in vidsig_requirements
+    assert "omegaconf" in vidsig_requirements
     for baseline_id, row in rows.items():
         assert row["external_supplemental_result_bundle_allowed"] is False
         assert row["official_baseline_command_env_var"] == f"SSTW_{baseline_id.upper()}_OFFICIAL_EVAL_COMMAND"
@@ -331,15 +334,26 @@ def test_official_resource_bootstrap_writes_repair_artifact_without_network(tmp_
 
 @pytest.mark.quick
 def test_official_resource_bootstrap_preserves_colab_torch_stack(tmp_path: Path) -> None:
-    """VideoSeal bootstrap 不应通过 pip 安装 torch / torchvision 或官方 git 包破坏 Colab 运行栈。"""
-    row = official_resource_bootstrap.bootstrap_videoseal(
+    """自动 bootstrap 不应通过 pip 安装 torch / torchvision 或官方 git 包破坏 Colab 运行栈。"""
+    videoseal_row = official_resource_bootstrap.bootstrap_videoseal(
         tmp_path / "resources" / "external_baseline",
         allow_network=False,
         source_root=tmp_path / "external_baseline" / "primary",
     )
-    install_targets = [item["install_target"] for item in row["install_results"]]
+    vidsig_row = official_resource_bootstrap.bootstrap_vidsig(
+        tmp_path / "resources" / "external_baseline",
+        allow_network=False,
+    )
+    install_targets = [
+        item["install_target"]
+        for row in (videoseal_row, vidsig_row)
+        for item in row["install_results"]
+    ]
 
-    assert row["colab_torch_stack_policy"] == "preserve_preinstalled_torch_and_torchvision"
+    assert videoseal_row["colab_torch_stack_policy"] == "preserve_preinstalled_torch_and_torchvision"
+    assert vidsig_row["colab_torch_stack_policy"] == "preserve_preinstalled_torch_and_torchvision"
+    assert "augly==1.0.0" in install_targets
+    assert "omegaconf" in install_targets
     assert "torch" not in install_targets
     assert "torchvision" not in install_targets
     assert not any(str(target).startswith("git+https://github.com/facebookresearch/videoseal") for target in install_targets)
@@ -357,6 +371,14 @@ def test_vidsig_bootstrap_uses_gdown_positional_file_id(
         official_resource_bootstrap,
         "_ensure_gdown",
         lambda: {"tool": "gdown", "status": "already_available"},
+    )
+    monkeypatch.setattr(
+        official_resource_bootstrap,
+        "_pip_install_target",
+        lambda target, *, allow_network, timeout_sec=1800: {
+            "install_target": target,
+            "install_status": "installed" if allow_network else "planned_network_disabled",
+        },
     )
 
     def fake_run_command(command: list[str], *, timeout_sec: int = 1800) -> dict[str, object]:

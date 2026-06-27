@@ -1,8 +1,14 @@
 # VidSig 官方 checkpoint 与 attack.py wrapper 运行依赖。
 # checkpoint 仍必须来自官方公开资源或项目内 official resource bootstrap。
-# Colab 已预装 torch / torchvision, 此处不重复安装, 避免破坏 CUDA 运行栈。
+# 官方 requirements 会固定 torch / torchvision, 但 Colab 已预装 CUDA 可用版本。
+# 因此这里只安装 attack.py 及其直接导入链需要的轻量依赖, 避免破坏 CUDA 运行栈。
 gdown
 numpy
 imageio
 imageio-ffmpeg
 opencv-python
+augly==1.0.0
+omegaconf
+pandas
+Pillow
+tqdm

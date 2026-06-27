@@ -46,6 +46,17 @@ VIDEOSEAL_COLAB_LIGHTWEIGHT_DEPENDENCIES = (
     "lpips",
     "calflops",
 )
+VIDSIG_COLAB_LIGHTWEIGHT_DEPENDENCIES = (
+    "numpy",
+    "imageio",
+    "imageio-ffmpeg",
+    "opencv-python",
+    "augly==1.0.0",
+    "omegaconf",
+    "pandas",
+    "Pillow",
+    "tqdm",
+)
 
 
 def _read_json(path: str | Path) -> dict[str, Any]:
@@ -142,18 +153,31 @@ def _unpack_if_archive(path: Path, output_dir: Path) -> dict[str, Any]:
 
 
 def bootstrap_vidsig(resource_root: Path, *, allow_network: bool) -> dict[str, Any]:
-    """下载或定位 VidSig 官方公开 checkpoint。"""
+    """下载或定位 VidSig 官方公开 checkpoint, 并补齐 Colab 轻量依赖。
+
+    VidSig 官方 `requirements.txt` 会固定 torch / torchvision 版本。Colab 中这两个包
+    与 CUDA 运行栈强绑定, 直接按官方 requirements 重装会引入新的不确定性。因此这里
+    只安装 `src/attack.py` 和 `src.utils` 导入链需要的轻量依赖, 让正式 Notebook 能在
+    保持预装 torch / torchvision 的前提下运行官方攻击检测脚本。
+    """
     baseline_root = resource_root / "vidsig"
     baseline_root.mkdir(parents=True, exist_ok=True)
+    install_results: list[dict[str, Any]] = []
+    for dependency in VIDSIG_COLAB_LIGHTWEIGHT_DEPENDENCIES:
+        install_results.append(_pip_install_target(dependency, allow_network=allow_network, timeout_sec=900))
+    failed_dependencies = [item for item in install_results if item.get("install_status") == "install_failed"]
     decoder = _find_file(baseline_root, {"dec_48b_whit.torchscript.pt"})
     vae_checkpoint = _find_file(baseline_root, {"checkpoint.pth"})
     if decoder and vae_checkpoint:
         return {
             "baseline_id": "vidsig",
-            "bootstrap_status": "ready",
+            "bootstrap_status": "ready" if not failed_dependencies else "manual_official_resource_required",
             "resource_mode": "existing_public_checkpoint",
             "SSTW_VIDSIG_MSG_DECODER_PATH": str(decoder),
             "SSTW_VIDSIG_VAE_CHECKPOINT_PATH": str(vae_checkpoint),
+            "colab_torch_stack_policy": "preserve_preinstalled_torch_and_torchvision",
+            "install_results": install_results,
+            "missing_after_bootstrap": [] if not failed_dependencies else ["vidsig_lightweight_python_dependencies"],
         }
     if not allow_network:
         return {
@@ -161,6 +185,8 @@ def bootstrap_vidsig(resource_root: Path, *, allow_network: bool) -> dict[str, A
             "bootstrap_status": "manual_official_resource_required",
             "resource_mode": "network_disabled",
             "required_resource": "Google Drive checkpoint id 1XFyzeX6T0iHgcxSN_DxvjLFy1EXZye-Q",
+            "colab_torch_stack_policy": "preserve_preinstalled_torch_and_torchvision",
+            "install_results": install_results,
         }
     gdown_status = _ensure_gdown()
     archive_path = baseline_root / "vidsig_official_checkpoint_download"
@@ -175,7 +201,10 @@ def bootstrap_vidsig(resource_root: Path, *, allow_network: bool) -> dict[str, A
     unpack = _unpack_if_archive(archive_path, baseline_root) if archive_path.exists() else {"unpack_status": "download_missing"}
     decoder = _find_file(baseline_root, {"dec_48b_whit.torchscript.pt"})
     vae_checkpoint = _find_file(baseline_root, {"checkpoint.pth"})
-    ready = decoder is not None and vae_checkpoint is not None
+    ready = decoder is not None and vae_checkpoint is not None and not failed_dependencies
+    missing_after_download = [] if decoder is not None and vae_checkpoint is not None else ["dec_48b_whit.torchscript.pt", "checkpoint.pth"]
+    if failed_dependencies:
+        missing_after_download.append("vidsig_lightweight_python_dependencies")
     return {
         "baseline_id": "vidsig",
         "bootstrap_status": "ready" if ready else "manual_official_resource_required",
@@ -185,7 +214,9 @@ def bootstrap_vidsig(resource_root: Path, *, allow_network: bool) -> dict[str, A
         "unpack_result": unpack,
         "SSTW_VIDSIG_MSG_DECODER_PATH": str(decoder) if decoder else "",
         "SSTW_VIDSIG_VAE_CHECKPOINT_PATH": str(vae_checkpoint) if vae_checkpoint else "",
-        "missing_after_download": [] if ready else ["dec_48b_whit.torchscript.pt", "checkpoint.pth"],
+        "colab_torch_stack_policy": "preserve_preinstalled_torch_and_torchvision",
+        "install_results": install_results,
+        "missing_after_download": missing_after_download,
     }
 
 

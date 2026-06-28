@@ -19,11 +19,17 @@ import shutil
 import subprocess
 import sys
 from typing import Any, Mapping
+import urllib.error
+import urllib.request
 import zipfile
 
 
 DEFAULT_RESOURCE_REQUIREMENTS = "configs/external_baselines/official_resource_requirements.json"
 VIDSIG_GOOGLE_DRIVE_FILE_ID = "1XFyzeX6T0iHgcxSN_DxvjLFy1EXZye-Q"
+SIGMARK_IMAGE_PROMPT_URL = (
+    "https://raw.githubusercontent.com/JeremyZhao1998/JeremyZhao1998.github.io/"
+    "master/images/2026-SIGMark/VBench2_aug_img_prompt.zip"
+)
 DEFAULT_PRIMARY_SOURCE_ROOT = "external_baseline/primary"
 VIDEOSEAL_COLAB_LIGHTWEIGHT_DEPENDENCIES = (
     "av",
@@ -152,6 +158,45 @@ def _unpack_if_archive(path: Path, output_dir: Path) -> dict[str, Any]:
     return {"archive_path": str(path), "unpack_status": "not_zip"}
 
 
+def _download_url_if_missing(url: str, output_path: Path, *, allow_network: bool) -> dict[str, Any]:
+    """下载公开 URL 资源, 已存在时直接复用。
+
+    该函数只用于官方仓库 README 中明确公开的小型辅助资源。它不会下载大模型,
+    也不会生成任何 baseline 分数。这样可以补齐 Colab 冷启动所需的公开文件,
+    同时保持正式 `measured_formal` 结果必须来自后续官方运行链路。
+    """
+
+    if output_path.is_file():
+        return {
+            "download_status": "already_available",
+            "url": url,
+            "output_path": str(output_path),
+            "output_size_bytes": output_path.stat().st_size,
+        }
+    if not allow_network:
+        return {
+            "download_status": "planned_network_disabled",
+            "url": url,
+            "output_path": str(output_path),
+        }
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        urllib.request.urlretrieve(url, output_path)
+    except (urllib.error.URLError, OSError) as exc:
+        return {
+            "download_status": "download_failed",
+            "url": url,
+            "output_path": str(output_path),
+            "error": str(exc)[-1000:],
+        }
+    return {
+        "download_status": "downloaded",
+        "url": url,
+        "output_path": str(output_path),
+        "output_size_bytes": output_path.stat().st_size,
+    }
+
+
 def bootstrap_vidsig(resource_root: Path, *, allow_network: bool) -> dict[str, Any]:
     """下载或定位 VidSig 官方公开 checkpoint, 并补齐 Colab 轻量依赖。
 
@@ -246,6 +291,41 @@ def bootstrap_videoseal(resource_root: Path, *, allow_network: bool, source_root
     }
 
 
+def bootstrap_sigmark(resource_root: Path, *, allow_network: bool) -> dict[str, Any]:
+    """准备 SIGMark 官方 I2V 路径的公开辅助 prompt 资源。
+
+    SIGMark 的正式 measured_formal 结果仍需要 HunyuanVideo / HunyuanVideo-I2V
+    官方生成与提取流程产出 `*-bit_accuracy.npz`。这里自动补齐的是 README
+    中公开的 `VBench2_aug_img_prompt.zip`, 它只是 I2V 官方流程的辅助输入,
+    不能替代高显存官方运行产物。
+    """
+
+    baseline_root = resource_root / "sigmark"
+    baseline_root.mkdir(parents=True, exist_ok=True)
+    image_prompt_zip = baseline_root / "VBench2_aug_img_prompt.zip"
+    download = _download_url_if_missing(SIGMARK_IMAGE_PROMPT_URL, image_prompt_zip, allow_network=allow_network)
+    image_prompt_ready = image_prompt_zip.is_file()
+    return {
+        "baseline_id": "sigmark",
+        "bootstrap_status": "manual_official_resource_required",
+        "resource_mode": "public_auxiliary_prompt_ready_but_high_memory_official_run_still_required"
+        if image_prompt_ready
+        else "not_publicly_auto_resolvable_in_colab_l4",
+        "manual_reason": (
+            "SIGMark README 的 Hunyuan pipeline 需要 >=48GB CPU 内存和高显存 GPU; "
+            "公开 image prompt 已可自动下载, 但 bit accuracy 必须由项目内官方运行生成。"
+        ),
+        "strict_gate_resolution": (
+            "在本项目 workflow 内运行 SIGMark 官方 gen/extract, 生成 *-bit_accuracy.npz "
+            "或 repository-owned official bundle; 不能用外部补交分数替代 measured_formal。"
+        ),
+        "public_auxiliary_resource_status": "ready" if image_prompt_ready else "missing",
+        "SSTW_SIGMARK_IMAGE_PROMPT_ZIP": str(image_prompt_zip) if image_prompt_ready else "",
+        "download_result": download,
+        "missing_after_bootstrap": [] if image_prompt_ready else ["VBench2_aug_img_prompt.zip"],
+    }
+
+
 def manual_resource_row(baseline_id: str, reason: str, strict_gate_resolution: str) -> dict[str, Any]:
     """构造需要官方离线资源的 baseline 行。"""
     return {
@@ -276,7 +356,8 @@ def bootstrap_official_resources(
     baseline_rows: list[dict[str, Any]] = []
     baseline_rows.append(bootstrap_videoseal(resolved_resource_root, allow_network=allow_network, source_root=resolved_source_root))
     baseline_rows.append(bootstrap_vidsig(resolved_resource_root, allow_network=allow_network))
-    for baseline_id in ("videoshield", "sigmark", "spdmark", "videomark"):
+    baseline_rows.append(bootstrap_sigmark(resolved_resource_root, allow_network=allow_network))
+    for baseline_id in ("videoshield", "spdmark", "videomark"):
         row = rows.get(baseline_id, {})
         baseline_rows.append(manual_resource_row(
             baseline_id,

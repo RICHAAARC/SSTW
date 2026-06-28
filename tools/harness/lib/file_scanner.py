@@ -49,7 +49,19 @@ DEFAULT_GOVERNED_SCAN_ROOTS = (
 def should_skip_path(path: str | Path) -> bool:
     """判断路径是否属于缓存、输出或构建产物。"""
     candidate = Path(path)
+    parts = candidate.parts
+    # 第三方官方 baseline 源码是 Colab 冷启动 clone 的 runtime cache, 已由
+    # source intake 单独记录 commit 与入口文件。它不属于本仓库命名治理对象,
+    # 否则上游仓库自带的 LICENSE、README 或示例文件会让本项目 harness 误失败。
+    is_external_official_source_snapshot = (
+        len(parts) >= 4
+        and parts[0] == "external_baseline"
+        and parts[1] == "primary"
+        and parts[3] == "source"
+    )
     return (
+        is_external_official_source_snapshot
+        or
         any(part in SKIP_DIRECTORY_NAMES for part in candidate.parts)
         or candidate.name in SKIP_FILE_NAMES
         or candidate.suffix.lower() in SKIP_FILE_SUFFIXES

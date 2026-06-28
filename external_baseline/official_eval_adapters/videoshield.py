@@ -18,6 +18,7 @@ from external_baseline.official_eval_adapters.common import (
     raise_missing_official_artifacts,
     read_json,
     read_official_result_bundle_if_available,
+    resolve_existing_env_file,
     run_adapter_main,
 )
 
@@ -45,11 +46,11 @@ def _run_default(args: argparse.Namespace, source_dir: Path, output_json_path: P
     )
     if bundled is not None:
         return bundled
-    result_json = os.environ.get("SSTW_VIDEOSHIELD_RESULT_JSON", "").strip()
-    if not result_json:
+    result_json = resolve_existing_env_file("SSTW_VIDEOSHIELD_RESULT_JSON")
+    if result_json is None:
         raise_missing_official_artifacts(
             BASELINE_ID,
-            "missing SSTW_VIDEOSHIELD_RESULT_JSON or SSTW_VIDEOSHIELD_NATIVE_EVAL_COMMAND",
+            "missing file SSTW_VIDEOSHIELD_RESULT_JSON or SSTW_VIDEOSHIELD_NATIVE_EVAL_COMMAND",
         )
     payload = read_json(result_json)
     score = extract_score(payload)

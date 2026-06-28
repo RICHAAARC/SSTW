@@ -16,12 +16,38 @@ from typing import Any
 from external_baseline.official_eval_adapters.common import (
     raise_missing_official_artifacts,
     read_official_result_bundle_if_available,
+    resolve_existing_env_file,
     run_adapter_main,
 )
 
 
 BASELINE_ID = "sigmark"
 REQUIRED_SOURCE_FILES = ("main.py", "watermarks/sigmark.py", "apply_disturbances.py")
+
+
+def _resolve_sigmark_bit_accuracy_npz() -> Path | None:
+    """定位 SIGMark 官方提取阶段产出的 bit accuracy npz 文件。
+
+    官方 `main.py --mode extract` 产物名称包含实验设置前缀, 典型形式是
+    `HunyuanVideo-...-sigmark-...-bit_accuracy.npz`。因此除了显式
+    `SSTW_SIGMARK_BIT_ACCURACY_NPZ`, 还允许通过 `SSTW_SIGMARK_OUTPUT_DIR`
+    指向官方 output 目录并按 glob 自动发现。
+    """
+
+    explicit_path = resolve_existing_env_file("SSTW_SIGMARK_BIT_ACCURACY_NPZ")
+    if explicit_path is not None:
+        return explicit_path
+    output_dir_value = os.environ.get("SSTW_SIGMARK_OUTPUT_DIR", "").strip()
+    if not output_dir_value:
+        return None
+    output_dir = Path(output_dir_value).expanduser()
+    if not output_dir.is_dir():
+        return None
+    pattern = os.environ.get("SSTW_SIGMARK_BIT_ACCURACY_GLOB", "**/*bit_accuracy*.npz").strip()
+    if not pattern:
+        pattern = "**/*bit_accuracy*.npz"
+    matches = sorted(path for path in output_dir.glob(pattern) if path.is_file())
+    return matches[0] if matches else None
 
 
 def _mean_numeric(values: list[Any]) -> float:
@@ -47,11 +73,12 @@ def _run_default(args: argparse.Namespace, source_dir: Path, output_json_path: P
     )
     if bundled is not None:
         return bundled
-    bit_accuracy_npz = Path(os.environ.get("SSTW_SIGMARK_BIT_ACCURACY_NPZ", "")).expanduser()
-    if not bit_accuracy_npz.exists():
+    bit_accuracy_npz = _resolve_sigmark_bit_accuracy_npz()
+    if bit_accuracy_npz is None:
         raise_missing_official_artifacts(
             BASELINE_ID,
-            "missing SSTW_SIGMARK_BIT_ACCURACY_NPZ or SSTW_SIGMARK_NATIVE_EVAL_COMMAND",
+            "missing file SSTW_SIGMARK_BIT_ACCURACY_NPZ, "
+            "SSTW_SIGMARK_OUTPUT_DIR/**/*bit_accuracy*.npz, or SSTW_SIGMARK_NATIVE_EVAL_COMMAND",
         )
 
     import numpy as np

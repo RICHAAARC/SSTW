@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
+import subprocess
 import sys
 
 import pytest
@@ -291,6 +293,42 @@ def test_official_runtime_closure_preflight_binds_existing_default_drive_resourc
     vidsig_row = audit["baseline_runtime_rows"][0]
     assert vidsig_row["baseline_id"] == "vidsig"
     assert vidsig_row["resource_requirement"]["resource_requirements"][0]["effective_resource_path_exists"] is True
+
+
+@pytest.mark.quick
+def test_sigmark_runtime_closure_binds_prefixed_official_bit_accuracy_npz(tmp_path: Path) -> None:
+    """SIGMark 官方输出文件名带实验前缀时, 预检仍应自动绑定到环境变量。
+
+    SIGMark 官方 `main.py --mode extract` 写出的文件名不是固定的
+    `bit_accuracy.npz`, 而是 `<setting>-bit_accuracy.npz`。该测试防止
+    Colab 已经完成官方提取后, runtime closure 因 glob 过窄而误报资源缺失。
+    """
+
+    run_root = tmp_path / "runs" / "generative_video_model_probe" / "validation_scale"
+    _write_external_baseline_runtime_fixture(run_root)
+    resource_root = tmp_path / "resources" / "external_baseline"
+    bit_accuracy_npz = (
+        resource_root
+        / "sigmark"
+        / "official_outputs"
+        / "HunyuanVideo-I2V-community-VBench2_aug-512x512-65frams-sigmark-128x4bits-bit_accuracy.npz"
+    )
+    bit_accuracy_npz.parent.mkdir(parents=True)
+    bit_accuracy_npz.write_bytes(b"npz-placeholder")
+
+    audit = build_official_runtime_closure_requirements(
+        run_root,
+        repo_root=Path("."),
+        resource_root=resource_root,
+        official_result_bundle_root=tmp_path / "external_baseline_official_result_bundles" / "validation_scale",
+        baseline_id="sigmark",
+    )
+
+    assert audit["baseline_count"] == 1
+    assert audit["environment_updates"]["SSTW_SIGMARK_BIT_ACCURACY_NPZ"] == str(bit_accuracy_npz)
+    sigmark_row = audit["baseline_runtime_rows"][0]
+    assert sigmark_row["baseline_id"] == "sigmark"
+    assert sigmark_row["resource_requirement"]["resource_requirements"][0]["effective_resource_path_exists"] is True
 
 
 @pytest.mark.quick
@@ -771,3 +809,120 @@ def test_repository_official_eval_adapters_are_tracked_fail_closed_entrypoints()
         assert callable(module.main)
         assert module.BASELINE_ID == baseline_id
         assert module.REQUIRED_SOURCE_FILES
+
+
+@pytest.mark.quick
+@pytest.mark.parametrize("npz_value", ["", "."])
+def test_sigmark_adapter_missing_npz_fails_closed_without_loading_current_directory(
+    tmp_path: Path,
+    npz_value: str,
+) -> None:
+    """SigMark adapter 不能把空环境变量或目录 `.` 当作官方 bit accuracy npz。
+
+    该测试复现 Colab 中 `SSTW_SIGMARK_BIT_ACCURACY_NPZ` 未正确指向文件时的
+    失败路径。期望行为是明确报告官方资源缺失, 而不是让 `numpy.load('.')`
+    抛出不易理解的 `IsADirectoryError`。
+    """
+
+    source_dir = tmp_path / "sigmark_source"
+    (source_dir / "watermarks").mkdir(parents=True)
+    for relative in ("main.py", "watermarks/sigmark.py", "apply_disturbances.py"):
+        path = source_dir / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("# 官方源码占位文件, 用于测试 adapter 资源校验边界。\n", encoding="utf-8")
+    source_video = tmp_path / "source.mp4"
+    attacked_video = tmp_path / "attacked.mp4"
+    source_video.write_bytes(b"source")
+    attacked_video.write_bytes(b"attacked")
+    output_json = tmp_path / "sigmark_output.json"
+
+    env = dict(os.environ)
+    env.pop("SSTW_SIGMARK_NATIVE_EVAL_COMMAND", None)
+    if npz_value:
+        env["SSTW_SIGMARK_BIT_ACCURACY_NPZ"] = npz_value
+    else:
+        env.pop("SSTW_SIGMARK_BIT_ACCURACY_NPZ", None)
+
+    completed = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "external_baseline.official_eval_adapters.sigmark",
+            "--official-source-dir",
+            str(source_dir),
+            "--source-video",
+            str(source_video),
+            "--attacked-video",
+            str(attacked_video),
+            "--attack-name",
+            "video_compression_runtime",
+            "--official-output-json",
+            str(output_json),
+        ],
+        cwd=Path.cwd(),
+        env=env,
+        text=True,
+        capture_output=True,
+        timeout=30,
+    )
+
+    assert completed.returncode != 0
+    assert "sigmark_official_required_artifacts_missing" in completed.stderr
+    assert "SSTW_SIGMARK_BIT_ACCURACY_NPZ" in completed.stderr
+    assert "IsADirectoryError" not in completed.stderr
+
+
+@pytest.mark.quick
+def test_sigmark_adapter_discovers_prefixed_bit_accuracy_npz_from_output_dir(tmp_path: Path) -> None:
+    """SigMark adapter 应支持官方带前缀的 `*-bit_accuracy.npz` 输出文件。"""
+
+    import numpy as np
+
+    source_dir = tmp_path / "sigmark_source"
+    (source_dir / "watermarks").mkdir(parents=True)
+    for relative in ("main.py", "watermarks/sigmark.py", "apply_disturbances.py"):
+        path = source_dir / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("# 官方源码占位文件, 用于测试 adapter 资源校验边界。\n", encoding="utf-8")
+    source_video = tmp_path / "source.mp4"
+    attacked_video = tmp_path / "attacked.mp4"
+    source_video.write_bytes(b"source")
+    attacked_video.write_bytes(b"attacked")
+    official_output_dir = tmp_path / "sigmark_official_outputs"
+    official_output_dir.mkdir()
+    bit_accuracy_npz = official_output_dir / "HunyuanVideo-I2V-community-sigmark-bit_accuracy.npz"
+    np.savez(bit_accuracy_npz, sample_0=np.array([0.75, 0.85], dtype=float))
+    output_json = tmp_path / "sigmark_output.json"
+
+    env = dict(os.environ)
+    env.pop("SSTW_SIGMARK_NATIVE_EVAL_COMMAND", None)
+    env.pop("SSTW_SIGMARK_BIT_ACCURACY_NPZ", None)
+    env["SSTW_SIGMARK_OUTPUT_DIR"] = str(official_output_dir)
+
+    completed = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "external_baseline.official_eval_adapters.sigmark",
+            "--official-source-dir",
+            str(source_dir),
+            "--source-video",
+            str(source_video),
+            "--attacked-video",
+            str(attacked_video),
+            "--attack-name",
+            "video_compression_runtime",
+            "--official-output-json",
+            str(output_json),
+        ],
+        cwd=Path.cwd(),
+        env=env,
+        text=True,
+        capture_output=True,
+        timeout=30,
+    )
+
+    assert completed.returncode == 0, completed.stderr
+    payload = json.loads(output_json.read_text(encoding="utf-8"))
+    assert payload["official_bit_accuracy_npz_path"] == str(bit_accuracy_npz)
+    assert payload["bit_accuracy"] == 0.8

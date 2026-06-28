@@ -33,7 +33,7 @@ checkpoint、key、message、训练权重、官方中间产物和项目 adapter 
 | VideoMark | 不能直接完成 | 是 | 需要项目内运行官方 PRC key、embedding、extraction 和 temporal tamper 流程。 |
 | VideoShield | 不能直接完成 | 是 | 需要官方 generation / inversion / maintained info 流程, 不能只对 SSTW 普通视频后处理检测。 |
 | SPDMark | 不能直接完成 | 是 | 需要训练出的 decoder / extractor 权重和 ground-truth bits。 |
-| SIGMark | 不能直接完成 | 是 | 官方 HunyuanVideo 流程显存需求高, Colab L4 默认路径不可靠。 |
+| SIGMark | 有条件可以 | 否 | 已补齐项目内 `external_baseline.sigmark_official_hunyuan_runtime`, 可运行官方 Hunyuan `gen -> extract` 并转写 official bundle; 仍需要高显存 GPU 或可完成 HunyuanVideo 的 Colab 规格。 |
 
 ## 4. 当前适配器状态
 
@@ -51,6 +51,14 @@ external_baseline/official_eval_adapters/<baseline>.py
 这些 adapter 当前是 fail-closed 设计: 缺少官方源码、权重、key、message、checkpoint
 或官方输出时必须失败, 不能输出 proxy 分数。
 
+SIGMark 是一个特殊项: 其正式参考 Notebook 默认不再只读取预先存在的
+`*-bit_accuracy.npz`, 而是通过
+`external_baseline.sigmark_official_hunyuan_runtime` 在项目内复制官方源码到 runtime
+工作副本, 构造与 SSTW runtime records 对齐的 prompt set, 运行官方
+`main.py --mode=gen` 与 `main.py --mode=extract`, 再把官方 bit accuracy 输出写成
+project-owned official bundle。该 bundle 仍不是最终论文记录, 后续必须由统一
+external baseline runner 转写为 `metric_status: measured_formal`。
+
 ## 5. 结论
 
 当前项目已经具备标准论文 baseline 对比的工程框架, 但 6 个 baseline 的正式结果尚未全部闭合。
@@ -63,4 +71,4 @@ external_baseline/official_eval_adapters/<baseline>.py
 4. 覆盖全部 `validation_scale` runtime comparison units 的 score JSON。
 5. 6 个 independent formal reference Notebook 先各自生成项目内 official bundle, 并默认调用统一 runner 转写当前可用的 `measured_formal` records。
 6. `external_baseline_formal_scoring_colab.ipynb` 在 6 个 official bundle 全部完成后执行全量统一转写、self-containment 判定和打包。
-6. `external_baseline_self_containment_decision.json` 通过。
+7. `external_baseline_self_containment_decision.json` 通过。

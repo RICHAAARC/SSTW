@@ -16,6 +16,7 @@ from typing import Any
 from external_baseline.official_eval_adapters.common import (
     raise_missing_official_artifacts,
     read_official_result_bundle_if_available,
+    resolve_existing_env_file,
     run_adapter_main,
     safe_float,
 )
@@ -53,12 +54,12 @@ def _run_default(args: argparse.Namespace, source_dir: Path, output_json_path: P
     )
     if bundled is not None:
         return bundled
-    extractor_path = Path(os.environ.get("SSTW_SPDMARK_EXTRACTOR_PATH", "")).expanduser()
-    gt_bits_path = Path(os.environ.get("SSTW_SPDMARK_GT_BITS_PATH", "")).expanduser()
-    if not extractor_path.exists():
-        raise_missing_official_artifacts(BASELINE_ID, "missing SSTW_SPDMARK_EXTRACTOR_PATH")
-    if not gt_bits_path.exists():
-        raise_missing_official_artifacts(BASELINE_ID, "missing SSTW_SPDMARK_GT_BITS_PATH")
+    extractor_path = resolve_existing_env_file("SSTW_SPDMARK_EXTRACTOR_PATH")
+    gt_bits_path = resolve_existing_env_file("SSTW_SPDMARK_GT_BITS_PATH")
+    if extractor_path is None:
+        raise_missing_official_artifacts(BASELINE_ID, "missing file SSTW_SPDMARK_EXTRACTOR_PATH")
+    if gt_bits_path is None:
+        raise_missing_official_artifacts(BASELINE_ID, "missing file SSTW_SPDMARK_GT_BITS_PATH")
 
     sys.path.insert(0, str(source_dir))
     sys.path.insert(0, str(source_dir / "assets"))

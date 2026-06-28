@@ -585,6 +585,38 @@ def _run_videoseal_reference(
     }
 
 
+def _run_sigmark_hunyuan_reference(
+    *,
+    run_root: Path,
+    bundle_root: Path,
+    official_source_dir: Path,
+    repo_root: Path,
+    resource_root: str | Path,
+    max_records: int | None,
+) -> dict[str, Any]:
+    """运行 SIGMark 官方 Hunyuan gen->extract official bundle 生成路径。
+
+    该路径属于项目特定的 external baseline 自包含实现: Notebook 在项目内调用
+    SIGMark 官方 `main.py --mode=gen` 和 `--mode=extract`, 再把官方 bit accuracy
+    转成 official bundle。它不直接写 `measured_formal`, 后续仍由统一 runner 转写。
+    """
+
+    from external_baseline.sigmark_official_hunyuan_runtime import (
+        build_default_sigmark_official_hunyuan_config_from_env,
+        run_sigmark_official_hunyuan_runtime,
+    )
+
+    sigmark_config = build_default_sigmark_official_hunyuan_config_from_env(
+        run_root=run_root,
+        bundle_root=bundle_root,
+        source_dir=official_source_dir,
+        repo_root=repo_root,
+        resource_root=resource_root,
+        max_records=max_records,
+    )
+    return run_sigmark_official_hunyuan_runtime(sigmark_config)
+
+
 def _build_unified_formal_scoring_environment(
     layout: Mapping[str, str],
     config: ModernExternalBaselineFormalReferenceConfig,
@@ -766,6 +798,18 @@ def run_modern_external_baseline_formal_reference_plan(
             official_source_dir=official_source_dir,
             max_records=config.max_records,
             generate_auto_supported_bundle=config.generate_auto_supported_bundle,
+        )
+    elif config.baseline_id == "sigmark" and os.environ.get(
+        "SSTW_RUN_SIGMARK_OFFICIAL_HUNYUAN_PIPELINE",
+        "true",
+    ).lower() == "true":
+        reference_manifest = _run_sigmark_hunyuan_reference(
+            run_root=run_root,
+            bundle_root=bundle_root,
+            official_source_dir=official_source_dir,
+            repo_root=repo_root,
+            resource_root=layout["external_baseline_resource_root"],
+            max_records=config.max_records,
         )
     else:
         reference_manifest = _run_generic_repository_official_adapter(

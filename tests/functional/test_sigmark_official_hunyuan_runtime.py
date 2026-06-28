@@ -1,0 +1,181 @@
+"""验证 SIGMark 官方 Hunyuan gen->extract 项目内运行器的轻量逻辑。"""
+
+from __future__ import annotations
+
+import json
+from pathlib import Path
+
+import numpy as np
+import pytest
+
+from external_baseline.sigmark_official_hunyuan_runtime import (
+    SigmarkOfficialHunyuanRuntimeConfig,
+    run_sigmark_official_hunyuan_runtime,
+    write_sigmark_official_bundle_records,
+)
+
+
+def _write_json(path: Path, payload: object) -> None:
+    """写出测试 JSON 文件。"""
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+
+def _write_runtime_records(run_root: Path) -> None:
+    """构造最小 runtime detection records fixture。"""
+
+    records_path = run_root / "records" / "runtime_detection_records.jsonl"
+    records_path.parent.mkdir(parents=True, exist_ok=True)
+    rows = [
+        {
+            "runtime_detection_status": "ready",
+            "generation_model_id": "wan21_runtime",
+            "prompt_id": "prompt_a",
+            "seed_id": "seed_0",
+            "trajectory_trace_id": "trace_a",
+            "attack_name": "clean",
+            "source_video_path": str(run_root / "videos" / "source.mp4"),
+            "attacked_video_path": str(run_root / "videos" / "attacked.mp4"),
+        }
+    ]
+    records_path.write_text("\n".join(json.dumps(row, ensure_ascii=False) for row in rows) + "\n", encoding="utf-8")
+
+
+def _write_prompt_suite(path: Path) -> None:
+    """构造包含 prompt_text 的最小 prompt suite。"""
+
+    _write_json(
+        path,
+        {
+            "prompt_suite_id": "test_prompt_suite",
+            "prompts": [
+                {
+                    "prompt_id": "prompt_a",
+                    "prompt_text": "A small red toy car moves across a table with clear motion.",
+                }
+            ],
+        },
+    )
+
+
+def _write_fake_sigmark_source(source_dir: Path) -> None:
+    """构造只用于 dry-run 文本改写的伪 SIGMark 官方源码结构。"""
+
+    (source_dir / "watermarks").mkdir(parents=True, exist_ok=True)
+    (source_dir / "watermarks" / "sigmark.py").write_text("# fake sigmark watermark\n", encoding="utf-8")
+    (source_dir / "apply_disturbances.py").write_text("# fake disturbance script\n", encoding="utf-8")
+    (source_dir / "main.py").write_text(
+        "\n".join(
+            [
+                "def generate_videos(args, dimension, prompt):",
+                '        image_prompt = load_image(os.path.join(args.image_prompt_dir, dimension, prompt[:180] + "-0.png")) \\',
+                "            if args.image_prompt_dir is not None else None",
+                "    return image_prompt",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+
+@pytest.mark.quick
+def test_sigmark_hunyuan_runtime_dry_run_builds_prompt_set_and_commands(tmp_path: Path) -> None:
+    """dry-run 必须只写运行计划, 不触发重型 Hunyuan 生成。"""
+
+    run_root = tmp_path / "runs" / "generative_video_model_probe" / "validation_scale"
+    bundle_root = tmp_path / "bundles" / "validation_scale"
+    source_dir = tmp_path / "official_source"
+    prompt_suite_path = tmp_path / "datasets" / "generative_video_prompt_suite" / "prompt_seed_suite.json"
+    _write_runtime_records(run_root)
+    _write_prompt_suite(prompt_suite_path)
+    _write_fake_sigmark_source(source_dir)
+
+    config = SigmarkOfficialHunyuanRuntimeConfig(
+        run_root=str(run_root),
+        bundle_root=str(bundle_root),
+        source_dir=str(source_dir),
+        output_root=str(tmp_path / "sigmark_runtime"),
+        resource_root=str(tmp_path / "resources" / "external_baseline"),
+        prompt_suite_path=str(prompt_suite_path),
+        model_base_path=str(tmp_path / "resources" / "external_baseline" / "sigmark" / "models"),
+        dry_run=True,
+    )
+
+    manifest = run_sigmark_official_hunyuan_runtime(config)
+
+    assert manifest["execution_status"] == "dry_run_planned"
+    assert manifest["generated_bundle_record_count"] == 0
+    assert manifest["prompt_manifest"]["prompt_count"] == 1
+    assert manifest["patch_manifest"]["patch_status"] == "patched_runtime_copy"
+    assert "--mode=gen" in manifest["gen_command"]
+    assert "--mode=extract" in manifest["extract_command"]
+    prompt_file = Path(manifest["prompt_manifest"]["prompt_file"])
+    assert "toy car moves" in prompt_file.read_text(encoding="utf-8")
+    runtime_main = Path(manifest["runtime_source_dir"]) / "main.py"
+    assert '"I2V" in args.model_name' in runtime_main.read_text(encoding="utf-8")
+
+
+@pytest.mark.quick
+def test_sigmark_bundle_writer_records_project_owned_provenance(tmp_path: Path) -> None:
+    """SIGMark bit accuracy npz 必须转成 project-owned official bundle, 而非外部补交结果。"""
+
+    run_root = tmp_path / "runs" / "generative_video_model_probe" / "validation_scale"
+    bundle_root = tmp_path / "bundles" / "validation_scale"
+    manifest_path = bundle_root / "sigmark" / "official_reference_execution_manifest.json"
+    npz_path = tmp_path / "official_outputs" / "HunyuanVideo-community-sigmark-bit_accuracy.npz"
+    _write_runtime_records(run_root)
+    _write_json(manifest_path, {"manifest_kind": "test_sigmark_execution_manifest"})
+    npz_path.parent.mkdir(parents=True, exist_ok=True)
+    np.savez(npz_path, **{"sstw_runtime_prompt/example": np.array([0.75, 1.0])})
+
+    result = write_sigmark_official_bundle_records(
+        run_root=run_root,
+        bundle_root=bundle_root,
+        manifest_path=manifest_path,
+        bit_accuracy_npz_path=npz_path,
+        model_name="HunyuanVideo-community",
+    )
+
+    assert result["generated_bundle_record_count"] == 1
+    record_path = bundle_root / "sigmark" / "records" / "prompt_a__seed_0__clean.json"
+    payload = json.loads(record_path.read_text(encoding="utf-8"))
+    assert payload["official_result_provenance"] == "repository_generated_from_third_party_official_code"
+    assert payload["external_baseline_official_execution_mode"] == "sigmark_hunyuan_gen_extract"
+    assert "metric_status" not in payload
+    assert payload["bit_accuracy"] == 0.875
+    assert payload["official_execution_manifest_path"] == str(manifest_path)
+
+
+@pytest.mark.quick
+def test_sigmark_hunyuan_runtime_writes_governed_failure_manifest_when_model_missing(tmp_path: Path) -> None:
+    """模型缺失时运行器必须写出失败 manifest, 而不是伪造 baseline 分数。"""
+
+    run_root = tmp_path / "runs" / "generative_video_model_probe" / "validation_scale"
+    bundle_root = tmp_path / "bundles" / "validation_scale"
+    source_dir = tmp_path / "official_source"
+    prompt_suite_path = tmp_path / "datasets" / "generative_video_prompt_suite" / "prompt_seed_suite.json"
+    _write_runtime_records(run_root)
+    _write_prompt_suite(prompt_suite_path)
+    _write_fake_sigmark_source(source_dir)
+
+    config = SigmarkOfficialHunyuanRuntimeConfig(
+        run_root=str(run_root),
+        bundle_root=str(bundle_root),
+        source_dir=str(source_dir),
+        output_root=str(tmp_path / "sigmark_runtime"),
+        resource_root=str(tmp_path / "resources" / "external_baseline"),
+        prompt_suite_path=str(prompt_suite_path),
+        model_base_path=str(tmp_path / "resources" / "external_baseline" / "sigmark" / "models"),
+        auto_download_hf_model=False,
+        dry_run=False,
+    )
+
+    manifest = run_sigmark_official_hunyuan_runtime(config)
+
+    assert manifest["execution_status"] == "failed"
+    assert manifest["generated_bundle_record_count"] == 0
+    assert manifest["failed_bundle_record_count"] == 1
+    assert "sigmark_hunyuan_model_missing" in manifest["execution_failure_reason"]
+    record_path = bundle_root / "sigmark" / "records" / "prompt_a__seed_0__clean.json"
+    assert not record_path.exists()

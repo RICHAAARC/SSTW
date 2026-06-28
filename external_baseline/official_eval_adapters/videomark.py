@@ -16,6 +16,7 @@ from external_baseline.official_eval_adapters.common import (
     raise_missing_official_artifacts,
     read_json,
     read_official_result_bundle_if_available,
+    resolve_existing_env_file,
     run_adapter_main,
     safe_float,
 )
@@ -50,11 +51,11 @@ def _run_default(args: argparse.Namespace, source_dir: Path, output_json_path: P
     )
     if bundled is not None:
         return bundled
-    result_json = Path(os.environ.get("SSTW_VIDEOMARK_TEMPORAL_RESULTS_JSON", "")).expanduser()
-    if not result_json.exists():
+    result_json = resolve_existing_env_file("SSTW_VIDEOMARK_TEMPORAL_RESULTS_JSON")
+    if result_json is None:
         raise_missing_official_artifacts(
             BASELINE_ID,
-            "missing SSTW_VIDEOMARK_TEMPORAL_RESULTS_JSON or SSTW_VIDEOMARK_NATIVE_EVAL_COMMAND",
+            "missing file SSTW_VIDEOMARK_TEMPORAL_RESULTS_JSON or SSTW_VIDEOMARK_NATIVE_EVAL_COMMAND",
         )
     payload = read_json(result_json)
     values = _collect_decode_acc(payload)

@@ -55,6 +55,20 @@ def require_paths_exist(paths: Sequence[str | Path], *, label: str) -> None:
         raise FileNotFoundError(f"{label}_missing:{missing}")
 
 
+def resolve_existing_env_file(env_var: str) -> Path | None:
+    """读取环境变量中的文件路径, 并拒绝空值、目录和不存在的路径。
+
+    该函数属于通用防御式写法。`Path("")` 在 Python 中会解析为当前目录 `.`,
+    如果只检查 `exists()` 就会把“未配置文件”误判为“当前目录存在”。对于官方
+    baseline 权重、npz、json 等资源, 只有真实文件才能继续进入 adapter。
+    """
+    value = os.environ.get(env_var, "").strip()
+    if not value:
+        return None
+    path = Path(value).expanduser()
+    return path if path.is_file() else None
+
+
 def verify_official_source(official_source_dir: str | Path, required_files: Sequence[str]) -> Path:
     """检查官方源码目录和关键入口文件。
 

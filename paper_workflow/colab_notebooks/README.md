@@ -242,7 +242,8 @@ configs/external_baselines/requirements/<baseline_id>.txt
 若需要临时跳过该安装步骤, 可设置 `SSTW_INSTALL_BASELINE_REQUIREMENTS=false`;
 但这只适合调试已安装环境, 正式 Colab 冷启动运行应保持默认启用。
 
-也就是在项目内克隆官方源码、运行 source intake、调用仓库 official adapter 或官方 API,
+也就是在项目内克隆官方源码、运行 source intake、调用仓库 official adapter、官方 API
+或项目内官方流程运行器,
 并以同一 `prompt_id / seed_id / attack_name / trajectory_trace_id` runtime comparison unit
 为锚点, 把每个 baseline 的官方结果写入:
 
@@ -329,6 +330,17 @@ external_baseline/official_eval_adapters/videoseal.py
 这些 adapter 不是替代 baseline, 只负责把官方仓库源码、官方 API、官方 checkpoint
 或项目内 official bundle cache 转换成 SSTW 统一 JSON。若缺少第三方官方权重、key、message、
 maintained info 或官方输出文件, adapter 会直接失败, 不会输出 proxy 分数。
+
+SIGMark 的 `sigmark_formal_reference_colab.ipynb` 另有项目内官方流程运行器:
+
+```text
+external_baseline/sigmark_official_hunyuan_runtime.py
+```
+
+该运行器默认在 Notebook 内执行 SIGMark 官方 Hunyuan `gen -> extract` 路径, 用同一批
+SSTW runtime prompt 构造官方 prompt set, 生成 `*-bit_accuracy.npz`, 再写入
+project-owned official bundle。它仍不直接写 `metric_status: measured_formal`; 正式记录仍由
+统一 external baseline runner 转写。
 
 内部官方命令必须把官方 detector / extractor 的输出写入:
 

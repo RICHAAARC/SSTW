@@ -16,6 +16,7 @@ from typing import Any
 from external_baseline.official_eval_adapters.common import (
     raise_missing_official_artifacts,
     read_official_result_bundle_if_available,
+    resolve_existing_env_file,
     run_adapter_main,
     safe_float,
 )
@@ -63,9 +64,9 @@ def _run_default(args: argparse.Namespace, source_dir: Path, output_json_path: P
     )
     if bundled is not None:
         return bundled
-    decoder_path = Path(os.environ.get("SSTW_VIDSIG_MSG_DECODER_PATH", "")).expanduser()
-    if not decoder_path.exists():
-        raise_missing_official_artifacts(BASELINE_ID, "missing SSTW_VIDSIG_MSG_DECODER_PATH")
+    decoder_path = resolve_existing_env_file("SSTW_VIDSIG_MSG_DECODER_PATH")
+    if decoder_path is None:
+        raise_missing_official_artifacts(BASELINE_ID, "missing file SSTW_VIDSIG_MSG_DECODER_PATH")
 
     work_dir = output_json_path.parent / "vidsig_official_work"
     frame_array_dir = work_dir / "frame_arrays"

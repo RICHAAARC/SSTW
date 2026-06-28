@@ -216,6 +216,7 @@ experiments/generative_video_model_probe/formal_metric_runner.py
 experiments/generative_video_model_probe/generalization_runner.py
 experiments/generative_video_model_probe/postprocess_runner.py
 experiments/generative_video_model_probe/package_outputs.py
+external_baseline/sigmark_official_hunyuan_runtime.py
 scripts/check_results/generative_video_colab_result_checker.py
 scripts/package_results/generative_video_drive_packager.py
 ```
@@ -272,6 +273,14 @@ motion_threshold_calibration_colab.ipynb
 旧综合 Notebook 已移除; 当前只保留拆分后的 Notebook workflow。
 所有 Notebook 的 profile、Drive 目录和 stage plan 均由
 `configs/paper_workflow/generative_video_notebook_workflows.json` 控制。
+
+其中 `sigmark_formal_reference_colab.ipynb` 已切换为项目内 SIGMark 官方
+Hunyuan `gen -> extract` 路径: Notebook 调用
+`external_baseline.sigmark_official_hunyuan_runtime`, 在 runtime 工作副本中构造
+与 SSTW runtime records 对齐的 prompt set, 运行官方 `main.py --mode=gen` 与
+`main.py --mode=extract`, 再把官方 `*-bit_accuracy.npz` 转写为 project-owned
+official bundle。该 bundle 仍需经统一 external baseline runner 转成
+`metric_status: measured_formal`, 不能在 Notebook 中手写正式 records。
 
 历史 pilot 落盘 package manifest 曾包含:
 
@@ -337,7 +346,7 @@ strong visible displacement in every frame
 | 项目 | 当前标注 |
 |---|---|
 | 完成状态 | pilot 已通过, validation_scale 未完成 |
-| 主要差距项 | validation_scale 尚未运行; 现代外部 baseline 目前只有 governed 状态记录, 尚无可进主表的 runnable 结果。 |
+| 主要差距项 | validation_scale 尚未运行; SIGMark 与 VideoSeal 已具备项目内 official bundle 生成路径, 其余现代外部 baseline 仍需继续完成官方流程适配或高显存运行闭合。 |
 | 下一步构建方向 | 构建 validation_scale 真实模型小样本全流程打通实验、现代 baseline adapter contract、内部消融和 fixed-FPR CI reporter。 |
 | full_paper 影响 | 未满足本阶段要求时, 不得把相关结果写入 full_paper supported claim。 |
 

@@ -198,16 +198,17 @@
       "colab_default_measured_formal_ready_without_user_files": false,
       "external_baseline_command_env_var": "SSTW_SIGMARK_EVAL_COMMAND",
       "external_supplemental_result_bundle_allowed": false,
-      "missing_resource_action": "在高显存官方环境中运行 SIGMark 官方 Hunyuan pipeline, 或提供项目内 native command / official bundle。",
+      "missing_resource_action": "通过 external_baseline.sigmark_official_hunyuan_runtime 在项目内运行 SIGMark 官方 Hunyuan gen->extract, 或记录高显存资源阻断; non-run record 不能替代 measured_formal baseline。",
       "native_command_env_var": "SSTW_SIGMARK_NATIVE_EVAL_COMMAND",
       "official_baseline_command_env_var": "SSTW_SIGMARK_OFFICIAL_EVAL_COMMAND",
-      "official_bundle_policy": "preferred_project_owned_cache; bit_accuracy NPZ must be produced by project workflow from official SIGMark high-memory pipeline",
+      "official_bundle_policy": "preferred_project_owned_cache; bit_accuracy NPZ must be produced by project workflow from official SIGMark Hunyuan gen->extract runner",
       "official_repository_branch": "main",
       "official_repository_url": "https://github.com/JeremyZhao1998/SIGMark-release",
       "official_source_dir_candidates": [
         "external_baseline/primary/sigmark/source",
         "/content/SSTW/external_baseline/primary/sigmark/source"
       ],
+      "project_owned_hunyuan_runner_module": "external_baseline.sigmark_official_hunyuan_runtime",
       "required_source_files": [
         "main.py",
         "watermarks/sigmark.py",
@@ -216,15 +217,23 @@
       "requirements_file": "configs/external_baselines/requirements/sigmark.txt",
       "resource_env_vars": [
         {
-          "default_resource_glob_pattern": "sigmark/**/bit_accuracy.npz",
+          "default_resource_glob_pattern": "sigmark/**/*bit_accuracy*.npz",
           "default_resource_relative_path": "sigmark/official_outputs/bit_accuracy.npz",
           "env_var": "SSTW_SIGMARK_BIT_ACCURACY_NPZ",
           "project_owned_resource_required": true,
           "required_for_repository_default_adapter": true,
           "resource_role": "project_generated_official_bit_accuracy_npz"
+        },
+        {
+          "default_resource_glob_pattern": "sigmark/models",
+          "default_resource_relative_path": "sigmark/models",
+          "env_var": "SSTW_SIGMARK_MODEL_BASE_PATH",
+          "project_owned_resource_required": true,
+          "required_for_repository_default_adapter": false,
+          "resource_role": "project_downloaded_or_prepopulated_hunyuan_model_base_path"
         }
       ],
-      "runtime_support_mode": "high_memory_hunyuan_pipeline_or_project_owned_bundle_required",
+      "runtime_support_mode": "project_owned_hunyuan_gen_extract_runner_available_high_memory_gpu_required",
       "source_dir": "external_baseline/primary/sigmark/source"
     }
   ],

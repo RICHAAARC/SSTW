@@ -84,6 +84,7 @@
       "display_name": "SIGMark",
       "external_baseline_command_env_var": "SSTW_SIGMARK_EVAL_COMMAND",
       "external_supplemental_result_bundle_allowed": false,
+      "formal_reference_runner_mode": "official_hunyuan_gen_extract_then_project_owned_bundle_record",
       "official_baseline_command_env_var": "SSTW_SIGMARK_OFFICIAL_EVAL_COMMAND",
       "official_entrypoint_candidates": [
         "main.py",
@@ -94,6 +95,8 @@
         "description": "该命令在 bridge 内部调用第三方官方实现, 并把官方输出 JSON 写入 {official_output_json_path}。",
         "env_var": "SSTW_SIGMARK_OFFICIAL_EVAL_COMMAND",
         "fail_closed_policy": "缺少官方源码、官方权重、官方 key/message/maintained info 或官方输出时必须失败, 不允许输出 proxy 分数。",
+        "formal_reference_notebook_runner_module": "external_baseline.sigmark_official_hunyuan_runtime",
+        "formal_reference_notebook_runner_policy": "先运行官方 Hunyuan gen -> extract 生成 bit_accuracy npz, 再写 project-owned official bundle; 该 bundle 由统一 runner 转写 measured_formal。",
         "official_result_bundle_path_convention": [
           "<bundle_root>/<baseline_id>/records/<prompt_id>__<seed_id>__<attack_name>.json",
           "<bundle_root>/<baseline_id>/records/<trajectory_trace_id>__<attack_name>.json",
@@ -119,6 +122,7 @@
         "<bundle_root>/<baseline_id>/<trajectory_trace_id>/<attack_name>.json"
       ],
       "official_result_bundle_supported": true,
+      "project_owned_formal_reference_runner_module": "external_baseline.sigmark_official_hunyuan_runtime",
       "repository_generated_result_cache_allowed": true,
       "repository_official_eval_adapter_module": "external_baseline.official_eval_adapters.sigmark",
       "repository_official_eval_command_template": "python -m external_baseline.official_eval_adapters.sigmark --official-source-dir /content/SSTW/external_baseline/primary/sigmark/source --source-video {source_video_path} --attacked-video {attacked_video_path} --attack-name {attack_name} --official-output-json {official_output_json_path} --run-root {run_root} --prompt-id {prompt_id} --seed-id {seed_id} --trajectory-trace-id {trajectory_trace_id}",

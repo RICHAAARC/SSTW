@@ -1,11 +1,18 @@
 # SIGMark 官方 HunyuanVideo / blind extraction 流程通用依赖。
 # 官方推荐高显存环境, Colab L4 默认不保证可完成完整生成流程。
 # Colab 已预装 torch / torchvision, 此处不重复安装, 避免破坏 CUDA 运行栈。
-diffusers
-transformers
-accelerate
+transformers>=4.45
+diffusers>=0.34.0
+accelerate>=1.10.1
+bitsandbytes>=0.47.0
+huggingface_hub
 numpy
-opencv-python
+scipy>=1.15
+pycryptodome>=3.23
+galois>=0.4.4
+ldpc>=2.2.8
+Levenshtein>=0.27.1
+opencv-python-headless>=4.12
 decord
 imageio
 imageio-ffmpeg

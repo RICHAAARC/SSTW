@@ -438,9 +438,9 @@ def write_source_intake_artifacts(
 ) -> dict[str, Any]:
     """写出 source intake、inspection、clone results 和 table plan 四类治理文件。"""
     output = Path(output_root)
+    clone_manifest = build_clone_results_manifest(registry_path, repo_root, execute_clone=execute_clone)
     intake_manifest = build_source_intake_manifest(registry_path, repo_root)
     inspection_manifest = build_source_inspection_manifest(registry_path, repo_root)
-    clone_manifest = build_clone_results_manifest(registry_path, repo_root, execute_clone=execute_clone)
     table_plan = build_external_baseline_table_plan(registry_path)
     write_json(output / INTAKE_MANIFEST_NAME, intake_manifest)
     write_json(output / SOURCE_INSPECTION_NAME, inspection_manifest)

@@ -121,10 +121,18 @@ def test_modern_baseline_colab_command_config_is_guidance_not_claim_evidence() -
         assert row["external_baseline_command_env_var"] == f"SSTW_{baseline_id.upper()}_EVAL_COMMAND"
         assert row["official_baseline_command_env_var"] == f"SSTW_{baseline_id.upper()}_OFFICIAL_EVAL_COMMAND"
         assert row["source_verification_status"] == "git_ls_remote_head_verified_2026_06_25"
-        assert row["sstw_eval_command_template_status"] == "repository_bridge_ready_requires_official_eval_command"
-        assert row["repository_official_eval_command_template_status"] == (
-            "repository_official_wrapper_ready_fail_closed_requires_official_source_and_artifacts"
-        )
+        if baseline_id == "videomark":
+            assert row["sstw_eval_command_template_status"] == "repository_bridge_ready_uses_project_owned_official_bundle_when_available"
+        else:
+            assert row["sstw_eval_command_template_status"] == "repository_bridge_ready_requires_official_eval_command"
+        if baseline_id == "videomark":
+            assert row["repository_official_eval_command_template_status"] == (
+                "repository_official_wrapper_ready_with_project_owned_videomark_runtime_default"
+            )
+        else:
+            assert row["repository_official_eval_command_template_status"] == (
+                "repository_official_wrapper_ready_fail_closed_requires_official_source_and_artifacts"
+            )
         assert row["repository_official_eval_adapter_module"] == f"external_baseline.official_eval_adapters.{baseline_id}"
         assert f"external_baseline.official_eval_adapters.{baseline_id}" in row["repository_official_eval_command_template"]
         assert "{official_output_json_path}" in row["repository_official_eval_command_template"]
@@ -340,10 +348,10 @@ def test_official_bundle_generation_plan_is_fail_closed_about_auto_blocked_basel
 
     assert plan["runtime_comparison_unit_count"] == 2
     assert plan["baseline_count"] == 6
-    assert plan["auto_supported_baselines"] == ["videoseal"]
+    assert plan["auto_supported_baselines"] == ["videomark", "videoseal"]
     assert "spdmark" in plan["auto_blocked_baselines"]
     assert "sigmark" in plan["auto_blocked_baselines"]
-    assert plan["auto_blocked_baseline_count"] == 5
+    assert plan["auto_blocked_baseline_count"] == 4
     spdmark_row = next(row for row in plan["plan_rows"] if row["baseline_id"] == "spdmark")
     assert spdmark_row["automatic_bundle_generation_supported_by_sstw"] is False
     assert spdmark_row["resource_blocker"]

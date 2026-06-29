@@ -9,3 +9,7 @@ scipy
 opencv-python
 imageio
 imageio-ffmpeg
+galois
+ldpc
+python-Levenshtein
+tqdm

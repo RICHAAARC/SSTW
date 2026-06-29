@@ -63,6 +63,20 @@ VIDSIG_COLAB_LIGHTWEIGHT_DEPENDENCIES = (
     "Pillow",
     "tqdm",
 )
+VIDEOMARK_COLAB_LIGHTWEIGHT_DEPENDENCIES = (
+    "diffusers",
+    "transformers",
+    "accelerate",
+    "numpy",
+    "scipy",
+    "opencv-python",
+    "imageio",
+    "imageio-ffmpeg",
+    "galois",
+    "ldpc",
+    "python-Levenshtein",
+    "tqdm",
+)
 
 
 def _read_json(path: str | Path) -> dict[str, Any]:
@@ -326,6 +340,35 @@ def bootstrap_sigmark(resource_root: Path, *, allow_network: bool) -> dict[str, 
     }
 
 
+def bootstrap_videomark(resource_root: Path, *, allow_network: bool, source_root: Path) -> dict[str, Any]:
+    """准备 VideoMark 官方 runtime 的公开 Python 依赖。
+
+    VideoMark 的正式 measured_formal 结果仍必须由项目内
+    `external_baseline.videomark_official_runtime` 运行官方 embedding / extraction /
+    temporal tamper 产生。这里仅安装轻量依赖并记录 runner 可尝试状态, 不生成任何
+    baseline 分数。
+    """
+
+    baseline_root = resource_root / "videomark"
+    baseline_root.mkdir(parents=True, exist_ok=True)
+    source_dir = source_root / "videomark" / "source"
+    install_results: list[dict[str, Any]] = []
+    for dependency in VIDEOMARK_COLAB_LIGHTWEIGHT_DEPENDENCIES:
+        install_results.append(_pip_install_target(dependency, allow_network=allow_network, timeout_sec=1200))
+    failed = [item for item in install_results if item.get("install_status") == "install_failed"]
+    return {
+        "baseline_id": "videomark",
+        "bootstrap_status": "ready" if not failed else "manual_official_resource_required",
+        "resource_mode": "project_owned_official_runtime_downloads_public_model_on_first_use",
+        "resource_dir": str(baseline_root),
+        "official_source_dir": str(source_dir),
+        "project_owned_runner_module": "external_baseline.videomark_official_runtime",
+        "colab_torch_stack_policy": "preserve_preinstalled_torch_and_torchvision",
+        "install_results": install_results,
+        "missing_after_bootstrap": [] if not failed else ["videomark_lightweight_python_dependencies"],
+    }
+
+
 def manual_resource_row(baseline_id: str, reason: str, strict_gate_resolution: str) -> dict[str, Any]:
     """构造需要官方离线资源的 baseline 行。"""
     return {
@@ -357,7 +400,8 @@ def bootstrap_official_resources(
     baseline_rows.append(bootstrap_videoseal(resolved_resource_root, allow_network=allow_network, source_root=resolved_source_root))
     baseline_rows.append(bootstrap_vidsig(resolved_resource_root, allow_network=allow_network))
     baseline_rows.append(bootstrap_sigmark(resolved_resource_root, allow_network=allow_network))
-    for baseline_id in ("videoshield", "spdmark", "videomark"):
+    baseline_rows.append(bootstrap_videomark(resolved_resource_root, allow_network=allow_network, source_root=resolved_source_root))
+    for baseline_id in ("videoshield", "spdmark"):
         row = rows.get(baseline_id, {})
         baseline_rows.append(manual_resource_row(
             baseline_id,

@@ -617,6 +617,39 @@ def _run_sigmark_hunyuan_reference(
     return run_sigmark_official_hunyuan_runtime(sigmark_config)
 
 
+def _run_videomark_official_reference(
+    *,
+    run_root: Path,
+    bundle_root: Path,
+    official_source_dir: Path,
+    repo_root: Path,
+    resource_root: str | Path,
+    max_records: int | None,
+) -> dict[str, Any]:
+    """运行 VideoMark 官方 embedding / extraction / temporal tamper official bundle 生成路径。
+
+    该路径属于项目特定的 external baseline 自包含实现: Notebook 在项目内调用
+    VideoMark 官方 `embedding_and_extraction.py` 和 `temporal_tamper.py`, 再把官方
+    `temporal_results.json` 转成 official bundle。它不直接写 `measured_formal`,
+    后续仍由统一 runner 转写。
+    """
+
+    from external_baseline.videomark_official_runtime import (
+        build_default_videomark_official_config_from_env,
+        run_videomark_official_runtime,
+    )
+
+    videomark_config = build_default_videomark_official_config_from_env(
+        run_root=run_root,
+        bundle_root=bundle_root,
+        source_dir=official_source_dir,
+        repo_root=repo_root,
+        resource_root=resource_root,
+        max_records=max_records,
+    )
+    return run_videomark_official_runtime(videomark_config)
+
+
 def _build_unified_formal_scoring_environment(
     layout: Mapping[str, str],
     config: ModernExternalBaselineFormalReferenceConfig,
@@ -804,6 +837,18 @@ def run_modern_external_baseline_formal_reference_plan(
         "true",
     ).lower() == "true":
         reference_manifest = _run_sigmark_hunyuan_reference(
+            run_root=run_root,
+            bundle_root=bundle_root,
+            official_source_dir=official_source_dir,
+            repo_root=repo_root,
+            resource_root=layout["external_baseline_resource_root"],
+            max_records=config.max_records,
+        )
+    elif config.baseline_id == "videomark" and os.environ.get(
+        "SSTW_RUN_VIDEOMARK_OFFICIAL_PIPELINE",
+        "true",
+    ).lower() == "true":
+        reference_manifest = _run_videomark_official_reference(
             run_root=run_root,
             bundle_root=bundle_root,
             official_source_dir=official_source_dir,

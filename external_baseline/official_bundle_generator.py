@@ -311,6 +311,24 @@ def run_official_bundle_generation(
             generation_manifests.append(generate_videoseal_official_bundle(root, bundle))
         except Exception as exc:  # pragma: no cover - 依赖 Colab GPU 和第三方模型
             failures.append({"baseline_id": "videoseal", "failure_reason": str(exc)})
+    if generate_auto_supported and "videomark" in plan["auto_supported_baselines"]:
+        try:
+            from external_baseline.videomark_official_runtime import (
+                build_default_videomark_official_config_from_env,
+                run_videomark_official_runtime,
+            )
+
+            source_dir = Path("external_baseline/primary/videomark/source")
+            config = build_default_videomark_official_config_from_env(
+                run_root=root,
+                bundle_root=bundle,
+                source_dir=source_dir,
+                repo_root=".",
+                max_records=None,
+            )
+            generation_manifests.append(run_videomark_official_runtime(config))
+        except Exception as exc:  # pragma: no cover - 依赖 Colab GPU 和第三方模型
+            failures.append({"baseline_id": "videomark", "failure_reason": str(exc)})
     decision = {
         "artifact_name": "external_baseline_official_bundle_generation_decision.json",
         "manifest_kind": "external_baseline_official_bundle_generation_decision",

@@ -264,7 +264,7 @@
       "repository_generated_result_cache_allowed": true,
       "repository_official_eval_adapter_module": "external_baseline.official_eval_adapters.videomark",
       "repository_official_eval_command_template": "python -m external_baseline.official_eval_adapters.videomark --official-source-dir /content/SSTW/external_baseline/primary/videomark/source --source-video {source_video_path} --attacked-video {attacked_video_path} --attack-name {attack_name} --official-output-json {official_output_json_path} --run-root {run_root} --prompt-id {prompt_id} --seed-id {seed_id} --trajectory-trace-id {trajectory_trace_id}",
-      "repository_official_eval_command_template_status": "repository_official_wrapper_ready_fail_closed_requires_official_source_and_artifacts",
+      "repository_official_eval_command_template_status": "repository_official_wrapper_ready_with_project_owned_videomark_runtime_default",
       "score_output_contract": {
         "formal_record_policy": "only_command_outputs_are_converted_to_measured_formal_records",
         "json_object_required": true,
@@ -281,13 +281,15 @@
       "source_clone_command": "git clone --branch main https://github.com/KYRIE-LI11/VideoMark /content/SSTW/external_baseline/primary/videomark/source",
       "source_verification_status": "git_ls_remote_head_verified_2026_06_25",
       "sstw_eval_command_template": "python -m external_baseline.official_command_bridge --baseline-id videomark --official-source-dir /content/SSTW/external_baseline/primary/videomark/source --source-video {source_video_path} --attacked-video {attacked_video_path} --attack-name {attack_name} --output-json {output_json_path} --run-root {run_root} --prompt-id {prompt_id} --seed-id {seed_id} --trajectory-trace-id {trajectory_trace_id}",
-      "sstw_eval_command_template_status": "repository_bridge_ready_requires_official_eval_command",
+      "sstw_eval_command_template_status": "repository_bridge_ready_uses_project_owned_official_bundle_when_available",
       "strict_gate_resource_resolution_order": [
-        "SSTW_VIDEOMARK_NATIVE_EVAL_COMMAND",
-        "repository_official_eval_adapter_default_runtime_when_supported",
-        "repository_generated_official_bundle_cache"
+        "project_owned_videomark_official_runtime",
+        "repository_generated_official_bundle_cache",
+        "SSTW_VIDEOMARK_NATIVE_EVAL_COMMAND"
       ],
-      "verified_head_commit": "9f8d78b73ab9f9f055651b1b4f37d68bdb05e7be"
+      "verified_head_commit": "9f8d78b73ab9f9f055651b1b4f37d68bdb05e7be",
+      "formal_reference_runner_mode": "official_videomark_embedding_extraction_temporal_tamper_then_project_owned_bundle_record",
+      "project_owned_formal_reference_runner_module": "external_baseline.videomark_official_runtime"
     },
     {
       "baseline_id": "vidsig",

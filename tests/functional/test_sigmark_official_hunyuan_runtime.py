@@ -10,6 +10,7 @@ import pytest
 
 from external_baseline.sigmark_official_hunyuan_runtime import (
     SigmarkOfficialHunyuanRuntimeConfig,
+    normalize_sigmark_precision,
     run_sigmark_official_hunyuan_runtime,
     write_sigmark_official_bundle_records,
 )
@@ -110,6 +111,8 @@ def test_sigmark_hunyuan_runtime_dry_run_builds_prompt_set_and_commands(tmp_path
     assert manifest["patch_manifest"]["patch_status"] == "patched_runtime_copy"
     assert "--mode=gen" in manifest["gen_command"]
     assert "--mode=extract" in manifest["extract_command"]
+    assert "--precision=bf16" in manifest["gen_command"]
+    assert "--precision=bfloat16" not in manifest["gen_command"]
     prompt_file = Path(manifest["prompt_manifest"]["prompt_file"])
     assert "toy car moves" in prompt_file.read_text(encoding="utf-8")
     runtime_main = Path(manifest["runtime_source_dir"]) / "main.py"
@@ -179,3 +182,15 @@ def test_sigmark_hunyuan_runtime_writes_governed_failure_manifest_when_model_mis
     assert "sigmark_hunyuan_model_missing" in manifest["execution_failure_reason"]
     record_path = bundle_root / "sigmark" / "records" / "prompt_a__seed_0__clean.json"
     assert not record_path.exists()
+
+
+@pytest.mark.quick
+def test_sigmark_precision_normalization_matches_official_cli_choices() -> None:
+    """项目运行器必须把 PyTorch dtype 名称转换为官方 CLI precision token。"""
+
+    assert normalize_sigmark_precision("bfloat16") == "bf16"
+    assert normalize_sigmark_precision("float16") == "fp16"
+    assert normalize_sigmark_precision("float32") == "fp32"
+    assert normalize_sigmark_precision("bf16") == "bf16"
+    with pytest.raises(ValueError, match="sigmark_precision_invalid"):
+        normalize_sigmark_precision("torch.bfloat16")

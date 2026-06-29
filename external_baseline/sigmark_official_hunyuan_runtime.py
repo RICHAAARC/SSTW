@@ -28,6 +28,13 @@ DEFAULT_MODEL_NAME = "HunyuanVideo-community"
 DEFAULT_PROMPT_SET = "VBench2_aug"
 DEFAULT_RUNTIME_DIMENSION = "sstw_runtime_prompt"
 DEFAULT_DETECTION_THRESHOLD = 0.5
+DEFAULT_PRECISION = "bf16"
+PRECISION_ALIASES = {
+    "bfloat16": "bf16",
+    "float16": "fp16",
+    "float32": "fp32",
+}
+OFFICIAL_PRECISION_CHOICES = {"fp16", "bf16", "fp32"}
 PATCH_TARGET = (
     '        image_prompt = load_image(os.path.join(args.image_prompt_dir, dimension, prompt[:180] + "-0.png")) \\\n'
     "            if args.image_prompt_dir is not None else None"
@@ -77,7 +84,7 @@ class SigmarkOfficialHunyuanRuntimeConfig:
     ch_factor: int = 1
     hw_factor: int = 8
     fr_factor: int = 4
-    precision: str = "bfloat16"
+    precision: str = DEFAULT_PRECISION
     quant_text_encoder: int = 1
     nproc_per_node: int = 1
     small_scale_test: int = -1
@@ -109,6 +116,20 @@ def _env_float(name: str, default: float) -> float:
 
     value = os.environ.get(name, "").strip()
     return float(value) if value else default
+
+
+def normalize_sigmark_precision(value: str) -> str:
+    """把常见 dtype 名称转换为 SIGMark 官方 CLI 可接受的 precision token。
+
+    SIGMark 官方 `main.py` 只接受 `fp16`、`bf16` 和 `fp32`。Colab 与 PyTorch
+    文档中常见的 `bfloat16` 属于 dtype 名称, 不能直接传给官方 CLI。因此这里在
+    项目运行器层做显式归一化, 避免 Notebook 冷启动运行到官方 argparse 时才失败。
+    """
+
+    normalized = PRECISION_ALIASES.get(str(value or "").strip().lower(), str(value or "").strip().lower())
+    if normalized not in OFFICIAL_PRECISION_CHOICES:
+        raise ValueError(f"sigmark_precision_invalid:{value}:choices={sorted(OFFICIAL_PRECISION_CHOICES)}")
+    return normalized
 
 
 def _read_json(path: str | Path) -> dict[str, Any]:
@@ -248,7 +269,7 @@ def build_default_sigmark_official_hunyuan_config_from_env(
         ch_factor=_env_int("SSTW_SIGMARK_CH_FACTOR", 1),
         hw_factor=_env_int("SSTW_SIGMARK_HW_FACTOR", 8),
         fr_factor=_env_int("SSTW_SIGMARK_FR_FACTOR", 4),
-        precision=os.environ.get("SSTW_SIGMARK_PRECISION", "bfloat16").strip() or "bfloat16",
+        precision=normalize_sigmark_precision(os.environ.get("SSTW_SIGMARK_PRECISION", DEFAULT_PRECISION)),
         quant_text_encoder=_env_int("SSTW_SIGMARK_QUANT_TEXT_ENCODER", 1),
         nproc_per_node=_env_int("SSTW_SIGMARK_NPROC_PER_NODE", 1),
         small_scale_test=_env_int("SSTW_SIGMARK_SMALL_SCALE_TEST", -1),
@@ -515,7 +536,7 @@ def _sigmark_command(config: SigmarkOfficialHunyuanRuntimeConfig, *, runtime_sou
         "--num_prompts_diversity=1",
         f"--small_scale_test={int(config.small_scale_test)}",
         f"--output_path={config.output_path}",
-        f"--precision={config.precision}",
+        f"--precision={normalize_sigmark_precision(config.precision)}",
         f"--quant_text_encoder={int(config.quant_text_encoder)}",
         f"--seed={int(config.seed)}",
     ]

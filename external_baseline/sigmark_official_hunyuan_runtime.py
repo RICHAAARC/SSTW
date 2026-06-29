@@ -29,6 +29,16 @@ DEFAULT_PROMPT_SET = "VBench2_aug"
 DEFAULT_RUNTIME_DIMENSION = "sstw_runtime_prompt"
 DEFAULT_DETECTION_THRESHOLD = 0.5
 DEFAULT_PRECISION = "bf16"
+DEFAULT_WIDTH = 512
+DEFAULT_HEIGHT = 512
+DEFAULT_NUM_FRAMES = 65
+DEFAULT_FPS = 8
+DEFAULT_CH_FACTOR = 2
+DEFAULT_HW_FACTOR = 8
+DEFAULT_FR_FACTOR = 1
+DEFAULT_VAE_SCALE_FACTOR_SPATIAL = 8
+DEFAULT_VAE_SCALE_FACTOR_TEMPORAL = 4
+DEFAULT_LATENT_CHANNELS = 16
 PRECISION_ALIASES = {
     "bfloat16": "bf16",
     "float16": "fp16",
@@ -74,16 +84,16 @@ class SigmarkOfficialHunyuanRuntimeConfig:
     num_videos_per_prompt: int = 1
     num_videos_per_prompt_diversity: int = 1
     batch_size: int = 1
-    width: int = 720
-    height: int = 1280
-    num_frames: int = 61
-    fps: int = 15
+    width: int = DEFAULT_WIDTH
+    height: int = DEFAULT_HEIGHT
+    num_frames: int = DEFAULT_NUM_FRAMES
+    fps: int = DEFAULT_FPS
     guidance_scale: float = 6.0
     num_inference_steps: int = 50
     seed: int = 42
-    ch_factor: int = 1
-    hw_factor: int = 8
-    fr_factor: int = 4
+    ch_factor: int = DEFAULT_CH_FACTOR
+    hw_factor: int = DEFAULT_HW_FACTOR
+    fr_factor: int = DEFAULT_FR_FACTOR
     precision: str = DEFAULT_PRECISION
     quant_text_encoder: int = 1
     nproc_per_node: int = 1
@@ -130,6 +140,71 @@ def normalize_sigmark_precision(value: str) -> str:
     if normalized not in OFFICIAL_PRECISION_CHOICES:
         raise ValueError(f"sigmark_precision_invalid:{value}:choices={sorted(OFFICIAL_PRECISION_CHOICES)}")
     return normalized
+
+
+def validate_sigmark_watermark_geometry(
+    *,
+    width: int,
+    height: int,
+    num_frames: int,
+    ch_factor: int,
+    hw_factor: int,
+    fr_factor: int,
+    vae_scale_factor_spatial: int = DEFAULT_VAE_SCALE_FACTOR_SPATIAL,
+    vae_scale_factor_temporal: int = DEFAULT_VAE_SCALE_FACTOR_TEMPORAL,
+    latent_channels: int = DEFAULT_LATENT_CHANNELS,
+) -> dict[str, Any]:
+    """在加载 Hunyuan 模型前校验 SIGMark 官方水印几何约束。
+
+    该函数属于项目特定防御式写法。SIGMark 官方代码会在构造 watermark 时要求
+    latent height / width 能被 `hw_factor` 整除。若使用 720x1280 且 `hw_factor=8`,
+    latent width 为 90, 会在官方模型已经加载后才失败。此处提前校验, 并把默认值
+    固定为官方 `main.py` 的 512x512 / 65 frames / ch=2 / hw=8 / fr=1。
+    """
+
+    if width <= 0 or height <= 0 or num_frames <= 0:
+        raise ValueError(f"sigmark_watermark_geometry_invalid:non_positive_size:{width}x{height}x{num_frames}")
+    if ch_factor <= 0 or hw_factor <= 0 or fr_factor <= 0:
+        raise ValueError(
+            "sigmark_watermark_geometry_invalid:non_positive_factor:"
+            f"ch_factor={ch_factor}:hw_factor={hw_factor}:fr_factor={fr_factor}"
+        )
+    violations: list[str] = []
+    if height % vae_scale_factor_spatial != 0 or width % vae_scale_factor_spatial != 0:
+        violations.append("video_hw_not_divisible_by_vae_scale_factor_spatial")
+    if (num_frames - 1) % vae_scale_factor_temporal != 0:
+        violations.append("video_frames_not_divisible_by_vae_scale_factor_temporal")
+    latent_h = height // vae_scale_factor_spatial
+    latent_w = width // vae_scale_factor_spatial
+    latent_f = (num_frames - 1) // vae_scale_factor_temporal
+    if latent_h % hw_factor != 0 or latent_w % hw_factor != 0:
+        violations.append("latent_hw_not_divisible_by_hw_factor")
+    if latent_f % fr_factor != 0:
+        violations.append("latent_f_not_divisible_by_fr_factor")
+    if latent_channels % ch_factor != 0:
+        violations.append("latent_channels_not_divisible_by_ch_factor")
+    manifest = {
+        "geometry_status": "ready" if not violations else "invalid",
+        "width": int(width),
+        "height": int(height),
+        "num_frames": int(num_frames),
+        "ch_factor": int(ch_factor),
+        "hw_factor": int(hw_factor),
+        "fr_factor": int(fr_factor),
+        "vae_scale_factor_spatial": int(vae_scale_factor_spatial),
+        "vae_scale_factor_temporal": int(vae_scale_factor_temporal),
+        "latent_channels": int(latent_channels),
+        "latent_h": int(latent_h),
+        "latent_w": int(latent_w),
+        "latent_f": int(latent_f),
+        "required_width_multiple": int(vae_scale_factor_spatial * hw_factor),
+        "required_height_multiple": int(vae_scale_factor_spatial * hw_factor),
+        "required_frame_rule": f"num_frames = {vae_scale_factor_temporal} * n + 1",
+        "violations": violations,
+    }
+    if violations:
+        raise ValueError(f"sigmark_watermark_geometry_invalid:{json.dumps(manifest, ensure_ascii=False, sort_keys=True)}")
+    return manifest
 
 
 def _read_json(path: str | Path) -> dict[str, Any]:
@@ -259,16 +334,16 @@ def build_default_sigmark_official_hunyuan_config_from_env(
         num_videos_per_prompt=_env_int("SSTW_SIGMARK_NUM_VIDEOS_PER_PROMPT", 1),
         num_videos_per_prompt_diversity=_env_int("SSTW_SIGMARK_NUM_VIDEOS_PER_PROMPT_DIVERSITY", 1),
         batch_size=_env_int("SSTW_SIGMARK_BATCH_SIZE", 1),
-        width=_env_int("SSTW_SIGMARK_WIDTH", 720),
-        height=_env_int("SSTW_SIGMARK_HEIGHT", 1280),
-        num_frames=_env_int("SSTW_SIGMARK_NUM_FRAMES", 61),
-        fps=_env_int("SSTW_SIGMARK_FPS", 15),
+        width=_env_int("SSTW_SIGMARK_WIDTH", DEFAULT_WIDTH),
+        height=_env_int("SSTW_SIGMARK_HEIGHT", DEFAULT_HEIGHT),
+        num_frames=_env_int("SSTW_SIGMARK_NUM_FRAMES", DEFAULT_NUM_FRAMES),
+        fps=_env_int("SSTW_SIGMARK_FPS", DEFAULT_FPS),
         guidance_scale=_env_float("SSTW_SIGMARK_GUIDANCE_SCALE", 6.0),
         num_inference_steps=_env_int("SSTW_SIGMARK_NUM_INFERENCE_STEPS", 50),
         seed=_env_int("SSTW_SIGMARK_SEED", 42),
-        ch_factor=_env_int("SSTW_SIGMARK_CH_FACTOR", 1),
-        hw_factor=_env_int("SSTW_SIGMARK_HW_FACTOR", 8),
-        fr_factor=_env_int("SSTW_SIGMARK_FR_FACTOR", 4),
+        ch_factor=_env_int("SSTW_SIGMARK_CH_FACTOR", DEFAULT_CH_FACTOR),
+        hw_factor=_env_int("SSTW_SIGMARK_HW_FACTOR", DEFAULT_HW_FACTOR),
+        fr_factor=_env_int("SSTW_SIGMARK_FR_FACTOR", DEFAULT_FR_FACTOR),
         precision=normalize_sigmark_precision(os.environ.get("SSTW_SIGMARK_PRECISION", DEFAULT_PRECISION)),
         quant_text_encoder=_env_int("SSTW_SIGMARK_QUANT_TEXT_ENCODER", 1),
         nproc_per_node=_env_int("SSTW_SIGMARK_NPROC_PER_NODE", 1),
@@ -695,6 +770,14 @@ def run_sigmark_official_hunyuan_runtime(config: SigmarkOfficialHunyuanRuntimeCo
     output_path.mkdir(parents=True, exist_ok=True)
 
     source_audit = _ensure_source_ready(source_dir)
+    geometry_manifest = validate_sigmark_watermark_geometry(
+        width=config.width,
+        height=config.height,
+        num_frames=config.num_frames,
+        ch_factor=config.ch_factor,
+        hw_factor=config.hw_factor,
+        fr_factor=config.fr_factor,
+    )
     records = _selected_runtime_records(run_root, config.max_records)
     if not records:
         raise RuntimeError(f"sigmark_runtime_detection_records_missing:{run_root / 'records/runtime_detection_records.jsonl'}")
@@ -815,6 +898,7 @@ def run_sigmark_official_hunyuan_runtime(config: SigmarkOfficialHunyuanRuntimeCo
         "dry_run": bool(config.dry_run),
         "config": asdict(config),
         "source_audit": source_audit,
+        "geometry_manifest": geometry_manifest,
         "patch_manifest": patch_manifest,
         "prompt_manifest": prompt_manifest,
         "model_manifest": model_manifest,

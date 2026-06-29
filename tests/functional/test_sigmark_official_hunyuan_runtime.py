@@ -12,6 +12,7 @@ from external_baseline.sigmark_official_hunyuan_runtime import (
     SigmarkOfficialHunyuanRuntimeConfig,
     normalize_sigmark_precision,
     run_sigmark_official_hunyuan_runtime,
+    validate_sigmark_watermark_geometry,
     write_sigmark_official_bundle_records,
 )
 
@@ -107,6 +108,10 @@ def test_sigmark_hunyuan_runtime_dry_run_builds_prompt_set_and_commands(tmp_path
 
     assert manifest["execution_status"] == "dry_run_planned"
     assert manifest["generated_bundle_record_count"] == 0
+    assert manifest["geometry_manifest"]["geometry_status"] == "ready"
+    assert manifest["geometry_manifest"]["width"] == 512
+    assert manifest["geometry_manifest"]["height"] == 512
+    assert manifest["geometry_manifest"]["latent_w"] == 64
     assert manifest["prompt_manifest"]["prompt_count"] == 1
     assert manifest["patch_manifest"]["patch_status"] == "patched_runtime_copy"
     assert "--mode=gen" in manifest["gen_command"]
@@ -194,3 +199,30 @@ def test_sigmark_precision_normalization_matches_official_cli_choices() -> None:
     assert normalize_sigmark_precision("bf16") == "bf16"
     with pytest.raises(ValueError, match="sigmark_precision_invalid"):
         normalize_sigmark_precision("torch.bfloat16")
+
+
+@pytest.mark.quick
+def test_sigmark_watermark_geometry_rejects_invalid_720_width() -> None:
+    """运行器必须在加载 Hunyuan 前阻断 720x1280 + hw_factor=8 这类官方非法组合。"""
+
+    with pytest.raises(ValueError, match="latent_hw_not_divisible_by_hw_factor"):
+        validate_sigmark_watermark_geometry(
+            width=720,
+            height=1280,
+            num_frames=61,
+            ch_factor=1,
+            hw_factor=8,
+            fr_factor=4,
+        )
+
+    manifest = validate_sigmark_watermark_geometry(
+        width=512,
+        height=512,
+        num_frames=65,
+        ch_factor=2,
+        hw_factor=8,
+        fr_factor=1,
+    )
+    assert manifest["geometry_status"] == "ready"
+    assert manifest["latent_w"] == 64
+    assert manifest["latent_h"] == 64

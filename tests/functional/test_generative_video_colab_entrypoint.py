@@ -307,6 +307,11 @@ def test_split_colab_notebooks_are_profile_driven() -> None:
         assert "SSTW_COLAB_STAGE_IO_MODE" in source
         assert "prepare_colab_stage_layout" in source
         assert "publish_colab_stage_package" in source
+        assert "layout['drive_package_dir']" not in source
+        assert "package_dir = Path(layout['drive_package_dir'])" not in source
+        assert "stage_package_dir = Path(layout['stage_package_dir'])" in source
+        assert "stage_package_latest.zip" in source
+        assert "stage_package_latest_manifest.json" in source
         assert "active_local_layout" in source
         assert "stage_enabled(" in source
         assert "drive.mount('/content/drive')" in source

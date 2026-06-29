@@ -57,7 +57,12 @@ def test_wan21_preflight_colab_notebook_calls_repository_module() -> None:
     assert "adapter_preflight_decision" in source
     assert "不得进入 B6 sampling-time constraint" in source
     assert "build_drive_packaging_command" in source
-    assert "packages/wan21_flow_adapter_preflight" in source
+    assert "打包到 Google Drive packages/" not in source
+    assert "package_dir = Path(layout['drive_package_dir'])" not in source
+    assert "stage_packages/wan21_flow_adapter_preflight" in source
+    assert "stage_package_dir = Path(layout['stage_package_dir'])" in source
+    assert "stage_package_latest.zip" in source
+    assert "stage_package_latest_manifest.json" in source
 
     helper_text = Path("paper_workflow/notebook_utils/flow_model_adapter_preflight_workflow.py").read_text(encoding="utf-8")
     assert "experiments.flow_model_adapter_preflight.wan21_preflight" in helper_text

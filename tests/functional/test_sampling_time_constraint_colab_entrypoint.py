@@ -197,6 +197,11 @@ def test_sampling_time_constraint_colab_notebook_calls_repository_modules() -> N
     assert "SSTW_COLAB_STAGE_IO_MODE" in source
     assert "prepare_colab_stage_layout" in source
     assert "publish_colab_stage_package" in source
+    assert "打包到 Google Drive packages/" not in source
+    assert "package_dir = Path(layout['drive_package_dir'])" not in source
+    assert "stage_package_dir = Path(layout['stage_package_dir'])" in source
+    assert "stage_package_latest.zip" in source
+    assert "stage_package_latest_manifest.json" in source
     assert "active_local_layout" in source
     assert "PROFILE = 'recommended'" in source
     assert "Wan-AI/Wan2.1-T2V-1.3B-Diffusers" in source

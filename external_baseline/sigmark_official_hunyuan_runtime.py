@@ -53,6 +53,8 @@ PATCH_REPLACEMENT = (
     '        image_prompt = load_image(os.path.join(args.image_prompt_dir, dimension, prompt[:180] + "-0.png")) \\\n'
     '            if "I2V" in args.model_name and args.image_prompt_dir is not None else None'
 )
+EXTRACT_VALID_INDEX_TARGET = "        else:\n            valid_index = None"
+EXTRACT_VALID_INDEX_REPLACEMENT = "        else:\n            valid_index = [None] * len(sample_names)"
 HF_MODEL_REPOS = {
     "HunyuanVideo-community": "hunyuanvideo-community/HunyuanVideo",
     "HunyuanVideo-I2V-community": "hunyuanvideo-community/HunyuanVideo-I2V",
@@ -403,26 +405,57 @@ def _copy_official_source_to_runtime(source_dir: Path, runtime_source_dir: Path,
 
 
 def _patch_sigmark_main_for_t2v(runtime_source_dir: Path) -> dict[str, Any]:
-    """修补 runtime 副本中官方 main.py 的 T2V prompt loading 兼容性。
+    """修补 runtime 副本中官方 main.py 的 Colab T2V 兼容性。
 
     官方 main.py 在 T2V 路径中也会先读取 image prompt。SSTW validation_scale
     需要用同一批文本 prompt 锚定外部 baseline, 因而只在 runtime 副本中把 image
-    prompt loading 限定到 I2V 模型。该补丁不修改 checked-in 第三方源码。
+    prompt loading 限定到 I2V 模型。同时, 官方 extract 在没有 disturbance_info
+    时会把 valid_index 设为 None, 但后续仍将其传入 zip。该路径在 Colab T2V
+    官方 gen->extract 中会触发 TypeError, 因此运行器只在 runtime 副本中把它
+    改成与 sample_names 等长的占位列表。该补丁不修改 checked-in 第三方源码。
     """
 
     main_path = runtime_source_dir / "main.py"
     text = main_path.read_text(encoding="utf-8")
+    patch_results: list[dict[str, Any]] = []
     if PATCH_REPLACEMENT in text:
-        status = "already_patched"
+        patch_results.append({
+            "patch_name": "t2v_image_prompt_load_guard",
+            "patch_status": "already_patched",
+        })
     elif PATCH_TARGET in text:
         text = text.replace(PATCH_TARGET, PATCH_REPLACEMENT, 1)
-        main_path.write_text(text, encoding="utf-8")
-        status = "patched_runtime_copy"
+        patch_results.append({
+            "patch_name": "t2v_image_prompt_load_guard",
+            "patch_status": "patched_runtime_copy",
+        })
     else:
         raise RuntimeError("sigmark_main_image_prompt_patch_pattern_missing")
+
+    if EXTRACT_VALID_INDEX_REPLACEMENT in text:
+        patch_results.append({
+            "patch_name": "extract_valid_index_none_guard",
+            "patch_status": "already_patched",
+        })
+    elif EXTRACT_VALID_INDEX_TARGET in text:
+        text = text.replace(EXTRACT_VALID_INDEX_TARGET, EXTRACT_VALID_INDEX_REPLACEMENT, 1)
+        patch_results.append({
+            "patch_name": "extract_valid_index_none_guard",
+            "patch_status": "patched_runtime_copy",
+        })
+    else:
+        patch_results.append({
+            "patch_name": "extract_valid_index_none_guard",
+            "patch_status": "pattern_missing_no_change",
+        })
+    main_path.write_text(text, encoding="utf-8")
+    status = "patched_runtime_copy" if any(
+        row["patch_status"] == "patched_runtime_copy" for row in patch_results
+    ) else "already_patched"
     return {
-        "patch_name": "t2v_image_prompt_load_guard",
+        "patch_name": "sigmark_colab_t2v_runtime_compatibility",
         "patch_status": status,
+        "patch_results": patch_results,
         "patched_file": str(main_path),
         "source_mutation_policy": "runtime_copy_only_checked_in_official_source_not_modified",
     }

@@ -74,6 +74,12 @@ def _write_fake_sigmark_source(source_dir: Path) -> None:
                 '        image_prompt = load_image(os.path.join(args.image_prompt_dir, dimension, prompt[:180] + "-0.png")) \\',
                 "            if args.image_prompt_dir is not None else None",
                 "    return image_prompt",
+                "def extract(args):",
+                "        if args.disturbance_info:",
+                "            valid_index = ['existing']",
+                "        else:",
+                "            valid_index = None",
+                "        return valid_index",
             ]
         )
         + "\n",
@@ -121,7 +127,15 @@ def test_sigmark_hunyuan_runtime_dry_run_builds_prompt_set_and_commands(tmp_path
     prompt_file = Path(manifest["prompt_manifest"]["prompt_file"])
     assert "toy car moves" in prompt_file.read_text(encoding="utf-8")
     runtime_main = Path(manifest["runtime_source_dir"]) / "main.py"
-    assert '"I2V" in args.model_name' in runtime_main.read_text(encoding="utf-8")
+    runtime_main_text = runtime_main.read_text(encoding="utf-8")
+    assert '"I2V" in args.model_name' in runtime_main_text
+    assert "valid_index = [None] * len(sample_names)" in runtime_main_text
+    assert {
+        row["patch_name"]: row["patch_status"] for row in manifest["patch_manifest"]["patch_results"]
+    } == {
+        "t2v_image_prompt_load_guard": "patched_runtime_copy",
+        "extract_valid_index_none_guard": "patched_runtime_copy",
+    }
 
 
 @pytest.mark.quick

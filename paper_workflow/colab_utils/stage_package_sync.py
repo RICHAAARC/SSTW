@@ -34,6 +34,8 @@ DEFAULT_LOCAL_PACKAGE_CACHE_ROOT = "/content/SSTW_stage_packages"
 STAGE_PACKAGE_ROOT_RELATIVE = "stage_packages"
 STAGE_PACKAGE_MANIFEST_KIND = "colab_stage_zip_handoff_manifest"
 STAGE_PACKAGE_MANIFEST_VERSION = "2026_06_27_local_zip_handoff_v1"
+EXTERNAL_BASELINE_FORMAL_REFERENCE_DECISION_KIND = "modern_external_baseline_formal_reference_decision"
+
 MODERN_EXTERNAL_BASELINE_IDS = (
     "videoseal",
     "vidsig",
@@ -118,19 +120,73 @@ def stage_package_dir(
     )
 
 
+def _env_flag(name: str, default: bool = False) -> bool:
+    """读取布尔环境变量, 统一处理 Colab Notebook 中的开关。"""
+
+    value = os.environ.get(name)
+    if value is None:
+        return default
+    return value.strip().lower() in {"1", "true", "yes", "y", "on"}
+
+
+def _is_external_baseline_stage_package(stage_package_id: str) -> bool:
+    """判断阶段包是否属于 modern external baseline 官方参考结果。"""
+
+    return sanitize_filename_token(stage_package_id).startswith("external_baseline_formal_reference_")
+
+
+def _stage_package_manifest_path_for_zip(package_zip: Path) -> Path:
+    """根据 zip 名称推导同阶段 manifest 路径。"""
+
+    if package_zip.name == "stage_package_latest.zip":
+        return package_zip.with_name("stage_package_latest_manifest.json")
+    if package_zip.name.startswith("stage_package__") and package_zip.suffix == ".zip":
+        return package_zip.with_name(f"{package_zip.stem}_stage_package_manifest.json")
+    return package_zip.with_suffix(".json")
+
+
+def _stage_package_zip_allowed_for_restore(package_zip: Path, stage_package_id: str) -> bool:
+    """判断候选 zip 是否允许作为恢复输入。"""
+
+    if not _is_external_baseline_stage_package(stage_package_id):
+        return True
+    manifest_path = _stage_package_manifest_path_for_zip(package_zip)
+    if not manifest_path.exists():
+        return _env_flag("SSTW_ALLOW_LEGACY_EXTERNAL_BASELINE_STAGE_PACKAGE_RESTORE", default=False)
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return False
+    if manifest.get("stage_package_publish_status") != "published":
+        return False
+    if manifest.get("formal_reference_decision") != "PASS":
+        return False
+    return True
+
+
 def latest_stage_package_zip(
     drive_project_root: str | Path,
     workflow_profile: str,
     stage_package_id: str,
 ) -> Path | None:
-    """查找 Drive 中某个阶段的 latest zip 或最新时间戳 zip。"""
+    """查找 Drive 中某个阶段的 latest zip。
+
+    默认只接受 `stage_package_latest.zip`。历史时间戳 zip 只能在显式设置
+    `SSTW_STAGE_PACKAGE_ALLOW_TIMESTAMP_FALLBACK=true` 后作为兼容输入。这样做的
+    主要原因是失败的 external baseline 重跑不能误用旧的成功或失败归档。
+    """
 
     package_dir = stage_package_dir(drive_project_root, workflow_profile, stage_package_id)
     latest = package_dir / "stage_package_latest.zip"
-    if latest.exists():
+    if latest.exists() and _stage_package_zip_allowed_for_restore(latest, stage_package_id):
         return latest
-    candidates = sorted(package_dir.glob("*.zip"), key=lambda path: path.stat().st_mtime, reverse=True)
-    return candidates[0] if candidates else None
+    if not _env_flag("SSTW_STAGE_PACKAGE_ALLOW_TIMESTAMP_FALLBACK", default=False):
+        return None
+    candidates = sorted(package_dir.glob("stage_package__*.zip"), key=lambda path: path.stat().st_mtime, reverse=True)
+    for candidate in candidates:
+        if _stage_package_zip_allowed_for_restore(candidate, stage_package_id):
+            return candidate
+    return None
 
 
 def _stage_package_source_workflow_profile(
@@ -481,6 +537,128 @@ def _write_source_to_archive(
     return count
 
 
+def _external_baseline_decision_path(layout: Mapping[str, str], baseline_id: str | None) -> Path | None:
+    """返回单个 external baseline 官方参考决策文件路径。"""
+
+    if not baseline_id:
+        return None
+    run_root = Path(str(layout.get("drive_run_root") or ""))
+    if not str(run_root):
+        return None
+    baseline_token = sanitize_filename_token(baseline_id)
+    return run_root / "artifacts" / "external_baseline_formal_reference" / f"{baseline_token}_formal_reference_decision.json"
+
+
+def _load_external_baseline_decision(layout: Mapping[str, str], baseline_id: str | None) -> dict[str, Any] | None:
+    """读取 external baseline 决策文件, 缺失或损坏时返回 None。"""
+
+    decision_path = _external_baseline_decision_path(layout, baseline_id)
+    if decision_path is None or not decision_path.exists():
+        return None
+    try:
+        decision = json.loads(decision_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return None
+    if decision.get("manifest_kind") != EXTERNAL_BASELINE_FORMAL_REFERENCE_DECISION_KIND:
+        return None
+    return decision
+
+
+def _external_baseline_publish_blocker(
+    layout: Mapping[str, str],
+    *,
+    stage_package_id: str,
+    notebook_role: str,
+    baseline_id: str | None,
+) -> dict[str, Any] | None:
+    """判断 external baseline 阶段是否允许发布完整 zip。"""
+
+    role = sanitize_filename_token(notebook_role)
+    is_external_reference = role == "external_baseline_formal_scoring" or stage_package_id.startswith(
+        "external_baseline_formal_reference_"
+    )
+    if not is_external_reference:
+        return None
+
+    decision = _load_external_baseline_decision(layout, baseline_id)
+    decision_path = _external_baseline_decision_path(layout, baseline_id)
+    if decision is None:
+        return {
+            "stage_package_publish_status": "blocked_missing_external_baseline_formal_reference_decision",
+            "formal_reference_decision_path": str(decision_path or ""),
+            "formal_reference_decision": "MISSING",
+            "formal_reference_status": "missing_or_invalid_decision_record",
+        }
+    if decision.get("formal_reference_decision") != "PASS":
+        return {
+            "stage_package_publish_status": "skipped_failed_external_baseline_reference",
+            "formal_reference_decision_path": str(decision_path or ""),
+            "formal_reference_decision": decision.get("formal_reference_decision", "UNKNOWN"),
+            "formal_reference_status": decision.get("formal_reference_status", "unknown_failure"),
+        }
+    return None
+
+
+def _prune_remote_stage_package_snapshots(remote_package_dir: Path) -> list[str]:
+    """删除当前阶段目录下的历史时间戳包, 保留 latest 作为唯一默认入口。"""
+
+    removed: list[str] = []
+    for pattern in ("stage_package__*.zip", "stage_package__*_stage_package_manifest.json"):
+        for path in sorted(remote_package_dir.glob(pattern)):
+            if not path.is_file():
+                continue
+            path.unlink()
+            removed.append(str(path))
+    return removed
+
+
+def _remove_path_if_file(path: Path) -> bool:
+    """若文件存在则删除, 用于清理失败阶段遗留的 latest zip。"""
+
+    if path.exists() and path.is_file():
+        path.unlink()
+        return True
+    return False
+
+
+def _write_manifest_only_stage_package(
+    *,
+    layout: Mapping[str, str],
+    remote_package_dir: Path,
+    latest_zip: Path,
+    latest_manifest: Path,
+    manifest: dict[str, Any],
+) -> dict[str, Any]:
+    """只写阶段 manifest, 不写 zip。
+
+    external baseline 未通过时, 这个 manifest 是阻断记录, 不能被后续门禁当成可恢复
+    阶段包使用。该设计避免失败运行把数百 MB 或数 GB 的中间视频继续写入 Drive。
+    """
+
+    remote_package_dir.mkdir(parents=True, exist_ok=True)
+    removed_timestamp_snapshots = _prune_remote_stage_package_snapshots(remote_package_dir)
+    removed_latest_zip = _remove_path_if_file(latest_zip)
+    manifest = {
+        **manifest,
+        "drive_stage_package_zip": "",
+        "latest_drive_stage_package_zip": "",
+        "stage_package_archive_sha256": "",
+        "stage_package_entry_count": 0,
+        "stage_package_source_root_count": 0,
+        "stage_package_source_roots": [],
+        "keep_timestamp_snapshot": False,
+        "removed_latest_stage_package_zip": removed_latest_zip,
+        "removed_timestamp_stage_package_snapshots": removed_timestamp_snapshots,
+        "claim_support_status": "stage_package_blocked_not_claim_evidence",
+    }
+    latest_manifest.write_text(json.dumps(manifest, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    return {
+        **manifest,
+        "stage_package_manifest_path": str(latest_manifest),
+        "latest_stage_package_manifest_path": str(latest_manifest),
+    }
+
+
 def publish_colab_stage_package(
     layout: Mapping[str, str],
     *,
@@ -511,8 +689,70 @@ def publish_colab_stage_package(
     stem = f"stage_package__{package_batch_id}"
     local_zip = local_package_dir / f"{stem}.zip"
     local_manifest = local_package_dir / f"{stem}_stage_package_manifest.json"
-    sources = _iter_package_sources(layout, include_videos=include_videos)
+    remote_zip = remote_package_dir / local_zip.name
+    remote_manifest = remote_package_dir / local_manifest.name
+    latest_zip = remote_package_dir / "stage_package_latest.zip"
+    latest_manifest = remote_package_dir / "stage_package_latest_manifest.json"
+    keep_timestamp_snapshot = _env_flag("SSTW_STAGE_PACKAGE_KEEP_TIMESTAMP_SNAPSHOT", default=False)
+    prune_timestamp_snapshots = _env_flag("SSTW_STAGE_PACKAGE_PRUNE_TIMESTAMP_SNAPSHOTS", default=True)
+    external_decision = _load_external_baseline_decision(layout, baseline_id) if _is_external_baseline_stage_package(stage_package_id) else None
+    external_decision_path = _external_baseline_decision_path(layout, baseline_id) if _is_external_baseline_stage_package(stage_package_id) else None
+    external_decision_metadata = (
+        {
+            "formal_reference_decision_path": str(external_decision_path or ""),
+            "formal_reference_decision": external_decision.get("formal_reference_decision", "UNKNOWN"),
+            "formal_reference_status": external_decision.get("formal_reference_status", "unknown_status"),
+        }
+        if external_decision is not None
+        else (
+            {
+                "formal_reference_decision_path": str(external_decision_path or ""),
+                "formal_reference_decision": "MISSING",
+                "formal_reference_status": "missing_or_invalid_decision_record",
+            }
+            if _is_external_baseline_stage_package(stage_package_id)
+            else {}
+        )
+    )
 
+    base_manifest: dict[str, Any] = {
+        "manifest_kind": STAGE_PACKAGE_MANIFEST_KIND,
+        "manifest_version": STAGE_PACKAGE_MANIFEST_VERSION,
+        "stage_package_id": stage_package_id,
+        "notebook_role": notebook_role,
+        "baseline_id": baseline_id or "",
+        "workflow_profile": workflow_profile,
+        "stage_package_handoff_mode": "local_zip",
+        "stage_package_publish_status": "pending",
+        "package_batch_id": package_batch_id,
+        "package_utc_time": package_utc_time,
+        "package_short_commit": package_short_commit,
+        "include_videos": bool(include_videos),
+        "local_stage_workspace_root": str(layout.get("local_stage_workspace_root") or ""),
+        "local_stage_package_zip": str(local_zip),
+        "local_stage_package_manifest": str(local_manifest),
+        "retention_policy": "latest_only_by_default",
+        "keep_timestamp_snapshot": keep_timestamp_snapshot,
+        "prune_timestamp_snapshots": prune_timestamp_snapshots,
+        **external_decision_metadata,
+    }
+
+    blocker = _external_baseline_publish_blocker(
+        layout,
+        stage_package_id=stage_package_id,
+        notebook_role=notebook_role,
+        baseline_id=baseline_id,
+    )
+    if blocker is not None:
+        return _write_manifest_only_stage_package(
+            layout=layout,
+            remote_package_dir=remote_package_dir,
+            latest_zip=latest_zip,
+            latest_manifest=latest_manifest,
+            manifest={**base_manifest, **blocker},
+        )
+
+    sources = _iter_package_sources(layout, include_videos=include_videos)
     entry_count = 0
     with zipfile.ZipFile(local_zip, mode="w", compression=zipfile.ZIP_DEFLATED) as archive:
         for source_root, archive_root in sources:
@@ -524,27 +764,22 @@ def publish_colab_stage_package(
             )
 
     archive_sha256 = _sha256_file(local_zip)
-    remote_zip = remote_package_dir / local_zip.name
-    remote_manifest = remote_package_dir / local_manifest.name
-    latest_zip = remote_package_dir / "stage_package_latest.zip"
-    latest_manifest = remote_package_dir / "stage_package_latest_manifest.json"
+    removed_timestamp_snapshots = (
+        _prune_remote_stage_package_snapshots(remote_package_dir)
+        if prune_timestamp_snapshots and not keep_timestamp_snapshot
+        else []
+    )
+    if keep_timestamp_snapshot:
+        drive_stage_package_zip = str(remote_zip)
+        stage_package_manifest_path = str(remote_manifest)
+    else:
+        drive_stage_package_zip = str(latest_zip)
+        stage_package_manifest_path = str(latest_manifest)
 
     manifest = {
-        "manifest_kind": STAGE_PACKAGE_MANIFEST_KIND,
-        "manifest_version": STAGE_PACKAGE_MANIFEST_VERSION,
-        "stage_package_id": stage_package_id,
-        "notebook_role": notebook_role,
-        "baseline_id": baseline_id or "",
-        "workflow_profile": workflow_profile,
-        "stage_package_handoff_mode": "local_zip",
+        **base_manifest,
         "stage_package_publish_status": "published",
-        "package_batch_id": package_batch_id,
-        "package_utc_time": package_utc_time,
-        "package_short_commit": package_short_commit,
-        "include_videos": bool(include_videos),
-        "local_stage_workspace_root": str(layout.get("local_stage_workspace_root") or ""),
-        "local_stage_package_zip": str(local_zip),
-        "drive_stage_package_zip": str(remote_zip),
+        "drive_stage_package_zip": drive_stage_package_zip,
         "latest_drive_stage_package_zip": str(latest_zip),
         "stage_package_archive_sha256": archive_sha256,
         "stage_package_entry_count": entry_count,
@@ -553,16 +788,18 @@ def publish_colab_stage_package(
             {"source_root": str(source_root), "archive_root": archive_root}
             for source_root, archive_root in sources
         ],
+        "removed_timestamp_stage_package_snapshots": removed_timestamp_snapshots,
         "claim_support_status": "stage_package_handoff_container_not_claim_evidence",
     }
     local_manifest.write_text(json.dumps(manifest, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-    shutil.copy2(local_zip, remote_zip)
-    shutil.copy2(local_manifest, remote_manifest)
+    if keep_timestamp_snapshot:
+        shutil.copy2(local_zip, remote_zip)
+        shutil.copy2(local_manifest, remote_manifest)
     shutil.copy2(local_zip, latest_zip)
     shutil.copy2(local_manifest, latest_manifest)
     return {
         **manifest,
         "stage_package_publish_status": "published",
-        "stage_package_manifest_path": str(remote_manifest),
+        "stage_package_manifest_path": stage_package_manifest_path,
         "latest_stage_package_manifest_path": str(latest_manifest),
     }

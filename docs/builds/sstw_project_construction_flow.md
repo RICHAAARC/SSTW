@@ -1216,12 +1216,30 @@ Colab 输出应落盘到:
 
 ```text
 /content/drive/MyDrive/SSTW/datasets
-/content/drive/MyDrive/SSTW/runs
-/content/drive/MyDrive/SSTW/packages
-/content/drive/MyDrive/SSTW/manifests
+/content/drive/MyDrive/SSTW/resources
+/content/drive/MyDrive/SSTW/stage_packages
 ```
 
-数据集构造、模型运行、结果检查和打包下载应分离为不同步骤。
+当前 Colab 正式流程采用“本地热路径 + Drive 冷归档”的阶段 zip 交接规则:
+
+1. Notebook 启动时只从 `stage_packages/<profile>/<stage_id>/stage_package_latest.zip`
+   复制少量上游阶段包到 Colab 本地 workspace。
+2. 模型运行、attack、scoring、adapter 和 result checker 的小文件读写只能发生在
+   Colab 本地 workspace, 不应循环读写 Google Drive 小文件。
+3. 阶段完成后由 `publish_colab_stage_package` 统一生成 `stage_package_latest.zip`
+   和 `stage_package_latest_manifest.json` 并写回 Drive。
+4. 默认不再写 `packages/` 下的旧版时间戳包, 也不在 `stage_packages/` 中保留历史
+   `stage_package__*.zip`。只有显式设置
+   `SSTW_STAGE_PACKAGE_KEEP_TIMESTAMP_SNAPSHOT=true` 时才保留时间戳快照。
+5. failed 或未闭合的 `external_baseline_formal_reference_*` 阶段只能写阻断 manifest,
+   不得保存可被后续门禁恢复的 zip。这样可以防止失败运行占用大量 Drive 空间, 也防止
+   后续 Notebook 误用旧 external baseline 输出。
+
+`resources/` 只保存可复用的大模型、checkpoint、官方资源包等冷资源。以 SIGMark 为例,
+`resources/external_baseline/sigmark/models/HunyuanVideo-community` 属于可复用模型资源,
+不应随每次实验阶段重复打包。
+
+数据集构造、模型运行、结果检查和阶段打包下载应分离为不同步骤。
 
 ### 19.3 Notebook 必须包含的步骤
 
@@ -2384,6 +2402,10 @@ external_baseline_source_intake
    `S_final`、最终判定分数、视频相似度或随机数生成替代分数。
 4. `external_baseline_official_result_bundle_preflight` 只能在官方资源或本项目 workflow 生成的官方结果缓存覆盖当前
    comparison unit 时通过。失败时必须保留缺口 artifact, 作为 validation_scale 阻断依据。
+5. `external_baseline_formal_reference_*` 只有在对应
+   `<baseline_id>_formal_reference_decision.json` 的 `formal_reference_decision` 为 `PASS`
+   时, 才能发布完整 `stage_package_latest.zip`。若结果为 `FAIL` 或决策文件缺失, 只能发布
+   manifest-only 阻断记录, 且必须清理该阶段遗留的 stale latest zip。
 
 该规则的目标是让 Colab 冷启动具备“能自动补齐的就自动补齐”的工程能力, 同时保持论文
 baseline 对比的 fail-closed 边界。严格门禁通过的前提仍然是 6 个现代 baseline 最终都由本项目产出

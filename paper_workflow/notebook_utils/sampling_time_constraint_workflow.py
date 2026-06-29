@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from pathlib import Path, PurePosixPath
 import subprocess
 import sys
@@ -110,8 +111,36 @@ def build_result_check_command(layout: dict[str, str]) -> list[str]:
     ]
 
 
+def _stage_zip_mode_uses_unified_package(layout: dict[str, str]) -> bool:
+    """判断是否跳过旧版 packages/ 打包, 避免 Drive 重复归档。"""
+
+    mode = str(layout.get("stage_package_handoff_mode") or os.environ.get("SSTW_COLAB_STAGE_IO_MODE", ""))
+    if mode.strip().lower() not in {"local_zip", "stage_zip", "zip_handoff"}:
+        return False
+    return os.environ.get("SSTW_WRITE_LEGACY_DRIVE_PACKAGE_IN_STAGE_ZIP_MODE", "false").strip().lower() not in {
+        "1",
+        "true",
+        "yes",
+        "y",
+        "on",
+    }
+
+
+def _build_legacy_drive_packaging_noop_command(packager_name: str) -> list[str]:
+    """构造可执行 no-op 命令, 由阶段 zip 发布逻辑承担实际落盘。"""
+
+    message = (
+        "SSTW stage zip handoff is active; skip legacy drive packager "
+        f"{packager_name}. Unified output is written by publish_colab_stage_package."
+    )
+    return [sys.executable, "-c", f"print({message!r})"]
+
+
 def build_drive_packaging_command(layout: dict[str, str], include_videos: bool = True) -> list[str]:
     """构造 B6 Google Drive 打包命令。"""
+    if _stage_zip_mode_uses_unified_package(layout):
+        return _build_legacy_drive_packaging_noop_command("sampling_time_constraint_drive_packager.py")
+
     command = [
         sys.executable,
         "scripts/package_results/sampling_time_constraint_drive_packager.py",

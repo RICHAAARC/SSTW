@@ -1358,8 +1358,41 @@ def build_validation_scale_package_manifest_builder_command(layout: dict[str, st
     ]
 
 
+def _stage_zip_mode_uses_unified_package(layout: Mapping[str, str]) -> bool:
+    """判断当前 Notebook 是否应跳过旧版 packages/ 打包。
+
+    Colab 阶段 zip 交接模式下, `publish_colab_stage_package` 已负责把完整阶段包
+    写回 `stage_packages/`。继续运行旧版 drive packager 会在 `packages/` 下生成
+    重复 zip, 增加 Google Drive 占用并制造后续读取歧义。
+    """
+
+    mode = str(layout.get("stage_package_handoff_mode") or os.environ.get("SSTW_COLAB_STAGE_IO_MODE", ""))
+    if mode.strip().lower() not in {"local_zip", "stage_zip", "zip_handoff"}:
+        return False
+    return os.environ.get("SSTW_WRITE_LEGACY_DRIVE_PACKAGE_IN_STAGE_ZIP_MODE", "false").strip().lower() not in {
+        "1",
+        "true",
+        "yes",
+        "y",
+        "on",
+    }
+
+
+def _build_legacy_drive_packaging_noop_command(packager_name: str) -> list[str]:
+    """构造可执行的 no-op 命令, 让 Notebook 编排保持单一路径。"""
+
+    message = (
+        "SSTW stage zip handoff is active; skip legacy drive packager "
+        f"{packager_name}. Unified output is written by publish_colab_stage_package."
+    )
+    return [sys.executable, "-c", f"print({message!r})"]
+
+
 def build_drive_packaging_command(layout: dict[str, str], include_videos: bool = True) -> list[str]:
     """构造 Google Drive 打包命令。"""
+    if _stage_zip_mode_uses_unified_package(layout):
+        return _build_legacy_drive_packaging_noop_command("generative_video_drive_packager.py")
+
     command = [
         sys.executable,
         "scripts/package_results/generative_video_drive_packager.py",

@@ -19,10 +19,11 @@ import os
 from pathlib import Path, PurePosixPath
 import shutil
 import zipfile
-from typing import Any, Iterable, Mapping
+from typing import Any, Mapping
 
 from main.protocol.package_naming import (
     build_package_batch_id,
+    build_package_file_stem,
     current_short_commit,
     current_utc_time_for_filename,
     sanitize_filename_token,
@@ -31,10 +32,12 @@ from main.protocol.package_naming import (
 
 DEFAULT_LOCAL_WORKSPACE_ROOT = "/content/SSTW_stage_workspace"
 DEFAULT_LOCAL_PACKAGE_CACHE_ROOT = "/content/SSTW_stage_packages"
-STAGE_PACKAGE_ROOT_RELATIVE = "stage_packages"
 STAGE_PACKAGE_MANIFEST_KIND = "colab_stage_zip_handoff_manifest"
-STAGE_PACKAGE_MANIFEST_VERSION = "2026_06_27_local_zip_handoff_v1"
+STAGE_PACKAGE_MANIFEST_VERSION = "2026_07_01_profile_stage_timestamp_zip_v2"
 EXTERNAL_BASELINE_FORMAL_REFERENCE_DECISION_KIND = "modern_external_baseline_formal_reference_decision"
+EXTERNAL_BASELINE_REFERENCE_DIR_NAME = "external_baseline_official_reference"
+MOTION_THRESHOLD_PACKAGE_DIR_NAME = "motion_threshold"
+HELPER_PACKAGE_DIR_NAME = "helper"
 
 MODERN_EXTERNAL_BASELINE_IDS = (
     "videoseal",
@@ -44,6 +47,16 @@ MODERN_EXTERNAL_BASELINE_IDS = (
     "spdmark",
     "sigmark",
 )
+
+MAIN_STAGE_PACKAGE_IDS = {
+    "generative_video_runtime_colab",
+    "paper_gate_and_package_colab",
+}
+
+HELPER_WORKFLOW_PROFILES = {
+    "sampling_time_constraint",
+    "wan21_flow_adapter_preflight",
+}
 
 
 def stage_zip_handoff_enabled() -> bool:
@@ -112,12 +125,16 @@ def stage_package_dir(
 ) -> Path:
     """返回某个阶段包在 Google Drive 中的归档目录。"""
 
-    return (
-        Path(drive_project_root)
-        / STAGE_PACKAGE_ROOT_RELATIVE
-        / sanitize_filename_token(workflow_profile)
-        / sanitize_filename_token(stage_package_id)
-    )
+    root = Path(drive_project_root)
+    profile = sanitize_filename_token(workflow_profile)
+    package_id = sanitize_filename_token(stage_package_id)
+    if package_id == "motion_threshold_calibration_colab":
+        return root / MOTION_THRESHOLD_PACKAGE_DIR_NAME
+    if _is_external_baseline_stage_package(package_id):
+        return root / profile / EXTERNAL_BASELINE_REFERENCE_DIR_NAME
+    if profile in HELPER_WORKFLOW_PROFILES or package_id not in MAIN_STAGE_PACKAGE_IDS:
+        return root / HELPER_PACKAGE_DIR_NAME
+    return root / profile / package_id
 
 
 def _env_flag(name: str, default: bool = False) -> bool:
@@ -138,11 +155,7 @@ def _is_external_baseline_stage_package(stage_package_id: str) -> bool:
 def _stage_package_manifest_path_for_zip(package_zip: Path) -> Path:
     """根据 zip 名称推导同阶段 manifest 路径。"""
 
-    if package_zip.name == "stage_package_latest.zip":
-        return package_zip.with_name("stage_package_latest_manifest.json")
-    if package_zip.name.startswith("stage_package__") and package_zip.suffix == ".zip":
-        return package_zip.with_name(f"{package_zip.stem}_stage_package_manifest.json")
-    return package_zip.with_suffix(".json")
+    return package_zip.with_name(f"{package_zip.stem}_manifest.json")
 
 
 def _stage_package_zip_allowed_for_restore(package_zip: Path, stage_package_id: str) -> bool:
@@ -169,20 +182,16 @@ def latest_stage_package_zip(
     workflow_profile: str,
     stage_package_id: str,
 ) -> Path | None:
-    """查找 Drive 中某个阶段的 latest zip。
-
-    默认只接受 `stage_package_latest.zip`。历史时间戳 zip 只能在显式设置
-    `SSTW_STAGE_PACKAGE_ALLOW_TIMESTAMP_FALLBACK=true` 后作为兼容输入。这样做的
-    主要原因是失败的 external baseline 重跑不能误用旧的成功或失败归档。
-    """
+    """查找 Drive 中某个阶段最新的完整时间戳 zip。"""
 
     package_dir = stage_package_dir(drive_project_root, workflow_profile, stage_package_id)
-    latest = package_dir / "stage_package_latest.zip"
-    if latest.exists() and _stage_package_zip_allowed_for_restore(latest, stage_package_id):
-        return latest
-    if not _env_flag("SSTW_STAGE_PACKAGE_ALLOW_TIMESTAMP_FALLBACK", default=False):
-        return None
-    candidates = sorted(package_dir.glob("stage_package__*.zip"), key=lambda path: path.stat().st_mtime, reverse=True)
+    profile = sanitize_filename_token(workflow_profile)
+    package_id = sanitize_filename_token(stage_package_id)
+    candidates = sorted(
+        package_dir.glob(f"{profile}_{package_id}_*.zip"),
+        key=lambda path: path.name,
+        reverse=True,
+    )
     for candidate in candidates:
         if _stage_package_zip_allowed_for_restore(candidate, stage_package_id):
             return candidate
@@ -215,8 +224,9 @@ def activate_local_stage_layout(
 ) -> dict[str, str]:
     """把 workflow layout 的热路径切换到 Colab 本地磁盘。
 
-    `drive_package_dir` 和 `external_baseline_resource_root` 仍保留在 Drive:
-    前者只接收最终 zip, 后者通常是较大的 checkpoint 资源, 不是小文件循环读写热点。
+    `drive_package_dir` 会指向当前阶段的 Drive 归档目录, 只接收最终 zip。
+    `external_baseline_resource_root` 若存在资源 zip, 会在后续 prepare 步骤切换到本地
+    解包目录; 若没有资源包, 则保留原始远端目录作为显式兼容路径。
     """
 
     drive_project_root = str(layout.get("drive_project_root") or "/content/drive/MyDrive/SSTW")
@@ -233,7 +243,12 @@ def activate_local_stage_layout(
         "SSTW_LOCAL_STAGE_PACKAGE_CACHE_ROOT",
         DEFAULT_LOCAL_PACKAGE_CACHE_ROOT,
     )
-    localized["stage_package_dir"] = str(stage_package_dir(drive_project_root, workflow_profile, stage_package_id))
+    resolved_stage_package_dir = stage_package_dir(drive_project_root, workflow_profile, stage_package_id)
+    localized["stage_package_dir"] = str(resolved_stage_package_dir)
+    localized["drive_package_dir"] = str(resolved_stage_package_dir)
+    if str(layout.get("external_baseline_resource_root") or ""):
+        localized["external_baseline_resource_root_remote"] = str(layout["external_baseline_resource_root"])
+        localized["external_baseline_resource_root_local"] = str(local_project_root / "resources" / "external_baseline")
 
     for key in (
         "drive_dataset_root",
@@ -254,6 +269,105 @@ def activate_local_stage_layout(
             Path(localized[key]).parent.mkdir(parents=True, exist_ok=True)
 
     return localized
+
+
+def _resource_package_candidates(remote_resource_root: Path) -> list[Path]:
+    """列出 Drive resources 中可一次性复制到 Colab 的资源 zip 包。"""
+
+    if not remote_resource_root.exists():
+        return []
+    candidates: list[Path] = []
+    for pattern in ("*.zip", "*/*.zip"):
+        candidates.extend(path for path in remote_resource_root.glob(pattern) if path.is_file())
+    return sorted(set(candidates), key=lambda path: path.as_posix())
+
+
+def _strip_resource_archive_prefix(relative: PurePosixPath) -> PurePosixPath:
+    """兼容资源包内可能包含的 resources/external_baseline 前缀。"""
+
+    parts = relative.parts
+    if len(parts) >= 2 and parts[0] == "resources" and parts[1] == "external_baseline":
+        return PurePosixPath(*parts[2:])
+    if parts and parts[0] == "external_baseline":
+        return PurePosixPath(*parts[1:])
+    return relative
+
+
+def _extract_resource_package(package_zip: Path, target_root: Path) -> int:
+    """安全解压单个 external baseline 资源包, 返回解压文件数。"""
+
+    count = 0
+    with zipfile.ZipFile(package_zip) as archive:
+        members = _safe_archive_members(archive)
+        for name in members:
+            member = PurePosixPath(name)
+            if name.endswith("/") or not member.name:
+                continue
+            relative = _strip_resource_archive_prefix(member)
+            if not relative.parts:
+                continue
+            output = target_root / Path(relative.as_posix())
+            output.parent.mkdir(parents=True, exist_ok=True)
+            with archive.open(name) as source, output.open("wb") as target:
+                shutil.copyfileobj(source, target)
+            count += 1
+    return count
+
+
+def hydrate_external_baseline_resource_packages(layout: Mapping[str, str]) -> dict[str, Any]:
+    """把 Drive resources 下的压缩资源包复制到本地并解压。
+
+    该函数只在检测到 zip 包时切换 `external_baseline_resource_root`。若用户仍使用
+    Drive 上的松散 checkpoint 文件, 当前 Notebook 会继续使用原远端目录, 避免
+    因未打包资源而破坏既有流程。
+    """
+
+    remote_root_text = str(layout.get("external_baseline_resource_root_remote") or layout.get("external_baseline_resource_root") or "")
+    local_root_text = str(layout.get("external_baseline_resource_root_local") or "")
+    if not remote_root_text or not local_root_text:
+        return {
+            "external_baseline_resource_package_restore_status": "not_configured",
+            "resource_package_count": 0,
+            "extracted_resource_file_count": 0,
+        }
+    remote_root = Path(remote_root_text)
+    local_root = Path(local_root_text)
+    packages = _resource_package_candidates(remote_root)
+    if not packages:
+        return {
+            "external_baseline_resource_package_restore_status": "no_resource_package_zip_found",
+            "external_baseline_resource_root": remote_root_text,
+            "external_baseline_resource_root_remote": remote_root_text,
+            "external_baseline_resource_root_local": local_root_text,
+            "resource_package_count": 0,
+            "extracted_resource_file_count": 0,
+        }
+
+    local_root.mkdir(parents=True, exist_ok=True)
+    cache_root = Path(str(layout.get("local_stage_package_cache_root") or DEFAULT_LOCAL_PACKAGE_CACHE_ROOT)) / "resources"
+    cache_root.mkdir(parents=True, exist_ok=True)
+    rows: list[dict[str, Any]] = []
+    extracted_count = 0
+    for package_zip in packages:
+        local_zip = cache_root / package_zip.name
+        _copy_file(package_zip, local_zip)
+        file_count = _extract_resource_package(local_zip, local_root)
+        extracted_count += file_count
+        rows.append({
+            "resource_package_zip": str(package_zip),
+            "local_resource_package_zip": str(local_zip),
+            "extracted_resource_file_count": file_count,
+            "resource_package_sha256": _sha256_file(local_zip),
+        })
+    return {
+        "external_baseline_resource_package_restore_status": "restored",
+        "external_baseline_resource_root": str(local_root),
+        "external_baseline_resource_root_remote": remote_root_text,
+        "external_baseline_resource_root_local": str(local_root),
+        "resource_package_count": len(packages),
+        "extracted_resource_file_count": extracted_count,
+        "resource_package_restore_rows": rows,
+    }
 
 
 def _safe_archive_members(archive: zipfile.ZipFile) -> list[str]:
@@ -277,38 +391,23 @@ def _sha256_file(path: Path) -> str:
     return digest.hexdigest()
 
 
-def _copy_tree_contents(source: Path, target: Path) -> None:
-    """把一个目录内容复制到目标目录, 已存在文件会被覆盖。"""
+def _windows_long_path(path: Path) -> str:
+    """在 Windows 本地测试中为长路径添加长路径前缀。"""
 
-    if not source.exists():
-        return
-    for item in source.rglob("*"):
-        if not item.is_file():
-            continue
-        relative = item.relative_to(source)
-        output = target / relative
-        output.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(item, output)
+    resolved = str(path.resolve())
+    if os.name != "nt" or resolved.startswith("\\\\?\\"):
+        return resolved
+    return "\\\\?\\" + resolved
 
 
-def _normalize_legacy_generative_package(layout: Mapping[str, str], extract_root: Path) -> dict[str, Any]:
-    """兼容历史 drive_packager 生成的 `<profile>/records/...` zip。
+def _copy_file(source: Path, target: Path) -> None:
+    """复制文件并兼容 Windows 长路径。"""
 
-    这一兼容层只在本地解压目录中移动文件, 不回退到 Drive 小文件读取。它使旧 zip
-    可以作为新阶段包机制的初始输入。
-    """
-
-    run_root = Path(str(layout.get("drive_run_root") or ""))
-    profile = str(layout.get("workflow_profile") or run_root.name)
-    legacy_root = extract_root / profile
-    if legacy_root.is_dir() and (legacy_root / "records").exists():
-        _copy_tree_contents(legacy_root, run_root)
-        return {
-            "legacy_package_normalized": True,
-            "legacy_package_source_root": str(legacy_root),
-            "legacy_package_target_run_root": str(run_root),
-        }
-    return {"legacy_package_normalized": False}
+    target.parent.mkdir(parents=True, exist_ok=True)
+    if os.name == "nt":
+        shutil.copy2(_windows_long_path(source), _windows_long_path(target))
+    else:
+        shutil.copy2(source, target)
 
 
 def hydrate_stage_package(
@@ -316,7 +415,6 @@ def hydrate_stage_package(
     stage_package_id: str,
     *,
     required: bool = True,
-    allow_legacy_drive_package: bool = False,
     source_workflow_profile: str | None = None,
 ) -> dict[str, Any]:
     """从 Drive 复制单个阶段 zip 到本地并解压。"""
@@ -327,14 +425,6 @@ def hydrate_stage_package(
     local_cache_root = Path(str(layout.get("local_stage_package_cache_root") or DEFAULT_LOCAL_PACKAGE_CACHE_ROOT))
     local_workspace_root = Path(str(layout.get("local_stage_workspace_root") or DEFAULT_LOCAL_WORKSPACE_ROOT))
     source_zip = latest_stage_package_zip(drive_project_root, source_profile, stage_package_id)
-    source_kind = "stage_package"
-
-    if source_zip is None and allow_legacy_drive_package:
-        package_dir = Path(str(layout.get("drive_package_dir") or ""))
-        legacy_candidates = sorted(package_dir.glob("*.zip"), key=lambda path: path.stat().st_mtime, reverse=True) if package_dir.exists() else []
-        source_zip = legacy_candidates[0] if legacy_candidates else None
-        source_kind = "legacy_drive_package" if source_zip else source_kind
-
     if source_zip is None:
         if required:
             raise FileNotFoundError(
@@ -352,21 +442,16 @@ def hydrate_stage_package(
     local_cache_dir = local_cache_root / source_profile / sanitize_filename_token(stage_package_id)
     local_cache_dir.mkdir(parents=True, exist_ok=True)
     local_zip = local_cache_dir / source_zip.name
-    shutil.copy2(source_zip, local_zip)
+    _copy_file(source_zip, local_zip)
 
     with zipfile.ZipFile(local_zip) as archive:
         members = _safe_archive_members(archive)
         archive.extractall(local_workspace_root)
 
-    legacy_normalization = (
-        _normalize_legacy_generative_package(layout, local_workspace_root)
-        if source_kind == "legacy_drive_package"
-        else {"legacy_package_normalized": False}
-    )
     return {
         "stage_package_id": stage_package_id,
         "stage_package_restore_status": "restored",
-        "stage_package_source_kind": source_kind,
+        "stage_package_source_kind": "stage_package",
         "stage_package_source_workflow_profile": source_profile,
         "stage_package_target_workflow_profile": target_workflow_profile,
         "drive_stage_package_zip": str(source_zip),
@@ -374,7 +459,7 @@ def hydrate_stage_package(
         "local_stage_workspace_root": str(local_workspace_root),
         "stage_package_entry_count": len(members),
         "stage_package_archive_sha256": _sha256_file(local_zip),
-        **legacy_normalization,
+        "legacy_package_normalized": False,
     }
 
 
@@ -399,11 +484,10 @@ def _default_optional_stage_packages(notebook_role: str, baseline_id: str | None
     """返回某个 Notebook role 可恢复但不强制存在的阶段包。"""
 
     role = sanitize_filename_token(notebook_role)
-    if role in {"external_baseline_formal_scoring", "paper_gate_and_package"}:
+    if role == "paper_gate_and_package":
         return [
             stage_package_id_for_notebook("external_baseline_formal_scoring", baseline_id=baseline)
             for baseline in MODERN_EXTERNAL_BASELINE_IDS
-            if baseline != baseline_id
         ]
     return []
 
@@ -425,7 +509,6 @@ def hydrate_stage_packages_for_notebook(
 
     required = _default_required_stage_packages(layout, notebook_role)
     optional = _default_optional_stage_packages(notebook_role, baseline_id=baseline_id)
-    allow_legacy = os.environ.get("SSTW_ALLOW_LEGACY_DRIVE_PACKAGE_RESTORE", "true").lower() == "true"
     rows: list[dict[str, Any]] = []
     for stage_package_id in required:
         rows.append(
@@ -433,7 +516,6 @@ def hydrate_stage_packages_for_notebook(
                 layout,
                 stage_package_id,
                 required=True,
-                allow_legacy_drive_package=allow_legacy and stage_package_id == "generative_video_runtime_colab",
                 source_workflow_profile=_stage_package_source_workflow_profile(layout, stage_package_id),
             )
         )
@@ -468,12 +550,23 @@ def prepare_colab_stage_layout(
     if not stage_zip_handoff_enabled():
         return dict(layout)
     localized = activate_local_stage_layout(layout, notebook_role=notebook_role, baseline_id=baseline_id)
+    resource_restore = hydrate_external_baseline_resource_packages(localized)
+    if resource_restore.get("external_baseline_resource_package_restore_status") == "restored":
+        localized["external_baseline_resource_root"] = str(resource_restore["external_baseline_resource_root"])
     restore = hydrate_stage_packages_for_notebook(localized, notebook_role=notebook_role, baseline_id=baseline_id)
     restore_path = Path(localized["drive_run_root"]) / "artifacts" / "stage_package_restore_decision.json"
     restore_path.parent.mkdir(parents=True, exist_ok=True)
+    restore = {
+        **restore,
+        "external_baseline_resource_package_restore": resource_restore,
+    }
     restore_path.write_text(json.dumps(restore, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     localized["stage_package_restore_decision_path"] = str(restore_path)
     os.environ["SSTW_STAGE_PACKAGE_HANDOFF_MODE"] = "local_zip"
+    os.environ["SSTW_EXTERNAL_BASELINE_RESOURCE_ROOT"] = localized.get(
+        "external_baseline_resource_root",
+        os.environ.get("SSTW_EXTERNAL_BASELINE_RESOURCE_ROOT", ""),
+    )
     os.environ["SSTW_EXTERNAL_BASELINE_OFFICIAL_RESULT_BUNDLE_ROOT"] = localized.get(
         "external_baseline_official_result_bundle_root",
         os.environ.get("SSTW_EXTERNAL_BASELINE_OFFICIAL_RESULT_BUNDLE_ROOT", ""),
@@ -481,19 +574,45 @@ def prepare_colab_stage_layout(
     return localized
 
 
-def _iter_package_sources(layout: Mapping[str, str], *, include_videos: bool) -> list[tuple[Path, str]]:
+def _iter_package_sources(
+    layout: Mapping[str, str],
+    *,
+    notebook_role: str,
+    baseline_id: str | None,
+) -> list[tuple[Path, str]]:
     """列出阶段包需要归档的本地源目录。"""
 
     sources: list[tuple[Path, str]] = []
-    for key in ("drive_run_root", "drive_dataset_root", "external_baseline_official_result_bundle_root"):
+    role = sanitize_filename_token(notebook_role)
+    if role == "external_baseline_formal_scoring":
+        run_root = Path(str(layout.get("drive_run_root") or ""))
+        if run_root.exists():
+            artifacts_dir = run_root / "artifacts"
+            if artifacts_dir.exists():
+                sources.append((artifacts_dir, f"{_archive_root_for_layout_path(layout, 'drive_run_root')}/artifacts"))
+        bundle_root = Path(str(layout.get("external_baseline_official_result_bundle_root") or ""))
+        if baseline_id:
+            baseline_bundle = bundle_root / sanitize_filename_token(baseline_id)
+            if baseline_bundle.exists():
+                sources.append(
+                    (
+                        baseline_bundle,
+                        f"{_archive_root_for_layout_path(layout, 'external_baseline_official_result_bundle_root')}/{sanitize_filename_token(baseline_id)}",
+                    )
+                )
+        elif bundle_root.exists():
+            sources.append((bundle_root, _archive_root_for_layout_path(layout, "external_baseline_official_result_bundle_root")))
+        return sources
+
+    keys = ["drive_run_root"]
+    if role in {"generative_video_runtime", "motion_threshold_calibration"}:
+        keys.append("drive_dataset_root")
+    for key in keys:
         path_text = str(layout.get(key) or "")
         if not path_text:
             continue
         path = Path(path_text)
         if not path.exists():
-            continue
-        if not include_videos and key == "drive_run_root":
-            sources.append((path, _archive_root_for_layout_path(layout, key)))
             continue
         sources.append((path, _archive_root_for_layout_path(layout, key)))
     return sources
@@ -528,13 +647,33 @@ def _write_source_to_archive(
     """把 source_root 写入 zip, 返回写入文件数。"""
 
     count = 0
+    if source_root.is_file():
+        relative = Path(source_root.name)
+        if not include_videos and _should_skip_video_payload(relative):
+            return 0
+        archive.write(source_root, arcname=f"{archive_root}/{relative.as_posix()}")
+        return 1
     for file_path in sorted(path for path in source_root.rglob("*") if path.is_file()):
         relative = file_path.relative_to(source_root)
-        if not include_videos and relative.parts and relative.parts[0] in {"videos", "attacked_videos"}:
+        if not include_videos and _should_skip_video_payload(relative):
             continue
         archive.write(file_path, arcname=f"{archive_root}/{relative.as_posix()}")
         count += 1
     return count
+
+
+def _should_skip_video_payload(relative: Path) -> bool:
+    """判断文件是否属于可选视频或帧级大文件。"""
+
+    parts = {sanitize_filename_token(part) for part in relative.parts}
+    suffix = relative.suffix.lower()
+    if parts & {"videos", "attacked_videos"}:
+        return True
+    if suffix in {".mp4", ".mov", ".avi", ".webm", ".mkv"}:
+        return True
+    if "frames" in parts and suffix in {".png", ".jpg", ".jpeg", ".bmp", ".webp"}:
+        return True
+    return False
 
 
 def _external_baseline_decision_path(layout: Mapping[str, str], baseline_id: str | None) -> Path | None:
@@ -573,10 +712,7 @@ def _external_baseline_publish_blocker(
 ) -> dict[str, Any] | None:
     """判断 external baseline 阶段是否允许发布完整 zip。"""
 
-    role = sanitize_filename_token(notebook_role)
-    is_external_reference = role == "external_baseline_formal_scoring" or stage_package_id.startswith(
-        "external_baseline_formal_reference_"
-    )
+    is_external_reference = stage_package_id.startswith("external_baseline_formal_reference_")
     if not is_external_reference:
         return None
 
@@ -599,11 +735,13 @@ def _external_baseline_publish_blocker(
     return None
 
 
-def _prune_remote_stage_package_snapshots(remote_package_dir: Path) -> list[str]:
-    """删除当前阶段目录下的历史时间戳包, 保留 latest 作为唯一默认入口。"""
+def _prune_remote_stage_package_snapshots(remote_package_dir: Path, workflow_profile: str, stage_package_id: str) -> list[str]:
+    """按显式开关删除当前阶段目录下的历史时间戳包。"""
 
     removed: list[str] = []
-    for pattern in ("stage_package__*.zip", "stage_package__*_stage_package_manifest.json"):
+    profile = sanitize_filename_token(workflow_profile)
+    package_id = sanitize_filename_token(stage_package_id)
+    for pattern in (f"{profile}_{package_id}_*.zip", f"{profile}_{package_id}_*_manifest.json"):
         for path in sorted(remote_package_dir.glob(pattern)):
             if not path.is_file():
                 continue
@@ -612,21 +750,11 @@ def _prune_remote_stage_package_snapshots(remote_package_dir: Path) -> list[str]
     return removed
 
 
-def _remove_path_if_file(path: Path) -> bool:
-    """若文件存在则删除, 用于清理失败阶段遗留的 latest zip。"""
-
-    if path.exists() and path.is_file():
-        path.unlink()
-        return True
-    return False
-
-
 def _write_manifest_only_stage_package(
     *,
     layout: Mapping[str, str],
     remote_package_dir: Path,
-    latest_zip: Path,
-    latest_manifest: Path,
+    remote_manifest: Path,
     manifest: dict[str, Any],
 ) -> dict[str, Any]:
     """只写阶段 manifest, 不写 zip。
@@ -636,8 +764,6 @@ def _write_manifest_only_stage_package(
     """
 
     remote_package_dir.mkdir(parents=True, exist_ok=True)
-    removed_timestamp_snapshots = _prune_remote_stage_package_snapshots(remote_package_dir)
-    removed_latest_zip = _remove_path_if_file(latest_zip)
     manifest = {
         **manifest,
         "drive_stage_package_zip": "",
@@ -647,15 +773,15 @@ def _write_manifest_only_stage_package(
         "stage_package_source_root_count": 0,
         "stage_package_source_roots": [],
         "keep_timestamp_snapshot": False,
-        "removed_latest_stage_package_zip": removed_latest_zip,
-        "removed_timestamp_stage_package_snapshots": removed_timestamp_snapshots,
+        "removed_latest_stage_package_zip": False,
+        "removed_timestamp_stage_package_snapshots": [],
         "claim_support_status": "stage_package_blocked_not_claim_evidence",
     }
-    latest_manifest.write_text(json.dumps(manifest, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    remote_manifest.write_text(json.dumps(manifest, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     return {
         **manifest,
-        "stage_package_manifest_path": str(latest_manifest),
-        "latest_stage_package_manifest_path": str(latest_manifest),
+        "stage_package_manifest_path": str(remote_manifest),
+        "latest_stage_package_manifest_path": "",
     }
 
 
@@ -686,15 +812,13 @@ def publish_colab_stage_package(
     package_utc_time = current_utc_time_for_filename()
     package_short_commit = current_short_commit()
     package_batch_id = build_package_batch_id(package_utc_time, package_short_commit)
-    stem = f"stage_package__{package_batch_id}"
-    local_zip = local_package_dir / f"{stem}.zip"
-    local_manifest = local_package_dir / f"{stem}_stage_package_manifest.json"
-    remote_zip = remote_package_dir / local_zip.name
-    remote_manifest = remote_package_dir / local_manifest.name
-    latest_zip = remote_package_dir / "stage_package_latest.zip"
-    latest_manifest = remote_package_dir / "stage_package_latest_manifest.json"
-    keep_timestamp_snapshot = _env_flag("SSTW_STAGE_PACKAGE_KEEP_TIMESTAMP_SNAPSHOT", default=False)
-    prune_timestamp_snapshots = _env_flag("SSTW_STAGE_PACKAGE_PRUNE_TIMESTAMP_SNAPSHOTS", default=True)
+    stem = build_package_file_stem(f"{workflow_profile}_{stage_package_id}", package_utc_time, package_short_commit)
+    local_zip = local_package_dir / f"local_{package_batch_id}.zip"
+    local_manifest = local_package_dir / f"local_{package_batch_id}_manifest.json"
+    remote_zip = remote_package_dir / f"{stem}.zip"
+    remote_manifest = remote_package_dir / f"{stem}_manifest.json"
+    keep_timestamp_snapshot = _env_flag("SSTW_STAGE_PACKAGE_KEEP_TIMESTAMP_SNAPSHOT", default=True)
+    prune_timestamp_snapshots = _env_flag("SSTW_STAGE_PACKAGE_PRUNE_TIMESTAMP_SNAPSHOTS", default=False)
     external_decision = _load_external_baseline_decision(layout, baseline_id) if _is_external_baseline_stage_package(stage_package_id) else None
     external_decision_path = _external_baseline_decision_path(layout, baseline_id) if _is_external_baseline_stage_package(stage_package_id) else None
     external_decision_metadata = (
@@ -727,11 +851,12 @@ def publish_colab_stage_package(
         "package_batch_id": package_batch_id,
         "package_utc_time": package_utc_time,
         "package_short_commit": package_short_commit,
+        "stage_package_file_stem": stem,
         "include_videos": bool(include_videos),
         "local_stage_workspace_root": str(layout.get("local_stage_workspace_root") or ""),
         "local_stage_package_zip": str(local_zip),
         "local_stage_package_manifest": str(local_manifest),
-        "retention_policy": "latest_only_by_default",
+        "retention_policy": "timestamp_snapshots_retained_by_default",
         "keep_timestamp_snapshot": keep_timestamp_snapshot,
         "prune_timestamp_snapshots": prune_timestamp_snapshots,
         **external_decision_metadata,
@@ -747,12 +872,11 @@ def publish_colab_stage_package(
         return _write_manifest_only_stage_package(
             layout=layout,
             remote_package_dir=remote_package_dir,
-            latest_zip=latest_zip,
-            latest_manifest=latest_manifest,
+            remote_manifest=remote_manifest,
             manifest={**base_manifest, **blocker},
         )
 
-    sources = _iter_package_sources(layout, include_videos=include_videos)
+    sources = _iter_package_sources(layout, notebook_role=notebook_role, baseline_id=baseline_id)
     entry_count = 0
     with zipfile.ZipFile(local_zip, mode="w", compression=zipfile.ZIP_DEFLATED) as archive:
         for source_root, archive_root in sources:
@@ -765,22 +889,18 @@ def publish_colab_stage_package(
 
     archive_sha256 = _sha256_file(local_zip)
     removed_timestamp_snapshots = (
-        _prune_remote_stage_package_snapshots(remote_package_dir)
+        _prune_remote_stage_package_snapshots(remote_package_dir, workflow_profile, stage_package_id)
         if prune_timestamp_snapshots and not keep_timestamp_snapshot
         else []
     )
-    if keep_timestamp_snapshot:
-        drive_stage_package_zip = str(remote_zip)
-        stage_package_manifest_path = str(remote_manifest)
-    else:
-        drive_stage_package_zip = str(latest_zip)
-        stage_package_manifest_path = str(latest_manifest)
+    drive_stage_package_zip = str(remote_zip)
+    stage_package_manifest_path = str(remote_manifest)
 
     manifest = {
         **base_manifest,
         "stage_package_publish_status": "published",
         "drive_stage_package_zip": drive_stage_package_zip,
-        "latest_drive_stage_package_zip": str(latest_zip),
+        "latest_drive_stage_package_zip": "",
         "stage_package_archive_sha256": archive_sha256,
         "stage_package_entry_count": entry_count,
         "stage_package_source_root_count": len(sources),
@@ -791,15 +911,13 @@ def publish_colab_stage_package(
         "removed_timestamp_stage_package_snapshots": removed_timestamp_snapshots,
         "claim_support_status": "stage_package_handoff_container_not_claim_evidence",
     }
+    local_manifest.parent.mkdir(parents=True, exist_ok=True)
     local_manifest.write_text(json.dumps(manifest, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-    if keep_timestamp_snapshot:
-        shutil.copy2(local_zip, remote_zip)
-        shutil.copy2(local_manifest, remote_manifest)
-    shutil.copy2(local_zip, latest_zip)
-    shutil.copy2(local_manifest, latest_manifest)
+    _copy_file(local_zip, remote_zip)
+    _copy_file(local_manifest, remote_manifest)
     return {
         **manifest,
         "stage_package_publish_status": "published",
         "stage_package_manifest_path": stage_package_manifest_path,
-        "latest_stage_package_manifest_path": str(latest_manifest),
+        "latest_stage_package_manifest_path": "",
     }

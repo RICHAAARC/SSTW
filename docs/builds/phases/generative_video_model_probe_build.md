@@ -28,7 +28,6 @@ paper_workflow/colab_notebooks/videomark_formal_reference_colab.ipynb
 paper_workflow/colab_notebooks/videoshield_formal_reference_colab.ipynb
 paper_workflow/colab_notebooks/spdmark_formal_reference_colab.ipynb
 paper_workflow/colab_notebooks/sigmark_formal_reference_colab.ipynb
-paper_workflow/colab_notebooks/external_baseline_formal_scoring_colab.ipynb
 paper_workflow/colab_notebooks/paper_gate_and_package_colab.ipynb
 ```
 
@@ -266,7 +265,6 @@ scripts/package_results/generative_video_drive_packager.py
 motion_threshold_calibration_colab.ipynb
 -> generative_video_runtime_colab.ipynb
 -> 6 个 modern external baseline formal reference Notebook
--> external_baseline_formal_scoring_colab.ipynb
 -> paper_gate_and_package_colab.ipynb
 ```
 
@@ -706,9 +704,11 @@ configs/paper_workflow/generative_video_notebook_workflows.json
 motion_threshold_calibration_colab.ipynb: 只运行 motion calibration split 并冻结 threshold artifact
 generative_video_runtime_colab.ipynb: 运行 Wan2.1 生成、formal metrics、motion threshold 复用、attack 和 detection
 6 个 modern external baseline formal reference Notebook: 分别运行对应 baseline 的官方流程、生成项目内 official bundle, 并默认调用统一 runner 转写当前可用的 measured_formal records
-external_baseline_formal_scoring_colab.ipynb: 在 6 个 official bundle 完成后运行全量统一转写、self-containment 判定和打包
-paper_gate_and_package_colab.ipynb: 运行 internal ablation、adaptive attack、replay/sketch 或 Claim-3 downgrade、CI、gate 和 package
+paper_gate_and_package_colab.ipynb: 恢复 6 个 official reference 阶段包后运行全量 external baseline comparison、self-containment、internal ablation、adaptive attack、replay/sketch 或 Claim-3 downgrade、CI、gate 和 package
 ```
+
+`external_baseline_formal_scoring_colab.ipynb` 仅作为诊断或历史聚合入口保留, 不再是
+validation-scale 推荐主流程中的必跑 Notebook。
 
 切换运行层级时只应修改环境变量或配置:
 

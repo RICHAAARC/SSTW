@@ -23,7 +23,7 @@ def test_wan21_preflight_workflow_uses_dedicated_drive_layout() -> None:
     package_command = build_drive_packaging_command(layout)
 
     assert layout["drive_run_root"] == "/content/drive/MyDrive/SSTW/runs/wan21_flow_adapter_preflight"
-    assert layout["drive_package_dir"] == "/content/drive/MyDrive/SSTW/packages/wan21_flow_adapter_preflight"
+    assert layout["drive_package_dir"] == "/content/drive/MyDrive/SSTW/helper"
     assert "experiments.flow_model_adapter_preflight.wan21_preflight" in command
     assert DEFAULT_WAN21_PREFLIGHT_MODEL_ID in command
     assert "--num-inference-steps" in command
@@ -59,10 +59,10 @@ def test_wan21_preflight_colab_notebook_calls_repository_module() -> None:
     assert "build_drive_packaging_command" in source
     assert "打包到 Google Drive packages/" not in source
     assert "package_dir = Path(layout['drive_package_dir'])" not in source
-    assert "stage_packages/wan21_flow_adapter_preflight" in source
+    assert "helper" in source
     assert "stage_package_dir = Path(layout['stage_package_dir'])" in source
-    assert "stage_package_latest.zip" in source
-    assert "stage_package_latest_manifest.json" in source
+    assert "drive_stage_package_zip" in source
+    assert "stage_package_manifest_path" in source
 
     helper_text = Path("paper_workflow/notebook_utils/flow_model_adapter_preflight_workflow.py").read_text(encoding="utf-8")
     assert "experiments.flow_model_adapter_preflight.wan21_preflight" in helper_text

@@ -20,7 +20,7 @@ def build_drive_layout(drive_project_root: str = DEFAULT_DRIVE_PROJECT_ROOT) -> 
         "drive_project_root": root.as_posix(),
         "drive_dataset_root": (root / "datasets" / "generative_video_prompt_suite").as_posix(),
         "drive_run_root": (root / "runs" / "sampling_time_constraint_colab").as_posix(),
-        "drive_package_dir": (root / "packages" / "sampling_time_constraint").as_posix(),
+        "drive_package_dir": (root / "helper").as_posix(),
         "drive_log_dir": (root / "logs" / "sampling_time_constraint").as_posix(),
         "prompt_suite_path": (root / "datasets" / "generative_video_prompt_suite" / "prompt_seed_suite.json").as_posix(),
         "workflow_profile": "sampling_time_constraint",
@@ -112,18 +112,10 @@ def build_result_check_command(layout: dict[str, str]) -> list[str]:
 
 
 def _stage_zip_mode_uses_unified_package(layout: dict[str, str]) -> bool:
-    """判断是否跳过旧版 packages/ 打包, 避免 Drive 重复归档。"""
+    """判断是否跳过历史 drive packager, 避免 Drive 重复归档。"""
 
     mode = str(layout.get("stage_package_handoff_mode") or os.environ.get("SSTW_COLAB_STAGE_IO_MODE", ""))
-    if mode.strip().lower() not in {"local_zip", "stage_zip", "zip_handoff"}:
-        return False
-    return os.environ.get("SSTW_WRITE_LEGACY_DRIVE_PACKAGE_IN_STAGE_ZIP_MODE", "false").strip().lower() not in {
-        "1",
-        "true",
-        "yes",
-        "y",
-        "on",
-    }
+    return mode.strip().lower() in {"local_zip", "stage_zip", "zip_handoff"}
 
 
 def _build_legacy_drive_packaging_noop_command(packager_name: str) -> list[str]:

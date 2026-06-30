@@ -9,6 +9,7 @@ import subprocess
 import sys
 from typing import Any, Mapping
 
+from paper_workflow.colab_utils.stage_package_sync import stage_package_dir, stage_package_id_for_notebook
 from paper_workflow.notebook_utils.streaming_command import run_streaming_command
 
 
@@ -207,11 +208,15 @@ def build_drive_layout(
         or config.get("default_prompt_suite_path_relative")
         or "datasets/generative_video_prompt_suite/prompt_seed_suite.json"
     )
+    resolved_notebook_role = str(workflow.get("notebook_role") or notebook_role or DEFAULT_NOTEBOOK_ROLE)
+    resolved_stage_package_id = stage_package_id_for_notebook(resolved_notebook_role)
     return {
         "drive_project_root": root.as_posix(),
         "drive_dataset_root": _join_drive_path(root, dataset_root_relative),
         "drive_run_root": _join_drive_path(root, str(workflow["drive_run_root_relative"])),
-        "drive_package_dir": _join_drive_path(root, str(workflow["drive_package_dir_relative"])),
+        "drive_package_dir": str(
+            stage_package_dir(root.as_posix(), str(workflow["workflow_profile"]), resolved_stage_package_id)
+        ).replace("\\", "/"),
         "drive_log_dir": _join_drive_path(root, str(workflow["drive_log_dir_relative"])),
         "external_baseline_resource_root": _join_drive_path(root, "resources/external_baseline"),
         "external_baseline_official_result_bundle_root": _join_drive_path(
@@ -228,7 +233,7 @@ def build_drive_layout(
         "requested_workflow_profile": str(workflow["requested_workflow_profile"]),
         "runtime_profile": str(workflow["runtime_profile"]),
         "result_tier": str(workflow["result_tier"]),
-        "notebook_role": str(workflow.get("notebook_role") or ""),
+        "notebook_role": resolved_notebook_role,
         "protocol_config_path": str(workflow.get("protocol_config_path") or ""),
     }
 
@@ -1359,23 +1364,15 @@ def build_validation_scale_package_manifest_builder_command(layout: dict[str, st
 
 
 def _stage_zip_mode_uses_unified_package(layout: Mapping[str, str]) -> bool:
-    """判断当前 Notebook 是否应跳过旧版 packages/ 打包。
+    """判断当前 Notebook 是否应跳过历史 drive packager。
 
     Colab 阶段 zip 交接模式下, `publish_colab_stage_package` 已负责把完整阶段包
-    写回 `stage_packages/`。继续运行旧版 drive packager 会在 `packages/` 下生成
-    重复 zip, 增加 Google Drive 占用并制造后续读取歧义。
+    写回新目录结构。继续运行历史 drive packager 会生成重复 zip, 增加 Google Drive
+    占用并制造后续读取歧义。
     """
 
     mode = str(layout.get("stage_package_handoff_mode") or os.environ.get("SSTW_COLAB_STAGE_IO_MODE", ""))
-    if mode.strip().lower() not in {"local_zip", "stage_zip", "zip_handoff"}:
-        return False
-    return os.environ.get("SSTW_WRITE_LEGACY_DRIVE_PACKAGE_IN_STAGE_ZIP_MODE", "false").strip().lower() not in {
-        "1",
-        "true",
-        "yes",
-        "y",
-        "on",
-    }
+    return mode.strip().lower() in {"local_zip", "stage_zip", "zip_handoff"}
 
 
 def _build_legacy_drive_packaging_noop_command(packager_name: str) -> list[str]:

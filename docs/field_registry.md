@@ -505,9 +505,13 @@ Notebook 与 repository module 的跨边界数据
 | stage_package_source_roots | artifact | none | false | false | false | 生成阶段 zip 时纳入的本地源目录和 zip 内归档根路径列表。 |
 | local_stage_package_zip | artifact | none | true | false | false | 阶段 zip 在 Colab 本地缓存中的路径。 |
 | drive_stage_package_zip | artifact | none | true | false | false | 阶段 zip 在 Google Drive 中的时间戳归档路径。 |
-| latest_drive_stage_package_zip | artifact | none | true | false | false | 阶段 zip 在 Google Drive 中的 latest 交接路径。 |
+| latest_drive_stage_package_zip | artifact | none | true | false | false | 历史兼容字段; 2026-07-01 后正式阶段包默认使用时间戳 zip, 该字段应为空。 |
 | stage_package_manifest_path | artifact | none | true | false | false | 阶段 zip manifest 在 Google Drive 中的时间戳归档路径。 |
-| latest_stage_package_manifest_path | artifact | none | true | false | false | 阶段 zip manifest 在 Google Drive 中的 latest 交接路径。 |
+| latest_stage_package_manifest_path | artifact | none | true | false | false | 历史兼容字段; 2026-07-01 后正式阶段包默认使用时间戳 manifest, 该字段应为空。 |
+| stage_package_file_stem | artifact | none | true | false | false | 阶段 zip 的规范文件名前缀, 格式为 `<workflow_profile>_<stage_package_id>_<YYYYMMDD_HHMMSS>_<git_short_commit>`。 |
+| external_baseline_resource_package_restore_status | governance | none | false | false | false | Colab 是否从 Drive resources zip 包恢复了本地 external baseline 资源根目录。 |
+| resource_package_count | metric | none | false | false | false | 本次从 Drive resources 中检测到并解包的资源 zip 数量。 |
+| extracted_resource_file_count | metric | none | false | false | false | 本次从资源 zip 解压出的文件数量。 |
 | required_stage_package_ids | governance | none | false | false | false | 当前 Notebook 必须先恢复的前置阶段包 ID 列表。 |
 | optional_stage_package_ids | governance | none | false | false | false | 当前 Notebook 可恢复但不强制存在的阶段包 ID 列表。 |
 | restored_stage_package_count | metric | none | false | false | false | 当前 Notebook 已成功恢复到本地 workspace 的阶段包数量。 |

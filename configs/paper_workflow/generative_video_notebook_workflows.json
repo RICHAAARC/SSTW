@@ -1,6 +1,6 @@
 {
   "config_kind": "generative_video_notebook_workflow_config",
-  "config_version": "2026_06_26_profile_driven_colab_workflow_v8_split_notebook_layout",
+  "config_version": "2026_07_01_profile_stage_timestamp_zip_v9",
   "default_dataset_root_relative": "datasets/generative_video_prompt_suite",
   "default_drive_project_root": "/content/drive/MyDrive/SSTW",
   "default_prompt_suite_path_relative": "datasets/generative_video_prompt_suite/prompt_seed_suite.json",
@@ -80,6 +80,7 @@
         "replay_and_sketch_gate",
         "claim3_downgrade_gate",
         "statistical_confidence_interval",
+        "external_baseline_comparison",
         "external_baseline_self_containment_decision",
         "data_split_and_leakage_guard",
         "pilot_paper_gate",
@@ -101,7 +102,7 @@
       "bootstrap_iteration_count": null,
       "disabled_stage_names": [],
       "drive_log_dir_relative": "logs/generative_video_model_probe/full_paper",
-      "drive_package_dir_relative": "packages/generative_video_model_probe/full_paper",
+      "drive_package_dir_relative": "full_paper",
       "drive_run_root_relative": "runs/generative_video_model_probe/full_paper",
       "enabled_for_claim": false,
       "enabled_for_run": false,
@@ -140,7 +141,7 @@
         "validation_scale_gate"
       ],
       "drive_log_dir_relative": "logs/generative_video_model_probe/motion_calibration",
-      "drive_package_dir_relative": "packages/generative_video_model_probe/motion_calibration",
+      "drive_package_dir_relative": "motion_threshold",
       "drive_run_root_relative": "runs/generative_video_model_probe/motion_calibration",
       "enabled_for_claim": false,
       "enabled_for_run": true,
@@ -168,7 +169,7 @@
         "validation_scale_to_pilot_paper_transition_decision"
       ],
       "drive_log_dir_relative": "logs/generative_video_model_probe/pilot_paper",
-      "drive_package_dir_relative": "packages/generative_video_model_probe/pilot_paper",
+      "drive_package_dir_relative": "pilot_paper",
       "drive_run_root_relative": "runs/generative_video_model_probe/pilot_paper",
       "enabled_for_claim": true,
       "enabled_for_run": true,
@@ -194,7 +195,7 @@
         "pilot_paper_to_full_paper_transition_decision"
       ],
       "drive_log_dir_relative": "logs/generative_video_model_probe/validation_scale",
-      "drive_package_dir_relative": "packages/generative_video_model_probe/validation_scale",
+      "drive_package_dir_relative": "validation_scale",
       "drive_run_root_relative": "runs/generative_video_model_probe/validation_scale",
       "enabled_for_claim": false,
       "enabled_for_run": true,

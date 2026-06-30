@@ -70,5 +70,5 @@ external baseline runner 转写为 `metric_status: measured_formal`。
 3. `SSTW_<BASELINE>_NATIVE_EVAL_COMMAND` 或等价项目内 official bundle 生成逻辑。
 4. 覆盖全部 `validation_scale` runtime comparison units 的 score JSON。
 5. 6 个 independent formal reference Notebook 先各自生成项目内 official bundle, 并默认调用统一 runner 转写当前可用的 `measured_formal` records。
-6. `external_baseline_formal_scoring_colab.ipynb` 在 6 个 official bundle 全部完成后执行全量统一转写、self-containment 判定和打包。
+6. `paper_gate_and_package_colab.ipynb` 在恢复 6 个 official reference 阶段包后执行全量统一转写、self-containment 判定和打包; `external_baseline_formal_scoring_colab.ipynb` 仅作为诊断或历史聚合入口。
 7. `external_baseline_self_containment_decision.json` 通过。

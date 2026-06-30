@@ -50,17 +50,27 @@ os.environ["SSTW_COLAB_STAGE_IO_MODE"] = "local_zip"
 启用后路径语义如下:
 
 ```text
-Google Drive: 只保存阶段 zip、stage package manifest、旧版审阅 package zip 和少量资源 checkpoint。
+Google Drive: 只保存阶段 zip、stage package manifest 和可复用资源包 / checkpoint。
 /content/SSTW_stage_workspace: 当前 Notebook 的本地热路径, runner 在这里读写 records、artifacts、videos 和 official bundle。
 /content/SSTW_stage_packages: 当前 Colab 会话复制过来的 zip 缓存。
 ```
 
+`SSTW/resources/external_baseline/` 用于保存可复用的 official checkpoint、模型和官方资源。
+若该目录下存在资源 zip, Notebook 会先复制 zip 到 `/content` 本地缓存并解压到本地资源根目录,
+然后把 `SSTW_EXTERNAL_BASELINE_RESOURCE_ROOT` 指向本地路径。SIGMark 的 HunyuanVideo 等大模型资源
+应优先以资源包形式保存, 避免运行时循环读取 Google Drive 小文件。
+
 每个阶段完成后会额外写出阶段交接包:
 
 ```text
-/content/drive/MyDrive/SSTW/stage_packages/<workflow_profile>/<stage_package_id>/stage_package_latest.zip
-/content/drive/MyDrive/SSTW/stage_packages/<workflow_profile>/<stage_package_id>/stage_package_latest_manifest.json
+/content/drive/MyDrive/SSTW/<workflow_profile>/<stage_package_id>/<workflow_profile>_<stage_package_id>_<YYYYMMDD_HHMMSS>_<git_short_commit>.zip
 ```
+
+其中 `motion_threshold_calibration_colab.ipynb` 写入 `/content/drive/MyDrive/SSTW/motion_threshold/`;
+6 个 baseline 专用 Notebook 写入
+`/content/drive/MyDrive/SSTW/<workflow_profile>/external_baseline_official_reference/`;
+历史或辅助 Notebook 写入 `/content/drive/MyDrive/SSTW/helper/`。阶段包默认保留时间戳,
+后续 Notebook 会按文件名时间戳选择最新的完整 zip。
 
 后续 Notebook 不应直接从:
 
@@ -69,9 +79,8 @@ Google Drive: 只保存阶段 zip、stage package manifest、旧版审阅 packag
 /content/drive/MyDrive/SSTW/external_baseline_official_result_bundles/...
 ```
 
-循环读取大量小文件。正确流程是复制 latest zip 到本地、解压、在本地路径继续运行。
-旧版 `packages/.../*.zip` 仍可作为人工审阅包保留, 但 Notebook 间自动交接以
-`stage_packages/.../*latest.zip` 为准。
+循环读取大量小文件。正确流程是复制对应阶段最新时间戳 zip 到本地、解压、在本地路径继续运行。
+旧版 `packages/.../*.zip` 不再作为 Notebook 间自动交接入口。
 
 ## 3. 当前推荐执行顺序
 
@@ -85,7 +94,6 @@ Google Drive: 只保存阶段 zip、stage package manifest、旧版审阅 packag
 motion_threshold_calibration_colab.ipynb  # 仅当 motion calibration artifact 缺失时运行
 -> generative_video_runtime_colab.ipynb
 -> 6 个 modern external baseline formal reference Notebook
--> external_baseline_formal_scoring_colab.ipynb
 -> paper_gate_and_package_colab.ipynb
 ```
 
@@ -122,8 +130,7 @@ SSTW_WORKFLOW_PROFILE_VALUE = ''
 
 ```text
 /content/SSTW_stage_workspace/runs/generative_video_model_probe/motion_calibration
-/content/drive/MyDrive/SSTW/stage_packages/motion_calibration/motion_threshold_calibration_colab
-/content/drive/MyDrive/SSTW/packages/generative_video_model_probe/motion_calibration
+/content/drive/MyDrive/SSTW/motion_threshold
 ```
 
 只有缺少 motion threshold artifact、阈值设计发生变化或需要重新校准时, 才需要重新运行该 Notebook。
@@ -157,24 +164,27 @@ SSTW_WORKFLOW_PROFILE_VALUE = 'validation_scale'
 现代 baseline 使用 bridge 模式时, workflow 默认会把 `SSTW_RUN_EXTERNAL_BASELINE_SOURCE_CLONE`
 视为 `true`, 以适配 Colab 冷启动环境。若已经手动挂载或克隆官方源码, 可以显式设置为 `"false"`。
 
-### 3.3 外部 baseline 正式评分
+### 3.3 外部 baseline official reference
 
-Notebook:
+推荐 Notebook:
 
 ```text
-paper_workflow/colab_notebooks/external_baseline_formal_scoring_colab.ipynb
+paper_workflow/colab_notebooks/videoseal_formal_reference_colab.ipynb
+paper_workflow/colab_notebooks/vidsig_formal_reference_colab.ipynb
+paper_workflow/colab_notebooks/videomark_formal_reference_colab.ipynb
+paper_workflow/colab_notebooks/videoshield_formal_reference_colab.ipynb
+paper_workflow/colab_notebooks/spdmark_formal_reference_colab.ipynb
+paper_workflow/colab_notebooks/sigmark_formal_reference_colab.ipynb
 ```
 
 用途:
 
 - 读取统一 workflow profile。
-- 执行 external baseline source intake。
-- 执行 official resource bootstrap, 自动补齐可公开下载的资源。
-- 执行 automatic official bundle generation, 生成可自动支持 baseline 的官方结果包。
-- 执行 official result bundle preflight。
-- 通过正式 command adapter 调用现代视频水印 baseline。
-- 生成 external baseline comparison records。
-- 打包 baseline 对比结果到 Google Drive。
+- 在各自 Notebook 内执行当前 baseline 的 source intake、clone / build / run / adapt / record。
+- 以同一 prompt / seed / attack 协议为锚点生成当前 baseline 的 official bundle。
+- 只打包当前 baseline 的 official bundle 与对应 governed artifacts。
+- 将阶段包保存到 `/content/drive/MyDrive/SSTW/<workflow_profile>/external_baseline_official_reference/`。
+- `paper_gate_and_package_colab.ipynb` 恢复 6 个 official bundle 后, 再统一重建最终 `measured_formal` records。
 
 当前 validation-scale 配置:
 
@@ -182,7 +192,8 @@ paper_workflow/colab_notebooks/external_baseline_formal_scoring_colab.ipynb
 SSTW_WORKFLOW_PROFILE_VALUE = 'validation_scale'
 ```
 
-进入 paper gate 前必须配置 6 个现代 baseline command:
+进入 paper gate 前必须完成 6 个现代 baseline 的 official reference 阶段包。若使用通用 command adapter,
+仍必须配置 6 个现代 baseline command:
 
 ```text
 SSTW_VIDEOSHIELD_EVAL_COMMAND
@@ -254,7 +265,7 @@ configs/external_baselines/requirements/<baseline_id>.txt
 阶段完成后, 该本地 official bundle 会随对应 baseline 的阶段 zip 写入:
 
 ```text
-/content/drive/MyDrive/SSTW/stage_packages/validation_scale/external_baseline_formal_reference_<baseline_id>
+/content/drive/MyDrive/SSTW/validation_scale/external_baseline_official_reference
 ```
 
 其产物性质必须明确区分:
@@ -275,9 +286,10 @@ official_reference_notebook
 -> external_baseline_runner unified measured_formal conversion
 ```
 
-`external_baseline_formal_scoring_colab.ipynb` 仍然保留, 作用是当 6 个 baseline 的 official bundle
-已经全部存在时, 重新执行一次全量统一转写、self-containment 判定和打包; 它不重新生成
-baseline 官方视频或官方中间产物。
+`paper_gate_and_package_colab.ipynb` 会在恢复 6 个 baseline official reference 阶段包后,
+重新执行一次全量统一转写和 self-containment 判定, 防止各 baseline 专用包中的单 baseline
+临时 records 互相覆盖。`external_baseline_formal_scoring_colab.ipynb` 仅作为诊断或历史聚合入口保留,
+不再是 validation-scale 推荐主流程中的必跑 Notebook。
 
 最终必须检查:
 
@@ -533,6 +545,8 @@ paper_workflow/colab_notebooks/paper_gate_and_package_colab.ipynb
 - 执行 replay/sketch gate。
 - 必要时执行 Claim-3 downgrade gate。
 - 执行 statistical confidence interval。
+- 恢复 6 个 baseline official bundle 后重新执行全量 external baseline comparison。
+- 执行 external baseline self-containment 判定。
 - 执行 validation artifact rebuild dry run。
 - 对 validation-scale 或 pilot-paper 进行最终 gate 判断。
 - 打包完整结果到 Google Drive。
@@ -543,7 +557,7 @@ paper_workflow/colab_notebooks/paper_gate_and_package_colab.ipynb
 SSTW_WORKFLOW_PROFILE_VALUE = 'validation_scale'
 ```
 
-该 Notebook 必须在 runtime 与 external baseline notebook 完成后运行, 因为 gate 需要读取前序 artifacts。
+该 Notebook 必须在 runtime 与 6 个 external baseline official reference Notebook 完成后运行, 因为 gate 需要读取前序 artifacts。
 执行 gate 前, Notebook 会再次校验并复制 `motion_calibration` run root 中已冻结的
 `motion_threshold_calibration_decision.json` 到当前 `validation_scale` 或 `pilot_paper`
 run root。该步骤不重新估计阈值, 只把独立 calibration split 的阈值 artifact 固化到当前
@@ -551,7 +565,7 @@ gate 所需的 governed artifacts 中。
 
 ## 4. validation-scale 到 pilot-paper 的切换
 
-validation-scale 是进入 paper 级运行前的最后完整工程门禁。通过后, 可以把以下 3 个 Notebook 中的 profile 从 validation-scale 切到 pilot-paper:
+validation-scale 是进入 paper 级运行前的最后完整工程门禁。通过后, 可以把 runtime、6 个 baseline official reference Notebook 和 paper gate Notebook 的 profile 从 validation-scale 切到 pilot-paper:
 
 ```python
 SSTW_WORKFLOW_PROFILE_VALUE = 'pilot_paper'
@@ -561,7 +575,7 @@ SSTW_WORKFLOW_PROFILE_VALUE = 'pilot_paper'
 
 ```text
 paper_workflow/colab_notebooks/generative_video_runtime_colab.ipynb
-paper_workflow/colab_notebooks/external_baseline_formal_scoring_colab.ipynb
+paper_workflow/colab_notebooks/*_formal_reference_colab.ipynb
 paper_workflow/colab_notebooks/paper_gate_and_package_colab.ipynb
 ```
 
@@ -569,7 +583,7 @@ paper_workflow/colab_notebooks/paper_gate_and_package_colab.ipynb
 
 ```text
 generative_video_runtime_colab.ipynb
-external_baseline_formal_scoring_colab.ipynb
+6 个 *_formal_reference_colab.ipynb
 paper_gate_and_package_colab.ipynb
 ```
 
@@ -621,14 +635,14 @@ manifests/validation_scale_package_manifest.json
 package 输出应位于:
 
 ```text
-/content/drive/MyDrive/SSTW/packages/generative_video_model_probe/<workflow_profile>
+/content/drive/MyDrive/SSTW/<workflow_profile>/<stage_package_id>
 ```
 
-package 文件名采用 `<utc_time>_<short_commit>` 批次标识, 便于定位同一轮 Colab 产物。
+package 文件名采用 `<workflow_profile>_<stage_package_id>_<YYYYMMDD_HHMMSS>_<git_short_commit>.zip` 格式, 便于定位同一轮 Colab 产物。
 Notebook 间复用优先读取阶段交接包:
 
 ```text
-/content/drive/MyDrive/SSTW/stage_packages/<workflow_profile>/<stage_package_id>/*latest.zip
+/content/drive/MyDrive/SSTW/<workflow_profile>/<stage_package_id>/<workflow_profile>_<stage_package_id>_*.zip
 ```
 
 ## 6. 真实工作量进度显示

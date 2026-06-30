@@ -369,7 +369,6 @@ Notebook 只能通过 `paper_workflow/notebook_utils/generative_video_model_prob
 motion_threshold_calibration_colab.ipynb
 -> generative_video_runtime_colab.ipynb
 -> 6 个 modern external baseline formal reference Notebook
--> external_baseline_formal_scoring_colab.ipynb
 -> paper_gate_and_package_colab.ipynb
 ```
 
@@ -384,9 +383,13 @@ motion_threshold_calibration_colab.ipynb
 2. `generative_video_runtime_colab.ipynb` 负责 Wan2.1 生成、formal metrics、阈值复用、
    runtime attack 和 detection, 并在真实 GPU 生成前执行现代 baseline command 预检。
 3. 6 个 modern external baseline formal reference Notebook 分别负责对应 baseline 的 source intake、clone / build / run / adapt、official bundle 生成, 并默认调用统一 runner 将已完成 bundle 转写为 `measured_formal` records。
-4. `external_baseline_formal_scoring_colab.ipynb` 负责全量统一转写、repository-generated result cache preflight、self-containment 判定和打包, 不重新生成视频, 也不接收外部补交结果包。
-5. `paper_gate_and_package_colab.ipynb` 负责内部消融、adaptive attack proxy、replay/sketch
+4. `paper_gate_and_package_colab.ipynb` 负责恢复 6 个 baseline official reference 阶段包, 重新执行全量统一转写和 self-containment 判定, 再执行内部消融、adaptive attack proxy、replay/sketch
    或 Claim-3 downgrade、CI、fixed-FPR gate、artifact rebuild 和 Drive package。
+
+`external_baseline_formal_scoring_colab.ipynb` 仅作为诊断或历史聚合入口保留, 不再是
+validation-scale 推荐主流程中的必跑 Notebook。正式主流程应以 6 个 baseline 专用 Notebook
+产生的 official bundle 为输入, 由 `paper_gate_and_package_colab.ipynb` 统一重建最终
+`measured_formal` records, 避免单 baseline 临时 records 互相覆盖。
 
 旧综合 Notebook 已移除。正式推进只使用拆分 Notebook, 因为拆分后可以在同一 `workflow_profile` 下分阶段复跑、检查和打包,
 避免 runtime、baseline 与 gate 的失败原因混在一个长 Notebook 中。
@@ -1217,27 +1220,30 @@ Colab 输出应落盘到:
 ```text
 /content/drive/MyDrive/SSTW/datasets
 /content/drive/MyDrive/SSTW/resources
-/content/drive/MyDrive/SSTW/stage_packages
+/content/drive/MyDrive/SSTW/motion_threshold
+/content/drive/MyDrive/SSTW/<workflow_profile>/<stage_package_id>
+/content/drive/MyDrive/SSTW/<workflow_profile>/external_baseline_official_reference
+/content/drive/MyDrive/SSTW/helper
 ```
 
 当前 Colab 正式流程采用“本地热路径 + Drive 冷归档”的阶段 zip 交接规则:
 
-1. Notebook 启动时只从 `stage_packages/<profile>/<stage_id>/stage_package_latest.zip`
+1. Notebook 启动时只从新目录结构中选择最新的
+   `<workflow_profile>_<stage_package_id>_<YYYYMMDD_HHMMSS>_<git_short_commit>.zip`
    复制少量上游阶段包到 Colab 本地 workspace。
 2. 模型运行、attack、scoring、adapter 和 result checker 的小文件读写只能发生在
    Colab 本地 workspace, 不应循环读写 Google Drive 小文件。
-3. 阶段完成后由 `publish_colab_stage_package` 统一生成 `stage_package_latest.zip`
-   和 `stage_package_latest_manifest.json` 并写回 Drive。
-4. 默认不再写 `packages/` 下的旧版时间戳包, 也不在 `stage_packages/` 中保留历史
-   `stage_package__*.zip`。只有显式设置
-   `SSTW_STAGE_PACKAGE_KEEP_TIMESTAMP_SNAPSHOT=true` 时才保留时间戳快照。
+3. 阶段完成后由 `publish_colab_stage_package` 统一生成带时间戳的 zip 和 manifest
+   并写回 Drive。默认保留时间戳包, 不再写固定 latest 小入口。
+4. 旧版 `packages/` 目录不再作为 Notebook 间自动交接入口。
 5. failed 或未闭合的 `external_baseline_formal_reference_*` 阶段只能写阻断 manifest,
    不得保存可被后续门禁恢复的 zip。这样可以防止失败运行占用大量 Drive 空间, 也防止
    后续 Notebook 误用旧 external baseline 输出。
 
-`resources/` 只保存可复用的大模型、checkpoint、官方资源包等冷资源。以 SIGMark 为例,
-`resources/external_baseline/sigmark/models/HunyuanVideo-community` 属于可复用模型资源,
-不应随每次实验阶段重复打包。
+`resources/` 只保存可复用的大模型、checkpoint、官方资源包等冷资源。若资源以 zip 包保存,
+Notebook 会先复制 zip 到 Colab 本地并解压到本地资源根目录, 避免循环读取 Drive 小文件。以 SIGMark 为例,
+HunyuanVideo 这类可复用模型资源应优先作为 `resources/external_baseline/sigmark/*.zip`
+或等价资源包保存, Notebook 解包后再由官方运行器使用; 它不应随每次实验阶段重复打包。
 
 数据集构造、模型运行、结果检查和阶段打包下载应分离为不同步骤。
 
@@ -2389,6 +2395,7 @@ external_baseline_source_intake
 -> external_baseline_official_bundle_generation
 -> external_baseline_official_result_bundle_preflight
 -> external_baseline_comparison
+-> paper_gate_and_package_colab 重新聚合 6 个 official reference 阶段包
 ```
 
 其中:
@@ -2404,8 +2411,11 @@ external_baseline_source_intake
    comparison unit 时通过。失败时必须保留缺口 artifact, 作为 validation_scale 阻断依据。
 5. `external_baseline_formal_reference_*` 只有在对应
    `<baseline_id>_formal_reference_decision.json` 的 `formal_reference_decision` 为 `PASS`
-   时, 才能发布完整 `stage_package_latest.zip`。若结果为 `FAIL` 或决策文件缺失, 只能发布
-   manifest-only 阻断记录, 且必须清理该阶段遗留的 stale latest zip。
+   时, 才能发布完整时间戳 zip。若结果为 `FAIL` 或决策文件缺失, 只能发布
+   manifest-only 阻断记录, 且不得发布可被后续门禁恢复的 zip。
+6. 单 baseline Notebook 中的 comparison records 只用于即时自检。最终论文 gate 必须在
+   `paper_gate_and_package_colab.ipynb` 恢复 6 个 official reference 阶段包后重新运行
+   `external_baseline_comparison`, 生成全量 `measured_formal` records 和 self-containment 判定。
 
 该规则的目标是让 Colab 冷启动具备“能自动补齐的就自动补齐”的工程能力, 同时保持论文
 baseline 对比的 fail-closed 边界。严格门禁通过的前提仍然是 6 个现代 baseline 最终都由本项目产出

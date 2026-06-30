@@ -24,7 +24,7 @@ def build_drive_layout(drive_project_root: str = DEFAULT_DRIVE_PROJECT_ROOT) -> 
     return {
         "drive_project_root": root.as_posix(),
         "drive_run_root": (root / "runs" / "wan21_flow_adapter_preflight").as_posix(),
-        "drive_package_dir": (root / "packages" / "wan21_flow_adapter_preflight").as_posix(),
+        "drive_package_dir": (root / "helper").as_posix(),
         "drive_log_dir": (root / "logs" / "wan21_flow_adapter_preflight").as_posix(),
         "workflow_profile": "wan21_flow_adapter_preflight",
         "runtime_profile": "wan21_flow_adapter_preflight",
@@ -75,18 +75,10 @@ def build_wan21_flow_adapter_preflight_command(
 
 
 def _stage_zip_mode_uses_unified_package(layout: dict[str, str]) -> bool:
-    """判断是否跳过旧版 packages/ 打包, 避免 Drive 重复归档。"""
+    """判断是否跳过历史 drive packager, 避免 Drive 重复归档。"""
 
     mode = str(layout.get("stage_package_handoff_mode") or os.environ.get("SSTW_COLAB_STAGE_IO_MODE", ""))
-    if mode.strip().lower() not in {"local_zip", "stage_zip", "zip_handoff"}:
-        return False
-    return os.environ.get("SSTW_WRITE_LEGACY_DRIVE_PACKAGE_IN_STAGE_ZIP_MODE", "false").strip().lower() not in {
-        "1",
-        "true",
-        "yes",
-        "y",
-        "on",
-    }
+    return mode.strip().lower() in {"local_zip", "stage_zip", "zip_handoff"}
 
 
 def _build_legacy_drive_packaging_noop_command(packager_name: str) -> list[str]:

@@ -6,13 +6,17 @@ import zipfile
 
 import pytest
 
-from paper_workflow.colab_utils.stage_package_sync import latest_stage_package_zip, publish_colab_stage_package
+from paper_workflow.colab_utils.stage_package_sync import (
+    hydrate_external_baseline_resource_packages,
+    latest_stage_package_zip,
+    publish_colab_stage_package,
+)
 from paper_workflow.notebook_utils.generative_video_model_probe_workflow import build_drive_packaging_command
 
 
 @pytest.mark.quick
-def test_stage_package_publish_keeps_latest_zip_only_by_default(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """阶段 zip 默认只在 Drive 保留 latest, 避免历史时间戳包重复占用空间。"""
+def test_stage_package_publish_keeps_timestamp_zip_by_default(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """阶段 zip 默认保留时间戳包, 不再写 latest 小入口。"""
 
     monkeypatch.setenv("SSTW_COLAB_STAGE_IO_MODE", "local_zip")
     monkeypatch.delenv("SSTW_STAGE_PACKAGE_KEEP_TIMESTAMP_SNAPSHOT", raising=False)
@@ -34,13 +38,14 @@ def test_stage_package_publish_keeps_latest_zip_only_by_default(tmp_path: Path, 
 
     result = publish_colab_stage_package(layout, notebook_role="generative_video_runtime", include_videos=True)
 
-    package_dir = drive_root / "stage_packages" / "validation_scale" / "generative_video_runtime_colab"
+    package_dir = drive_root / "validation_scale" / "generative_video_runtime_colab"
     assert result["stage_package_publish_status"] == "published"
-    assert (package_dir / "stage_package_latest.zip").exists()
-    assert (package_dir / "stage_package_latest_manifest.json").exists()
-    assert not list(package_dir.glob("stage_package__*.zip"))
-    assert latest_stage_package_zip(drive_root, "validation_scale", "generative_video_runtime_colab") == package_dir / "stage_package_latest.zip"
-    with zipfile.ZipFile(package_dir / "stage_package_latest.zip") as archive:
+    assert not (package_dir / "stage_package_latest.zip").exists()
+    assert not (package_dir / "stage_package_latest_manifest.json").exists()
+    timestamp_zips = list(package_dir.glob("validation_scale_generative_video_runtime_colab_*.zip"))
+    assert len(timestamp_zips) == 1
+    assert latest_stage_package_zip(drive_root, "validation_scale", "generative_video_runtime_colab") == timestamp_zips[0]
+    with zipfile.ZipFile(timestamp_zips[0]) as archive:
         assert any(name.endswith("runtime_decision.json") for name in archive.namelist())
 
 
@@ -67,11 +72,9 @@ def test_failed_external_baseline_reference_writes_manifest_only_and_removes_sta
         ),
         encoding="utf-8",
     )
-    package_dir = drive_root / "stage_packages" / "validation_scale" / "external_baseline_formal_reference_sigmark"
+    package_dir = drive_root / "validation_scale" / "external_baseline_official_reference"
     package_dir.mkdir(parents=True)
-    (package_dir / "stage_package_latest.zip").write_bytes(b"stale")
-    (package_dir / "stage_package__old.zip").write_bytes(b"stale")
-    (package_dir / "stage_package__old_stage_package_manifest.json").write_text("{}", encoding="utf-8")
+    (package_dir / "validation_scale_external_baseline_formal_reference_sigmark_20260101_000000_deadbeef.zip").write_bytes(b"stale")
     bundle_root = tmp_path / "workspace" / "external_baseline_official_result_bundles" / "validation_scale"
     bundle_root.mkdir(parents=True)
     (bundle_root / "large_failed_output.bin").write_bytes(b"x" * 1024)
@@ -92,25 +95,27 @@ def test_failed_external_baseline_reference_writes_manifest_only_and_removes_sta
         include_videos=True,
     )
 
-    latest_manifest = package_dir / "stage_package_latest_manifest.json"
-    manifest = json.loads(latest_manifest.read_text(encoding="utf-8"))
+    manifests = list(package_dir.glob("validation_scale_external_baseline_formal_reference_sigmark_*_manifest.json"))
+    assert len(manifests) == 1
+    manifest = json.loads(manifests[0].read_text(encoding="utf-8"))
     assert result["stage_package_publish_status"] == "skipped_failed_external_baseline_reference"
     assert manifest["stage_package_publish_status"] == "skipped_failed_external_baseline_reference"
     assert not (package_dir / "stage_package_latest.zip").exists()
-    assert not list(package_dir.glob("stage_package__*.zip"))
     assert latest_stage_package_zip(drive_root, "validation_scale", "external_baseline_formal_reference_sigmark") is None
 
 
 @pytest.mark.quick
 def test_external_baseline_restore_requires_pass_decision_in_stage_manifest(tmp_path: Path) -> None:
-    """历史 external baseline zip 若没有 PASS 决策, 不得被后续 Notebook 恢复。"""
+    """external baseline 时间戳 zip 若没有 PASS 决策, 不得被后续 Notebook 恢复。"""
 
     drive_root = tmp_path / "drive" / "SSTW"
-    package_dir = drive_root / "stage_packages" / "validation_scale" / "external_baseline_formal_reference_sigmark"
+    package_dir = drive_root / "validation_scale" / "external_baseline_official_reference"
     package_dir.mkdir(parents=True)
-    with zipfile.ZipFile(package_dir / "stage_package_latest.zip", mode="w") as archive:
+    package_zip = package_dir / "validation_scale_external_baseline_formal_reference_sigmark_20260101_000000_deadbeef.zip"
+    manifest_path = package_dir / "validation_scale_external_baseline_formal_reference_sigmark_20260101_000000_deadbeef_manifest.json"
+    with zipfile.ZipFile(package_zip, mode="w") as archive:
         archive.writestr("runs/validation_scale/records/legacy.json", "{}")
-    (package_dir / "stage_package_latest_manifest.json").write_text(
+    manifest_path.write_text(
         json.dumps(
             {
                 "manifest_kind": "colab_stage_zip_handoff_manifest",
@@ -122,7 +127,7 @@ def test_external_baseline_restore_requires_pass_decision_in_stage_manifest(tmp_
 
     assert latest_stage_package_zip(drive_root, "validation_scale", "external_baseline_formal_reference_sigmark") is None
 
-    (package_dir / "stage_package_latest_manifest.json").write_text(
+    manifest_path.write_text(
         json.dumps(
             {
                 "manifest_kind": "colab_stage_zip_handoff_manifest",
@@ -132,24 +137,143 @@ def test_external_baseline_restore_requires_pass_decision_in_stage_manifest(tmp_
         ),
         encoding="utf-8",
     )
-    assert latest_stage_package_zip(drive_root, "validation_scale", "external_baseline_formal_reference_sigmark") == (
-        package_dir / "stage_package_latest.zip"
-    )
+    assert latest_stage_package_zip(drive_root, "validation_scale", "external_baseline_formal_reference_sigmark") == package_zip
 
 
 @pytest.mark.quick
-def test_legacy_drive_packager_is_noop_in_stage_zip_mode(monkeypatch: pytest.MonkeyPatch) -> None:
-    """local_zip 模式下旧版 packages/ 打包只能成为 no-op, 实际落盘由阶段 zip 完成。"""
+def test_aggregate_external_baseline_scoring_can_publish_helper_package(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """聚合诊断 Notebook 没有 baseline_id 时不应被单 baseline reference 判定误阻断。"""
 
-    monkeypatch.delenv("SSTW_WRITE_LEGACY_DRIVE_PACKAGE_IN_STAGE_ZIP_MODE", raising=False)
+    monkeypatch.setenv("SSTW_COLAB_STAGE_IO_MODE", "local_zip")
+    drive_root = tmp_path / "drive" / "SSTW"
+    run_root = tmp_path / "workspace" / "runs" / "validation_scale"
+    (run_root / "artifacts").mkdir(parents=True)
+    (run_root / "artifacts" / "external_baseline_comparison_decision.json").write_text(
+        json.dumps({"external_baseline_comparison_decision": "PASS"}),
+        encoding="utf-8",
+    )
+    bundle_root = tmp_path / "workspace" / "external_baseline_official_result_bundles" / "validation_scale"
+    (bundle_root / "videoseal" / "records").mkdir(parents=True)
+    (bundle_root / "videoseal" / "records" / "sample.json").write_text("{}", encoding="utf-8")
+    layout = {
+        "drive_project_root": str(drive_root),
+        "workflow_profile": "validation_scale",
+        "stage_package_id": "external_baseline_formal_scoring_colab",
+        "drive_run_root": str(run_root),
+        "external_baseline_official_result_bundle_root": str(bundle_root),
+        "local_stage_package_cache_root": str(tmp_path / "local_cache"),
+        "local_stage_workspace_root": str(tmp_path / "workspace"),
+    }
+
+    result = publish_colab_stage_package(
+        layout,
+        notebook_role="external_baseline_formal_scoring",
+        baseline_id=None,
+        include_videos=False,
+    )
+
+    assert result["stage_package_publish_status"] == "published"
+    assert "helper" in result["drive_stage_package_zip"].replace("\\", "/")
+
+
+@pytest.mark.quick
+def test_history_drive_packager_is_noop_in_stage_zip_mode() -> None:
+    """local_zip 模式下历史 drive packager 只能成为 no-op, 实际落盘由阶段 zip 完成。"""
+
     command = build_drive_packaging_command(
         {
             "stage_package_handoff_mode": "local_zip",
             "drive_run_root": "/content/SSTW_stage_workspace/runs/validation_scale",
-            "drive_package_dir": "/content/drive/MyDrive/SSTW/packages/generative_video_model_probe/validation_scale",
+            "drive_package_dir": "/content/drive/MyDrive/SSTW/validation_scale/generative_video_runtime_colab",
         }
     )
 
     assert command[1] == "-c"
     assert "skip legacy drive packager" in command[2]
     assert "generative_video_drive_packager.py" in command[2]
+
+
+@pytest.mark.quick
+def test_external_baseline_package_contains_only_current_baseline_bundle_and_respects_video_flag(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """baseline 专用 Notebook 只能打包当前 baseline official bundle, 并遵守 include_videos。"""
+
+    monkeypatch.setenv("SSTW_COLAB_STAGE_IO_MODE", "local_zip")
+    drive_root = tmp_path / "drive" / "SSTW"
+    workspace = tmp_path / "workspace"
+    run_root = workspace / "runs" / "generative_video_model_probe" / "validation_scale"
+    decision_dir = run_root / "artifacts" / "external_baseline_formal_reference"
+    decision_dir.mkdir(parents=True)
+    (decision_dir / "videoseal_formal_reference_decision.json").write_text(
+        json.dumps(
+            {
+                "manifest_kind": "modern_external_baseline_formal_reference_decision",
+                "baseline_id": "videoseal",
+                "formal_reference_decision": "PASS",
+                "formal_reference_status": "official_reference_bundle_complete",
+            }
+        ),
+        encoding="utf-8",
+    )
+    bundle_root = workspace / "external_baseline_official_result_bundles" / "validation_scale"
+    (bundle_root / "videoseal" / "records").mkdir(parents=True)
+    (bundle_root / "videoseal" / "records" / "sample.json").write_text("{}", encoding="utf-8")
+    (bundle_root / "videoseal" / "official_outputs" / "wm" / "frames").mkdir(parents=True)
+    (bundle_root / "videoseal" / "official_outputs" / "wm.mp4").write_bytes(b"video")
+    (bundle_root / "videoseal" / "official_outputs" / "wm" / "frames" / "000.png").write_bytes(b"frame")
+    (bundle_root / "vidsig" / "records").mkdir(parents=True)
+    (bundle_root / "vidsig" / "records" / "other.json").write_text("{}", encoding="utf-8")
+    layout = {
+        "drive_project_root": str(drive_root),
+        "workflow_profile": "validation_scale",
+        "stage_package_id": "external_baseline_formal_reference_videoseal",
+        "drive_run_root": str(run_root),
+        "external_baseline_official_result_bundle_root": str(bundle_root),
+        "local_stage_package_cache_root": str(tmp_path / "local_cache"),
+        "local_stage_workspace_root": str(workspace),
+    }
+
+    result = publish_colab_stage_package(
+        layout,
+        notebook_role="external_baseline_formal_scoring",
+        baseline_id="videoseal",
+        include_videos=False,
+    )
+
+    assert result["stage_package_publish_status"] == "published"
+    assert "validation_scale/external_baseline_official_reference" in result["drive_stage_package_zip"].replace("\\", "/")
+    with zipfile.ZipFile(result["drive_stage_package_zip"]) as archive:
+        names = archive.namelist()
+    assert any("videoseal/records/sample.json" in name for name in names)
+    assert any("videoseal_formal_reference_decision.json" in name for name in names)
+    assert not any("vidsig/records/other.json" in name for name in names)
+    assert not any(name.endswith(".mp4") for name in names)
+    assert not any(name.endswith("000.png") for name in names)
+
+
+@pytest.mark.quick
+def test_external_baseline_resource_zip_is_hydrated_to_local_resource_root(tmp_path: Path) -> None:
+    """Drive resources 中的 zip 包应复制并解压到本地资源根目录。"""
+
+    remote_root = tmp_path / "drive" / "SSTW" / "resources" / "external_baseline"
+    remote_root.mkdir(parents=True)
+    package_zip = remote_root / "vidsig_resources.zip"
+    with zipfile.ZipFile(package_zip, mode="w") as archive:
+        archive.writestr("resources/external_baseline/vidsig/ckpts/model.bin", b"checkpoint")
+    local_root = tmp_path / "workspace" / "resources" / "external_baseline"
+    layout = {
+        "external_baseline_resource_root_remote": str(remote_root),
+        "external_baseline_resource_root_local": str(local_root),
+        "local_stage_package_cache_root": str(tmp_path / "local_cache"),
+    }
+
+    result = hydrate_external_baseline_resource_packages(layout)
+
+    assert result["external_baseline_resource_package_restore_status"] == "restored"
+    assert result["resource_package_count"] == 1
+    assert (local_root / "vidsig" / "ckpts" / "model.bin").read_bytes() == b"checkpoint"

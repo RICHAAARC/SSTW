@@ -153,7 +153,7 @@ def test_sampling_time_constraint_colab_workflow_uses_drive_layout() -> None:
 
     assert layout["drive_project_root"] == "/content/drive/MyDrive/SSTW"
     assert layout["drive_run_root"] == "/content/drive/MyDrive/SSTW/runs/sampling_time_constraint_colab"
-    assert layout["drive_package_dir"] == "/content/drive/MyDrive/SSTW/packages/sampling_time_constraint"
+    assert layout["drive_package_dir"] == "/content/drive/MyDrive/SSTW/helper"
 
     runtime_command = build_sampling_constraint_colab_runtime_command(layout, "recommended")
     formal_command = build_formal_metric_command(layout)
@@ -200,8 +200,8 @@ def test_sampling_time_constraint_colab_notebook_calls_repository_modules() -> N
     assert "打包到 Google Drive packages/" not in source
     assert "package_dir = Path(layout['drive_package_dir'])" not in source
     assert "stage_package_dir = Path(layout['stage_package_dir'])" in source
-    assert "stage_package_latest.zip" in source
-    assert "stage_package_latest_manifest.json" in source
+    assert "drive_stage_package_zip" in source
+    assert "stage_package_manifest_path" in source
     assert "active_local_layout" in source
     assert "PROFILE = 'recommended'" in source
     assert "Wan-AI/Wan2.1-T2V-1.3B-Diffusers" in source

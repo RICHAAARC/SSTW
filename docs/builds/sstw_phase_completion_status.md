@@ -1497,9 +1497,12 @@ workflow_stage_plan
 ```text
 paper_workflow/colab_notebooks/motion_threshold_calibration_colab.ipynb
 paper_workflow/colab_notebooks/generative_video_runtime_colab.ipynb
-paper_workflow/colab_notebooks/external_baseline_formal_scoring_colab.ipynb
+paper_workflow/colab_notebooks/*_formal_reference_colab.ipynb
 paper_workflow/colab_notebooks/paper_gate_and_package_colab.ipynb
 ```
+
+`external_baseline_formal_scoring_colab.ipynb` 仅作为诊断或历史聚合入口保留, 不再是
+validation-scale 推荐主流程的必跑 Notebook。
 
 阶段性状态为:
 

@@ -310,8 +310,8 @@ def test_split_colab_notebooks_are_profile_driven() -> None:
         assert "layout['drive_package_dir']" not in source
         assert "package_dir = Path(layout['drive_package_dir'])" not in source
         assert "stage_package_dir = Path(layout['stage_package_dir'])" in source
-        assert "stage_package_latest.zip" in source
-        assert "stage_package_latest_manifest.json" in source
+        assert "drive_stage_package_zip" in source
+        assert "stage_package_manifest_path" in source
         assert "active_local_layout" in source
         assert "stage_enabled(" in source
         assert "drive.mount('/content/drive')" in source
@@ -332,6 +332,7 @@ def test_split_colab_notebooks_are_profile_driven() -> None:
     assert "build_external_baseline_official_runtime_closure_command" in baseline_source
     assert "external_baseline_official_runtime_closure_requirements.json" in baseline_source
     assert "build_external_baseline_official_result_bundle_preflight_command" in baseline_source
+    assert "build_external_baseline_comparison_command" in gate_source
     assert "build_pilot_paper_gate_command" in gate_source
     assert "build_validation_scale_gate_command" in gate_source
     assert not Path("paper_workflow/colab_notebooks/validation_scale_formal_gate_colab.ipynb").exists()
@@ -378,18 +379,19 @@ def test_colab_workflow_readme_documents_validation_scale_execution() -> None:
 
     assert "motion_threshold_calibration_colab.ipynb" in text
     assert "generative_video_runtime_colab.ipynb" in text
-    assert "external_baseline_formal_scoring_colab.ipynb" in text
+    assert "videoseal_formal_reference_colab.ipynb" in text
+    assert "sigmark_formal_reference_colab.ipynb" in text
     assert "paper_gate_and_package_colab.ipynb" in text
     assert "当前不保留单 Notebook 全流程入口" in text
     assert "validation_scale_formal_gate_colab.ipynb" not in text
     assert "SSTW_VALIDATION_SCALE_RUN_THROUGH_TEST" not in text
     assert text.index("motion_threshold_calibration_colab.ipynb") < text.index("generative_video_runtime_colab.ipynb")
-    assert text.index("generative_video_runtime_colab.ipynb") < text.index("external_baseline_formal_scoring_colab.ipynb")
-    assert text.index("external_baseline_formal_scoring_colab.ipynb") < text.index("paper_gate_and_package_colab.ipynb")
+    assert text.index("generative_video_runtime_colab.ipynb") < text.index("6 个 modern external baseline formal reference Notebook")
+    assert text.index("6 个 modern external baseline formal reference Notebook") < text.index("paper_gate_and_package_colab.ipynb")
     assert "SSTW_WORKFLOW_PROFILE_VALUE = 'validation_scale'" in text
     assert "SSTW_WORKFLOW_PROFILE_VALUE = 'pilot_paper'" in text
     assert "SSTW_COLAB_STAGE_IO_MODE" in text
-    assert "stage_packages" in text
+    assert "external_baseline_official_reference" in text
     assert "/content/SSTW_stage_workspace" in text
     assert "不要把该 Notebook 切换到 `validation_scale` 或 `pilot_paper`" in text
     assert "SSTW_VIDEOSHIELD_EVAL_COMMAND" in text
@@ -408,7 +410,7 @@ def test_colab_workflow_readme_documents_validation_scale_execution() -> None:
     assert "/content/drive/MyDrive/SSTW" in text
     assert r"G:\我的云端硬盘\SSTW" in text
     assert "不要手写 records" in text
-    assert "<utc_time>_<short_commit>" in text
+    assert "<workflow_profile>_<stage_package_id>_<YYYYMMDD_HHMMSS>_<git_short_commit>" in text
     assert "SSTW 工作量进度" in text
     assert "Wan2.1 生成: len(plan)" in text
     assert "runtime detection 视频扫描: len(runtime_attack_records)" in text
@@ -435,6 +437,7 @@ def test_notebook_workflow_profile_config_supports_profile_switching() -> None:
     assert validation["protocol_target_fpr"] == validation_protocol["target_fpr"]
     assert validation["target_fpr_source_config_path"] == validation["protocol_config_path"]
     assert "motion_threshold_reuse_check" in build_workflow_stage_plan("validation_scale", "paper_gate_and_package")
+    assert "external_baseline_comparison" in build_workflow_stage_plan("validation_scale", "paper_gate_and_package")
     assert "validation_scale_gate" in build_workflow_stage_plan("validation_scale", "paper_gate_and_package")
     assert "pilot_paper_gate" not in build_workflow_stage_plan("validation_scale", "paper_gate_and_package")
     assert validation["notebook_path"] == "paper_workflow/colab_notebooks/paper_gate_and_package_colab.ipynb"
@@ -454,6 +457,7 @@ def test_notebook_workflow_profile_config_supports_profile_switching() -> None:
     assert pilot["target_fpr"] == pilot_protocol["target_fpr"]
     assert pilot["protocol_target_fpr"] == pilot_protocol["target_fpr"]
     assert "motion_threshold_reuse_check" in build_workflow_stage_plan("pilot_paper", "paper_gate_and_package")
+    assert "external_baseline_comparison" in build_workflow_stage_plan("pilot_paper", "paper_gate_and_package")
     assert "pilot_paper_gate" in build_workflow_stage_plan("pilot_paper", "paper_gate_and_package")
     assert "validation_scale_gate" not in build_workflow_stage_plan("pilot_paper", "paper_gate_and_package")
 
@@ -482,11 +486,11 @@ def test_profile_specific_drive_layout_prevents_result_mixing(tmp_path: Path) ->
     )
 
     assert validation_layout["drive_run_root"].endswith("/runs/generative_video_model_probe/validation_scale")
-    assert validation_layout["drive_package_dir"].endswith("/packages/generative_video_model_probe/validation_scale")
+    assert validation_layout["drive_package_dir"].replace("\\", "/").endswith("/validation_scale/generative_video_runtime_colab")
     assert validation_layout["motion_threshold_artifact_run_root"].endswith("/runs/generative_video_model_probe/motion_calibration")
     assert validation_layout["runtime_profile"] == "validation_scale"
     assert pilot_layout["drive_run_root"].endswith("/runs/generative_video_model_probe/pilot_paper")
-    assert pilot_layout["drive_package_dir"].endswith("/packages/generative_video_model_probe/pilot_paper")
+    assert pilot_layout["drive_package_dir"].replace("\\", "/").endswith("/pilot_paper/generative_video_runtime_colab")
     assert pilot_layout["motion_threshold_artifact_run_root"].endswith("/runs/generative_video_model_probe/motion_calibration")
     assert pilot_layout["runtime_profile"] == "pilot_paper"
     assert validation_layout["drive_run_root"] != pilot_layout["drive_run_root"]
@@ -532,9 +536,9 @@ def test_stage_package_sync_round_trips_local_run_without_drive_small_file_reads
 
     assert published["stage_package_publish_status"] == "published"
     assert Path(published["drive_stage_package_zip"]).exists()
-    assert Path(published["latest_drive_stage_package_zip"]).exists()
-    latest_manifest = json.loads(Path(published["latest_stage_package_manifest_path"]).read_text(encoding="utf-8"))
-    assert latest_manifest["stage_package_publish_status"] == "published"
+    assert published["latest_drive_stage_package_zip"] == ""
+    stage_manifest = json.loads(Path(published["stage_package_manifest_path"]).read_text(encoding="utf-8"))
+    assert stage_manifest["stage_package_publish_status"] == "published"
     assert published["stage_package_entry_count"] >= 3
     assert published["stage_package_id"] == stage_package_id_for_notebook("generative_video_runtime")
 
@@ -593,13 +597,11 @@ def test_validation_scale_restores_motion_calibration_stage_package_from_calibra
     )
 
     assert published["workflow_profile"] == "motion_calibration"
-    assert Path(published["latest_drive_stage_package_zip"]).exists()
+    assert Path(published["drive_stage_package_zip"]).exists()
     assert not (
         drive_root
-        / "stage_packages"
         / "validation_scale"
         / "motion_threshold_calibration_colab"
-        / "stage_package_latest.zip"
     ).exists()
 
     monkeypatch.setenv("SSTW_LOCAL_STAGE_WORKSPACE_ROOT", str(tmp_path / "validation_workspace"))
@@ -626,7 +628,7 @@ def test_validation_scale_restores_motion_calibration_stage_package_from_calibra
     assert restore_manifest["required_stage_package_ids"] == ["motion_threshold_calibration_colab"]
     assert restore_manifest["stage_package_restore_rows"][0]["stage_package_source_workflow_profile"] == "motion_calibration"
     assert restore_manifest["stage_package_restore_rows"][0]["stage_package_target_workflow_profile"] == "validation_scale"
-    assert "stage_packages/motion_calibration/motion_threshold_calibration_colab" in (
+    assert "motion_threshold/motion_calibration_motion_threshold_calibration_colab" in (
         restore_manifest["stage_package_restore_rows"][0]["drive_stage_package_zip"].replace("\\", "/")
     )
 
@@ -952,7 +954,7 @@ def test_generative_video_drive_layout_uses_sstw_drive_root() -> None:
     assert layout["drive_project_root"] == "/content/drive/MyDrive/SSTW"
     assert layout["drive_dataset_root"].startswith("/content/drive/MyDrive/SSTW/datasets/")
     assert layout["drive_run_root"].startswith("/content/drive/MyDrive/SSTW/runs/")
-    assert layout["drive_package_dir"].startswith("/content/drive/MyDrive/SSTW/packages/")
+    assert layout["drive_package_dir"].startswith("/content/drive/MyDrive/SSTW/validation_scale/")
     assert layout["drive_log_dir"].startswith("/content/drive/MyDrive/SSTW/logs/")
 
 

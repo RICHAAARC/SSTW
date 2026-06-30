@@ -911,7 +911,7 @@ def run_modern_external_baseline_formal_reference_plan(
         layout,
         notebook_role=DEFAULT_NOTEBOOK_ROLE_FOR_LAYOUT,
         baseline_id=config.baseline_id,
-        include_videos=True,
+        include_videos=os.environ.get("SSTW_INCLUDE_VIDEOS_IN_PACKAGE", "true").lower() == "true",
     )
     decision["stage_package_publish_result"] = package_manifest
     _write_json(decision_path, decision)

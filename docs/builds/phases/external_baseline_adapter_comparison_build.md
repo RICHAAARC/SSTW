@@ -156,7 +156,7 @@ claim_support_status: measured_formal_self_contained_results_required_for_valida
 3. 运行 `external_baseline.official_runtime_closure`, 写出 `artifacts/external_baseline_official_runtime_closure_requirements.json`; 若 Google Drive 默认资源路径已存在, Notebook 应自动应用其中的 `environment_updates`。
 4. 配置 `SSTW_VIDEOSHIELD_EVAL_COMMAND`、`SSTW_SIGMARK_EVAL_COMMAND`、`SSTW_SPDMARK_EVAL_COMMAND`、`SSTW_VIDEOMARK_EVAL_COMMAND`、`SSTW_VIDSIG_EVAL_COMMAND` 和 `SSTW_VIDEOSEAL_EVAL_COMMAND`, 或配置 repository bridge + official inner command。
 5. 按顺序运行 6 个 `*_formal_reference_colab.ipynb`, 以同一 prompt / seed / attack 协议为锚点, 让每个 baseline 在自己的 Notebook 内完成官方流程、生成项目内 official bundle, 并默认调用统一 runner 转写当前可用的 `measured_formal` records。
-6. 在 6 个 official bundle 全部完成后运行 `paper_workflow/colab_notebooks/external_baseline_formal_scoring_colab.ipynb`, 执行全量统一转写、self-containment 判定和打包。
+6. 在 6 个 official bundle 全部完成后运行 `paper_workflow/colab_notebooks/paper_gate_and_package_colab.ipynb`, 由 paper gate 恢复全部 official reference 阶段包后执行全量统一转写、self-containment 判定和打包。
 7. 写出 `artifacts/external_baseline_self_containment_decision.json`, 逐 baseline 记录 clone / build / run / adapt / record 状态。
 8. 仅当全部现代 baseline 都产生项目内自包含 governed `measured_formal` records 后, 才允许 validation_scale gate 通过; validation_scale 通过后还必须生成 validation_scale_to_pilot_paper_transition_decision 才能进入 pilot_paper, full_paper 仍需 pilot_paper gate、pilot_paper_to_full_paper_transition_decision 与 full_paper_result_checker。
 ```
@@ -195,8 +195,7 @@ external_baseline_threshold 或 threshold
 ```text
 generative_video_runtime_colab.ipynb: 在真实 GPU 生成前执行 baseline command preflight, 但不运行 baseline comparison。
 *_formal_reference_colab.ipynb: 读取同一 workflow_profile 的 run_root, 逐 baseline 执行 source intake、project clone / build / run / adapt、official bundle 生成与统一 measured_formal 转写。
-external_baseline_formal_scoring_colab.ipynb: 读取同一 workflow_profile 的 run_root, 在 6 个 bundle 完成后执行全量统一转写、self-containment 判定与打包。
-paper_gate_and_package_colab.ipynb: 只读取 comparison records 和 execution manifest, 不直接调用第三方命令。
+paper_gate_and_package_colab.ipynb: 读取同一 workflow_profile 的 run_root, 恢复 6 个 official reference 阶段包后执行全量统一转写、self-containment 判定与最终 gate 打包。该 Notebook 只消费项目内 official bundle 和 governed manifests, 不直接调用第三方命令。`external_baseline_formal_scoring_colab.ipynb` 仅作为诊断或历史聚合入口。
 ```
 
 profile、Drive 目录和 stage plan 由下述配置统一控制:

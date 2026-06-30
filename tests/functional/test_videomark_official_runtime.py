@@ -80,6 +80,8 @@ def _write_fake_videomark_source(source_dir: Path) -> None:
                 "def main():",
                 "    for item in tqdm(range(4)):",
                 "        pass",
+                "if __name__ == '__main__':",
+                "    parser.add_argument('--model_name', default='i2vgen-xl')",
             ]
         )
         + "\n",
@@ -123,11 +125,13 @@ def test_videomark_runtime_dry_run_builds_prompt_set_and_commands(tmp_path: Path
     runtime_text = runtime_embedding.read_text(encoding="utf-8")
     assert "SSTW_VIDEOMARK_PROMPT_VARIANTS" in runtime_text
     assert "decode_message = np.full((len(message_bits[0]),), -1)" in runtime_text
+    assert "parser.add_argument('--model_path', default=None)" in runtime_text
     assert {
         row["patch_name"]: row["patch_status"] for row in manifest["patch_manifest"]["patch_results"]
     } == {
         "prompt_variant_count_env_guard": "patched_runtime_copy",
         "undetected_decode_message_guard": "patched_runtime_copy",
+        "embedding_model_path_cli_arg_guard": "patched_runtime_copy",
     }
 
 

@@ -52,6 +52,11 @@ EMBEDDING_UNDETECTED_REPLACEMENT = (
     "        decode_message = Decode(decoding_key, reversed_prc)\n"
     "        decode_message_str = bits_to_string(decode_message)"
 )
+EMBEDDING_MODEL_PATH_ARG_TARGET = "    parser.add_argument('--model_name', default='i2vgen-xl')"
+EMBEDDING_MODEL_PATH_ARG_REPLACEMENT = (
+    "    parser.add_argument('--model_name', default='i2vgen-xl')\n"
+    "    parser.add_argument('--model_path', default=None)"
+)
 
 
 @dataclass(frozen=True)
@@ -322,6 +327,14 @@ def _patch_videomark_runtime_source(runtime_source_dir: Path) -> dict[str, Any]:
         patch_results.append({"patch_name": "undetected_decode_message_guard", "patch_status": "patched_runtime_copy"})
     else:
         patch_results.append({"patch_name": "undetected_decode_message_guard", "patch_status": "pattern_missing_no_change"})
+
+    if "parser.add_argument('--model_path'" in text or 'parser.add_argument("--model_path"' in text:
+        patch_results.append({"patch_name": "embedding_model_path_cli_arg_guard", "patch_status": "already_patched"})
+    elif EMBEDDING_MODEL_PATH_ARG_TARGET in text:
+        text = text.replace(EMBEDDING_MODEL_PATH_ARG_TARGET, EMBEDDING_MODEL_PATH_ARG_REPLACEMENT, 1)
+        patch_results.append({"patch_name": "embedding_model_path_cli_arg_guard", "patch_status": "patched_runtime_copy"})
+    else:
+        patch_results.append({"patch_name": "embedding_model_path_cli_arg_guard", "patch_status": "pattern_missing_no_change"})
 
     embedding_path.write_text(text, encoding="utf-8")
     status = "patched_runtime_copy" if any(

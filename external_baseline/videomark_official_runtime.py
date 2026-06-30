@@ -32,10 +32,16 @@ DEFAULT_NUM_BIT = 512
 DEFAULT_NUM_INFERENCE_STEPS = 50
 DEFAULT_PROMPT_VARIANTS = 1
 DEFAULT_DETECTION_THRESHOLD = 0.5
+SAFE_OUTPUT_DIR_NAME = "official_outputs_safe_prompt_digest_v1"
 EMBEDDING_VARIANT_LOOP_TARGET = "    for item in tqdm(range(4)):"
 EMBEDDING_VARIANT_LOOP_REPLACEMENT = (
     "    variant_count = int(os.environ.get(\"SSTW_VIDEOMARK_PROMPT_VARIANTS\", \"4\"))\n"
     "    for item in tqdm(range(variant_count)):"
+)
+EMBEDDING_VIDEO_ID_TARGET = "            video_id = current_prompt.replace(' ', '_')"
+EMBEDDING_VIDEO_ID_REPLACEMENT = (
+    "            video_id_digest = __import__('hashlib').sha1(current_prompt.encode('utf-8')).hexdigest()[:12]\n"
+    "            video_id = f\"prompt_{i:04d}_{video_id_digest}\""
 )
 EMBEDDING_UNDETECTED_TARGET = (
     "    if not detection_result:\n"
@@ -216,8 +222,10 @@ def build_default_videomark_official_config_from_env(
     if not output_root:
         output_root = str(Path(bundle_root) / BASELINE_ID / "official_runtime")
     output_path = os.environ.get("SSTW_VIDEOMARK_OFFICIAL_OUTPUT_DIR", "").strip()
-    if not output_path:
-        output_path = str(Path(bundle_root) / BASELINE_ID / "official_outputs")
+    legacy_default_output_path = Path(bundle_root) / BASELINE_ID / "official_outputs"
+    safe_default_output_path = Path(bundle_root) / BASELINE_ID / SAFE_OUTPUT_DIR_NAME
+    if not output_path or Path(output_path) == legacy_default_output_path:
+        output_path = str(safe_default_output_path)
     max_records_text = os.environ.get("SSTW_VIDEOMARK_REFERENCE_MAX_RECORDS", "").strip()
     effective_max_records = int(max_records_text) if max_records_text else max_records
     return VideoMarkOfficialRuntimeConfig(
@@ -319,6 +327,14 @@ def _patch_videomark_runtime_source(runtime_source_dir: Path) -> dict[str, Any]:
         patch_results.append({"patch_name": "prompt_variant_count_env_guard", "patch_status": "patched_runtime_copy"})
     else:
         patch_results.append({"patch_name": "prompt_variant_count_env_guard", "patch_status": "pattern_missing_no_change"})
+
+    if "prompt_{i:04d}_" in text and "video_id_digest" in text:
+        patch_results.append({"patch_name": "safe_prompt_digest_video_id_guard", "patch_status": "already_patched"})
+    elif EMBEDDING_VIDEO_ID_TARGET in text:
+        text = text.replace(EMBEDDING_VIDEO_ID_TARGET, EMBEDDING_VIDEO_ID_REPLACEMENT, 1)
+        patch_results.append({"patch_name": "safe_prompt_digest_video_id_guard", "patch_status": "patched_runtime_copy"})
+    else:
+        patch_results.append({"patch_name": "safe_prompt_digest_video_id_guard", "patch_status": "pattern_missing_no_change"})
 
     if EMBEDDING_UNDETECTED_REPLACEMENT in text:
         patch_results.append({"patch_name": "undetected_decode_message_guard", "patch_status": "already_patched"})
@@ -662,6 +678,7 @@ def write_videomark_official_bundle_records(
                 "official_baseline_id": BASELINE_ID,
                 "external_baseline_generation_model_id": model_name,
                 "external_baseline_official_execution_mode": "videomark_embedding_extraction_temporal_tamper",
+                "official_output_naming_policy": "safe_prompt_digest_video_id_v1",
                 "official_score_assignment_policy": "aggregate_mean_over_videomark_official_temporal_results_json",
                 "attack_protocol_status": "videomark_official_temporal_tamper_score_reused_for_runtime_attack_anchor",
                 "official_temporal_results_json_path": str(temporal_path),
@@ -815,6 +832,7 @@ def run_videomark_official_runtime(config: VideoMarkOfficialRuntimeConfig) -> di
         "official_output_path": str(output_path),
         "official_repository_url": "https://github.com/KYRIE-LI11/VideoMark",
         "official_execution_mode": "videomark_embedding_extraction_temporal_tamper",
+        "official_output_naming_policy": "safe_prompt_digest_video_id_v1",
         "execution_status": execution_status,
         "execution_failure_reason": execution_failure_reason,
         "dry_run": bool(config.dry_run),

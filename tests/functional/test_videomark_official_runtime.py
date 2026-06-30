@@ -9,6 +9,7 @@ import pytest
 
 from external_baseline.videomark_official_runtime import (
     VideoMarkOfficialRuntimeConfig,
+    build_default_videomark_official_config_from_env,
     run_videomark_official_runtime,
     write_videomark_official_bundle_records,
 )
@@ -79,7 +80,9 @@ def _write_fake_videomark_source(source_dir: Path) -> None:
                 "    return decode_message_str",
                 "def main():",
                 "    for item in tqdm(range(4)):",
-                "        pass",
+                "        for i, row in enumerate(data):",
+                "            current_prompt = row",
+                "            video_id = current_prompt.replace(' ', '_')",
                 "if __name__ == '__main__':",
                 "    parser.add_argument('--model_name', default='i2vgen-xl')",
             ]
@@ -124,15 +127,36 @@ def test_videomark_runtime_dry_run_builds_prompt_set_and_commands(tmp_path: Path
     runtime_embedding = Path(manifest["runtime_source_dir"]) / "embedding_and_extraction.py"
     runtime_text = runtime_embedding.read_text(encoding="utf-8")
     assert "SSTW_VIDEOMARK_PROMPT_VARIANTS" in runtime_text
+    assert "video_id = f\"prompt_{i:04d}_{video_id_digest}\"" in runtime_text
     assert "decode_message = np.full((len(message_bits[0]),), -1)" in runtime_text
     assert "parser.add_argument('--model_path', default=None)" in runtime_text
     assert {
         row["patch_name"]: row["patch_status"] for row in manifest["patch_manifest"]["patch_results"]
     } == {
         "prompt_variant_count_env_guard": "patched_runtime_copy",
+        "safe_prompt_digest_video_id_guard": "patched_runtime_copy",
         "undetected_decode_message_guard": "patched_runtime_copy",
         "embedding_model_path_cli_arg_guard": "patched_runtime_copy",
     }
+
+
+@pytest.mark.quick
+def test_videomark_default_output_path_uses_safe_prompt_digest_policy(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """默认输出目录必须避开旧的长 prompt 目录缓存。"""
+
+    bundle_root = tmp_path / "bundles" / "validation_scale"
+    monkeypatch.setenv("SSTW_VIDEOMARK_OFFICIAL_OUTPUT_DIR", str(bundle_root / "videomark" / "official_outputs"))
+
+    config = build_default_videomark_official_config_from_env(
+        run_root=tmp_path / "runs" / "generative_video_model_probe" / "validation_scale",
+        bundle_root=bundle_root,
+        source_dir=tmp_path / "official_source",
+    )
+
+    assert Path(config.output_path).name == "official_outputs_safe_prompt_digest_v1"
 
 
 @pytest.mark.quick

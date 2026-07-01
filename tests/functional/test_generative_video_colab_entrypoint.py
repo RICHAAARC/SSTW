@@ -25,6 +25,7 @@ from paper_workflow.notebook_utils.generative_video_model_probe_workflow import 
     build_pilot_paper_gate_command,
     build_validation_scale_gate_command,
     default_workflow_profile_for_notebook_role,
+    ensure_drive_layout,
     resolve_notebook_workflow_profile,
     validate_modern_baseline_commands_for_profile,
     validate_modern_baseline_official_bridge_for_profile,
@@ -956,6 +957,29 @@ def test_generative_video_drive_layout_uses_sstw_drive_root() -> None:
     assert layout["drive_run_root"].startswith("/content/drive/MyDrive/SSTW/runs/")
     assert layout["drive_package_dir"].startswith("/content/drive/MyDrive/SSTW/validation_scale/")
     assert layout["drive_log_dir"].startswith("/content/drive/MyDrive/SSTW/logs/")
+
+
+@pytest.mark.quick
+def test_generative_video_local_zip_does_not_precreate_drive_hot_dirs(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """local_zip 模式下主流程 Notebook 不应在 Drive 上预创建空 run / log / dataset 目录。"""
+
+    monkeypatch.setenv("SSTW_COLAB_STAGE_IO_MODE", "local_zip")
+    drive_root = tmp_path / "SSTW"
+
+    layout = ensure_drive_layout(
+        str(drive_root),
+        workflow_profile="validation_scale",
+        notebook_role="generative_video_runtime",
+    )
+
+    assert Path(layout["drive_project_root"]).exists()
+    assert not (drive_root / "runs" / "generative_video_model_probe" / "validation_scale").exists()
+    assert not (drive_root / "logs" / "generative_video_model_probe" / "validation_scale").exists()
+    assert not (drive_root / "datasets" / "generative_video_prompt_suite").exists()
+    assert not (drive_root / "validation_scale" / "generative_video_runtime_colab").exists()
 
 
 @pytest.mark.quick

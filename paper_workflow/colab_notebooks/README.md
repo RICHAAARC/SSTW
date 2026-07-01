@@ -55,6 +55,10 @@ Google Drive: 只保存阶段 zip、stage package manifest 和可复用资源包
 /content/SSTW_stage_packages: 当前 Colab 会话复制过来的 zip 缓存。
 ```
 
+启用 `local_zip` 后, Notebook 初始化阶段不应在 Drive 上预创建 `runs/`、`logs/`
+或 `datasets/` 热路径空目录。只有阶段发布成功时, `publish_colab_stage_package`
+才会创建对应的冷归档目录并写入 zip / manifest。
+
 `SSTW/resources/external_baseline/` 用于保存可复用的 official checkpoint、模型和官方资源。
 若该目录下存在资源 zip, Notebook 会先复制 zip 到 `/content` 本地缓存并解压到本地资源根目录,
 然后把 `SSTW_EXTERNAL_BASELINE_RESOURCE_ROOT` 指向本地路径。SIGMark 的 HunyuanVideo 等大模型资源

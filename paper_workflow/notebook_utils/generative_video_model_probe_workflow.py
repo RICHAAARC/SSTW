@@ -9,7 +9,11 @@ import subprocess
 import sys
 from typing import Any, Mapping
 
-from paper_workflow.colab_utils.stage_package_sync import stage_package_dir, stage_package_id_for_notebook
+from paper_workflow.colab_utils.stage_package_sync import (
+    stage_package_dir,
+    stage_package_id_for_notebook,
+    stage_zip_handoff_enabled,
+)
 from paper_workflow.notebook_utils.streaming_command import run_streaming_command
 
 
@@ -251,6 +255,11 @@ def ensure_drive_layout(
         notebook_role=notebook_role,
         workflow_config_path=workflow_config_path,
     )
+    if stage_zip_handoff_enabled():
+        # local_zip 模式下, run / log / dataset 都会被本地化到 /content。
+        # 此处只确保 Drive 项目根存在, 最终阶段目录由 publish_colab_stage_package 在发布时创建。
+        Path(layout["drive_project_root"]).mkdir(parents=True, exist_ok=True)
+        return layout
     for key, value in layout.items():
         if key.endswith("_dir") or key.endswith("_root"):
             Path(value).mkdir(parents=True, exist_ok=True)

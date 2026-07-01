@@ -12,6 +12,7 @@ from paper_workflow.notebook_utils.flow_model_adapter_preflight_workflow import 
     build_drive_layout,
     build_drive_packaging_command,
     build_wan21_flow_adapter_preflight_command,
+    ensure_drive_layout,
 )
 
 
@@ -29,6 +30,24 @@ def test_wan21_preflight_workflow_uses_dedicated_drive_layout() -> None:
     assert "--num-inference-steps" in command
     assert "4" in command
     assert "scripts/package_results/wan21_flow_adapter_preflight_drive_packager.py" in package_command
+
+
+@pytest.mark.quick
+def test_wan21_preflight_local_zip_does_not_precreate_drive_hot_dirs(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """local_zip 模式下 preflight Notebook 不应在 Drive 上预创建空 run / log 目录。"""
+
+    monkeypatch.setenv("SSTW_COLAB_STAGE_IO_MODE", "local_zip")
+    drive_root = tmp_path / "SSTW"
+
+    layout = ensure_drive_layout(str(drive_root))
+
+    assert Path(layout["drive_project_root"]).exists()
+    assert not (drive_root / "runs" / "wan21_flow_adapter_preflight").exists()
+    assert not (drive_root / "logs" / "wan21_flow_adapter_preflight").exists()
+    assert not (drive_root / "helper").exists()
 
 
 @pytest.mark.quick

@@ -16,6 +16,7 @@ from paper_workflow.notebook_utils.sampling_time_constraint_workflow import (
     build_postprocess_command,
     build_result_check_command,
     build_sampling_constraint_colab_runtime_command,
+    ensure_drive_layout,
 )
 from scripts.check_results.sampling_time_constraint_colab_result_checker import check_sampling_time_constraint_colab_results
 
@@ -167,6 +168,25 @@ def test_sampling_time_constraint_colab_workflow_uses_drive_layout() -> None:
     assert "experiments.sampling_time_constraint.postprocess_runner" in postprocess_command
     assert "scripts/check_results/sampling_time_constraint_colab_result_checker.py" in result_check_command
     assert "scripts/package_results/sampling_time_constraint_drive_packager.py" in package_command
+
+
+@pytest.mark.quick
+def test_sampling_time_constraint_local_zip_does_not_precreate_drive_hot_dirs(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """local_zip 模式下 helper Notebook 不应在 Drive 上预创建空 run / log / dataset 目录。"""
+
+    monkeypatch.setenv("SSTW_COLAB_STAGE_IO_MODE", "local_zip")
+    drive_root = tmp_path / "SSTW"
+
+    layout = ensure_drive_layout(str(drive_root))
+
+    assert Path(layout["drive_project_root"]).exists()
+    assert not (drive_root / "runs" / "sampling_time_constraint_colab").exists()
+    assert not (drive_root / "logs" / "sampling_time_constraint").exists()
+    assert not (drive_root / "datasets" / "generative_video_prompt_suite").exists()
+    assert not (drive_root / "helper").exists()
 
 
 @pytest.mark.quick

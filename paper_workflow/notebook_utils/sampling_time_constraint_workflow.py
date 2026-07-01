@@ -7,6 +7,7 @@ from pathlib import Path, PurePosixPath
 import subprocess
 import sys
 
+from paper_workflow.colab_utils.stage_package_sync import stage_zip_handoff_enabled
 from paper_workflow.notebook_utils.streaming_command import run_streaming_command
 
 DEFAULT_DRIVE_PROJECT_ROOT = "/content/drive/MyDrive/SSTW"
@@ -33,6 +34,11 @@ def build_drive_layout(drive_project_root: str = DEFAULT_DRIVE_PROJECT_ROOT) -> 
 def ensure_drive_layout(drive_project_root: str = DEFAULT_DRIVE_PROJECT_ROOT) -> dict[str, str]:
     """创建 B6 Colab 目标目录并返回路径布局。"""
     layout = build_drive_layout(drive_project_root)
+    if stage_zip_handoff_enabled():
+        # local_zip 模式下, Drive 只作为冷归档根目录使用。run / log / dataset 热路径
+        # 会被 prepare_colab_stage_layout 切到 /content 本地, 因此这里不预创建 Drive 空目录。
+        Path(layout["drive_project_root"]).mkdir(parents=True, exist_ok=True)
+        return layout
     for key, value in layout.items():
         if key.endswith("_dir") or key.endswith("_root"):
             Path(value).mkdir(parents=True, exist_ok=True)

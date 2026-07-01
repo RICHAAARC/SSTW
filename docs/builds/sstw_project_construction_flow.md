@@ -1233,10 +1233,12 @@ Colab 输出应落盘到:
    复制少量上游阶段包到 Colab 本地 workspace。
 2. 模型运行、attack、scoring、adapter 和 result checker 的小文件读写只能发生在
    Colab 本地 workspace, 不应循环读写 Google Drive 小文件。
-3. 阶段完成后由 `publish_colab_stage_package` 统一生成带时间戳的 zip 和 manifest
+3. Notebook 初始化阶段不应在 Drive 上预创建 `runs/`、`logs/` 或 `datasets/`
+   热路径空目录; 这些路径在 `local_zip` 模式下会被映射到 `/content` 本地 workspace。
+4. 阶段完成后由 `publish_colab_stage_package` 统一生成带时间戳的 zip 和 manifest
    并写回 Drive。默认保留时间戳包, 不再写固定 latest 小入口。
-4. 旧版 `packages/` 目录不再作为 Notebook 间自动交接入口。
-5. failed 或未闭合的 `external_baseline_formal_reference_*` 阶段只能写阻断 manifest,
+5. 旧版 `packages/` 目录不再作为 Notebook 间自动交接入口。
+6. failed 或未闭合的 `external_baseline_formal_reference_*` 阶段只能写阻断 manifest,
    不得保存可被后续门禁恢复的 zip。这样可以防止失败运行占用大量 Drive 空间, 也防止
    后续 Notebook 误用旧 external baseline 输出。
 

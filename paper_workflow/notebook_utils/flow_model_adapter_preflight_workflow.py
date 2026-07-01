@@ -7,6 +7,7 @@ from pathlib import Path, PurePosixPath
 import subprocess
 import sys
 
+from paper_workflow.colab_utils.stage_package_sync import stage_zip_handoff_enabled
 from paper_workflow.notebook_utils.streaming_command import run_streaming_command
 
 
@@ -36,6 +37,11 @@ def build_drive_layout(drive_project_root: str = DEFAULT_DRIVE_PROJECT_ROOT) -> 
 def ensure_drive_layout(drive_project_root: str = DEFAULT_DRIVE_PROJECT_ROOT) -> dict[str, str]:
     """创建真实 Wan2.1 GPU preflight 的 Google Drive 目录。"""
     layout = build_drive_layout(drive_project_root)
+    if stage_zip_handoff_enabled():
+        # local_zip 模式下, helper Notebook 的中间结果只写入 /content 本地 workspace。
+        # Drive 上只保留最终 helper 阶段 zip, 避免产生空的 runs / logs 目录。
+        Path(layout["drive_project_root"]).mkdir(parents=True, exist_ok=True)
+        return layout
     for key, value in layout.items():
         if key.endswith("_dir") or key.endswith("_root"):
             Path(value).mkdir(parents=True, exist_ok=True)

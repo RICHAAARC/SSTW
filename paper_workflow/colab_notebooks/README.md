@@ -61,8 +61,9 @@ Google Drive: 只保存阶段 zip、stage package manifest 和可复用资源包
 
 `SSTW/resources/external_baseline/` 用于保存可复用的 official checkpoint、模型和官方资源。
 若该目录下存在资源 zip, Notebook 会先复制 zip 到 `/content` 本地缓存并解压到本地资源根目录,
-然后把 `SSTW_EXTERNAL_BASELINE_RESOURCE_ROOT` 指向本地路径。SIGMark 的 HunyuanVideo 等大模型资源
-应优先以资源包形式保存, 避免运行时循环读取 Google Drive 小文件。
+然后把 `SSTW_EXTERNAL_BASELINE_RESOURCE_ROOT` 指向本地路径。SIGMark 的 HunyuanVideo、
+VidSig 的 message decoder / VAE checkpoint 等可复用资源应优先以资源包形式保存,
+避免运行时循环读取 Google Drive 小文件。
 
 每个阶段完成后会额外写出阶段交接包:
 
@@ -360,6 +361,19 @@ SSTW runtime prompt 构造官方 prompt set, 生成 `*-bit_accuracy.npz`, 再写
 project-owned official bundle。它仍不直接写 `metric_status: measured_formal`; 正式记录仍由
 统一 external baseline runner 转写。
 
+VidSig 的 `vidsig_formal_reference_colab.ipynb` 也使用项目内官方流程运行器:
+
+```text
+external_baseline/vidsig_official_runtime.py
+```
+
+该运行器默认执行 VidSig 官方 `generate_ms.py -> attack.py` 路径: 先用同一批
+SSTW runtime prompt / seed 生成 VidSig 自己的 clean / watermarked videos, 再对
+VidSig watermarked videos 应用同名项目 runtime attack, 最后调用官方 `attack.py`
+生成 project-owned official bundle。该设计的主要考虑在于 VidSig 是生成过程中嵌入水印的方法,
+正式比较不能把 SSTW / Wan 生成的视频直接送入 VidSig detector 后当作 baseline 结果。
+直接检测给定视频的 adapter 路径仅保留为显式诊断入口, 默认 fail-closed。
+
 内部官方命令必须把官方 detector / extractor 的输出写入:
 
 ```text
@@ -410,6 +424,7 @@ SSTW_SPDMARK_EXTRACTOR_PATH
 SSTW_SPDMARK_GT_BITS_PATH
 SSTW_VIDEOMARK_TEMPORAL_RESULTS_JSON
 SSTW_VIDSIG_MSG_DECODER_PATH
+SSTW_VIDSIG_VAE_CHECKPOINT_PATH
 ```
 
 `SSTW_VIDEOSEAL_OFFICIAL_EVAL_COMMAND` 默认可直接调用 VideoSeal 官方 Python API,
@@ -425,9 +440,14 @@ SSTW_VIDSIG_MSG_DECODER_PATH
 ```python
 import os
 os.environ["SSTW_EXTERNAL_BASELINE_OFFICIAL_RESULT_BUNDLE_ROOT"] = (
-    "/content/drive/MyDrive/SSTW/external_baseline_official_result_bundles/validation_scale"
+    "/content/SSTW_stage_workspace/external_baseline_official_result_bundles/validation_scale"
 )
 ```
+
+在 `local_zip` 模式下, 该路径通常由 Notebook layout 自动指向本地 workspace。不要把
+热路径直接设置到 Google Drive 上循环读写大量小文件; 阶段结束时 Notebook 会把完整
+official bundle 打包成单个 zip 保存到
+`/content/drive/MyDrive/SSTW/<workflow_profile>/external_baseline_official_reference/`。
 
 每个 baseline 的结果 JSON 只能由 formal reference Notebook、repository official adapter
 或 official bundle generator 写入, 命名位置可采用以下任一形式:

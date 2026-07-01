@@ -81,6 +81,13 @@ maintained info 或项目内 official bundle cache, wrapper 会失败, 不会输
 视频相似度、SSTW 分数或其他 proxy 分数。用户也可以通过
 `SSTW_<BASELINE>_NATIVE_EVAL_COMMAND` 覆盖单个 baseline 的官方原生命令。
 
+VidSig 是特殊边界: 它属于生成过程中嵌入签名的方法, 因此默认 adapter 不允许把
+SSTW / Wan 生成视频直接送入 VidSig detector 后输出正式 baseline 分数。VidSig 正式路径
+必须由 `external_baseline/vidsig_official_runtime.py` 先运行官方 `generate_ms.py`
+生成 VidSig 自己的 clean / watermarked videos, 再施加项目 runtime attack, 最后调用
+官方 `attack.py` 写出 project-owned official bundle。该 bundle 随后由统一 runner
+转写为 `metric_status: measured_formal` records。
+
 ## repository-owned 官方结果缓存
 
 部分现代视频水印 baseline 绑定特定生成模型、训练得到的 extractor、message decoder、
@@ -121,22 +128,27 @@ official_execution_manifest_path
 
 ```bash
 python -m external_baseline.official_resource_bootstrap \
-  --run-root /content/drive/MyDrive/SSTW/runs/generative_video_model_probe/validation_scale \
+  --run-root /content/SSTW_stage_workspace/runs/generative_video_model_probe/validation_scale \
   --resource-root /content/drive/MyDrive/SSTW/resources/external_baseline
 
 python -m external_baseline.official_runtime_closure \
-  --run-root /content/drive/MyDrive/SSTW/runs/generative_video_model_probe/validation_scale \
+  --run-root /content/SSTW_stage_workspace/runs/generative_video_model_probe/validation_scale \
   --resource-root /content/drive/MyDrive/SSTW/resources/external_baseline \
-  --official-result-bundle-root /content/drive/MyDrive/SSTW/external_baseline_official_result_bundles/validation_scale
+  --official-result-bundle-root /content/SSTW_stage_workspace/external_baseline_official_result_bundles/validation_scale
 
 python -m external_baseline.official_bundle_generator \
-  --run-root /content/drive/MyDrive/SSTW/runs/generative_video_model_probe/validation_scale \
-  --bundle-root /content/drive/MyDrive/SSTW/external_baseline_official_result_bundles/validation_scale \
+  --run-root /content/SSTW_stage_workspace/runs/generative_video_model_probe/validation_scale \
+  --bundle-root /content/SSTW_stage_workspace/external_baseline_official_result_bundles/validation_scale \
   --generate-auto-supported
 
 python -m external_baseline.official_result_bundle \
-  --run-root /content/drive/MyDrive/SSTW/runs/generative_video_model_probe/validation_scale
+  --run-root /content/SSTW_stage_workspace/runs/generative_video_model_probe/validation_scale
 ```
+
+在 Colab `local_zip` 模式下, 上述 `run_root` 和 `bundle_root` 是本地热路径。不要把
+重型 official bundle 小文件直接写到 Google Drive 热路径; formal reference Notebook
+会在阶段结束后把完整 bundle 打包为 zip 并保存到
+`SSTW/<workflow_profile>/external_baseline_official_reference/`。
 
 上述顺序体现严格门禁的修复策略: 不是只检查失败, 而是先自动准备可公开资源、再落盘真实运行闭合要求、
 再自动生成可由官方 API 支持的 repository-owned official bundle cache、最后执行 fail-closed preflight。若某个 baseline

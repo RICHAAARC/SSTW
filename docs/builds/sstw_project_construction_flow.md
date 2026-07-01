@@ -2406,8 +2406,11 @@ external_baseline_source_intake
 
 1. `external_baseline_official_resource_bootstrap` 尝试自动安装或下载公开可获得的官方资源,
    例如 VideoSeal 官方 API 依赖、VidSig 公开 checkpoint 等。
-2. `external_baseline_official_bundle_generation` 只对当前仓库可以真实调用官方 API 的
-   baseline 生成 repository-owned official bundle cache。当前主要适用于 VideoSeal 这类 post-hoc 官方水印方法。
+2. `external_baseline_official_bundle_generation` 只对当前仓库可以真实调用官方 API 或
+   项目内官方流程运行器的 baseline 生成 repository-owned official bundle cache。当前可自动尝试
+   VideoSeal、VideoMark 与 VidSig; 其中 VidSig 必须先运行官方 `generate_ms.py` 生成
+   VidSig 自己的 clean / watermarked videos, 再施加项目 runtime attack 并调用官方
+   `attack.py`, 不允许直接检测 SSTW / Wan 视频后伪造成 baseline 结果。
 3. 对需要高显存生成模型、训练得到的 extractor、PRC key、maintained info 或官方中间产物的
    baseline, 自动流程必须写出 `non_runnable_with_governed_reason` 或 `manual_official_resource_required`, 不得用 SSTW 的
    `S_final`、最终判定分数、视频相似度或随机数生成替代分数。

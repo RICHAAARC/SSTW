@@ -59,8 +59,8 @@ def _baseline_runtime_resource_ready(baseline_id: str) -> tuple[bool, str]:
         return True, "spdmark_extractor_and_bits_configured"
     if baseline_id == "videomark" and _path_env_exists("SSTW_VIDEOMARK_TEMPORAL_RESULTS_JSON"):
         return True, "videomark_temporal_results_configured"
-    if baseline_id == "vidsig" and _path_env_exists("SSTW_VIDSIG_MSG_DECODER_PATH"):
-        return True, "vidsig_decoder_configured"
+    if baseline_id == "vidsig":
+        return False, "vidsig_requires_project_owned_generate_ms_official_bundle_or_native_command"
     if baseline_id == "videoseal":
         return True, "videoseal_repository_api_runtime_attempt_allowed"
     return False, "missing_runtime_resource_or_bundle"

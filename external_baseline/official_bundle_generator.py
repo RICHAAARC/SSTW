@@ -329,6 +329,24 @@ def run_official_bundle_generation(
             generation_manifests.append(run_videomark_official_runtime(config))
         except Exception as exc:  # pragma: no cover - 依赖 Colab GPU 和第三方模型
             failures.append({"baseline_id": "videomark", "failure_reason": str(exc)})
+    if generate_auto_supported and "vidsig" in plan["auto_supported_baselines"]:
+        try:
+            from external_baseline.vidsig_official_runtime import (
+                build_default_vidsig_official_config_from_env,
+                run_vidsig_official_runtime,
+            )
+
+            source_dir = Path("external_baseline/primary/vidsig/source")
+            config = build_default_vidsig_official_config_from_env(
+                run_root=root,
+                bundle_root=bundle,
+                source_dir=source_dir,
+                repo_root=".",
+                max_records=None,
+            )
+            generation_manifests.append(run_vidsig_official_runtime(config))
+        except Exception as exc:  # pragma: no cover - 依赖 Colab GPU 和第三方模型
+            failures.append({"baseline_id": "vidsig", "failure_reason": str(exc)})
     decision = {
         "artifact_name": "external_baseline_official_bundle_generation_decision.json",
         "manifest_kind": "external_baseline_official_bundle_generation_decision",

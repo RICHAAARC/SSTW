@@ -29,8 +29,8 @@ checkpoint、key、message、训练权重、官方中间产物和项目 adapter 
 | baseline | 当前 Colab 默认路径能否直接产出 `measured_formal` | 是否需要进一步适配 | 主要缺口 |
 |---|---:|---:|---|
 | VideoSeal | 有条件可以 | 否 | 需要 Colab 成功安装 VideoSeal 依赖并下载官方 checkpoint。 |
-| VidSig | 不能直接完成 | 是 | checkpoint 可获取, 但正式比较需要官方 Video-Signature pipeline 生成签名视频或等价官方中间产物。 |
-| VideoMark | 不能直接完成 | 是 | 需要项目内运行官方 PRC key、embedding、extraction 和 temporal tamper 流程。 |
+| VidSig | 有条件可以 | 否 | 已补齐项目内 `external_baseline.vidsig_official_runtime`, 默认运行官方 `generate_ms.py` 生成 VidSig clean / watermarked videos, 再施加项目 runtime attack 并调用官方 `attack.py`; 仍需要公开 checkpoint、Hugging Face 模型下载和可完成 Text-to-Video 的 GPU。 |
+| VideoMark | 有条件可以 | 否 | 已补齐项目内运行官方 PRC key、embedding、extraction 和 temporal tamper 流程; 仍需要 Colab 成功下载模型并完成官方脚本。 |
 | VideoShield | 不能直接完成 | 是 | 需要官方 generation / inversion / maintained info 流程, 不能只对 SSTW 普通视频后处理检测。 |
 | SPDMark | 不能直接完成 | 是 | 需要训练出的 decoder / extractor 权重和 ground-truth bits。 |
 | SIGMark | 有条件可以 | 否 | 已补齐项目内 `external_baseline.sigmark_official_hunyuan_runtime`, 可运行官方 Hunyuan `gen -> extract` 并转写 official bundle; 仍需要高显存 GPU 或可完成 HunyuanVideo 的 Colab 规格。 |
@@ -58,6 +58,13 @@ SIGMark 是一个特殊项: 其正式参考 Notebook 默认不再只读取预先
 `main.py --mode=gen` 与 `main.py --mode=extract`, 再把官方 bit accuracy 输出写成
 project-owned official bundle。该 bundle 仍不是最终论文记录, 后续必须由统一
 external baseline runner 转写为 `metric_status: measured_formal`。
+
+VidSig 也是特殊项: 它是生成过程中嵌入签名的方法, 因此 adapter 已收紧为 fail-closed。
+正式结果不得来自“把 SSTW / Wan 视频直接送入 VidSig detector”。`vidsig_formal_reference_colab.ipynb`
+默认调用 `external_baseline.vidsig_official_runtime`, 先运行官方 `generate_ms.py` 生成
+VidSig 自己的 clean / watermarked videos, 再对 VidSig watermarked videos 应用同名
+`video_compression_runtime`、`temporal_crop_runtime`、`frame_rate_resampling_runtime`,
+最后调用官方 `attack.py` 写出 project-owned official bundle。
 
 ## 5. 结论
 

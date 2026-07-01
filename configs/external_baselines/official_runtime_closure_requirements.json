@@ -28,23 +28,24 @@
       "source_dir": "external_baseline/primary/videoseal/source"
     },
     {
-      "automatic_bundle_generation_supported_by_sstw": false,
+      "automatic_bundle_generation_supported_by_sstw": true,
       "baseline_id": "vidsig",
       "baseline_name": "VidSig",
-      "colab_default_can_attempt_without_user_files": false,
-      "colab_default_measured_formal_ready_without_user_files": false,
+      "colab_default_can_attempt_without_user_files": true,
+      "colab_default_measured_formal_ready_without_user_files": "depends_on_public_checkpoint_bootstrap_hf_model_download_gpu_memory_and_official_generate_ms_success",
       "external_baseline_command_env_var": "SSTW_VIDSIG_EVAL_COMMAND",
       "external_supplemental_result_bundle_allowed": false,
-      "missing_resource_action": "先运行 official_resource_bootstrap 下载公开 checkpoint; 若要支持论文主表, 还需用 VidSig 官方流程为同一 comparison unit 生成签名视频或 official bundle。",
+      "missing_resource_action": "运行 official_resource_bootstrap 下载公开 checkpoint, 然后由 vidsig_formal_reference_colab.ipynb 调用 external_baseline.vidsig_official_runtime 完成官方 generate_ms.py -> 项目 runtime attack -> 官方 attack.py 流程。",
       "native_command_env_var": "SSTW_VIDSIG_NATIVE_EVAL_COMMAND",
       "official_baseline_command_env_var": "SSTW_VIDSIG_OFFICIAL_EVAL_COMMAND",
-      "official_bundle_policy": "preferred_project_owned_cache; direct adapter requires official checkpoint and meaningful official signature pipeline inputs",
+      "official_bundle_policy": "preferred_project_owned_cache_or_auto_generate_from_official_generate_ms_attack_py_runtime",
       "official_repository_branch": "main",
       "official_repository_url": "https://github.com/hardenyu21/Video-Signature",
       "official_source_dir_candidates": [
         "external_baseline/primary/vidsig/source",
         "/content/SSTW/external_baseline/primary/vidsig/source"
       ],
+      "project_owned_vidsig_runner_module": "external_baseline.vidsig_official_runtime",
       "required_source_files": [
         "src/attack.py",
         "src/generate_ms.py"
@@ -53,22 +54,24 @@
       "resource_env_vars": [
         {
           "default_resource_glob_pattern": "vidsig/**/dec_48b_whit.torchscript.pt",
-          "default_resource_relative_path": "vidsig/dec_48b_whit.torchscript.pt",
+          "default_resource_relative_path": "vidsig/ckpts/msg_decoder/dec_48b_whit.torchscript.pt",
           "env_var": "SSTW_VIDSIG_MSG_DECODER_PATH",
           "project_owned_resource_required": true,
           "required_for_repository_default_adapter": true,
+          "resource_purpose": "VidSig 官方 attack.py 与 generate_ms.py 使用的 message decoder checkpoint",
           "resource_role": "official_message_decoder_checkpoint"
         },
         {
           "default_resource_glob_pattern": "vidsig/**/checkpoint.pth",
-          "default_resource_relative_path": "vidsig/checkpoint.pth",
+          "default_resource_relative_path": "vidsig/ckpts/vae/modelscope/checkpoint.pth",
           "env_var": "SSTW_VIDSIG_VAE_CHECKPOINT_PATH",
           "project_owned_resource_required": true,
-          "required_for_repository_default_adapter": false,
+          "required_for_repository_default_adapter": true,
+          "resource_purpose": "VidSig 官方 generate_ms.py 对 ModelScope TextToVideoSDPipeline 使用的 watermarked VAE checkpoint",
           "resource_role": "official_vae_checkpoint_for_generation_pipeline"
         }
       ],
-      "runtime_support_mode": "public_checkpoint_plus_official_signature_pipeline_or_project_owned_bundle_required",
+      "runtime_support_mode": "project_owned_official_vidsig_generate_ms_runtime_or_repository_generated_bundle",
       "source_dir": "external_baseline/primary/vidsig/source"
     },
     {
@@ -89,6 +92,7 @@
         "external_baseline/primary/videomark/source",
         "/content/SSTW/external_baseline/primary/videomark/source"
       ],
+      "project_owned_videomark_runner_module": "external_baseline.videomark_official_runtime",
       "required_source_files": [
         "embedding_and_extraction.py",
         "temporal_tamper.py",
@@ -106,8 +110,7 @@
         }
       ],
       "runtime_support_mode": "project_owned_official_videomark_runtime_or_repository_generated_bundle",
-      "source_dir": "external_baseline/primary/videomark/source",
-      "project_owned_videomark_runner_module": "external_baseline.videomark_official_runtime"
+      "source_dir": "external_baseline/primary/videomark/source"
     },
     {
       "automatic_bundle_generation_supported_by_sstw": false,

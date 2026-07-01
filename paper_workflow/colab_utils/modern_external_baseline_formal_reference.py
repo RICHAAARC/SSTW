@@ -650,6 +650,39 @@ def _run_videomark_official_reference(
     return run_videomark_official_runtime(videomark_config)
 
 
+def _run_vidsig_official_reference(
+    *,
+    run_root: Path,
+    bundle_root: Path,
+    official_source_dir: Path,
+    repo_root: Path,
+    resource_root: str,
+    max_records: int | None,
+) -> dict[str, Any]:
+    """运行 VidSig 官方 generate_ms -> attack.py bundle 生成路径。
+
+    VidSig 属于生成过程中嵌入水印的方法。项目特定要求是: 不能把 SSTW / Wan
+    生成的视频直接送入 VidSig detector 后当作 baseline 结果, 而必须在项目内先
+    调用 VidSig 官方生成流程得到自己的 clean / watermarked 视频, 再按相同
+    prompt / seed / attack comparison unit 写出 official bundle。
+    """
+
+    from external_baseline.vidsig_official_runtime import (
+        build_default_vidsig_official_config_from_env,
+        run_vidsig_official_runtime,
+    )
+
+    vidsig_config = build_default_vidsig_official_config_from_env(
+        run_root=run_root,
+        bundle_root=bundle_root,
+        source_dir=official_source_dir,
+        repo_root=repo_root,
+        resource_root=resource_root,
+        max_records=max_records,
+    )
+    return run_vidsig_official_runtime(vidsig_config)
+
+
 def _build_unified_formal_scoring_environment(
     layout: Mapping[str, str],
     config: ModernExternalBaselineFormalReferenceConfig,
@@ -849,6 +882,18 @@ def run_modern_external_baseline_formal_reference_plan(
         "true",
     ).lower() == "true":
         reference_manifest = _run_videomark_official_reference(
+            run_root=run_root,
+            bundle_root=bundle_root,
+            official_source_dir=official_source_dir,
+            repo_root=repo_root,
+            resource_root=layout["external_baseline_resource_root"],
+            max_records=config.max_records,
+        )
+    elif config.baseline_id == "vidsig" and os.environ.get(
+        "SSTW_RUN_VIDSIG_OFFICIAL_PIPELINE",
+        "true",
+    ).lower() == "true":
+        reference_manifest = _run_vidsig_official_reference(
             run_root=run_root,
             bundle_root=bundle_root,
             official_source_dir=official_source_dir,

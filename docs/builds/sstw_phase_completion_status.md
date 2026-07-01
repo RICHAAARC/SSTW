@@ -1646,7 +1646,7 @@ SSTW_VIDEOSHIELD_RESULT_JSON 或 SSTW_VIDEOSHIELD_NATIVE_EVAL_COMMAND
 SSTW_SIGMARK_BIT_ACCURACY_NPZ 或 SSTW_SIGMARK_NATIVE_EVAL_COMMAND
 SSTW_SPDMARK_EXTRACTOR_PATH + SSTW_SPDMARK_GT_BITS_PATH 或 SSTW_SPDMARK_NATIVE_EVAL_COMMAND
 SSTW_VIDEOMARK_TEMPORAL_RESULTS_JSON 或 SSTW_VIDEOMARK_NATIVE_EVAL_COMMAND
-SSTW_VIDSIG_MSG_DECODER_PATH 或 SSTW_VIDSIG_NATIVE_EVAL_COMMAND
+SSTW_VIDSIG_MSG_DECODER_PATH + SSTW_VIDSIG_VAE_CHECKPOINT_PATH, 并由 external_baseline.vidsig_official_runtime 运行官方 generate_ms.py -> attack.py
 VideoSeal 官方依赖和 checkpoint, 或 SSTW_VIDEOSEAL_NATIVE_EVAL_COMMAND
 ```
 
@@ -1719,14 +1719,19 @@ external_baseline_source_intake
 official_resource_bootstrap: implemented
 public_resource_auto_download_path: implemented_for_supported_resources
 videoseal_official_bundle_auto_generation: implemented
+videomark_official_bundle_auto_generation: implemented_if_public_resources_and_colab_runtime_succeed
 vidsig_public_checkpoint_bootstrap: implemented_as_resource_download_when_network_allowed
+vidsig_official_generate_ms_runtime: implemented_fail_closed_after_project_runtime_attack
 manual_official_resource_required_artifact: implemented_for_resource_heavy_or_unpublished_weight_baselines
 strict_gate_fake_pass: forbidden
 external_baseline_formal_scoring_notebook_auto_repair_path: integrated
 ```
 
 该更新的含义是: Colab 冷启动时不再只告诉用户缺少官方资源, 而是会先尝试自动安装
-公开依赖、下载公开 checkpoint, 并为可自动支持的 baseline 生成 official bundle。若某个
+公开依赖、下载公开 checkpoint, 并为可自动支持的 baseline 生成 official bundle。当前
+VideoSeal、VideoMark 与 VidSig 已有项目内 official bundle 生成路径; 其中 VidSig 必须先
+运行官方 `generate_ms.py` 生成自己的 clean / watermarked videos, 不能直接检测 SSTW / Wan 视频。
+若某个
 baseline 客观需要未公开训练权重、高显存官方生成流程、PRC key 或 maintained info,
 workflow 会写出 `manual_official_resource_required`, 仍然不会把该 baseline 伪造成
 `measured_formal`。因此严格 validation_scale 通过条件没有降低: 6 个现代 baseline

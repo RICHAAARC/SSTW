@@ -1,7 +1,8 @@
 """VidSig 官方源码的 SSTW 评测 wrapper。
 
-默认实现调用官方 `src/attack.py` 和官方 message decoder checkpoint。checkpoint 不属于
-SSTW 仓库, 必须由 Colab / Google Drive 提供。
+VidSig 属于生成过程中嵌入签名的视频水印方法。正式比较时, 本 adapter 默认只读取
+本项目 workflow 生成的 official bundle cache; 若没有 bundle cache, 会 fail-closed。
+只有显式开启诊断环境变量时, 才允许直接调用官方 `src/attack.py` 检测给定视频。
 """
 
 from __future__ import annotations
@@ -64,6 +65,17 @@ def _run_default(args: argparse.Namespace, source_dir: Path, output_json_path: P
     )
     if bundled is not None:
         return bundled
+    if os.environ.get("SSTW_VIDSIG_ALLOW_DIRECT_DETECTION_ON_SUPPLIED_VIDEO", "").strip().lower() not in {
+        "1",
+        "true",
+        "yes",
+    }:
+        raise RuntimeError(
+            "vidsig_official_bundle_required:"
+            "VidSig 是生成过程嵌入水印方法, 正式比较必须先由 "
+            "external_baseline.vidsig_official_runtime 运行官方 generate_ms.py "
+            "生成 VidSig watermarked video, 再施加项目 runtime attack 并调用官方 attack.py。"
+        )
     decoder_path = resolve_existing_env_file("SSTW_VIDSIG_MSG_DECODER_PATH")
     if decoder_path is None:
         raise_missing_official_artifacts(BASELINE_ID, "missing file SSTW_VIDSIG_MSG_DECODER_PATH")

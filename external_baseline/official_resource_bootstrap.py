@@ -62,6 +62,10 @@ VIDSIG_COLAB_LIGHTWEIGHT_DEPENDENCIES = (
     "pandas",
     "Pillow",
     "tqdm",
+    "diffusers",
+    "transformers",
+    "accelerate",
+    "safetensors",
 )
 VIDEOMARK_COLAB_LIGHTWEIGHT_DEPENDENCIES = (
     "diffusers",
@@ -163,6 +167,19 @@ def _find_file(root: Path, names: set[str]) -> Path | None:
     return None
 
 
+def _find_vidsig_vae_checkpoint(root: Path) -> Path | None:
+    """优先定位 VidSig Text-to-Video ModelScope 官方 VAE checkpoint。"""
+
+    preferred = root / "ckpts" / "vae" / "modelscope" / "checkpoint.pth"
+    if preferred.exists():
+        return preferred
+    candidates = sorted(path for path in root.rglob("checkpoint.pth") if path.is_file()) if root.exists() else []
+    for path in candidates:
+        if "modelscope" in path.as_posix().lower():
+            return path
+    return candidates[0] if candidates else None
+
+
 def _unpack_if_archive(path: Path, output_dir: Path) -> dict[str, Any]:
     """如果下载结果是 zip, 则解压到资源目录。"""
     if zipfile.is_zipfile(path):
@@ -226,7 +243,7 @@ def bootstrap_vidsig(resource_root: Path, *, allow_network: bool) -> dict[str, A
         install_results.append(_pip_install_target(dependency, allow_network=allow_network, timeout_sec=900))
     failed_dependencies = [item for item in install_results if item.get("install_status") == "install_failed"]
     decoder = _find_file(baseline_root, {"dec_48b_whit.torchscript.pt"})
-    vae_checkpoint = _find_file(baseline_root, {"checkpoint.pth"})
+    vae_checkpoint = _find_vidsig_vae_checkpoint(baseline_root)
     if decoder and vae_checkpoint:
         return {
             "baseline_id": "vidsig",
@@ -259,7 +276,7 @@ def bootstrap_vidsig(resource_root: Path, *, allow_network: bool) -> dict[str, A
     ], timeout_sec=3600)
     unpack = _unpack_if_archive(archive_path, baseline_root) if archive_path.exists() else {"unpack_status": "download_missing"}
     decoder = _find_file(baseline_root, {"dec_48b_whit.torchscript.pt"})
-    vae_checkpoint = _find_file(baseline_root, {"checkpoint.pth"})
+    vae_checkpoint = _find_vidsig_vae_checkpoint(baseline_root)
     ready = decoder is not None and vae_checkpoint is not None and not failed_dependencies
     missing_after_download = [] if decoder is not None and vae_checkpoint is not None else ["dec_48b_whit.torchscript.pt", "checkpoint.pth"]
     if failed_dependencies:

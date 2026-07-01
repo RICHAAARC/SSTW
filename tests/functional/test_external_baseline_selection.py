@@ -129,6 +129,10 @@ def test_modern_baseline_colab_command_config_is_guidance_not_claim_evidence() -
             assert row["repository_official_eval_command_template_status"] == (
                 "repository_official_wrapper_ready_with_project_owned_videomark_runtime_default"
             )
+        elif baseline_id == "vidsig":
+            assert row["repository_official_eval_command_template_status"] == (
+                "repository_official_wrapper_ready_with_project_owned_vidsig_runtime_default"
+            )
         else:
             assert row["repository_official_eval_command_template_status"] == (
                 "repository_official_wrapper_ready_fail_closed_requires_official_source_and_artifacts"
@@ -154,6 +158,8 @@ def test_official_resource_requirements_define_auto_and_manual_boundaries() -> N
     assert set(rows) == {"videoshield", "sigmark", "spdmark", "videomark", "vidsig", "videoseal"}
     assert rows["videoseal"]["automatic_bundle_generation_supported_by_sstw"] is True
     assert rows["videoseal"]["colab_l4_auto_bundle_status"] == "auto_bundle_supported"
+    assert rows["vidsig"]["automatic_bundle_generation_supported_by_sstw"] is True
+    assert rows["vidsig"]["colab_l4_auto_bundle_status"] == "auto_bundle_supported_after_public_checkpoint_bootstrap"
     assert rows["spdmark"]["automatic_bundle_generation_supported_by_sstw"] is False
     assert rows["spdmark"]["colab_l4_auto_bundle_status"] == "blocked_by_missing_public_trained_weights"
     assert rows["sigmark"]["colab_l4_auto_bundle_status"] == "blocked_by_official_gpu_memory_requirement"
@@ -171,6 +177,9 @@ def test_official_runtime_closure_requirements_are_first_class_colab_config() ->
     assert config["self_containment_rule"].startswith("external baseline 必须在项目内 clone")
     assert rows["videoseal"]["automatic_bundle_generation_supported_by_sstw"] is True
     assert rows["videoseal"]["colab_default_can_attempt_without_user_files"] is True
+    assert rows["vidsig"]["automatic_bundle_generation_supported_by_sstw"] is True
+    assert rows["vidsig"]["colab_default_can_attempt_without_user_files"] is True
+    assert rows["vidsig"]["project_owned_vidsig_runner_module"] == "external_baseline.vidsig_official_runtime"
     videoseal_requirements = Path(rows["videoseal"]["requirements_file"]).read_text(encoding="utf-8")
     assert "ffmpeg-python" in videoseal_requirements
     assert "git+https://github.com/facebookresearch/videoseal" not in videoseal_requirements
@@ -348,10 +357,10 @@ def test_official_bundle_generation_plan_is_fail_closed_about_auto_blocked_basel
 
     assert plan["runtime_comparison_unit_count"] == 2
     assert plan["baseline_count"] == 6
-    assert plan["auto_supported_baselines"] == ["videomark", "videoseal"]
+    assert plan["auto_supported_baselines"] == ["videomark", "vidsig", "videoseal"]
     assert "spdmark" in plan["auto_blocked_baselines"]
     assert "sigmark" in plan["auto_blocked_baselines"]
-    assert plan["auto_blocked_baseline_count"] == 4
+    assert plan["auto_blocked_baseline_count"] == 3
     spdmark_row = next(row for row in plan["plan_rows"] if row["baseline_id"] == "spdmark")
     assert spdmark_row["automatic_bundle_generation_supported_by_sstw"] is False
     assert spdmark_row["resource_blocker"]
@@ -753,6 +762,7 @@ def test_official_result_bundle_preflight_fails_when_non_runtime_baseline_bundle
         "SSTW_SPDMARK_GT_BITS_PATH",
         "SSTW_VIDEOMARK_TEMPORAL_RESULTS_JSON",
         "SSTW_VIDSIG_MSG_DECODER_PATH",
+        "SSTW_VIDSIG_VAE_CHECKPOINT_PATH",
     ):
         monkeypatch.delenv(env_name, raising=False)
     for baseline_id in ("VIDEOSHIELD", "SIGMARK", "SPDMARK", "VIDEOMARK", "VIDSIG", "VIDEOSEAL"):
@@ -762,6 +772,33 @@ def test_official_result_bundle_preflight_fails_when_non_runtime_baseline_bundle
     assert audit["official_result_bundle_preflight_decision"] == "FAIL"
     assert "spdmark" in audit["strict_missing_baselines"]
     assert audit["missing_bundle_examples"]
+
+
+@pytest.mark.quick
+def test_official_result_bundle_preflight_requires_vidsig_official_bundle_not_only_resources(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """VidSig 不能只靠 checkpoint 资源被误判为已经具备正式结果包。"""
+    run_root = tmp_path / "generative_video_runtime"
+    _write_external_baseline_runtime_fixture(run_root)
+    monkeypatch.setenv("SSTW_EXTERNAL_BASELINE_OFFICIAL_RESULT_BUNDLE_ROOT", str(tmp_path / "missing_bundle"))
+    monkeypatch.delenv("SSTW_VIDSIG_NATIVE_EVAL_COMMAND", raising=False)
+
+    decoder = tmp_path / "resources" / "vidsig" / "ckpts" / "msg_decoder" / "dec_48b_whit.torchscript.pt"
+    decoder.parent.mkdir(parents=True)
+    decoder.write_bytes(b"decoder")
+    monkeypatch.setenv("SSTW_VIDSIG_MSG_DECODER_PATH", str(decoder))
+    vae = tmp_path / "resources" / "vidsig" / "ckpts" / "vae" / "modelscope" / "checkpoint.pth"
+    vae.parent.mkdir(parents=True)
+    vae.write_bytes(b"vae")
+    monkeypatch.setenv("SSTW_VIDSIG_VAE_CHECKPOINT_PATH", str(vae))
+
+    audit = build_official_result_bundle_preflight(run_root, baseline_ids=("vidsig",))
+    row = audit["baseline_resource_rows"][0]
+    assert row["runtime_resource_ready"] is False
+    assert row["runtime_resource_mode"] == "vidsig_requires_project_owned_generate_ms_official_bundle_or_native_command"
+    assert audit["strict_missing_baselines"] == ["vidsig"]
 
 
 @pytest.mark.quick
@@ -781,6 +818,7 @@ def test_official_result_bundle_preflight_rejects_external_supplement_bundle(
         "SSTW_SPDMARK_GT_BITS_PATH",
         "SSTW_VIDEOMARK_TEMPORAL_RESULTS_JSON",
         "SSTW_VIDSIG_MSG_DECODER_PATH",
+        "SSTW_VIDSIG_VAE_CHECKPOINT_PATH",
     ):
         monkeypatch.delenv(env_name, raising=False)
     for baseline_id in ("VIDEOSHIELD", "SIGMARK", "SPDMARK", "VIDEOMARK", "VIDSIG", "VIDEOSEAL"):

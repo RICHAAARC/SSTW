@@ -85,6 +85,8 @@ Google Drive: 只保存阶段 zip、stage package manifest 和可复用资源包
 
 循环读取大量小文件。正确流程是复制对应阶段最新时间戳 zip 到本地、解压、在本地路径继续运行。
 旧版 `packages/.../*.zip` 不再作为 Notebook 间自动交接入口。
+若用户绕过 Notebook 直接运行 `scripts/package_results/*_drive_packager.py`, CLI 默认
+输出也会解析到上述阶段归档目录, 不会重新创建旧版 `SSTW/packages/`。
 
 ## 3. 当前推荐执行顺序
 

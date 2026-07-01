@@ -1238,7 +1238,9 @@ Colab 输出应落盘到:
 4. 阶段完成后由 `publish_colab_stage_package` 统一生成带时间戳的 zip 和 manifest
    并写回 Drive。默认保留时间戳包, 不再写固定 latest 小入口。
 5. 旧版 `packages/` 目录不再作为 Notebook 间自动交接入口。
-6. failed 或未闭合的 `external_baseline_formal_reference_*` 阶段只能写阻断 manifest,
+6. 独立运行 `scripts/package_results/*_drive_packager.py` 时, 默认输出目录也必须
+   解析到当前阶段归档结构, 不得默认回退到旧版 `SSTW/packages/`。
+7. failed 或未闭合的 `external_baseline_formal_reference_*` 阶段只能写阻断 manifest,
    不得保存可被后续门禁恢复的 zip。这样可以防止失败运行占用大量 Drive 空间, 也防止
    后续 Notebook 误用旧 external baseline 输出。
 

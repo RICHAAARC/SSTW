@@ -3,10 +3,17 @@
 from __future__ import annotations
 
 import re
+from pathlib import Path
 
 import pytest
 
 from main.protocol.package_naming import build_package_batch_id, build_package_file_stem, sanitize_filename_token
+from scripts.package_results.drive_package_paths import (
+    archive_run_root_for_stage,
+    build_packager_file_stem,
+    packager_manifest_filename,
+    resolve_stage_package_output_dir,
+)
 
 
 @pytest.mark.quick
@@ -30,3 +37,72 @@ def test_package_file_stem_prefixes_batch_id() -> None:
 def test_package_filename_token_sanitizer_keeps_snake_case() -> None:
     """文件名 token 必须稳定落到可审计的 snake_case 兼容形式。"""
     assert sanitize_filename_token("Wan2.1 Package/ABC") == "wan2_1_package_abc"
+
+
+@pytest.mark.quick
+def test_independent_packager_default_dirs_follow_stage_archive_layout() -> None:
+    """独立 packager 默认目录必须使用新阶段归档结构, 不得回退到旧 packages 目录。"""
+
+    drive_root = "/content/drive/MyDrive/SSTW"
+
+    assert resolve_stage_package_output_dir(
+        drive_root,
+        "validation_scale",
+        "generative_video_runtime_colab",
+    ).as_posix().endswith("/SSTW/validation_scale/generative_video_runtime_colab")
+    assert resolve_stage_package_output_dir(
+        drive_root,
+        "motion_calibration",
+        "motion_threshold_calibration_colab",
+    ).as_posix().endswith("/SSTW/motion_threshold")
+    assert resolve_stage_package_output_dir(
+        drive_root,
+        "validation_scale",
+        "external_baseline_formal_reference_sigmark",
+    ).as_posix().endswith("/SSTW/validation_scale/external_baseline_official_reference")
+    assert resolve_stage_package_output_dir(
+        drive_root,
+        "sampling_time_constraint",
+        "sampling_time_constraint_colab",
+    ).as_posix().endswith("/SSTW/helper")
+
+
+@pytest.mark.quick
+def test_independent_packager_stage_file_names_match_stage_zip_policy() -> None:
+    """独立 packager 在阶段命名模式下必须使用 profile + stage + 时间戳 + commit。"""
+
+    stem = build_packager_file_stem(
+        "generative_video_runtime",
+        "20260701_030405",
+        "abc123ef",
+        workflow_profile="validation_scale",
+        stage_package_id="generative_video_runtime_colab",
+    )
+
+    assert stem == "validation_scale_generative_video_runtime_colab_20260701_030405_abc123ef"
+    assert packager_manifest_filename(stem, stage_package_naming=True).endswith("_manifest.json")
+    assert packager_manifest_filename(stem, stage_package_naming=False).endswith("_package_manifest.json")
+    assert archive_run_root_for_stage(
+        "validation_scale",
+        workflow_profile="validation_scale",
+        stage_package_id="generative_video_runtime_colab",
+    ) == "runs/generative_video_model_probe/validation_scale"
+    assert archive_run_root_for_stage(
+        "sampling_time_constraint_colab",
+        workflow_profile="sampling_time_constraint",
+        stage_package_id="sampling_time_constraint_colab",
+    ) == "runs/sampling_time_constraint_colab"
+
+
+@pytest.mark.quick
+def test_independent_packager_cli_defaults_do_not_reference_legacy_packages_dir() -> None:
+    """独立 packager CLI 默认值不得再包含旧版 SSTW/packages 入口。"""
+
+    for path in (
+        Path("scripts/package_results/generative_video_drive_packager.py"),
+        Path("scripts/package_results/sampling_time_constraint_drive_packager.py"),
+        Path("scripts/package_results/wan21_flow_adapter_preflight_drive_packager.py"),
+    ):
+        source = path.read_text(encoding="utf-8")
+        assert f"{'{'}DEFAULT_DRIVE_PROJECT_ROOT{'}'}/packages" not in source
+        assert "/packages/" not in source

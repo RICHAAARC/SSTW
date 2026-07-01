@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 from datetime import datetime, timezone
+import os
 from pathlib import Path
 import sys
 import zipfile
@@ -13,18 +14,26 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from main.protocol.package_naming import build_package_batch_id, build_package_file_stem, current_short_commit, current_utc_time_for_filename
+from main.protocol.package_naming import build_package_batch_id, current_short_commit, current_utc_time_for_filename
+from scripts.package_results.drive_package_paths import (
+    DEFAULT_DRIVE_PROJECT_ROOT,
+    archive_run_root_for_stage,
+    build_packager_file_stem,
+    packager_manifest_filename,
+    resolve_stage_package_output_dir,
+)
 
 
-DEFAULT_DRIVE_PROJECT_ROOT = "/content/drive/MyDrive/SSTW"
+DEFAULT_WORKFLOW_PROFILE = "validation_scale"
+DEFAULT_STAGE_PACKAGE_ID = "generative_video_runtime_colab"
 
 
-def _write_tree_to_archive(archive: zipfile.ZipFile, run_root: Path, tree_path: Path) -> None:
+def _write_tree_to_archive(archive: zipfile.ZipFile, run_root: Path, tree_path: Path, archive_run_root: str) -> None:
     """将一个结果子目录写入 zip, 不存在的子目录会被跳过。"""
     if not tree_path.exists():
         return
     for file_path in sorted(path for path in tree_path.rglob("*") if path.is_file()):
-        archive.write(file_path, arcname=f"{run_root.name}/{file_path.relative_to(run_root).as_posix()}")
+        archive.write(file_path, arcname=f"{archive_run_root}/{file_path.relative_to(run_root).as_posix()}")
 
 
 def _read_json_if_exists(path: Path) -> dict:
@@ -70,6 +79,8 @@ def package_generative_video_colab_run(
     run_root: str | Path,
     drive_package_dir: str | Path,
     include_videos: bool = True,
+    workflow_profile: str | None = None,
+    stage_package_id: str | None = None,
 ) -> dict:
     """将 B5 Colab run_root 打包为 zip 和 sidecar manifest。
 
@@ -83,9 +94,24 @@ def package_generative_video_colab_run(
     package_utc_time = current_utc_time_for_filename()
     package_short_commit = current_short_commit()
     package_batch_id = build_package_batch_id(package_utc_time, package_short_commit)
-    package_file_stem = build_package_file_stem(run_root_path.name, package_utc_time, package_short_commit)
+    stage_package_naming = bool(workflow_profile and stage_package_id)
+    package_file_stem = build_packager_file_stem(
+        run_root_path.name,
+        package_utc_time,
+        package_short_commit,
+        workflow_profile=workflow_profile,
+        stage_package_id=stage_package_id,
+    )
     archive_path = package_dir / f"{package_file_stem}.zip"
-    package_manifest_path = package_dir / f"{package_file_stem}_package_manifest.json"
+    package_manifest_path = package_dir / packager_manifest_filename(
+        package_file_stem,
+        stage_package_naming=stage_package_naming,
+    )
+    archive_run_root = archive_run_root_for_stage(
+        run_root_path.name,
+        workflow_profile=workflow_profile,
+        stage_package_id=stage_package_id,
+    )
     decision_path = run_root_path / "artifacts" / "generative_video_colab_runtime_decision.json"
     postprocess_decision_path = run_root_path / "artifacts" / "generative_video_mechanism_postprocess_decision.json"
     formal_metric_decision_path = run_root_path / "artifacts" / "formal_quality_motion_semantic_decision.json"
@@ -109,10 +135,10 @@ def package_generative_video_colab_run(
 
     with zipfile.ZipFile(archive_path, mode="w", compression=zipfile.ZIP_DEFLATED) as archive:
         for subdir_name in ("records", "tables", "reports", "thresholds", "artifacts"):
-            _write_tree_to_archive(archive, run_root_path, run_root_path / subdir_name)
+            _write_tree_to_archive(archive, run_root_path, run_root_path / subdir_name, archive_run_root)
         if include_videos:
-            _write_tree_to_archive(archive, run_root_path, run_root_path / "videos")
-            _write_tree_to_archive(archive, run_root_path, run_root_path / "attacked_videos")
+            _write_tree_to_archive(archive, run_root_path, run_root_path / "videos", archive_run_root)
+            _write_tree_to_archive(archive, run_root_path, run_root_path / "attacked_videos", archive_run_root)
 
     decision = _read_json_if_exists(decision_path)
     postprocess_decision = _read_json_if_exists(postprocess_decision_path)
@@ -146,6 +172,9 @@ def package_generative_video_colab_run(
         "package_batch_id": package_batch_id,
         "package_utc_time": package_utc_time,
         "package_short_commit": package_short_commit,
+        "workflow_profile": workflow_profile or "",
+        "stage_package_id": stage_package_id or "",
+        "archive_run_root": archive_run_root,
         "include_videos": include_videos,
         "input_paths": [str(run_root_path)],
         "output_paths": [str(archive_path), str(package_manifest_path)],
@@ -265,10 +294,24 @@ def package_generative_video_colab_run(
 def main() -> None:
     parser = argparse.ArgumentParser(description="将 B5 Colab 生成式视频探测结果打包到 Google Drive。")
     parser.add_argument("--run-root", required=True)
-    parser.add_argument("--drive-package-dir", default=f"{DEFAULT_DRIVE_PROJECT_ROOT}/packages/generative_video_model_probe")
+    parser.add_argument("--drive-project-root", default=os.environ.get("SSTW_DRIVE_PROJECT_ROOT", DEFAULT_DRIVE_PROJECT_ROOT))
+    parser.add_argument("--workflow-profile", default=os.environ.get("SSTW_WORKFLOW_PROFILE", DEFAULT_WORKFLOW_PROFILE))
+    parser.add_argument("--stage-package-id", default=os.environ.get("SSTW_STAGE_PACKAGE_ID", DEFAULT_STAGE_PACKAGE_ID))
+    parser.add_argument("--drive-package-dir", default=None)
     parser.add_argument("--exclude-videos", action="store_true")
     args = parser.parse_args()
-    payload = package_generative_video_colab_run(args.run_root, args.drive_package_dir, include_videos=not args.exclude_videos)
+    drive_package_dir = args.drive_package_dir or resolve_stage_package_output_dir(
+        args.drive_project_root,
+        args.workflow_profile,
+        args.stage_package_id,
+    )
+    payload = package_generative_video_colab_run(
+        args.run_root,
+        drive_package_dir,
+        include_videos=not args.exclude_videos,
+        workflow_profile=args.workflow_profile,
+        stage_package_id=args.stage_package_id,
+    )
     print(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True))
 
 

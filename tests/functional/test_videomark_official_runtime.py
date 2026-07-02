@@ -64,7 +64,16 @@ def _write_fake_videomark_source(source_dir: Path) -> None:
 
     (source_dir / "src").mkdir(parents=True, exist_ok=True)
     (source_dir / "src" / "prc.py").write_text("# fake prc\n", encoding="utf-8")
-    (source_dir / "temporal_tamper.py").write_text("# fake temporal tamper\n", encoding="utf-8")
+    (source_dir / "temporal_tamper.py").write_text(
+        "\n".join(
+            [
+                "if __name__ == '__main__':",
+                "    parser.add_argument('--keys_path', default=\"./keys\")",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
     (source_dir / "embedding_and_extraction.py").write_text(
         "\n".join(
             [
@@ -124,12 +133,18 @@ def test_videomark_runtime_dry_run_builds_prompt_set_and_commands(tmp_path: Path
     assert manifest["prompt_manifest"]["prompt_count"] == 1
     assert "--model_name=modelscope" in manifest["embedding_command"]
     assert "--video_frames_dir=" + config.output_path in manifest["temporal_tamper_command"]
+    assert "--threshold=0.5" in manifest["temporal_tamper_command"]
+    assert "--resample_num=1" in manifest["temporal_tamper_command"]
     runtime_embedding = Path(manifest["runtime_source_dir"]) / "embedding_and_extraction.py"
+    runtime_temporal = Path(manifest["runtime_source_dir"]) / "temporal_tamper.py"
     runtime_text = runtime_embedding.read_text(encoding="utf-8")
+    runtime_temporal_text = runtime_temporal.read_text(encoding="utf-8")
     assert "SSTW_VIDEOMARK_PROMPT_VARIANTS" in runtime_text
     assert "video_id = f\"prompt_{i:04d}_{video_id_digest}\"" in runtime_text
     assert "decode_message = np.full((len(message_bits[0]),), -1)" in runtime_text
     assert "parser.add_argument('--model_path', default=None)" in runtime_text
+    assert "parser.add_argument('--threshold', default=0.5, type=float)" in runtime_temporal_text
+    assert "parser.add_argument('--resample_num', default=1, type=int)" in runtime_temporal_text
     assert {
         row["patch_name"]: row["patch_status"] for row in manifest["patch_manifest"]["patch_results"]
     } == {
@@ -137,6 +152,7 @@ def test_videomark_runtime_dry_run_builds_prompt_set_and_commands(tmp_path: Path
         "safe_prompt_digest_video_id_guard": "patched_runtime_copy",
         "undetected_decode_message_guard": "patched_runtime_copy",
         "embedding_model_path_cli_arg_guard": "patched_runtime_copy",
+        "temporal_threshold_resample_cli_arg_guard": "patched_runtime_copy",
     }
 
 

@@ -32,6 +32,7 @@ DEFAULT_NUM_BIT = 512
 DEFAULT_NUM_INFERENCE_STEPS = 50
 DEFAULT_PROMPT_VARIANTS = 1
 DEFAULT_DETECTION_THRESHOLD = 0.5
+DEFAULT_TEMPORAL_RESAMPLE_NUM = 1
 SAFE_OUTPUT_DIR_NAME = "official_outputs_safe_prompt_digest_v1"
 EMBEDDING_VARIANT_LOOP_TARGET = "    for item in tqdm(range(4)):"
 EMBEDDING_VARIANT_LOOP_REPLACEMENT = (
@@ -63,6 +64,12 @@ EMBEDDING_MODEL_PATH_ARG_REPLACEMENT = (
     "    parser.add_argument('--model_name', default='i2vgen-xl')\n"
     "    parser.add_argument('--model_path', default=None)"
 )
+TEMPORAL_KEYS_PATH_ARG_TARGET = "    parser.add_argument('--keys_path', default=\"./keys\")"
+TEMPORAL_COMPAT_ARG_REPLACEMENT = (
+    "    parser.add_argument('--keys_path', default=\"./keys\")\n"
+    "    parser.add_argument('--threshold', default=0.5, type=float)\n"
+    "    parser.add_argument('--resample_num', default=1, type=int)"
+)
 
 
 @dataclass(frozen=True)
@@ -92,6 +99,8 @@ class VideoMarkOfficialRuntimeConfig:
     num_inference_steps: int = DEFAULT_NUM_INFERENCE_STEPS
     num_inversion_steps: int = DEFAULT_NUM_INFERENCE_STEPS
     prompt_variants: int = DEFAULT_PROMPT_VARIANTS
+    temporal_threshold: float = DEFAULT_DETECTION_THRESHOLD
+    resample_num: int = DEFAULT_TEMPORAL_RESAMPLE_NUM
     device: str = "cuda:0"
     dry_run: bool = False
     timeout_seconds: float = 0.0
@@ -247,6 +256,8 @@ def build_default_videomark_official_config_from_env(
         num_inference_steps=_env_int("SSTW_VIDEOMARK_NUM_INFERENCE_STEPS", DEFAULT_NUM_INFERENCE_STEPS),
         num_inversion_steps=_env_int("SSTW_VIDEOMARK_NUM_INVERSION_STEPS", DEFAULT_NUM_INFERENCE_STEPS),
         prompt_variants=_env_int("SSTW_VIDEOMARK_PROMPT_VARIANTS", DEFAULT_PROMPT_VARIANTS),
+        temporal_threshold=_env_float("SSTW_VIDEOMARK_TEMPORAL_THRESHOLD", DEFAULT_DETECTION_THRESHOLD),
+        resample_num=_env_int("SSTW_VIDEOMARK_RESAMPLE_NUM", DEFAULT_TEMPORAL_RESAMPLE_NUM),
         device=os.environ.get("SSTW_VIDEOMARK_DEVICE", "cuda:0").strip() or "cuda:0",
         dry_run=_env_bool("SSTW_VIDEOMARK_OFFICIAL_DRY_RUN", False),
         timeout_seconds=_env_float("SSTW_VIDEOMARK_OFFICIAL_TIMEOUT_SECONDS", 0.0),
@@ -312,9 +323,10 @@ def _copy_official_source_to_runtime(source_dir: Path, runtime_source_dir: Path,
 def _patch_videomark_runtime_source(runtime_source_dir: Path) -> dict[str, Any]:
     """修补 runtime 副本中 VideoMark 官方脚本的 Colab 兼容性。
 
-    该补丁只作用于 runtime 副本, 不修改 checked-in 第三方源码。主要修复两点:
+    该补丁只作用于 runtime 副本, 不修改 checked-in 第三方源码。主要修复三点:
     1. 暴露 `SSTW_VIDEOMARK_PROMPT_VARIANTS`, 使 validation_scale 可控制小样本运行量。
     2. 当官方提取未检测到 watermark 时, 避免 `decode_message` 未定义导致流程中断。
+    3. 为 temporal_tamper.py 补齐官方脚本读取但 argparse 未声明的轻量参数。
     """
 
     embedding_path = runtime_source_dir / "embedding_and_extraction.py"
@@ -353,6 +365,24 @@ def _patch_videomark_runtime_source(runtime_source_dir: Path) -> dict[str, Any]:
         patch_results.append({"patch_name": "embedding_model_path_cli_arg_guard", "patch_status": "pattern_missing_no_change"})
 
     embedding_path.write_text(text, encoding="utf-8")
+
+    temporal_path = runtime_source_dir / "temporal_tamper.py"
+    temporal_text = temporal_path.read_text(encoding="utf-8")
+    if (
+        "parser.add_argument('--threshold'" in temporal_text
+        and "parser.add_argument('--resample_num'" in temporal_text
+    ):
+        patch_results.append({"patch_name": "temporal_threshold_resample_cli_arg_guard", "patch_status": "already_patched"})
+    elif TEMPORAL_KEYS_PATH_ARG_TARGET in temporal_text:
+        temporal_text = temporal_text.replace(TEMPORAL_KEYS_PATH_ARG_TARGET, TEMPORAL_COMPAT_ARG_REPLACEMENT, 1)
+        patch_results.append({"patch_name": "temporal_threshold_resample_cli_arg_guard", "patch_status": "patched_runtime_copy"})
+    else:
+        patch_results.append({
+            "patch_name": "temporal_threshold_resample_cli_arg_guard",
+            "patch_status": "pattern_missing_no_change",
+        })
+    temporal_path.write_text(temporal_text, encoding="utf-8")
+
     status = "patched_runtime_copy" if any(
         row["patch_status"] == "patched_runtime_copy" for row in patch_results
     ) else "already_patched"
@@ -361,6 +391,7 @@ def _patch_videomark_runtime_source(runtime_source_dir: Path) -> dict[str, Any]:
         "patch_status": status,
         "patch_results": patch_results,
         "patched_file": str(embedding_path),
+        "patched_files": [str(embedding_path), str(temporal_path)],
         "source_mutation_policy": "runtime_copy_only_checked_in_official_source_not_modified",
     }
 
@@ -497,6 +528,8 @@ def _videomark_temporal_tamper_command(config: VideoMarkOfficialRuntimeConfig) -
         f"--num_inversion_steps={int(config.num_inversion_steps)}",
         f"--video_frames_dir={config.output_path}",
         "--keys_path=./keys",
+        f"--threshold={float(config.temporal_threshold)}",
+        f"--resample_num={int(config.resample_num)}",
     ]
     if config.model_path:
         command.append(f"--model_path={config.model_path}")

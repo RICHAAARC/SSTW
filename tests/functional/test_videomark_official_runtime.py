@@ -69,6 +69,14 @@ def _write_fake_videomark_source(source_dir: Path) -> None:
             [
                 "if __name__ == '__main__':",
                 "    parser.add_argument('--keys_path', default=\"./keys\")",
+                "def main(args):",
+                "    for dirname in os.listdir(video_frames_dirs):",
+                "",
+                "        video_frames_dir = os.path.join(video_frames_dirs, dirname,'wm','frames')",
+                "        shift_value = np.load(os.path.join(video_frames_dirs, dirname,\"shift_value.npy\"))",
+                "",
+                "        if not os.path.exists(video_frames_dir):",
+                "            continue",
             ]
         )
         + "\n",
@@ -145,6 +153,9 @@ def test_videomark_runtime_dry_run_builds_prompt_set_and_commands(tmp_path: Path
     assert "parser.add_argument('--model_path', default=None)" in runtime_text
     assert "parser.add_argument('--threshold', default=0.5, type=float)" in runtime_temporal_text
     assert "parser.add_argument('--resample_num', default=1, type=int)" in runtime_temporal_text
+    assert "if not os.path.isdir(video_output_dir):" in runtime_temporal_text
+    assert "shift_value_path = os.path.join(video_output_dir,\"shift_value.npy\")" in runtime_temporal_text
+    assert "if not os.path.isdir(video_frames_dir) or not os.path.isfile(shift_value_path):" in runtime_temporal_text
     assert {
         row["patch_name"]: row["patch_status"] for row in manifest["patch_manifest"]["patch_results"]
     } == {
@@ -153,6 +164,7 @@ def test_videomark_runtime_dry_run_builds_prompt_set_and_commands(tmp_path: Path
         "undetected_decode_message_guard": "patched_runtime_copy",
         "embedding_model_path_cli_arg_guard": "patched_runtime_copy",
         "temporal_threshold_resample_cli_arg_guard": "patched_runtime_copy",
+        "temporal_output_file_skip_guard": "patched_runtime_copy",
     }
 
 

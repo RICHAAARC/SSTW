@@ -70,6 +70,28 @@ TEMPORAL_COMPAT_ARG_REPLACEMENT = (
     "    parser.add_argument('--threshold', default=0.5, type=float)\n"
     "    parser.add_argument('--resample_num', default=1, type=int)"
 )
+TEMPORAL_OUTPUT_ENTRY_TARGET = (
+    "    for dirname in os.listdir(video_frames_dirs):\n"
+    "\n"
+    "        video_frames_dir = os.path.join(video_frames_dirs, dirname,'wm','frames')\n"
+    "        shift_value = np.load(os.path.join(video_frames_dirs, dirname,\"shift_value.npy\"))\n"
+    "\n"
+    "        if not os.path.exists(video_frames_dir):\n"
+    "            continue"
+)
+TEMPORAL_OUTPUT_ENTRY_REPLACEMENT = (
+    "    for dirname in os.listdir(video_frames_dirs):\n"
+    "\n"
+    "        video_output_dir = os.path.join(video_frames_dirs, dirname)\n"
+    "        if not os.path.isdir(video_output_dir):\n"
+    "            continue\n"
+    "        video_frames_dir = os.path.join(video_output_dir,'wm','frames')\n"
+    "        shift_value_path = os.path.join(video_output_dir,\"shift_value.npy\")\n"
+    "\n"
+    "        if not os.path.isdir(video_frames_dir) or not os.path.isfile(shift_value_path):\n"
+    "            continue\n"
+    "        shift_value = np.load(shift_value_path)"
+)
 
 
 @dataclass(frozen=True)
@@ -323,10 +345,11 @@ def _copy_official_source_to_runtime(source_dir: Path, runtime_source_dir: Path,
 def _patch_videomark_runtime_source(runtime_source_dir: Path) -> dict[str, Any]:
     """修补 runtime 副本中 VideoMark 官方脚本的 Colab 兼容性。
 
-    该补丁只作用于 runtime 副本, 不修改 checked-in 第三方源码。主要修复三点:
+    该补丁只作用于 runtime 副本, 不修改 checked-in 第三方源码。主要修复四点:
     1. 暴露 `SSTW_VIDEOMARK_PROMPT_VARIANTS`, 使 validation_scale 可控制小样本运行量。
     2. 当官方提取未检测到 watermark 时, 避免 `decode_message` 未定义导致流程中断。
     3. 为 temporal_tamper.py 补齐官方脚本读取但 argparse 未声明的轻量参数。
+    4. 跳过 VideoMark 输出目录中的 args.json 等非视频子目录, 避免 temporal tamper 中断。
     """
 
     embedding_path = runtime_source_dir / "embedding_and_extraction.py"
@@ -379,6 +402,17 @@ def _patch_videomark_runtime_source(runtime_source_dir: Path) -> dict[str, Any]:
     else:
         patch_results.append({
             "patch_name": "temporal_threshold_resample_cli_arg_guard",
+            "patch_status": "pattern_missing_no_change",
+        })
+
+    if "shift_value_path = os.path.join(video_output_dir" in temporal_text and "os.path.isdir(video_output_dir)" in temporal_text:
+        patch_results.append({"patch_name": "temporal_output_file_skip_guard", "patch_status": "already_patched"})
+    elif TEMPORAL_OUTPUT_ENTRY_TARGET in temporal_text:
+        temporal_text = temporal_text.replace(TEMPORAL_OUTPUT_ENTRY_TARGET, TEMPORAL_OUTPUT_ENTRY_REPLACEMENT, 1)
+        patch_results.append({"patch_name": "temporal_output_file_skip_guard", "patch_status": "patched_runtime_copy"})
+    else:
+        patch_results.append({
+            "patch_name": "temporal_output_file_skip_guard",
             "patch_status": "pattern_missing_no_change",
         })
     temporal_path.write_text(temporal_text, encoding="utf-8")

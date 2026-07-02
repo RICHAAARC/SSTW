@@ -650,6 +650,40 @@ def _run_videomark_official_reference(
     return run_videomark_official_runtime(videomark_config)
 
 
+def _run_videoshield_official_reference(
+    *,
+    run_root: Path,
+    bundle_root: Path,
+    official_source_dir: Path,
+    repo_root: Path,
+    resource_root: str | Path,
+    max_records: int | None,
+) -> dict[str, Any]:
+    """运行 VideoShield 官方 generation / inversion official bundle 生成路径。
+
+    VideoShield 属于生成过程中嵌入 latent watermark 的方法。项目特定要求是:
+    不能把 SSTW / Wan 生成的视频直接送入 VideoShield 反演逻辑当作 baseline,
+    而必须在项目内调用 VideoShield 官方 watermark 生成流程得到自己的
+    watermarked 视频, 再按相同 prompt / seed / attack comparison unit 写出
+    official bundle。
+    """
+
+    from external_baseline.videoshield_official_runtime import (
+        build_default_videoshield_official_config_from_env,
+        run_videoshield_official_runtime,
+    )
+
+    videoshield_config = build_default_videoshield_official_config_from_env(
+        run_root=run_root,
+        bundle_root=bundle_root,
+        source_dir=official_source_dir,
+        repo_root=repo_root,
+        resource_root=resource_root,
+        max_records=max_records,
+    )
+    return run_videoshield_official_runtime(videoshield_config)
+
+
 def _run_vidsig_official_reference(
     *,
     run_root: Path,
@@ -882,6 +916,18 @@ def run_modern_external_baseline_formal_reference_plan(
         "true",
     ).lower() == "true":
         reference_manifest = _run_videomark_official_reference(
+            run_root=run_root,
+            bundle_root=bundle_root,
+            official_source_dir=official_source_dir,
+            repo_root=repo_root,
+            resource_root=layout["external_baseline_resource_root"],
+            max_records=config.max_records,
+        )
+    elif config.baseline_id == "videoshield" and os.environ.get(
+        "SSTW_RUN_VIDEOSHIELD_OFFICIAL_PIPELINE",
+        "true",
+    ).lower() == "true":
+        reference_manifest = _run_videoshield_official_reference(
             run_root=run_root,
             bundle_root=bundle_root,
             official_source_dir=official_source_dir,

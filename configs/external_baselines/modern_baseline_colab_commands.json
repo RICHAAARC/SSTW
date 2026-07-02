@@ -15,6 +15,7 @@
       "display_name": "VideoShield",
       "external_baseline_command_env_var": "SSTW_VIDEOSHIELD_EVAL_COMMAND",
       "external_supplemental_result_bundle_allowed": false,
+      "formal_reference_runner_mode": "project_owned_videoshield_generation_inversion_runtime_default",
       "official_baseline_command_env_var": "SSTW_VIDEOSHIELD_OFFICIAL_EVAL_COMMAND",
       "official_entrypoint_candidates": [
         "watermark_embedding_and_extraction.py",
@@ -22,9 +23,11 @@
         "spatial_tamper_localization.py"
       ],
       "official_eval_command_contract": {
-        "description": "该命令在 bridge 内部调用第三方官方实现, 并把官方输出 JSON 写入 {official_output_json_path}。",
+        "description": "该命令在 bridge 内部读取项目内 VideoShield official bundle; bundle 由 videoshield_formal_reference_colab.ipynb 调用项目内官方生成 / 反演 runtime 生成。",
         "env_var": "SSTW_VIDEOSHIELD_OFFICIAL_EVAL_COMMAND",
-        "fail_closed_policy": "缺少官方源码、官方权重、官方 key/message/maintained info 或官方输出时必须失败, 不允许输出 proxy 分数。",
+        "fail_closed_policy": "缺少官方源码、官方模型下载能力、项目内 official bundle 或用户显式 native command 时必须失败, 不允许输出 proxy 分数。",
+        "formal_reference_notebook_runner_module": "external_baseline.videoshield_official_runtime",
+        "formal_reference_notebook_runner_policy": "baseline 专用 Notebook 只生成当前 VideoShield official bundle, 不直接写 measured_formal records。",
         "official_result_bundle_path_convention": [
           "<bundle_root>/<baseline_id>/records/<prompt_id>__<seed_id>__<attack_name>.json",
           "<bundle_root>/<baseline_id>/records/<trajectory_trace_id>__<attack_name>.json",
@@ -50,10 +53,11 @@
         "<bundle_root>/<baseline_id>/<trajectory_trace_id>/<attack_name>.json"
       ],
       "official_result_bundle_supported": true,
+      "project_owned_formal_reference_runner_module": "external_baseline.videoshield_official_runtime",
       "repository_generated_result_cache_allowed": true,
       "repository_official_eval_adapter_module": "external_baseline.official_eval_adapters.videoshield",
       "repository_official_eval_command_template": "python -m external_baseline.official_eval_adapters.videoshield --official-source-dir /content/SSTW/external_baseline/primary/videoshield/source --source-video {source_video_path} --attacked-video {attacked_video_path} --attack-name {attack_name} --official-output-json {official_output_json_path} --run-root {run_root} --prompt-id {prompt_id} --seed-id {seed_id} --trajectory-trace-id {trajectory_trace_id}",
-      "repository_official_eval_command_template_status": "repository_official_wrapper_ready_fail_closed_requires_official_source_and_artifacts",
+      "repository_official_eval_command_template_status": "repository_official_wrapper_ready_with_project_owned_videoshield_runtime_default",
       "score_output_contract": {
         "formal_record_policy": "only_command_outputs_are_converted_to_measured_formal_records",
         "json_object_required": true,
@@ -70,11 +74,11 @@
       "source_clone_command": "git clone --branch master https://github.com/hurunyi/VideoShield /content/SSTW/external_baseline/primary/videoshield/source",
       "source_verification_status": "git_ls_remote_head_verified_2026_06_25",
       "sstw_eval_command_template": "python -m external_baseline.official_command_bridge --baseline-id videoshield --official-source-dir /content/SSTW/external_baseline/primary/videoshield/source --source-video {source_video_path} --attacked-video {attacked_video_path} --attack-name {attack_name} --output-json {output_json_path} --run-root {run_root} --prompt-id {prompt_id} --seed-id {seed_id} --trajectory-trace-id {trajectory_trace_id}",
-      "sstw_eval_command_template_status": "repository_bridge_ready_requires_official_eval_command",
+      "sstw_eval_command_template_status": "repository_bridge_ready_uses_project_owned_official_bundle_when_available",
       "strict_gate_resource_resolution_order": [
-        "SSTW_VIDEOSHIELD_NATIVE_EVAL_COMMAND",
-        "repository_official_eval_adapter_default_runtime_when_supported",
-        "repository_generated_official_bundle_cache"
+        "project_owned_videoshield_generation_inversion_runtime",
+        "repository_generated_official_bundle_cache",
+        "SSTW_VIDEOSHIELD_NATIVE_EVAL_COMMAND"
       ],
       "verified_head_commit": "a61efa73abb15d30f50ee535c3301cea7dec3075"
     },
@@ -226,6 +230,7 @@
       "display_name": "VideoMark",
       "external_baseline_command_env_var": "SSTW_VIDEOMARK_EVAL_COMMAND",
       "external_supplemental_result_bundle_allowed": false,
+      "formal_reference_runner_mode": "official_videomark_embedding_extraction_temporal_tamper_then_project_owned_bundle_record",
       "official_baseline_command_env_var": "SSTW_VIDEOMARK_OFFICIAL_EVAL_COMMAND",
       "official_entrypoint_candidates": [
         "PRC_key_gen.py",
@@ -261,6 +266,7 @@
         "<bundle_root>/<baseline_id>/<trajectory_trace_id>/<attack_name>.json"
       ],
       "official_result_bundle_supported": true,
+      "project_owned_formal_reference_runner_module": "external_baseline.videomark_official_runtime",
       "repository_generated_result_cache_allowed": true,
       "repository_official_eval_adapter_module": "external_baseline.official_eval_adapters.videomark",
       "repository_official_eval_command_template": "python -m external_baseline.official_eval_adapters.videomark --official-source-dir /content/SSTW/external_baseline/primary/videomark/source --source-video {source_video_path} --attacked-video {attacked_video_path} --attack-name {attack_name} --official-output-json {official_output_json_path} --run-root {run_root} --prompt-id {prompt_id} --seed-id {seed_id} --trajectory-trace-id {trajectory_trace_id}",
@@ -287,9 +293,7 @@
         "repository_generated_official_bundle_cache",
         "SSTW_VIDEOMARK_NATIVE_EVAL_COMMAND"
       ],
-      "verified_head_commit": "9f8d78b73ab9f9f055651b1b4f37d68bdb05e7be",
-      "formal_reference_runner_mode": "official_videomark_embedding_extraction_temporal_tamper_then_project_owned_bundle_record",
-      "project_owned_formal_reference_runner_module": "external_baseline.videomark_official_runtime"
+      "verified_head_commit": "9f8d78b73ab9f9f055651b1b4f37d68bdb05e7be"
     },
     {
       "baseline_id": "vidsig",
@@ -297,6 +301,7 @@
       "display_name": "VidSig",
       "external_baseline_command_env_var": "SSTW_VIDSIG_EVAL_COMMAND",
       "external_supplemental_result_bundle_allowed": false,
+      "formal_reference_runner_mode": "official_generate_ms_watermarked_video_project_runtime_attack_then_official_attack_py",
       "official_baseline_command_env_var": "SSTW_VIDSIG_OFFICIAL_EVAL_COMMAND",
       "official_entrypoint_candidates": [
         "src/generate_ms.py",
@@ -307,6 +312,8 @@
         "description": "该命令在 bridge 内部调用第三方官方实现, 并把官方输出 JSON 写入 {official_output_json_path}。",
         "env_var": "SSTW_VIDSIG_OFFICIAL_EVAL_COMMAND",
         "fail_closed_policy": "缺少官方源码、官方 msg decoder、官方 VAE checkpoint、prompt/seed suite 或官方生成/检测输出时必须失败; 不允许直接把 SSTW/Wan 视频送入 VidSig detector 伪造成 baseline 分数。",
+        "formal_reference_notebook_runner_module": "external_baseline.vidsig_official_runtime",
+        "formal_reference_notebook_runner_policy": "先运行 VidSig 官方 generate_ms.py 生成 clean / watermarked videos, 再对 VidSig watermarked video 施加项目 runtime attack, 最后调用官方 attack.py 生成 project-owned official bundle; 该 bundle 由统一 runner 转写 measured_formal。",
         "official_result_bundle_path_convention": [
           "<bundle_root>/<baseline_id>/records/<prompt_id>__<seed_id>__<attack_name>.json",
           "<bundle_root>/<baseline_id>/records/<trajectory_trace_id>__<attack_name>.json",
@@ -321,9 +328,7 @@
           "{attacked_video_path}",
           "{attack_name}"
         ],
-        "required_output_token": "{official_output_json_path}",
-        "formal_reference_notebook_runner_module": "external_baseline.vidsig_official_runtime",
-        "formal_reference_notebook_runner_policy": "先运行 VidSig 官方 generate_ms.py 生成 clean / watermarked videos, 再对 VidSig watermarked video 施加项目 runtime attack, 最后调用官方 attack.py 生成 project-owned official bundle; 该 bundle 由统一 runner 转写 measured_formal。"
+        "required_output_token": "{official_output_json_path}"
       },
       "official_repository_branch": "main",
       "official_repository_url": "https://github.com/hardenyu21/Video-Signature",
@@ -334,6 +339,7 @@
         "<bundle_root>/<baseline_id>/<trajectory_trace_id>/<attack_name>.json"
       ],
       "official_result_bundle_supported": true,
+      "project_owned_formal_reference_runner_module": "external_baseline.vidsig_official_runtime",
       "repository_generated_result_cache_allowed": true,
       "repository_official_eval_adapter_module": "external_baseline.official_eval_adapters.vidsig",
       "repository_official_eval_command_template": "python -m external_baseline.official_eval_adapters.vidsig --official-source-dir /content/SSTW/external_baseline/primary/vidsig/source --source-video {source_video_path} --attacked-video {attacked_video_path} --attack-name {attack_name} --official-output-json {official_output_json_path} --run-root {run_root} --prompt-id {prompt_id} --seed-id {seed_id} --trajectory-trace-id {trajectory_trace_id}",
@@ -360,9 +366,7 @@
         "repository_generated_official_bundle_cache",
         "SSTW_VIDSIG_NATIVE_EVAL_COMMAND"
       ],
-      "verified_head_commit": "9d219c47670c30fdaaccd17b24e7783c976a8c66",
-      "formal_reference_runner_mode": "official_generate_ms_watermarked_video_project_runtime_attack_then_official_attack_py",
-      "project_owned_formal_reference_runner_module": "external_baseline.vidsig_official_runtime"
+      "verified_head_commit": "9d219c47670c30fdaaccd17b24e7783c976a8c66"
     },
     {
       "baseline_id": "videoseal",
@@ -496,7 +500,7 @@
     "attack_name",
     "output_json_path"
   ],
+  "runnability_audit_note": "当前核验结论针对 validation_scale Colab L4 默认路径: VideoSeal、VideoShield、VideoMark 与 VidSig 具备项目内 official bundle 生成路径; SIGMark 具备项目内 Hunyuan runner 但需要高显存; SPDMark 仍需官方 extractor / gt bits 闭合后才能产出 measured_formal。",
   "source_verification_method": "GitHub repository inspection and git ls-remote --heads for configured branch HEAD commits",
-  "verified_at_utc": "2026-06-25T00:00:00Z",
-  "runnability_audit_note": "当前核验结论针对 validation_scale Colab L4 默认路径: VideoSeal、VideoMark 与 VidSig 具备项目内 official bundle 生成路径; SIGMark 具备项目内 Hunyuan runner 但需要高显存; VideoShield 与 SPDMark 仍需额外官方资源或 native command 适配后才能产出 measured_formal。"
+  "verified_at_utc": "2026-06-25T00:00:00Z"
 }

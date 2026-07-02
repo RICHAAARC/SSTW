@@ -154,8 +154,8 @@ claim_support_status: measured_formal_self_contained_results_required_for_valida
 1. 在 Colab 或等价受治理运行环境中, 由本项目 clone / build 每个现代 baseline 的官方源码、权重和依赖。
 2. 通过 `configs/external_baselines/official_runtime_closure_requirements.json` 和 `configs/external_baselines/requirements/<baseline_id>.txt` 明确每个 baseline 的真实运行要求; 6 个 formal reference Notebook 默认会安装各自的 requirements 文件。
 3. 运行 `external_baseline.official_runtime_closure`, 写出 `artifacts/external_baseline_official_runtime_closure_requirements.json`; 若 Google Drive 默认资源路径已存在, Notebook 应自动应用其中的 `environment_updates`。
-4. 配置 `SSTW_VIDEOSHIELD_EVAL_COMMAND`、`SSTW_SIGMARK_EVAL_COMMAND`、`SSTW_SPDMARK_EVAL_COMMAND`、`SSTW_VIDEOMARK_EVAL_COMMAND`、`SSTW_VIDSIG_EVAL_COMMAND` 和 `SSTW_VIDEOSEAL_EVAL_COMMAND`, 或配置 repository bridge + official inner command。
-5. 按顺序运行 6 个 `*_formal_reference_colab.ipynb`, 以同一 prompt / seed / attack 协议为锚点, 让每个 baseline 在自己的 Notebook 内完成官方流程、生成项目内 official bundle, 并默认调用统一 runner 转写当前可用的 `measured_formal` records。
+4. 默认使用 repository bridge + official inner command; 不要求用户手写 6 个 `SSTW_<BASELINE>_EVAL_COMMAND`。只有在官方仓库新增更合适 CLI 时, 才通过 `SSTW_<BASELINE>_NATIVE_EVAL_COMMAND` 覆盖单个 baseline。
+5. 按顺序运行 6 个 `*_formal_reference_colab.ipynb`, 以同一 prompt / seed / attack 协议为锚点, 让每个 baseline 在自己的 Notebook 内完成官方流程、生成项目内 official bundle, 并默认调用统一 runner 转写当前可用的 `measured_formal` records。其中 VideoShield、VideoMark、VidSig、VideoSeal 和 SIGMark 已有项目内运行器或官方 API 路径; SPDMark 仍需官方 extractor / gt bits 闭合后才能通过。
 6. 在 6 个 official bundle 全部完成后运行 `paper_workflow/colab_notebooks/paper_gate_and_package_colab.ipynb`, 由 paper gate 恢复全部 official reference 阶段包后执行全量统一转写、self-containment 判定和打包。
 7. 写出 `artifacts/external_baseline_self_containment_decision.json`, 逐 baseline 记录 clone / build / run / adapt / record 状态。
 8. 仅当全部现代 baseline 都产生项目内自包含 governed `measured_formal` records 后, 才允许 validation_scale gate 通过; validation_scale 通过后还必须生成 validation_scale_to_pilot_paper_transition_decision 才能进入 pilot_paper, full_paper 仍需 pilot_paper gate、pilot_paper_to_full_paper_transition_decision 与 full_paper_result_checker。

@@ -121,7 +121,7 @@ def test_modern_baseline_colab_command_config_is_guidance_not_claim_evidence() -
         assert row["external_baseline_command_env_var"] == f"SSTW_{baseline_id.upper()}_EVAL_COMMAND"
         assert row["official_baseline_command_env_var"] == f"SSTW_{baseline_id.upper()}_OFFICIAL_EVAL_COMMAND"
         assert row["source_verification_status"] == "git_ls_remote_head_verified_2026_06_25"
-        if baseline_id == "videomark":
+        if baseline_id in {"videomark", "videoshield"}:
             assert row["sstw_eval_command_template_status"] == "repository_bridge_ready_uses_project_owned_official_bundle_when_available"
         else:
             assert row["sstw_eval_command_template_status"] == "repository_bridge_ready_requires_official_eval_command"
@@ -129,6 +129,11 @@ def test_modern_baseline_colab_command_config_is_guidance_not_claim_evidence() -
             assert row["repository_official_eval_command_template_status"] == (
                 "repository_official_wrapper_ready_with_project_owned_videomark_runtime_default"
             )
+        elif baseline_id == "videoshield":
+            assert row["repository_official_eval_command_template_status"] == (
+                "repository_official_wrapper_ready_with_project_owned_videoshield_runtime_default"
+            )
+            assert row["project_owned_formal_reference_runner_module"] == "external_baseline.videoshield_official_runtime"
         elif baseline_id == "vidsig":
             assert row["repository_official_eval_command_template_status"] == (
                 "repository_official_wrapper_ready_with_project_owned_vidsig_runtime_default"
@@ -160,6 +165,9 @@ def test_official_resource_requirements_define_auto_and_manual_boundaries() -> N
     assert rows["videoseal"]["colab_l4_auto_bundle_status"] == "auto_bundle_supported"
     assert rows["vidsig"]["automatic_bundle_generation_supported_by_sstw"] is True
     assert rows["vidsig"]["colab_l4_auto_bundle_status"] == "auto_bundle_supported_after_public_checkpoint_bootstrap"
+    assert rows["videoshield"]["automatic_bundle_generation_supported_by_sstw"] is True
+    assert rows["videoshield"]["colab_l4_auto_bundle_status"] == "auto_bundle_supported_after_hf_model_download_and_colab_gpu_success"
+    assert rows["videoshield"]["project_owned_runner_module"] == "external_baseline.videoshield_official_runtime"
     assert rows["spdmark"]["automatic_bundle_generation_supported_by_sstw"] is False
     assert rows["spdmark"]["colab_l4_auto_bundle_status"] == "blocked_by_missing_public_trained_weights"
     assert rows["sigmark"]["colab_l4_auto_bundle_status"] == "blocked_by_official_gpu_memory_requirement"
@@ -180,6 +188,10 @@ def test_official_runtime_closure_requirements_are_first_class_colab_config() ->
     assert rows["vidsig"]["automatic_bundle_generation_supported_by_sstw"] is True
     assert rows["vidsig"]["colab_default_can_attempt_without_user_files"] is True
     assert rows["vidsig"]["project_owned_vidsig_runner_module"] == "external_baseline.vidsig_official_runtime"
+    assert rows["videoshield"]["automatic_bundle_generation_supported_by_sstw"] is True
+    assert rows["videoshield"]["colab_default_can_attempt_without_user_files"] is True
+    assert rows["videoshield"]["project_owned_videoshield_runner_module"] == "external_baseline.videoshield_official_runtime"
+    assert rows["videoshield"]["resource_env_vars"] == []
     videoseal_requirements = Path(rows["videoseal"]["requirements_file"]).read_text(encoding="utf-8")
     assert "ffmpeg-python" in videoseal_requirements
     assert "git+https://github.com/facebookresearch/videoseal" not in videoseal_requirements
@@ -357,10 +369,10 @@ def test_official_bundle_generation_plan_is_fail_closed_about_auto_blocked_basel
 
     assert plan["runtime_comparison_unit_count"] == 2
     assert plan["baseline_count"] == 6
-    assert plan["auto_supported_baselines"] == ["videomark", "vidsig", "videoseal"]
+    assert plan["auto_supported_baselines"] == ["videoshield", "videomark", "vidsig", "videoseal"]
     assert "spdmark" in plan["auto_blocked_baselines"]
     assert "sigmark" in plan["auto_blocked_baselines"]
-    assert plan["auto_blocked_baseline_count"] == 3
+    assert plan["auto_blocked_baseline_count"] == 2
     spdmark_row = next(row for row in plan["plan_rows"] if row["baseline_id"] == "spdmark")
     assert spdmark_row["automatic_bundle_generation_supported_by_sstw"] is False
     assert spdmark_row["resource_blocker"]
@@ -381,8 +393,9 @@ def test_official_resource_bootstrap_writes_repair_artifact_without_network(tmp_
     assert artifact_path.exists()
     assert decision["official_resource_bootstrap_decision"] == "PASS"
     assert "videoseal" in decision["ready_baselines"]
+    assert "videoshield" in decision["ready_baselines"]
     assert "spdmark" in decision["manual_official_resource_required_baselines"]
-    assert decision["manual_official_resource_required_count"] >= 4
+    assert decision["manual_official_resource_required_count"] >= 3
     assert decision["strict_gate_auto_resource_closure"] is False
     assert decision["environment_updates"]["SSTW_EXTERNAL_BASELINE_RESOURCE_ROOT"].endswith("external_baseline")
 

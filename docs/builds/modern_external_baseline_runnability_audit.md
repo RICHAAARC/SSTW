@@ -31,7 +31,7 @@ checkpoint、key、message、训练权重、官方中间产物和项目 adapter 
 | VideoSeal | 有条件可以 | 否 | 需要 Colab 成功安装 VideoSeal 依赖并下载官方 checkpoint。 |
 | VidSig | 有条件可以 | 否 | 已补齐项目内 `external_baseline.vidsig_official_runtime`, 默认运行官方 `generate_ms.py` 生成 VidSig clean / watermarked videos, 再施加项目 runtime attack 并调用官方 `attack.py`; 仍需要公开 checkpoint、Hugging Face 模型下载和可完成 Text-to-Video 的 GPU。 |
 | VideoMark | 有条件可以 | 否 | 已补齐项目内运行官方 PRC key、embedding、extraction 和 temporal tamper 流程; 仍需要 Colab 成功下载模型并完成官方脚本。 |
-| VideoShield | 不能直接完成 | 是 | 需要官方 generation / inversion / maintained info 流程, 不能只对 SSTW 普通视频后处理检测。 |
+| VideoShield | 有条件可以 | 否 | 已补齐项目内 `external_baseline.videoshield_official_runtime`, 默认调用官方 VideoShield watermark、ModelScope 生成、latent inversion 与 temporal matching 流程; 仍需要 Colab 成功下载 Hugging Face 模型并完成 GPU 反演。 |
 | SPDMark | 不能直接完成 | 是 | 需要训练出的 decoder / extractor 权重和 ground-truth bits。 |
 | SIGMark | 有条件可以 | 否 | 已补齐项目内 `external_baseline.sigmark_official_hunyuan_runtime`, 可运行官方 Hunyuan `gen -> extract` 并转写 official bundle; 仍需要高显存 GPU 或可完成 HunyuanVideo 的 Colab 规格。 |
 
@@ -65,6 +65,13 @@ VidSig 也是特殊项: 它是生成过程中嵌入签名的方法, 因此 adapt
 VidSig 自己的 clean / watermarked videos, 再对 VidSig watermarked videos 应用同名
 `video_compression_runtime`、`temporal_crop_runtime`、`frame_rate_resampling_runtime`,
 最后调用官方 `attack.py` 写出 project-owned official bundle。
+
+VideoShield 同样是生成过程中嵌入水印的方法。`videoshield_formal_reference_colab.ipynb`
+默认调用 `external_baseline.videoshield_official_runtime`, 以同一 prompt / seed 为锚点
+运行官方 VideoShield watermark 与 ModelScope 生成路径, 再对 VideoShield 自己的
+watermarked video 施加项目 runtime attack, 最后调用官方 latent inversion 与 temporal
+matching 逻辑写出 project-owned official bundle。该 bundle 仍不是最终论文记录, 后续
+必须由统一 external baseline runner 转写为 `metric_status: measured_formal`。
 
 ## 5. 结论
 

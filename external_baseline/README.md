@@ -151,10 +151,14 @@ python -m external_baseline.official_result_bundle \
 `SSTW/<workflow_profile>/external_baseline_official_reference/`。
 
 上述顺序体现严格门禁的修复策略: 不是只检查失败, 而是先自动准备可公开资源、再落盘真实运行闭合要求、
-再自动生成可由官方 API 支持的 repository-owned official bundle cache、最后执行 fail-closed preflight。若某个 baseline
-的官方仓库未公开训练权重、需要大显存生成模型、需要 PRC key / maintained info 或需要
-项目内官方中间产物, bootstrap 与 bundle generator 会写出明确阻断原因, 不会用 SSTW
-检测分数或视频相似度伪造结果, 也不会要求用户外部补交分数文件。
+再自动生成可由官方 API 或项目内官方流程运行器支持的 repository-owned official bundle
+cache、最后执行 fail-closed preflight。当前 VideoShield 通过
+`external_baseline.videoshield_official_runtime` 运行官方 watermark generation、
+ModelScope 生成、latent inversion 与 temporal matching; 失败时仍记录为运行缺口,
+不会降级为直接检测 SSTW / Wan 视频。若某个 baseline 的官方仓库未公开训练权重、
+需要大显存生成模型、需要 PRC key / maintained info 或需要项目内官方中间产物,
+bootstrap 与 bundle generator 会写出明确阻断原因, 不会用 SSTW 检测分数或视频相似度
+伪造结果, 也不会要求用户外部补交分数文件。
 
 真实运行闭合要求配置位于:
 

@@ -9,3 +9,5 @@ scipy
 opencv-python
 imageio
 imageio-ffmpeg
+pycryptodome
+tqdm

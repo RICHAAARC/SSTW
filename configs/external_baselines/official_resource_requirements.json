@@ -4,23 +4,24 @@
   "config_version": "2026_06_26_project_self_contained_external_baseline_resources_v2",
   "resource_rows": [
     {
-      "additional_adapter_work_required": true,
-      "automatic_bundle_generation_supported_by_sstw": false,
+      "additional_adapter_work_required": false,
+      "automatic_bundle_generation_supported_by_sstw": true,
       "baseline_id": "videoshield",
-      "colab_l4_auto_bundle_status": "resource_heavy_not_guaranteed",
+      "colab_l4_auto_bundle_status": "auto_bundle_supported_after_hf_model_download_and_colab_gpu_success",
       "external_supplemental_result_bundle_allowed": false,
       "official_repository_url": "https://github.com/hurunyi/VideoShield",
-      "official_runtime_mode": "official_generation_and_inversion",
+      "official_runtime_mode": "official_generation_watermarked_video_project_runtime_attack_official_inversion",
+      "project_owned_runner_module": "external_baseline.videoshield_official_runtime",
       "public_resource_status": "official_source_public_modelscope_or_svd_model_downloadable",
-      "reason_automatic_bundle_not_supported": "VideoShield detection depends on watermark generation maintained info and latent inversion under its supported video model; generating this fairly for every SSTW prompt is a separate official baseline generation run.",
-      "required_adapter_work_summary": "需要把官方 generation / inversion / maintained info 流程封装为项目内 native command, 或由项目 workflow 生成覆盖全部 comparison units 的 official bundle。",
+      "reason_automatic_bundle_not_supported": "not_applicable",
+      "required_adapter_work_summary": "已由 external_baseline.videoshield_official_runtime 封装 VideoShield 官方 watermark 生成、ModelScope 反演和 temporal matching 流程; Notebook 可在项目内生成 official bundle, 再由统一 runner 转写 measured_formal。",
       "required_public_or_user_resources": [
-        "ModelScope text-to-video model or Stable Video Diffusion model",
-        "official generated wm_info.bin and watermarked frames/video, or native official command output"
+        "ModelScope text-to-video model damo-vilab/text-to-video-ms-1.7b, 可由 Hugging Face / diffusers 在 Colab 中下载或从缓存复用",
+        "VideoShield 官方源码 external_baseline/primary/videoshield/source"
       ],
       "self_contained_result_policy": "project_clone_build_run_adapt_record_required",
       "strict_gate_resolution": "必须在本项目 workflow 内完成官方源码 clone、依赖构建、官方命令运行、adapter 转换和 governed record 写出; 无法运行时记录 non_runnable_with_governed_reason, 不接受外部补交结果包",
-      "validation_scale_colab_runnability_status": "not_runnable_without_additional_official_generation_adapter"
+      "validation_scale_colab_runnability_status": "runnable_if_hf_model_download_and_colab_gpu_succeed"
     },
     {
       "additional_adapter_work_required": false,
@@ -72,6 +73,7 @@
       "external_supplemental_result_bundle_allowed": false,
       "official_repository_url": "https://github.com/KYRIE-LI11/VideoMark",
       "official_runtime_mode": "official_prc_key_generation_embedding_extraction_temporal_tamper",
+      "project_owned_runner_module": "external_baseline.videomark_official_runtime",
       "public_resource_status": "official_source_public_modelscope_or_i2vgen_model_downloadable",
       "reason_automatic_bundle_not_supported": "已补齐项目内 VideoMark 官方 embedding/extraction/temporal tamper 运行器; 若 Colab GPU 或模型下载不足, 应记录运行阻断。",
       "required_adapter_work_summary": "已由 external_baseline.videomark_official_runtime 在项目内完成官方 prompt set 构造、embedding/extraction、temporal tamper、temporal_results 转 official bundle。",
@@ -82,8 +84,7 @@
       ],
       "self_contained_result_policy": "project_clone_build_run_adapt_record_required",
       "strict_gate_resolution": "必须在本项目 workflow 内完成官方源码 clone、依赖构建、官方命令运行、adapter 转换和 governed record 写出; 无法运行时记录 non_runnable_with_governed_reason, 不接受外部补交结果包",
-      "validation_scale_colab_runnability_status": "project_owned_runner_available",
-      "project_owned_runner_module": "external_baseline.videomark_official_runtime"
+      "validation_scale_colab_runnability_status": "project_owned_runner_available"
     },
     {
       "additional_adapter_work_required": false,

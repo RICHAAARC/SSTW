@@ -1642,7 +1642,7 @@ modern_external_baseline_measured_formal_results: pending_real_colab_official_ar
 当前真实运行仍需要 Colab 提供第三方官方源码和对应官方产物。典型额外输入包括:
 
 ```text
-SSTW_VIDEOSHIELD_RESULT_JSON 或 SSTW_VIDEOSHIELD_NATIVE_EVAL_COMMAND
+VideoShield 由 external_baseline.videoshield_official_runtime 在项目内运行官方 watermark generation -> latent inversion -> temporal matching, 或由 SSTW_VIDEOSHIELD_NATIVE_EVAL_COMMAND 显式覆盖
 SSTW_SIGMARK_BIT_ACCURACY_NPZ 或 SSTW_SIGMARK_NATIVE_EVAL_COMMAND
 SSTW_SPDMARK_EXTRACTOR_PATH + SSTW_SPDMARK_GT_BITS_PATH 或 SSTW_SPDMARK_NATIVE_EVAL_COMMAND
 SSTW_VIDEOMARK_TEMPORAL_RESULTS_JSON 或 SSTW_VIDEOMARK_NATIVE_EVAL_COMMAND
@@ -1729,8 +1729,9 @@ external_baseline_formal_scoring_notebook_auto_repair_path: integrated
 
 该更新的含义是: Colab 冷启动时不再只告诉用户缺少官方资源, 而是会先尝试自动安装
 公开依赖、下载公开 checkpoint, 并为可自动支持的 baseline 生成 official bundle。当前
-VideoSeal、VideoMark 与 VidSig 已有项目内 official bundle 生成路径; 其中 VidSig 必须先
-运行官方 `generate_ms.py` 生成自己的 clean / watermarked videos, 不能直接检测 SSTW / Wan 视频。
+VideoSeal、VideoShield、VideoMark 与 VidSig 已有项目内 official bundle 生成路径; 其中
+VideoShield 与 VidSig 必须先运行各自官方生成流程得到 baseline 自己的 watermarked videos,
+不能直接检测 SSTW / Wan 视频。
 若某个
 baseline 客观需要未公开训练权重、高显存官方生成流程、PRC key 或 maintained info,
 workflow 会写出 `manual_official_resource_required`, 仍然不会把该 baseline 伪造成

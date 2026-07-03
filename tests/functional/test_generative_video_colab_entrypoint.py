@@ -227,32 +227,38 @@ def test_generative_video_colab_notebook_calls_repository_modules() -> None:
     assert "ensure_drive_layout(" in source
     assert "SSTW_COLAB_STAGE_IO_MODE" in source
     assert "prepare_colab_stage_layout" in source
-    assert "publish_colab_stage_package" in source
+    assert "publish_colab_stage_package" not in source
+    assert "publish_colab_stage_package" in helper_text
     assert "active_local_layout" in source
     assert "workflow_profile=WORKFLOW_PROFILE" in source
-    assert "stage_enabled(" in source
-    assert "workflow_stage_enabled" in source
+    assert "run_configured_colab_stage_plan" in source
+    assert "stage_enabled(" not in source
+    assert "workflow_stage_enabled" not in source
     assert "HF_TOKEN" in source
     assert "add_to_git_credential=False" in source
     assert "generative_video_model_probe_workflow" in source
     assert "MODEL_ID = os.environ.get('SSTW_MODEL_ID'" in source
-    assert "RUN_EXTERNAL_BASELINE_SOURCE_CLONE" in source
-    assert "EXTERNAL_BASELINE_EVIDENCE_PATHS" in source
-    assert "REQUIRE_MODERN_BASELINE_COMMANDS_FOR_PAPER_GATE" in source
-    assert "SSTW_EXTERNAL_BASELINE_EVIDENCE_PATHS" in source
-    assert "build_modern_baseline_command_env" in source
-    assert "write_modern_baseline_colab_command_config_summary" in source
-    assert "write_external_baseline_colab_preflight_decision" in source
-    assert "validate_modern_baseline_commands_for_profile" in source
+    assert "RUN_EXTERNAL_BASELINE_SOURCE_CLONE" not in source
+    assert "EXTERNAL_BASELINE_EVIDENCE_PATHS" not in source
+    assert "REQUIRE_MODERN_BASELINE_COMMANDS_FOR_PAPER_GATE" not in source
+    assert "SSTW_EXTERNAL_BASELINE_EVIDENCE_PATHS" not in source
+    assert "build_modern_baseline_command_env" not in source
+    assert "write_modern_baseline_colab_command_config_summary" not in source
+    assert "write_external_baseline_colab_preflight_decision" not in source
+    assert "validate_modern_baseline_commands_for_profile" not in source
+    assert "build_modern_baseline_command_env" in helper_text
+    assert "write_modern_baseline_colab_command_config_summary" in helper_text
+    assert "write_external_baseline_colab_preflight_decision" in helper_text
+    assert "validate_modern_baseline_commands_for_profile" in helper_text
     assert "external_baseline_colab_preflight_decision" in helper_text
     assert "external_baseline_command_template_summary" in helper_text
-    assert "write_motion_threshold_reuse_artifact_for_profile" in source
-    assert "build_formal_metric_command" in source
-    assert "build_motion_threshold_calibration_command" in source
-    assert "build_mechanism_postprocess_command" in source
-    assert "build_protocol_evaluation_matrix_postprocess_command" in source
-    assert "build_runtime_attack_command" in source
-    assert "build_runtime_detection_command" in source
+    assert "write_motion_threshold_reuse_artifact_for_profile" not in source
+    assert "build_formal_metric_command" not in source
+    assert "build_motion_threshold_calibration_command" not in source
+    assert "build_mechanism_postprocess_command" not in source
+    assert "build_protocol_evaluation_matrix_postprocess_command" not in source
+    assert "build_runtime_attack_command" not in source
+    assert "build_runtime_detection_command" not in source
     assert "build_pilot_matrix_postprocess_command" not in source
     assert "build_small_scale_claim_pilot_gate_command" not in source
     assert "build_external_baseline_source_intake_command" not in source
@@ -292,8 +298,10 @@ def test_generative_video_colab_notebook_calls_repository_modules() -> None:
     assert "experiments.generative_video_model_probe.validation_artifact_rebuild" in helper_text
     assert "experiments.generative_video_model_probe.validation_scale_gate" in helper_text
     assert "scripts/package_results/generative_video_drive_packager.py" in helper_text
-    assert "pytest -q" in source
-    assert "tools/harness/run_all_audits.py" in source
+    assert "pytest -q" not in source
+    assert "tools/harness/run_all_audits.py" not in source
+    assert "pytest" in helper_text
+    assert "tools/harness/run_all_audits.py" in helper_text
     assert "pilot_paper_results" not in source
 
 
@@ -324,36 +332,50 @@ def test_split_colab_notebooks_are_profile_driven() -> None:
         assert "workflow_profile=WORKFLOW_PROFILE" in source
         assert "SSTW_COLAB_STAGE_IO_MODE" in source
         assert "prepare_colab_stage_layout" in source
-        assert "publish_colab_stage_package" in source
+        assert "publish_colab_stage_package" not in source
+        assert "run_configured_colab_stage_plan" in source
         assert "layout['drive_package_dir']" not in source
         assert "package_dir = Path(layout['drive_package_dir'])" not in source
-        assert "stage_package_dir = Path(layout['stage_package_dir'])" in source
-        assert "drive_stage_package_zip" in source
-        assert "stage_package_manifest_path" in source
+        assert "stage_package_dir = Path(layout['stage_package_dir'])" not in source
+        assert "drive_stage_package_zip" not in source
+        assert "stage_package_manifest_path" not in source
         assert "active_local_layout" in source
-        assert "stage_enabled(" in source
+        assert "stage_enabled(" not in source
         assert "drive.mount('/content/drive')" in source
         assert "git clone" in source
-        assert "tools/harness/run_all_audits.py" in source
+        assert "tools/harness/run_all_audits.py" not in source
         assert "pilot_paper_results" not in source
         assert "full_paper_results" not in source
 
     runtime_source = Path("paper_workflow/colab_notebooks/generative_video_runtime_colab.ipynb").read_text(encoding="utf-8")
     gate_source = Path("paper_workflow/colab_notebooks/paper_gate_and_package_colab.ipynb").read_text(encoding="utf-8")
-    assert "external_baseline_colab_preflight" in runtime_source
+    helper_text = Path("paper_workflow/notebook_utils/generative_video_model_probe_workflow.py").read_text(encoding="utf-8")
+    assert "external_baseline_colab_preflight" not in runtime_source
+    assert "external_baseline_colab_preflight" in helper_text
     assert "build_external_baseline_comparison_command" not in runtime_source
     assert "apply_paper_gate_external_baseline_environment" in gate_source
-    assert "build_motion_consistency_exclusion_report_command" in gate_source
-    assert "build_external_baseline_official_result_bundle_preflight_command" in gate_source
-    assert "build_external_baseline_comparison_command" in gate_source
-    assert "build_external_baseline_self_containment_decision_command" in gate_source
-    assert "build_low_fpr_formal_statistics_command" in gate_source
-    assert "build_sstw_measured_formal_result_command" in gate_source
-    assert "build_formal_method_baseline_comparison_command" in gate_source
-    assert "build_formal_baseline_difference_interval_command" in gate_source
-    assert "build_validation_scale_formal_internal_ablation_command" in gate_source
-    assert "build_pilot_paper_gate_command" in gate_source
-    assert "build_validation_scale_gate_command" in gate_source
+    assert "build_motion_consistency_exclusion_report_command" not in gate_source
+    assert "build_external_baseline_official_result_bundle_preflight_command" not in gate_source
+    assert "build_external_baseline_comparison_command" not in gate_source
+    assert "build_external_baseline_self_containment_decision_command" not in gate_source
+    assert "build_low_fpr_formal_statistics_command" not in gate_source
+    assert "build_sstw_measured_formal_result_command" not in gate_source
+    assert "build_formal_method_baseline_comparison_command" not in gate_source
+    assert "build_formal_baseline_difference_interval_command" not in gate_source
+    assert "build_validation_scale_formal_internal_ablation_command" not in gate_source
+    assert "build_pilot_paper_gate_command" not in gate_source
+    assert "build_validation_scale_gate_command" not in gate_source
+    assert "build_motion_consistency_exclusion_report_command" in helper_text
+    assert "build_external_baseline_official_result_bundle_preflight_command" in helper_text
+    assert "build_external_baseline_comparison_command" in helper_text
+    assert "build_external_baseline_self_containment_decision_command" in helper_text
+    assert "build_low_fpr_formal_statistics_command" in helper_text
+    assert "build_sstw_measured_formal_result_command" in helper_text
+    assert "build_formal_method_baseline_comparison_command" in helper_text
+    assert "build_formal_baseline_difference_interval_command" in helper_text
+    assert "build_validation_scale_formal_internal_ablation_command" in helper_text
+    assert "build_pilot_paper_gate_command" in helper_text
+    assert "build_validation_scale_gate_command" in helper_text
     assert not Path("paper_workflow/colab_notebooks/validation_scale_formal_gate_colab.ipynb").exists()
     assert not Path("paper_workflow/colab_notebooks/external_baseline_formal_scoring_colab.ipynb").exists()
     assert not list(Path("paper_workflow/colab_utils").glob("*.ipynb"))

@@ -10,6 +10,7 @@ import sys
 from typing import Any, Mapping
 
 from paper_workflow.colab_utils.stage_package_sync import (
+    publish_colab_stage_package,
     stage_package_dir,
     stage_package_id_for_notebook,
     stage_zip_handoff_enabled,
@@ -1681,3 +1682,343 @@ def build_drive_packaging_command(layout: dict[str, str], include_videos: bool =
 def run_command(command: list[str]) -> subprocess.CompletedProcess[str]:
     """执行 Notebook 编排命令, 并实时显示 repository runner 进度。"""
     return run_streaming_command(command)
+
+
+def _env_flag(name: str, default: bool) -> bool:
+    """从环境变量读取布尔开关。
+
+    该函数属于通用工程写法, 用于把 Colab 入口中易变的用户开关集中到
+    repository helper。Notebook cell 不再维护阶段流程或产物语义, 只负责把
+    profile 和少量运行入口参数传入本模块。
+    """
+
+    raw = os.environ.get(name)
+    if raw is None:
+        return default
+    return raw.strip().lower() in {"1", "true", "yes", "y", "on"}
+
+
+def _env_path_list(name: str) -> list[str]:
+    """按当前系统路径分隔符读取环境变量中的 evidence 路径列表。"""
+
+    return [item for item in os.environ.get(name, "").split(os.pathsep) if item]
+
+
+def _run_stage_command_or_raise(stage_name: str, command: list[str]) -> dict[str, Any]:
+    """执行单个 governed stage 命令, 非零退出时立即阻断。
+
+    这一实现属于 Notebook 入口复用层, 目的是避免每个 Notebook cell 都复制
+    `run_or_raise` 逻辑。具体命令仍由 repository command builder 生成。
+    """
+
+    print("\n===== stage:", stage_name, "=====")
+    print(" ".join(command))
+    result = run_command(command)
+    print(result.stdout)
+    print(result.stderr)
+    if result.returncode != 0:
+        raise SystemExit(result.returncode)
+    return {
+        "stage_name": stage_name,
+        "stage_execution_status": "completed",
+        "stage_execution_kind": "command",
+        "command": command,
+        "returncode": result.returncode,
+    }
+
+
+def write_external_baseline_colab_preflight_for_profile(
+    layout: dict[str, str],
+    *,
+    workflow_profile: str,
+) -> dict[str, Any]:
+    """执行 external baseline Colab 预检并写入 governed preflight artifacts。
+
+    该函数把此前散落在 Notebook cell 中的 baseline command 配置、bridge 预检、
+    source clone 开关和 evidence path 回写集中到 Python helper 中。Notebook 不再
+    维护 baseline 运行流程或产物闭环规则。
+    """
+
+    resolved = resolve_notebook_workflow_profile(
+        workflow_profile,
+        "external_baseline_formal_scoring"
+        if layout.get("notebook_role") == "external_baseline_formal_scoring"
+        else layout.get("notebook_role", ""),
+        allow_disabled=True,
+    ) if layout.get("notebook_role") else resolve_notebook_workflow_profile(workflow_profile, allow_disabled=True)
+    runtime_profile = str(resolved.get("runtime_profile") or workflow_profile)
+    run_external_baseline_source_clone = _env_flag("SSTW_RUN_EXTERNAL_BASELINE_SOURCE_CLONE", True)
+    require_modern_baseline_commands_for_paper_gate = _env_flag(
+        "SSTW_REQUIRE_MODERN_BASELINE_COMMANDS_FOR_PAPER_GATE",
+        True,
+    )
+    use_modern_baseline_bridge_commands = _env_flag("SSTW_USE_MODERN_BASELINE_BRIDGE_COMMANDS", True)
+    require_modern_baseline_bridge_official_commands = _env_flag(
+        "SSTW_REQUIRE_MODERN_BASELINE_BRIDGE_OFFICIAL_COMMANDS",
+        True,
+    )
+    use_repository_official_baseline_adapters = _env_flag(
+        "SSTW_USE_REPOSITORY_OFFICIAL_BASELINE_ADAPTERS",
+        True,
+    )
+    evidence_paths = _env_path_list("SSTW_EXTERNAL_BASELINE_EVIDENCE_PATHS")
+
+    modern_command_config_summary = write_modern_baseline_colab_command_config_summary(
+        layout,
+        profile=workflow_profile,
+    )
+    print(json.dumps(modern_command_config_summary, ensure_ascii=False, indent=2))
+
+    command_template_source: dict[str, str] = {}
+    if use_modern_baseline_bridge_commands:
+        command_template_source.update(build_modern_baseline_official_bridge_command_templates(runtime_profile))
+    if use_repository_official_baseline_adapters:
+        command_template_source.update(build_repository_official_baseline_eval_command_templates(runtime_profile))
+    command_template_source.update({str(key): str(value) for key, value in os.environ.items()})
+
+    bridge_preflight_decision = write_modern_baseline_official_bridge_preflight_decision(
+        layout,
+        profile=workflow_profile,
+        command_env=command_template_source,
+        use_bridge_commands=use_modern_baseline_bridge_commands,
+        require_bridge_official_commands=require_modern_baseline_bridge_official_commands,
+    )
+    print(json.dumps(bridge_preflight_decision, ensure_ascii=False, indent=2))
+    validate_modern_baseline_official_bridge_for_profile(bridge_preflight_decision)
+
+    modern_command_env = build_modern_baseline_command_env(runtime_profile, command_template_source)
+    external_baseline_preflight_decision = write_external_baseline_colab_preflight_decision(
+        layout,
+        profile=workflow_profile,
+        command_env=modern_command_env,
+        require_modern_baseline_commands_for_paper_gate=require_modern_baseline_commands_for_paper_gate,
+        run_external_baseline_source_clone=run_external_baseline_source_clone,
+        evidence_paths=evidence_paths,
+    )
+    print(json.dumps(external_baseline_preflight_decision, ensure_ascii=False, indent=2))
+    validate_modern_baseline_commands_for_profile(external_baseline_preflight_decision)
+
+    for env_name, command_template in modern_command_env.items():
+        if command_template:
+            os.environ[env_name] = command_template
+    os.environ["SSTW_EXTERNAL_BASELINE_EVIDENCE_PATHS"] = os.pathsep.join(evidence_paths)
+
+    return {
+        "stage_name": "external_baseline_colab_preflight",
+        "stage_execution_status": "completed",
+        "stage_execution_kind": "python_helper",
+        "modern_command_config_summary": modern_command_config_summary,
+        "bridge_preflight_decision": bridge_preflight_decision,
+        "external_baseline_preflight_decision": external_baseline_preflight_decision,
+        "modern_command_env_names": sorted(modern_command_env),
+    }
+
+
+def build_configured_colab_stage_command(
+    stage_name: str,
+    layout: dict[str, str],
+    *,
+    workflow_profile: str,
+    runtime_options: Mapping[str, Any] | None = None,
+) -> list[str]:
+    """根据统一 stage plan 构造单个 Colab stage 命令。
+
+    该函数是 Notebook 瘦入口的核心。Notebook 不再维护 `stage_name -> command`
+    字典, 只把 `workflow_profile` 交给配置和本 helper。新增或删除阶段时应改
+    `configs/paper_workflow/generative_video_notebook_workflows.json` 与本函数,
+    而不是改 Notebook cell。
+    """
+
+    options = dict(runtime_options or {})
+    resolved = resolve_notebook_workflow_profile(workflow_profile, allow_disabled=True)
+    runtime_profile = str(options.get("profile") or resolved.get("runtime_profile") or workflow_profile)
+
+    simple_builders = {
+        "prepare_prompt_suite": build_prompt_suite_command,
+        "motion_threshold_calibration": build_motion_threshold_calibration_command,
+        "mechanism_postprocess": build_mechanism_postprocess_command,
+        "protocol_evaluation_matrix_postprocess": build_protocol_evaluation_matrix_postprocess_command,
+        "runtime_attack": build_runtime_attack_command,
+        "runtime_detection": build_runtime_detection_command,
+        "external_baseline_official_result_bundle_preflight": build_external_baseline_official_result_bundle_preflight_command,
+        "external_baseline_comparison": build_external_baseline_comparison_command,
+        "external_baseline_self_containment_decision": build_external_baseline_self_containment_decision_command,
+        "motion_consistency_exclusion_report": build_motion_consistency_exclusion_report_command,
+        "validation_internal_ablation": build_validation_internal_ablation_command,
+        "adaptive_attack_proxy": build_adaptive_attack_command,
+        "replay_and_sketch_gate": build_replay_and_sketch_gate_command,
+        "claim3_downgrade_gate": build_claim3_downgrade_command,
+        "statistical_confidence_interval": build_statistical_confidence_interval_command,
+        "low_fpr_formal_statistics": build_low_fpr_formal_statistics_command,
+        "sstw_measured_formal_result": build_sstw_measured_formal_result_command,
+        "formal_method_baseline_comparison": build_formal_method_baseline_comparison_command,
+        "formal_baseline_difference_interval": build_formal_baseline_difference_interval_command,
+        "validation_scale_formal_internal_ablation": build_validation_scale_formal_internal_ablation_command,
+        "data_split_and_leakage_guard": build_data_split_and_leakage_guard_command,
+        "pilot_paper_gate": build_pilot_paper_gate_command,
+        "pilot_paper_to_full_paper_transition_decision": build_pilot_paper_to_full_paper_transition_decision_command,
+        "validation_artifact_rebuild_dry_run": build_validation_artifact_rebuild_dry_run_command,
+        "validation_scale_gate": build_validation_scale_gate_command,
+        "validation_scale_to_pilot_paper_transition_decision": build_validation_scale_to_pilot_paper_transition_decision_command,
+        "validation_scale_gate_figure_builder": build_validation_scale_gate_figure_builder_command,
+        "validation_scale_package_manifest_builder": build_validation_scale_package_manifest_builder_command,
+    }
+
+    if stage_name == "wan21_runtime_generation":
+        return build_colab_runtime_command(
+            layout,
+            runtime_profile,
+            str(options.get("model_id") or "Wan-AI/Wan2.1-T2V-1.3B-Diffusers"),
+            str(options.get("cross_model_id") or ""),
+        )
+    if stage_name == "formal_metric_scoring":
+        return build_formal_metric_command(
+            layout,
+            semantic_model_id=str(options.get("semantic_model_id") or "openai/clip-vit-base-patch32"),
+            semantic_frame_limit=int(options.get("semantic_frame_limit") or 8),
+            disable_semantic_metric=bool(options.get("disable_semantic_metric", False)),
+        )
+    if stage_name == "external_baseline_source_intake":
+        return build_external_baseline_source_intake_command(
+            layout,
+            execute_clone=_env_flag("SSTW_RUN_EXTERNAL_BASELINE_SOURCE_CLONE", True),
+        )
+    if stage_name == "external_baseline_official_resource_bootstrap":
+        return build_external_baseline_official_resource_bootstrap_command(
+            layout,
+            allow_network=_env_flag("SSTW_EXTERNAL_BASELINE_ALLOW_NETWORK_BOOTSTRAP", True),
+        )
+    if stage_name == "external_baseline_official_bundle_generation":
+        return build_external_baseline_official_bundle_generation_command(
+            layout,
+            generate_auto_supported=_env_flag("SSTW_EXTERNAL_BASELINE_GENERATE_AUTO_SUPPORTED_BUNDLE", True),
+        )
+    if stage_name == "drive_packaging":
+        return build_drive_packaging_command(
+            layout,
+            include_videos=bool(options.get("include_videos", True)),
+        )
+    if stage_name in simple_builders:
+        return simple_builders[stage_name](layout)
+    raise KeyError(f"未登记的 Colab workflow stage: {stage_name}")
+
+
+def run_configured_colab_stage_plan(
+    layout: dict[str, str],
+    *,
+    workflow_profile: str,
+    notebook_role: str,
+    runtime_options: Mapping[str, Any] | None = None,
+    include_videos: bool = True,
+) -> dict[str, Any]:
+    """按统一配置执行当前 Notebook role 的完整 stage plan。
+
+    Notebook 只应调用该函数作为 Colab 入口。阶段顺序、是否启用、命令构造、
+    governed records / tables / figures / reports / manifests 的产出逻辑均由
+    repository 配置和 Python 模块维护。
+    """
+
+    resolved = resolve_notebook_workflow_profile(workflow_profile, notebook_role)
+    stage_plan = build_workflow_stage_plan(workflow_profile, notebook_role)
+    options = {**dict(runtime_options or {}), "include_videos": include_videos}
+    stage_results: list[dict[str, Any]] = []
+    stage_package: dict[str, Any] = {}
+
+    for stage_name in stage_plan:
+        if stage_name == "external_baseline_colab_preflight":
+            stage_results.append(
+                write_external_baseline_colab_preflight_for_profile(
+                    layout,
+                    workflow_profile=workflow_profile,
+                )
+            )
+            continue
+
+        if stage_name == "motion_threshold_reuse_check":
+            if resolved.get("workflow_profile") == "motion_calibration":
+                stage_results.append({
+                    "stage_name": stage_name,
+                    "stage_execution_status": "skipped",
+                    "stage_execution_kind": "python_helper",
+                    "skip_reason": "motion_calibration_profile_owns_threshold_calibration",
+                })
+            else:
+                payload = write_motion_threshold_reuse_artifact_for_profile(layout, workflow_profile)
+                print(json.dumps(payload, ensure_ascii=False, indent=2))
+                stage_results.append({
+                    "stage_name": stage_name,
+                    "stage_execution_status": "completed",
+                    "stage_execution_kind": "python_helper",
+                    "motion_threshold_reuse": payload,
+                })
+            continue
+
+        if stage_name == "motion_threshold_calibration_or_reuse_check":
+            if resolved.get("workflow_profile") == "motion_calibration":
+                stage_results.append(
+                    _run_stage_command_or_raise(
+                        "motion_threshold_calibration",
+                        build_motion_threshold_calibration_command(layout),
+                    )
+                )
+            else:
+                payload = validate_motion_threshold_ready_for_profile(layout, workflow_profile)
+                print(json.dumps(payload, ensure_ascii=False, indent=2))
+                stage_results.append({
+                    "stage_name": stage_name,
+                    "stage_execution_status": "completed",
+                    "stage_execution_kind": "python_helper",
+                    "motion_threshold_reuse": payload,
+                })
+            continue
+
+        if stage_name == "quick_tests_and_harness":
+            stage_results.append(
+                _run_stage_command_or_raise(
+                    "quick_tests",
+                    [sys.executable, "-m", "pytest", "-q"],
+                )
+            )
+            stage_results.append(
+                _run_stage_command_or_raise(
+                    "harness_audits",
+                    [sys.executable, "tools/harness/run_all_audits.py"],
+                )
+            )
+            continue
+
+        command = build_configured_colab_stage_command(
+            stage_name,
+            layout,
+            workflow_profile=workflow_profile,
+            runtime_options=options,
+        )
+        stage_results.append(_run_stage_command_or_raise(stage_name, command))
+
+        if stage_name == "drive_packaging":
+            stage_package = publish_colab_stage_package(
+                layout,
+                notebook_role=notebook_role,
+                include_videos=include_videos,
+            )
+            print(json.dumps(stage_package, ensure_ascii=False, indent=2))
+
+    stage_package_dir_path = Path(layout["stage_package_dir"])
+    package_path_checks: dict[str, Any] = {}
+    for key in ("drive_stage_package_zip", "stage_package_manifest_path"):
+        path_text = str(stage_package.get(key, ""))
+        path = Path(path_text) if path_text else None
+        package_path_checks[key] = {
+            "path": path_text,
+            "exists": bool(path and path.exists()),
+        }
+
+    return {
+        "workflow_profile": resolved,
+        "notebook_role": notebook_role,
+        "enabled_stage_plan": stage_plan,
+        "stage_results": stage_results,
+        "stage_package": stage_package,
+        "stage_package_dir": str(stage_package_dir_path),
+        "package_path_checks": package_path_checks,
+    }

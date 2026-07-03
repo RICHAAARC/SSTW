@@ -485,6 +485,21 @@ def _enrich_official_bundle_payload(
     repository_provenance = "repository_generated_from_third_party_official_code"
     if existing_provenance not in {"", "third_party_official_code", repository_provenance}:
         raise RuntimeError(f"official_result_bundle_provenance_invalid:{existing_provenance}")
+    declared_baseline_ids = {
+        field_name: str(payload.get(field_name) or "").strip()
+        for field_name in ("official_adapter_baseline_id", "official_baseline_id", "baseline_id")
+        if payload.get(field_name) not in {None, ""}
+    }
+    mismatched_baseline_ids = {
+        field_name: value
+        for field_name, value in declared_baseline_ids.items()
+        if value != baseline_id
+    }
+    if mismatched_baseline_ids:
+        raise RuntimeError(
+            "official_result_bundle_baseline_id_mismatch:"
+            f"expected={baseline_id}:declared={mismatched_baseline_ids}"
+        )
     enriched = {
         **payload,
         **{
@@ -492,7 +507,8 @@ def _enrich_official_bundle_payload(
             for key, value in protocol_fields.items()
             if payload.get(key) is None or payload.get(key) == ""
         },
-        "official_baseline_id": payload.get("official_baseline_id") or baseline_id,
+        "official_adapter_baseline_id": baseline_id,
+        "official_baseline_id": baseline_id,
         "official_result_provenance": repository_provenance
         if existing_provenance in {"", "third_party_official_code"}
         else existing_provenance,

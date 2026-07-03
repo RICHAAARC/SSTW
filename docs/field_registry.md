@@ -293,6 +293,9 @@ Notebook 与 repository module 的跨边界数据
 | score_extraction_ready | governance | none | true | true | false | external baseline self-containment 中当前 baseline 的 official bundle 是否具备分数抽取口径、分数方向和协议锚点。 |
 | official_score_extraction_ready_count | metric | none | true | true | false | external baseline self-containment 中通过 official 分数抽取口径检查的 bundle record 数量。 |
 | missing_score_extraction_modern_external_baseline_names | governance | none | true | true | false | external baseline self-containment 中缺少 official 分数抽取口径证据的现代 baseline 名称列表。 |
+| official_adapter_baseline_id | protocol | none | true | true | false | official bundle 中声明的当前 baseline adapter 身份, 用于防止跨 baseline 误用分数。 |
+| official_baseline_id | protocol | none | true | true | false | official bundle 中声明的官方 baseline 身份, 必须与当前 baseline reference runner 一致。 |
+| runtime_comparison_unit_id | protocol | none | true | true | false | prompt / seed / attack comparison unit 的稳定 ID, 用于对齐 SSTW 与 external baseline 的同锚点比较。 |
 | official_score_extraction_policy | protocol | none | true | true | false | official bundle 中记录的逐 baseline 官方分数抽取策略。 |
 | official_reference_protocol_anchor | protocol | none | true | true | false | official bundle 中记录的 prompt / seed / attack comparison unit 锚点。 |
 | attack_protocol_status | protocol | none | true | true | false | official bundle 中记录的攻击协议映射或执行状态。 |

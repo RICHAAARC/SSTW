@@ -171,10 +171,46 @@ def test_enrich_official_bundle_payload_persists_protocol_anchor_and_manifest(tm
     written = json.loads(bundle_path.read_text(encoding="utf-8"))
 
     assert enriched["official_result_provenance"] == "repository_generated_from_third_party_official_code"
+    assert enriched["official_adapter_baseline_id"] == "videoseal"
+    assert enriched["official_baseline_id"] == "videoseal"
     assert enriched["official_execution_manifest_path"] == str(manifest_path)
     assert enriched["official_reference_protocol_anchor"] == "same_prompt_seed_attack_runtime_comparison_unit"
     assert enriched["runtime_comparison_unit_id"] == written["runtime_comparison_unit_id"]
     assert written["prompt_id"] == "prompt_a"
+
+
+@pytest.mark.quick
+def test_enrich_official_bundle_payload_rejects_cross_baseline_identity(tmp_path: Path) -> None:
+    """formal reference helper 必须在 bundle 层阻断跨 baseline 身份混用。"""
+
+    bundle_path = tmp_path / "bundles" / "videoseal" / "records" / "unit.json"
+    manifest_path = tmp_path / "bundles" / "videoseal" / "official_reference_execution_manifest.json"
+    bundle_path.parent.mkdir(parents=True)
+    payload = {
+        "official_adapter_baseline_id": "sigmark",
+        "official_baseline_id": "sigmark",
+        "external_baseline_score": 0.7,
+        "raw_detector_score": 0.7,
+        "score_semantics": "watermark_presence_confidence",
+        "score_orientation": "higher_is_more_watermarked",
+        "official_score_extraction_policy": "videoseal_official_detect_presence_confidence",
+        "external_baseline_clean_negative_score": 0.08,
+        "external_baseline_clean_negative_score_semantics": "watermark_presence_confidence",
+        "external_baseline_clean_negative_video_path": "official/videoseal/clean_negative.mp4",
+    }
+    bundle_path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+
+    with pytest.raises(RuntimeError, match="official_result_bundle_baseline_id_mismatch"):
+        _enrich_official_bundle_payload(
+            bundle_path,
+            manifest_path,
+            "videoseal",
+            {
+                "prompt_id": "prompt_a",
+                "seed_id": "seed_a",
+                "attack_name": "video_compression_runtime",
+            },
+        )
 
 
 @pytest.mark.quick

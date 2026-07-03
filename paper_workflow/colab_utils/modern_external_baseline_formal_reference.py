@@ -344,11 +344,69 @@ def _run_official_runtime_closure_preflight(
         "runtime_closure_ready_count": payload.get("runtime_closure_ready_count"),
         "runtime_closure_blocked_count": payload.get("runtime_closure_blocked_count"),
         "runtime_closure_blocked_baselines": payload.get("runtime_closure_blocked_baselines", []),
+        "runtime_closure_missing_requirement_summary": payload.get("missing_requirement_summary", {}),
         "applied_environment_update_keys": sorted(str(key) for key in environment_updates)
         if isinstance(environment_updates, Mapping)
         else [],
         "claim_support_status": "official_runtime_requirements_preflight_only_not_claim_evidence",
     }
+
+
+def _runtime_closure_blocks_reference_attempt(
+    preflight_result: Mapping[str, Any],
+    baseline_id: str,
+) -> bool:
+    """判断 runtime closure 预检是否已经足以阻断正式参考运行。
+
+    该函数属于项目特定门禁写法。对于 SPDMark 这类需要官方 extractor、
+    ground-truth bits 或原生命令的 baseline, 若预检已明确缺少资源, 后续不应再
+    逐条调用官方 adapter。这样可以避免生成 69 条重复失败记录, 也能把阻断原因
+    保持为 governed preflight artifact。
+    """
+
+    if str(preflight_result.get("stage_status") or "") != "FAIL":
+        return False
+    blocked = [str(item) for item in preflight_result.get("runtime_closure_blocked_baselines", [])]
+    return baseline_id in blocked
+
+
+def _build_runtime_closure_blocked_reference_manifest(
+    *,
+    baseline_id: str,
+    run_root: Path,
+    bundle_root: Path,
+    official_source_dir: Path,
+    selected_record_count: int,
+    runtime_closure_preflight_result: Mapping[str, Any],
+) -> dict[str, Any]:
+    """写出 runtime closure 阻断状态下的 official reference manifest。
+
+    该 manifest 不是论文结果, 也不会伪造分数。它只记录当前 baseline 因缺少
+    官方运行资源而无法进入 official bundle 生成阶段, 供 Notebook 和后续审计
+    给出明确阻断原因。
+    """
+
+    baseline_root = bundle_root / baseline_id
+    manifest_path = baseline_root / "official_reference_execution_manifest.json"
+    manifest = {
+        "manifest_kind": "modern_external_baseline_formal_reference_execution_manifest",
+        "baseline_id": baseline_id,
+        "run_root": str(run_root),
+        "bundle_root": str(bundle_root),
+        "official_source_dir": str(official_source_dir),
+        "execution_status": "blocked_missing_official_runtime_requirements",
+        "official_reference_blocker": "runtime_closure_preflight_failed",
+        "runtime_closure_preflight_result": dict(runtime_closure_preflight_result),
+        "input_runtime_detection_record_count": int(selected_record_count),
+        "generated_bundle_record_count": 0,
+        "failed_bundle_record_count": int(selected_record_count),
+        "successes": [],
+        "failures": [],
+        "created_at_utc": _utc_now(),
+        "claim_support_status": "official_reference_runtime_requirements_blocked_not_claim_evidence",
+    }
+    _write_json(manifest_path, manifest)
+    return manifest
 
 
 def _adapter_module_for_baseline(baseline_id: str) -> str:
@@ -891,7 +949,21 @@ def run_modern_external_baseline_formal_reference_plan(
     else:
         selected_record_count = len(records)
 
-    if config.baseline_id == "videoseal":
+    runtime_closure_blocked = _runtime_closure_blocks_reference_attempt(
+        runtime_closure_preflight_result,
+        config.baseline_id,
+    )
+
+    if runtime_closure_blocked:
+        reference_manifest = _build_runtime_closure_blocked_reference_manifest(
+            baseline_id=config.baseline_id,
+            run_root=run_root,
+            bundle_root=bundle_root,
+            official_source_dir=official_source_dir,
+            selected_record_count=selected_record_count,
+            runtime_closure_preflight_result=runtime_closure_preflight_result,
+        )
+    elif config.baseline_id == "videoseal":
         reference_manifest = _run_videoseal_reference(
             run_root=run_root,
             bundle_root=bundle_root,
@@ -958,11 +1030,24 @@ def run_modern_external_baseline_formal_reference_plan(
             allow_existing_official_bundle_as_reference_input=config.allow_existing_official_bundle_as_reference_input,
         )
 
-    followup_results = _run_optional_followup_commands(layout, config)
+    followup_results = (
+        [
+            {
+                "stage_id": "external_baseline_followup_commands",
+                "stage_status": "SKIPPED",
+                "skip_reason": "runtime_closure_preflight_failed_for_selected_baseline",
+                "claim_support_status": "followup_skipped_not_claim_evidence",
+            }
+        ]
+        if runtime_closure_blocked
+        else _run_optional_followup_commands(layout, config)
+    )
     generated_count = int(reference_manifest.get("generated_bundle_record_count") or 0)
     failed_count = int(reference_manifest.get("failed_bundle_record_count") or 0)
     reference_decision = "PASS" if selected_record_count > 0 and generated_count == selected_record_count and failed_count == 0 else "FAIL"
-    if selected_record_count == 0:
+    if runtime_closure_blocked:
+        reference_status = "blocked_missing_official_runtime_requirements"
+    elif selected_record_count == 0:
         reference_status = "missing_runtime_detection_records"
     elif generated_count != selected_record_count:
         reference_status = "bundle_record_coverage_incomplete"

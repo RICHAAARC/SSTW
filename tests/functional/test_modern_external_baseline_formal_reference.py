@@ -10,6 +10,8 @@ import pytest
 
 from paper_workflow.colab_utils.modern_external_baseline_formal_reference import (
     MODERN_EXTERNAL_BASELINE_BUILD_ORDER,
+    _build_runtime_closure_blocked_reference_manifest,
+    _runtime_closure_blocks_reference_attempt,
     build_default_config_from_env,
     build_official_adapter_command,
     build_official_bundle_record_path,
@@ -102,6 +104,47 @@ def test_build_official_adapter_command_uses_repository_adapter_module() -> None
     assert "--attacked-video /tmp/attacked.mp4" in command_text
     assert "--official-output-json /content/drive/MyDrive/SSTW/external_baseline_official_result_bundles/validation_scale/vidsig/records/unit.json" in command_text
     assert "--trajectory-trace-id trace_c" in command_text
+
+
+@pytest.mark.quick
+def test_runtime_closure_blocked_reference_manifest_is_fail_fast(tmp_path: Path) -> None:
+    """runtime closure 已阻断时, helper 必须写清晰 manifest, 不逐条运行 adapter。"""
+
+    preflight = {
+        "stage_id": "external_baseline_official_runtime_closure_requirements",
+        "stage_status": "FAIL",
+        "runtime_closure_blocked_baselines": ["spdmark"],
+        "runtime_closure_missing_requirement_summary": {
+            "spdmark": ["official_bundle_or_native_command_or_required_resources"],
+        },
+    }
+
+    assert _runtime_closure_blocks_reference_attempt(preflight, "spdmark") is True
+    assert _runtime_closure_blocks_reference_attempt(preflight, "videoseal") is False
+
+    manifest = _build_runtime_closure_blocked_reference_manifest(
+        baseline_id="spdmark",
+        run_root=tmp_path / "runs" / "validation_scale",
+        bundle_root=tmp_path / "bundles" / "validation_scale",
+        official_source_dir=tmp_path / "external_baseline" / "primary" / "spdmark" / "source",
+        selected_record_count=69,
+        runtime_closure_preflight_result=preflight,
+    )
+
+    manifest_path = (
+        tmp_path
+        / "bundles"
+        / "validation_scale"
+        / "spdmark"
+        / "official_reference_execution_manifest.json"
+    )
+    written = json.loads(manifest_path.read_text(encoding="utf-8"))
+    assert manifest["execution_status"] == "blocked_missing_official_runtime_requirements"
+    assert written["official_reference_blocker"] == "runtime_closure_preflight_failed"
+    assert written["generated_bundle_record_count"] == 0
+    assert written["failed_bundle_record_count"] == 69
+    assert written["successes"] == []
+    assert written["failures"] == []
 
 
 @pytest.mark.quick

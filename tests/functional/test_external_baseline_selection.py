@@ -658,6 +658,7 @@ def test_modern_external_baseline_formal_command_adapters_write_measured_records
         "'external_baseline_source_video_path': 'official/source.mp4', "
         "'external_baseline_attacked_video_path': 'official/attacked.mp4', "
         "'external_baseline_generation_model_id': 'official_baseline_model', "
+        "'official_result_provenance': 'repository_generated_from_third_party_official_code', "
         "'official_result_bundle_path': 'official/bundle_record.json', "
         "'official_execution_manifest_path': 'official/execution_manifest.json', "
         "'external_baseline_official_execution_mode': 'official_result_bundle'}, open(args.output_json, 'w', encoding='utf-8'))\n",
@@ -843,7 +844,8 @@ def test_modern_external_baseline_formal_command_adapters_require_official_bundl
         "args = parser.parse_args()\n"
         "json.dump({'external_baseline_score': 0.37, 'detected': True, "
         "'external_baseline_clean_negative_score': 0.08, "
-        "'external_baseline_clean_negative_video_path': 'official/clean_negative.mp4'}, "
+        "'external_baseline_clean_negative_video_path': 'official/clean_negative.mp4', "
+        "'official_result_provenance': 'repository_generated_from_third_party_official_code'}, "
         "open(args.output_json, 'w', encoding='utf-8'))\n",
         encoding="utf-8",
     )
@@ -883,6 +885,68 @@ def test_modern_external_baseline_formal_command_adapters_require_official_bundl
 
 
 @pytest.mark.quick
+def test_modern_external_baseline_formal_command_adapters_reject_external_bundle_provenance(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """现代 baseline 不能把外部补交 bundle 路径伪装成项目内正式证据。"""
+
+    run_root = tmp_path / "generative_video_runtime"
+    _write_external_baseline_runtime_fixture(run_root)
+    fake_adapter = tmp_path / "fake_modern_baseline_eval_with_external_bundle.py"
+    fake_adapter.write_text(
+        "import argparse, json\n"
+        "parser = argparse.ArgumentParser()\n"
+        "parser.add_argument('--output-json', required=True)\n"
+        "parser.add_argument('--source-video')\n"
+        "parser.add_argument('--attacked-video')\n"
+        "parser.add_argument('--attack-name')\n"
+        "args = parser.parse_args()\n"
+        "json.dump({'external_baseline_score': 0.37, 'detected': True, "
+        "'external_baseline_clean_negative_score': 0.08, "
+        "'external_baseline_clean_negative_video_path': 'official/clean_negative.mp4', "
+        "'official_result_provenance': 'external_user_supplied_result', "
+        "'official_result_bundle_path': 'official/bundle_record.json', "
+        "'official_execution_manifest_path': 'official/execution_manifest.json'}, "
+        "open(args.output_json, 'w', encoding='utf-8'))\n",
+        encoding="utf-8",
+    )
+    command = (
+        f"{sys.executable} {fake_adapter} "
+        "--source-video {source_video_path} "
+        "--attacked-video {attacked_video_path} "
+        "--attack-name {attack_name} "
+        "--output-json {output_json_path}"
+    )
+    monkeypatch.setenv("SSTW_UNIT_MODERN_EVAL_COMMAND", command)
+    config = ModernBaselineCommandConfig(
+        baseline_name="unit_modern",
+        baseline_family="unit_modern_video_watermark",
+        adapter_path="external_baseline/primary/unit_modern/adapter/run_sstw_eval.py",
+        env_var="SSTW_UNIT_MODERN_EVAL_COMMAND",
+        default_source_script="external_baseline/primary/unit_modern/adapter/run_sstw_eval.py",
+        score_source="official_command_adapter",
+    )
+
+    modern_records = build_modern_score_records(
+        run_root,
+        {
+            "external_baseline_name": "unit_modern",
+            "external_baseline_family": "unit_modern_video_watermark",
+            "external_baseline_layer": "modern_external_baseline",
+        },
+        config,
+    )
+
+    assert modern_records
+    assert all(record["metric_status"] == "unsupported" for record in modern_records)
+    assert any(
+        "official_result_bundle_provenance_invalid" in record["external_baseline_score_failure_reason"]
+        for record in modern_records
+    )
+
+
+@pytest.mark.quick
 def test_modern_external_baseline_formal_command_adapter_normalizes_clean_negative_aliases(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -904,6 +968,7 @@ def test_modern_external_baseline_formal_command_adapter_normalizes_clean_negati
         "'clean_negative_score': 0.09, "
         "'clean_negative_score_semantics': 'watermark_presence_confidence', "
         "'clean_negative_video_path': 'official/clean_negative_alias.mp4', "
+        "'official_result_provenance': 'repository_generated_from_third_party_official_code', "
         "'official_result_bundle_path': 'official/bundle_record.json', "
         "'official_execution_manifest_path': 'official/execution_manifest.json'}, "
         "open(args.output_json, 'w', encoding='utf-8'))\n",
@@ -967,6 +1032,7 @@ def test_modern_external_baseline_bridge_commands_require_real_official_output(t
         "'external_baseline_clean_negative_score': 0.07, "
         "'external_baseline_clean_negative_score_semantics': 'watermark_presence_confidence', "
         "'external_baseline_clean_negative_video_path': 'official/clean_negative.mp4', "
+        "'official_result_provenance': 'repository_generated_from_third_party_official_code', "
         "'official_result_bundle_path': 'official/bundle_record.json', "
         "'official_execution_manifest_path': 'official/execution_manifest.json'}, open(args.official_output_json, 'w', encoding='utf-8'))\n",
         encoding="utf-8",

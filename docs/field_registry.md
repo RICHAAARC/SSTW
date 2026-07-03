@@ -419,6 +419,7 @@ Notebook 与 repository module 的跨边界数据
 | external_baseline_official_stdout_path | artifact | none | true | true | false | Path to persisted stdout from an official external baseline command. |
 | external_baseline_official_stderr_path | artifact | none | true | true | false | Path to persisted stderr from an official external baseline command. |
 | external_baseline_official_command_manifest_path | artifact | none | true | true | false | Path to the governed manifest for one official external baseline command execution. |
+| external_baseline_official_result_provenance | governance | none | true | true | false | 现代 external baseline official bundle 是否来自项目内第三方官方代码运行链路的 provenance 标记。 |
 | external_baseline_official_result_bundle_path | artifact | none | true | true | false | 项目内 official reference 流程生成的单条 baseline 结果 bundle JSON 路径。 |
 | external_baseline_official_execution_manifest_path | artifact | none | true | true | false | 项目内 official reference 流程生成的 baseline execution manifest 路径。 |
 | external_baseline_reference_sequence_length | metric | none | true | false | false | Reference trajectory sequence length consumed by an external synchronization baseline adapter. |

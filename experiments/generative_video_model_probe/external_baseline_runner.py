@@ -25,6 +25,7 @@ EXTERNAL_BASELINE_COMPARISON_TABLE = "tables/external_baseline_comparison_table.
 EXTERNAL_BASELINE_COMPARISON_DECISION = "artifacts/external_baseline_comparison_decision.json"
 EXTERNAL_BASELINE_COMPARISON_REPORT = "reports/external_baseline_comparison_report.md"
 EXTERNAL_BASELINE_EXECUTION_MANIFEST = "artifacts/external_baseline_execution_manifest.json"
+REPOSITORY_GENERATED_OFFICIAL_PROVENANCE = "repository_generated_from_third_party_official_code"
 
 
 def run_external_baseline_status(config_path: str = DEFAULT_EXTERNAL_BASELINE_CONFIG) -> list[dict[str, Any]]:
@@ -200,6 +201,7 @@ def _has_official_execution_evidence(record: Mapping[str, Any]) -> bool:
     return (
         _has_nonempty_field(record, "external_baseline_official_result_bundle_path")
         and _has_nonempty_field(record, "external_baseline_official_execution_manifest_path")
+        and str(record.get("external_baseline_official_result_provenance") or "") == REPOSITORY_GENERATED_OFFICIAL_PROVENANCE
     )
 
 

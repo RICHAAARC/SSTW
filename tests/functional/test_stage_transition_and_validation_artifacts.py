@@ -139,6 +139,7 @@ def _write_self_contained_external_baseline_fixture(run_root: Path) -> None:
             "external_baseline_official_stdout_path": str(stdout_path),
             "external_baseline_official_stderr_path": str(stderr_path),
             "external_baseline_official_command_manifest_path": str(manifest_path),
+            "external_baseline_official_result_provenance": "repository_generated_from_third_party_official_code",
             "external_baseline_official_result_bundle_path": str(bundle_record_path),
             "external_baseline_official_execution_manifest_path": str(execution_manifest_path),
         })
@@ -311,6 +312,7 @@ def test_external_baseline_self_containment_accepts_repository_generated_officia
             "external_baseline_official_stdout_path": str(stdout_path),
             "external_baseline_official_stderr_path": str(stderr_path),
             "external_baseline_official_command_manifest_path": str(command_manifest_path),
+            "external_baseline_official_result_provenance": "repository_generated_from_third_party_official_code",
             "external_baseline_official_result_bundle_path": str(bundle_record_path),
             "external_baseline_official_execution_manifest_path": str(execution_manifest_path),
         })
@@ -403,6 +405,7 @@ def test_external_baseline_self_containment_rejects_bundle_without_clean_negativ
         "external_baseline_official_stdout_path": str(stdout_path),
         "external_baseline_official_stderr_path": str(stderr_path),
         "external_baseline_official_command_manifest_path": str(command_manifest_path),
+        "external_baseline_official_result_provenance": "repository_generated_from_third_party_official_code",
         "external_baseline_official_result_bundle_path": str(bundle_record_path),
         "external_baseline_official_execution_manifest_path": str(execution_manifest_path),
     }])

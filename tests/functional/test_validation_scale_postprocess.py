@@ -36,6 +36,7 @@ def _formal_baseline_evidence_fields(
         "external_baseline_clean_negative_video_path": str(evidence_root / f"{evidence_id}_clean_negative.mp4"),
         "external_baseline_official_output_path": str(evidence_root / f"{evidence_id}_official_output.json"),
         "external_baseline_official_command_manifest_path": str(evidence_root / f"{evidence_id}_official_command_manifest.json"),
+        "external_baseline_official_result_provenance": "repository_generated_from_third_party_official_code",
         "external_baseline_official_result_bundle_path": str(evidence_root / f"{evidence_id}_official_result_bundle.json"),
         "external_baseline_official_execution_manifest_path": str(evidence_root / f"{evidence_id}_official_execution_manifest.json"),
     }
@@ -522,6 +523,7 @@ def test_fair_detection_calibration_rejects_external_positive_without_official_e
             "external_baseline_clean_negative_video_path": str(run_root / "artifacts" / "videoseal_clean_negative.mp4"),
             "external_baseline_official_output_path": str(run_root / "artifacts" / "videoseal_official_output.json"),
             "external_baseline_official_command_manifest_path": str(run_root / "artifacts" / "videoseal_official_command_manifest.json"),
+            "external_baseline_official_result_provenance": "manual_result_json",
         },
         {
             "external_baseline_name": "videoseal",

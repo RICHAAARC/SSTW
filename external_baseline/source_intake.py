@@ -16,6 +16,7 @@ INTAKE_MANIFEST_NAME = "external_baseline_intake_manifest.json"
 SOURCE_INSPECTION_NAME = "external_baseline_source_inspection.json"
 CLONE_RESULTS_NAME = "external_baseline_clone_results.json"
 OFFICIAL_COMMAND_EVIDENCE_RELATIVE_ROOT = Path("artifacts/external_baseline_evidence")
+REPOSITORY_GENERATED_OFFICIAL_PROVENANCE = "repository_generated_from_third_party_official_code"
 
 REQUIRED_MODERN_BASELINE_IDS = {
     "videoshield",
@@ -524,6 +525,7 @@ def _formal_score_record_ready_for_manifest(record: Mapping[str, Any]) -> bool:
     bundle_evidence_ready = (
         _has_nonempty_field(record, "external_baseline_official_result_bundle_path")
         and _has_nonempty_field(record, "external_baseline_official_execution_manifest_path")
+        and str(record.get("external_baseline_official_result_provenance") or "") == REPOSITORY_GENERATED_OFFICIAL_PROVENANCE
     )
     return (
         record.get("metric_status") == "measured_formal"

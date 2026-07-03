@@ -13,7 +13,10 @@ from typing import Any, Mapping
 
 from external_baseline.runtime_trace_io import build_comparison_unit_id, comparable_detection_records, safe_float
 from external_baseline.score_semantics import normalized_score_payload
-from external_baseline.official_eval_adapters.common import validate_clean_negative_payload
+from external_baseline.official_eval_adapters.common import (
+    REPOSITORY_GENERATED_OFFICIAL_PROVENANCE,
+    validate_clean_negative_payload,
+)
 from main.core.digest import build_stable_digest
 from main.core.progress import ProgressReporter
 from main.protocol.flow_evidence_fields import with_flow_evidence_protocol_defaults
@@ -184,11 +187,18 @@ def _official_bundle_evidence_payload(payload: Mapping[str, Any]) -> dict[str, A
     self-containment gate 负责, 以便轻量 adapter 测试仍可使用 tmp fixture。
     """
 
+    provenance = str(payload.get("official_result_provenance") or "")
+    if provenance != REPOSITORY_GENERATED_OFFICIAL_PROVENANCE:
+        raise RuntimeError(
+            "official_result_bundle_provenance_invalid:"
+            f"{provenance or 'missing_official_result_provenance'}"
+        )
     result_bundle_path = payload.get("official_result_bundle_path")
     execution_manifest_path = payload.get("official_execution_manifest_path")
     if result_bundle_path in {None, ""} or execution_manifest_path in {None, ""}:
         raise RuntimeError("official_result_bundle_evidence_missing")
     return {
+        "external_baseline_official_result_provenance": provenance,
         "external_baseline_official_result_bundle_path": result_bundle_path,
         "external_baseline_official_execution_manifest_path": execution_manifest_path,
     }

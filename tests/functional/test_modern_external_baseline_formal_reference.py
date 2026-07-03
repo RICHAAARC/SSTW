@@ -11,6 +11,7 @@ import pytest
 from paper_workflow.colab_utils.modern_external_baseline_formal_reference import (
     MODERN_EXTERNAL_BASELINE_BUILD_ORDER,
     _build_runtime_closure_blocked_reference_manifest,
+    _enrich_official_bundle_payload,
     _runtime_closure_blocks_reference_attempt,
     build_default_config_from_env,
     build_official_adapter_command,
@@ -103,6 +104,77 @@ def test_build_official_adapter_command_uses_repository_adapter_module() -> None
     assert "--attacked-video /tmp/attacked.mp4" in command_text
     assert "--official-output-json /content/drive/MyDrive/SSTW/external_baseline_official_result_bundles/validation_scale/vidsig/records/unit.json" in command_text
     assert "--trajectory-trace-id trace_c" in command_text
+
+
+@pytest.mark.quick
+def test_enrich_official_bundle_payload_requires_score_and_clean_negative(tmp_path: Path) -> None:
+    """formal reference helper 必须在 bundle 层阻断缺少 clean negative 的输出。"""
+
+    bundle_path = tmp_path / "bundles" / "videoseal" / "records" / "unit.json"
+    manifest_path = tmp_path / "bundles" / "videoseal" / "official_reference_execution_manifest.json"
+    bundle_path.parent.mkdir(parents=True)
+    payload = {
+        "external_baseline_score": 0.7,
+        "raw_detector_score": 0.7,
+        "score_semantics": "watermark_presence_confidence",
+        "score_orientation": "higher_is_more_watermarked",
+        "official_score_extraction_policy": "videoseal_official_detect_presence_confidence",
+        "official_reference_protocol_anchor": "same_prompt_seed_attack_runtime_comparison_unit",
+    }
+    bundle_path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+
+    with pytest.raises(RuntimeError, match="official_result_bundle_missing_clean_negative_score"):
+        _enrich_official_bundle_payload(
+            bundle_path,
+            manifest_path,
+            "videoseal",
+            {
+                "prompt_id": "prompt_a",
+                "seed_id": "seed_a",
+                "attack_name": "video_compression_runtime",
+            },
+        )
+
+
+@pytest.mark.quick
+def test_enrich_official_bundle_payload_persists_protocol_anchor_and_manifest(tmp_path: Path) -> None:
+    """formal reference helper 必须把 official bundle 规范化为后续 measured_formal 输入。"""
+
+    bundle_path = tmp_path / "bundles" / "videoseal" / "records" / "unit.json"
+    manifest_path = tmp_path / "bundles" / "videoseal" / "official_reference_execution_manifest.json"
+    bundle_path.parent.mkdir(parents=True)
+    payload = {
+        "external_baseline_score": 0.7,
+        "raw_detector_score": 0.7,
+        "score_semantics": "watermark_presence_confidence",
+        "score_orientation": "higher_is_more_watermarked",
+        "official_score_extraction_policy": "videoseal_official_detect_presence_confidence",
+        "external_baseline_clean_negative_score": 0.08,
+        "external_baseline_clean_negative_score_semantics": "watermark_presence_confidence",
+        "external_baseline_clean_negative_video_path": "official/videoseal/clean_negative.mp4",
+    }
+    bundle_path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+
+    enriched = _enrich_official_bundle_payload(
+        bundle_path,
+        manifest_path,
+        "videoseal",
+        {
+            "prompt_id": "prompt_a",
+            "seed_id": "seed_a",
+            "attack_name": "video_compression_runtime",
+            "trajectory_trace_id": "trace_a",
+            "source_video_path": "clean.mp4",
+            "attacked_video_path": "attacked.mp4",
+        },
+    )
+    written = json.loads(bundle_path.read_text(encoding="utf-8"))
+
+    assert enriched["official_result_provenance"] == "repository_generated_from_third_party_official_code"
+    assert enriched["official_execution_manifest_path"] == str(manifest_path)
+    assert enriched["official_reference_protocol_anchor"] == "same_prompt_seed_attack_runtime_comparison_unit"
+    assert enriched["runtime_comparison_unit_id"] == written["runtime_comparison_unit_id"]
+    assert written["prompt_id"] == "prompt_a"
 
 
 @pytest.mark.quick
@@ -200,3 +272,20 @@ def test_formal_reference_helper_runs_bundle_then_unified_measured_formal_scorin
     assert "external_baseline_unified_measured_formal_scoring" in helper_text
     assert "build_external_baseline_comparison_command" in helper_text
     assert "measured_formal" in helper_text
+
+
+@pytest.mark.quick
+def test_videoseal_auto_bundle_generator_writes_fair_comparison_fields() -> None:
+    """VideoSeal 自动 bundle 生成器也必须产出公平比较所需字段。"""
+
+    generator_text = Path("external_baseline/official_bundle_generator.py").read_text(encoding="utf-8")
+
+    assert "external_baseline_clean_negative_score" in generator_text
+    assert "external_baseline_clean_negative_score_semantics" in generator_text
+    assert "external_baseline_clean_negative_video_path" in generator_text
+    assert "official_score_extraction_policy" in generator_text
+    assert "videoseal_official_detect_presence_confidence" in generator_text
+    assert "official_reference_protocol_anchor" in generator_text
+    assert "same_prompt_seed_attack_runtime_comparison_unit" in generator_text
+    assert "repository_generated_from_third_party_official_code" in generator_text
+    assert "official_execution_manifest_path" in generator_text

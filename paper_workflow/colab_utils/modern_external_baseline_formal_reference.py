@@ -19,8 +19,13 @@ import subprocess
 import sys
 from typing import Any, Mapping
 
+from external_baseline.official_eval_adapters.common import (
+    validate_clean_negative_payload,
+    validate_score_payload,
+)
 from external_baseline.official_runtime_closure import write_official_runtime_closure_requirements
 from external_baseline.runtime_trace_io import build_comparison_unit_id, comparable_detection_records
+from external_baseline.score_semantics import validate_official_score_extraction_payload
 from paper_workflow.colab_utils.stage_package_sync import (
     prepare_colab_stage_layout,
     publish_colab_stage_package,
@@ -455,10 +460,12 @@ def _enrich_official_bundle_payload(
     baseline_id: str,
     detection_record: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """为官方 bundle JSON 补充本项目运行 manifest provenance。
+    """为官方 bundle JSON 补充并校验本项目运行 manifest provenance。
 
-    该函数只补充 provenance 字段, 不改写官方分数。这样 official bundle 可以被后续
-    bridge 读取, 同时保留本次 Notebook 运行的可审计入口。
+    该函数不改写官方分数, 但会把 prompt / seed / attack anchor、项目内
+    provenance 和 execution manifest path 补齐到 official bundle。补齐后立即
+    校验 score、clean negative 和官方分数抽取口径, 防止某个 baseline 的
+    formal reference Notebook 生成不完整 bundle 后仍进入 measured_formal 转写。
     """
 
     payload = _read_json(path)
@@ -476,6 +483,8 @@ def _enrich_official_bundle_payload(
         }
     existing_provenance = str(payload.get("official_result_provenance") or "")
     repository_provenance = "repository_generated_from_third_party_official_code"
+    if existing_provenance not in {"", "third_party_official_code", repository_provenance}:
+        raise RuntimeError(f"official_result_bundle_provenance_invalid:{existing_provenance}")
     enriched = {
         **payload,
         **{
@@ -489,6 +498,9 @@ def _enrich_official_bundle_payload(
         else existing_provenance,
         "official_execution_manifest_path": payload.get("official_execution_manifest_path") or str(manifest_path),
     }
+    validate_score_payload(enriched)
+    validate_clean_negative_payload(enriched)
+    validate_official_score_extraction_payload(enriched)
     _write_json(path, enriched)
     return enriched
 

@@ -89,6 +89,101 @@ def _decision_pass(payload: Mapping[str, Any], fields: tuple[str, ...]) -> bool:
     return any(payload.get(field) == "PASS" for field in fields)
 
 
+def _safe_int(value: Any) -> int | None:
+    """把 gate artifact 中的计数字段转换为 int, 不可解析时返回 None。"""
+
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _safe_float(value: Any) -> float | None:
+    """把 gate artifact 中的浮点协议字段转换为 float, 不可解析时返回 None。"""
+
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _validation_scale_fair_gate_missing_requirements(source_payload: Mapping[str, Any]) -> list[str]:
+    """检查 validation_scale PASS 是否已经包含公平比较闭环。
+
+    该函数属于项目特定门禁。旧版 `validation_scale_gate_decision: PASS` 只表示
+    小样本流程曾经打通, 不足以证明当前论文协议所需的公平比较已经闭合。这里要求
+    source gate artifact 显式包含 SSTW measured_formal、5 个现代 baseline 的
+    clean negative 校准、同协议统计表、差值区间和数据切分防泄漏判定。只有这些
+    字段同时满足时, `validation_scale -> pilot_paper` 跳转才允许 PASS。
+    """
+
+    missing: list[str] = []
+    if source_payload.get("paper_result_level") != "validation_scale":
+        missing.append("validation_scale_paper_result_level_current")
+    if source_payload.get("claim_support_status") != "validation_scale_ready_for_pilot_paper":
+        missing.append("validation_scale_claim_support_status_ready")
+    target_fpr = _safe_float(source_payload.get("target_fpr"))
+    if target_fpr is None:
+        missing.append("validation_scale_target_fpr_registered")
+
+    missing_validation_requirements = source_payload.get("missing_validation_requirements")
+    if not isinstance(missing_validation_requirements, list) or missing_validation_requirements:
+        missing.append("validation_scale_missing_validation_requirements_empty")
+    if _safe_int(source_payload.get("validation_missing_requirement_count")) != 0:
+        missing.append("validation_scale_missing_requirement_count_zero")
+
+    required_baselines_raw = source_payload.get("required_modern_external_baseline_adapter_names")
+    required_baselines = (
+        [str(item) for item in required_baselines_raw if str(item)]
+        if isinstance(required_baselines_raw, list)
+        else []
+    )
+    required_baseline_count = len(set(required_baselines))
+    if required_baseline_count <= 0:
+        missing.append("validation_scale_required_modern_baselines_registered")
+    required_method_count = required_baseline_count + 1 if required_baseline_count > 0 else 0
+
+    missing_modern_names = source_payload.get("missing_modern_external_baseline_formal_adapter_names")
+    if not isinstance(missing_modern_names, list) or missing_modern_names:
+        missing.append("validation_scale_modern_external_baseline_missing_names_empty")
+    modern_formal_count = _safe_int(source_payload.get("modern_external_baseline_formal_measured_adapter_count"))
+    if modern_formal_count is None:
+        missing.append("validation_scale_modern_external_baseline_formal_count_registered")
+    elif required_baseline_count and modern_formal_count < required_baseline_count:
+        missing.append("validation_scale_modern_external_baseline_formal_count_ready")
+
+    if source_payload.get("external_baseline_self_containment_decision") != "PASS":
+        missing.append("validation_scale_external_baseline_self_containment_passed")
+    if source_payload.get("data_split_and_leakage_guard_decision") != "PASS":
+        missing.append("validation_scale_data_split_and_leakage_guard_passed")
+    if source_payload.get("full_paper_allowed") is not False:
+        missing.append("validation_scale_must_not_allow_full_paper")
+
+    if (_safe_int(source_payload.get("sstw_measured_formal_record_count")) or 0) <= 0:
+        missing.append("validation_scale_sstw_measured_formal_records_ready")
+    if source_payload.get("sstw_measured_formal_status") != "sstw_measured_formal_validation_scale_only":
+        missing.append("validation_scale_sstw_measured_formal_status_ready")
+
+    fair_count = _safe_int(source_payload.get("fair_detection_calibration_ready_count"))
+    if fair_count is None or (required_method_count and fair_count < required_method_count):
+        missing.append("validation_scale_fair_detection_calibration_ready")
+    comparison_count = _safe_int(source_payload.get("formal_method_baseline_comparison_ready_count"))
+    if comparison_count is None or (required_method_count and comparison_count < required_method_count):
+        missing.append("validation_scale_formal_method_baseline_comparison_ready")
+    if source_payload.get("fair_detection_calibration_status") != "fair_detection_calibration_validation_scale_ready":
+        missing.append("validation_scale_fair_detection_calibration_status_ready")
+    if source_payload.get("formal_method_baseline_comparison_status") != "formal_method_baseline_comparison_validation_scale_only":
+        missing.append("validation_scale_formal_method_baseline_comparison_status_ready")
+
+    interval_count = _safe_int(source_payload.get("formal_baseline_difference_interval_ready_count"))
+    if interval_count is None or (required_baseline_count and interval_count < required_baseline_count):
+        missing.append("validation_scale_formal_baseline_difference_interval_ready")
+    if source_payload.get("formal_baseline_difference_interval_status") != "formal_baseline_difference_interval_validation_scale_only":
+        missing.append("validation_scale_formal_baseline_difference_interval_status_ready")
+
+    return missing
+
+
 def _resolve_source_gate_path(run_root: Path, spec: Mapping[str, Any]) -> Path:
     """解析 source gate decision artifact 路径, 支持未来 full_paper 的兼容文件名。"""
     candidates = [run_root / str(spec["source_gate_path"])]
@@ -174,6 +269,7 @@ def build_stage_transition_decision(
             missing_requirements.append(f"{predicate}_true")
 
     if transition_id == "validation_scale_to_pilot_paper":
+        missing_requirements.extend(_validation_scale_fair_gate_missing_requirements(source_payload))
         if source_payload.get("full_paper_allowed") is True:
             missing_requirements.append("validation_scale_must_not_directly_allow_full_paper")
 

@@ -170,7 +170,33 @@ def _official_bundle_payload_ok(path_text: str | None, run_root: Path, baseline_
     manifest_path = str(payload.get("official_execution_manifest_path") or "")
     if not manifest_path:
         return False
+    if not _record_clean_negative_ready(payload):
+        return False
     return _official_execution_manifest_ok(manifest_path, run_root, baseline_name)
+
+
+def _record_clean_negative_ready(record: Mapping[str, Any]) -> bool:
+    """检查 measured_formal baseline record 是否携带公平校准所需 clean negative 分数。
+
+    validation_scale 的 self-containment 不应只证明 positive score 来自项目内官方流程,
+    还必须证明同一 official bundle 已经提供 baseline 自身 clean negative 分布的
+    分数来源。否则该 baseline 后续无法参与 `TPR@target FPR` 公平比较。
+    """
+
+    score = record.get("external_baseline_clean_negative_score", record.get("clean_negative_score"))
+    if score is None or score == "" or score == "unsupported":
+        return False
+    try:
+        float(score)
+    except (TypeError, ValueError):
+        return False
+    return bool(
+        record.get("external_baseline_clean_negative_video_path")
+        or record.get("official_clean_negative_source_video_path")
+        or record.get("official_clean_negative_bit_accuracy_npz_path")
+        or record.get("official_clean_negative_results_json_path")
+        or record.get("official_clean_negative_frame_array_path")
+    )
 
 
 def _index_rows(rows: Iterable[Mapping[str, Any]], key: str) -> dict[str, dict[str, Any]]:
@@ -253,6 +279,7 @@ def _build_baseline_rows(
             1 for path in official_execution_manifest_paths
             if _official_execution_manifest_ok(path, run_root, baseline_name)
         )
+        clean_negative_ready_count = sum(1 for record in measured_records if _record_clean_negative_ready(record))
         command_manifest_paths = [
             str(record.get("external_baseline_official_command_manifest_path") or "")
             for record in measured_records
@@ -281,6 +308,7 @@ def _build_baseline_rows(
             for record in measured_records
         ) if measured_records else False
         record_ready = bool(measured_records) and len(materialized_evidence_paths) >= len(command_manifest_paths)
+        clean_negative_ready = bool(measured_records) and clean_negative_ready_count == len(measured_records)
         rows.append({
             "baseline_name": baseline_name,
             "source_intake_status": intake.get("source_intake_status", "missing"),
@@ -293,7 +321,9 @@ def _build_baseline_rows(
             "run_ready": run_ready,
             "adapt_ready": adapt_ready,
             "record_ready": record_ready,
+            "clean_negative_ready": clean_negative_ready,
             "measured_formal_record_count": len(measured_records),
+            "clean_negative_ready_count": clean_negative_ready_count,
             "unsupported_record_count": sum(1 for record in records if record.get("metric_status") == "unsupported"),
             "official_command_manifest_count": len(command_manifest_paths),
             "official_command_manifest_ok_count": command_manifest_ok_count,
@@ -304,7 +334,14 @@ def _build_baseline_rows(
             "materialized_evidence_path_count": len(materialized_evidence_paths),
             "materialized_official_bundle_path_count": len(materialized_official_bundle_paths),
             "materialized_official_execution_manifest_path_count": len(materialized_official_execution_manifest_paths),
-            "external_baseline_self_contained": all([clone_ready, build_ready, run_ready, adapt_ready, record_ready]),
+            "external_baseline_self_contained": all([
+                clone_ready,
+                build_ready,
+                run_ready,
+                adapt_ready,
+                record_ready,
+                clean_negative_ready,
+            ]),
         })
     return rows
 
@@ -336,6 +373,11 @@ def build_external_baseline_self_containment_decision(
         for row in rows
         if not row["external_baseline_self_contained"]
     ]
+    missing_clean_negative_names = [
+        row["baseline_name"]
+        for row in rows
+        if not row.get("clean_negative_ready")
+    ]
     comparison_passed = comparison_decision.get("external_baseline_comparison_decision") == "PASS"
     execution_manifest_bound = execution_manifest.get("formal_evidence_status") == "evidence_paths_bound"
     formal_measured_names = set(execution_manifest.get("modern_external_baseline_formal_measured_adapter_names") or [])
@@ -349,6 +391,8 @@ def build_external_baseline_self_containment_decision(
         missing_requirements.append("all_required_modern_baselines_measured_formal")
     if missing_names:
         missing_requirements.append("all_required_modern_baselines_clone_build_run_adapt_record")
+    if missing_clean_negative_names:
+        missing_requirements.append("all_required_modern_baselines_clean_negative_scores")
 
     decision = "PASS" if not missing_requirements else "FAIL"
     return {
@@ -362,6 +406,7 @@ def build_external_baseline_self_containment_decision(
         "required_modern_external_baseline_adapter_count": len(required_names),
         "self_contained_modern_external_baseline_count": sum(1 for row in rows if row["external_baseline_self_contained"]),
         "missing_self_contained_modern_external_baseline_names": missing_names,
+        "missing_clean_negative_modern_external_baseline_names": missing_clean_negative_names,
         "missing_formal_modern_external_baseline_names": missing_formal_names,
         "missing_self_containment_requirements": missing_requirements,
         "self_containment_missing_requirement_count": len(missing_requirements),

@@ -1244,6 +1244,9 @@ Notebook 与 repository module 的跨边界数据
 | external_baseline_clean_negative_score | metric | none | true | false | false | baseline 自身 clean negative 分布中的检测分数, 用于 target FPR 阈值校准。 |
 | external_baseline_clean_negative_score_semantics | protocol | none | true | false | false | clean negative 分数语义, 必须与 external_baseline_score_semantics 对齐。 |
 | external_baseline_clean_negative_video_path | artifact | none | true | false | false | baseline 自身 clean negative 视频路径, 用于审计阈值校准来源。 |
+| clean_negative_ready | governance | none | true | true | false | self-containment 行中 measured_formal baseline 是否已经携带 clean negative 分数证据。 |
+| clean_negative_ready_count | metric | none | true | true | false | self-containment 行中具备 clean negative 分数证据的 measured_formal record 数量。 |
+| missing_clean_negative_modern_external_baseline_names | governance | none | true | false | false | self-containment 判定中缺少 clean negative 分数证据的现代 baseline 名称。 |
 | official_clean_negative_source_video_path | artifact | none | true | false | false | official runtime 中未施加 runtime attack 的 baseline clean negative 视频路径。 |
 | official_clean_negative_frame_array_path | artifact | none | true | false | false | VidSig official attack.py 读取的 clean negative 帧数组路径。 |
 | official_clean_negative_attack_log_path | artifact | none | true | false | false | official detector 在 clean negative 视频上的日志路径。 |

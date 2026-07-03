@@ -165,8 +165,13 @@ def _official_bundle_payload_ok(path_text: str | None, run_root: Path, baseline_
     payload = _read_json(path)
     if str(payload.get("official_result_provenance") or "") != REPOSITORY_GENERATED_OFFICIAL_PROVENANCE:
         return False
-    payload_baseline = str(payload.get("official_adapter_baseline_id") or payload.get("baseline_id") or "")
-    if payload_baseline and payload_baseline != baseline_name:
+    payload_baseline = str(
+        payload.get("official_adapter_baseline_id")
+        or payload.get("official_baseline_id")
+        or payload.get("baseline_id")
+        or ""
+    )
+    if not payload_baseline or payload_baseline != baseline_name:
         return False
     manifest_path = str(payload.get("official_execution_manifest_path") or "")
     if not manifest_path:

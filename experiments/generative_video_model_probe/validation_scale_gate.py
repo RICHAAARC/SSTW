@@ -30,6 +30,7 @@ DEFAULT_REQUIRED_MODERN_EXTERNAL_BASELINE_ADAPTER_NAMES = (
     "vidsig",
     "videoseal",
 )
+SSTW_METHOD_ID = "sstw_key_conditioned_flow_trajectory"
 DEFAULT_MINIMUM_EXTERNAL_BASELINE_MEASURED_ADAPTER_COUNT = 7
 DEFAULT_MINIMUM_MODERN_EXTERNAL_BASELINE_FORMAL_ADAPTER_COUNT = len(DEFAULT_REQUIRED_MODERN_EXTERNAL_BASELINE_ADAPTER_NAMES)
 
@@ -237,30 +238,83 @@ def _sstw_measured_formal_ready(run_root: Path) -> tuple[bool, int, str]:
     return ready, len(ready_records), decision.get("claim_support_status", "missing_sstw_measured_formal_decision")
 
 
-def _formal_method_baseline_comparison_ready(run_root: Path) -> tuple[bool, int, str]:
+def _required_fair_method_ids(required_modern_adapter_names: list[str]) -> set[str]:
+    """返回公平比较必须覆盖的 SSTW 与现代 baseline 方法集合。"""
+
+    return {SSTW_METHOD_ID, *{str(name) for name in required_modern_adapter_names if str(name)}}
+
+
+def _formal_method_baseline_comparison_ready(
+    run_root: Path,
+    required_modern_adapter_names: list[str],
+) -> tuple[bool, int, str]:
     """检查 SSTW 与 5 个现代 baseline 的同协议统计表是否已通过。"""
     records = _read_jsonl(run_root / "records" / "formal_method_baseline_comparison_records.jsonl")
     decision = _read_json(run_root / "artifacts" / "formal_method_baseline_comparison_decision.json")
-    ready = bool(records) and _decision_pass(decision, "formal_method_baseline_comparison_decision")
-    ready_count = int(decision.get("formal_comparison_ready_method_count") or 0)
+    required_method_ids = _required_fair_method_ids(required_modern_adapter_names)
+    ready_method_ids = {
+        str(record.get("method_id") or "")
+        for record in records
+        if record.get("metric_status") == "measured_formal"
+    }
+    missing_method_ids = sorted(required_method_ids - ready_method_ids)
+    ready_count = int(decision.get("formal_comparison_ready_method_count") or len(ready_method_ids))
+    ready = (
+        bool(records)
+        and _decision_pass(decision, "formal_method_baseline_comparison_decision")
+        and ready_count >= len(required_method_ids)
+        and not missing_method_ids
+    )
     return ready, ready_count, decision.get("claim_support_status", "missing_formal_method_baseline_comparison_decision")
 
 
-def _fair_detection_calibration_ready(run_root: Path) -> tuple[bool, int, str]:
+def _fair_detection_calibration_ready(
+    run_root: Path,
+    required_modern_adapter_names: list[str],
+) -> tuple[bool, int, str]:
     """检查 clean negative calibration 公平比较是否已通过。"""
     records = _read_jsonl(run_root / "records" / "fair_detection_calibration_records.jsonl")
     decision = _read_json(run_root / "artifacts" / "fair_detection_calibration_decision.json")
-    ready = bool(records) and _decision_pass(decision, "fair_detection_calibration_decision")
-    ready_count = int(decision.get("fair_detection_calibration_ready_count") or 0)
+    required_method_ids = _required_fair_method_ids(required_modern_adapter_names)
+    ready_method_ids = {
+        str(record.get("method_id") or "")
+        for record in records
+        if record.get("fair_comparison_status") == "ready"
+        and record.get("metric_status") == "measured_formal"
+    }
+    missing_method_ids = sorted(required_method_ids - ready_method_ids)
+    ready_count = int(decision.get("fair_detection_calibration_ready_count") or len(ready_method_ids))
+    ready = (
+        bool(records)
+        and _decision_pass(decision, "fair_detection_calibration_decision")
+        and ready_count >= len(required_method_ids)
+        and not missing_method_ids
+    )
     return ready, ready_count, decision.get("claim_support_status", "missing_fair_detection_calibration_decision")
 
 
-def _formal_baseline_difference_interval_ready(run_root: Path) -> tuple[bool, int, str]:
+def _formal_baseline_difference_interval_ready(
+    run_root: Path,
+    required_modern_adapter_names: list[str],
+) -> tuple[bool, int, str]:
     """检查 SSTW 相对 baseline 的差值置信区间报告是否已通过。"""
     records = _read_jsonl(run_root / "records" / "formal_baseline_difference_interval_records.jsonl")
     decision = _read_json(run_root / "artifacts" / "formal_baseline_difference_interval_decision.json")
-    ready = bool(records) and _decision_pass(decision, "formal_baseline_difference_interval_decision")
-    ready_count = int(decision.get("difference_interval_ready_count") or 0)
+    required_baseline_ids = {str(name) for name in required_modern_adapter_names if str(name)}
+    ready_baseline_ids = {
+        str(record.get("baseline_method_id") or "")
+        for record in records
+        if record.get("difference_interval_status") == "ready"
+        and record.get("metric_status") == "measured_formal"
+    }
+    missing_baseline_ids = sorted(required_baseline_ids - ready_baseline_ids)
+    ready_count = int(decision.get("difference_interval_ready_count") or len(ready_baseline_ids))
+    ready = (
+        bool(records)
+        and _decision_pass(decision, "formal_baseline_difference_interval_decision")
+        and ready_count >= len(required_baseline_ids)
+        and not missing_baseline_ids
+    )
     return ready, ready_count, decision.get("claim_support_status", "missing_formal_baseline_difference_interval_decision")
 
 
@@ -327,9 +381,18 @@ def build_validation_scale_gate_audit(
     confidence_interval_ready, confidence_interval_status = _confidence_interval_ready(run_root)
     low_fpr_ready, low_fpr_record_count, low_fpr_status = _low_fpr_formal_statistics_ready(run_root)
     sstw_measured_formal_ready, sstw_measured_formal_record_count, sstw_measured_formal_status = _sstw_measured_formal_ready(run_root)
-    fair_detection_ready, fair_detection_ready_count, fair_detection_status = _fair_detection_calibration_ready(run_root)
-    formal_method_comparison_ready, formal_method_comparison_ready_count, formal_method_comparison_status = _formal_method_baseline_comparison_ready(run_root)
-    formal_difference_interval_ready, formal_difference_interval_ready_count, formal_difference_interval_status = _formal_baseline_difference_interval_ready(run_root)
+    fair_detection_ready, fair_detection_ready_count, fair_detection_status = _fair_detection_calibration_ready(
+        run_root,
+        config["required_modern_external_baseline_adapter_names"],
+    )
+    formal_method_comparison_ready, formal_method_comparison_ready_count, formal_method_comparison_status = _formal_method_baseline_comparison_ready(
+        run_root,
+        config["required_modern_external_baseline_adapter_names"],
+    )
+    formal_difference_interval_ready, formal_difference_interval_ready_count, formal_difference_interval_status = _formal_baseline_difference_interval_ready(
+        run_root,
+        config["required_modern_external_baseline_adapter_names"],
+    )
     artifact_rebuild_ready, artifact_rebuild_status = _artifact_rebuild_ready(run_root)
     motion_selection = select_motion_claim_generation_records(validation_generation_records, formal_metric_records)
     formal_motion_claim_ready = motion_selection.formal_motion_claim_status in FORMAL_MOTION_CLAIM_READY_STATUSES

@@ -191,12 +191,14 @@ def test_validation_scale_gate_accepts_claim3_downgrade_path(tmp_path: Path) -> 
         {
             "method_id": "sstw_key_conditioned_flow_trajectory",
             "fair_comparison_status": "ready",
+            "metric_status": "measured_formal",
             "tpr_at_target_fpr": 1.0,
         },
         *[
             {
                 "method_id": baseline_id,
                 "fair_comparison_status": "ready",
+                "metric_status": "measured_formal",
                 "tpr_at_target_fpr": 1.0,
             }
             for baseline_id in sorted(MODERN_EXTERNAL_BASELINE_NAMES)
@@ -220,7 +222,7 @@ def test_validation_scale_gate_accepts_claim3_downgrade_path(tmp_path: Path) -> 
         "claim_support_status": "formal_method_baseline_comparison_validation_scale_only",
     })
     write_jsonl(run_root / "records" / "formal_baseline_difference_interval_records.jsonl", [
-        {"baseline_method_id": baseline_id, "difference_interval_status": "ready"}
+        {"baseline_method_id": baseline_id, "difference_interval_status": "ready", "metric_status": "measured_formal"}
         for baseline_id in sorted(MODERN_EXTERNAL_BASELINE_NAMES)
     ])
     write_json(run_root / "artifacts" / "formal_baseline_difference_interval_decision.json", {

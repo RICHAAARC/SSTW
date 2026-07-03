@@ -15,6 +15,7 @@ from main.external_baselines.explicit_dtw_temporal_alignment import compute_dtw_
 from main.external_baselines.frame_matching_temporal_registration import compute_registration_cost, match_frames
 from experiments.generative_video_model_probe.external_baseline_runner import (
     audit_external_baseline_comparison_records,
+    build_external_baseline_comparison_table_rows,
     write_external_baseline_comparison_outputs,
     write_external_baseline_status_outputs,
 )
@@ -37,7 +38,7 @@ from paper_workflow.notebook_utils.generative_video_model_probe_workflow import 
     build_paper_gate_external_baseline_environment,
 )
 from main.protocol.record_writer import read_jsonl, write_jsonl
-from external_baseline.source_intake import build_source_intake_manifest, write_source_intake_artifacts
+from external_baseline.source_intake import build_execution_manifest, build_source_intake_manifest, write_source_intake_artifacts
 
 
 @pytest.mark.quick
@@ -705,7 +706,7 @@ def test_modern_external_baseline_formal_command_adapters_write_measured_records
 def test_external_baseline_audit_rejects_handwritten_measured_formal_without_evidence() -> None:
     """external baseline audit 不能把手写 measured_formal 行计入正式 baseline 覆盖。"""
 
-    audit = audit_external_baseline_comparison_records([
+    records = [
         {
             "external_baseline_name": "videoseal",
             "external_baseline_layer": "modern_external_baseline",
@@ -715,13 +716,53 @@ def test_external_baseline_audit_rejects_handwritten_measured_formal_without_evi
             "seed_id": "seed_0",
             "attack_name": "video_compression_runtime",
         },
-    ])
+    ]
+    audit = audit_external_baseline_comparison_records(records)
 
     assert audit["external_baseline_comparison_decision"] == "FAIL"
     assert audit["external_baseline_formal_ready_count"] == 0
     assert audit["external_baseline_formal_incomplete_record_count"] == 1
     assert audit["modern_external_baseline_formal_measured_adapter_count"] == 0
     assert audit["modern_external_baseline_formal_measured_adapter_names"] == []
+
+
+@pytest.mark.quick
+def test_external_baseline_table_and_manifest_reject_incomplete_measured_formal_rows(tmp_path: Path) -> None:
+    """表格和 execution manifest 必须与 audit 使用同一 formal evidence 口径。"""
+
+    run_root = tmp_path / "run"
+    write_jsonl(run_root / "records" / "runtime_detection_records.jsonl", [])
+    records = [
+        {
+            "external_baseline_name": "videoseal",
+            "external_baseline_layer": "modern_external_baseline",
+            "external_baseline_family": "video_watermark",
+            "metric_status": "measured_formal",
+            "external_baseline_score": 0.61,
+            "prompt_id": "prompt_0",
+            "seed_id": "seed_0",
+            "attack_name": "video_compression_runtime",
+            "claim_support_status": "modern_external_baseline_formal_measured",
+        },
+    ]
+
+    table_rows = build_external_baseline_comparison_table_rows(run_root, records)
+    manifest = build_execution_manifest(
+        records,
+        run_root=run_root,
+        config_path="configs/external_baselines/external_baselines.json",
+    )
+    videoseal_row = next(row for row in table_rows if row["method_id"] == "videoseal")
+
+    assert videoseal_row["metric_status"] == "unsupported"
+    assert videoseal_row["comparison_scope"] == "external_baseline_result_missing"
+    assert videoseal_row["external_baseline_result_used_for_claim"] is False
+    assert videoseal_row["external_baseline_formal_incomplete_record_count"] == 1
+    assert manifest["external_baseline_formal_measured_adapter_count"] == 0
+    assert manifest["modern_external_baseline_formal_measured_adapter_count"] == 0
+    assert manifest["external_baseline_formal_incomplete_record_count"] == 1
+    assert manifest["formal_result_claim"] is False
+    assert manifest["formal_evidence_status"] == "no_formal_rows"
 
 
 @pytest.mark.quick

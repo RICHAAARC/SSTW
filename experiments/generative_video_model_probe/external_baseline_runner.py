@@ -238,6 +238,7 @@ def _proposed_method_row(runtime_detection_records: list[dict[str, Any]]) -> dic
         "external_baseline_score_mean": None,
         "external_baseline_distance_mean": None,
         "baseline_score_margin_mean": None,
+        "external_baseline_formal_incomplete_record_count": 0,
         "claim_support_status": "runtime_proxy_comparison_not_claim_supporting",
     }
 
@@ -254,8 +255,13 @@ def build_external_baseline_comparison_table_rows(
         grouped.setdefault(str(record.get("external_baseline_name") or "unknown_external_baseline"), []).append(record)
     for baseline_name, group in sorted(grouped.items()):
         first = group[0]
-        measured_rows = [record for record in group if record.get("metric_status") in {"measured_proxy", "measured_formal"}]
-        has_formal_rows = any(record.get("metric_status") == "measured_formal" for record in measured_rows)
+        formal_rows = [record for record in group if _formal_score_record_ready_for_claim(record)]
+        measured_rows = [
+            record
+            for record in group
+            if record.get("metric_status") == "measured_proxy" or _formal_score_record_ready_for_claim(record)
+        ]
+        has_formal_rows = bool(formal_rows)
         attack_names = {str(record.get("attack_name")) for record in measured_rows if record.get("attack_name")}
         rows.append({
             "method_id": baseline_name,
@@ -273,7 +279,13 @@ def build_external_baseline_comparison_table_rows(
             "external_baseline_score_mean": _mean_numeric(measured_rows, "external_baseline_score"),
             "external_baseline_distance_mean": _mean_numeric(measured_rows, "external_baseline_distance"),
             "baseline_score_margin_mean": _mean_numeric(measured_rows, "baseline_score_margin"),
-            "claim_support_status": first.get("claim_support_status"),
+            "external_baseline_formal_incomplete_record_count": sum(
+                1
+                for record in group
+                if record.get("metric_status") == "measured_formal"
+                and not _formal_score_record_ready_for_claim(record)
+            ),
+            "claim_support_status": first.get("claim_support_status") if has_formal_rows or measured_rows else "external_baseline_result_missing",
         })
     return rows
 

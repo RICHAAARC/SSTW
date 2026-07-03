@@ -493,11 +493,65 @@ def persisted_official_command_evidence_paths(run_root: str | Path) -> list[str]
     return [str(path.resolve()) for path in sorted(paths)]
 
 
+def _has_nonempty_field(record: Mapping[str, Any], field_name: str) -> bool:
+    """判断 execution manifest 输入记录中某个字段是否存在非空值。"""
+
+    return record.get(field_name) not in {None, ""}
+
+
+def _has_numeric_field(record: Mapping[str, Any], field_name: str) -> bool:
+    """判断 execution manifest 输入记录中某个字段是否可作为数值使用。"""
+
+    if record.get(field_name) in {None, "", "unsupported"}:
+        return False
+    try:
+        float(record.get(field_name))
+    except (TypeError, ValueError):
+        return False
+    return True
+
+
+def _formal_score_record_ready_for_manifest(record: Mapping[str, Any]) -> bool:
+    """检查 measured_formal record 是否足以写入正式 execution manifest 摘要。
+
+    该检查与 external baseline comparison audit 保持同一证据层级: formal 行必须
+    同时包含 prompt / seed / attack anchor、自身 clean negative 校准分数和项目内
+    official command 或 official bundle 证据。这样 manifest 不会把手写分数字段升级为
+    论文比较证据。
+    """
+
+    command_evidence_ready = (
+        _has_nonempty_field(record, "external_baseline_official_output_path")
+        and _has_nonempty_field(record, "external_baseline_official_command_manifest_path")
+    )
+    bundle_evidence_ready = (
+        _has_nonempty_field(record, "external_baseline_official_result_bundle_path")
+        and _has_nonempty_field(record, "external_baseline_official_execution_manifest_path")
+    )
+    return (
+        record.get("metric_status") == "measured_formal"
+        and all(_has_nonempty_field(record, field_name) for field_name in ("prompt_id", "seed_id", "attack_name"))
+        and _has_numeric_field(record, "external_baseline_clean_negative_score")
+        and _has_nonempty_field(record, "external_baseline_clean_negative_video_path")
+        and (command_evidence_ready or bundle_evidence_ready)
+    )
+
+
 def summarize_records_for_execution_manifest(records: Iterable[Mapping[str, Any]]) -> dict[str, Any]:
     """从 comparison records 汇总 external baseline execution manifest 所需字段。"""
     materialized = [dict(record) for record in records]
-    measured = [record for record in materialized if record.get("metric_status") in {"measured_proxy", "measured_formal"}]
-    formal = [record for record in materialized if record.get("metric_status") == "measured_formal"]
+    formal_candidate_records = [record for record in materialized if record.get("metric_status") == "measured_formal"]
+    formal = [record for record in formal_candidate_records if _formal_score_record_ready_for_manifest(record)]
+    formal_incomplete = [
+        record
+        for record in formal_candidate_records
+        if not _formal_score_record_ready_for_manifest(record)
+    ]
+    measured = [
+        record
+        for record in materialized
+        if record.get("metric_status") == "measured_proxy" or _formal_score_record_ready_for_manifest(record)
+    ]
     modern_formal_names = sorted({
         str(record.get("external_baseline_name"))
         for record in formal
@@ -507,6 +561,7 @@ def summarize_records_for_execution_manifest(records: Iterable[Mapping[str, Any]
         "external_baseline_comparison_record_count": len(materialized),
         "external_baseline_measured_adapter_count": len({str(record.get("external_baseline_name")) for record in measured if record.get("external_baseline_name")}),
         "external_baseline_formal_measured_adapter_count": len({str(record.get("external_baseline_name")) for record in formal if record.get("external_baseline_name")}),
+        "external_baseline_formal_incomplete_record_count": len(formal_incomplete),
         "modern_external_baseline_formal_measured_adapter_count": len(modern_formal_names),
         "modern_external_baseline_formal_measured_adapter_names": modern_formal_names,
         "external_baseline_result_used_for_claim": any(bool(record.get("external_baseline_result_used_for_claim")) for record in formal),

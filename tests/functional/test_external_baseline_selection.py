@@ -754,6 +754,71 @@ def test_modern_external_baseline_formal_command_adapters_require_clean_negative
 
 
 @pytest.mark.quick
+def test_modern_external_baseline_formal_command_adapter_normalizes_clean_negative_aliases(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """现代 baseline 命令输出 clean_negative_* 短字段时也必须转成正式校准字段。"""
+
+    run_root = tmp_path / "generative_video_runtime"
+    _write_external_baseline_runtime_fixture(run_root)
+    fake_adapter = tmp_path / "fake_modern_baseline_eval_with_clean_negative_aliases.py"
+    fake_adapter.write_text(
+        "import argparse, json\n"
+        "parser = argparse.ArgumentParser()\n"
+        "parser.add_argument('--output-json', required=True)\n"
+        "parser.add_argument('--source-video')\n"
+        "parser.add_argument('--attacked-video')\n"
+        "parser.add_argument('--attack-name')\n"
+        "args = parser.parse_args()\n"
+        "json.dump({'score': 0.44, 'detected': True, "
+        "'clean_negative_score': 0.09, "
+        "'clean_negative_score_semantics': 'watermark_presence_confidence', "
+        "'clean_negative_video_path': 'official/clean_negative_alias.mp4'}, "
+        "open(args.output_json, 'w', encoding='utf-8'))\n",
+        encoding="utf-8",
+    )
+    command = (
+        f"{sys.executable} {fake_adapter} "
+        "--source-video {source_video_path} "
+        "--attacked-video {attacked_video_path} "
+        "--attack-name {attack_name} "
+        "--output-json {output_json_path}"
+    )
+    monkeypatch.setenv("SSTW_UNIT_MODERN_EVAL_COMMAND", command)
+    config = ModernBaselineCommandConfig(
+        baseline_name="unit_modern",
+        baseline_family="unit_modern_video_watermark",
+        adapter_path="external_baseline/primary/unit_modern/adapter/run_sstw_eval.py",
+        env_var="SSTW_UNIT_MODERN_EVAL_COMMAND",
+        default_source_script="external_baseline/primary/unit_modern/adapter/run_sstw_eval.py",
+        score_source="official_command_adapter",
+    )
+
+    modern_records = build_modern_score_records(
+        run_root,
+        {
+            "external_baseline_name": "unit_modern",
+            "external_baseline_family": "unit_modern_video_watermark",
+            "external_baseline_layer": "modern_external_baseline",
+        },
+        config,
+    )
+
+    assert modern_records
+    assert all(record["metric_status"] == "measured_formal" for record in modern_records)
+    assert all(record["external_baseline_clean_negative_score"] == 0.09 for record in modern_records)
+    assert all(
+        record["external_baseline_clean_negative_score_semantics"] == "watermark_presence_confidence"
+        for record in modern_records
+    )
+    assert all(
+        record["external_baseline_clean_negative_video_path"] == "official/clean_negative_alias.mp4"
+        for record in modern_records
+    )
+
+
+@pytest.mark.quick
 def test_modern_external_baseline_bridge_commands_require_real_official_output(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """repository bridge 只能把官方命令输出归一化为 measured_formal records。"""
     run_root = tmp_path / "generative_video_runtime"

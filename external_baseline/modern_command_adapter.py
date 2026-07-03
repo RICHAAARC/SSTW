@@ -150,6 +150,31 @@ def _extract_score(payload: Mapping[str, Any]) -> float:
     return float(normalized_score_payload(payload)["external_baseline_raw_detector_score"])
 
 
+def _clean_negative_score_payload(payload: Mapping[str, Any]) -> dict[str, Any]:
+    """从官方输出中归一化 clean negative 校准字段。
+
+    官方 wrapper、bridge 或用户提供的原生命令可能使用短字段
+    `clean_negative_score` / `clean_negative_video_path`。校验层已经允许这些别名,
+    因此写入 `measured_formal` records 时也必须同步归一化, 否则后续
+    fair_detection_calibration 会读不到 baseline 自身的 clean negative 分布。
+    """
+
+    return {
+        "external_baseline_clean_negative_score": payload.get(
+            "external_baseline_clean_negative_score",
+            payload.get("clean_negative_score", payload.get("clean_negative_raw_detector_score")),
+        ),
+        "external_baseline_clean_negative_score_semantics": payload.get(
+            "external_baseline_clean_negative_score_semantics",
+            payload.get("clean_negative_score_semantics"),
+        ),
+        "external_baseline_clean_negative_video_path": payload.get(
+            "external_baseline_clean_negative_video_path",
+            payload.get("clean_negative_video_path"),
+        ),
+    }
+
+
 def _unsupported_record(
     config: ModernBaselineCommandConfig,
     baseline_record: Mapping[str, Any],
@@ -280,6 +305,7 @@ def build_modern_score_records(
             payload = _read_official_output(output_json_path)
             validate_clean_negative_payload(payload)
             score_payload = normalized_score_payload(payload)
+            clean_negative_payload = _clean_negative_score_payload(payload)
             score = round(float(score_payload["external_baseline_raw_detector_score"]), 6)
             method_score = safe_float(detection_record.get("S_runtime_attack_detection"), 0.0)
             records.append(with_flow_evidence_protocol_defaults({
@@ -320,9 +346,7 @@ def build_modern_score_records(
                 "external_baseline_score": score,
                 "external_baseline_detected": payload.get("external_baseline_detected", payload.get("detected")),
                 "external_baseline_bit_accuracy": payload.get("external_baseline_bit_accuracy", payload.get("bit_accuracy")),
-                "external_baseline_clean_negative_score": payload.get("external_baseline_clean_negative_score"),
-                "external_baseline_clean_negative_score_semantics": payload.get("external_baseline_clean_negative_score_semantics"),
-                "external_baseline_clean_negative_video_path": payload.get("external_baseline_clean_negative_video_path"),
+                **clean_negative_payload,
                 "external_baseline_threshold": payload.get("external_baseline_threshold", payload.get("threshold")),
                 "baseline_score_margin": round(method_score - score, 6),
                 "external_baseline_result_used_for_claim": True,

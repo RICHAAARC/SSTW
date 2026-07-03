@@ -18,6 +18,7 @@ from external_baseline.official_bundle_generator import build_official_bundle_ge
 import external_baseline.official_resource_bootstrap as official_resource_bootstrap
 from external_baseline.official_resource_bootstrap import bootstrap_official_resources
 from external_baseline.official_result_bundle import build_official_result_bundle_preflight
+from external_baseline.modern_command_adapter import ModernBaselineCommandConfig, build_modern_score_records
 from external_baseline.official_runtime_closure import (
     build_official_runtime_closure_requirements,
     load_official_runtime_closure_requirements,
@@ -694,6 +695,62 @@ def test_modern_external_baseline_formal_command_adapters_write_measured_records
     assert execution_manifest["modern_external_baseline_formal_measured_adapter_count"] == 5
     assert execution_manifest["formal_evidence_status"] == "evidence_paths_bound"
     assert execution_manifest["evidence_path_count"] >= len(formal_records)
+
+
+@pytest.mark.quick
+def test_modern_external_baseline_formal_command_adapters_require_clean_negative(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """现代 baseline 官方命令若缺少 clean negative 分数, 不能写成 measured_formal。"""
+
+    run_root = tmp_path / "generative_video_runtime"
+    _write_external_baseline_runtime_fixture(run_root)
+    fake_adapter = tmp_path / "fake_modern_baseline_eval_without_clean_negative.py"
+    fake_adapter.write_text(
+        "import argparse, json\n"
+        "parser = argparse.ArgumentParser()\n"
+        "parser.add_argument('--output-json', required=True)\n"
+        "parser.add_argument('--source-video')\n"
+        "parser.add_argument('--attacked-video')\n"
+        "parser.add_argument('--attack-name')\n"
+        "args = parser.parse_args()\n"
+        "json.dump({'external_baseline_score': 0.37, 'detected': True}, open(args.output_json, 'w', encoding='utf-8'))\n",
+        encoding="utf-8",
+    )
+    command = (
+        f"{sys.executable} {fake_adapter} "
+        "--source-video {source_video_path} "
+        "--attacked-video {attacked_video_path} "
+        "--attack-name {attack_name} "
+        "--output-json {output_json_path}"
+    )
+    monkeypatch.setenv("SSTW_UNIT_MODERN_EVAL_COMMAND", command)
+    config = ModernBaselineCommandConfig(
+        baseline_name="unit_modern",
+        baseline_family="unit_modern_video_watermark",
+        adapter_path="external_baseline/primary/unit_modern/adapter/run_sstw_eval.py",
+        env_var="SSTW_UNIT_MODERN_EVAL_COMMAND",
+        default_source_script="external_baseline/primary/unit_modern/adapter/run_sstw_eval.py",
+        score_source="official_command_adapter",
+    )
+
+    modern_records = build_modern_score_records(
+        run_root,
+        {
+            "external_baseline_name": "unit_modern",
+            "external_baseline_family": "unit_modern_video_watermark",
+            "external_baseline_layer": "modern_external_baseline",
+        },
+        config,
+    )
+
+    assert modern_records
+    assert all(record["metric_status"] == "unsupported" for record in modern_records)
+    assert any(
+        "clean_negative" in record["external_baseline_score_failure_reason"]
+        for record in modern_records
+    )
 
 
 @pytest.mark.quick

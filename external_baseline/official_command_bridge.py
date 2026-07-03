@@ -14,6 +14,7 @@ import shlex
 import subprocess
 from typing import Any, Mapping
 
+from external_baseline.official_eval_adapters.common import validate_clean_negative_payload
 from external_baseline.score_semantics import extract_raw_detector_score, normalized_score_payload
 
 
@@ -155,6 +156,7 @@ def run_bridge(args: argparse.Namespace) -> dict[str, Any]:
         raise FileNotFoundError(f"official_output_json_missing:{official_output_json_path}")
 
     official_payload = _read_json(official_output_json_path)
+    validate_clean_negative_payload(official_payload)
     score = round(_extract_score(official_payload), 6)
     score_payload = normalized_score_payload(official_payload)
     normalized = {

@@ -13,6 +13,7 @@ from typing import Any, Mapping
 
 from external_baseline.runtime_trace_io import build_comparison_unit_id, comparable_detection_records, safe_float
 from external_baseline.score_semantics import normalized_score_payload
+from external_baseline.official_eval_adapters.common import validate_clean_negative_payload
 from main.core.digest import build_stable_digest
 from main.core.progress import ProgressReporter
 from main.protocol.flow_evidence_fields import with_flow_evidence_protocol_defaults
@@ -277,6 +278,7 @@ def build_modern_score_records(
             if completed.returncode != 0:
                 raise RuntimeError(f"official_command_failed:{completed.returncode}:{completed.stderr[-500:]}")
             payload = _read_official_output(output_json_path)
+            validate_clean_negative_payload(payload)
             score_payload = normalized_score_payload(payload)
             score = round(float(score_payload["external_baseline_raw_detector_score"]), 6)
             method_score = safe_float(detection_record.get("S_runtime_attack_detection"), 0.0)

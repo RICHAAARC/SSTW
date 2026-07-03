@@ -147,11 +147,18 @@ def _deduplicated_score_rows(
             or record.get("source_video_path")
             or ""
         )
+        negative_unit_id = str(
+            record.get("clean_negative_unit_id")
+            or record.get("control_name")
+            or record.get("negative_family")
+            or ""
+        )
         key = (
             path,
             str(record.get("prompt_id") or ""),
             str(record.get("seed_id") or ""),
             field_name,
+            negative_unit_id,
         )
         if key in seen:
             continue

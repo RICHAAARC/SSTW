@@ -144,13 +144,27 @@ def test_sstw_measured_formal_result_writes_project_method_records(tmp_path: Pat
             "S_runtime_attack_detection": 0.1,
         },
     ])
+    write_jsonl(run_root / "records" / "controlled_negative_records.jsonl", [
+        {
+            "sample_role": "controlled_negative",
+            "control_name": "trajectory_direction_reversed_control",
+            "generation_model_id": "wan21",
+            "prompt_id": f"negative_prompt_{index}",
+            "seed_id": "seed_a",
+            "trajectory_trace_id": f"negative_trace_{index}",
+            "S_final": 0.05 + index * 0.001,
+        }
+        for index in range(10)
+    ])
 
     audit = run_sstw_measured_formal_result(run_root)
     records = read_jsonl(run_root / "records" / "sstw_measured_formal_records.jsonl")
     protocol = json.loads(Path("configs/protocol/validation_scale_generative_probe.json").read_text(encoding="utf-8"))
 
     assert audit["sstw_measured_formal_decision"] == "PASS"
-    assert audit["sstw_measured_formal_record_count"] == 1
+    assert audit["sstw_measured_formal_record_count"] == 11
+    assert audit["sstw_measured_formal_positive_record_count"] == 1
+    assert audit["sstw_measured_formal_clean_negative_score_count"] == 10
     assert audit["sstw_measured_formal_score_mean"] == 0.8
     assert audit["target_fpr"] == protocol["target_fpr"]
     assert records[0]["metric_status"] == "measured_formal"
@@ -159,6 +173,7 @@ def test_sstw_measured_formal_result_writes_project_method_records(tmp_path: Pat
     assert records[0]["comparison_scope"] == "paper_protocol_formal_adapter"
     assert records[0]["claim_support_status"] == "sstw_measured_formal_validation_scale_only"
     assert records[0]["sstw_detection_score_field"] == "S_final_conservative"
+    assert any(record.get("sample_role") == "clean_negative" for record in records)
     assert (run_root / "tables" / "sstw_measured_formal_table.csv").exists()
     assert (run_root / "artifacts" / "sstw_measured_formal_decision.json").exists()
     assert (run_root / "reports" / "sstw_measured_formal_report.md").exists()

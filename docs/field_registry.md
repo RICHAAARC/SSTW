@@ -1147,16 +1147,29 @@ Notebook 与 repository module 的跨边界数据
 | sstw_measured_formal_status | governance | none | true | false | false | 单条 SSTW measured_formal record 的可用状态。 |
 | sstw_score | metric | none | true | true | false | SSTW 本方法在同协议攻击样本上的检测分数。 |
 | sstw_detected | metric | none | true | true | false | SSTW 本方法在同协议攻击样本上的检测布尔结果。 |
+| sstw_clean_negative_score | metric | none | true | true | false | SSTW 本方法 clean negative 校准样本上的检测分数。 |
+| sstw_clean_negative_score_semantics | protocol | none | true | false | false | SSTW clean negative 分数语义, 必须与 sstw_score_semantics 对齐。 |
+| sstw_score_orientation | protocol | none | true | false | false | SSTW 分数方向, 公平比较阶段只接受 higher_is_more_watermarked。 |
 | sstw_detection_score_field | governance | none | true | false | false | SSTW measured_formal 转写所使用的源检测分数字段。 |
 | source_runtime_detection_record_index | artifact | none | true | false | false | SSTW measured_formal record 对应的 runtime_detection_records 源记录序号。 |
+| source_controlled_negative_record_index | artifact | none | true | false | false | SSTW measured_formal clean negative record 对应的 controlled_negative_records 源记录序号。 |
+| clean_negative_unit_id | protocol | none | true | false | false | clean negative 校准单元标识, 用于避免同一 prompt / seed 下多个负样本控制项被误去重。 |
+| clean_negative_evidence_level | governance | none | true | false | false | clean negative 分数的证据来源层级。 |
+| clean_negative_source_record_family | governance | none | true | false | false | clean negative 分数来自的源 record 文件族。 |
 | sstw_measured_formal_record_count | metric | none | true | true | false | SSTW 本方法 measured_formal records 数量。 |
 | sstw_measured_formal_ready_count | metric | none | true | false | false | SSTW 本方法 measured_formal ready records 数量。 |
+| sstw_measured_formal_positive_record_count | metric | none | true | true | false | SSTW measured_formal 中 attacked positive record 数量。 |
+| sstw_measured_formal_clean_negative_record_count | metric | none | true | true | false | SSTW measured_formal 中 clean negative record 数量。 |
+| sstw_measured_formal_clean_negative_score_count | metric | none | true | true | false | SSTW measured_formal 中可用于公平校准的 clean negative 分数数量。 |
 | sstw_measured_formal_prompt_count | metric | none | true | false | false | SSTW 本方法 measured_formal records 覆盖的 prompt 数量。 |
 | sstw_measured_formal_attack_count | metric | none | true | false | false | SSTW 本方法 measured_formal records 覆盖的 attack 数量。 |
 | sstw_measured_formal_detected_count | metric | none | true | true | false | SSTW 本方法 measured_formal records 中检测为 positive 的数量。 |
 | sstw_measured_formal_detectable_rate | metric | none | true | true | false | SSTW 本方法 measured_formal records 的 positive rate。 |
 | sstw_measured_formal_score_mean | metric | none | true | true | false | SSTW 本方法 measured_formal records 的平均检测分数。 |
+| sstw_measured_formal_clean_negative_score_mean | metric | none | true | true | false | SSTW measured_formal clean negative 分数均值。 |
 | sstw_measured_formal_metric_status | governance | none | true | false | false | SSTW 本方法 measured_formal 转写阶段的 metric_status 汇总。 |
+| missing_sstw_measured_formal_requirements | governance | none | true | false | false | SSTW measured_formal 转写阶段仍缺失的要求。 |
+| sstw_measured_formal_missing_requirement_count | metric | none | true | false | false | SSTW measured_formal 转写阶段缺失要求数量。 |
 | require_sstw_measured_formal_records | protocol | none | true | false | false | validation_scale gate 是否要求 SSTW 本方法 measured_formal records 已落盘。 |
 | allow_effect_size_claims | protocol | none | true | false | false | 当前 protocol profile 是否允许效果大小 claim。 |
 | formal_method_baseline_comparison_decision | governance | none | true | true | false | SSTW 与现代 external baseline 同协议 measured_formal 比较表阶段判定。 |

@@ -138,19 +138,19 @@ def _external_baseline_comparison_ready(
     """检查 external_baseline/ adapter 是否已经写出 comparison records。"""
     records = _read_jsonl(run_root / "records" / "external_baseline_score_records.jsonl")
     decision = _read_json(run_root / "artifacts" / "external_baseline_comparison_decision.json")
-    if not decision and records:
-        decision = audit_external_baseline_comparison_records(records)
-    measured_adapter_count = int(decision.get("external_baseline_measured_adapter_count") or 0)
-    modern_formal_adapter_count = int(decision.get("modern_external_baseline_formal_measured_adapter_count") or 0)
+    records_audit = audit_external_baseline_comparison_records(records) if records else {}
+    measured_adapter_count = int(records_audit.get("external_baseline_measured_adapter_count") or 0)
+    modern_formal_adapter_count = int(records_audit.get("modern_external_baseline_formal_measured_adapter_count") or 0)
     modern_formal_names = {
         str(name)
-        for name in decision.get("modern_external_baseline_formal_measured_adapter_names", [])
+        for name in records_audit.get("modern_external_baseline_formal_measured_adapter_names", [])
         if str(name)
     }
     required_modern_names = {str(name) for name in required_modern_adapter_names if str(name)}
     missing_modern_names = sorted(required_modern_names - modern_formal_names)
     ready = (
         _decision_pass(decision, "external_baseline_comparison_decision")
+        and records_audit.get("external_baseline_comparison_decision") == "PASS"
         and measured_adapter_count >= minimum_measured_adapter_count
         and modern_formal_adapter_count >= minimum_modern_formal_adapter_count
         and not missing_modern_names
@@ -161,7 +161,10 @@ def _external_baseline_comparison_ready(
         measured_adapter_count,
         modern_formal_adapter_count,
         missing_modern_names,
-        decision.get("external_baseline_claim_support_status", "missing_external_baseline_comparison_decision"),
+        records_audit.get(
+            "external_baseline_claim_support_status",
+            decision.get("external_baseline_claim_support_status", "missing_external_baseline_comparison_decision"),
+        ),
     )
 
 def _internal_ablation_ready(run_root: Path) -> tuple[bool, int, str]:

@@ -31,14 +31,25 @@ MODERN_EXTERNAL_BASELINE_NAMES = {
 
 def _formal_external_baseline_records() -> list[dict]:
     """构造完整 baseline fixture, 使该测试只聚焦 Claim-3 降级路径。"""
-    return [
-        {
+    records: list[dict] = []
+    for name in EXTERNAL_BASELINE_NAMES:
+        record = {
             "external_baseline_name": name,
             "external_baseline_layer": "modern_external_baseline" if name in MODERN_EXTERNAL_BASELINE_NAMES else "explicit_synchronization_control",
             "metric_status": "measured_formal" if name in MODERN_EXTERNAL_BASELINE_NAMES else "measured_proxy",
         }
-        for name in EXTERNAL_BASELINE_NAMES
-    ]
+        if name in MODERN_EXTERNAL_BASELINE_NAMES:
+            record.update({
+                "prompt_id": "prompt_0",
+                "seed_id": "seed_0",
+                "attack_name": "video_compression_runtime",
+                "external_baseline_clean_negative_score": 0.08,
+                "external_baseline_clean_negative_video_path": f"official/{name}/clean_negative.mp4",
+                "external_baseline_official_output_path": f"official/{name}/official_output.json",
+                "external_baseline_official_command_manifest_path": f"official/{name}/official_command_manifest.json",
+            })
+        records.append(record)
+    return records
 
 
 @pytest.mark.quick

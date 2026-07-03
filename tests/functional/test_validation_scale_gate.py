@@ -31,8 +31,9 @@ MODERN_EXTERNAL_BASELINE_NAMES = {
 
 def _formal_external_baseline_records() -> list[dict]:
     """构造 validation-scale 通过所需的完整 external baseline records fixture。"""
-    return [
-        {
+    records: list[dict] = []
+    for name in EXTERNAL_BASELINE_NAMES:
+        record = {
             "external_baseline_name": name,
             "external_baseline_layer": "modern_external_baseline" if name in MODERN_EXTERNAL_BASELINE_NAMES else "explicit_synchronization_control",
             "metric_status": "measured_formal" if name in MODERN_EXTERNAL_BASELINE_NAMES else "measured_proxy",
@@ -40,8 +41,18 @@ def _formal_external_baseline_records() -> list[dict]:
             if name in MODERN_EXTERNAL_BASELINE_NAMES
             else "external_baseline_proxy_comparison_not_claim_supporting",
         }
-        for name in EXTERNAL_BASELINE_NAMES
-    ]
+        if name in MODERN_EXTERNAL_BASELINE_NAMES:
+            record.update({
+                "prompt_id": "prompt_0",
+                "seed_id": "seed_0",
+                "attack_name": "video_compression_runtime",
+                "external_baseline_clean_negative_score": 0.08,
+                "external_baseline_clean_negative_video_path": f"official/{name}/clean_negative.mp4",
+                "external_baseline_official_output_path": f"official/{name}/official_output.json",
+                "external_baseline_official_command_manifest_path": f"official/{name}/official_command_manifest.json",
+            })
+        records.append(record)
+    return records
 
 
 @pytest.mark.quick
@@ -421,6 +432,72 @@ def test_validation_scale_gate_rejects_stale_fair_comparison_decision_without_re
     assert "validation_fair_detection_calibration_ready" in audit["missing_validation_requirements"]
     assert "validation_formal_method_baseline_comparison_ready" in audit["missing_validation_requirements"]
     assert "validation_formal_baseline_difference_interval_ready" in audit["missing_validation_requirements"]
+
+
+@pytest.mark.quick
+def test_validation_scale_gate_recomputes_external_baseline_records_before_pass(tmp_path: Path) -> None:
+    """validation-scale 不能只凭旧 external baseline decision 放行缺 evidence 的 formal 记录。"""
+
+    run_root = tmp_path / "run"
+    config_path = tmp_path / "validation_scale_config.json"
+    config_path.write_text(
+        json.dumps(
+            {
+                "target_fpr": 0.1,
+                "paper_result_level": "validation_scale",
+                "minimum_prompt_count": 0,
+                "minimum_seed_per_prompt": 0,
+                "minimum_attack_count": 0,
+                "minimum_external_baseline_measured_adapter_count": 1,
+                "minimum_modern_external_baseline_formal_adapter_count": 1,
+                "required_modern_external_baseline_adapter_names": ["videoseal"],
+                "require_external_baseline_status_records": False,
+                "require_external_baseline_comparison_records": True,
+                "require_external_baseline_self_containment_decision": False,
+                "require_sstw_measured_formal_records": False,
+                "require_fair_detection_calibration": False,
+                "require_formal_method_baseline_comparison": False,
+                "require_formal_baseline_difference_interval": False,
+                "require_motion_threshold_calibration_ready": False,
+                "require_formal_motion_claim_ready": False,
+                "require_motion_consistency_exclusion_report": False,
+                "require_internal_ablation_records": False,
+                "require_validation_scale_formal_internal_ablation": False,
+                "require_adaptive_attack_records": False,
+                "require_replay_or_sketch_records_or_claim3_downgrade": False,
+                "require_confidence_interval_report": False,
+                "require_low_fpr_formal_statistics_blocking_record": False,
+                "require_artifact_rebuild_dry_run": False,
+                "require_data_split_and_leakage_guard": False,
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+    write_jsonl(run_root / "records" / "external_baseline_score_records.jsonl", [
+        {
+            "external_baseline_name": "videoseal",
+            "external_baseline_layer": "modern_external_baseline",
+            "metric_status": "measured_formal",
+            "prompt_id": "prompt_0",
+            "seed_id": "seed_0",
+            "attack_name": "video_compression_runtime",
+        },
+    ])
+    write_json(run_root / "artifacts" / "external_baseline_comparison_decision.json", {
+        "external_baseline_comparison_decision": "PASS",
+        "external_baseline_measured_adapter_count": 1,
+        "modern_external_baseline_formal_measured_adapter_count": 1,
+        "modern_external_baseline_formal_measured_adapter_names": ["videoseal"],
+        "external_baseline_claim_support_status": "external_baseline_formal_and_proxy_records_written",
+    })
+
+    audit = build_validation_scale_gate_audit(run_root, config_path)
+
+    assert audit["validation_scale_gate_decision"] == "FAIL"
+    assert "validation_external_baseline_comparison_records_ready" in audit["missing_validation_requirements"]
+    assert audit["modern_external_baseline_formal_measured_adapter_count"] == 0
+    assert audit["missing_modern_external_baseline_formal_adapter_names"] == ["videoseal"]
 
 
 @pytest.mark.quick

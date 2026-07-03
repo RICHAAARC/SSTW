@@ -473,6 +473,10 @@ def _default_required_stage_packages(layout: Mapping[str, str], notebook_role: s
         required = ["generative_video_runtime_colab"]
         if profile != "motion_calibration":
             required.append("motion_threshold_calibration_colab")
+            required.extend(
+                stage_package_id_for_notebook("external_baseline_formal_scoring", baseline_id=baseline)
+                for baseline in MODERN_EXTERNAL_BASELINE_IDS
+            )
         return required
     if role == "generative_video_runtime" and profile != "motion_calibration":
         return ["motion_threshold_calibration_colab"]
@@ -483,11 +487,6 @@ def _default_optional_stage_packages(notebook_role: str, baseline_id: str | None
     """返回某个 Notebook role 可恢复但不强制存在的阶段包。"""
 
     role = sanitize_filename_token(notebook_role)
-    if role == "paper_gate_and_package":
-        return [
-            stage_package_id_for_notebook("external_baseline_formal_scoring", baseline_id=baseline)
-            for baseline in MODERN_EXTERNAL_BASELINE_IDS
-        ]
     return []
 
 

@@ -1196,7 +1196,8 @@ def build_external_baseline_self_containment_decision_command(layout: dict[str, 
     """
     return [
         sys.executable,
-        "scripts/check_results/external_baseline_self_containment_decision.py",
+        "-m",
+        "scripts.check_results.external_baseline_self_containment_decision",
         "--run-root",
         layout["drive_run_root"],
         "--config-path",
@@ -1208,7 +1209,8 @@ def build_data_split_and_leakage_guard_command(layout: dict[str, str]) -> list[s
     """构造数据切分与泄漏检查命令。"""
     return [
         sys.executable,
-        "scripts/check_results/data_split_and_leakage_guard.py",
+        "-m",
+        "scripts.check_results.data_split_and_leakage_guard",
         "--run-root",
         layout["drive_run_root"],
     ]
@@ -1325,7 +1327,8 @@ def build_stage_transition_decision_command(layout: dict[str, str], transition_i
     """构造主干阶段跳转判定命令。"""
     return [
         sys.executable,
-        "scripts/check_results/stage_transition_decision.py",
+        "-m",
+        "scripts.check_results.stage_transition_decision",
         "--run-root",
         layout["drive_run_root"],
         "--transition",

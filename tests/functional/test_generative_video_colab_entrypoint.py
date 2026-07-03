@@ -18,12 +18,15 @@ from paper_workflow.notebook_utils.generative_video_model_probe_workflow import 
     build_external_baseline_official_bundle_generation_command,
     build_external_baseline_official_resource_bootstrap_command,
     build_external_baseline_official_result_bundle_preflight_command,
+    build_external_baseline_self_containment_decision_command,
+    build_data_split_and_leakage_guard_command,
     build_modern_baseline_official_bridge_command_templates,
     build_modern_baseline_official_bridge_preflight_decision,
     build_repository_official_baseline_eval_command_templates,
     build_statistical_confidence_interval_command,
     build_pilot_paper_gate_command,
     build_validation_scale_gate_command,
+    build_validation_scale_to_pilot_paper_transition_decision_command,
     default_workflow_profile_for_notebook_role,
     ensure_drive_layout,
     resolve_notebook_workflow_profile,
@@ -35,6 +38,7 @@ from paper_workflow.notebook_utils.generative_video_model_probe_workflow import 
     write_motion_threshold_reuse_artifact_for_profile,
 )
 from paper_workflow.colab_utils.stage_package_sync import (
+    _default_required_stage_packages,
     activate_local_stage_layout,
     hydrate_stage_package,
     prepare_colab_stage_layout,
@@ -656,6 +660,44 @@ def test_profile_specific_commands_pass_protocol_config_path(tmp_path: Path) -> 
         assert command[command.index("--config-path") + 1] == "configs/protocol/validation_scale_generative_probe.json"
     assert "--config-path" in pilot_command
     assert pilot_command[pilot_command.index("--config-path") + 1] == "configs/protocol/pilot_paper_generative_probe.json"
+
+
+@pytest.mark.quick
+def test_paper_gate_commands_use_module_mode_for_check_result_scripts(tmp_path: Path) -> None:
+    """paper gate 中的 check_results 脚本必须用 `python -m`, 避免 Colab 直接脚本路径丢失 repo root。"""
+
+    layout = build_drive_layout(
+        str(tmp_path / "SSTW"),
+        workflow_profile="validation_scale",
+        notebook_role="paper_gate_and_package",
+    )
+    commands = [
+        build_external_baseline_self_containment_decision_command(layout),
+        build_data_split_and_leakage_guard_command(layout),
+        build_validation_scale_to_pilot_paper_transition_decision_command(layout),
+    ]
+
+    for command in commands:
+        assert command[1] == "-m"
+        assert command[2].startswith("scripts.check_results.")
+        assert not any(str(item).startswith("scripts/check_results/") for item in command)
+
+
+@pytest.mark.quick
+def test_paper_gate_requires_all_external_baseline_reference_stage_packages(tmp_path: Path) -> None:
+    """paper gate 必须强制恢复 5 个 official reference 阶段包, 不能静默降级为 proxy-only comparison。"""
+
+    layout = build_drive_layout(
+        str(tmp_path / "SSTW"),
+        workflow_profile="validation_scale",
+        notebook_role="paper_gate_and_package",
+    )
+    required = _default_required_stage_packages(layout, "paper_gate_and_package")
+
+    assert "generative_video_runtime_colab" in required
+    assert "motion_threshold_calibration_colab" in required
+    for baseline_id in ("videoseal", "vidsig", "videomark", "videoshield", "sigmark"):
+        assert f"external_baseline_formal_reference_{baseline_id}" in required
 
 
 @pytest.mark.quick

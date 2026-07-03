@@ -302,6 +302,76 @@ def test_formal_method_baseline_comparison_requires_sstw_and_five_baselines(tmp_
 
 
 @pytest.mark.quick
+def test_formal_comparison_rejects_fair_calibration_target_fpr_mismatch(tmp_path: Path) -> None:
+    """正式比较不能把旧 target_fpr 的 fair calibration 结果改标成当前配置结果。"""
+    run_root = tmp_path / "run"
+    config_path = run_root / "validation_scale_config.json"
+    write_json(config_path, {
+        "paper_result_level": "validation_scale",
+        "target_fpr": 0.1,
+        "required_modern_external_baseline_adapter_names": ["videoseal"],
+    })
+    common_units = [
+        {
+            "comparison_anchor_key": "prompt_a::seed_a::video_compression_runtime",
+            "prompt_id": "prompt_a",
+            "seed_id": "seed_a",
+            "attack_name": "video_compression_runtime",
+            "detected_at_target_fpr": True,
+        }
+    ]
+    write_jsonl(run_root / "records" / "fair_detection_calibration_records.jsonl", [
+        {
+            "method_id": "sstw_key_conditioned_flow_trajectory",
+            "method_role": "proposed_method",
+            "metric_status": "measured_formal",
+            "fair_comparison_status": "ready",
+            "target_fpr": 0.01,
+            "positive_anchor_keys": ["prompt_a::seed_a::video_compression_runtime"],
+            "positive_detection_units_at_target_fpr": common_units,
+            "positive_score_field": "sstw_score",
+            "attacked_positive_score_count": 1,
+            "detected_positive_count_at_target_fpr": 1,
+            "tpr_at_target_fpr": 1.0,
+            "prompt_count": 1,
+            "attack_count": 1,
+            "clean_negative_score_count": 10,
+            "score_semantics": "sstw_conservative_detector_score",
+        },
+        {
+            "method_id": "videoseal",
+            "method_role": "modern_external_baseline",
+            "metric_status": "measured_formal",
+            "fair_comparison_status": "ready",
+            "target_fpr": 0.01,
+            "positive_anchor_keys": ["prompt_a::seed_a::video_compression_runtime"],
+            "positive_detection_units_at_target_fpr": common_units,
+            "positive_score_field": "external_baseline_score",
+            "attacked_positive_score_count": 1,
+            "detected_positive_count_at_target_fpr": 1,
+            "tpr_at_target_fpr": 1.0,
+            "prompt_count": 1,
+            "attack_count": 1,
+            "clean_negative_score_count": 10,
+            "score_semantics": "watermark_presence_detector_score",
+        },
+    ])
+
+    comparison_audit = run_formal_method_baseline_comparison(run_root, config_path)
+    difference_audit = run_formal_baseline_difference_interval(run_root, config_path)
+    comparison_records = read_jsonl(run_root / "records" / "formal_method_baseline_comparison_records.jsonl")
+    difference_records = read_jsonl(run_root / "records" / "formal_baseline_difference_interval_records.jsonl")
+
+    assert comparison_audit["formal_method_baseline_comparison_decision"] == "FAIL"
+    assert difference_audit["formal_baseline_difference_interval_decision"] == "FAIL"
+    assert all(record["metric_status"] == "missing" for record in comparison_records)
+    assert all(record["source_fair_detection_target_fpr"] == 0.01 for record in comparison_records)
+    assert all(record["comparison_missing_reason"] == "fair_detection_calibration_target_fpr_mismatch" for record in comparison_records)
+    assert difference_records[0]["difference_interval_status"] == "missing_or_unaligned_paired_anchors"
+    assert difference_records[0]["baseline_source_fair_detection_target_fpr"] == 0.01
+
+
+@pytest.mark.quick
 def test_fair_detection_calibration_rejects_positive_records_without_complete_anchor(tmp_path: Path) -> None:
     """公平校准不能把缺失 prompt / seed / attack 的 positive 记录伪装成可比较 anchor。"""
     run_root = tmp_path / "run"

@@ -181,6 +181,17 @@ def _score_values(records: Iterable[dict[str, Any]], score_field: str) -> list[f
     return values
 
 
+def _target_fpr_matches(record: dict[str, Any] | None, expected_target_fpr: float) -> bool:
+    """检查上游 fair calibration record 是否来自当前 protocol config。"""
+
+    if not record:
+        return False
+    try:
+        return abs(float(record.get("target_fpr")) - float(expected_target_fpr)) <= 1e-12
+    except (TypeError, ValueError):
+        return False
+
+
 def build_formal_baseline_difference_interval_records(
     run_root: str | Path,
     config_path: str | Path = DEFAULT_PROTOCOL_CONFIG,
@@ -190,7 +201,8 @@ def build_formal_baseline_difference_interval_records(
     profile_context = _load_profile_context(config_path)
     fair_records = _read_jsonl(run_root / "records" / "fair_detection_calibration_records.jsonl")
     fair_by_method = {str(record.get("method_id") or ""): record for record in fair_records if record.get("method_id")}
-    sstw_record = fair_by_method.get(SSTW_METHOD_ID, {})
+    raw_sstw_record = fair_by_method.get(SSTW_METHOD_ID, {})
+    sstw_record = raw_sstw_record if _target_fpr_matches(raw_sstw_record, float(profile_context["target_fpr"])) else {}
     sstw_tpr = _safe_float(sstw_record.get("tpr_at_target_fpr"))
     sstw_count = int(sstw_record.get("attacked_positive_score_count") or 0)
     sstw_units = _detection_units_by_anchor(sstw_record)
@@ -202,7 +214,8 @@ def build_formal_baseline_difference_interval_records(
         else "formal_baseline_difference_interval_validation_scale_only"
     )
     for baseline_id in profile_context["required_modern_external_baseline_adapter_names"]:
-        baseline_record = fair_by_method.get(baseline_id, {})
+        raw_baseline_record = fair_by_method.get(baseline_id, {})
+        baseline_record = raw_baseline_record if _target_fpr_matches(raw_baseline_record, float(profile_context["target_fpr"])) else {}
         baseline_tpr = _safe_float(baseline_record.get("tpr_at_target_fpr"))
         baseline_count = int(baseline_record.get("attacked_positive_score_count") or 0)
         baseline_units = _detection_units_by_anchor(baseline_record)
@@ -236,6 +249,8 @@ def build_formal_baseline_difference_interval_records(
             "comparison_scope": "fair_detection_calibration_at_target_fpr",
             "reference_score_field": "tpr_at_target_fpr",
             "baseline_score_field": "tpr_at_target_fpr",
+            "reference_source_fair_detection_target_fpr": raw_sstw_record.get("target_fpr") if raw_sstw_record else None,
+            "baseline_source_fair_detection_target_fpr": raw_baseline_record.get("target_fpr") if raw_baseline_record else None,
             "reference_record_count": sstw_count,
             "baseline_record_count": baseline_count,
             "paired_comparison_unit_count": paired_count,

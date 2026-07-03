@@ -87,6 +87,17 @@ def _mean(values: Iterable[float | None]) -> float | None:
     return round(mean(numeric_values), 6) if numeric_values else None
 
 
+def _target_fpr_matches(record: dict[str, Any] | None, expected_target_fpr: float) -> bool:
+    """检查上游 fair calibration record 是否来自当前 protocol config。"""
+
+    if not record:
+        return False
+    try:
+        return abs(float(record.get("target_fpr")) - float(expected_target_fpr)) <= 1e-12
+    except (TypeError, ValueError):
+        return False
+
+
 def _method_row(
     *,
     method_id: str,
@@ -97,8 +108,11 @@ def _method_row(
     reference_anchor_keys: set[str] | None = None,
 ) -> dict[str, Any]:
     """将 fair calibration record 转成同协议比较行。"""
-    fair_ready = bool(record) and record.get("fair_comparison_status") == "ready"
+    record_target_matches = _target_fpr_matches(record, float(profile_context["target_fpr"]))
+    fair_ready = bool(record) and record.get("fair_comparison_status") == "ready" and record_target_matches
     anchor_keys = {str(item) for item in (record or {}).get("positive_anchor_keys", []) if str(item)}
+    if record and not record_target_matches:
+        missing_reason = "fair_detection_calibration_target_fpr_mismatch"
     if method_role == "proposed_method":
         anchor_alignment_status = "reference_method_anchor_set_ready" if fair_ready and anchor_keys else "reference_method_anchor_set_missing"
         anchor_aligned = fair_ready and bool(anchor_keys)
@@ -126,6 +140,7 @@ def _method_row(
         "comparison_scope": "fair_detection_calibration_at_target_fpr",
         "comparison_primary_metric_name": "tpr_at_target_fpr",
         "comparison_primary_metric_value": record.get("tpr_at_target_fpr") if record else None,
+        "source_fair_detection_target_fpr": record.get("target_fpr") if record else None,
         "comparison_score_field": record.get("positive_score_field") if record else "missing_fair_detection_calibration",
         "comparison_record_count": record.get("attacked_positive_score_count") if record else 0,
         "comparison_anchor_count": len(anchor_keys),

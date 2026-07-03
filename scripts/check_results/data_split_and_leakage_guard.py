@@ -22,6 +22,7 @@ RECORD_SOURCES = (
     ("generation_records", "records/generation_records.jsonl"),
     ("formal_quality_motion_semantic_records", "records/formal_quality_motion_semantic_records.jsonl"),
     ("runtime_detection_records", "records/runtime_detection_records.jsonl"),
+    ("protocol_evaluation_matrix_records", "records/protocol_evaluation_matrix_records.jsonl"),
     ("small_scale_claim_pilot_matrix_records", "records/small_scale_claim_pilot_matrix_records.jsonl"),
     ("external_baseline_score_records", "records/external_baseline_score_records.jsonl"),
     ("validation_internal_ablation_records", "records/validation_internal_ablation_records.jsonl"),

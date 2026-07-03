@@ -38,7 +38,6 @@
   "require_pilot_paper_gate_passed": true,
   "require_pilot_paper_to_full_paper_transition_decision": true,
   "require_replay_or_sketch_records_or_claim3_downgrade": true,
-  "require_small_scale_pilot_gate_passed": true,
   "require_validation_scale_gate_passed": true,
   "require_validation_scale_to_pilot_paper_transition_decision": true,
   "required_external_baseline_adapter_names": [

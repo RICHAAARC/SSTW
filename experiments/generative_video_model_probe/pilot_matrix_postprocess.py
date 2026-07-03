@@ -1,4 +1,10 @@
-"""构造 small-scale claim pilot 的轻量矩阵后处理记录。"""
+"""构造协议评估矩阵的轻量后处理记录。
+
+历史入口仍保留 `small_scale_claim_pilot` 文件名, 用于复现早期
+mechanism_validation 子检查。当前主干 Notebook 使用
+`protocol_evaluation_matrix` 输出, 避免把历史 gate 名称继续写入
+validation_scale / pilot_paper 的正式阶段包。
+"""
 
 from __future__ import annotations
 
@@ -238,6 +244,79 @@ def audit_pilot_matrix_records(records: list[dict], run_root: str | Path | None 
     }
 
 
+def _protocol_matrix_records(records: list[dict]) -> list[dict]:
+    """把历史 pilot matrix record 形状转成当前主干协议矩阵 record 形状。"""
+
+    converted: list[dict] = []
+    for record in records:
+        row = dict(record)
+        row["record_version"] = "protocol_evaluation_matrix_v1"
+        row["protocol_matrix_evidence_level"] = row.pop("pilot_evidence_level", "proxy_postprocess")
+        row["claim_support_status"] = "protocol_evaluation_matrix_proxy_only"
+        converted.append(row)
+    return converted
+
+
+def audit_protocol_evaluation_matrix_records(records: list[dict], run_root: str | Path | None = None) -> dict:
+    """审计当前主干协议评估矩阵 proxy records 的覆盖情况。"""
+
+    audit = audit_pilot_matrix_records(records, run_root)
+    return {
+        "stage_id": "protocol_evaluation_matrix_postprocess",
+        "protocol_evaluation_matrix_decision": audit["pilot_matrix_postprocess_decision"],
+        "protocol_evaluation_matrix_record_count": audit["pilot_matrix_record_count"],
+        "protocol_evaluation_matrix_attack_count": audit["pilot_matrix_attack_count"],
+        "protocol_evaluation_matrix_method_variant_count": audit["pilot_matrix_method_variant_count"],
+        "protocol_evaluation_matrix_negative_family_count": audit["pilot_matrix_negative_family_count"],
+        "path_marginal_gain_at_fixed_fpr": audit["path_marginal_gain_at_fixed_fpr"],
+        "replay_uncertainty_mean": audit["replay_uncertainty_mean"],
+        "claim_support_status": "protocol_evaluation_matrix_proxy_only",
+        "protocol_matrix_evidence_level": "proxy_postprocess",
+        **{
+            key: value
+            for key, value in audit.items()
+            if key
+            in {
+                "motion_claim_eligible_generation_count",
+                "motion_claim_excluded_generation_count",
+                "formal_motion_claim_status",
+                "formal_motion_consistency_ready_count",
+                "formal_motion_consistency_blocked_count",
+            }
+        },
+    }
+
+
+def write_protocol_evaluation_matrix_postprocess(run_root: str | Path) -> dict:
+    """写出当前主干协议评估矩阵 proxy records、table、decision 和 report。"""
+
+    run_root = Path(run_root)
+    records = _protocol_matrix_records(build_pilot_matrix_records(run_root))
+    audit = audit_protocol_evaluation_matrix_records(records, run_root)
+    write_jsonl(run_root / "records" / "protocol_evaluation_matrix_records.jsonl", records)
+    write_csv(run_root / "tables" / "protocol_evaluation_matrix_table.csv", records)
+    write_json(run_root / "artifacts" / "protocol_evaluation_matrix_decision.json", audit)
+    report = (
+        "# Protocol Evaluation Matrix Postprocess Report\n\n"
+        "该报告由现有 generation 与 trajectory records 后处理生成。当前记录是 proxy_postprocess 证据, "
+        "用于在 validation_scale / pilot_paper 中预演 attack、negative family、method variant "
+        "和 replay 控制矩阵, 不能替代 full-paper 正式效果 claim。\n\n"
+        f"- protocol_evaluation_matrix_decision: {audit['protocol_evaluation_matrix_decision']}\n"
+        f"- protocol_evaluation_matrix_record_count: {audit['protocol_evaluation_matrix_record_count']}\n"
+        f"- protocol_evaluation_matrix_attack_count: {audit['protocol_evaluation_matrix_attack_count']}\n"
+        f"- protocol_evaluation_matrix_method_variant_count: {audit['protocol_evaluation_matrix_method_variant_count']}\n"
+        f"- protocol_evaluation_matrix_negative_family_count: {audit['protocol_evaluation_matrix_negative_family_count']}\n"
+        f"- motion_claim_eligible_generation_count: {audit.get('motion_claim_eligible_generation_count')}\n"
+        f"- motion_claim_excluded_generation_count: {audit.get('motion_claim_excluded_generation_count')}\n"
+        f"- formal_motion_claim_status: {audit.get('formal_motion_claim_status')}\n"
+        f"- claim_support_status: {audit['claim_support_status']}\n"
+    )
+    report_path = run_root / "reports" / "protocol_evaluation_matrix_report.md"
+    report_path.parent.mkdir(parents=True, exist_ok=True)
+    report_path.write_text(report, encoding="utf-8")
+    return audit
+
+
 def write_pilot_matrix_postprocess(run_root: str | Path) -> dict:
     """写出 small-scale pilot matrix proxy records、table、decision 和 report。"""
     run_root = Path(run_root)
@@ -267,10 +346,18 @@ def write_pilot_matrix_postprocess(run_root: str | Path) -> dict:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="构造 small-scale claim pilot matrix proxy records。")
+    parser = argparse.ArgumentParser(description="构造协议评估矩阵 proxy records。")
     parser.add_argument("--run-root", required=True)
+    parser.add_argument(
+        "--output-family",
+        choices=("protocol_evaluation_matrix", "small_scale_claim_pilot"),
+        default="small_scale_claim_pilot",
+    )
     args = parser.parse_args()
-    payload = write_pilot_matrix_postprocess(args.run_root)
+    if args.output_family == "protocol_evaluation_matrix":
+        payload = write_protocol_evaluation_matrix_postprocess(args.run_root)
+    else:
+        payload = write_pilot_matrix_postprocess(args.run_root)
     print(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True))
 
 

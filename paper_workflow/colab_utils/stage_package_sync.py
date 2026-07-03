@@ -47,6 +47,14 @@ MODERN_EXTERNAL_BASELINE_IDS = (
     "sigmark",
 )
 
+OBSOLETE_STAGE_PAYLOAD_NAME_FRAGMENTS = (
+    "small_scale_claim_pilot",
+)
+
+OBSOLETE_EXTERNAL_BASELINE_EVIDENCE_IDS = {
+    "spdmark",
+}
+
 MAIN_STAGE_PACKAGE_IDS = {
     "generative_video_runtime_colab",
     "paper_gate_and_package_colab",
@@ -647,17 +655,43 @@ def _write_source_to_archive(
     count = 0
     if source_root.is_file():
         relative = Path(source_root.name)
+        if _should_skip_obsolete_stage_payload(relative):
+            return 0
         if not include_videos and _should_skip_video_payload(relative):
             return 0
         archive.write(source_root, arcname=f"{archive_root}/{relative.as_posix()}")
         return 1
     for file_path in sorted(path for path in source_root.rglob("*") if path.is_file()):
         relative = file_path.relative_to(source_root)
+        if _should_skip_obsolete_stage_payload(relative):
+            continue
         if not include_videos and _should_skip_video_payload(relative):
             continue
         archive.write(file_path, arcname=f"{archive_root}/{relative.as_posix()}")
         count += 1
     return count
+
+
+def _should_skip_obsolete_stage_payload(relative: Path) -> bool:
+    """判断是否应从阶段 zip 中排除历史兼容产物。
+
+    该函数只影响归档内容, 不删除本地运行目录中的文件。这样既能保留旧代码路径的
+    本地调试能力, 又能防止 paper gate package 把已经退出主实验门禁的历史 artifact
+    当作当前规则的一部分发布。
+    """
+
+    relative_posix = PurePosixPath(relative.as_posix())
+    relative_text = relative_posix.as_posix()
+    if any(fragment in relative_text for fragment in OBSOLETE_STAGE_PAYLOAD_NAME_FRAGMENTS):
+        return True
+    parts = relative_posix.parts
+    for index, part in enumerate(parts[:-1]):
+        if part != "external_baseline_evidence":
+            continue
+        baseline_id = sanitize_filename_token(parts[index + 1])
+        if baseline_id in OBSOLETE_EXTERNAL_BASELINE_EVIDENCE_IDS:
+            return True
+    return False
 
 
 def _should_skip_video_payload(relative: Path) -> bool:

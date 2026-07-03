@@ -41,7 +41,6 @@
   "require_internal_ablation_matrix_ready": true,
   "require_modern_external_baseline_formal_results": true,
   "require_motion_threshold_calibration_ready": true,
-  "require_small_scale_pilot_gate_passed": true,
   "require_validation_scale_gate_passed": true,
   "require_validation_scale_to_pilot_paper_transition_decision": true,
   "required_external_baseline_adapter_names": [

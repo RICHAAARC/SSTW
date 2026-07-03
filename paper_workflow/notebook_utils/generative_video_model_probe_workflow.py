@@ -1200,6 +1200,19 @@ def build_pilot_matrix_postprocess_command(layout: dict[str, str]) -> list[str]:
     ]
 
 
+def build_protocol_evaluation_matrix_postprocess_command(layout: dict[str, str]) -> list[str]:
+    """构造主干协议评估矩阵 postprocess 命令, 避免继续写出历史 small-scale gate 文件名。"""
+    return [
+        sys.executable,
+        "-m",
+        "experiments.generative_video_model_probe.pilot_matrix_postprocess",
+        "--run-root",
+        layout["drive_run_root"],
+        "--output-family",
+        "protocol_evaluation_matrix",
+    ]
+
+
 def build_runtime_attack_command(layout: dict[str, str]) -> list[str]:
     """构造 runtime video-file attack 命令, 对真实 mp4 生成 attacked videos 与 governed records。"""
     return [

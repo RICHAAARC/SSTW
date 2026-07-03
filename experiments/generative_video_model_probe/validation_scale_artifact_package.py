@@ -52,7 +52,6 @@ def _requirement_rows(decision: Mapping[str, Any]) -> list[dict[str, Any]]:
     """把 validation_scale gate 的 requirement 列表转成图数据行。"""
     missing = {str(item) for item in decision.get("missing_validation_requirements", [])}
     known = [
-        "small_scale_claim_pilot_gate_passed",
         "validation_generation_records_ready",
         "validation_motion_threshold_calibration_ready",
         "validation_formal_motion_claim_ready",

@@ -172,7 +172,6 @@ def _load_config(config_path: str | Path = DEFAULT_PILOT_PAPER_CONFIG) -> dict[s
         "require_modern_external_baseline_formal_results": bool(raw.get("require_modern_external_baseline_formal_results", True)),
         "require_internal_ablation_matrix_ready": bool(raw.get("require_internal_ablation_matrix_ready", True)),
         "require_motion_threshold_calibration_ready": bool(raw.get("require_motion_threshold_calibration_ready", True)),
-        "require_small_scale_pilot_gate_passed": bool(raw.get("require_small_scale_pilot_gate_passed", True)),
         "require_validation_scale_gate_passed": bool(raw.get("require_validation_scale_gate_passed", True)),
         "require_validation_scale_to_pilot_paper_transition_decision": bool(raw.get("require_validation_scale_to_pilot_paper_transition_decision", True)),
         "require_formal_motion_claim_ready": bool(raw.get("require_formal_motion_claim_ready", True)),
@@ -272,6 +271,15 @@ def _identity_keys(records: Iterable[dict]) -> set[tuple[str, str, str, str]]:
 def _records_in_keys(records: Iterable[dict], keys: set[tuple[str, str, str, str]]) -> list[dict]:
     """筛选属于给定 generation 身份集合的下游 records。"""
     return [record for record in records if record_identity_key(record) in keys]
+
+
+def _protocol_matrix_records(run_root: Path) -> list[dict]:
+    """读取当前主干协议矩阵 records, 并兼容历史 pilot matrix 本地复现记录。"""
+
+    records = _read_jsonl(run_root / "records" / "protocol_evaluation_matrix_records.jsonl")
+    if records:
+        return records
+    return _read_jsonl(run_root / "records" / "small_scale_claim_pilot_matrix_records.jsonl")
 
 
 def _trace_ids(records: Iterable[dict]) -> set[str]:
@@ -453,7 +461,7 @@ def build_pilot_paper_gate_audit(
     test_trace_ids = _trace_ids(test_generation_records)
 
     pilot_matrix_records = filter_records_to_motion_claim_eligible(
-        _read_jsonl(run_root / "records" / "small_scale_claim_pilot_matrix_records.jsonl"),
+        _protocol_matrix_records(run_root),
         motion_selection,
     )
     runtime_detection_records = filter_records_to_motion_claim_eligible(
@@ -516,7 +524,6 @@ def build_pilot_paper_gate_audit(
     external_baseline_ready, external_baseline_summary = _external_baseline_readiness(run_root, config, test_trace_ids)
     internal_ablation_ready, internal_ablation_summary = _internal_ablation_readiness(run_root, config, test_trace_ids)
 
-    pilot_decision = _read_json(run_root / "artifacts" / "small_scale_claim_pilot_gate_decision.json")
     validation_scale_decision = _read_validation_scale_artifact(run_root, "artifacts/validation_scale_gate_decision.json")
     validation_scale_to_pilot_transition = _read_validation_scale_artifact(run_root, "artifacts/validation_scale_to_pilot_paper_transition_decision.json")
     motion_threshold_decision = _read_json(run_root / "artifacts" / "motion_threshold_calibration_decision.json")
@@ -528,10 +535,6 @@ def build_pilot_paper_gate_audit(
         not config["require_motion_threshold_calibration_ready"]
         or motion_threshold_decision.get("motion_threshold_calibration_ready") is True
     )
-    small_scale_pilot_ready = (
-        not config["require_small_scale_pilot_gate_passed"]
-        or pilot_decision.get("pilot_gate_decision") == "PASS"
-    )
     validation_scale_ready = (
         not config["require_validation_scale_gate_passed"]
         or validation_scale_decision.get("validation_scale_gate_decision") == "PASS"
@@ -542,7 +545,6 @@ def build_pilot_paper_gate_audit(
     )
 
     requirement_checks = {
-        "small_scale_pilot_gate_passed": small_scale_pilot_ready,
         "validation_scale_gate_passed": validation_scale_ready,
         "validation_scale_to_pilot_paper_transition_decision_passed": validation_scale_to_pilot_transition_ready,
         "motion_threshold_calibration_ready": motion_threshold_ready,

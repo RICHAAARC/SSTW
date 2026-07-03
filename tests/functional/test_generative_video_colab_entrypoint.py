@@ -244,10 +244,11 @@ def test_generative_video_colab_notebook_calls_repository_modules() -> None:
     assert "build_formal_metric_command" in source
     assert "build_motion_threshold_calibration_command" in source
     assert "build_mechanism_postprocess_command" in source
-    assert "build_pilot_matrix_postprocess_command" in source
+    assert "build_protocol_evaluation_matrix_postprocess_command" in source
     assert "build_runtime_attack_command" in source
     assert "build_runtime_detection_command" in source
-    assert "build_small_scale_claim_pilot_gate_command" in source
+    assert "build_pilot_matrix_postprocess_command" not in source
+    assert "build_small_scale_claim_pilot_gate_command" not in source
     assert "build_external_baseline_source_intake_command" not in source
     assert "build_external_baseline_comparison_command" not in source
     assert "build_validation_internal_ablation_command" not in source

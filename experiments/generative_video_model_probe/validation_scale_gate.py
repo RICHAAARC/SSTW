@@ -73,7 +73,6 @@ def _load_config(config_path: str | Path = DEFAULT_VALIDATION_SCALE_CONFIG) -> d
         "minimum_prompt_count": int(config.get("minimum_prompt_count", DEFAULT_MINIMUM_PROMPT_COUNT)),
         "minimum_seed_per_prompt": int(config.get("minimum_seed_per_prompt", DEFAULT_MINIMUM_SEED_PER_PROMPT)),
         "minimum_attack_count": int(config.get("minimum_attack_count", DEFAULT_MINIMUM_ATTACK_COUNT)),
-        "require_small_scale_pilot_gate_passed": bool(config.get("require_small_scale_pilot_gate_passed", True)),
         "require_external_baseline_status_records": bool(config.get("require_external_baseline_status_records", True)),
         "require_external_baseline_comparison_records": bool(config.get("require_external_baseline_comparison_records", True)),
         "require_external_baseline_self_containment_decision": bool(config.get("require_external_baseline_self_containment_decision", True)),
@@ -225,7 +224,6 @@ def build_validation_scale_gate_audit(
     external_baseline_records = _read_jsonl(run_root / "records" / "external_baseline_records.jsonl")
     formal_metric_records = _read_jsonl(run_root / "records" / "formal_quality_motion_semantic_records.jsonl")
 
-    pilot_decision = _read_json(run_root / "artifacts" / "small_scale_claim_pilot_gate_decision.json")
     runtime_attack_decision = _read_json(run_root / "artifacts" / "runtime_attack_decision.json")
     runtime_detection_decision = _read_json(run_root / "artifacts" / "runtime_detection_decision.json")
     motion_threshold_decision = _read_json(run_root / "artifacts" / "motion_threshold_calibration_decision.json")
@@ -262,7 +260,6 @@ def build_validation_scale_gate_audit(
     motion_threshold_ready = motion_threshold_decision.get("motion_threshold_calibration_ready") is True
 
     requirement_checks = {
-        "small_scale_claim_pilot_gate_passed": (not config["require_small_scale_pilot_gate_passed"]) or pilot_decision.get("pilot_gate_decision") == "PASS",
         "validation_generation_records_ready": prompt_count >= config["minimum_prompt_count"] and seed_per_prompt_min >= config["minimum_seed_per_prompt"],
         "validation_motion_threshold_calibration_ready": (not config["require_motion_threshold_calibration_ready"]) or motion_threshold_ready,
         "validation_formal_motion_claim_ready": (not config["require_formal_motion_claim_ready"]) or formal_motion_claim_ready,

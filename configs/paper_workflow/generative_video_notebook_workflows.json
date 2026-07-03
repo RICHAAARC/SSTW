@@ -1,6 +1,6 @@
 {
   "config_kind": "generative_video_notebook_workflow_config",
-  "config_version": "2026_07_01_profile_stage_timestamp_zip_v9",
+  "config_version": "2026_07_03_profile_stage_timestamp_zip_v11",
   "default_dataset_root_relative": "datasets/generative_video_prompt_suite",
   "default_drive_project_root": "/content/drive/MyDrive/SSTW",
   "default_prompt_suite_path_relative": "datasets/generative_video_prompt_suite/prompt_seed_suite.json",
@@ -52,10 +52,9 @@
         "formal_metric_scoring",
         "motion_threshold_reuse_check",
         "mechanism_postprocess",
-        "pilot_matrix_postprocess",
+        "protocol_evaluation_matrix_postprocess",
         "runtime_attack",
         "runtime_detection",
-        "small_scale_claim_pilot_gate",
         "quick_tests_and_harness",
         "drive_packaging"
       ]
@@ -134,12 +133,10 @@
         "external_baseline_colab_preflight",
         "motion_threshold_reuse_check",
         "mechanism_postprocess",
-        "pilot_matrix_postprocess",
         "runtime_attack",
         "runtime_detection",
         "external_baseline_source_intake",
         "external_baseline_comparison",
-        "small_scale_claim_pilot_gate",
         "validation_internal_ablation",
         "adaptive_attack_proxy",
         "replay_and_sketch_gate",

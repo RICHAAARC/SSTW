@@ -257,6 +257,47 @@ def test_external_baseline_package_contains_only_current_baseline_bundle_and_res
 
 
 @pytest.mark.quick
+def test_stage_package_excludes_obsolete_spdmark_and_small_scale_artifacts(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """阶段 zip 不应继续发布已退出当前主实验规则的历史 artifact 路径。"""
+
+    monkeypatch.setenv("SSTW_COLAB_STAGE_IO_MODE", "local_zip")
+    drive_root = tmp_path / "drive" / "SSTW"
+    run_root = tmp_path / "workspace" / "runs" / "generative_video_model_probe" / "validation_scale"
+    write_targets = {
+        "records/generation_records.jsonl": "{}\n",
+        "artifacts/small_scale_claim_pilot_gate_decision.json": "{}",
+        "records/small_scale_claim_pilot_gate_records.jsonl": "{}\n",
+        "tables/small_scale_claim_pilot_gate_table.csv": "stage_id\nsmall_scale\n",
+        "reports/small_scale_claim_pilot_gate_report.md": "# old\n",
+        "artifacts/external_baseline_evidence/spdmark/unit_000/official_stdout.txt": "old",
+        "artifacts/external_baseline_evidence/videoseal/unit_000/official_stdout.txt": "ok",
+    }
+    for relpath, content in write_targets.items():
+        path = run_root / relpath
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(content, encoding="utf-8")
+    layout = {
+        "drive_project_root": str(drive_root),
+        "workflow_profile": "validation_scale",
+        "drive_run_root": str(run_root),
+        "local_stage_package_cache_root": str(tmp_path / "local_cache"),
+        "local_stage_workspace_root": str(tmp_path / "workspace"),
+    }
+
+    result = publish_colab_stage_package(layout, notebook_role="paper_gate_and_package", include_videos=True)
+
+    with zipfile.ZipFile(result["drive_stage_package_zip"]) as archive:
+        names = archive.namelist()
+    assert any(name.endswith("records/generation_records.jsonl") for name in names)
+    assert any("external_baseline_evidence/videoseal" in name for name in names)
+    assert not any("small_scale_claim_pilot" in name for name in names)
+    assert not any("external_baseline_evidence/spdmark" in name for name in names)
+
+
+@pytest.mark.quick
 def test_external_baseline_resource_zip_is_hydrated_to_local_resource_root(tmp_path: Path) -> None:
     """Drive resources 中的 zip 包应复制并解压到本地资源根目录。"""
 

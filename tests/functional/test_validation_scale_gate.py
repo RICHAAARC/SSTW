@@ -52,7 +52,7 @@ def test_validation_scale_gate_blocks_empty_run(tmp_path: Path) -> None:
     assert audit["validation_scale_gate_decision"] == "FAIL"
     assert audit["claim_support_status"] == "validation_scale_blocked"
     assert audit["full_paper_allowed"] is False
-    assert "small_scale_claim_pilot_gate_passed" in audit["missing_validation_requirements"]
+    assert "small_scale_claim_pilot_gate_passed" not in audit["missing_validation_requirements"]
     assert "validation_generation_records_ready" in audit["missing_validation_requirements"]
     assert "validation_internal_ablation_records_ready" in audit["missing_validation_requirements"]
 
@@ -71,8 +71,6 @@ def test_validation_scale_gate_rejects_pilot_profile_as_validation(tmp_path: Pat
                 "seed_id": f"seed_{seed_index}",
             })
     write_jsonl(run_root / "records" / "generation_records.jsonl", generation_records)
-    write_json(run_root / "artifacts" / "small_scale_claim_pilot_gate_decision.json", {"pilot_gate_decision": "PASS"})
-
     audit = build_validation_scale_gate_audit(run_root)
 
     assert audit["validation_scale_gate_decision"] == "FAIL"
@@ -141,7 +139,6 @@ def test_validation_scale_gate_passes_when_all_governed_inputs_exist(tmp_path: P
     write_jsonl(run_root / "records" / "adaptive_attack_records.jsonl", [
         {"adaptive_attack_name": "time_grid_jitter", "adaptive_attack_status": "ready"},
     ])
-    write_json(run_root / "artifacts" / "small_scale_claim_pilot_gate_decision.json", {"pilot_gate_decision": "PASS"})
     write_json(run_root / "artifacts" / "motion_threshold_calibration_decision.json", {
         "motion_threshold_calibration_decision": "PASS",
         "motion_threshold_calibration_ready": True,
@@ -216,8 +213,6 @@ def test_validation_scale_gate_requires_reused_motion_threshold_and_formal_motio
                 "seed_id": f"seed_{seed_index}",
             })
     write_jsonl(run_root / "records" / "generation_records.jsonl", generation_records)
-    write_json(run_root / "artifacts" / "small_scale_claim_pilot_gate_decision.json", {"pilot_gate_decision": "PASS"})
-
     audit = build_validation_scale_gate_audit(run_root)
 
     assert audit["validation_scale_gate_decision"] == "FAIL"

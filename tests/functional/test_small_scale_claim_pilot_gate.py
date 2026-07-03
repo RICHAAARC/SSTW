@@ -8,7 +8,10 @@ from pathlib import Path
 import pytest
 
 from experiments.generative_video_model_probe.pilot_claim_gate import build_small_scale_claim_pilot_audit, write_small_scale_claim_pilot_audit
-from experiments.generative_video_model_probe.pilot_matrix_postprocess import write_pilot_matrix_postprocess
+from experiments.generative_video_model_probe.pilot_matrix_postprocess import (
+    write_pilot_matrix_postprocess,
+    write_protocol_evaluation_matrix_postprocess,
+)
 from main.protocol.record_writer import write_json, write_jsonl
 from scripts.check_results.small_scale_claim_pilot_result_checker import check_small_scale_claim_pilot_results
 
@@ -242,6 +245,32 @@ def test_pilot_matrix_postprocess_fills_proxy_matrix_but_keeps_calibration_block
     assert all(required_protocol_fields <= set(record) for record in records)
     assert all(record["S_final_conservative"] is not None for record in records)
     assert any(record["wrong_sampler_replay_status"] == "replay_rejected" for record in records)
+
+
+@pytest.mark.quick
+def test_protocol_evaluation_matrix_writes_current_mainline_artifacts(tmp_path: Path) -> None:
+    """主干协议矩阵应写入非历史文件名, 供 validation / pilot / full profile 复用。"""
+    run_root = tmp_path / "generative_video_runtime"
+    _write_generation_records(run_root)
+    _write_trajectory_records(run_root)
+    _write_proxy_postprocess(run_root)
+
+    audit = write_protocol_evaluation_matrix_postprocess(run_root)
+
+    assert audit["protocol_evaluation_matrix_decision"] == "PASS"
+    assert (run_root / "records" / "protocol_evaluation_matrix_records.jsonl").exists()
+    assert (run_root / "tables" / "protocol_evaluation_matrix_table.csv").exists()
+    assert (run_root / "artifacts" / "protocol_evaluation_matrix_decision.json").exists()
+    assert (run_root / "reports" / "protocol_evaluation_matrix_report.md").exists()
+    assert not (run_root / "records" / "small_scale_claim_pilot_matrix_records.jsonl").exists()
+    records = [
+        json.loads(line)
+        for line in (run_root / "records" / "protocol_evaluation_matrix_records.jsonl").read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+    assert records
+    assert {record["record_version"] for record in records} == {"protocol_evaluation_matrix_v1"}
+    assert {record["claim_support_status"] for record in records} == {"protocol_evaluation_matrix_proxy_only"}
 
 
 @pytest.mark.quick

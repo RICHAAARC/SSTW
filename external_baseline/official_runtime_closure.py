@@ -3,7 +3,8 @@
 该模块的职责是把 5 个主实验现代视频水印 baseline 的真实运行条件收敛为一个
 可由 Colab Notebook 自动执行的 governed artifact。它不运行重型第三方模型, 也不
 生成 baseline 分数; 它只检查当前 run_root 是否已经具备 source、requirements、
-runtime videos、官方资源或项目内 official bundle cache。
+runtime videos、官方资源、项目内 official bundle cache 或可由后续 Notebook
+调用的项目内官方 runner。
 """
 
 from __future__ import annotations
@@ -326,6 +327,58 @@ def _native_command_audit(row: Mapping[str, Any]) -> dict[str, Any]:
     }
 
 
+def _project_owned_reference_runner_audit(row: Mapping[str, Any]) -> dict[str, Any]:
+    """检查项目内官方参考 runner 是否可作为 formal reference 尝试路径。
+
+    此处只判断“是否允许进入真实运行尝试”, 不把 runner 存在解释为已得到
+    measured_formal 结果。以 SIGMark 为例, `SSTW_SIGMARK_BIT_ACCURACY_NPZ`
+    是 Hunyuan gen->extract 完成后的输出产物, 不能在预检阶段被当作运行前
+    必备输入而阻断官方 runner。
+    """
+
+    baseline_id = str(row.get("baseline_id") or "")
+    candidate_keys = [
+        "project_owned_formal_reference_runner_module",
+        f"project_owned_{baseline_id}_runner_module" if baseline_id else "",
+        "project_owned_hunyuan_runner_module",
+        "project_owned_vidsig_runner_module",
+        "project_owned_videomark_runner_module",
+        "project_owned_videoshield_runner_module",
+    ]
+    runner_module = ""
+    runner_module_key = ""
+    for key in candidate_keys:
+        if not key:
+            continue
+        value = str(row.get(key) or "").strip()
+        if value:
+            runner_module = value
+            runner_module_key = key
+            break
+
+    enabled = bool(runner_module)
+    enable_env_var = ""
+    enable_env_value = ""
+    if baseline_id == "sigmark":
+        enable_env_var = "SSTW_RUN_SIGMARK_OFFICIAL_HUNYUAN_PIPELINE"
+        enable_env_value = os.environ.get(enable_env_var, "true").strip()
+        enabled = bool(runner_module) and enable_env_value.lower() not in {"0", "false", "no", "off"}
+
+    return {
+        "project_owned_reference_runner_module": runner_module,
+        "project_owned_reference_runner_module_key": runner_module_key,
+        "project_owned_reference_runner_available": bool(runner_module),
+        "project_owned_reference_runner_enable_env_var": enable_env_var,
+        "project_owned_reference_runner_enable_env_value": enable_env_value,
+        "project_owned_reference_runner_ready_to_attempt": enabled,
+        "project_owned_reference_runner_policy": (
+            "runner_may_generate_required_outputs_during_formal_reference_notebook"
+            if enabled
+            else "runner_not_configured_or_disabled"
+        ),
+    }
+
+
 def _bundle_candidate_paths_for_roots(
     baseline_id: str,
     record: Mapping[str, Any],
@@ -428,6 +481,7 @@ def _baseline_runtime_row(
     requirements_file = _requirements_file_audit(row, repo_root)
     resources, environment_updates = _resource_audit(row, resource_root)
     commands = _native_command_audit(row)
+    project_runner = _project_owned_reference_runner_audit(row)
     bundle = _bundle_audit(baseline_id, detection_records, official_result_bundle_root)
     runtime_ready = bool(runtime_input.get("runtime_input_ready"))
     source_ready = bool(source.get("official_source_ready"))
@@ -438,6 +492,7 @@ def _baseline_runtime_row(
     native_command_configured = bool(commands.get("native_command_configured"))
     official_command_configured = bool(commands.get("official_baseline_command_configured"))
     default_adapter_can_attempt = resource_ready and bool(resources.get("required_resource_env_vars"))
+    project_runner_can_attempt = bool(project_runner.get("project_owned_reference_runner_ready_to_attempt"))
     ready_to_attempt = (
         runtime_ready
         and source_ready
@@ -448,6 +503,7 @@ def _baseline_runtime_row(
             or official_command_configured
             or auto_supported
             or default_adapter_can_attempt
+            or project_runner_can_attempt
         )
     )
     missing: list[str] = []
@@ -457,7 +513,14 @@ def _baseline_runtime_row(
         missing.append("official_source_required_files")
     if not requirements_ready:
         missing.append("requirements_file")
-    if not (bundle_complete or native_command_configured or official_command_configured or auto_supported or default_adapter_can_attempt):
+    if not (
+        bundle_complete
+        or native_command_configured
+        or official_command_configured
+        or auto_supported
+        or default_adapter_can_attempt
+        or project_runner_can_attempt
+    ):
         missing.append("official_bundle_or_native_command_or_required_resources")
     if ready_to_attempt:
         status = "ready_to_attempt_formal_reference"
@@ -477,6 +540,7 @@ def _baseline_runtime_row(
         "requirements_file_requirement": requirements_file,
         "resource_requirement": resources,
         "command_requirement": commands,
+        "project_owned_reference_runner_requirement": project_runner,
         "official_bundle_requirement": bundle,
         "runtime_closure_ready_to_attempt": ready_to_attempt,
         "runtime_closure_status": status,

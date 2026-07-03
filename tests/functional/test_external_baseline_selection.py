@@ -355,6 +355,58 @@ def test_sigmark_runtime_closure_binds_prefixed_official_bit_accuracy_npz(tmp_pa
 
 
 @pytest.mark.quick
+def test_sigmark_runtime_closure_allows_project_owned_hunyuan_runner_before_npz_exists(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """SIGMark 首次运行时不能把 bit_accuracy NPZ 误当作运行前必需输入。
+
+    `SSTW_SIGMARK_BIT_ACCURACY_NPZ` 是官方 Hunyuan gen->extract 完成后的
+    输出产物。若预检阶段要求该文件已经存在, Colab 会在真正调用项目内
+    SIGMark 官方 runner 前失败, A100-80G 等高显存环境也无法进入真实运行。
+    """
+
+    run_root = tmp_path / "runs" / "generative_video_model_probe" / "validation_scale"
+    _write_external_baseline_runtime_fixture(run_root)
+    (run_root / "attacked_videos").mkdir(parents=True, exist_ok=True)
+    write_jsonl(run_root / "records" / "generation_records.jsonl", [
+        {
+            "prompt_id": "prompt_0",
+            "seed_id": "seed_0",
+            "generation_status": "ready",
+            "source_video_path": str(run_root / "videos" / "source.mp4"),
+        }
+    ])
+    monkeypatch.delenv("SSTW_SIGMARK_BIT_ACCURACY_NPZ", raising=False)
+    monkeypatch.delenv("SSTW_SIGMARK_NATIVE_EVAL_COMMAND", raising=False)
+    monkeypatch.delenv("SSTW_SIGMARK_OFFICIAL_EVAL_COMMAND", raising=False)
+    monkeypatch.setenv("SSTW_RUN_SIGMARK_OFFICIAL_HUNYUAN_PIPELINE", "true")
+
+    audit = build_official_runtime_closure_requirements(
+        run_root,
+        repo_root=Path("."),
+        resource_root=tmp_path / "resources" / "external_baseline",
+        official_result_bundle_root=tmp_path / "external_baseline_official_result_bundles" / "validation_scale",
+        baseline_id="sigmark",
+    )
+
+    assert audit["official_runtime_closure_decision"] == "PASS"
+    assert audit["runtime_closure_ready_count"] == 1
+    sigmark_row = audit["baseline_runtime_rows"][0]
+    assert sigmark_row["baseline_id"] == "sigmark"
+    assert sigmark_row["runtime_closure_ready_to_attempt"] is True
+    assert sigmark_row["runtime_closure_status"] == "ready_to_attempt_formal_reference"
+    assert "official_bundle_or_native_command_or_required_resources" not in sigmark_row["runtime_closure_missing_requirements"]
+    assert sigmark_row["resource_requirement"]["required_resource_ready"] is False
+    assert "SSTW_SIGMARK_BIT_ACCURACY_NPZ" in sigmark_row["resource_requirement"]["missing_required_resource_env_vars"]
+    assert (
+        sigmark_row["project_owned_reference_runner_requirement"]["project_owned_reference_runner_module"]
+        == "external_baseline.sigmark_official_hunyuan_runtime"
+    )
+    assert sigmark_row["project_owned_reference_runner_requirement"]["project_owned_reference_runner_ready_to_attempt"] is True
+
+
+@pytest.mark.quick
 def test_official_bundle_generation_plan_is_fail_closed_about_auto_blocked_baselines(tmp_path: Path) -> None:
     """official bundle generator 只能自动生成官方可支持的方法, 不能把缺资源 baseline 伪装为可自动生成。"""
     run_root = tmp_path / "generative_video_runtime"

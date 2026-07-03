@@ -14,7 +14,10 @@ import shlex
 import subprocess
 from typing import Any, Mapping
 
-from external_baseline.official_eval_adapters.common import validate_clean_negative_payload
+from external_baseline.official_eval_adapters.common import (
+    validate_clean_negative_payload,
+    validate_official_bundle_baseline_identity,
+)
 from external_baseline.score_semantics import (
     extract_raw_detector_score,
     normalized_score_payload,
@@ -163,6 +166,11 @@ def run_bridge(args: argparse.Namespace) -> dict[str, Any]:
     official_payload = _read_json(official_output_json_path)
     validate_clean_negative_payload(official_payload)
     validate_official_score_extraction_payload(official_payload)
+    validate_official_bundle_baseline_identity(
+        official_payload,
+        str(official_payload.get("official_result_bundle_path") or official_output_json_path),
+        baseline_id=args.baseline_id,
+    )
     score = round(_extract_score(official_payload), 6)
     score_payload = normalized_score_payload(official_payload)
     normalized = {
@@ -187,6 +195,8 @@ def run_bridge(args: argparse.Namespace) -> dict[str, Any]:
         "official_result_provenance": official_payload.get("official_result_provenance"),
         "official_result_bundle_path": official_payload.get("official_result_bundle_path"),
         "official_execution_manifest_path": official_payload.get("official_execution_manifest_path"),
+        "official_adapter_baseline_id": official_payload.get("official_adapter_baseline_id"),
+        "official_baseline_id": official_payload.get("official_baseline_id"),
         "external_baseline_source_video_path": official_payload.get(
             "external_baseline_source_video_path",
             official_payload.get("baseline_source_video_path"),

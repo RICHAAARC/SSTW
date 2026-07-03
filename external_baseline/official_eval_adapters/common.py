@@ -176,7 +176,64 @@ def official_bundle_candidate_paths(
     return candidates
 
 
-def validate_repository_generated_bundle(payload: Mapping[str, Any], candidate: str | Path) -> None:
+def _declared_official_baseline_ids(payload: Mapping[str, Any]) -> dict[str, str]:
+    """提取 official bundle 中显式声明的 baseline 身份字段。
+
+    该函数属于项目特定治理逻辑。公平比较要求每个 official bundle 只能服务于
+    当前 baseline, 因此只要 payload 中任一身份字段与当前 baseline 不一致, 就
+    必须 fail closed。这里同时接受历史字段 `baseline_id`, 便于旧的项目内
+    manifest 在重新打包前仍能被明确审计, 但不允许多个字段互相矛盾。
+    """
+
+    declared: dict[str, str] = {}
+    for field_name in ("official_adapter_baseline_id", "official_baseline_id", "baseline_id"):
+        raw_value = payload.get(field_name)
+        value = str(raw_value).strip() if raw_value is not None else ""
+        if value:
+            declared[field_name] = value
+    return declared
+
+
+def validate_official_bundle_baseline_identity(
+    payload: Mapping[str, Any],
+    candidate: str | Path,
+    *,
+    baseline_id: str,
+) -> None:
+    """校验 official bundle 声明的 baseline 身份与当前 adapter 一致。
+
+    该函数只检查身份字段, 不检查 provenance 和执行 manifest。这样 command
+    adapter 在读取官方命令输出时可以先拒绝跨 baseline 结果, 而完整 bundle
+    preflight 仍由 `validate_repository_generated_bundle` 负责。
+    """
+
+    expected_baseline_id = str(baseline_id or "").strip()
+    if not expected_baseline_id:
+        raise RuntimeError(f"official_result_bundle_missing_expected_baseline_id:{candidate}")
+    declared_ids = _declared_official_baseline_ids(payload)
+    if not declared_ids:
+        raise RuntimeError(
+            "official_result_bundle_missing_baseline_id:"
+            f"{candidate}:expected={expected_baseline_id}"
+        )
+    mismatched_ids = {
+        field_name: value
+        for field_name, value in declared_ids.items()
+        if value != expected_baseline_id
+    }
+    if mismatched_ids:
+        raise RuntimeError(
+            "official_result_bundle_baseline_id_mismatch:"
+            f"{candidate}:expected={expected_baseline_id}:declared={mismatched_ids}"
+        )
+
+
+def validate_repository_generated_bundle(
+    payload: Mapping[str, Any],
+    candidate: str | Path,
+    *,
+    baseline_id: str | None = None,
+) -> None:
     """校验 official bundle 只能来自项目内自包含生成链路。
 
     该函数属于项目特定门禁: 读取 official bundle cache 是为了避免重复运行高显存
@@ -196,6 +253,9 @@ def validate_repository_generated_bundle(payload: Mapping[str, Any], candidate: 
         raise RuntimeError(f"official_result_bundle_missing_execution_manifest:{candidate}")
     if not Path(manifest_path).exists():
         raise RuntimeError(f"official_result_bundle_execution_manifest_missing:{candidate}:{manifest_path}")
+    expected_baseline_id = str(baseline_id or "").strip()
+    if expected_baseline_id:
+        validate_official_bundle_baseline_identity(payload, candidate, baseline_id=expected_baseline_id)
 
 
 def read_official_result_bundle_if_available(
@@ -227,7 +287,7 @@ def read_official_result_bundle_if_available(
             continue
         payload = read_json(candidate)
         validate_score_payload(payload)
-        validate_repository_generated_bundle(payload, candidate)
+        validate_repository_generated_bundle(payload, candidate, baseline_id=baseline_id)
         validate_clean_negative_payload(payload)
         validate_official_score_extraction_payload(payload)
         return {

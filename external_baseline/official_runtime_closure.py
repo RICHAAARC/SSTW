@@ -25,6 +25,7 @@ from external_baseline.official_eval_adapters.common import (
     validate_repository_generated_bundle,
     validate_score_payload,
 )
+from external_baseline.score_semantics import validate_official_score_extraction_payload
 from external_baseline.runtime_trace_io import comparable_detection_records, read_jsonl
 
 
@@ -426,8 +427,9 @@ def _bundle_audit(
             try:
                 payload = read_json(candidate)
                 validate_score_payload(payload)
-                validate_repository_generated_bundle(payload, candidate)
+                validate_repository_generated_bundle(payload, candidate, baseline_id=baseline_id)
                 validate_clean_negative_payload(payload)
+                validate_official_score_extraction_payload(payload)
             except Exception as exc:  # noqa: BLE001 - artifact 需要保留具体阻断原因。
                 last_invalid_reason = str(exc)
                 continue

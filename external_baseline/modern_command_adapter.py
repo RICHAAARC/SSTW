@@ -19,6 +19,7 @@ from external_baseline.score_semantics import (
 )
 from external_baseline.official_eval_adapters.common import (
     REPOSITORY_GENERATED_OFFICIAL_PROVENANCE,
+    validate_official_bundle_baseline_identity,
     validate_clean_negative_payload,
 )
 from main.core.digest import build_stable_digest
@@ -89,9 +90,12 @@ def _format_command(
     run_root: Path,
     detection_record: Mapping[str, Any],
     output_json_path: Path,
+    *,
+    baseline_id: str,
 ) -> list[str]:
     """把命令模板格式化为 argv, 不通过 shell 执行。"""
     values = {
+        "baseline_id": baseline_id,
         "run_root": str(run_root),
         "source_video_path": str(detection_record.get("source_video_path") or ""),
         "attacked_video_path": str(detection_record.get("attacked_video_path") or ""),
@@ -182,7 +186,7 @@ def _clean_negative_score_payload(payload: Mapping[str, Any]) -> dict[str, Any]:
     }
 
 
-def _official_bundle_evidence_payload(payload: Mapping[str, Any]) -> dict[str, Any]:
+def _official_bundle_evidence_payload(payload: Mapping[str, Any], *, baseline_id: str) -> dict[str, Any]:
     """从官方输出中提取项目内 official bundle 执行闭环字段。
 
     该检查是项目特定门禁。现代 external baseline 的正式分数不能只来自
@@ -201,10 +205,17 @@ def _official_bundle_evidence_payload(payload: Mapping[str, Any]) -> dict[str, A
     execution_manifest_path = payload.get("official_execution_manifest_path")
     if result_bundle_path in {None, ""} or execution_manifest_path in {None, ""}:
         raise RuntimeError("official_result_bundle_evidence_missing")
+    validate_official_bundle_baseline_identity(
+        payload,
+        str(result_bundle_path or "official_command_output"),
+        baseline_id=baseline_id,
+    )
     return {
         "external_baseline_official_result_provenance": provenance,
         "external_baseline_official_result_bundle_path": result_bundle_path,
         "external_baseline_official_execution_manifest_path": execution_manifest_path,
+        "external_baseline_official_adapter_baseline_id": payload.get("official_adapter_baseline_id", payload.get("baseline_id")),
+        "external_baseline_official_baseline_id": payload.get("official_baseline_id", payload.get("baseline_id")),
     }
 
 
@@ -314,7 +325,13 @@ def build_modern_score_records(
             stderr_path = Path(evidence_paths["external_baseline_official_stderr_path"])
             command_manifest_path = Path(evidence_paths["external_baseline_official_command_manifest_path"])
             output_json_path.parent.mkdir(parents=True, exist_ok=True)
-            argv = _format_command(command_template, root, detection_record, output_json_path)
+            argv = _format_command(
+                command_template,
+                root,
+                detection_record,
+                output_json_path,
+                baseline_id=config.baseline_name,
+            )
             completed = subprocess.run(argv, text=True, capture_output=True, timeout=timeout_sec)
             _write_text(stdout_path, completed.stdout)
             _write_text(stderr_path, completed.stderr)
@@ -340,7 +357,7 @@ def build_modern_score_records(
             validate_official_score_extraction_payload(payload)
             score_payload = normalized_score_payload(payload)
             clean_negative_payload = _clean_negative_score_payload(payload)
-            official_bundle_payload = _official_bundle_evidence_payload(payload)
+            official_bundle_payload = _official_bundle_evidence_payload(payload, baseline_id=config.baseline_name)
             score = round(float(score_payload["external_baseline_raw_detector_score"]), 6)
             method_score = safe_float(detection_record.get("S_runtime_attack_detection"), 0.0)
             score_extraction_policy = official_score_extraction_policy(payload)

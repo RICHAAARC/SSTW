@@ -650,6 +650,7 @@ def test_modern_external_baseline_formal_command_adapters_write_measured_records
         "parser.add_argument('--source-video')\n"
         "parser.add_argument('--attacked-video')\n"
         "parser.add_argument('--attack-name')\n"
+        "parser.add_argument('--baseline-id', default='unit_modern')\n"
         "args = parser.parse_args()\n"
         "json.dump({'external_baseline_score': 0.37, 'detected': True, 'bit_accuracy': 0.91, 'threshold': 0.5, "
         "'score_semantics': 'watermark_presence_confidence', 'score_orientation': 'higher_is_more_watermarked', 'official_score_extraction_policy': 'test_official_detector_confidence', 'official_reference_protocol_anchor': 'same_prompt_seed_attack_runtime_comparison_unit', 'external_baseline_clean_negative_score': 0.08, "
@@ -659,12 +660,13 @@ def test_modern_external_baseline_formal_command_adapters_write_measured_records
         "'external_baseline_attacked_video_path': 'official/attacked.mp4', "
         "'external_baseline_generation_model_id': 'official_baseline_model', "
         "'official_result_provenance': 'repository_generated_from_third_party_official_code', "
+        "'official_adapter_baseline_id': args.baseline_id, 'official_baseline_id': args.baseline_id, "
         "'official_result_bundle_path': 'official/bundle_record.json', "
         "'official_execution_manifest_path': 'official/execution_manifest.json', "
         "'external_baseline_official_execution_mode': 'official_result_bundle'}, open(args.output_json, 'w', encoding='utf-8'))\n",
         encoding="utf-8",
     )
-    command = f'{sys.executable} {fake_adapter} --source-video {{source_video_path}} --attacked-video {{attacked_video_path}} --attack-name {{attack_name}} --output-json {{output_json_path}}'
+    command = f'{sys.executable} {fake_adapter} --source-video {{source_video_path}} --attacked-video {{attacked_video_path}} --attack-name {{attack_name}} --baseline-id {{baseline_id}} --output-json {{output_json_path}}'
     for env_var in (
         "SSTW_VIDEOSHIELD_EVAL_COMMAND",
         "SSTW_SIGMARK_EVAL_COMMAND",
@@ -978,6 +980,68 @@ def test_modern_external_baseline_formal_command_adapters_reject_external_bundle
 
 
 @pytest.mark.quick
+def test_modern_external_baseline_formal_command_adapters_require_bundle_baseline_identity(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """现代 baseline 官方命令输出必须声明与当前 adapter 一致的 baseline 身份。"""
+
+    run_root = tmp_path / "generative_video_runtime"
+    _write_external_baseline_runtime_fixture(run_root)
+    fake_adapter = tmp_path / "fake_modern_baseline_eval_without_bundle_identity.py"
+    fake_adapter.write_text(
+        "import argparse, json\n"
+        "parser = argparse.ArgumentParser()\n"
+        "parser.add_argument('--output-json', required=True)\n"
+        "parser.add_argument('--source-video')\n"
+        "parser.add_argument('--attacked-video')\n"
+        "parser.add_argument('--attack-name')\n"
+        "args = parser.parse_args()\n"
+        "json.dump({'external_baseline_score': 0.37, 'detected': True, "
+        "'score_semantics': 'watermark_presence_confidence', 'score_orientation': 'higher_is_more_watermarked', 'official_score_extraction_policy': 'test_official_detector_confidence', 'official_reference_protocol_anchor': 'same_prompt_seed_attack_runtime_comparison_unit', 'external_baseline_clean_negative_score': 0.08, "
+        "'external_baseline_clean_negative_video_path': 'official/clean_negative.mp4', "
+        "'official_result_provenance': 'repository_generated_from_third_party_official_code', "
+        "'official_result_bundle_path': 'official/bundle_record.json', "
+        "'official_execution_manifest_path': 'official/execution_manifest.json'}, "
+        "open(args.output_json, 'w', encoding='utf-8'))\n",
+        encoding="utf-8",
+    )
+    command = (
+        f"{sys.executable} {fake_adapter} "
+        "--source-video {source_video_path} "
+        "--attacked-video {attacked_video_path} "
+        "--attack-name {attack_name} "
+        "--output-json {output_json_path}"
+    )
+    monkeypatch.setenv("SSTW_UNIT_MODERN_EVAL_COMMAND", command)
+    config = ModernBaselineCommandConfig(
+        baseline_name="unit_modern",
+        baseline_family="unit_modern_video_watermark",
+        adapter_path="external_baseline/primary/unit_modern/adapter/run_sstw_eval.py",
+        env_var="SSTW_UNIT_MODERN_EVAL_COMMAND",
+        default_source_script="external_baseline/primary/unit_modern/adapter/run_sstw_eval.py",
+        score_source="official_command_adapter",
+    )
+
+    modern_records = build_modern_score_records(
+        run_root,
+        {
+            "external_baseline_name": "unit_modern",
+            "external_baseline_family": "unit_modern_video_watermark",
+            "external_baseline_layer": "modern_external_baseline",
+        },
+        config,
+    )
+
+    assert modern_records
+    assert all(record["metric_status"] == "unsupported" for record in modern_records)
+    assert any(
+        "official_result_bundle_missing_baseline_id" in record["external_baseline_score_failure_reason"]
+        for record in modern_records
+    )
+
+
+@pytest.mark.quick
 def test_modern_external_baseline_formal_command_adapter_normalizes_clean_negative_aliases(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -994,12 +1058,14 @@ def test_modern_external_baseline_formal_command_adapter_normalizes_clean_negati
         "parser.add_argument('--source-video')\n"
         "parser.add_argument('--attacked-video')\n"
         "parser.add_argument('--attack-name')\n"
+        "parser.add_argument('--baseline-id', default='unit_modern')\n"
         "args = parser.parse_args()\n"
         "json.dump({'score': 0.44, 'detected': True, "
         "'score_semantics': 'watermark_presence_confidence', 'score_orientation': 'higher_is_more_watermarked', 'official_score_extraction_policy': 'test_official_detector_confidence', 'official_reference_protocol_anchor': 'same_prompt_seed_attack_runtime_comparison_unit', 'clean_negative_score': 0.09, "
         "'clean_negative_score_semantics': 'watermark_presence_confidence', "
         "'clean_negative_video_path': 'official/clean_negative_alias.mp4', "
         "'official_result_provenance': 'repository_generated_from_third_party_official_code', "
+        "'official_adapter_baseline_id': args.baseline_id, 'official_baseline_id': args.baseline_id, "
         "'official_result_bundle_path': 'official/bundle_record.json', "
         "'official_execution_manifest_path': 'official/execution_manifest.json'}, "
         "open(args.output_json, 'w', encoding='utf-8'))\n",
@@ -1010,6 +1076,7 @@ def test_modern_external_baseline_formal_command_adapter_normalizes_clean_negati
         "--source-video {source_video_path} "
         "--attacked-video {attacked_video_path} "
         "--attack-name {attack_name} "
+        "--baseline-id {baseline_id} "
         "--output-json {output_json_path}"
     )
     monkeypatch.setenv("SSTW_UNIT_MODERN_EVAL_COMMAND", command)
@@ -1058,12 +1125,14 @@ def test_modern_external_baseline_bridge_commands_require_real_official_output(t
         "parser.add_argument('--source-video')\n"
         "parser.add_argument('--attacked-video')\n"
         "parser.add_argument('--attack-name')\n"
+        "parser.add_argument('--baseline-id')\n"
         "args = parser.parse_args()\n"
         "json.dump({'score': 0.42, 'detected': True, 'bit_accuracy': 0.88, "
         "'score_semantics': 'watermark_presence_confidence', 'score_orientation': 'higher_is_more_watermarked', 'official_score_extraction_policy': 'test_official_detector_confidence', 'official_reference_protocol_anchor': 'same_prompt_seed_attack_runtime_comparison_unit', 'external_baseline_clean_negative_score': 0.07, "
         "'external_baseline_clean_negative_score_semantics': 'watermark_presence_confidence', "
         "'external_baseline_clean_negative_video_path': 'official/clean_negative.mp4', "
         "'official_result_provenance': 'repository_generated_from_third_party_official_code', "
+        "'official_adapter_baseline_id': args.baseline_id, 'official_baseline_id': args.baseline_id, "
         "'official_result_bundle_path': 'official/bundle_record.json', "
         "'official_execution_manifest_path': 'official/execution_manifest.json'}, open(args.official_output_json, 'w', encoding='utf-8'))\n",
         encoding="utf-8",
@@ -1073,6 +1142,7 @@ def test_modern_external_baseline_bridge_commands_require_real_official_output(t
         "--source-video {source_video_path} "
         "--attacked-video {attacked_video_path} "
         "--attack-name {attack_name} "
+        "--baseline-id {baseline_id} "
         "--official-output-json {official_output_json_path}"
     )
     for baseline_id in ("videoshield", "sigmark", "videomark", "vidsig", "videoseal"):
@@ -1161,6 +1231,8 @@ def test_official_result_bundle_preflight_requires_all_modern_baseline_units(
                     "detected": True,
                     "bit_accuracy": 0.93,
                     "official_result_provenance": "repository_generated_from_third_party_official_code",
+                    "official_adapter_baseline_id": baseline_id,
+                    "official_baseline_id": baseline_id,
                     "official_execution_manifest_path": str(manifest_path),
                     "external_baseline_source_video_path": f"{baseline_id}/source.mp4",
                     "external_baseline_attacked_video_path": f"{baseline_id}/attacked.mp4",
@@ -1218,6 +1290,8 @@ def test_paper_gate_comparison_consumes_repository_official_bundles_without_sour
                     "detected": True,
                     "bit_accuracy": 0.93,
                     "official_result_provenance": "repository_generated_from_third_party_official_code",
+                    "official_adapter_baseline_id": baseline_id,
+                    "official_baseline_id": baseline_id,
                     "official_execution_manifest_path": str(manifest_path),
                     "external_baseline_source_video_path": f"{baseline_id}/source.mp4",
                     "external_baseline_attacked_video_path": f"{baseline_id}/attacked.mp4",
@@ -1354,6 +1428,66 @@ def test_official_result_bundle_preflight_rejects_external_supplement_bundle(
     ]
     assert audit["official_result_bundle_preflight_decision"] == "FAIL"
     assert any("official_result_bundle_not_repository_generated" in reason for reason in invalid_reasons)
+
+
+@pytest.mark.quick
+def test_official_result_bundle_preflight_rejects_cross_baseline_bundle_identity(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """official bundle 目录名与 payload baseline 身份不一致时必须 fail closed。"""
+    run_root = tmp_path / "generative_video_runtime"
+    _write_external_baseline_runtime_fixture(run_root)
+    bundle_root = tmp_path / "official_baseline_bundle"
+    monkeypatch.setenv("SSTW_EXTERNAL_BASELINE_OFFICIAL_RESULT_BUNDLE_ROOT", str(bundle_root))
+    for env_name in (
+        "SSTW_SIGMARK_BIT_ACCURACY_NPZ",
+        "SSTW_SIGMARK_CLEAN_NEGATIVE_BIT_ACCURACY_NPZ",
+    ):
+        monkeypatch.delenv(env_name, raising=False)
+    monkeypatch.delenv("SSTW_SIGMARK_NATIVE_EVAL_COMMAND", raising=False)
+
+    record = read_jsonl(run_root / "records" / "runtime_detection_records.jsonl")[0]
+    manifest_path = bundle_root / "sigmark" / "official_reference_execution_manifest.json"
+    manifest_path.parent.mkdir(parents=True, exist_ok=True)
+    manifest_path.write_text(
+        json.dumps({
+            "manifest_kind": "test_repository_generated_official_bundle_manifest",
+            "baseline_id": "sigmark",
+            "claim_support_status": "test_fixture_only",
+        }),
+        encoding="utf-8",
+    )
+    output = bundle_root / "sigmark" / "records" / f"{record['prompt_id']}__{record['seed_id']}__{record['attack_name']}.json"
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text(
+        json.dumps({
+            "external_baseline_score": 0.61,
+            "detected": True,
+            "official_result_provenance": "repository_generated_from_third_party_official_code",
+            "official_adapter_baseline_id": "videoseal",
+            "official_baseline_id": "videoseal",
+            "official_execution_manifest_path": str(manifest_path),
+            "score_semantics": "watermark_presence_confidence",
+            "score_orientation": "higher_is_more_watermarked",
+            "official_score_extraction_policy": "test_official_detector_confidence",
+            "official_reference_protocol_anchor": "same_prompt_seed_attack_runtime_comparison_unit",
+            "external_baseline_clean_negative_score": 0.12,
+            "external_baseline_clean_negative_score_semantics": "watermark_presence_confidence",
+            "external_baseline_clean_negative_video_path": "sigmark/clean_negative.mp4",
+        }),
+        encoding="utf-8",
+    )
+
+    audit = build_official_result_bundle_preflight(run_root, baseline_ids=("sigmark",))
+    invalid_reasons = [
+        str(row.get("invalid_bundle_reason") or "")
+        for row in audit["missing_bundle_examples"]
+    ]
+
+    assert audit["official_result_bundle_preflight_decision"] == "FAIL"
+    assert audit["present_bundle_result_count"] == 0
+    assert any("official_result_bundle_baseline_id_mismatch" in reason for reason in invalid_reasons)
 
 
 @pytest.mark.quick

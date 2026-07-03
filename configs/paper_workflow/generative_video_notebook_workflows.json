@@ -88,6 +88,7 @@
         "replay_and_sketch_gate",
         "claim3_downgrade_gate",
         "statistical_confidence_interval",
+        "external_baseline_official_result_bundle_preflight",
         "external_baseline_comparison",
         "external_baseline_self_containment_decision",
         "data_split_and_leakage_guard",

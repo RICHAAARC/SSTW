@@ -32,6 +32,7 @@ EXTERNAL_BASELINE_OFFICIAL_RESOURCE_BOOTSTRAP_DECISION = "artifacts/external_bas
 EXTERNAL_BASELINE_OFFICIAL_BUNDLE_GENERATION_DECISION = "artifacts/external_baseline_official_bundle_generation_decision.json"
 EXTERNAL_BASELINE_OFFICIAL_RUNTIME_CLOSURE_REQUIREMENTS = "artifacts/external_baseline_official_runtime_closure_requirements.json"
 EXTERNAL_BASELINE_OFFICIAL_RESULT_BUNDLE_PREFLIGHT_DECISION = "artifacts/external_baseline_official_result_bundle_preflight_decision.json"
+PAPER_GATE_EXTERNAL_BASELINE_ENVIRONMENT_DECISION = "artifacts/paper_gate_external_baseline_environment_decision.json"
 
 
 def _join_drive_path(root: PurePosixPath, relative_path: str) -> str:
@@ -413,6 +414,7 @@ def build_modern_baseline_colab_command_config_summary(
     profile: str,
     protocol_config_path: str | Path | None = None,
     command_config_path: str | Path = DEFAULT_MODERN_BASELINE_COLAB_COMMAND_CONFIG,
+    command_templates_auto_applied: bool = False,
 ) -> dict[str, object]:
     """构造现代 baseline command 配置摘要。
 
@@ -465,7 +467,7 @@ def build_modern_baseline_colab_command_config_summary(
         "verified_at_utc": config.get("verified_at_utc"),
         "source_verification_method": config.get("source_verification_method"),
         "formal_result_policy": config.get("formal_result_policy"),
-        "command_templates_auto_applied": False,
+        "command_templates_auto_applied": bool(command_templates_auto_applied),
         "required_modern_external_baseline_adapter_names": required_baseline_ids,
         "required_modern_external_baseline_adapter_count": len(required_baseline_ids),
         "configured_template_row_count": len(rows) - len(missing_template_ids),
@@ -492,6 +494,7 @@ def write_modern_baseline_colab_command_config_summary(
     profile: str,
     protocol_config_path: str | Path | None = None,
     command_config_path: str | Path = DEFAULT_MODERN_BASELINE_COLAB_COMMAND_CONFIG,
+    command_templates_auto_applied: bool = False,
 ) -> dict[str, object]:
     """写出 command 配置摘要, 便于 Colab 失败后在 Google Drive 中审计。"""
     summary = build_modern_baseline_colab_command_config_summary(
@@ -499,6 +502,7 @@ def write_modern_baseline_colab_command_config_summary(
         profile=profile,
         protocol_config_path=protocol_config_path,
         command_config_path=command_config_path,
+        command_templates_auto_applied=command_templates_auto_applied,
     )
     _write_json(Path(layout["drive_run_root"]) / EXTERNAL_BASELINE_COMMAND_TEMPLATE_SUMMARY, summary)
     return summary
@@ -848,6 +852,172 @@ def validate_modern_baseline_commands_for_profile(
             "当前 workflow profile 是 paper gate 或 paper gate 前最后门禁, 必须先在 Colab 配置现代视频水印 baseline command。"
             f" 缺失: {missing}。可先查看命令配置摘要: {summary_path}"
         )
+
+
+def _dedupe_non_empty_strings(values: list[str] | tuple[str, ...]) -> list[str]:
+    """按出现顺序去重非空字符串。
+
+    该函数属于通用工程写法。这里用于合并环境变量路径列表, 防止 Colab
+    多次重跑同一 cell 后把相同 bundle root 反复追加到 `os.pathsep`
+    分隔的环境变量中。
+    """
+
+    result: list[str] = []
+    seen: set[str] = set()
+    for value in values:
+        text = str(value or "").strip()
+        if not text or text in seen:
+            continue
+        result.append(text)
+        seen.add(text)
+    return result
+
+
+def build_paper_gate_external_baseline_environment(
+    layout: Mapping[str, str],
+    *,
+    profile: str,
+    repo_root: str | Path | None = None,
+) -> dict[str, str]:
+    """构造 paper gate 聚合阶段所需的 modern baseline 环境变量。
+
+    该函数是项目特定写法。baseline 专用 Notebook 只负责生成各自的
+    official bundle; `paper_gate_and_package_colab` 需要再次调用统一
+    `external_baseline_runner`, 因此必须在该 Notebook 中显式注入:
+
+    1. 外层 `SSTW_<BASELINE>_EVAL_COMMAND`, 用于让现代 baseline adapter
+       从 `not_runnable` 升级为 `runnable`。
+    2. 内层 `SSTW_<BASELINE>_OFFICIAL_EVAL_COMMAND`, 用于让 bridge 读取
+       项目内 official bundle 或调用 fail-closed 官方 wrapper。
+    3. `SSTW_EXTERNAL_BASELINE_OFFICIAL_RESULT_BUNDLE_ROOT`, 用于指向已从
+       阶段 zip 恢复到本地 workspace 的 official bundle 根目录。
+
+    该函数只准备执行环境, 不写正式 comparison records。
+    """
+
+    bridge_templates = build_modern_baseline_official_bridge_command_templates(profile)
+    repository_official_templates = build_repository_official_baseline_eval_command_templates(profile)
+    command_template_source: dict[str, str] = {}
+    command_template_source.update(bridge_templates)
+    command_template_source.update(repository_official_templates)
+    command_template_source.update({key: value for key, value in os.environ.items() if value})
+    outer_command_env = build_modern_baseline_command_env(profile, command_template_source)
+
+    bundle_root = str(layout.get("external_baseline_official_result_bundle_root") or "").strip()
+    existing_bundle_roots = [
+        item
+        for item in os.environ.get("SSTW_EXTERNAL_BASELINE_OFFICIAL_RESULT_BUNDLE_ROOTS", "").split(os.pathsep)
+        if item
+    ]
+    existing_evidence_paths = [
+        item
+        for item in os.environ.get("SSTW_EXTERNAL_BASELINE_EVIDENCE_PATHS", "").split(os.pathsep)
+        if item
+    ]
+
+    env: dict[str, str] = {}
+    if repo_root:
+        env["PYTHONPATH"] = str(repo_root) + os.pathsep + os.environ.get("PYTHONPATH", "")
+    env.update(repository_official_templates)
+    env.update(outer_command_env)
+    for key, value in os.environ.items():
+        if key.startswith("SSTW_") and value:
+            env[key] = value
+    if bundle_root:
+        env["SSTW_EXTERNAL_BASELINE_OFFICIAL_RESULT_BUNDLE_ROOT"] = bundle_root
+        env["SSTW_EXTERNAL_BASELINE_OFFICIAL_RESULT_BUNDLE_ROOTS"] = os.pathsep.join(
+            _dedupe_non_empty_strings([bundle_root, *existing_bundle_roots])
+        )
+        env["SSTW_EXTERNAL_BASELINE_EVIDENCE_PATHS"] = os.pathsep.join(
+            _dedupe_non_empty_strings([bundle_root, *existing_evidence_paths])
+        )
+    return env
+
+
+def apply_paper_gate_external_baseline_environment(
+    layout: Mapping[str, str],
+    *,
+    profile: str,
+    repo_root: str | Path | None = None,
+    run_external_baseline_source_clone: bool = False,
+) -> dict[str, object]:
+    """应用 paper gate 聚合阶段的 modern baseline 环境变量并写出预检 artifact。
+
+    Notebook 入口调用该函数后, 后续 `external_baseline_comparison` 子进程会继承
+    同一组环境变量, 从已恢复的 official bundle 生成正式 `measured_formal`
+    records。该函数写出的 artifact 只说明环境和命令模板已准备, 不直接支持论文
+    效果主张。
+    """
+
+    env = build_paper_gate_external_baseline_environment(
+        layout,
+        profile=profile,
+        repo_root=repo_root,
+    )
+    os.environ.update({key: value for key, value in env.items() if value})
+
+    summary = write_modern_baseline_colab_command_config_summary(
+        layout,
+        profile=profile,
+        command_templates_auto_applied=True,
+    )
+    bridge_decision = write_modern_baseline_official_bridge_preflight_decision(
+        layout,
+        profile=profile,
+        command_env=env,
+        use_bridge_commands=True,
+        require_bridge_official_commands=True,
+    )
+    outer_command_env = {
+        key: value
+        for key, value in env.items()
+        if key.startswith("SSTW_") and key.endswith("_EVAL_COMMAND") and "_OFFICIAL_" not in key
+    }
+    evidence_paths = [env["SSTW_EXTERNAL_BASELINE_OFFICIAL_RESULT_BUNDLE_ROOT"]] if env.get("SSTW_EXTERNAL_BASELINE_OFFICIAL_RESULT_BUNDLE_ROOT") else []
+    baseline_preflight = write_external_baseline_colab_preflight_decision(
+        dict(layout),
+        profile=profile,
+        command_env=outer_command_env,
+        require_modern_baseline_commands_for_paper_gate=True,
+        run_external_baseline_source_clone=run_external_baseline_source_clone,
+        evidence_paths=evidence_paths,
+    )
+    decision = "PASS" if (
+        bridge_decision.get("external_baseline_official_bridge_preflight_decision") == "PASS"
+        and baseline_preflight.get("external_baseline_colab_preflight_decision") == "PASS"
+    ) else "FAIL"
+    payload: dict[str, object] = {
+        "artifact_name": "paper_gate_external_baseline_environment_decision.json",
+        "manifest_kind": "paper_gate_external_baseline_environment_decision",
+        "profile": profile,
+        "run_root": layout["drive_run_root"],
+        "paper_gate_external_baseline_environment_decision": decision,
+        "paper_gate_external_baseline_environment_status": (
+            "repository_official_bundle_environment_ready"
+            if decision == "PASS"
+            else "repository_official_bundle_environment_blocked"
+        ),
+        "command_templates_auto_applied": True,
+        "external_baseline_official_result_bundle_root": env.get("SSTW_EXTERNAL_BASELINE_OFFICIAL_RESULT_BUNDLE_ROOT", ""),
+        "external_baseline_official_result_bundle_roots": env.get("SSTW_EXTERNAL_BASELINE_OFFICIAL_RESULT_BUNDLE_ROOTS", ""),
+        "configured_outer_command_env_vars": sorted(outer_command_env),
+        "configured_outer_command_env_var_count": len(outer_command_env),
+        "configured_repository_official_command_env_vars": sorted(
+            key for key in env if key.startswith("SSTW_") and key.endswith("_OFFICIAL_EVAL_COMMAND")
+        ),
+        "configured_repository_official_command_env_var_count": sum(
+            1
+            for key in env
+            if key.startswith("SSTW_") and key.endswith("_OFFICIAL_EVAL_COMMAND")
+        ),
+        "external_baseline_command_template_summary_path": summary.get("summary_path"),
+        "external_baseline_colab_preflight_decision": baseline_preflight.get("external_baseline_colab_preflight_decision"),
+        "external_baseline_official_bridge_preflight_decision": bridge_decision.get("external_baseline_official_bridge_preflight_decision"),
+        "required_modern_external_baseline_adapter_names": summary.get("required_modern_external_baseline_adapter_names", []),
+        "claim_support_status": "paper_gate_environment_preflight_only_not_claim_evidence",
+    }
+    _write_json(Path(layout["drive_run_root"]) / PAPER_GATE_EXTERNAL_BASELINE_ENVIRONMENT_DECISION, payload)
+    return payload
 
 
 def read_motion_threshold_calibration_decision(layout: Mapping[str, str]) -> dict[str, Any]:

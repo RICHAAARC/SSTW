@@ -15,6 +15,7 @@ from paper_workflow.notebook_utils.generative_video_model_probe_workflow import 
     build_workflow_stage_plan,
     build_mechanism_postprocess_command,
     build_modern_baseline_command_env,
+    build_paper_gate_external_baseline_environment,
     build_external_baseline_official_bundle_generation_command,
     build_external_baseline_official_resource_bootstrap_command,
     build_external_baseline_official_result_bundle_preflight_command,
@@ -328,6 +329,8 @@ def test_split_colab_notebooks_are_profile_driven() -> None:
     gate_source = Path("paper_workflow/colab_notebooks/paper_gate_and_package_colab.ipynb").read_text(encoding="utf-8")
     assert "external_baseline_colab_preflight" in runtime_source
     assert "build_external_baseline_comparison_command" not in runtime_source
+    assert "apply_paper_gate_external_baseline_environment" in gate_source
+    assert "build_external_baseline_official_result_bundle_preflight_command" in gate_source
     assert "build_external_baseline_comparison_command" in gate_source
     assert "build_external_baseline_self_containment_decision_command" in gate_source
     assert "build_pilot_paper_gate_command" in gate_source
@@ -927,6 +930,39 @@ def test_repository_official_baseline_eval_adapters_configure_inner_commands(tmp
     assert ready_decision["external_baseline_official_bridge_preflight_decision"] == "PASS"
     assert ready_decision["official_bridge_configured_env_var_count"] == 5
     assert ready_decision["official_bridge_missing_env_vars"] == []
+
+
+@pytest.mark.quick
+def test_paper_gate_external_baseline_environment_binds_restored_official_bundles(tmp_path: Path) -> None:
+    """paper gate 必须自动绑定已恢复的 official bundle 与 repository bridge 命令。"""
+    layout = build_drive_layout(str(tmp_path / "SSTW"), workflow_profile="validation_scale")
+    env = build_paper_gate_external_baseline_environment(
+        layout,
+        profile="validation_scale",
+        repo_root=tmp_path / "repo",
+    )
+    baseline_ids = {"videoshield", "sigmark", "videomark", "vidsig", "videoseal"}
+
+    assert env["SSTW_EXTERNAL_BASELINE_OFFICIAL_RESULT_BUNDLE_ROOT"] == layout["external_baseline_official_result_bundle_root"]
+    assert layout["external_baseline_official_result_bundle_root"] in env["SSTW_EXTERNAL_BASELINE_EVIDENCE_PATHS"]
+    assert set(
+        key.removeprefix("SSTW_").removesuffix("_EVAL_COMMAND").lower()
+        for key in env
+        if key.startswith("SSTW_") and key.endswith("_EVAL_COMMAND") and "_OFFICIAL_" not in key
+    ) == baseline_ids
+    assert set(
+        key.removeprefix("SSTW_").removesuffix("_OFFICIAL_EVAL_COMMAND").lower()
+        for key in env
+        if key.startswith("SSTW_") and key.endswith("_OFFICIAL_EVAL_COMMAND")
+    ) == baseline_ids
+    assert all(
+        "external_baseline.official_command_bridge" in env[f"SSTW_{baseline_id.upper()}_EVAL_COMMAND"]
+        for baseline_id in baseline_ids
+    )
+    assert all(
+        f"external_baseline.official_eval_adapters.{baseline_id}" in env[f"SSTW_{baseline_id.upper()}_OFFICIAL_EVAL_COMMAND"]
+        for baseline_id in baseline_ids
+    )
 
 
 @pytest.mark.quick

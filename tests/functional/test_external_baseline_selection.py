@@ -28,6 +28,9 @@ from external_baseline.videoseal_official_runtime import (
     inspect_videoseal_official_runtime_layout,
     videoseal_official_source_cwd,
 )
+from paper_workflow.notebook_utils.generative_video_model_probe_workflow import (
+    build_paper_gate_external_baseline_environment,
+)
 from main.protocol.record_writer import read_jsonl, write_jsonl
 from external_baseline.source_intake import build_source_intake_manifest, write_source_intake_artifacts
 
@@ -793,6 +796,77 @@ def test_official_result_bundle_preflight_requires_all_modern_baseline_units(
     assert audit["expected_bundle_result_count"] == 10
     assert audit["present_bundle_result_count"] == 10
     assert audit["strict_missing_baselines"] == []
+
+
+@pytest.mark.quick
+def test_paper_gate_comparison_consumes_repository_official_bundles_without_source_checkout(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """paper gate 应能只凭项目内 official bundle 转写 5 个 baseline 的 measured_formal。"""
+    run_root = tmp_path / "generative_video_runtime"
+    _write_external_baseline_runtime_fixture(run_root)
+    bundle_root = tmp_path / "official_baseline_bundle"
+    records = read_jsonl(run_root / "records" / "runtime_detection_records.jsonl")
+    baseline_ids = ("videoshield", "sigmark", "videomark", "vidsig", "videoseal")
+    for baseline_id in baseline_ids:
+        manifest_path = bundle_root / baseline_id / "official_reference_execution_manifest.json"
+        manifest_path.parent.mkdir(parents=True, exist_ok=True)
+        manifest_path.write_text(
+            json.dumps({
+                "manifest_kind": "test_repository_generated_official_bundle_manifest",
+                "baseline_id": baseline_id,
+                "claim_support_status": "test_fixture_only",
+            }),
+            encoding="utf-8",
+        )
+        for record in records:
+            output = (
+                bundle_root
+                / baseline_id
+                / "records"
+                / f"{record['prompt_id']}__{record['seed_id']}__{record['attack_name']}.json"
+            )
+            output.parent.mkdir(parents=True, exist_ok=True)
+            output.write_text(
+                json.dumps({
+                    "external_baseline_score": 0.61,
+                    "detected": True,
+                    "bit_accuracy": 0.93,
+                    "official_result_provenance": "repository_generated_from_third_party_official_code",
+                    "official_execution_manifest_path": str(manifest_path),
+                    "external_baseline_source_video_path": f"{baseline_id}/source.mp4",
+                    "external_baseline_attacked_video_path": f"{baseline_id}/attacked.mp4",
+                    "external_baseline_generation_model_id": f"{baseline_id}_official_model",
+                }),
+                encoding="utf-8",
+            )
+
+    layout = {
+        "drive_run_root": str(run_root),
+        "external_baseline_official_result_bundle_root": str(bundle_root),
+    }
+    env = build_paper_gate_external_baseline_environment(
+        layout,
+        profile="validation_scale",
+        repo_root=Path.cwd(),
+    )
+    for key, value in env.items():
+        if key.startswith("SSTW_") or key == "PYTHONPATH":
+            monkeypatch.setenv(key, value)
+
+    audit = write_external_baseline_comparison_outputs(run_root)
+    formal_records = [
+        record
+        for record in read_jsonl(run_root / "records" / "external_baseline_score_records.jsonl")
+        if record.get("metric_status") == "measured_formal"
+    ]
+
+    assert audit["modern_external_baseline_formal_measured_adapter_count"] == 5
+    assert set(audit["modern_external_baseline_formal_measured_adapter_names"]) == set(baseline_ids)
+    assert len(formal_records) == len(baseline_ids) * len(records)
+    assert all(record["external_baseline_score"] == 0.61 for record in formal_records)
+    assert all(record["external_baseline_official_execution_mode"] == "measured_formal_from_official_command" for record in formal_records)
 
 
 @pytest.mark.quick

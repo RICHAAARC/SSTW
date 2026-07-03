@@ -64,6 +64,36 @@ def _write_json(path: str | Path, payload: Mapping[str, Any]) -> None:
     output_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 
+def _official_result_bundle_read_enabled() -> bool:
+    """判断当前 bridge 是否允许通过项目内 official bundle cache 完成读取。
+
+    该函数不直接信任 bundle 内容。真正的 provenance、score 字段和执行
+    manifest 校验仍由 `external_baseline.official_eval_adapters.common`
+    完成。这里仅用于决定是否可以把“官方源码目录不存在”的检查延后到
+    repository official adapter。
+    """
+
+    if os.environ.get("SSTW_DISABLE_OFFICIAL_RESULT_BUNDLE_READ", "").strip().lower() in {"1", "true", "yes"}:
+        return False
+    return any([
+        os.environ.get("SSTW_EXTERNAL_BASELINE_OFFICIAL_RESULT_BUNDLE_ROOT", "").strip(),
+        os.environ.get("SSTW_EXTERNAL_BASELINE_OFFICIAL_RESULT_BUNDLE_ROOTS", "").strip(),
+        os.environ.get("SSTW_EXTERNAL_BASELINE_BUNDLE_ROOT", "").strip(),
+    ])
+
+
+def _official_eval_command_uses_repository_adapter(baseline_id: str) -> bool:
+    """判断内部官方命令是否是项目内 fail-closed official adapter。
+
+    只有这种命令能够在源码目录缺失时安全地读取项目内 official bundle。
+    用户自定义 native command 仍然需要 bridge 在入口处检查官方源码目录,
+    防止把缺失依赖延后成难以理解的第三方报错。
+    """
+
+    template = os.environ.get(official_eval_command_env_var_for(baseline_id), "").strip()
+    return "external_baseline.official_eval_adapters" in template
+
+
 def _format_official_command(args: argparse.Namespace, official_output_json_path: Path) -> list[str]:
     """把用户配置的官方命令模板格式化为 argv。
 
@@ -98,7 +128,11 @@ def run_bridge(args: argparse.Namespace) -> dict[str, Any]:
     未输出 score 时必须失败, 不能用 SSTW 自身分数或视频相似度伪造外部 baseline。
     """
     official_source_dir = Path(args.official_source_dir)
-    if not official_source_dir.is_dir():
+    allow_repository_bundle_without_source = (
+        _official_result_bundle_read_enabled()
+        and _official_eval_command_uses_repository_adapter(args.baseline_id)
+    )
+    if not official_source_dir.is_dir() and not allow_repository_bundle_without_source:
         raise FileNotFoundError(f"official_source_dir_missing:{official_source_dir}")
     source_video = Path(args.source_video)
     attacked_video = Path(args.attacked_video)

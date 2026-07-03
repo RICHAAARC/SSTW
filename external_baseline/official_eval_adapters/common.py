@@ -321,9 +321,22 @@ def run_adapter_main(
     """
     parser = build_parser(description)
     args = parser.parse_args()
-    source_dir = verify_official_source(args.official_source_dir, required_source_files)
     require_paths_exist([args.source_video, args.attacked_video], label="baseline_input_video")
     output_json_path = Path(args.official_output_json)
+    source_dir = Path(args.official_source_dir)
+
+    bundled = read_official_result_bundle_if_available(
+        baseline_id=baseline_id,
+        args=args,
+        source_dir=source_dir,
+        output_json_path=output_json_path,
+    )
+    if bundled is not None:
+        write_json(output_json_path, bundled)
+        print(json.dumps(bundled, ensure_ascii=False, indent=2, sort_keys=True))
+        return
+
+    source_dir = verify_official_source(args.official_source_dir, required_source_files)
 
     payload = run_native_command_if_configured(
         baseline_id=baseline_id,

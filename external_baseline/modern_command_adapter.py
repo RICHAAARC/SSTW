@@ -303,7 +303,10 @@ def build_modern_score_records(
                 "external_baseline_source_video_path": payload.get("external_baseline_source_video_path", payload.get("baseline_source_video_path")),
                 "external_baseline_attacked_video_path": payload.get("external_baseline_attacked_video_path", payload.get("baseline_attacked_video_path")),
                 "external_baseline_generation_model_id": payload.get("external_baseline_generation_model_id"),
-                "external_baseline_official_execution_mode": payload.get("external_baseline_official_execution_mode", payload.get("official_adapter_status")),
+                "external_baseline_official_execution_mode": payload.get(
+                    "external_baseline_official_execution_mode",
+                    payload.get("official_adapter_status", payload.get("official_bridge_status")),
+                ),
                 "external_baseline_official_result_bundle_path": payload.get("official_result_bundle_path"),
                 "external_baseline_official_execution_manifest_path": payload.get("official_execution_manifest_path"),
                 "metric_status": "measured_formal",

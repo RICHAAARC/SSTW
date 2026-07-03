@@ -141,11 +141,11 @@ def test_external_baseline_restore_requires_pass_decision_in_stage_manifest(tmp_
 
 
 @pytest.mark.quick
-def test_aggregate_external_baseline_scoring_can_publish_helper_package(
+def test_external_baseline_role_without_baseline_id_can_publish_helper_package(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """聚合诊断 Notebook 没有 baseline_id 时不应被单 baseline reference 判定误阻断。"""
+    """external baseline role 缺少 baseline_id 时应归入 helper, 不误判为单 baseline reference。"""
 
     monkeypatch.setenv("SSTW_COLAB_STAGE_IO_MODE", "local_zip")
     drive_root = tmp_path / "drive" / "SSTW"
@@ -161,7 +161,7 @@ def test_aggregate_external_baseline_scoring_can_publish_helper_package(
     layout = {
         "drive_project_root": str(drive_root),
         "workflow_profile": "validation_scale",
-        "stage_package_id": "external_baseline_formal_scoring_colab",
+        "stage_package_id": "external_baseline_aggregate_diagnostic_colab",
         "drive_run_root": str(run_root),
         "external_baseline_official_result_bundle_root": str(bundle_root),
         "local_stage_package_cache_root": str(tmp_path / "local_cache"),

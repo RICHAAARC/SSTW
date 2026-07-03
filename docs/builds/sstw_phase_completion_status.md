@@ -1500,8 +1500,9 @@ paper_workflow/colab_notebooks/*_formal_reference_colab.ipynb
 paper_workflow/colab_notebooks/paper_gate_and_package_colab.ipynb
 ```
 
-`external_baseline_formal_scoring_colab.ipynb` 仅作为诊断或历史聚合入口保留, 不再是
-validation-scale 推荐主流程的必跑 Notebook。
+旧的通用 external baseline scoring Notebook 已删除。validation-scale 推荐主流程
+只保留 5 个 baseline 专用 official reference Notebook 与
+`paper_gate_and_package_colab.ipynb` 的最终聚合门禁。
 
 阶段性状态为:
 
@@ -1720,7 +1721,7 @@ vidsig_public_checkpoint_bootstrap: implemented_as_resource_download_when_networ
 vidsig_official_generate_ms_runtime: implemented_fail_closed_after_project_runtime_attack
 manual_official_resource_required_artifact: implemented_for_resource_heavy_or_unpublished_weight_baselines
 strict_gate_fake_pass: forbidden
-external_baseline_formal_scoring_notebook_auto_repair_path: integrated
+external_baseline_formal_reference_notebook_auto_repair_path: integrated
 ```
 
 该更新的含义是: Colab 冷启动时不再只告诉用户缺少官方资源, 而是会先尝试自动安装

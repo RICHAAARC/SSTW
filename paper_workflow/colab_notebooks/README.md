@@ -294,8 +294,8 @@ official_reference_notebook
 
 `paper_gate_and_package_colab.ipynb` 会在恢复 5 个主实验 baseline official reference 阶段包后,
 重新执行一次全量统一转写和 self-containment 判定, 防止各 baseline 专用包中的单 baseline
-临时 records 互相覆盖。`external_baseline_formal_scoring_colab.ipynb` 仅作为诊断或历史聚合入口保留,
-不再是 validation-scale 推荐主流程中的必跑 Notebook。
+临时 records 互相覆盖。旧的通用 external baseline scoring Notebook 已删除, 避免与
+paper gate 聚合职责重复并造成运行顺序误读。
 
 最终必须检查:
 

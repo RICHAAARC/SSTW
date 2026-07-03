@@ -328,6 +328,8 @@ Notebook 与 repository module 的跨边界数据
 | notebook_role | protocol | none | true | false | false | Colab Notebook 的职责角色, 用于从统一 workflow 配置读取 stage plan。 |
 | notebook_roles | protocol | none | false | false | false | Colab workflow 统一配置中 Notebook role 到路径、允许 profile 和 stage plan 的映射。 |
 | notebook_path | artifact | none | true | false | false | Notebook role 对应的 Colab Notebook 文件路径。 |
+| notebook_path_examples | artifact | none | true | false | false | 当某个 Notebook role 没有单独入口时, 对应该 role 的具体 Notebook 示例路径列表。 |
+| entrypoint_status | governance | none | true | false | false | Notebook role 是否保留独立入口, 或是否仅由更细粒度 Notebook 复用该 role。 |
 | allowed_workflow_profiles | protocol | none | true | false | false | 某个 Notebook role 允许使用的 workflow profile 列表。 |
 | workflow_stage_plan | protocol | none | true | false | false | 某个 Notebook role 在指定 workflow profile 下应执行的语义阶段列表。 |
 | disabled_stage_names | protocol | none | true | false | false | 某个 workflow profile 在通用 stage plan 中禁用的阶段名称列表。 |

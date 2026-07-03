@@ -701,8 +701,9 @@ generative_video_runtime_colab.ipynb: 运行 Wan2.1 生成、formal metrics、mo
 paper_gate_and_package_colab.ipynb: 恢复 5 个主实验 official reference 阶段包后运行全量 external baseline comparison、self-containment、internal ablation、adaptive attack、replay/sketch 或 Claim-3 downgrade、CI、gate 和 package
 ```
 
-`external_baseline_formal_scoring_colab.ipynb` 仅作为诊断或历史聚合入口保留, 不再是
-validation-scale 推荐主流程中的必跑 Notebook。
+旧的通用 external baseline scoring Notebook 已删除。validation-scale 推荐主流程
+只保留 5 个 baseline 专用 official reference Notebook 与
+`paper_gate_and_package_colab.ipynb` 的最终聚合门禁。
 
 切换运行层级时只应修改环境变量或配置:
 

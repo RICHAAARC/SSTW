@@ -17,7 +17,15 @@
         "pilot_paper",
         "full_paper"
       ],
-      "notebook_path": "paper_workflow/colab_notebooks/external_baseline_formal_scoring_colab.ipynb",
+      "entrypoint_status": "no_standalone_notebook_per_baseline_formal_reference_only",
+      "notebook_path": "",
+      "notebook_path_examples": [
+        "paper_workflow/colab_notebooks/videoseal_formal_reference_colab.ipynb",
+        "paper_workflow/colab_notebooks/vidsig_formal_reference_colab.ipynb",
+        "paper_workflow/colab_notebooks/videomark_formal_reference_colab.ipynb",
+        "paper_workflow/colab_notebooks/videoshield_formal_reference_colab.ipynb",
+        "paper_workflow/colab_notebooks/sigmark_formal_reference_colab.ipynb"
+      ],
       "stage_plan": [
         "external_baseline_colab_preflight",
         "external_baseline_source_intake",

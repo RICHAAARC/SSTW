@@ -292,19 +292,20 @@ bundle 转写为 `metric_status: measured_formal` records。若其它 baseline b
 完成, 统一 runner 会写出 governed unsupported rows; 这些 rows 只能作为阻断记录,
 不能替代正式 baseline 结果。
 
-5 个主实验 official bundle 全部完成后, 再运行:
+5 个主实验 official bundle 全部完成后, 直接运行:
 
 ```text
-paper_workflow/colab_notebooks/external_baseline_formal_scoring_colab.ipynb
+paper_workflow/colab_notebooks/paper_gate_and_package_colab.ipynb
 ```
 
-该 Notebook 的职责是全量统一转写、self-containment 判定和打包。它不重新生成
-baseline 官方视频或官方中间产物, 不重新生成 Wan2.1 视频, 也不执行最终 paper gate。
+该 Notebook 会恢复 5 个 official reference 阶段包, 重新执行全量统一转写、
+self-containment 判定、validation / pilot gate 和打包。旧的通用 external baseline
+scoring Notebook 已删除, 防止它与 paper gate 的聚合职责重复并造成运行顺序误读。
 这样可以把三类失败原因分离:
 
 1. `generative_video_runtime_colab.ipynb`: 主方法生成、attack 和 detection 是否成功。
-2. 5 个主实验 `*_formal_reference_colab.ipynb` 与 `external_baseline_formal_scoring_colab.ipynb`: 现代视频水印 baseline official bundle、统一转写和 self-containment 是否成功。
-3. `paper_gate_and_package_colab.ipynb`: validation-scale、pilot-paper 或 full-paper gate 是否满足论文协议。
+2. 5 个主实验 `*_formal_reference_colab.ipynb`: 现代视频水印 baseline official bundle 是否成功。
+3. `paper_gate_and_package_colab.ipynb`: 全量统一转写、self-containment、validation-scale、pilot-paper 或 full-paper gate 是否满足论文协议。
 
 Notebook 的 profile、Drive 目录和 stage plan 均由以下配置控制:
 

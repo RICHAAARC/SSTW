@@ -197,7 +197,8 @@
   "governed_artifact": "artifacts/external_baseline_official_runtime_closure_requirements.json",
   "notebook_enforcement": {
     "formal_reference_notebooks": "每个 baseline notebook 在 source intake 和 resource bootstrap 后执行该要求预检, 自动绑定已存在的默认 Drive 资源路径, 然后才运行 official adapter。",
-    "formal_scoring_notebook": "external_baseline_formal_scoring_colab.ipynb 在 resource bootstrap 后执行该要求预检, 用于暴露缺少的官方 source / resource / bundle。",
+    "formal_reference_notebooks": "5 个独立 *_formal_reference_colab.ipynb 在 resource bootstrap 后执行该要求预检, 用于暴露缺少的官方 source / resource / bundle。",
+    "paper_gate_notebook": "paper_gate_and_package_colab.ipynb 在恢复 5 个 official reference 阶段包后执行最终聚合、self-containment 判定和 validation / pilot gate。",
     "non_run_record_policy": "non-run record 只能作为阻断记录, 不能替代 measured_formal baseline。"
   },
   "runtime_input_requirements": [

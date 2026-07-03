@@ -134,6 +134,8 @@ def resolve_notebook_workflow_profile(
         "profile_alias_applied": canonical_profile != profile,
         "notebook_role": notebook_role or "",
         "notebook_path": role_config.get("notebook_path", ""),
+        "notebook_path_examples": list(role_config.get("notebook_path_examples", [])),
+        "entrypoint_status": str(role_config.get("entrypoint_status", "")),
         "workflow_stage_plan": list(role_config.get("stage_plan", [])),
         "allowed_workflow_profiles": list(role_config.get("allowed_workflow_profiles", [])),
         "config_path": str(config_path),

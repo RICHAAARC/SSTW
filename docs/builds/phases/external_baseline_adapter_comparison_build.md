@@ -194,7 +194,7 @@ external_baseline_threshold 或 threshold
 ```text
 generative_video_runtime_colab.ipynb: 在真实 GPU 生成前执行 baseline command preflight, 但不运行 baseline comparison。
 *_formal_reference_colab.ipynb: 读取同一 workflow_profile 的 run_root, 逐 baseline 执行 source intake、project clone / build / run / adapt、official bundle 生成与统一 measured_formal 转写。
-paper_gate_and_package_colab.ipynb: 读取同一 workflow_profile 的 run_root, 恢复 5 个主实验 official reference 阶段包后执行全量统一转写、self-containment 判定与最终 gate 打包。该 Notebook 只消费项目内 official bundle 和 governed manifests, 不直接调用第三方命令。`external_baseline_formal_scoring_colab.ipynb` 仅作为诊断或历史聚合入口。
+paper_gate_and_package_colab.ipynb: 读取同一 workflow_profile 的 run_root, 恢复 5 个主实验 official reference 阶段包后执行全量统一转写、self-containment 判定与最终 gate 打包。该 Notebook 只消费项目内 official bundle 和 governed manifests, 不直接调用第三方命令。旧的通用 external baseline scoring Notebook 已删除, 防止与 paper gate 聚合职责重复。
 ```
 
 profile、Drive 目录和 stage plan 由下述配置统一控制:

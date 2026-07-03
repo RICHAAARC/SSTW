@@ -84,5 +84,5 @@ matching 逻辑写出 project-owned official bundle。该 bundle 仍不是最终
 3. `SSTW_<BASELINE>_NATIVE_EVAL_COMMAND` 或等价项目内 official bundle 生成逻辑。
 4. 覆盖全部 `validation_scale` runtime comparison units 的 score JSON。
 5. 5 个主实验 independent formal reference Notebook 先各自生成项目内 official bundle, 并默认调用统一 runner 转写当前可用的 `measured_formal` records。
-6. `paper_gate_and_package_colab.ipynb` 在恢复 5 个主实验 official reference 阶段包后执行全量统一转写、self-containment 判定和打包; `external_baseline_formal_scoring_colab.ipynb` 仅作为诊断或历史聚合入口。
+6. `paper_gate_and_package_colab.ipynb` 在恢复 5 个主实验 official reference 阶段包后执行全量统一转写、self-containment 判定和打包; 旧的通用 external baseline scoring Notebook 已删除, 不再作为诊断或正式入口保留。
 7. `external_baseline_self_containment_decision.json` 通过。

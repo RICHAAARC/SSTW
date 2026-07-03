@@ -386,10 +386,10 @@ motion_threshold_calibration_colab.ipynb
 4. `paper_gate_and_package_colab.ipynb` 负责恢复 5 个主实验 baseline official reference 阶段包, 重新执行全量统一转写和 self-containment 判定, 再执行内部消融、adaptive attack proxy、replay/sketch
    或 Claim-3 downgrade、CI、fixed-FPR gate、artifact rebuild 和 Drive package。
 
-`external_baseline_formal_scoring_colab.ipynb` 仅作为诊断或历史聚合入口保留, 不再是
-validation-scale 推荐主流程中的必跑 Notebook。正式主流程应以 5 个主实验 baseline 专用 Notebook
-产生的 official bundle 为输入, 由 `paper_gate_and_package_colab.ipynb` 统一重建最终
-`measured_formal` records, 避免单 baseline 临时 records 互相覆盖。
+旧的通用 external baseline scoring Notebook 已删除。正式主流程应以 5 个主实验
+baseline 专用 Notebook 产生的 official bundle 为输入, 由
+`paper_gate_and_package_colab.ipynb` 统一重建最终 `measured_formal` records,
+避免单 baseline 临时 records 互相覆盖。
 
 旧综合 Notebook 已移除。正式推进只使用拆分 Notebook, 因为拆分后可以在同一 `workflow_profile` 下分阶段复跑、检查和打包,
 避免 runtime、baseline 与 gate 的失败原因混在一个长 Notebook 中。

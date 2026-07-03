@@ -171,6 +171,52 @@ def test_validation_scale_gate_accepts_claim3_downgrade_path(tmp_path: Path) -> 
         "data_split_and_leakage_guard_decision": "PASS",
         "claim_support_status": "data_split_and_leakage_guard_passed",
     })
+    write_jsonl(run_root / "records" / "motion_consistency_exclusion_records.jsonl", [
+        {"prompt_id": "prompt_0", "included_in_motion_claim": True, "excluded_from_motion_claim": False},
+    ])
+    write_json(run_root / "artifacts" / "motion_consistency_exclusion_decision.json", {
+        "motion_consistency_exclusion_decision": "PASS",
+        "motion_consistency_excluded_count": 0,
+        "claim_support_status": "motion_consistency_exclusion_audit_record",
+    })
+    write_jsonl(run_root / "records" / "sstw_measured_formal_records.jsonl", [
+        {"metric_status": "measured_formal", "sstw_score": 0.82, "claim_support_status": "sstw_measured_formal_validation_scale_only"},
+    ])
+    write_json(run_root / "artifacts" / "sstw_measured_formal_decision.json", {
+        "sstw_measured_formal_decision": "PASS",
+        "sstw_measured_formal_record_count": 1,
+        "claim_support_status": "sstw_measured_formal_validation_scale_only",
+    })
+    write_jsonl(run_root / "records" / "formal_method_baseline_comparison_records.jsonl", [
+        {"method_id": "sstw_key_conditioned_flow_trajectory", "metric_status": "measured_formal"},
+        *[
+            {"method_id": baseline_id, "metric_status": "measured_formal"}
+            for baseline_id in sorted(MODERN_EXTERNAL_BASELINE_NAMES)
+        ],
+    ])
+    write_json(run_root / "artifacts" / "formal_method_baseline_comparison_decision.json", {
+        "formal_method_baseline_comparison_decision": "PASS",
+        "formal_comparison_ready_method_count": 6,
+        "claim_support_status": "formal_method_baseline_comparison_validation_scale_only",
+    })
+    write_jsonl(run_root / "records" / "formal_baseline_difference_interval_records.jsonl", [
+        {"baseline_method_id": baseline_id, "difference_interval_status": "ready"}
+        for baseline_id in sorted(MODERN_EXTERNAL_BASELINE_NAMES)
+    ])
+    write_json(run_root / "artifacts" / "formal_baseline_difference_interval_decision.json", {
+        "formal_baseline_difference_interval_decision": "PASS",
+        "difference_interval_ready_count": 5,
+        "claim_support_status": "formal_baseline_difference_interval_validation_scale_only",
+    })
+    write_jsonl(run_root / "records" / "validation_scale_formal_internal_ablation_records.jsonl", [
+        {"method_variant": "sstw_full_method", "metric_status": "measured_formal"},
+        {"method_variant": "without_velocity_constraint", "metric_status": "measured_proxy"},
+    ])
+    write_json(run_root / "artifacts" / "validation_scale_formal_internal_ablation_decision.json", {
+        "validation_scale_formal_internal_ablation_decision": "PASS",
+        "formal_internal_ablation_variant_count": 8,
+        "claim_support_status": "validation_scale_formal_internal_ablation_ready_not_effect_size_claim",
+    })
     write_json(run_root / "artifacts" / "validation_internal_ablation_decision.json", {
         "validation_internal_ablation_decision": "PASS",
         "claim_support_status": "validation_internal_ablation_ready",
@@ -182,6 +228,15 @@ def test_validation_scale_gate_accepts_claim3_downgrade_path(tmp_path: Path) -> 
     write_json(run_root / "artifacts" / "statistical_confidence_interval_decision.json", {
         "statistical_confidence_interval_decision": "PASS",
         "claim_support_status": "validation_ci_ready",
+    })
+    write_jsonl(run_root / "records" / "low_fpr_formal_statistics_records.jsonl", [
+        {"blocked_result_profile": "pilot_paper", "formal_low_fpr_claim_allowed": False},
+        {"blocked_result_profile": "full_paper", "formal_low_fpr_claim_allowed": False},
+    ])
+    write_json(run_root / "artifacts" / "low_fpr_formal_statistics_decision.json", {
+        "low_fpr_formal_statistics_decision": "PASS",
+        "low_fpr_formal_statistics_record_count": 2,
+        "claim_support_status": "low_fpr_formal_statistics_blocking_record",
     })
     write_json(run_root / "artifacts" / "validation_artifact_rebuild_dry_run_decision.json", {
         "validation_artifact_rebuild_dry_run_decision": "PASS",

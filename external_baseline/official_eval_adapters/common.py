@@ -325,6 +325,7 @@ def run_native_command_if_configured(
         raise FileNotFoundError(f"native_official_output_json_missing:{output_json_path}")
     payload = read_json(output_json_path)
     validate_score_payload(payload)
+    validate_clean_negative_payload(payload)
     enriched = {
         **payload,
         "official_adapter_status": "measured_by_native_official_command",
@@ -376,6 +377,7 @@ def run_adapter_main(
     if payload is None:
         payload = default_runner(args, source_dir, output_json_path)
         validate_score_payload(payload)
+        validate_clean_negative_payload(payload)
         write_json(output_json_path, payload)
     print(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True))
 

@@ -122,6 +122,9 @@ def test_sigmark_hunyuan_runtime_dry_run_builds_prompt_set_and_commands(tmp_path
     assert manifest["patch_manifest"]["patch_status"] == "patched_runtime_copy"
     assert "--mode=gen" in manifest["gen_command"]
     assert "--mode=extract" in manifest["extract_command"]
+    assert "--watermark_method=none" in manifest["clean_negative_gen_command"]
+    assert "--watermark_method=sigmark" in manifest["clean_negative_extract_command"]
+    assert "official_hunyuan_clean_negative_outputs" in " ".join(manifest["clean_negative_gen_command"])
     assert "--precision=bf16" in manifest["gen_command"]
     assert "--precision=bfloat16" not in manifest["gen_command"]
     prompt_file = Path(manifest["prompt_manifest"]["prompt_file"])
@@ -172,6 +175,56 @@ def test_sigmark_bundle_writer_records_project_owned_provenance(tmp_path: Path) 
     assert payload["external_baseline_clean_negative_score"] == 0.375
     assert payload["official_clean_negative_bit_accuracy_npz_path"] == str(clean_npz_path)
     assert payload["official_execution_manifest_path"] == str(manifest_path)
+
+
+@pytest.mark.quick
+def test_sigmark_bundle_writer_uses_prompt_seed_specific_npz_key(tmp_path: Path) -> None:
+    """SIGMark official bundle 需要按 prompt / seed 抽取单条分数, 不能只复用全局均值。"""
+
+    run_root = tmp_path / "runs" / "generative_video_model_probe" / "validation_scale"
+    bundle_root = tmp_path / "bundles" / "validation_scale"
+    manifest_path = bundle_root / "sigmark" / "official_reference_execution_manifest.json"
+    prompt_suite_path = tmp_path / "datasets" / "generative_video_prompt_suite" / "prompt_seed_suite.json"
+    npz_path = tmp_path / "official_outputs" / "HunyuanVideo-community-sigmark-bit_accuracy.npz"
+    clean_npz_path = tmp_path / "official_outputs" / "HunyuanVideo-community-sigmark-clean-negative-bit_accuracy.npz"
+    _write_runtime_records(run_root)
+    _write_prompt_suite(prompt_suite_path)
+    _write_json(manifest_path, {"manifest_kind": "test_sigmark_execution_manifest"})
+    result_key = "sstw_runtime_prompt/A small red toy car moves across a table with clear motion.-0"
+    npz_path.parent.mkdir(parents=True, exist_ok=True)
+    np.savez(
+        npz_path,
+        **{
+            result_key: np.array([0.8]),
+            "sstw_runtime_prompt/unrelated-0": np.array([0.1]),
+        },
+    )
+    np.savez(
+        clean_npz_path,
+        **{
+            result_key: np.array([0.2]),
+            "sstw_runtime_prompt/unrelated-0": np.array([0.9]),
+        },
+    )
+
+    result = write_sigmark_official_bundle_records(
+        run_root=run_root,
+        bundle_root=bundle_root,
+        manifest_path=manifest_path,
+        bit_accuracy_npz_path=npz_path,
+        model_name="HunyuanVideo-community",
+        clean_negative_bit_accuracy_npz_path=clean_npz_path,
+        prompt_suite_path=prompt_suite_path,
+    )
+
+    assert result["generated_bundle_record_count"] == 1
+    record_path = bundle_root / "sigmark" / "records" / "prompt_a__seed_0__clean.json"
+    payload = json.loads(record_path.read_text(encoding="utf-8"))
+    assert payload["external_baseline_score"] == 0.8
+    assert payload["external_baseline_clean_negative_score"] == 0.2
+    assert payload["official_result_key"] == result_key
+    assert payload["official_clean_negative_result_key"] == result_key
+    assert payload["official_score_assignment_policy"] == "per_prompt_seed_sigmark_bit_accuracy_npz_key"
 
 
 @pytest.mark.quick

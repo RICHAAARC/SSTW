@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import argparse
 from dataclasses import asdict, dataclass
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -64,11 +65,39 @@ EMBEDDING_MODEL_PATH_ARG_REPLACEMENT = (
     "    parser.add_argument('--model_name', default='i2vgen-xl')\n"
     "    parser.add_argument('--model_path', default=None)"
 )
+EMBEDDING_USE_WATERMARK_PARSE_TARGET = "    use_watermark = args.use_watermark"
+EMBEDDING_USE_WATERMARK_PARSE_REPLACEMENT = (
+    "    use_watermark = args.use_watermark\n"
+    "    if isinstance(use_watermark, str):\n"
+    "        use_watermark = use_watermark.strip().lower() not in {'0', 'false', 'no', 'off'}"
+)
+EMBEDDING_CLEAN_BRANCH_TARGET = (
+    "            else:\n"
+    "                init_latents_w = torch.randn(num_frames, 1, 4, height, width).to(device)"
+)
+EMBEDDING_CLEAN_BRANCH_REPLACEMENT = (
+    "            else:\n"
+    "                with open(keys_path, 'rb') as f:\n"
+    "                    _encoding_key, decoding_key = pickle.load(f)\n"
+    "                shift, message_bits = get_message_bits(message_bits_sequence)\n"
+    "                init_latents_w = torch.randn(num_frames, 1, 4, height, width).to(device)"
+)
 TEMPORAL_KEYS_PATH_ARG_TARGET = "    parser.add_argument('--keys_path', default=\"./keys\")"
 TEMPORAL_COMPAT_ARG_REPLACEMENT = (
     "    parser.add_argument('--keys_path', default=\"./keys\")\n"
     "    parser.add_argument('--threshold', default=0.5, type=float)\n"
-    "    parser.add_argument('--resample_num', default=1, type=int)"
+    "    parser.add_argument('--resample_num', default=1, type=int)\n"
+    "    parser.add_argument('--video_family', default='videomark')"
+)
+TEMPORAL_VIDEO_FAMILY_TARGET = (
+    "    video_frames_dirs = os.path.join(args.video_frames_dir,\"videomark\",model_name,f\"{num_bit}bit\")"
+)
+TEMPORAL_VIDEO_FAMILY_REPLACEMENT = (
+    "    video_family = getattr(args, 'video_family', 'videomark')\n"
+    "    if video_family == 'without_watermark':\n"
+    "        video_frames_dirs = os.path.join(args.video_frames_dir, 'without_watermark', model_name)\n"
+    "    else:\n"
+    "        video_frames_dirs = os.path.join(args.video_frames_dir, video_family, model_name, f\"{num_bit}bit\")"
 )
 TEMPORAL_OUTPUT_ENTRY_TARGET = (
     "    for dirname in os.listdir(video_frames_dirs):\n"
@@ -113,6 +142,7 @@ class VideoMarkOfficialRuntimeConfig:
     model_name: str = DEFAULT_MODEL_NAME
     model_path: str = ""
     output_path: str = ""
+    clean_negative_output_path: str = ""
     max_records: int | None = None
     num_frames: int = DEFAULT_NUM_FRAMES
     height: int = DEFAULT_HEIGHT
@@ -124,6 +154,7 @@ class VideoMarkOfficialRuntimeConfig:
     temporal_threshold: float = DEFAULT_DETECTION_THRESHOLD
     resample_num: int = DEFAULT_TEMPORAL_RESAMPLE_NUM
     device: str = "cuda:0"
+    generate_clean_negative_reference: bool = True
     dry_run: bool = False
     timeout_seconds: float = 0.0
     allow_prompt_id_fallback: bool = False
@@ -257,8 +288,14 @@ def build_default_videomark_official_config_from_env(
     safe_default_output_path = Path(bundle_root) / BASELINE_ID / SAFE_OUTPUT_DIR_NAME
     if not output_path or Path(output_path) == legacy_default_output_path:
         output_path = str(safe_default_output_path)
+    clean_negative_output_path = os.environ.get("SSTW_VIDEOMARK_CLEAN_NEGATIVE_OFFICIAL_OUTPUT_DIR", "").strip()
+    if not clean_negative_output_path:
+        clean_negative_output_path = str(Path(bundle_root) / BASELINE_ID / "official_clean_negative_outputs_safe_prompt_digest_v1")
     max_records_text = os.environ.get("SSTW_VIDEOMARK_REFERENCE_MAX_RECORDS", "").strip()
     effective_max_records = int(max_records_text) if max_records_text else max_records
+    selected_records = _selected_runtime_records(root, effective_max_records) if root.exists() else []
+    inferred_seed_count = _max_unique_seed_count_per_prompt(selected_records) if selected_records else DEFAULT_PROMPT_VARIANTS
+    prompt_variants = _env_int("SSTW_VIDEOMARK_PROMPT_VARIANTS", inferred_seed_count)
     return VideoMarkOfficialRuntimeConfig(
         run_root=str(root),
         bundle_root=str(bundle_root),
@@ -270,6 +307,7 @@ def build_default_videomark_official_config_from_env(
         model_name=os.environ.get("SSTW_VIDEOMARK_MODEL_NAME", DEFAULT_MODEL_NAME).strip() or DEFAULT_MODEL_NAME,
         model_path=os.environ.get("SSTW_VIDEOMARK_MODEL_PATH", "").strip(),
         output_path=output_path,
+        clean_negative_output_path=clean_negative_output_path,
         max_records=effective_max_records,
         num_frames=_env_int("SSTW_VIDEOMARK_NUM_FRAMES", DEFAULT_NUM_FRAMES),
         height=_env_int("SSTW_VIDEOMARK_HEIGHT", DEFAULT_HEIGHT),
@@ -277,10 +315,11 @@ def build_default_videomark_official_config_from_env(
         num_bit=_env_int("SSTW_VIDEOMARK_NUM_BIT", DEFAULT_NUM_BIT),
         num_inference_steps=_env_int("SSTW_VIDEOMARK_NUM_INFERENCE_STEPS", DEFAULT_NUM_INFERENCE_STEPS),
         num_inversion_steps=_env_int("SSTW_VIDEOMARK_NUM_INVERSION_STEPS", DEFAULT_NUM_INFERENCE_STEPS),
-        prompt_variants=_env_int("SSTW_VIDEOMARK_PROMPT_VARIANTS", DEFAULT_PROMPT_VARIANTS),
+        prompt_variants=prompt_variants,
         temporal_threshold=_env_float("SSTW_VIDEOMARK_TEMPORAL_THRESHOLD", DEFAULT_DETECTION_THRESHOLD),
         resample_num=_env_int("SSTW_VIDEOMARK_RESAMPLE_NUM", DEFAULT_TEMPORAL_RESAMPLE_NUM),
         device=os.environ.get("SSTW_VIDEOMARK_DEVICE", "cuda:0").strip() or "cuda:0",
+        generate_clean_negative_reference=_env_bool("SSTW_VIDEOMARK_GENERATE_CLEAN_NEGATIVE_REFERENCE", True),
         dry_run=_env_bool("SSTW_VIDEOMARK_OFFICIAL_DRY_RUN", False),
         timeout_seconds=_env_float("SSTW_VIDEOMARK_OFFICIAL_TIMEOUT_SECONDS", 0.0),
         allow_prompt_id_fallback=_env_bool("SSTW_VIDEOMARK_ALLOW_PROMPT_ID_FALLBACK", False),
@@ -387,6 +426,25 @@ def _patch_videomark_runtime_source(runtime_source_dir: Path) -> dict[str, Any]:
     else:
         patch_results.append({"patch_name": "embedding_model_path_cli_arg_guard", "patch_status": "pattern_missing_no_change"})
 
+    if "use_watermark.strip().lower()" in text:
+        patch_results.append({"patch_name": "embedding_use_watermark_bool_guard", "patch_status": "already_patched"})
+    elif EMBEDDING_USE_WATERMARK_PARSE_TARGET in text:
+        text = text.replace(EMBEDDING_USE_WATERMARK_PARSE_TARGET, EMBEDDING_USE_WATERMARK_PARSE_REPLACEMENT, 1)
+        patch_results.append({"patch_name": "embedding_use_watermark_bool_guard", "patch_status": "patched_runtime_copy"})
+    else:
+        patch_results.append({"patch_name": "embedding_use_watermark_bool_guard", "patch_status": "pattern_missing_no_change"})
+
+    if "_encoding_key, decoding_key = pickle.load(f)" in text:
+        patch_results.append({"patch_name": "embedding_clean_negative_decode_key_guard", "patch_status": "already_patched"})
+    elif EMBEDDING_CLEAN_BRANCH_TARGET in text:
+        text = text.replace(EMBEDDING_CLEAN_BRANCH_TARGET, EMBEDDING_CLEAN_BRANCH_REPLACEMENT, 1)
+        patch_results.append({"patch_name": "embedding_clean_negative_decode_key_guard", "patch_status": "patched_runtime_copy"})
+    else:
+        patch_results.append({
+            "patch_name": "embedding_clean_negative_decode_key_guard",
+            "patch_status": "pattern_missing_no_change",
+        })
+
     embedding_path.write_text(text, encoding="utf-8")
 
     temporal_path = runtime_source_dir / "temporal_tamper.py"
@@ -402,6 +460,17 @@ def _patch_videomark_runtime_source(runtime_source_dir: Path) -> dict[str, Any]:
     else:
         patch_results.append({
             "patch_name": "temporal_threshold_resample_cli_arg_guard",
+            "patch_status": "pattern_missing_no_change",
+        })
+
+    if "video_family = getattr(args, 'video_family', 'videomark')" in temporal_text:
+        patch_results.append({"patch_name": "temporal_video_family_guard", "patch_status": "already_patched"})
+    elif TEMPORAL_VIDEO_FAMILY_TARGET in temporal_text:
+        temporal_text = temporal_text.replace(TEMPORAL_VIDEO_FAMILY_TARGET, TEMPORAL_VIDEO_FAMILY_REPLACEMENT, 1)
+        patch_results.append({"patch_name": "temporal_video_family_guard", "patch_status": "patched_runtime_copy"})
+    else:
+        patch_results.append({
+            "patch_name": "temporal_video_family_guard",
             "patch_status": "pattern_missing_no_change",
         })
 
@@ -455,6 +524,36 @@ def _selected_runtime_records(run_root: Path, max_records: int | None) -> list[d
     if max_records is not None:
         return records[: int(max_records)]
     return records
+
+
+def _max_unique_seed_count_per_prompt(records: list[Mapping[str, Any]]) -> int:
+    """推断 VideoMark 官方 `prompt_variants` 应覆盖的 seed 数量。"""
+
+    seed_ids_by_prompt: dict[str, list[str]] = {}
+    for record in records:
+        prompt_id = str(record.get("prompt_id") or "").strip()
+        if not prompt_id:
+            continue
+        seed_id = str(record.get("seed_id") or "seed_0").strip() or "seed_0"
+        bucket = seed_ids_by_prompt.setdefault(prompt_id, [])
+        if seed_id not in bucket:
+            bucket.append(seed_id)
+    return max((len(seed_ids) for seed_ids in seed_ids_by_prompt.values()), default=1)
+
+
+def _seed_index_by_prompt(records: list[Mapping[str, Any]]) -> dict[str, dict[str, int]]:
+    """为每个 prompt 下的 seed 分配稳定 VideoMark item index。"""
+
+    mapping: dict[str, dict[str, int]] = {}
+    for record in records:
+        prompt_id = str(record.get("prompt_id") or "").strip()
+        if not prompt_id:
+            continue
+        seed_id = str(record.get("seed_id") or "seed_0").strip() or "seed_0"
+        prompt_mapping = mapping.setdefault(prompt_id, {})
+        if seed_id not in prompt_mapping:
+            prompt_mapping[seed_id] = len(prompt_mapping)
+    return mapping
 
 
 def _runtime_prompt_rows(
@@ -527,9 +626,15 @@ def _write_runtime_prompt_set(
     return manifest
 
 
-def _videomark_embedding_command(config: VideoMarkOfficialRuntimeConfig) -> list[str]:
+def _videomark_embedding_command(
+    config: VideoMarkOfficialRuntimeConfig,
+    *,
+    output_path: str | Path | None = None,
+    use_watermark: bool = True,
+) -> list[str]:
     """构造 VideoMark 官方 embedding_and_extraction.py 命令。"""
 
+    resolved_output_path = str(output_path or config.output_path)
     command = [
         sys.executable,
         "embedding_and_extraction.py",
@@ -541,7 +646,8 @@ def _videomark_embedding_command(config: VideoMarkOfficialRuntimeConfig) -> list
         f"--num_bit={int(config.num_bit)}",
         f"--num_inference_steps={int(config.num_inference_steps)}",
         f"--num_inversion_steps={int(config.num_inversion_steps)}",
-        f"--output_dir={config.output_path}",
+        f"--output_dir={resolved_output_path}",
+        f"--use_watermark={'true' if use_watermark else 'false'}",
         "--data_dir=data",
         "--keys_path=./keys",
     ]
@@ -550,9 +656,15 @@ def _videomark_embedding_command(config: VideoMarkOfficialRuntimeConfig) -> list
     return command
 
 
-def _videomark_temporal_tamper_command(config: VideoMarkOfficialRuntimeConfig) -> list[str]:
+def _videomark_temporal_tamper_command(
+    config: VideoMarkOfficialRuntimeConfig,
+    *,
+    output_path: str | Path | None = None,
+    video_family: str = "videomark",
+) -> list[str]:
     """构造 VideoMark 官方 temporal_tamper.py 命令。"""
 
+    resolved_output_path = str(output_path or config.output_path)
     command = [
         sys.executable,
         "temporal_tamper.py",
@@ -560,10 +672,11 @@ def _videomark_temporal_tamper_command(config: VideoMarkOfficialRuntimeConfig) -
         f"--model_name={config.model_name}",
         f"--num_bit={int(config.num_bit)}",
         f"--num_inversion_steps={int(config.num_inversion_steps)}",
-        f"--video_frames_dir={config.output_path}",
+        f"--video_frames_dir={resolved_output_path}",
         "--keys_path=./keys",
         f"--threshold={float(config.temporal_threshold)}",
         f"--resample_num={int(config.resample_num)}",
+        f"--video_family={video_family}",
     ]
     if config.model_path:
         command.append(f"--model_path={config.model_path}")
@@ -641,6 +754,12 @@ def _videomark_result_dir(output_path: Path, model_name: str, num_bit: int) -> P
     return output_path / "videomark" / model_name / f"{int(num_bit)}bit"
 
 
+def _videomark_clean_negative_result_dir(output_path: Path, model_name: str) -> Path:
+    """返回 VideoMark 无水印 clean negative 官方结果目录。"""
+
+    return output_path / "without_watermark" / model_name
+
+
 def _collect_metric_values(payload: Any, key_name: str) -> list[float]:
     """递归收集官方 JSON 中的指定数值字段。"""
 
@@ -674,6 +793,100 @@ def _collect_temporal_attack_names(payload: Any) -> list[str]:
         for item in payload:
             names.update(_collect_temporal_attack_names(item))
     return sorted(names)
+
+
+def _videomark_video_key_for_record(
+    record: Mapping[str, Any],
+    *,
+    prompt_rows: list[Mapping[str, Any]],
+    seed_indices: Mapping[str, Mapping[str, int]],
+) -> str:
+    """把 runtime comparison unit 映射为 VideoMark 官方 video key。"""
+
+    prompt_id = str(record.get("prompt_id") or "").strip()
+    prompt_index_by_id = {str(row.get("prompt_id")): index for index, row in enumerate(prompt_rows)}
+    prompt_text_by_id = {str(row.get("prompt_id")): str(row.get("prompt_text") or "") for row in prompt_rows}
+    if prompt_id not in prompt_index_by_id:
+        raise KeyError(f"videomark_prompt_id_missing_for_video_key:{prompt_id}")
+    prompt_text = prompt_text_by_id[prompt_id]
+    digest = hashlib.sha1(prompt_text.encode("utf-8")).hexdigest()[:12]
+    seed_id = str(record.get("seed_id") or "seed_0").strip() or "seed_0"
+    seed_index = int(seed_indices.get(prompt_id, {}).get(seed_id, 0))
+    return f"prompt_{prompt_index_by_id[prompt_id]:04d}_{digest}_{seed_index}"
+
+
+def _videomark_temporal_attack_key_for_runtime_attack(attack_name: str) -> str | None:
+    """把 SSTW runtime attack 名称映射到 VideoMark 官方 temporal attack 名称。"""
+
+    normalized = str(attack_name or "").strip().lower().replace("-", "_").replace(" ", "_")
+    if "insert" in normalized:
+        return "frame insert"
+    if "drop" in normalized or "delete" in normalized or "crop" in normalized:
+        return "frame drop"
+    if "swap" in normalized or "shuffle" in normalized or "permute" in normalized:
+        return "frame swap"
+    return None
+
+
+def _score_from_videomark_temporal_entry(
+    entry: Mapping[str, Any],
+    *,
+    result_path: Path,
+    video_key: str,
+    attack_name: str,
+) -> dict[str, Any]:
+    """从单个 VideoMark video key 下抽取与 runtime attack 对齐的分数。"""
+
+    official_attack_key = _videomark_temporal_attack_key_for_runtime_attack(attack_name)
+    selected_payload: Any = entry
+    assignment_policy = "per_prompt_seed_mean_over_videomark_temporal_attacks"
+    if official_attack_key and isinstance(entry.get(official_attack_key), Mapping):
+        selected_payload = entry[official_attack_key]
+        assignment_policy = "per_prompt_seed_runtime_attack_mapped_to_videomark_temporal_attack"
+    decode_values = _collect_metric_values(selected_payload, "decode_acc")
+    frame_values = _collect_metric_values(selected_payload, "frames_acc")
+    if not decode_values:
+        raise RuntimeError(f"videomark_temporal_decode_acc_missing:{result_path}:video_key={video_key}")
+    decode_mean = sum(decode_values) / len(decode_values)
+    frame_mean = sum(frame_values) / len(frame_values) if frame_values else None
+    result: dict[str, Any] = {
+        "bit_accuracy": round(float(decode_mean), 6),
+        "external_baseline_score": round(float(decode_mean), 6),
+        "raw_detector_score": round(float(decode_mean), 6),
+        "payload_bit_accuracy": round(float(decode_mean), 6),
+        "score_semantics": "payload_bit_accuracy_extraction_score",
+        "score_orientation": "higher_is_more_watermarked",
+        "official_decode_acc_count": len(decode_values),
+        "official_decode_acc_mean": round(float(decode_mean), 6),
+        "official_temporal_attack_names": _collect_temporal_attack_names(entry),
+        "official_result_key": video_key,
+        "official_temporal_attack_key": official_attack_key or "mean_over_available_temporal_attacks",
+        "official_score_assignment_policy": assignment_policy,
+    }
+    if frame_mean is not None:
+        result["official_frames_acc_count"] = len(frame_values)
+        result["official_frames_acc_mean"] = round(float(frame_mean), 6)
+    return result
+
+
+def _score_from_videomark_temporal_results_key(
+    temporal_results_path: Path,
+    *,
+    video_key: str,
+    attack_name: str,
+) -> dict[str, Any]:
+    """从 VideoMark 官方 temporal_results.json 中抽取单个 prompt / seed 分数。"""
+
+    payload = _read_json(temporal_results_path)
+    entry = payload.get(video_key)
+    if not isinstance(entry, Mapping):
+        raise KeyError(f"videomark_temporal_result_key_missing:{video_key}:json={temporal_results_path}")
+    return _score_from_videomark_temporal_entry(
+        entry,
+        result_path=temporal_results_path,
+        video_key=video_key,
+        attack_name=attack_name,
+    )
 
 
 def _score_from_videomark_temporal_results(temporal_results_path: Path) -> dict[str, Any]:
@@ -722,6 +935,8 @@ def write_videomark_official_bundle_records(
     model_name: str,
     max_records: int | None = None,
     clean_negative_results_json_path: str | Path | None = None,
+    prompt_suite_path: str | Path | None = None,
+    allow_prompt_id_fallback: bool = False,
 ) -> dict[str, Any]:
     """把 VideoMark 官方 temporal_results 输出转写为 official bundle records。
 
@@ -734,27 +949,63 @@ def write_videomark_official_bundle_records(
     bundle = Path(bundle_root)
     temporal_path = Path(temporal_results_json_path)
     video_path = Path(video_results_json_path)
-    score_payload = _score_from_videomark_temporal_results(temporal_path)
-    clean_negative_payload: dict[str, Any] = {}
     clean_path = Path(clean_negative_results_json_path) if clean_negative_results_json_path else None
-    if clean_path is not None and clean_path.is_file():
-        clean_score_payload = _score_from_videomark_temporal_results(clean_path)
-        clean_negative_payload = {
-            "external_baseline_clean_negative_score": clean_score_payload["raw_detector_score"],
-            "external_baseline_clean_negative_score_semantics": clean_score_payload["score_semantics"],
-            "external_baseline_clean_negative_video_path": str(clean_path),
-            "official_clean_negative_results_json_path": str(clean_path),
-            "official_clean_negative_score_assignment_policy": (
-                "aggregate_mean_over_videomark_official_clean_negative_results_json"
-            ),
-        }
     records = _selected_runtime_records(root, max_records)
+    prompt_rows: list[dict[str, Any]] = []
+    seed_indices: dict[str, dict[str, int]] = {}
+    if prompt_suite_path is not None:
+        prompt_rows = _runtime_prompt_rows(
+            records,
+            prompt_suite_path=Path(prompt_suite_path),
+            allow_prompt_id_fallback=allow_prompt_id_fallback,
+        )
+        seed_indices = _seed_index_by_prompt(records)
     generated = 0
     failures: list[dict[str, Any]] = []
     threshold = float(os.environ.get("SSTW_VIDEOMARK_DETECTION_THRESHOLD", str(DEFAULT_DETECTION_THRESHOLD)))
     for record in records:
         output_json_path = _bundle_record_path(bundle, record)
         try:
+            if prompt_suite_path is not None:
+                video_key = _videomark_video_key_for_record(
+                    record,
+                    prompt_rows=prompt_rows,
+                    seed_indices=seed_indices,
+                )
+                score_payload = _score_from_videomark_temporal_results_key(
+                    temporal_path,
+                    video_key=video_key,
+                    attack_name=str(record.get("attack_name") or ""),
+                )
+            else:
+                video_key = "mean_over_temporal_results"
+                score_payload = {
+                    **_score_from_videomark_temporal_results(temporal_path),
+                    "official_result_key": video_key,
+                    "official_score_assignment_policy": (
+                        "aggregate_mean_over_videomark_official_temporal_results_json"
+                    ),
+                }
+            clean_negative_payload: dict[str, Any] = {}
+            if clean_path is not None and clean_path.is_file():
+                if prompt_suite_path is not None:
+                    clean_score_payload = _score_from_videomark_temporal_results_key(
+                        clean_path,
+                        video_key=video_key,
+                        attack_name=str(record.get("attack_name") or ""),
+                    )
+                    clean_policy = "per_prompt_seed_videomark_clean_negative_temporal_results_json_key"
+                else:
+                    clean_score_payload = _score_from_videomark_temporal_results(clean_path)
+                    clean_policy = "aggregate_mean_over_videomark_official_clean_negative_results_json"
+                clean_negative_payload = {
+                    "external_baseline_clean_negative_score": clean_score_payload["raw_detector_score"],
+                    "external_baseline_clean_negative_score_semantics": clean_score_payload["score_semantics"],
+                    "external_baseline_clean_negative_video_path": str(clean_path),
+                    "official_clean_negative_results_json_path": str(clean_path),
+                    "official_clean_negative_result_key": video_key,
+                    "official_clean_negative_score_assignment_policy": clean_policy,
+                }
             payload = {
                 **score_payload,
                 **clean_negative_payload,
@@ -765,8 +1016,8 @@ def write_videomark_official_bundle_records(
                 "external_baseline_generation_model_id": model_name,
                 "external_baseline_official_execution_mode": "videomark_embedding_extraction_temporal_tamper",
                 "official_output_naming_policy": "safe_prompt_digest_video_id_v1",
-                "official_score_assignment_policy": "aggregate_mean_over_videomark_official_temporal_results_json",
-                "attack_protocol_status": "videomark_official_temporal_tamper_score_reused_for_runtime_attack_anchor",
+                "official_score_assignment_policy": score_payload["official_score_assignment_policy"],
+                "attack_protocol_status": "videomark_official_temporal_attack_mapped_to_runtime_attack_anchor",
                 "official_temporal_results_json_path": str(temporal_path),
                 "official_video_results_json_path": str(video_path),
                 "official_execution_manifest_path": str(manifest_path),
@@ -805,10 +1056,16 @@ def run_videomark_official_runtime(config: VideoMarkOfficialRuntimeConfig) -> di
     source_dir = Path(config.source_dir)
     output_root = Path(config.output_root)
     output_path = Path(config.output_path)
+    clean_negative_output_path = (
+        Path(config.clean_negative_output_path)
+        if config.clean_negative_output_path
+        else bundle_root / BASELINE_ID / "official_clean_negative_outputs_safe_prompt_digest_v1"
+    )
     prompt_suite_path = Path(config.prompt_suite_path)
     output_root.mkdir(parents=True, exist_ok=True)
     bundle_root.mkdir(parents=True, exist_ok=True)
     output_path.mkdir(parents=True, exist_ok=True)
+    clean_negative_output_path.mkdir(parents=True, exist_ok=True)
 
     source_audit = _ensure_source_ready(source_dir)
     records = _selected_runtime_records(run_root, config.max_records)
@@ -836,8 +1093,21 @@ def run_videomark_official_runtime(config: VideoMarkOfficialRuntimeConfig) -> di
     result_dir = _videomark_result_dir(output_path, config.model_name, config.num_bit)
     video_results_path = result_dir / "video_results.json"
     temporal_results_path = result_dir / "temporal_results.json"
+    clean_negative_result_dir = _videomark_clean_negative_result_dir(clean_negative_output_path, config.model_name)
+    clean_negative_video_results_path = clean_negative_result_dir / "video_results.json"
+    clean_negative_temporal_results_path = clean_negative_result_dir / "temporal_results.json"
     embedding_command = _videomark_embedding_command(config)
     temporal_tamper_command = _videomark_temporal_tamper_command(config)
+    clean_negative_embedding_command = _videomark_embedding_command(
+        config,
+        output_path=clean_negative_output_path,
+        use_watermark=False,
+    )
+    clean_negative_temporal_tamper_command = _videomark_temporal_tamper_command(
+        config,
+        output_path=clean_negative_output_path,
+        video_family="without_watermark",
+    )
     command_results: list[dict[str, Any]] = []
     execution_status = "dry_run_planned" if config.dry_run else "executed"
     execution_failure_reason = ""
@@ -868,6 +1138,34 @@ def run_videomark_official_runtime(config: VideoMarkOfficialRuntimeConfig) -> di
                 execution_failure_reason = (
                     f"videomark_official_temporal_tamper_failed:{temporal_result['return_code']}:{temporal_result['stderr_tail']}"
                 )
+        if not execution_failure_reason and config.generate_clean_negative_reference:
+            clean_embedding_result = _run_videomark_command(
+                clean_negative_embedding_command,
+                cwd=runtime_source_dir,
+                log_path=output_root / "logs" / "videomark_clean_negative_embedding_and_extraction",
+                timeout_seconds=float(config.timeout_seconds),
+                prompt_variants=int(config.prompt_variants),
+            )
+            command_results.append(clean_embedding_result)
+            if int(clean_embedding_result["return_code"]) != 0:
+                execution_failure_reason = (
+                    "videomark_official_clean_negative_embedding_failed:"
+                    f"{clean_embedding_result['return_code']}:{clean_embedding_result['stderr_tail']}"
+                )
+        if not execution_failure_reason and config.generate_clean_negative_reference:
+            clean_temporal_result = _run_videomark_command(
+                clean_negative_temporal_tamper_command,
+                cwd=runtime_source_dir,
+                log_path=output_root / "logs" / "videomark_clean_negative_temporal_tamper",
+                timeout_seconds=float(config.timeout_seconds),
+                prompt_variants=int(config.prompt_variants),
+            )
+            command_results.append(clean_temporal_result)
+            if int(clean_temporal_result["return_code"]) != 0:
+                execution_failure_reason = (
+                    "videomark_official_clean_negative_temporal_tamper_failed:"
+                    f"{clean_temporal_result['return_code']}:{clean_temporal_result['stderr_tail']}"
+                )
 
     bundle_result = {
         "input_runtime_detection_record_count": len(records),
@@ -879,16 +1177,23 @@ def run_videomark_official_runtime(config: VideoMarkOfficialRuntimeConfig) -> di
         if temporal_results_path.is_file():
             os.environ["SSTW_VIDEOMARK_TEMPORAL_RESULTS_JSON"] = str(temporal_results_path)
             clean_negative_results_path = os.environ.get("SSTW_VIDEOMARK_CLEAN_NEGATIVE_RESULTS_JSON", "").strip() or None
-            bundle_result = write_videomark_official_bundle_records(
-                run_root=run_root,
-                bundle_root=bundle_root,
-                manifest_path=manifest_path,
-                temporal_results_json_path=temporal_results_path,
-                video_results_json_path=video_results_path,
-                model_name=config.model_name,
-                max_records=config.max_records,
-                clean_negative_results_json_path=clean_negative_results_path,
-            )
+            if clean_negative_results_path is None and clean_negative_temporal_results_path.is_file():
+                clean_negative_results_path = str(clean_negative_temporal_results_path)
+            if config.generate_clean_negative_reference and clean_negative_results_path is None:
+                execution_failure_reason = f"videomark_clean_negative_temporal_results_json_missing:{clean_negative_temporal_results_path}"
+            if not execution_failure_reason:
+                bundle_result = write_videomark_official_bundle_records(
+                    run_root=run_root,
+                    bundle_root=bundle_root,
+                    manifest_path=manifest_path,
+                    temporal_results_json_path=temporal_results_path,
+                    video_results_json_path=video_results_path,
+                    model_name=config.model_name,
+                    max_records=config.max_records,
+                    clean_negative_results_json_path=clean_negative_results_path,
+                    prompt_suite_path=prompt_suite_path,
+                    allow_prompt_id_fallback=config.allow_prompt_id_fallback,
+                )
         else:
             execution_failure_reason = f"videomark_temporal_results_json_missing:{temporal_results_path}"
     if execution_failure_reason:
@@ -918,6 +1223,7 @@ def run_videomark_official_runtime(config: VideoMarkOfficialRuntimeConfig) -> di
         "runtime_source_dir": str(runtime_source_dir),
         "official_runtime_output_root": str(output_root),
         "official_output_path": str(output_path),
+        "official_clean_negative_output_path": str(clean_negative_output_path),
         "official_repository_url": "https://github.com/KYRIE-LI11/VideoMark",
         "official_execution_mode": "videomark_embedding_extraction_temporal_tamper",
         "official_output_naming_policy": "safe_prompt_digest_video_id_v1",
@@ -930,10 +1236,15 @@ def run_videomark_official_runtime(config: VideoMarkOfficialRuntimeConfig) -> di
         "prompt_manifest": prompt_manifest,
         "embedding_command": embedding_command,
         "temporal_tamper_command": temporal_tamper_command,
+        "clean_negative_embedding_command": clean_negative_embedding_command,
+        "clean_negative_temporal_tamper_command": clean_negative_temporal_tamper_command,
         "command_results": command_results,
         "video_results_json_path": str(video_results_path),
         "temporal_results_json_path": str(temporal_results_path),
+        "clean_negative_video_results_json_path": str(clean_negative_video_results_path),
+        "clean_negative_temporal_results_json_path": str(clean_negative_temporal_results_path),
         "temporal_results_json_exists": temporal_results_path.is_file(),
+        "clean_negative_temporal_results_json_exists": clean_negative_temporal_results_path.is_file(),
         "input_runtime_detection_record_count": len(records),
         "generated_bundle_record_count": int(bundle_result["generated_bundle_record_count"]),
         "failed_bundle_record_count": int(bundle_result["failed_bundle_record_count"]),
@@ -944,7 +1255,10 @@ def run_videomark_official_runtime(config: VideoMarkOfficialRuntimeConfig) -> di
     _write_json(output_root / "videomark_official_execution_manifest.json", manifest)
     if temporal_results_path.is_file():
         os.environ["SSTW_VIDEOMARK_TEMPORAL_RESULTS_JSON"] = str(temporal_results_path)
+    if clean_negative_temporal_results_path.is_file():
+        os.environ["SSTW_VIDEOMARK_CLEAN_NEGATIVE_RESULTS_JSON"] = str(clean_negative_temporal_results_path)
     os.environ["SSTW_VIDEOMARK_OFFICIAL_OUTPUT_DIR"] = str(output_path)
+    os.environ["SSTW_VIDEOMARK_CLEAN_NEGATIVE_OFFICIAL_OUTPUT_DIR"] = str(clean_negative_output_path)
     return manifest
 
 

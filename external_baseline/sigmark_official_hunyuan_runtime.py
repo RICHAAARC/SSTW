@@ -82,6 +82,7 @@ class SigmarkOfficialHunyuanRuntimeConfig:
     prompt_set: str = DEFAULT_PROMPT_SET
     runtime_dimension: str = DEFAULT_RUNTIME_DIMENSION
     output_path: str = ""
+    clean_negative_output_path: str = ""
     max_records: int | None = None
     num_videos_per_prompt: int = 1
     num_videos_per_prompt_diversity: int = 1
@@ -101,6 +102,7 @@ class SigmarkOfficialHunyuanRuntimeConfig:
     nproc_per_node: int = 1
     small_scale_test: int = -1
     auto_download_hf_model: bool = False
+    generate_clean_negative_reference: bool = True
     dry_run: bool = False
     timeout_seconds: float = 0.0
     allow_prompt_id_fallback: bool = False
@@ -315,8 +317,18 @@ def build_default_sigmark_official_hunyuan_config_from_env(
     output_path = os.environ.get("SSTW_SIGMARK_OFFICIAL_OUTPUT_DIR", "").strip()
     if not output_path:
         output_path = str(Path(bundle_root) / BASELINE_ID / "official_hunyuan_outputs")
+    clean_negative_output_path = os.environ.get("SSTW_SIGMARK_CLEAN_NEGATIVE_OFFICIAL_OUTPUT_DIR", "").strip()
+    if not clean_negative_output_path:
+        clean_negative_output_path = str(Path(bundle_root) / BASELINE_ID / "official_hunyuan_clean_negative_outputs")
     max_records_text = os.environ.get("SSTW_SIGMARK_REFERENCE_MAX_RECORDS", "").strip()
     effective_max_records = int(max_records_text) if max_records_text else max_records
+    selected_records = _selected_runtime_records(root, effective_max_records) if root.exists() else []
+    inferred_seed_count = _max_unique_seed_count_per_prompt(selected_records) if selected_records else 1
+    num_videos_per_prompt = _env_int("SSTW_SIGMARK_NUM_VIDEOS_PER_PROMPT", inferred_seed_count)
+    num_videos_per_prompt_diversity = _env_int(
+        "SSTW_SIGMARK_NUM_VIDEOS_PER_PROMPT_DIVERSITY",
+        num_videos_per_prompt,
+    )
     timeout = _env_float("SSTW_SIGMARK_OFFICIAL_TIMEOUT_SECONDS", 0.0)
     return SigmarkOfficialHunyuanRuntimeConfig(
         run_root=str(root),
@@ -332,9 +344,10 @@ def build_default_sigmark_official_hunyuan_config_from_env(
         runtime_dimension=os.environ.get("SSTW_SIGMARK_RUNTIME_DIMENSION", DEFAULT_RUNTIME_DIMENSION).strip()
         or DEFAULT_RUNTIME_DIMENSION,
         output_path=output_path,
+        clean_negative_output_path=clean_negative_output_path,
         max_records=effective_max_records,
-        num_videos_per_prompt=_env_int("SSTW_SIGMARK_NUM_VIDEOS_PER_PROMPT", 1),
-        num_videos_per_prompt_diversity=_env_int("SSTW_SIGMARK_NUM_VIDEOS_PER_PROMPT_DIVERSITY", 1),
+        num_videos_per_prompt=num_videos_per_prompt,
+        num_videos_per_prompt_diversity=num_videos_per_prompt_diversity,
         batch_size=_env_int("SSTW_SIGMARK_BATCH_SIZE", 1),
         width=_env_int("SSTW_SIGMARK_WIDTH", DEFAULT_WIDTH),
         height=_env_int("SSTW_SIGMARK_HEIGHT", DEFAULT_HEIGHT),
@@ -351,6 +364,7 @@ def build_default_sigmark_official_hunyuan_config_from_env(
         nproc_per_node=_env_int("SSTW_SIGMARK_NPROC_PER_NODE", 1),
         small_scale_test=_env_int("SSTW_SIGMARK_SMALL_SCALE_TEST", -1),
         auto_download_hf_model=_env_bool("SSTW_SIGMARK_AUTO_DOWNLOAD_HF_MODEL", False),
+        generate_clean_negative_reference=_env_bool("SSTW_SIGMARK_GENERATE_CLEAN_NEGATIVE_REFERENCE", True),
         dry_run=_env_bool("SSTW_SIGMARK_OFFICIAL_HUNYUAN_DRY_RUN", False),
         timeout_seconds=timeout,
         allow_prompt_id_fallback=_env_bool("SSTW_SIGMARK_ALLOW_PROMPT_ID_FALLBACK", False),
@@ -488,6 +502,42 @@ def _selected_runtime_records(run_root: Path, max_records: int | None) -> list[d
     return records
 
 
+def _max_unique_seed_count_per_prompt(records: list[Mapping[str, Any]]) -> int:
+    """推断官方每个 prompt 需要生成的 seed 变体数量。
+
+    通用工程写法是从 runtime records 中读取 prompt / seed 锚点。项目特定考虑是
+    SIGMark 官方 prompt set 只能用同一 prompt 下的 `sample_name` 序号区分多个
+    视频, 因此这里把同一 prompt 的唯一 seed 数量转换为 `num_videos_per_prompt`。
+    这样 validation_scale 不需要在 Notebook 中手工填写样本规模参数。
+    """
+
+    seed_ids_by_prompt: dict[str, list[str]] = {}
+    for record in records:
+        prompt_id = str(record.get("prompt_id") or "").strip()
+        if not prompt_id:
+            continue
+        seed_id = str(record.get("seed_id") or "seed_0").strip() or "seed_0"
+        bucket = seed_ids_by_prompt.setdefault(prompt_id, [])
+        if seed_id not in bucket:
+            bucket.append(seed_id)
+    return max((len(seed_ids) for seed_ids in seed_ids_by_prompt.values()), default=1)
+
+
+def _seed_index_by_prompt(records: list[Mapping[str, Any]]) -> dict[str, dict[str, int]]:
+    """为每个 prompt 下的 seed 分配稳定官方 sample index。"""
+
+    mapping: dict[str, dict[str, int]] = {}
+    for record in records:
+        prompt_id = str(record.get("prompt_id") or "").strip()
+        if not prompt_id:
+            continue
+        seed_id = str(record.get("seed_id") or "seed_0").strip() or "seed_0"
+        prompt_mapping = mapping.setdefault(prompt_id, {})
+        if seed_id not in prompt_mapping:
+            prompt_mapping[seed_id] = len(prompt_mapping)
+    return mapping
+
+
 def _runtime_prompt_rows(
     records: list[Mapping[str, Any]],
     *,
@@ -616,19 +666,27 @@ def _ensure_model_available(config: SigmarkOfficialHunyuanRuntimeConfig, *, outp
     return manifest
 
 
-def _sigmark_command(config: SigmarkOfficialHunyuanRuntimeConfig, *, runtime_source_dir: Path, mode: str) -> list[str]:
+def _sigmark_command(
+    config: SigmarkOfficialHunyuanRuntimeConfig,
+    *,
+    runtime_source_dir: Path,
+    mode: str,
+    watermark_method: str = "sigmark",
+    output_path: str | Path | None = None,
+) -> list[str]:
     """构造 SIGMark 官方 main.py 命令。"""
 
     launcher = [sys.executable, "main.py"]
     if int(config.nproc_per_node) > 1:
         launcher = ["torchrun", f"--nproc_per_node={int(config.nproc_per_node)}", "main.py"]
+    resolved_output_path = str(output_path or config.output_path)
     return [
         *launcher,
         f"--mode={mode}",
         f"--model_base_path={config.model_base_path}",
         f"--model_name={config.model_name}",
         f"--prompt_set={config.prompt_set}",
-        "--watermark_method=sigmark",
+        f"--watermark_method={watermark_method}",
         f"--ch_factor={int(config.ch_factor)}",
         f"--hw_factor={int(config.hw_factor)}",
         f"--fr_factor={int(config.fr_factor)}",
@@ -643,7 +701,7 @@ def _sigmark_command(config: SigmarkOfficialHunyuanRuntimeConfig, *, runtime_sou
         f"--num_videos_per_prompt_diversity={int(config.num_videos_per_prompt_diversity)}",
         "--num_prompts_diversity=1",
         f"--small_scale_test={int(config.small_scale_test)}",
-        f"--output_path={config.output_path}",
+        f"--output_path={resolved_output_path}",
         f"--precision={normalize_sigmark_precision(config.precision)}",
         f"--quant_text_encoder={int(config.quant_text_encoder)}",
         f"--seed={int(config.seed)}",
@@ -688,6 +746,25 @@ def _find_bit_accuracy_npz(output_path: Path) -> list[Path]:
     return [path for path in candidates if path.is_file()]
 
 
+def _score_from_sigmark_values(values: list[float], *, npz_keys: list[str], npz_path: Path) -> dict[str, Any]:
+    """把 SIGMark 官方 bit accuracy 数值转换为统一 score payload。"""
+
+    if not values:
+        raise RuntimeError(f"sigmark_bit_accuracy_npz_empty:{npz_path}")
+    mean_score = sum(values) / len(values)
+    return {
+        "bit_accuracy": round(float(mean_score), 6),
+        "external_baseline_score": round(float(mean_score), 6),
+        "raw_detector_score": round(float(mean_score), 6),
+        "payload_bit_accuracy": round(float(mean_score), 6),
+        "score_semantics": "payload_bit_accuracy_extraction_score",
+        "score_orientation": "higher_is_more_watermarked",
+        "official_npz_key_count": len(npz_keys),
+        "official_npz_value_count": len(values),
+        "official_npz_keys_sample": npz_keys[:10],
+    }
+
+
 def _score_from_sigmark_bit_accuracy_npz(npz_path: Path) -> dict[str, Any]:
     """从 SIGMark 官方 bit_accuracy npz 中计算聚合 score。"""
 
@@ -702,19 +779,84 @@ def _score_from_sigmark_bit_accuracy_npz(npz_path: Path) -> dict[str, Any]:
         if getattr(array, "size", 0) == 0:
             continue
         values.extend(float(item) for item in array.reshape(-1))
-    if not values:
-        raise RuntimeError(f"sigmark_bit_accuracy_npz_empty:{npz_path}")
-    mean_score = sum(values) / len(values)
+    return _score_from_sigmark_values(values, npz_keys=npz_keys, npz_path=npz_path)
+
+
+def _score_from_sigmark_bit_accuracy_npz_key(npz_path: Path, result_key: str) -> dict[str, Any]:
+    """从 SIGMark 官方 bit_accuracy npz 中读取单个 prompt / seed 对应的分数。"""
+
+    import numpy as np
+
+    payload = np.load(npz_path, allow_pickle=True)
+    if result_key not in payload.files:
+        raise KeyError(f"sigmark_bit_accuracy_result_key_missing:{result_key}:npz={npz_path}")
+    array = payload[result_key]
+    values = [float(item) for item in np.asarray(array, dtype=float).reshape(-1)]
+    result = _score_from_sigmark_values(values, npz_keys=[result_key], npz_path=npz_path)
+    result["official_result_key"] = result_key
+    result["official_score_assignment_policy"] = "per_prompt_seed_sigmark_bit_accuracy_npz_key"
+    return result
+
+
+def _sigmark_result_key_for_record(
+    record: Mapping[str, Any],
+    *,
+    prompt_text_by_id: Mapping[str, str],
+    seed_indices: Mapping[str, Mapping[str, int]],
+    runtime_dimension: str,
+    allow_prompt_id_fallback: bool,
+) -> str:
+    """把 runtime comparison unit 映射为 SIGMark 官方 npz key。
+
+    SIGMark 官方 VBench prompt loader 使用 `dimension/sample_name` 作为 npz key。
+    本项目固定 `dimension` 为 runtime 专用维度, 并用同一 prompt 下的 sample 序号
+    表示 seed anchor, 从而避免把多个 seed 的结果压成一个聚合分数。
+    """
+
+    prompt_id = str(record.get("prompt_id") or "").strip()
+    if not prompt_id:
+        raise KeyError("sigmark_prompt_id_missing_for_result_key")
+    prompt_text = str(prompt_text_by_id.get(prompt_id) or "").strip()
+    if not prompt_text and allow_prompt_id_fallback:
+        prompt_text = prompt_id
+    if not prompt_text:
+        raise KeyError(f"sigmark_prompt_text_missing_for_result_key:{prompt_id}")
+    seed_id = str(record.get("seed_id") or "seed_0").strip() or "seed_0"
+    seed_index = int(seed_indices.get(prompt_id, {}).get(seed_id, 0))
+    return f"{runtime_dimension}/{prompt_text[:180]}-{seed_index}"
+
+
+def _copy_sigmark_state_for_clean_negative(
+    *,
+    positive_output_path: Path,
+    clean_output_path: Path,
+) -> dict[str, Any]:
+    """把 SIGMark 正样本的 key 与 message 状态复制到 clean negative 输出目录。
+
+    clean negative 视频由官方 `watermark_method=none` 生成, 但检测必须使用同一个
+    SIGMark decoder key 和同一组目标 message。否则得到的不是该方法自身 detector
+    在 clean negative 分布上的分数。该函数只复制官方 gen 阶段已经生成的
+    `maintained_info` 与 `gt_watermark_messages` 文件, 不伪造检测结果。
+    """
+
+    clean_output_path.mkdir(parents=True, exist_ok=True)
+    copied: list[dict[str, str]] = []
+    missing: list[str] = []
+    for pattern in ("*-sigmark-*-maintained_info.pkl", "*-sigmark-*-gt_watermark_messages.npz"):
+        matches = sorted(path for path in positive_output_path.glob(pattern) if path.is_file())
+        if not matches:
+            missing.append(pattern)
+            continue
+        for source in matches:
+            destination = clean_output_path / source.name
+            shutil.copy2(source, destination)
+            copied.append({"source_path": str(source), "destination_path": str(destination)})
+    if missing:
+        raise FileNotFoundError(f"sigmark_clean_negative_reference_state_missing:{missing}:source={positive_output_path}")
     return {
-        "bit_accuracy": round(float(mean_score), 6),
-        "external_baseline_score": round(float(mean_score), 6),
-        "raw_detector_score": round(float(mean_score), 6),
-        "payload_bit_accuracy": round(float(mean_score), 6),
-        "score_semantics": "payload_bit_accuracy_extraction_score",
-        "score_orientation": "higher_is_more_watermarked",
-        "official_npz_key_count": len(npz_keys),
-        "official_npz_value_count": len(values),
-        "official_npz_keys_sample": npz_keys[:10],
+        "clean_negative_reference_state_status": "copied",
+        "copied_reference_state_count": len(copied),
+        "copied_reference_state_files": copied,
     }
 
 
@@ -736,6 +878,9 @@ def write_sigmark_official_bundle_records(
     model_name: str,
     max_records: int | None = None,
     clean_negative_bit_accuracy_npz_path: str | Path | None = None,
+    prompt_suite_path: str | Path | None = None,
+    runtime_dimension: str = DEFAULT_RUNTIME_DIMENSION,
+    allow_prompt_id_fallback: bool = False,
 ) -> dict[str, Any]:
     """把 SIGMark 官方 extract 输出转写为 official bundle records。
 
@@ -747,27 +892,51 @@ def write_sigmark_official_bundle_records(
     root = Path(run_root)
     bundle = Path(bundle_root)
     npz_path = Path(bit_accuracy_npz_path)
-    score_payload = _score_from_sigmark_bit_accuracy_npz(npz_path)
-    clean_negative_payload: dict[str, Any] = {}
     clean_npz_path = Path(clean_negative_bit_accuracy_npz_path) if clean_negative_bit_accuracy_npz_path else None
-    if clean_npz_path is not None and clean_npz_path.is_file():
-        clean_score_payload = _score_from_sigmark_bit_accuracy_npz(clean_npz_path)
-        clean_negative_payload = {
-            "external_baseline_clean_negative_score": clean_score_payload["raw_detector_score"],
-            "external_baseline_clean_negative_score_semantics": clean_score_payload["score_semantics"],
-            "external_baseline_clean_negative_video_path": str(clean_npz_path),
-            "official_clean_negative_bit_accuracy_npz_path": str(clean_npz_path),
-            "official_clean_negative_score_assignment_policy": (
-                "aggregate_mean_over_sigmark_official_clean_negative_bit_accuracy_npz"
-            ),
-        }
     records = _selected_runtime_records(root, max_records)
+    prompt_text_by_id: dict[str, str] = {}
+    seed_indices: dict[str, dict[str, int]] = {}
+    if prompt_suite_path is not None:
+        prompt_text_by_id = _prompt_rows_from_suite(Path(prompt_suite_path))
+        seed_indices = _seed_index_by_prompt(records)
     generated = 0
     failures: list[dict[str, Any]] = []
     threshold = float(os.environ.get("SSTW_SIGMARK_DETECTION_THRESHOLD", str(DEFAULT_DETECTION_THRESHOLD)))
     for record in records:
         output_json_path = _bundle_record_path(bundle, record)
         try:
+            if prompt_suite_path is not None:
+                result_key = _sigmark_result_key_for_record(
+                    record,
+                    prompt_text_by_id=prompt_text_by_id,
+                    seed_indices=seed_indices,
+                    runtime_dimension=runtime_dimension,
+                    allow_prompt_id_fallback=allow_prompt_id_fallback,
+                )
+                score_payload = _score_from_sigmark_bit_accuracy_npz_key(npz_path, result_key)
+            else:
+                result_key = "mean_over_npz_entries"
+                score_payload = {
+                    **_score_from_sigmark_bit_accuracy_npz(npz_path),
+                    "official_result_key": result_key,
+                    "official_score_assignment_policy": "aggregate_mean_over_sigmark_official_bit_accuracy_npz",
+                }
+            clean_negative_payload: dict[str, Any] = {}
+            if clean_npz_path is not None and clean_npz_path.is_file():
+                if prompt_suite_path is not None:
+                    clean_score_payload = _score_from_sigmark_bit_accuracy_npz_key(clean_npz_path, result_key)
+                    clean_policy = "per_prompt_seed_sigmark_clean_negative_bit_accuracy_npz_key"
+                else:
+                    clean_score_payload = _score_from_sigmark_bit_accuracy_npz(clean_npz_path)
+                    clean_policy = "aggregate_mean_over_sigmark_official_clean_negative_bit_accuracy_npz"
+                clean_negative_payload = {
+                    "external_baseline_clean_negative_score": clean_score_payload["raw_detector_score"],
+                    "external_baseline_clean_negative_score_semantics": clean_score_payload["score_semantics"],
+                    "external_baseline_clean_negative_video_path": str(clean_npz_path),
+                    "official_clean_negative_bit_accuracy_npz_path": str(clean_npz_path),
+                    "official_clean_negative_result_key": result_key,
+                    "official_clean_negative_score_assignment_policy": clean_policy,
+                }
             payload = {
                 **score_payload,
                 **clean_negative_payload,
@@ -777,7 +946,7 @@ def write_sigmark_official_bundle_records(
                 "official_baseline_id": BASELINE_ID,
                 "external_baseline_generation_model_id": model_name,
                 "external_baseline_official_execution_mode": "sigmark_hunyuan_gen_extract",
-                "official_score_assignment_policy": "aggregate_mean_over_sigmark_official_bit_accuracy_npz",
+                "official_score_assignment_policy": score_payload["official_score_assignment_policy"],
                 "attack_protocol_status": "sigmark_official_clean_extract_score_reused_for_runtime_attack_anchor",
                 "official_bit_accuracy_npz_path": str(npz_path),
                 "official_execution_manifest_path": str(manifest_path),
@@ -816,10 +985,16 @@ def run_sigmark_official_hunyuan_runtime(config: SigmarkOfficialHunyuanRuntimeCo
     source_dir = Path(config.source_dir)
     output_root = Path(config.output_root)
     output_path = Path(config.output_path)
+    clean_negative_output_path = (
+        Path(config.clean_negative_output_path)
+        if config.clean_negative_output_path
+        else bundle_root / BASELINE_ID / "official_hunyuan_clean_negative_outputs"
+    )
     prompt_suite_path = Path(config.prompt_suite_path)
     output_root.mkdir(parents=True, exist_ok=True)
     bundle_root.mkdir(parents=True, exist_ok=True)
     output_path.mkdir(parents=True, exist_ok=True)
+    clean_negative_output_path.mkdir(parents=True, exist_ok=True)
 
     source_audit = _ensure_source_ready(source_dir)
     geometry_manifest = validate_sigmark_watermark_geometry(
@@ -868,8 +1043,26 @@ def run_sigmark_official_hunyuan_runtime(config: SigmarkOfficialHunyuanRuntimeCo
 
     gen_command = _sigmark_command(config, runtime_source_dir=runtime_source_dir, mode="gen")
     extract_command = _sigmark_command(config, runtime_source_dir=runtime_source_dir, mode="extract")
+    clean_negative_gen_command = _sigmark_command(
+        config,
+        runtime_source_dir=runtime_source_dir,
+        mode="gen",
+        watermark_method="none",
+        output_path=clean_negative_output_path,
+    )
+    clean_negative_extract_command = _sigmark_command(
+        config,
+        runtime_source_dir=runtime_source_dir,
+        mode="extract",
+        watermark_method="sigmark",
+        output_path=clean_negative_output_path,
+    )
     command_results: list[dict[str, Any]] = []
     execution_status = "dry_run_planned" if config.dry_run else "executed"
+    clean_negative_reference_state_manifest: dict[str, Any] = {
+        "clean_negative_reference_state_status": "not_run",
+        "reason": "dry_run_or_positive_execution_not_finished",
+    }
     if not config.dry_run and not execution_failure_reason:
         gen_result = _run_sigmark_command(
             gen_command,
@@ -894,9 +1087,48 @@ def run_sigmark_official_hunyuan_runtime(config: SigmarkOfficialHunyuanRuntimeCo
                 execution_failure_reason = (
                     f"sigmark_official_extract_failed:{extract_result['return_code']}:{extract_result['stderr_tail']}"
                 )
+        if not execution_failure_reason and config.generate_clean_negative_reference:
+            clean_gen_result = _run_sigmark_command(
+                clean_negative_gen_command,
+                cwd=runtime_source_dir,
+                log_path=output_root / "logs" / "sigmark_clean_negative_gen",
+                timeout_seconds=float(config.timeout_seconds),
+            )
+            command_results.append(clean_gen_result)
+            if int(clean_gen_result["return_code"]) != 0:
+                execution_failure_reason = (
+                    "sigmark_official_clean_negative_gen_failed:"
+                    f"{clean_gen_result['return_code']}:{clean_gen_result['stderr_tail']}"
+                )
+        if not execution_failure_reason and config.generate_clean_negative_reference:
+            try:
+                clean_negative_reference_state_manifest = _copy_sigmark_state_for_clean_negative(
+                    positive_output_path=output_path,
+                    clean_output_path=clean_negative_output_path,
+                )
+            except Exception as exc:  # noqa: BLE001 - 需要写入 governed failure artifact。
+                execution_failure_reason = f"sigmark_clean_negative_reference_state_copy_failed:{exc}"
+        if not execution_failure_reason and config.generate_clean_negative_reference:
+            clean_extract_result = _run_sigmark_command(
+                clean_negative_extract_command,
+                cwd=runtime_source_dir,
+                log_path=output_root / "logs" / "sigmark_clean_negative_extract",
+                timeout_seconds=float(config.timeout_seconds),
+            )
+            command_results.append(clean_extract_result)
+            if int(clean_extract_result["return_code"]) != 0:
+                execution_failure_reason = (
+                    "sigmark_official_clean_negative_extract_failed:"
+                    f"{clean_extract_result['return_code']}:{clean_extract_result['stderr_tail']}"
+                )
 
     manifest_path = bundle_root / BASELINE_ID / "official_reference_execution_manifest.json"
     bit_accuracy_candidates = _find_bit_accuracy_npz(output_path) if not config.dry_run and not execution_failure_reason else []
+    clean_negative_bit_accuracy_candidates = (
+        _find_bit_accuracy_npz(clean_negative_output_path)
+        if not config.dry_run and not execution_failure_reason and config.generate_clean_negative_reference
+        else []
+    )
     bundle_result = {
         "input_runtime_detection_record_count": len(records),
         "generated_bundle_record_count": 0,
@@ -904,18 +1136,28 @@ def run_sigmark_official_hunyuan_runtime(config: SigmarkOfficialHunyuanRuntimeCo
         "failures": [],
     }
     selected_bit_accuracy_path = ""
+    selected_clean_negative_bit_accuracy_path = ""
     if bit_accuracy_candidates:
         selected_bit_accuracy_path = str(bit_accuracy_candidates[-1])
         clean_negative_npz_path = os.environ.get("SSTW_SIGMARK_CLEAN_NEGATIVE_BIT_ACCURACY_NPZ", "").strip() or None
-        bundle_result = write_sigmark_official_bundle_records(
-            run_root=run_root,
-            bundle_root=bundle_root,
-            manifest_path=manifest_path,
-            bit_accuracy_npz_path=selected_bit_accuracy_path,
-            model_name=config.model_name,
-            max_records=config.max_records,
-            clean_negative_bit_accuracy_npz_path=clean_negative_npz_path,
-        )
+        if clean_negative_npz_path is None and clean_negative_bit_accuracy_candidates:
+            clean_negative_npz_path = str(clean_negative_bit_accuracy_candidates[-1])
+        if config.generate_clean_negative_reference and clean_negative_npz_path is None:
+            execution_failure_reason = f"sigmark_clean_negative_bit_accuracy_npz_missing:{clean_negative_output_path}"
+        selected_clean_negative_bit_accuracy_path = clean_negative_npz_path or ""
+        if not execution_failure_reason:
+            bundle_result = write_sigmark_official_bundle_records(
+                run_root=run_root,
+                bundle_root=bundle_root,
+                manifest_path=manifest_path,
+                bit_accuracy_npz_path=selected_bit_accuracy_path,
+                model_name=config.model_name,
+                max_records=config.max_records,
+                clean_negative_bit_accuracy_npz_path=clean_negative_npz_path,
+                prompt_suite_path=prompt_suite_path,
+                runtime_dimension=config.runtime_dimension,
+                allow_prompt_id_fallback=config.allow_prompt_id_fallback,
+            )
     elif not config.dry_run and not execution_failure_reason:
         execution_failure_reason = f"sigmark_bit_accuracy_npz_missing:{output_path}"
     if execution_failure_reason:
@@ -945,6 +1187,7 @@ def run_sigmark_official_hunyuan_runtime(config: SigmarkOfficialHunyuanRuntimeCo
         "runtime_source_dir": str(runtime_source_dir),
         "official_runtime_output_root": str(output_root),
         "official_output_path": str(output_path),
+        "official_clean_negative_output_path": str(clean_negative_output_path),
         "official_repository_url": "https://github.com/JeremyZhao1998/SIGMark-release",
         "official_execution_mode": "sigmark_hunyuan_gen_extract",
         "execution_status": execution_status,
@@ -958,9 +1201,16 @@ def run_sigmark_official_hunyuan_runtime(config: SigmarkOfficialHunyuanRuntimeCo
         "model_manifest": model_manifest,
         "gen_command": gen_command,
         "extract_command": extract_command,
+        "clean_negative_gen_command": clean_negative_gen_command,
+        "clean_negative_extract_command": clean_negative_extract_command,
+        "clean_negative_reference_state_manifest": clean_negative_reference_state_manifest,
         "command_results": command_results,
         "bit_accuracy_npz_candidates": [str(path) for path in bit_accuracy_candidates],
+        "clean_negative_bit_accuracy_npz_candidates": [
+            str(path) for path in clean_negative_bit_accuracy_candidates
+        ],
         "selected_bit_accuracy_npz_path": selected_bit_accuracy_path,
+        "selected_clean_negative_bit_accuracy_npz_path": selected_clean_negative_bit_accuracy_path,
         "input_runtime_detection_record_count": len(records),
         "generated_bundle_record_count": int(bundle_result["generated_bundle_record_count"]),
         "failed_bundle_record_count": int(bundle_result["failed_bundle_record_count"]),
@@ -971,7 +1221,10 @@ def run_sigmark_official_hunyuan_runtime(config: SigmarkOfficialHunyuanRuntimeCo
     _write_json(output_root / "sigmark_official_hunyuan_execution_manifest.json", manifest)
     if selected_bit_accuracy_path:
         os.environ["SSTW_SIGMARK_BIT_ACCURACY_NPZ"] = selected_bit_accuracy_path
+    if selected_clean_negative_bit_accuracy_path:
+        os.environ["SSTW_SIGMARK_CLEAN_NEGATIVE_BIT_ACCURACY_NPZ"] = selected_clean_negative_bit_accuracy_path
     os.environ["SSTW_SIGMARK_OUTPUT_DIR"] = str(output_path)
+    os.environ["SSTW_SIGMARK_CLEAN_NEGATIVE_OUTPUT_DIR"] = str(clean_negative_output_path)
     return manifest
 
 

@@ -1251,8 +1251,28 @@ Notebook 与 repository module 的跨边界数据
 | official_clean_negative_attack_stderr_path | artifact | none | true | false | false | official clean negative 检测命令 stderr 证据路径。 |
 | official_clean_negative_bit_accuracy_npz_path | artifact | none | true | false | false | SIGMark clean negative 官方 bit accuracy npz 路径。 |
 | official_clean_negative_results_json_path | artifact | none | true | false | false | VideoMark clean negative 官方结果 JSON 路径。 |
+| official_result_key | protocol | none | true | false | false | 官方输出文件中与当前 prompt / seed comparison unit 对应的 result key。 |
+| official_temporal_attack_key | protocol | none | true | false | false | VideoMark 官方 temporal_results 中与当前 runtime attack 对齐的攻击 key。 |
+| official_clean_negative_result_key | protocol | none | true | false | false | clean negative 官方输出文件中与当前 prompt / seed calibration unit 对应的 result key。 |
+| official_clean_negative_output_path | artifact | none | true | false | false | 自动生成 clean negative 官方产物的输出目录。 |
 | official_clean_negative_score_assignment_policy | protocol | none | true | false | false | 聚合型 official clean negative 分数如何映射到 comparison unit。 |
+| official_score_assignment_policy | protocol | none | true | false | false | 正样本 official score 如何映射到当前 prompt / seed / attack comparison unit。 |
 | official_clean_negative_video_io_backend | protocol | none | true | false | false | official clean negative 视频读取所使用的 I/O 后端。 |
+| generate_clean_negative_reference | protocol | none | true | false | false | baseline 官方运行器是否自动生成 clean negative reference 并抽取官方分数。 |
+| clean_negative_output_path | protocol | none | true | false | false | baseline 官方运行器 clean negative 输出目录配置。 |
+| selected_clean_negative_bit_accuracy_npz_path | artifact | none | true | false | false | SIGMark 运行器选中的 clean negative bit accuracy npz。 |
+| clean_negative_bit_accuracy_npz_candidates | artifact | none | true | false | false | SIGMark clean negative extract 阶段发现的 bit accuracy npz 候选列表。 |
+| clean_negative_reference_state_manifest | artifact | none | true | false | false | SIGMark clean negative extract 复用官方 key/message 状态的复制审计。 |
+| clean_negative_reference_state_status | governance | none | true | false | false | SIGMark clean negative reference 状态文件复制是否完成。 |
+| copied_reference_state_count | metric | none | true | false | false | SIGMark clean negative reference 复制的官方状态文件数量。 |
+| copied_reference_state_files | artifact | none | true | false | false | SIGMark clean negative reference 复制的状态文件路径列表。 |
+| clean_negative_gen_command | artifact | none | true | false | false | SIGMark clean negative 官方 gen 命令。 |
+| clean_negative_extract_command | artifact | none | true | false | false | SIGMark clean negative 官方 extract 命令。 |
+| clean_negative_embedding_command | artifact | none | true | false | false | VideoMark clean negative 官方 embedding/extraction 命令。 |
+| clean_negative_temporal_tamper_command | artifact | none | true | false | false | VideoMark clean negative 官方 temporal tamper 命令。 |
+| clean_negative_video_results_json_path | artifact | none | true | false | false | VideoMark clean negative video_results.json 路径。 |
+| clean_negative_temporal_results_json_path | artifact | none | true | false | false | VideoMark clean negative temporal_results.json 路径。 |
+| clean_negative_temporal_results_json_exists | governance | none | true | false | false | VideoMark clean negative temporal_results.json 是否已落盘。 |
 | clean_negative_attack_transform | protocol | none | true | false | false | clean negative 视频施加的 runtime attack 变换描述。 |
 | clean_negative_attack_strength | protocol | none | true | false | false | clean negative 视频施加的 runtime attack 强度描述。 |
 | fair_comparison_protocol | protocol | none | true | false | false | 公平比较协议名称, 当前为 method-specific clean negative calibration 到统一 target FPR。 |

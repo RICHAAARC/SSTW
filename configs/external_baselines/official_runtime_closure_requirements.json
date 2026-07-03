@@ -107,6 +107,14 @@
           "project_owned_resource_required": true,
           "required_for_repository_default_adapter": true,
           "resource_role": "project_generated_official_temporal_results_json"
+        },
+        {
+          "default_resource_glob_pattern": "videomark/**/clean_negative*results*.json",
+          "default_resource_relative_path": "videomark/official_outputs/clean_negative_results.json",
+          "env_var": "SSTW_VIDEOMARK_CLEAN_NEGATIVE_RESULTS_JSON",
+          "project_owned_resource_required": true,
+          "required_for_repository_default_adapter": true,
+          "resource_role": "project_generated_official_clean_negative_temporal_results_json"
         }
       ],
       "runtime_support_mode": "project_owned_official_videomark_runtime_or_repository_generated_bundle",
@@ -176,6 +184,14 @@
           "resource_role": "project_generated_official_bit_accuracy_npz"
         },
         {
+          "default_resource_glob_pattern": "sigmark/**/*clean*negative*bit_accuracy*.npz",
+          "default_resource_relative_path": "sigmark/official_outputs/clean_negative_bit_accuracy.npz",
+          "env_var": "SSTW_SIGMARK_CLEAN_NEGATIVE_BIT_ACCURACY_NPZ",
+          "project_owned_resource_required": true,
+          "required_for_repository_default_adapter": true,
+          "resource_role": "project_generated_official_clean_negative_bit_accuracy_npz"
+        },
+        {
           "default_resource_glob_pattern": "sigmark/models",
           "default_resource_relative_path": "sigmark/models",
           "env_var": "SSTW_SIGMARK_MODEL_BASE_PATH",
@@ -196,7 +212,6 @@
   "default_run_root_pattern": "runs/generative_video_model_probe/<workflow_profile>",
   "governed_artifact": "artifacts/external_baseline_official_runtime_closure_requirements.json",
   "notebook_enforcement": {
-    "formal_reference_notebooks": "每个 baseline notebook 在 source intake 和 resource bootstrap 后执行该要求预检, 自动绑定已存在的默认 Drive 资源路径, 然后才运行 official adapter。",
     "formal_reference_notebooks": "5 个独立 *_formal_reference_colab.ipynb 在 resource bootstrap 后执行该要求预检, 用于暴露缺少的官方 source / resource / bundle。",
     "paper_gate_notebook": "paper_gate_and_package_colab.ipynb 在恢复 5 个 official reference 阶段包后执行最终聚合、self-containment 判定和 validation / pilot gate。",
     "non_run_record_policy": "non-run record 只能作为阻断记录, 不能替代 measured_formal baseline。"

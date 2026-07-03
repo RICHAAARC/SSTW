@@ -1088,13 +1088,16 @@ def test_sigmark_adapter_discovers_prefixed_bit_accuracy_npz_from_output_dir(tmp
     official_output_dir = tmp_path / "sigmark_official_outputs"
     official_output_dir.mkdir()
     bit_accuracy_npz = official_output_dir / "HunyuanVideo-I2V-community-sigmark-bit_accuracy.npz"
+    clean_negative_npz = official_output_dir / "HunyuanVideo-I2V-community-sigmark-clean-negative-bit_accuracy.npz"
     np.savez(bit_accuracy_npz, sample_0=np.array([0.75, 0.85], dtype=float))
+    np.savez(clean_negative_npz, sample_0=np.array([0.2, 0.4], dtype=float))
     output_json = tmp_path / "sigmark_output.json"
 
     env = dict(os.environ)
     env.pop("SSTW_SIGMARK_NATIVE_EVAL_COMMAND", None)
     env.pop("SSTW_SIGMARK_BIT_ACCURACY_NPZ", None)
     env["SSTW_SIGMARK_OUTPUT_DIR"] = str(official_output_dir)
+    env["SSTW_SIGMARK_CLEAN_NEGATIVE_BIT_ACCURACY_NPZ"] = str(clean_negative_npz)
 
     completed = subprocess.run(
         [
@@ -1123,3 +1126,4 @@ def test_sigmark_adapter_discovers_prefixed_bit_accuracy_npz_from_output_dir(tmp
     payload = json.loads(output_json.read_text(encoding="utf-8"))
     assert payload["official_bit_accuracy_npz_path"] == str(bit_accuracy_npz)
     assert payload["bit_accuracy"] == 0.8
+    assert payload["external_baseline_clean_negative_score"] == 0.3

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+import hashlib
 
 import pytest
 
@@ -70,6 +71,7 @@ def _write_fake_videomark_source(source_dir: Path) -> None:
                 "if __name__ == '__main__':",
                 "    parser.add_argument('--keys_path', default=\"./keys\")",
                 "def main(args):",
+                "    video_frames_dirs = os.path.join(args.video_frames_dir,\"videomark\",model_name,f\"{num_bit}bit\")",
                 "    for dirname in os.listdir(video_frames_dirs):",
                 "",
                 "        video_frames_dir = os.path.join(video_frames_dirs, dirname,'wm','frames')",
@@ -96,12 +98,18 @@ def _write_fake_videomark_source(source_dir: Path) -> None:
                 "        decode_message_str = bits_to_string(decode_message)",
                 "    return decode_message_str",
                 "def main():",
+                "    use_watermark = args.use_watermark",
                 "    for item in tqdm(range(4)):",
                 "        for i, row in enumerate(data):",
                 "            current_prompt = row",
                 "            video_id = current_prompt.replace(' ', '_')",
+                "            if use_watermark:",
+                "                pass",
+                "            else:",
+                "                init_latents_w = torch.randn(num_frames, 1, 4, height, width).to(device)",
                 "if __name__ == '__main__':",
                 "    parser.add_argument('--model_name', default='i2vgen-xl')",
+                "    parser.add_argument('--use_watermark', default=True)",
             ]
         )
         + "\n",
@@ -140,9 +148,13 @@ def test_videomark_runtime_dry_run_builds_prompt_set_and_commands(tmp_path: Path
     assert manifest["generated_bundle_record_count"] == 0
     assert manifest["prompt_manifest"]["prompt_count"] == 1
     assert "--model_name=modelscope" in manifest["embedding_command"]
+    assert "--use_watermark=true" in manifest["embedding_command"]
     assert "--video_frames_dir=" + config.output_path in manifest["temporal_tamper_command"]
     assert "--threshold=0.5" in manifest["temporal_tamper_command"]
     assert "--resample_num=1" in manifest["temporal_tamper_command"]
+    assert "--video_family=videomark" in manifest["temporal_tamper_command"]
+    assert "--use_watermark=false" in manifest["clean_negative_embedding_command"]
+    assert "--video_family=without_watermark" in manifest["clean_negative_temporal_tamper_command"]
     runtime_embedding = Path(manifest["runtime_source_dir"]) / "embedding_and_extraction.py"
     runtime_temporal = Path(manifest["runtime_source_dir"]) / "temporal_tamper.py"
     runtime_text = runtime_embedding.read_text(encoding="utf-8")
@@ -151,8 +163,12 @@ def test_videomark_runtime_dry_run_builds_prompt_set_and_commands(tmp_path: Path
     assert "video_id = f\"prompt_{i:04d}_{video_id_digest}\"" in runtime_text
     assert "decode_message = np.full((len(message_bits[0]),), -1)" in runtime_text
     assert "parser.add_argument('--model_path', default=None)" in runtime_text
+    assert "use_watermark.strip().lower()" in runtime_text
+    assert "_encoding_key, decoding_key = pickle.load(f)" in runtime_text
     assert "parser.add_argument('--threshold', default=0.5, type=float)" in runtime_temporal_text
     assert "parser.add_argument('--resample_num', default=1, type=int)" in runtime_temporal_text
+    assert "parser.add_argument('--video_family', default='videomark')" in runtime_temporal_text
+    assert "video_family = getattr(args, 'video_family', 'videomark')" in runtime_temporal_text
     assert "if not os.path.isdir(video_output_dir):" in runtime_temporal_text
     assert "shift_value_path = os.path.join(video_output_dir,\"shift_value.npy\")" in runtime_temporal_text
     assert "if not os.path.isdir(video_frames_dir) or not os.path.isfile(shift_value_path):" in runtime_temporal_text
@@ -163,7 +179,10 @@ def test_videomark_runtime_dry_run_builds_prompt_set_and_commands(tmp_path: Path
         "safe_prompt_digest_video_id_guard": "patched_runtime_copy",
         "undetected_decode_message_guard": "patched_runtime_copy",
         "embedding_model_path_cli_arg_guard": "patched_runtime_copy",
+        "embedding_use_watermark_bool_guard": "patched_runtime_copy",
+        "embedding_clean_negative_decode_key_guard": "patched_runtime_copy",
         "temporal_threshold_resample_cli_arg_guard": "patched_runtime_copy",
+        "temporal_video_family_guard": "patched_runtime_copy",
         "temporal_output_file_skip_guard": "patched_runtime_copy",
     }
 
@@ -232,3 +251,65 @@ def test_videomark_bundle_writer_records_project_owned_provenance(tmp_path: Path
     assert payload["official_frames_acc_mean"] == 0.65
     assert payload["official_temporal_attack_names"] == ["frame drop", "frame swap"]
     assert "metric_status" not in payload
+
+
+@pytest.mark.quick
+def test_videomark_bundle_writer_uses_prompt_seed_attack_specific_key(tmp_path: Path) -> None:
+    """VideoMark official bundle 需要按 prompt / seed / attack 抽取单条官方分数。"""
+
+    run_root = tmp_path / "runs" / "generative_video_model_probe" / "validation_scale"
+    bundle_root = tmp_path / "bundles" / "validation_scale"
+    manifest_path = bundle_root / "videomark" / "official_reference_execution_manifest.json"
+    prompt_suite_path = tmp_path / "datasets" / "generative_video_prompt_suite" / "prompt_seed_suite.json"
+    temporal_path = tmp_path / "official_outputs" / "videomark" / "modelscope" / "512bit" / "temporal_results.json"
+    video_path = temporal_path.with_name("video_results.json")
+    clean_path = tmp_path / "official_clean_negative_outputs" / "without_watermark" / "modelscope" / "temporal_results.json"
+    _write_runtime_records(run_root)
+    _write_prompt_suite(prompt_suite_path)
+    _write_json(manifest_path, {"manifest_kind": "test_videomark_execution_manifest"})
+    prompt_text = "A small red toy car moves across a table with clear motion."
+    digest = hashlib.sha1(prompt_text.encode("utf-8")).hexdigest()[:12]
+    video_key = f"prompt_0000_{digest}_0"
+    unrelated_key = f"prompt_0000_{digest}_1"
+    _write_json(
+        temporal_path,
+        {
+            video_key: {
+                "frame drop": {"decode_acc": 0.7, "frames_acc": 0.5},
+                "frame swap": {"decode_acc": 0.95, "frames_acc": 0.8},
+            },
+            unrelated_key: {"frame drop": {"decode_acc": 0.1, "frames_acc": 0.1}},
+        },
+    )
+    _write_json(video_path, {video_key: {"decode_acc": 0.9}})
+    _write_json(
+        clean_path,
+        {
+            video_key: {
+                "frame drop": {"decode_acc": 0.25, "frames_acc": 0.4},
+                "frame swap": {"decode_acc": 0.8, "frames_acc": 0.6},
+            },
+            unrelated_key: {"frame drop": {"decode_acc": 0.9, "frames_acc": 0.9}},
+        },
+    )
+
+    result = write_videomark_official_bundle_records(
+        run_root=run_root,
+        bundle_root=bundle_root,
+        manifest_path=manifest_path,
+        temporal_results_json_path=temporal_path,
+        video_results_json_path=video_path,
+        model_name="modelscope",
+        clean_negative_results_json_path=clean_path,
+        prompt_suite_path=prompt_suite_path,
+    )
+
+    assert result["generated_bundle_record_count"] == 1
+    record_path = bundle_root / "videomark" / "records" / "prompt_a__seed_0__temporal_crop_runtime.json"
+    payload = json.loads(record_path.read_text(encoding="utf-8"))
+    assert payload["external_baseline_score"] == 0.7
+    assert payload["external_baseline_clean_negative_score"] == 0.25
+    assert payload["official_result_key"] == video_key
+    assert payload["official_temporal_attack_key"] == "frame drop"
+    assert payload["official_score_assignment_policy"] == "per_prompt_seed_runtime_attack_mapped_to_videomark_temporal_attack"
+    assert payload["official_clean_negative_result_key"] == video_key

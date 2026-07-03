@@ -199,6 +199,12 @@ def _record_clean_negative_ready(record: Mapping[str, Any]) -> bool:
     )
 
 
+def _record_anchor_ready(record: Mapping[str, Any]) -> bool:
+    """检查 formal baseline record 是否保留公平比较所需的 prompt / seed / attack anchor。"""
+
+    return all(record.get(field_name) not in {None, ""} for field_name in ("prompt_id", "seed_id", "attack_name"))
+
+
 def _index_rows(rows: Iterable[Mapping[str, Any]], key: str) -> dict[str, dict[str, Any]]:
     """按指定字段索引列表对象。"""
     indexed: dict[str, dict[str, Any]] = {}
@@ -235,11 +241,16 @@ def _build_baseline_rows(
             record for record in score_records
             if record.get("external_baseline_name") == baseline_name
         ]
-        measured_records = [
+        formal_candidate_records = [
             record for record in records
             if record.get("metric_status") == "measured_formal"
             and record.get("external_baseline_score_status") in {None, "measured_formal"}
         ]
+        measured_records = [
+            record for record in formal_candidate_records
+            if _record_anchor_ready(record)
+        ]
+        formal_anchor_missing_count = len(formal_candidate_records) - len(measured_records)
         intake = intake_by_name.get(baseline_name, {})
         inspection = inspection_by_name.get(baseline_name, {})
         clone = clone_by_name.get(baseline_name, {})
@@ -302,6 +313,7 @@ def _build_baseline_rows(
         clone_ready = source_clone_ready or repository_generated_official_bundle_ready
         build_ready = bool(command_manifest_paths) and command_manifest_ok_count == len(command_manifest_paths)
         run_ready = bool(measured_records)
+        anchor_ready = bool(formal_candidate_records) and formal_anchor_missing_count == 0
         adapt_ready = all(
             record.get("external_baseline_adapter_path")
             and record.get("external_baseline_score_source") not in {"sstw_proxy_score", "paper_number_only", "manual_result_json"}
@@ -319,10 +331,13 @@ def _build_baseline_rows(
             "clone_ready": clone_ready,
             "build_ready": build_ready,
             "run_ready": run_ready,
+            "anchor_ready": anchor_ready,
             "adapt_ready": adapt_ready,
             "record_ready": record_ready,
             "clean_negative_ready": clean_negative_ready,
             "measured_formal_record_count": len(measured_records),
+            "formal_candidate_record_count": len(formal_candidate_records),
+            "formal_anchor_missing_count": formal_anchor_missing_count,
             "clean_negative_ready_count": clean_negative_ready_count,
             "unsupported_record_count": sum(1 for record in records if record.get("metric_status") == "unsupported"),
             "official_command_manifest_count": len(command_manifest_paths),
@@ -338,6 +353,7 @@ def _build_baseline_rows(
                 clone_ready,
                 build_ready,
                 run_ready,
+                anchor_ready,
                 adapt_ready,
                 record_ready,
                 clean_negative_ready,
@@ -378,9 +394,18 @@ def build_external_baseline_self_containment_decision(
         for row in rows
         if not row.get("clean_negative_ready")
     ]
+    missing_anchor_names = [
+        row["baseline_name"]
+        for row in rows
+        if not row.get("anchor_ready")
+    ]
     comparison_passed = comparison_decision.get("external_baseline_comparison_decision") == "PASS"
     execution_manifest_bound = execution_manifest.get("formal_evidence_status") == "evidence_paths_bound"
-    formal_measured_names = set(execution_manifest.get("modern_external_baseline_formal_measured_adapter_names") or [])
+    formal_measured_names = {
+        str(row["baseline_name"])
+        for row in rows
+        if int(row.get("measured_formal_record_count") or 0) > 0
+    }
     missing_formal_names = sorted(set(required_names) - formal_measured_names)
     missing_requirements: list[str] = []
     if not comparison_passed:
@@ -393,6 +418,8 @@ def build_external_baseline_self_containment_decision(
         missing_requirements.append("all_required_modern_baselines_clone_build_run_adapt_record")
     if missing_clean_negative_names:
         missing_requirements.append("all_required_modern_baselines_clean_negative_scores")
+    if missing_anchor_names:
+        missing_requirements.append("all_required_modern_baselines_prompt_seed_attack_anchors")
 
     decision = "PASS" if not missing_requirements else "FAIL"
     return {
@@ -407,6 +434,7 @@ def build_external_baseline_self_containment_decision(
         "self_contained_modern_external_baseline_count": sum(1 for row in rows if row["external_baseline_self_contained"]),
         "missing_self_contained_modern_external_baseline_names": missing_names,
         "missing_clean_negative_modern_external_baseline_names": missing_clean_negative_names,
+        "missing_anchor_modern_external_baseline_names": missing_anchor_names,
         "missing_formal_modern_external_baseline_names": missing_formal_names,
         "missing_self_containment_requirements": missing_requirements,
         "self_containment_missing_requirement_count": len(missing_requirements),

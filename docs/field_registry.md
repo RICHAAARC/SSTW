@@ -285,6 +285,10 @@ Notebook 与 repository module 的跨边界数据
 | external_baseline_formal_measured_adapter_names | metric | none | true | false | false | external_baseline comparison 中产出 measured_formal records 的 adapter 名称列表。 |
 | modern_external_baseline_formal_measured_adapter_count | metric | none | true | true | false | 现代视频水印 baseline 中产出 measured_formal records 的 adapter 数量。 |
 | modern_external_baseline_formal_measured_adapter_names | metric | none | true | true | false | 现代视频水印 baseline 中产出 measured_formal records 的 adapter 名称列表。 |
+| formal_candidate_record_count | metric | none | true | true | false | external baseline self-containment 中声明 measured_formal 的候选记录数量。 |
+| formal_anchor_missing_count | metric | none | true | true | false | external baseline self-containment 中缺少 prompt / seed / attack anchor 的 formal 候选记录数量。 |
+| anchor_ready | governance | none | true | true | false | external baseline self-containment 中当前 baseline 的 prompt / seed / attack anchor 是否完整。 |
+| missing_anchor_modern_external_baseline_names | governance | none | true | true | false | external baseline self-containment 中缺少完整 prompt / seed / attack anchor 的现代 baseline 名称列表。 |
 | external_baseline_detected | metric | none | true | false | false | 外部 baseline 官方 detector 是否给出 detected 判定。 |
 | external_baseline_bit_accuracy | metric | none | true | false | false | 外部 baseline 官方 detector 给出的 bit accuracy 或等价 payload accuracy。 |
 | external_baseline_threshold | protocol | none | true | false | false | 外部 baseline 官方 detector 使用或输出的阈值。 |

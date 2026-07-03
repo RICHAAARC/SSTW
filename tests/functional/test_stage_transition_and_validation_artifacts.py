@@ -112,6 +112,9 @@ def _write_self_contained_external_baseline_fixture(run_root: Path) -> None:
             "external_baseline_score_source": "official_command_adapter",
             "metric_status": "measured_formal",
             "external_baseline_score_status": "measured_formal",
+            "prompt_id": "prompt_0",
+            "seed_id": "seed_0",
+            "attack_name": "video_compression_runtime",
             "external_baseline_clean_negative_score": 0.2,
             "external_baseline_clean_negative_video_path": str(output_path),
             "external_baseline_official_output_path": str(output_path),
@@ -215,6 +218,9 @@ def test_external_baseline_self_containment_accepts_repository_generated_officia
             "external_baseline_score_source": "official_command_adapter",
             "metric_status": "measured_formal",
             "external_baseline_score_status": "measured_formal",
+            "prompt_id": "prompt_0",
+            "seed_id": "seed_0",
+            "attack_name": "video_compression_runtime",
             "external_baseline_clean_negative_score": 0.2,
             "external_baseline_clean_negative_video_path": str(bundle_record_path),
             "external_baseline_official_output_path": str(output_path),
@@ -306,6 +312,9 @@ def test_external_baseline_self_containment_rejects_bundle_without_clean_negativ
         "external_baseline_score_source": "official_command_adapter",
         "metric_status": "measured_formal",
         "external_baseline_score_status": "measured_formal",
+        "prompt_id": "prompt_0",
+        "seed_id": "seed_0",
+        "attack_name": "video_compression_runtime",
         "external_baseline_official_output_path": str(output_path),
         "external_baseline_official_stdout_path": str(stdout_path),
         "external_baseline_official_stderr_path": str(stderr_path),
@@ -338,6 +347,68 @@ def test_external_baseline_self_containment_rejects_bundle_without_clean_negativ
     assert audit["external_baseline_self_containment_decision"] == "FAIL"
     assert audit["missing_clean_negative_modern_external_baseline_names"] == [baseline_name]
     assert "all_required_modern_baselines_clean_negative_scores" in audit["missing_self_containment_requirements"]
+
+
+@pytest.mark.quick
+def test_external_baseline_self_containment_rejects_records_without_complete_anchor(tmp_path: Path) -> None:
+    """formal baseline record 缺少 prompt / seed / attack anchor 时不能进入公平比较。"""
+
+    run_root = tmp_path / "run"
+    baseline_name = "videoseal"
+    evidence_root = run_root / "artifacts" / "external_baseline_evidence" / baseline_name / "unit_000"
+    output_path = evidence_root / "official_output.json"
+    stdout_path = evidence_root / "official_stdout.txt"
+    stderr_path = evidence_root / "official_stderr.txt"
+    command_manifest_path = evidence_root / "official_command_manifest.json"
+    write_json(output_path, {"score": 0.7})
+    stdout_path.write_text("ok", encoding="utf-8")
+    stderr_path.write_text("", encoding="utf-8")
+    write_json(command_manifest_path, {"command_return_code": 0})
+    write_jsonl(run_root / "records" / "external_baseline_score_records.jsonl", [{
+        "external_baseline_name": baseline_name,
+        "external_baseline_layer": "modern_external_baseline",
+        "external_baseline_adapter_path": f"external_baseline/primary/{baseline_name}/adapter/run_sstw_eval.py",
+        "external_baseline_score_source": "official_command_adapter",
+        "metric_status": "measured_formal",
+        "external_baseline_score_status": "measured_formal",
+        "prompt_id": "prompt_0",
+        "attack_name": "video_compression_runtime",
+        "external_baseline_clean_negative_score": 0.2,
+        "external_baseline_clean_negative_video_path": str(output_path),
+        "external_baseline_official_output_path": str(output_path),
+        "external_baseline_official_stdout_path": str(stdout_path),
+        "external_baseline_official_stderr_path": str(stderr_path),
+        "external_baseline_official_command_manifest_path": str(command_manifest_path),
+    }])
+    write_json(run_root / "artifacts" / "external_baseline_comparison_decision.json", {
+        "external_baseline_comparison_decision": "PASS",
+    })
+    write_json(run_root / "artifacts" / "external_baseline_execution_manifest.json", {
+        "formal_evidence_status": "evidence_paths_bound",
+        "evidence_path_count": 4,
+        "modern_external_baseline_formal_measured_adapter_names": [baseline_name],
+    })
+    write_json(run_root / "artifacts" / "external_baseline_intake_manifest.json", {
+        "baseline_sources": [{"baseline_id": baseline_name, "source_intake_status": "source_snapshot_available", "source_dir_exists": True}],
+    })
+    write_json(run_root / "artifacts" / "external_baseline_source_inspection.json", {
+        "source_inspections": [{"baseline_id": baseline_name, "source_dir_exists": True}],
+    })
+    write_json(run_root / "artifacts" / "external_baseline_clone_results.json", {
+        "clone_results": [{"baseline_id": baseline_name, "source_dir_exists": True, "clone_operation_status": "updated"}],
+    })
+    config_path = run_root / "validation_scale_protocol.json"
+    write_json(config_path, {"required_modern_external_baseline_adapter_names": [baseline_name]})
+
+    audit = write_external_baseline_self_containment_decision(run_root, config_path)
+    row = audit["baseline_self_containment_rows"][0]
+
+    assert audit["external_baseline_self_containment_decision"] == "FAIL"
+    assert row["formal_candidate_record_count"] == 1
+    assert row["formal_anchor_missing_count"] == 1
+    assert row["anchor_ready"] is False
+    assert audit["missing_anchor_modern_external_baseline_names"] == [baseline_name]
+    assert "all_required_modern_baselines_prompt_seed_attack_anchors" in audit["missing_self_containment_requirements"]
 
 
 @pytest.mark.quick

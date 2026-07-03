@@ -1,4 +1,5 @@
 {
+  "allow_effect_size_claims": true,
   "blocked_target_fpr": 0.001,
   "claim_support_status": "pilot_paper_protocol_only",
   "external_baseline_prohibited_result_sources": [
@@ -9,9 +10,11 @@
     "sstw_proxy_score"
   ],
   "external_baseline_result_production_contract": "project_clone_build_run_adapt_record",
+  "fair_comparison_protocol": "method_specific_clean_negative_calibration_to_target_fpr",
   "minimum_attack_event_count_per_attack": 60,
   "minimum_calibration_negative_event_count": 1000,
   "minimum_calibration_negative_event_count_per_family": 200,
+  "minimum_clean_negative_count": 1000,
   "minimum_calibration_seed_per_prompt": 4,
   "minimum_calibration_unique_video_count": 84,
   "minimum_external_baseline_measured_adapter_count": 7,
@@ -37,7 +40,10 @@
   "repository_generated_external_baseline_cache_allowed": true,
   "require_external_baseline_comparison_ready": true,
   "require_external_baseline_self_contained_outputs": true,
+  "require_fair_detection_calibration": true,
+  "require_formal_baseline_difference_interval": true,
   "require_formal_motion_claim_ready": true,
+  "require_formal_method_baseline_comparison": true,
   "require_internal_ablation_matrix_ready": true,
   "require_modern_external_baseline_formal_results": true,
   "require_motion_threshold_calibration_ready": true,

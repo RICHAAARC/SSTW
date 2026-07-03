@@ -170,6 +170,10 @@ def _load_config(config_path: str | Path = DEFAULT_PILOT_PAPER_CONFIG) -> dict[s
         "required_modern_external_baseline_adapter_names": raw.get("required_modern_external_baseline_adapter_names", list(DEFAULT_REQUIRED_MODERN_EXTERNAL_BASELINE_ADAPTER_NAMES)),
         "required_internal_ablation_variants": raw.get("required_internal_ablation_variants", list(DEFAULT_REQUIRED_INTERNAL_ABLATION_VARIANTS)),
         "require_external_baseline_comparison_ready": bool(raw.get("require_external_baseline_comparison_ready", True)),
+        "require_external_baseline_self_contained_outputs": bool(raw.get("require_external_baseline_self_contained_outputs", True)),
+        "require_fair_detection_calibration": bool(raw.get("require_fair_detection_calibration", True)),
+        "require_formal_method_baseline_comparison": bool(raw.get("require_formal_method_baseline_comparison", True)),
+        "require_formal_baseline_difference_interval": bool(raw.get("require_formal_baseline_difference_interval", True)),
         "require_modern_external_baseline_formal_results": bool(raw.get("require_modern_external_baseline_formal_results", True)),
         "require_internal_ablation_matrix_ready": bool(raw.get("require_internal_ablation_matrix_ready", True)),
         "require_motion_threshold_calibration_ready": bool(raw.get("require_motion_threshold_calibration_ready", True)),
@@ -286,6 +290,165 @@ def _protocol_matrix_records(run_root: Path) -> list[dict]:
 def _trace_ids(records: Iterable[dict]) -> set[str]:
     """提取 records 中非空 trajectory trace id, 用于检查 baseline 和消融是否覆盖同一批样本。"""
     return {str(record.get("trajectory_trace_id")) for record in records if record.get("trajectory_trace_id") not in {None, ""}}
+
+
+def _target_fpr_matches(record: dict, expected_target_fpr: float) -> bool:
+    """检查 paper gate 消费的公平比较产物是否来自当前 protocol config。"""
+
+    try:
+        return abs(float(record.get("target_fpr")) - float(expected_target_fpr)) <= 1e-12
+    except (TypeError, ValueError):
+        return False
+
+
+def _required_fair_method_ids(config: dict[str, Any]) -> set[str]:
+    """返回 pilot_paper 公平比较必须覆盖的 SSTW 与 modern baseline 方法集合。"""
+
+    return {
+        "sstw_key_conditioned_flow_trajectory",
+        *{str(name) for name in config["required_modern_external_baseline_adapter_names"] if str(name)},
+    }
+
+
+def _fair_detection_anchor_ready(record: dict) -> bool:
+    """检查 fair calibration record 是否含有可配对的 positive anchor。"""
+
+    return (
+        int(record.get("positive_anchor_count") or 0) > 0
+        and int(record.get("positive_anchor_missing_count") or 0) == 0
+        and int(record.get("positive_formal_evidence_missing_count") or 0) == 0
+    )
+
+
+def _formal_comparison_anchor_ready(record: dict) -> bool:
+    """检查同协议统计行是否与 SSTW reference anchors 对齐。"""
+
+    status = str(record.get("comparison_anchor_alignment_status") or "")
+    return (
+        status in {"reference_method_anchor_set_ready", "aligned_with_sstw_reference_anchors"}
+        and int(record.get("comparison_anchor_count") or 0) > 0
+        and int(record.get("missing_reference_anchor_count") or 0) == 0
+        and int(record.get("extra_anchor_count") or 0) == 0
+    )
+
+
+def _difference_interval_anchor_ready(record: dict) -> bool:
+    """检查差值区间是否来自 prompt / seed / attack 完全配对的比较单元。"""
+
+    return (
+        str(record.get("comparison_anchor_alignment_status") or "") == "aligned_with_sstw_reference_anchors"
+        and int(record.get("paired_comparison_unit_count") or 0) > 0
+        and int(record.get("unpaired_reference_anchor_count") or 0) == 0
+        and int(record.get("unpaired_baseline_anchor_count") or 0) == 0
+    )
+
+
+def _external_baseline_self_containment_ready(run_root: Path) -> tuple[bool, dict[str, Any]]:
+    """检查 pilot_paper external baseline 是否完成项目内 clone/build/run/adapt/record 闭环。"""
+
+    decision = _read_json(run_root / "artifacts" / "external_baseline_self_containment_decision.json")
+    ready = decision.get("external_baseline_self_containment_decision") == "PASS"
+    return ready, {
+        "external_baseline_self_containment_decision": decision.get("external_baseline_self_containment_decision"),
+        "self_contained_modern_external_baseline_count": decision.get("self_contained_modern_external_baseline_count", 0),
+        "missing_self_contained_modern_external_baseline_names": decision.get("missing_self_contained_modern_external_baseline_names", []),
+        "missing_self_containment_requirements": decision.get("missing_self_containment_requirements", []),
+    }
+
+
+def _fair_detection_calibration_ready(run_root: Path, config: dict[str, Any]) -> tuple[bool, dict[str, Any]]:
+    """检查 pilot_paper 是否已经完成同 target FPR 的公平检测校准。"""
+
+    records = _read_jsonl(run_root / "records" / "fair_detection_calibration_records.jsonl")
+    decision = _read_json(run_root / "artifacts" / "fair_detection_calibration_decision.json")
+    required_method_ids = _required_fair_method_ids(config)
+    ready_method_ids = {
+        str(record.get("method_id") or "")
+        for record in records
+        if record.get("fair_comparison_status") == "ready"
+        and record.get("metric_status") == "measured_formal"
+        and _target_fpr_matches(record, config["target_fpr"])
+        and _fair_detection_anchor_ready(record)
+    }
+    missing_method_ids = sorted(required_method_ids - ready_method_ids)
+    ready_count = int(decision.get("fair_detection_calibration_ready_count") or len(ready_method_ids))
+    ready = (
+        bool(records)
+        and decision.get("fair_detection_calibration_decision") == "PASS"
+        and _target_fpr_matches(decision, config["target_fpr"])
+        and ready_count >= len(required_method_ids)
+        and not missing_method_ids
+    )
+    return ready, {
+        "fair_detection_calibration_decision": decision.get("fair_detection_calibration_decision"),
+        "fair_detection_calibration_ready_count": ready_count,
+        "fair_detection_calibration_missing_method_ids": missing_method_ids,
+        "fair_detection_calibration_target_fpr": decision.get("target_fpr"),
+        "fair_detection_calibration_status": decision.get("claim_support_status", "missing_fair_detection_calibration_decision"),
+    }
+
+
+def _formal_method_baseline_comparison_ready(run_root: Path, config: dict[str, Any]) -> tuple[bool, dict[str, Any]]:
+    """检查 pilot_paper 是否已经产出 SSTW 与 5 个 baseline 的同协议统计表。"""
+
+    records = _read_jsonl(run_root / "records" / "formal_method_baseline_comparison_records.jsonl")
+    decision = _read_json(run_root / "artifacts" / "formal_method_baseline_comparison_decision.json")
+    required_method_ids = _required_fair_method_ids(config)
+    ready_method_ids = {
+        str(record.get("method_id") or "")
+        for record in records
+        if record.get("metric_status") == "measured_formal"
+        and _target_fpr_matches(record, config["target_fpr"])
+        and _formal_comparison_anchor_ready(record)
+    }
+    missing_method_ids = sorted(required_method_ids - ready_method_ids)
+    ready_count = int(decision.get("formal_comparison_ready_method_count") or len(ready_method_ids))
+    ready = (
+        bool(records)
+        and decision.get("formal_method_baseline_comparison_decision") == "PASS"
+        and _target_fpr_matches(decision, config["target_fpr"])
+        and ready_count >= len(required_method_ids)
+        and not missing_method_ids
+    )
+    return ready, {
+        "formal_method_baseline_comparison_decision": decision.get("formal_method_baseline_comparison_decision"),
+        "formal_method_baseline_comparison_ready_count": ready_count,
+        "formal_method_baseline_comparison_missing_method_ids": missing_method_ids,
+        "formal_method_baseline_comparison_target_fpr": decision.get("target_fpr"),
+        "formal_method_baseline_comparison_status": decision.get("claim_support_status", "missing_formal_method_baseline_comparison_decision"),
+    }
+
+
+def _formal_baseline_difference_interval_ready(run_root: Path, config: dict[str, Any]) -> tuple[bool, dict[str, Any]]:
+    """检查 pilot_paper 是否已经产出 SSTW 相对 5 个 baseline 的配对差值区间。"""
+
+    records = _read_jsonl(run_root / "records" / "formal_baseline_difference_interval_records.jsonl")
+    decision = _read_json(run_root / "artifacts" / "formal_baseline_difference_interval_decision.json")
+    required_baseline_ids = {str(name) for name in config["required_modern_external_baseline_adapter_names"] if str(name)}
+    ready_baseline_ids = {
+        str(record.get("baseline_method_id") or "")
+        for record in records
+        if record.get("difference_interval_status") == "ready"
+        and record.get("metric_status") == "measured_formal"
+        and _target_fpr_matches(record, config["target_fpr"])
+        and _difference_interval_anchor_ready(record)
+    }
+    missing_baseline_ids = sorted(required_baseline_ids - ready_baseline_ids)
+    ready_count = int(decision.get("difference_interval_ready_count") or len(ready_baseline_ids))
+    ready = (
+        bool(records)
+        and decision.get("formal_baseline_difference_interval_decision") == "PASS"
+        and _target_fpr_matches(decision, config["target_fpr"])
+        and ready_count >= len(required_baseline_ids)
+        and not missing_baseline_ids
+    )
+    return ready, {
+        "formal_baseline_difference_interval_decision": decision.get("formal_baseline_difference_interval_decision"),
+        "formal_baseline_difference_interval_ready_count": ready_count,
+        "formal_baseline_difference_interval_missing_baseline_ids": missing_baseline_ids,
+        "formal_baseline_difference_interval_target_fpr": decision.get("target_fpr"),
+        "formal_baseline_difference_interval_status": decision.get("claim_support_status", "missing_formal_baseline_difference_interval_decision"),
+    }
 
 
 def _external_baseline_readiness(
@@ -537,6 +700,10 @@ def build_pilot_paper_gate_audit(
     }
     external_baseline_ready, external_baseline_summary = _external_baseline_readiness(run_root, config, test_trace_ids)
     internal_ablation_ready, internal_ablation_summary = _internal_ablation_readiness(run_root, config, test_trace_ids)
+    external_baseline_self_containment_ready, external_baseline_self_containment_summary = _external_baseline_self_containment_ready(run_root)
+    fair_detection_ready, fair_detection_summary = _fair_detection_calibration_ready(run_root, config)
+    formal_method_comparison_ready, formal_method_comparison_summary = _formal_method_baseline_comparison_ready(run_root, config)
+    formal_difference_interval_ready, formal_difference_interval_summary = _formal_baseline_difference_interval_ready(run_root, config)
 
     validation_scale_decision = _read_validation_scale_artifact(run_root, "artifacts/validation_scale_gate_decision.json")
     validation_scale_to_pilot_transition = _read_validation_scale_artifact(run_root, "artifacts/validation_scale_to_pilot_paper_transition_decision.json")
@@ -586,6 +753,10 @@ def build_pilot_paper_gate_audit(
         "negative_tail_not_inflated": bool(negative_tail_statuses & {"not_inflated", "negative_tail_not_inflated", "pass"}),
         "wrong_sampler_replay_rejected": _wrong_sampler_replay_rejected(heldout_negative_records),
         "pilot_paper_external_baseline_comparison_ready": (not config["require_external_baseline_comparison_ready"]) or external_baseline_ready,
+        "pilot_paper_external_baseline_self_containment_ready": (not config["require_external_baseline_self_contained_outputs"]) or external_baseline_self_containment_ready,
+        "pilot_paper_fair_detection_calibration_ready": (not config["require_fair_detection_calibration"]) or fair_detection_ready,
+        "pilot_paper_formal_method_baseline_comparison_ready": (not config["require_formal_method_baseline_comparison"]) or formal_method_comparison_ready,
+        "pilot_paper_formal_baseline_difference_interval_ready": (not config["require_formal_baseline_difference_interval"]) or formal_difference_interval_ready,
         "pilot_paper_internal_ablation_matrix_ready": (not config["require_internal_ablation_matrix_ready"]) or internal_ablation_ready,
     }
     missing = [name for name, passed in requirement_checks.items() if not passed]
@@ -616,6 +787,10 @@ def build_pilot_paper_gate_audit(
         "validation_scale_claim_support_status": validation_scale_decision.get("claim_support_status"),
         "validation_scale_to_pilot_paper_transition_decision": validation_scale_to_pilot_transition.get("validation_scale_to_pilot_paper_transition_decision"),
         **external_baseline_summary,
+        **external_baseline_self_containment_summary,
+        **fair_detection_summary,
+        **formal_method_comparison_summary,
+        **formal_difference_interval_summary,
         **internal_ablation_summary,
         "target_fpr": config["target_fpr"],
         "blocked_target_fpr": config["blocked_target_fpr"],
@@ -740,8 +915,15 @@ def write_pilot_paper_gate_audit(
         f"- validation_scale_gate_decision: {audit['validation_scale_gate_decision']}\n"
         f"- validation_scale_to_pilot_paper_transition_decision: {audit['validation_scale_to_pilot_paper_transition_decision']}\n"
         f"- external_baseline_comparison_decision: {audit['external_baseline_comparison_decision']}\n"
+        f"- external_baseline_self_containment_decision: {audit['external_baseline_self_containment_decision']}\n"
         f"- external_baseline_measured_adapter_count: {audit['external_baseline_measured_adapter_count']}\n"
         f"- modern_external_baseline_formal_measured_adapter_count: {audit['modern_external_baseline_formal_measured_adapter_count']}\n"
+        f"- fair_detection_calibration_decision: {audit['fair_detection_calibration_decision']}\n"
+        f"- fair_detection_calibration_ready_count: {audit['fair_detection_calibration_ready_count']}\n"
+        f"- formal_method_baseline_comparison_decision: {audit['formal_method_baseline_comparison_decision']}\n"
+        f"- formal_method_baseline_comparison_ready_count: {audit['formal_method_baseline_comparison_ready_count']}\n"
+        f"- formal_baseline_difference_interval_decision: {audit['formal_baseline_difference_interval_decision']}\n"
+        f"- formal_baseline_difference_interval_ready_count: {audit['formal_baseline_difference_interval_ready_count']}\n"
         f"- pilot_paper_external_baseline_trace_count_min: {audit['pilot_paper_external_baseline_trace_count_min']}\n"
         f"- validation_internal_ablation_decision: {audit['validation_internal_ablation_decision']}\n"
         f"- validation_internal_ablation_variant_count: {audit['validation_internal_ablation_variant_count']}\n"

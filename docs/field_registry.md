@@ -1142,6 +1142,10 @@ Notebook 与 repository module 的跨边界数据
 | required_resource_ready | governance | none | true | false | false | Whether required baseline resource environment variables or default Drive resource files are available. |
 | environment_updates | artifact | none | true | false | false | Environment variable updates emitted by a preflight artifact for the Notebook parent process. |
 
+| external_baseline_self_containment_decision | governance | none | true | true | false | External baseline 是否完成项目内 clone/build/run/adapt/record 闭环的阶段判定。 |
+| self_contained_modern_external_baseline_count | metric | none | true | true | false | 已完成项目内 official bundle 执行闭环的现代 external baseline 数量。 |
+| missing_self_contained_modern_external_baseline_names | governance | none | true | false | false | 尚未完成项目内 official bundle 执行闭环的现代 external baseline 名称列表。 |
+| missing_self_containment_requirements | governance | none | true | false | false | External baseline self-containment 阶段仍缺失的要求列表。 |
 | source_clone_ready | governance | none | true | false | false | External baseline self-containment 行中表示当前 checkout 或 clone manifest 是否已经提供源码克隆证据。 |
 | repository_generated_official_bundle_ready | governance | none | true | false | false | External baseline self-containment 行中表示项目内生成的 official bundle 与 execution manifest 是否足以证明 clone/build/run 证据。 |
 | missing_repository_generated_official_bundle_modern_external_baseline_names | governance | none | true | false | false | External baseline self-containment 中缺少项目内 official bundle 执行闭环的现代 baseline 名称列表。 |
@@ -1183,6 +1187,8 @@ Notebook 与 repository module 的跨边界数据
 | require_sstw_measured_formal_records | protocol | none | true | false | false | validation_scale gate 是否要求 SSTW 本方法 measured_formal records 已落盘。 |
 | allow_effect_size_claims | protocol | none | true | false | false | 当前 protocol profile 是否允许效果大小 claim。 |
 | formal_method_baseline_comparison_decision | governance | none | true | true | false | SSTW 与现代 external baseline 同协议 measured_formal 比较表阶段判定。 |
+| formal_method_baseline_comparison_target_fpr | protocol | none | true | false | false | pilot_paper gate 读取到的 formal method baseline comparison decision 的 target_fpr。 |
+| formal_method_baseline_comparison_status | governance | none | true | false | false | pilot_paper gate 汇总的 formal method baseline comparison 产物状态。 |
 | formal_comparison_required_method_count | metric | none | true | true | false | 同协议 formal 比较表要求覆盖的方法数量。 |
 | formal_comparison_ready_method_count | metric | none | true | true | false | 同协议 formal 比较表已产出 measured_formal 的方法数量。 |
 | formal_comparison_modern_baseline_ready_count | metric | none | true | true | false | 同协议 formal 比较表中已产出 measured_formal 的现代 external baseline 数量。 |
@@ -1197,6 +1203,8 @@ Notebook 与 repository module 的跨边界数据
 | comparison_missing_reason | governance | none | true | false | false | 同协议 formal 比较行缺失 measured_formal records 的原因。 |
 | require_formal_method_baseline_comparison | protocol | none | true | false | false | validation_scale gate 是否要求 SSTW 与 5 个 baseline 的同协议 measured_formal 比较表。 |
 | formal_baseline_difference_interval_decision | governance | none | true | true | false | SSTW 相对现代 external baseline 的差值置信区间阶段判定。 |
+| formal_baseline_difference_interval_target_fpr | protocol | none | true | false | false | pilot_paper gate 读取到的 formal baseline difference interval decision 的 target_fpr。 |
+| formal_baseline_difference_interval_status | governance | none | true | false | false | pilot_paper gate 汇总的 formal baseline difference interval 产物状态。 |
 | reference_method_id | protocol | none | true | false | false | 差值比较中的参考方法 ID。 |
 | baseline_method_id | protocol | none | true | false | false | 差值比较中的 baseline 方法 ID。 |
 | difference_metric_name | metric | none | true | false | false | 差值置信区间所对应的指标名称。 |
@@ -1305,6 +1313,8 @@ Notebook 与 repository module 的跨边界数据
 | require_fair_detection_calibration | protocol | none | true | false | false | validation_scale gate 是否要求 clean negative 公平校准通过。 |
 | minimum_clean_negative_count | protocol | none | true | false | false | 每个方法校准 target FPR 所需的最小 clean negative 分数数量。 |
 | fair_detection_calibration_decision | governance | none | true | true | false | clean negative calibration 公平比较阶段判定。 |
+| fair_detection_calibration_target_fpr | protocol | none | true | false | false | pilot_paper gate 读取到的 fair detection calibration decision 的 target_fpr。 |
+| fair_detection_calibration_status | governance | none | true | false | false | pilot_paper gate 汇总的 fair detection calibration 产物状态。 |
 | fair_detection_calibration_record_id | protocol | none | true | false | false | 单条公平校准记录的稳定标识。 |
 | fair_comparison_status | governance | none | true | true | false | 单个方法的公平校准状态。 |
 | fair_comparison_missing_reasons | governance | none | true | false | false | 单个方法未通过公平校准的原因列表。 |

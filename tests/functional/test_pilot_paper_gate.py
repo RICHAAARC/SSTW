@@ -14,6 +14,7 @@ ATTACKS = ("video_compression_runtime", "temporal_crop_runtime", "frame_rate_res
 NEGATIVE_FAMILIES = ("wrong_key_control", "without_key_control", "wrong_sampler_replay", "trajectory_time_shuffle_control")
 CALIBRATION_SEEDS = tuple(f"seed_calibration_{index:02d}" for index in range(4))
 TEST_SEEDS = tuple(f"seed_test_{index:02d}" for index in range(4))
+SSTW_METHOD_ID = "sstw_key_conditioned_flow_trajectory"
 EXTERNAL_BASELINE_NAMES = (
     "explicit_dtw_temporal_alignment",
     "explicit_frame_matching_temporal_registration",
@@ -34,6 +35,155 @@ INTERNAL_ABLATION_VARIANTS = (
     "without_flow_state_admissibility",
     "generic_ssm_baseline",
 )
+
+
+def _write_pilot_paper_fair_comparison_fixture(
+    run_root: Path,
+    anchor_units: list[dict[str, str]],
+    *,
+    blocked_modern_baseline_names: set[str],
+    target_fpr: float = 0.01,
+    decision_target_fpr: float | None = None,
+) -> None:
+    """写入 pilot_paper gate 消费的轻量公平比较产物。
+
+    该 fixture 不模拟 detector 细节, 只表达 gate 必须检查的产物契约:
+    每个方法已经在自身 clean negative 分布上校准到同一 target FPR, 并且
+    attacked positive 使用完全一致的 prompt / seed / attack anchor 集合。
+    """
+
+    method_ids = [SSTW_METHOD_ID, *sorted(MODERN_EXTERNAL_BASELINE_NAMES)]
+    decision_target_fpr = target_fpr if decision_target_fpr is None else decision_target_fpr
+    anchor_keys = [unit["comparison_anchor_key"] for unit in anchor_units]
+    fair_records = []
+    comparison_records = []
+    difference_records = []
+    for method_id in method_ids:
+        is_blocked = method_id in blocked_modern_baseline_names
+        method_role = "proposed_method" if method_id == SSTW_METHOD_ID else "modern_external_baseline"
+        positive_detection_units = [
+            {
+                **unit,
+                "score": 0.82,
+                "detected_at_target_fpr": True,
+            }
+            for unit in anchor_units
+        ] if not is_blocked else []
+        fair_records.append({
+            "record_version": "fair_detection_calibration_v1",
+            "method_id": method_id,
+            "method_role": method_role,
+            "metric_status": "measured_formal" if not is_blocked else "missing",
+            "fair_comparison_status": "ready" if not is_blocked else "blocked",
+            "target_fpr": target_fpr,
+            "paper_result_level": "pilot_paper",
+            "clean_negative_score_count": 1000 if not is_blocked else 0,
+            "attacked_positive_score_count": len(anchor_units) if not is_blocked else 0,
+            "positive_anchor_count": len(anchor_units) if not is_blocked else 0,
+            "positive_anchor_keys": anchor_keys if not is_blocked else [],
+            "positive_anchor_missing_count": 0,
+            "positive_formal_evidence_missing_count": 0 if not is_blocked else 1,
+            "positive_detection_units_at_target_fpr": positive_detection_units,
+            "tpr_at_target_fpr": 1.0 if not is_blocked else None,
+            "claim_support_status": "fair_detection_calibration_pilot_paper_ready"
+            if not is_blocked
+            else "fair_detection_calibration_blocked",
+        })
+        comparison_alignment = (
+            "reference_method_anchor_set_ready"
+            if method_id == SSTW_METHOD_ID and not is_blocked
+            else "aligned_with_sstw_reference_anchors"
+            if not is_blocked
+            else "anchor_set_mismatch_with_sstw"
+        )
+        comparison_records.append({
+            "record_version": "formal_method_baseline_comparison_v1",
+            "method_id": method_id,
+            "method_role": method_role,
+            "metric_status": "measured_formal" if not is_blocked else "missing",
+            "target_fpr": target_fpr,
+            "comparison_primary_metric_name": "tpr_at_target_fpr",
+            "comparison_primary_metric_value": 1.0 if not is_blocked else None,
+            "comparison_anchor_count": len(anchor_units) if not is_blocked else 0,
+            "reference_anchor_count": len(anchor_units),
+            "missing_reference_anchor_count": 0 if not is_blocked else len(anchor_units),
+            "extra_anchor_count": 0,
+            "comparison_anchor_alignment_status": comparison_alignment,
+            "claim_support_status": "formal_method_baseline_comparison_pilot_paper_ready"
+            if not is_blocked
+            else "formal_method_baseline_comparison_missing_measured_formal",
+        })
+    for baseline_id in sorted(MODERN_EXTERNAL_BASELINE_NAMES):
+        is_blocked = baseline_id in blocked_modern_baseline_names
+        difference_records.append({
+            "record_version": "formal_baseline_difference_interval_v1",
+            "reference_method_id": SSTW_METHOD_ID,
+            "baseline_method_id": baseline_id,
+            "metric_status": "measured_formal" if not is_blocked else "missing",
+            "target_fpr": target_fpr,
+            "reference_tpr_at_target_fpr": 1.0,
+            "baseline_tpr_at_target_fpr": 1.0 if not is_blocked else None,
+            "tpr_at_target_fpr_difference": 0.0 if not is_blocked else None,
+            "paired_comparison_unit_count": len(anchor_units) if not is_blocked else 0,
+            "unpaired_reference_anchor_count": 0 if not is_blocked else len(anchor_units),
+            "unpaired_baseline_anchor_count": 0,
+            "comparison_anchor_alignment_status": "aligned_with_sstw_reference_anchors"
+            if not is_blocked
+            else "anchor_set_mismatch_with_sstw",
+            "difference_interval_status": "ready" if not is_blocked else "missing_or_unaligned_paired_anchors",
+            "difference_ci_confidence_level": 0.95,
+            "difference_ci_lower": 0.0 if not is_blocked else None,
+            "difference_ci_upper": 0.0 if not is_blocked else None,
+            "claim_support_status": "formal_baseline_difference_interval_pilot_paper_ready"
+            if not is_blocked
+            else "formal_baseline_difference_interval_blocked",
+        })
+    ready_fair_records = [record for record in fair_records if record["fair_comparison_status"] == "ready"]
+    ready_comparison_records = [record for record in comparison_records if record["metric_status"] == "measured_formal"]
+    ready_difference_records = [record for record in difference_records if record["difference_interval_status"] == "ready"]
+    write_jsonl(run_root / "records" / "fair_detection_calibration_records.jsonl", fair_records)
+    write_json(run_root / "artifacts" / "fair_detection_calibration_decision.json", {
+        "fair_detection_calibration_decision": "PASS" if len(ready_fair_records) == len(method_ids) else "FAIL",
+        "target_fpr": decision_target_fpr,
+        "fair_detection_calibration_method_count": len(method_ids),
+        "fair_detection_calibration_ready_count": len(ready_fair_records),
+        "fair_detection_calibration_missing_method_ids": [
+            record["method_id"] for record in fair_records if record["fair_comparison_status"] != "ready"
+        ],
+        "claim_support_status": "fair_detection_calibration_pilot_paper_ready"
+        if len(ready_fair_records) == len(method_ids)
+        else "fair_detection_calibration_blocked",
+    })
+    write_jsonl(run_root / "records" / "formal_method_baseline_comparison_records.jsonl", comparison_records)
+    write_json(run_root / "artifacts" / "formal_method_baseline_comparison_decision.json", {
+        "formal_method_baseline_comparison_decision": "PASS" if len(ready_comparison_records) == len(method_ids) else "FAIL",
+        "target_fpr": decision_target_fpr,
+        "formal_comparison_required_method_count": len(method_ids),
+        "formal_comparison_ready_method_count": len(ready_comparison_records),
+        "formal_comparison_missing_method_ids": [
+            record["method_id"] for record in comparison_records if record["metric_status"] != "measured_formal"
+        ],
+        "claim_support_status": "formal_method_baseline_comparison_pilot_paper_ready"
+        if len(ready_comparison_records) == len(method_ids)
+        else "formal_method_baseline_comparison_blocked",
+    })
+    write_jsonl(run_root / "records" / "formal_baseline_difference_interval_records.jsonl", difference_records)
+    write_json(run_root / "artifacts" / "formal_baseline_difference_interval_decision.json", {
+        "formal_baseline_difference_interval_decision": "PASS"
+        if len(ready_difference_records) == len(MODERN_EXTERNAL_BASELINE_NAMES)
+        else "FAIL",
+        "target_fpr": decision_target_fpr,
+        "difference_interval_record_count": len(difference_records),
+        "difference_interval_ready_count": len(ready_difference_records),
+        "difference_interval_missing_baseline_ids": [
+            record["baseline_method_id"]
+            for record in difference_records
+            if record["difference_interval_status"] != "ready"
+        ],
+        "claim_support_status": "formal_baseline_difference_interval_pilot_paper_ready"
+        if len(ready_difference_records) == len(MODERN_EXTERNAL_BASELINE_NAMES)
+        else "formal_baseline_difference_interval_blocked",
+    })
 
 
 def _seed_pilot_paper_run(
@@ -59,6 +209,7 @@ def _seed_pilot_paper_run(
     pilot_matrix_records = []
     external_baseline_records = []
     internal_ablation_records = []
+    fair_anchor_units = []
     incomplete_modern_external_baseline_names = incomplete_modern_external_baseline_names or set()
     split_seed_pairs = [
         ("calibration", seed_id) for seed_id in CALIBRATION_SEEDS[:calibration_seed_count]
@@ -98,6 +249,13 @@ def _seed_pilot_paper_run(
                     "S_final_conservative": 0.82,
                     "attacked_video_detectable": True,
                 })
+                if split_name == "test":
+                    fair_anchor_units.append({
+                        "comparison_anchor_key": f"{base['prompt_id']}::{seed_id}::{attack_name}",
+                        "prompt_id": base["prompt_id"],
+                        "seed_id": seed_id,
+                        "attack_name": attack_name,
+                    })
                 for method_variant in (
                     "sstw_full_method",
                     "endpoint_only_control",
@@ -185,6 +343,23 @@ def _seed_pilot_paper_run(
             "modern_external_baseline_formal_measured_adapter_names": sorted(MODERN_EXTERNAL_BASELINE_NAMES),
             "external_baseline_claim_support_status": "external_baseline_formal_and_proxy_records_written",
         })
+        missing_self_contained_names = sorted(incomplete_modern_external_baseline_names)
+        write_json(run_root / "artifacts" / "external_baseline_self_containment_decision.json", {
+            "external_baseline_self_containment_decision": "PASS" if not missing_self_contained_names else "FAIL",
+            "self_contained_modern_external_baseline_count": len(MODERN_EXTERNAL_BASELINE_NAMES) - len(missing_self_contained_names),
+            "missing_self_contained_modern_external_baseline_names": missing_self_contained_names,
+            "missing_self_containment_requirements": []
+            if not missing_self_contained_names
+            else ["all_required_modern_baselines_repository_generated_official_bundles"],
+            "claim_support_status": "external_baseline_self_containment_ready"
+            if not missing_self_contained_names
+            else "external_baseline_self_containment_blocked",
+        })
+        _write_pilot_paper_fair_comparison_fixture(
+            run_root,
+            fair_anchor_units,
+            blocked_modern_baseline_names=incomplete_modern_external_baseline_names,
+        )
     if write_internal_ablation:
         write_jsonl(run_root / "records" / "validation_internal_ablation_records.jsonl", internal_ablation_records)
         write_json(run_root / "artifacts" / "validation_internal_ablation_decision.json", {
@@ -263,9 +438,19 @@ def test_pilot_paper_gate_passes_calibrated_heldout_fixture(tmp_path: Path) -> N
     assert audit["validation_scale_gate_decision"] == "PASS"
     assert audit["validation_scale_to_pilot_paper_transition_decision"] == "PASS"
     assert audit["external_baseline_comparison_decision"] == "PASS"
+    assert audit["external_baseline_self_containment_decision"] == "PASS"
     assert audit["external_baseline_measured_adapter_count"] == 7
     assert audit["modern_external_baseline_formal_measured_adapter_count"] == 5
     assert audit["missing_modern_external_baseline_formal_adapter_names"] == []
+    assert audit["fair_detection_calibration_decision"] == "PASS"
+    assert audit["fair_detection_calibration_ready_count"] == 6
+    assert audit["fair_detection_calibration_missing_method_ids"] == []
+    assert audit["formal_method_baseline_comparison_decision"] == "PASS"
+    assert audit["formal_method_baseline_comparison_ready_count"] == 6
+    assert audit["formal_method_baseline_comparison_missing_method_ids"] == []
+    assert audit["formal_baseline_difference_interval_decision"] == "PASS"
+    assert audit["formal_baseline_difference_interval_ready_count"] == 5
+    assert audit["formal_baseline_difference_interval_missing_baseline_ids"] == []
     assert audit["pilot_paper_external_baseline_trace_count"] == 84
     assert audit["pilot_paper_external_baseline_trace_count_min"] == 84
     assert audit["validation_internal_ablation_decision"] == "PASS"
@@ -316,9 +501,16 @@ def test_pilot_paper_gate_rejects_incomplete_formal_external_baseline(tmp_path: 
 
     assert audit["pilot_paper_gate_decision"] == "FAIL"
     assert "pilot_paper_external_baseline_comparison_ready" in audit["missing_pilot_paper_requirements"]
+    assert "pilot_paper_external_baseline_self_containment_ready" in audit["missing_pilot_paper_requirements"]
+    assert "pilot_paper_fair_detection_calibration_ready" in audit["missing_pilot_paper_requirements"]
+    assert "pilot_paper_formal_method_baseline_comparison_ready" in audit["missing_pilot_paper_requirements"]
+    assert "pilot_paper_formal_baseline_difference_interval_ready" in audit["missing_pilot_paper_requirements"]
     assert audit["external_baseline_formal_incomplete_record_count"] > 0
     assert audit["modern_external_baseline_formal_measured_adapter_count"] == 4
     assert audit["missing_modern_external_baseline_formal_adapter_names"] == ["videoseal"]
+    assert audit["fair_detection_calibration_missing_method_ids"] == ["videoseal"]
+    assert audit["formal_method_baseline_comparison_missing_method_ids"] == ["videoseal"]
+    assert audit["formal_baseline_difference_interval_missing_baseline_ids"] == ["videoseal"]
     assert audit["pilot_paper_claim_allowed"] is False
 
 
@@ -345,7 +537,44 @@ def test_pilot_paper_gate_requires_external_baseline_and_ablation(tmp_path: Path
 
     assert audit["pilot_paper_gate_decision"] == "FAIL"
     assert "pilot_paper_external_baseline_comparison_ready" in audit["missing_pilot_paper_requirements"]
+    assert "pilot_paper_external_baseline_self_containment_ready" in audit["missing_pilot_paper_requirements"]
+    assert "pilot_paper_fair_detection_calibration_ready" in audit["missing_pilot_paper_requirements"]
+    assert "pilot_paper_formal_method_baseline_comparison_ready" in audit["missing_pilot_paper_requirements"]
+    assert "pilot_paper_formal_baseline_difference_interval_ready" in audit["missing_pilot_paper_requirements"]
     assert "pilot_paper_internal_ablation_matrix_ready" in audit["missing_pilot_paper_requirements"]
+    assert audit["pilot_paper_claim_allowed"] is False
+
+
+@pytest.mark.quick
+def test_pilot_paper_gate_requires_fair_detection_calibration_decision(tmp_path: Path) -> None:
+    """pilot_paper 不能在缺少同 target FPR 公平校准 decision 时通过。"""
+    run_root = tmp_path / "run"
+    _seed_pilot_paper_run(run_root)
+    (run_root / "artifacts" / "fair_detection_calibration_decision.json").unlink()
+
+    audit = build_pilot_paper_gate_audit(run_root)
+
+    assert audit["pilot_paper_gate_decision"] == "FAIL"
+    assert "pilot_paper_fair_detection_calibration_ready" in audit["missing_pilot_paper_requirements"]
+    assert audit["fair_detection_calibration_status"] == "missing_fair_detection_calibration_decision"
+    assert audit["pilot_paper_claim_allowed"] is False
+
+
+@pytest.mark.quick
+def test_pilot_paper_gate_rejects_fair_calibration_target_fpr_mismatch(tmp_path: Path) -> None:
+    """pilot_paper 公平比较产物必须与当前 protocol config 的 target_fpr 完全一致。"""
+    run_root = tmp_path / "run"
+    _seed_pilot_paper_run(run_root)
+    decision_path = run_root / "artifacts" / "fair_detection_calibration_decision.json"
+    decision = json.loads(decision_path.read_text(encoding="utf-8"))
+    decision["target_fpr"] = 0.1
+    write_json(decision_path, decision)
+
+    audit = build_pilot_paper_gate_audit(run_root)
+
+    assert audit["pilot_paper_gate_decision"] == "FAIL"
+    assert audit["fair_detection_calibration_target_fpr"] == 0.1
+    assert "pilot_paper_fair_detection_calibration_ready" in audit["missing_pilot_paper_requirements"]
     assert audit["pilot_paper_claim_allowed"] is False
 
 

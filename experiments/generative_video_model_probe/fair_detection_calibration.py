@@ -174,7 +174,12 @@ def _deduplicated_score_rows(
 
 
 def _positive_score_rows(records: Iterable[Mapping[str, Any]], *, score_fields: tuple[str, ...]) -> list[dict[str, Any]]:
-    """提取 attacked positive 分数。"""
+    """提取具备完整 prompt / seed / attack anchor 的 attacked positive 分数。
+
+    公平比较的核心约束是每个方法都在同一 prompt / seed / attack 单元上比较
+    attacked positive TPR。缺少 prompt_id、seed_id 或 attack_name 的记录不能被
+    隐式拼成 `None` anchor, 否则不同方法可能在非同源样本上被误判为已对齐。
+    """
 
     rows: list[dict[str, Any]] = []
     for record in records:
@@ -186,6 +191,8 @@ def _positive_score_rows(records: Iterable[Mapping[str, Any]], *, score_fields: 
         prompt_id = record.get("prompt_id")
         seed_id = record.get("seed_id")
         attack_name = record.get("attack_name")
+        if prompt_id in {None, ""} or seed_id in {None, ""} or attack_name in {None, ""}:
+            continue
         comparison_anchor_key = f"{prompt_id}::{seed_id}::{attack_name}"
         rows.append({
             "score": float(score),
@@ -199,6 +206,29 @@ def _positive_score_rows(records: Iterable[Mapping[str, Any]], *, score_fields: 
             or record.get("sstw_measured_formal_record_id"),
         })
     return rows
+
+
+def _positive_score_missing_anchor_count(
+    records: Iterable[Mapping[str, Any]],
+    *,
+    score_fields: tuple[str, ...],
+) -> int:
+    """统计已测量 attacked positive 记录中缺少完整 anchor 的数量。
+
+    该计数用于 fail closed: 只要存在带分数但缺少 prompt_id / seed_id /
+    attack_name 的正式 positive 记录, 当前方法的公平校准就不能进入 ready 状态。
+    """
+
+    missing_count = 0
+    for record in records:
+        if record.get("metric_status") != "measured_formal" or not _is_attacked_positive_record(record):
+            continue
+        score, _field_name = _first_score(record, score_fields)
+        if score is None:
+            continue
+        if record.get("prompt_id") in {None, ""} or record.get("seed_id") in {None, ""} or record.get("attack_name") in {None, ""}:
+            missing_count += 1
+    return missing_count
 
 
 def _fpr_at_threshold(scores: list[float], threshold: float) -> float:
@@ -259,6 +289,7 @@ def _calibrated_method_record(
     """构建单个方法的公平校准记录。"""
 
     positive_rows = _positive_score_rows(records, score_fields=positive_score_fields)
+    positive_missing_anchor_count = _positive_score_missing_anchor_count(records, score_fields=positive_score_fields)
     negative_rows = _deduplicated_score_rows(
         records,
         score_fields=negative_score_fields,
@@ -297,6 +328,8 @@ def _calibrated_method_record(
         missing_reasons.append("clean_negative_score_count_below_minimum")
     if not positive_rows:
         missing_reasons.append("attacked_positive_scores_missing")
+    if positive_missing_anchor_count:
+        missing_reasons.append("positive_anchor_fields_missing")
     if any(str(record.get("external_baseline_score_orientation") or "higher_is_more_watermarked") != "higher_is_more_watermarked" for record in records):
         missing_reasons.append("unsupported_score_orientation")
     calibration_status = "ready" if not missing_reasons and threshold is not None and tpr is not None else "blocked"
@@ -313,6 +346,7 @@ def _calibrated_method_record(
         "clean_negative_score_field": negative_rows[0]["score_field"] if negative_rows else (embedded_negative_score_fields or negative_score_fields or ("missing",))[0],
         "clean_negative_score_count": len(negative_rows),
         "attacked_positive_score_count": len(positive_rows),
+        "positive_anchor_missing_count": positive_missing_anchor_count,
         "positive_anchor_count": len({str(row["comparison_anchor_key"]) for row in positive_rows}),
         "positive_anchor_keys": sorted({str(row["comparison_anchor_key"]) for row in positive_rows}),
         "positive_detection_units_at_target_fpr": sorted(

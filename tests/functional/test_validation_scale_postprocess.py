@@ -189,6 +189,7 @@ def test_formal_method_baseline_comparison_requires_sstw_and_five_baselines(tmp_
             "method_role": "proposed_method",
             "metric_status": "measured_formal",
             "prompt_id": "prompt_a",
+            "seed_id": "seed_a",
             "attack_name": "video_compression_runtime",
             "sstw_score": 0.84,
             "sstw_detected": True,
@@ -222,6 +223,7 @@ def test_formal_method_baseline_comparison_requires_sstw_and_five_baselines(tmp_
             "external_baseline_layer": "modern_external_baseline",
             "metric_status": "measured_formal",
             "prompt_id": "prompt_a",
+            "seed_id": "seed_a",
             "attack_name": "video_compression_runtime",
             "external_baseline_raw_detector_score": score,
             "external_baseline_score": score,
@@ -269,6 +271,92 @@ def test_formal_method_baseline_comparison_requires_sstw_and_five_baselines(tmp_
     assert (run_root / "tables" / "formal_method_baseline_comparison_table.csv").exists()
     assert (run_root / "artifacts" / "formal_method_baseline_comparison_decision.json").exists()
     assert (run_root / "reports" / "formal_method_baseline_comparison_report.md").exists()
+
+
+@pytest.mark.quick
+def test_fair_detection_calibration_rejects_positive_records_without_complete_anchor(tmp_path: Path) -> None:
+    """公平校准不能把缺失 prompt / seed / attack 的 positive 记录伪装成可比较 anchor。"""
+    run_root = tmp_path / "run"
+    config_path = run_root / "validation_scale_config.json"
+    write_json(config_path, {
+        "paper_result_level": "validation_scale",
+        "target_fpr": 0.1,
+        "minimum_clean_negative_count": 2,
+        "required_modern_external_baseline_adapter_names": ["videoseal"],
+    })
+    write_jsonl(run_root / "records" / "sstw_measured_formal_records.jsonl", [
+        {
+            "method_id": "sstw_key_conditioned_flow_trajectory",
+            "method_role": "proposed_method",
+            "metric_status": "measured_formal",
+            "prompt_id": "prompt_a",
+            "attack_name": "video_compression_runtime",
+            "sstw_score": 0.84,
+        },
+        {
+            "method_id": "sstw_key_conditioned_flow_trajectory",
+            "method_role": "proposed_method",
+            "metric_status": "measured_formal",
+            "sample_role": "clean_negative",
+            "prompt_id": "negative_0",
+            "seed_id": "seed_a",
+            "sstw_score": 0.05,
+        },
+        {
+            "method_id": "sstw_key_conditioned_flow_trajectory",
+            "method_role": "proposed_method",
+            "metric_status": "measured_formal",
+            "sample_role": "clean_negative",
+            "prompt_id": "negative_1",
+            "seed_id": "seed_a",
+            "sstw_score": 0.06,
+        },
+    ])
+    write_jsonl(run_root / "records" / "external_baseline_score_records.jsonl", [
+        {
+            "external_baseline_name": "videoseal",
+            "external_baseline_layer": "modern_external_baseline",
+            "metric_status": "measured_formal",
+            "prompt_id": "prompt_a",
+            "seed_id": "seed_a",
+            "attack_name": "video_compression_runtime",
+            "external_baseline_raw_detector_score": 0.8,
+            "external_baseline_score": 0.8,
+            "external_baseline_score_semantics": "watermark_presence_detector_score",
+        },
+        {
+            "external_baseline_name": "videoseal",
+            "external_baseline_layer": "modern_external_baseline",
+            "metric_status": "measured_formal",
+            "sample_role": "clean_negative",
+            "prompt_id": "negative_0",
+            "seed_id": "seed_a",
+            "external_baseline_raw_detector_score": 0.05,
+            "external_baseline_score": 0.05,
+            "external_baseline_score_semantics": "watermark_presence_detector_score",
+        },
+        {
+            "external_baseline_name": "videoseal",
+            "external_baseline_layer": "modern_external_baseline",
+            "metric_status": "measured_formal",
+            "sample_role": "clean_negative",
+            "prompt_id": "negative_1",
+            "seed_id": "seed_a",
+            "external_baseline_raw_detector_score": 0.06,
+            "external_baseline_score": 0.06,
+            "external_baseline_score_semantics": "watermark_presence_detector_score",
+        },
+    ])
+
+    audit = run_fair_detection_calibration(run_root, config_path)
+    records = read_jsonl(run_root / "records" / "fair_detection_calibration_records.jsonl")
+    sstw_record = next(record for record in records if record["method_id"] == "sstw_key_conditioned_flow_trajectory")
+
+    assert audit["fair_detection_calibration_decision"] == "FAIL"
+    assert "sstw_key_conditioned_flow_trajectory" in audit["fair_detection_calibration_missing_method_ids"]
+    assert sstw_record["fair_comparison_status"] == "blocked"
+    assert sstw_record["positive_anchor_missing_count"] == 1
+    assert "positive_anchor_fields_missing" in sstw_record["fair_comparison_missing_reasons"]
 
 
 @pytest.mark.quick

@@ -12,8 +12,9 @@ import argparse
 import json
 import math
 from pathlib import Path
-from typing import Any, Iterable, Mapping
+from typing import Any, Callable, Iterable, Mapping
 
+from experiments.generative_video_model_probe.external_baseline_runner import formal_score_record_ready_for_claim
 from main.core.digest import build_stable_digest
 from main.protocol.flow_evidence_fields import with_flow_evidence_protocol_defaults
 from main.protocol.record_writer import write_json, write_jsonl
@@ -173,7 +174,12 @@ def _deduplicated_score_rows(
     return rows
 
 
-def _positive_score_rows(records: Iterable[Mapping[str, Any]], *, score_fields: tuple[str, ...]) -> list[dict[str, Any]]:
+def _positive_score_rows(
+    records: Iterable[Mapping[str, Any]],
+    *,
+    score_fields: tuple[str, ...],
+    positive_record_ready_predicate: Callable[[Mapping[str, Any]], bool] | None = None,
+) -> list[dict[str, Any]]:
     """提取具备完整 prompt / seed / attack anchor 的 attacked positive 分数。
 
     公平比较的核心约束是每个方法都在同一 prompt / seed / attack 单元上比较
@@ -184,6 +190,8 @@ def _positive_score_rows(records: Iterable[Mapping[str, Any]], *, score_fields: 
     rows: list[dict[str, Any]] = []
     for record in records:
         if record.get("metric_status") != "measured_formal" or not _is_attacked_positive_record(record):
+            continue
+        if positive_record_ready_predicate is not None and not positive_record_ready_predicate(record):
             continue
         score, field_name = _first_score(record, score_fields)
         if score is None:
@@ -227,6 +235,28 @@ def _positive_score_missing_anchor_count(
         if score is None:
             continue
         if record.get("prompt_id") in {None, ""} or record.get("seed_id") in {None, ""} or record.get("attack_name") in {None, ""}:
+            missing_count += 1
+    return missing_count
+
+
+def _positive_formal_evidence_missing_count(
+    records: Iterable[Mapping[str, Any]],
+    *,
+    score_fields: tuple[str, ...],
+    positive_record_ready_predicate: Callable[[Mapping[str, Any]], bool] | None,
+) -> int:
+    """统计带分数但未满足 formal evidence 要求的 attacked positive 记录数量。"""
+
+    if positive_record_ready_predicate is None:
+        return 0
+    missing_count = 0
+    for record in records:
+        if record.get("metric_status") != "measured_formal" or not _is_attacked_positive_record(record):
+            continue
+        score, _field_name = _first_score(record, score_fields)
+        if score is None:
+            continue
+        if not positive_record_ready_predicate(record):
             missing_count += 1
     return missing_count
 
@@ -285,11 +315,21 @@ def _calibrated_method_record(
     score_semantics_field: str,
     default_score_semantics: str,
     context: dict[str, Any],
+    positive_record_ready_predicate: Callable[[Mapping[str, Any]], bool] | None = None,
 ) -> dict[str, Any]:
     """构建单个方法的公平校准记录。"""
 
-    positive_rows = _positive_score_rows(records, score_fields=positive_score_fields)
+    positive_rows = _positive_score_rows(
+        records,
+        score_fields=positive_score_fields,
+        positive_record_ready_predicate=positive_record_ready_predicate,
+    )
     positive_missing_anchor_count = _positive_score_missing_anchor_count(records, score_fields=positive_score_fields)
+    positive_formal_evidence_missing_count = _positive_formal_evidence_missing_count(
+        records,
+        score_fields=positive_score_fields,
+        positive_record_ready_predicate=positive_record_ready_predicate,
+    )
     negative_rows = _deduplicated_score_rows(
         records,
         score_fields=negative_score_fields,
@@ -330,6 +370,8 @@ def _calibrated_method_record(
         missing_reasons.append("attacked_positive_scores_missing")
     if positive_missing_anchor_count:
         missing_reasons.append("positive_anchor_fields_missing")
+    if positive_formal_evidence_missing_count:
+        missing_reasons.append("positive_formal_evidence_missing")
     if any(str(record.get("external_baseline_score_orientation") or "higher_is_more_watermarked") != "higher_is_more_watermarked" for record in records):
         missing_reasons.append("unsupported_score_orientation")
     calibration_status = "ready" if not missing_reasons and threshold is not None and tpr is not None else "blocked"
@@ -347,6 +389,7 @@ def _calibrated_method_record(
         "clean_negative_score_count": len(negative_rows),
         "attacked_positive_score_count": len(positive_rows),
         "positive_anchor_missing_count": positive_missing_anchor_count,
+        "positive_formal_evidence_missing_count": positive_formal_evidence_missing_count,
         "positive_anchor_count": len({str(row["comparison_anchor_key"]) for row in positive_rows}),
         "positive_anchor_keys": sorted({str(row["comparison_anchor_key"]) for row in positive_rows}),
         "positive_detection_units_at_target_fpr": sorted(
@@ -416,6 +459,7 @@ def build_fair_detection_calibration_records(
             score_semantics_field="external_baseline_score_semantics",
             default_score_semantics="external_baseline_detector_score",
             context=context,
+            positive_record_ready_predicate=formal_score_record_ready_for_claim,
         ))
     return rows
 

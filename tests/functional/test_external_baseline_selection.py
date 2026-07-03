@@ -371,6 +371,8 @@ def test_sigmark_runtime_closure_allows_project_owned_hunyuan_runner_before_npz_
 
     run_root = tmp_path / "runs" / "generative_video_model_probe" / "validation_scale"
     _write_external_baseline_runtime_fixture(run_root)
+    sigmark_source_dir = tmp_path / "official_sources" / "sigmark"
+    _write_minimal_sigmark_official_source_fixture(sigmark_source_dir)
     (run_root / "attacked_videos").mkdir(parents=True, exist_ok=True)
     write_jsonl(run_root / "records" / "generation_records.jsonl", [
         {
@@ -383,6 +385,7 @@ def test_sigmark_runtime_closure_allows_project_owned_hunyuan_runner_before_npz_
     monkeypatch.delenv("SSTW_SIGMARK_BIT_ACCURACY_NPZ", raising=False)
     monkeypatch.delenv("SSTW_SIGMARK_NATIVE_EVAL_COMMAND", raising=False)
     monkeypatch.delenv("SSTW_SIGMARK_OFFICIAL_EVAL_COMMAND", raising=False)
+    monkeypatch.setenv("SSTW_SIGMARK_OFFICIAL_SOURCE_DIR", str(sigmark_source_dir))
     monkeypatch.setenv("SSTW_RUN_SIGMARK_OFFICIAL_HUNYUAN_PIPELINE", "true")
 
     audit = build_official_runtime_closure_requirements(
@@ -407,6 +410,20 @@ def test_sigmark_runtime_closure_allows_project_owned_hunyuan_runner_before_npz_
         == "external_baseline.sigmark_official_hunyuan_runtime"
     )
     assert sigmark_row["project_owned_reference_runner_requirement"]["project_owned_reference_runner_ready_to_attempt"] is True
+
+
+def _write_minimal_sigmark_official_source_fixture(source_dir: Path) -> None:
+    """写出 SIGMark runtime closure 预检所需的最小官方源码占位结构。
+
+    该 fixture 只用于测试 source readiness 判定, 不执行第三方 SIGMark 代码。
+    这样可以保证 `pytest -q` 在 Colab 干净仓库中也自包含运行, 不依赖本地
+    `external_baseline/primary/sigmark/source` 这种被 git ignore 的 clone 目录。
+    """
+
+    (source_dir / "watermarks").mkdir(parents=True, exist_ok=True)
+    (source_dir / "main.py").write_text("# SIGMark 官方入口测试占位文件。\n", encoding="utf-8")
+    (source_dir / "apply_disturbances.py").write_text("# SIGMark 扰动脚本测试占位文件。\n", encoding="utf-8")
+    (source_dir / "watermarks" / "sigmark.py").write_text("# SIGMark 水印实现测试占位文件。\n", encoding="utf-8")
 
 
 @pytest.mark.quick

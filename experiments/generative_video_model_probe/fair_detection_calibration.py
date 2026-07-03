@@ -14,7 +14,10 @@ import math
 from pathlib import Path
 from typing import Any, Callable, Iterable, Mapping
 
-from experiments.generative_video_model_probe.external_baseline_runner import formal_score_record_ready_for_claim
+from experiments.generative_video_model_probe.external_baseline_runner import (
+    formal_clean_negative_score_record_ready_for_calibration,
+    formal_score_record_ready_for_claim,
+)
 from main.core.digest import build_stable_digest
 from main.protocol.flow_evidence_fields import with_flow_evidence_protocol_defaults
 from main.protocol.record_writer import write_json, write_jsonl
@@ -125,6 +128,8 @@ def _deduplicated_score_rows(
     *,
     score_fields: tuple[str, ...],
     negative_embedded_fields: tuple[str, ...] = (),
+    negative_record_ready_predicate: Callable[[Mapping[str, Any]], bool] | None = None,
+    embedded_negative_record_ready_predicate: Callable[[Mapping[str, Any]], bool] | None = None,
 ) -> list[dict[str, Any]]:
     """提取 clean negative 分数, 并按视频路径或 prompt / seed 去重。
 
@@ -136,12 +141,19 @@ def _deduplicated_score_rows(
     rows: list[dict[str, Any]] = []
     seen: set[tuple[str, str, str, str]] = set()
     for record in records:
-        candidate_fields = score_fields if _is_clean_negative_record(record) else negative_embedded_fields
+        is_clean_negative = _is_clean_negative_record(record)
+        candidate_fields = score_fields if is_clean_negative else negative_embedded_fields
         if not candidate_fields:
             continue
         score, field_name = _first_score(record, candidate_fields)
         if score is None:
             continue
+        if is_clean_negative and negative_record_ready_predicate is not None:
+            if not negative_record_ready_predicate(record):
+                continue
+        if not is_clean_negative and embedded_negative_record_ready_predicate is not None:
+            if not embedded_negative_record_ready_predicate(record):
+                continue
         path = str(
             record.get("clean_negative_video_path")
             or record.get("external_baseline_clean_negative_video_path")
@@ -261,6 +273,34 @@ def _positive_formal_evidence_missing_count(
     return missing_count
 
 
+def _negative_formal_evidence_missing_count(
+    records: Iterable[Mapping[str, Any]],
+    *,
+    score_fields: tuple[str, ...],
+    embedded_negative_score_fields: tuple[str, ...],
+    negative_record_ready_predicate: Callable[[Mapping[str, Any]], bool] | None,
+    embedded_negative_record_ready_predicate: Callable[[Mapping[str, Any]], bool] | None,
+) -> int:
+    """统计带 clean negative 分数但未满足 official evidence 要求的记录数量。"""
+
+    missing_count = 0
+    for record in records:
+        is_clean_negative = _is_clean_negative_record(record)
+        candidate_fields = score_fields if is_clean_negative else embedded_negative_score_fields
+        if not candidate_fields:
+            continue
+        score, _field_name = _first_score(record, candidate_fields)
+        if score is None:
+            continue
+        if is_clean_negative and negative_record_ready_predicate is not None:
+            if not negative_record_ready_predicate(record):
+                missing_count += 1
+        elif not is_clean_negative and embedded_negative_record_ready_predicate is not None:
+            if not embedded_negative_record_ready_predicate(record):
+                missing_count += 1
+    return missing_count
+
+
 def _fpr_at_threshold(scores: list[float], threshold: float) -> float:
     """计算 higher-is-more-watermarked 方向下的 FPR。"""
 
@@ -316,6 +356,8 @@ def _calibrated_method_record(
     default_score_semantics: str,
     context: dict[str, Any],
     positive_record_ready_predicate: Callable[[Mapping[str, Any]], bool] | None = None,
+    negative_record_ready_predicate: Callable[[Mapping[str, Any]], bool] | None = None,
+    embedded_negative_record_ready_predicate: Callable[[Mapping[str, Any]], bool] | None = None,
 ) -> dict[str, Any]:
     """构建单个方法的公平校准记录。"""
 
@@ -330,10 +372,19 @@ def _calibrated_method_record(
         score_fields=positive_score_fields,
         positive_record_ready_predicate=positive_record_ready_predicate,
     )
+    negative_formal_evidence_missing_count = _negative_formal_evidence_missing_count(
+        records,
+        score_fields=negative_score_fields,
+        embedded_negative_score_fields=embedded_negative_score_fields,
+        negative_record_ready_predicate=negative_record_ready_predicate,
+        embedded_negative_record_ready_predicate=embedded_negative_record_ready_predicate,
+    )
     negative_rows = _deduplicated_score_rows(
         records,
         score_fields=negative_score_fields,
         negative_embedded_fields=embedded_negative_score_fields,
+        negative_record_ready_predicate=negative_record_ready_predicate,
+        embedded_negative_record_ready_predicate=embedded_negative_record_ready_predicate,
     )
     negative_scores = [row["score"] for row in negative_rows]
     positive_scores = [row["score"] for row in positive_rows]
@@ -372,6 +423,8 @@ def _calibrated_method_record(
         missing_reasons.append("positive_anchor_fields_missing")
     if positive_formal_evidence_missing_count:
         missing_reasons.append("positive_formal_evidence_missing")
+    if negative_formal_evidence_missing_count:
+        missing_reasons.append("clean_negative_formal_evidence_missing")
     if any(str(record.get("external_baseline_score_orientation") or "higher_is_more_watermarked") != "higher_is_more_watermarked" for record in records):
         missing_reasons.append("unsupported_score_orientation")
     calibration_status = "ready" if not missing_reasons and threshold is not None and tpr is not None else "blocked"
@@ -390,6 +443,7 @@ def _calibrated_method_record(
         "attacked_positive_score_count": len(positive_rows),
         "positive_anchor_missing_count": positive_missing_anchor_count,
         "positive_formal_evidence_missing_count": positive_formal_evidence_missing_count,
+        "negative_formal_evidence_missing_count": negative_formal_evidence_missing_count,
         "positive_anchor_count": len({str(row["comparison_anchor_key"]) for row in positive_rows}),
         "positive_anchor_keys": sorted({str(row["comparison_anchor_key"]) for row in positive_rows}),
         "positive_detection_units_at_target_fpr": sorted(
@@ -460,6 +514,8 @@ def build_fair_detection_calibration_records(
             default_score_semantics="external_baseline_detector_score",
             context=context,
             positive_record_ready_predicate=formal_score_record_ready_for_claim,
+            negative_record_ready_predicate=formal_clean_negative_score_record_ready_for_calibration,
+            embedded_negative_record_ready_predicate=formal_score_record_ready_for_claim,
         ))
     return rows
 

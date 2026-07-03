@@ -1348,6 +1348,7 @@ Notebook 与 repository module 的跨边界数据
 | positive_anchor_count | metric | none | true | true | false | fair calibration 中 attacked positive 的 prompt / seed / attack anchor 数量。 |
 | positive_anchor_missing_count | metric | none | true | true | false | fair calibration 中带分数但缺少 prompt_id、seed_id 或 attack_name 的 attacked positive 记录数量。 |
 | positive_formal_evidence_missing_count | metric | none | true | true | false | fair calibration 中带分数但缺少 official evidence、clean negative 或完整 anchor 的 formal attacked positive 记录数量。 |
+| negative_formal_evidence_missing_count | metric | none | true | true | false | fair calibration 中带 clean negative 分数但缺少 official evidence 或官方分数抽取证据的记录数量。 |
 | positive_anchor_keys | protocol | none | true | false | false | fair calibration 中 attacked positive 的规范 prompt / seed / attack anchor 键集合。 |
 | positive_detection_units_at_target_fpr | metric | none | true | false | false | target FPR 阈值下每个 prompt / seed / attack anchor 的检测结果列表。 |
 | comparison_anchor_key | protocol | none | true | false | false | 由 prompt_id、seed_id 和 attack_name 组成的公平比较锚点键。 |

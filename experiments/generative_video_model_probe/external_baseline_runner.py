@@ -225,6 +225,57 @@ def _has_official_score_extraction_evidence(record: Mapping[str, Any]) -> bool:
     )
 
 
+def _has_clean_negative_score_evidence(record: Mapping[str, Any]) -> bool:
+    """检查 clean negative 行是否具备可用于 target FPR 校准的官方分数证据。"""
+
+    return (
+        _has_numeric_field(record, "external_baseline_clean_negative_score")
+        or _has_numeric_field(record, "external_baseline_raw_detector_score")
+        or _has_numeric_field(record, "external_baseline_score")
+    )
+
+
+def _has_clean_negative_score_extraction_evidence(record: Mapping[str, Any]) -> bool:
+    """检查 clean negative 分数是否声明了官方抽取口径。
+
+    clean negative 行可以只携带 `external_baseline_clean_negative_score`, 不一定
+    同时携带 positive 行使用的 `external_baseline_score`。因此这里单独检查
+    clean negative 分数字段和语义字段, 但仍复用同一 score orientation、
+    official score extraction policy 与 protocol anchor。
+    """
+
+    score_semantics = str(
+        record.get("external_baseline_clean_negative_score_semantics")
+        or record.get("external_baseline_score_semantics")
+        or ""
+    )
+    return (
+        _has_clean_negative_score_evidence(record)
+        and bool(score_semantics)
+        and score_semantics != "unspecified_detector_score"
+        and str(record.get("external_baseline_score_orientation") or "") == "higher_is_more_watermarked"
+        and _has_nonempty_field(record, "external_baseline_official_score_extraction_policy")
+        and str(record.get("external_baseline_official_reference_protocol_anchor") or "")
+        == REQUIRED_OFFICIAL_REFERENCE_PROTOCOL_ANCHOR
+    )
+
+
+def formal_clean_negative_score_record_ready_for_calibration(record: Mapping[str, Any]) -> bool:
+    """检查 external baseline clean negative 行是否可进入公平校准。
+
+    该函数不要求 attack_name, 因为 clean negative 样本本身不是 attacked positive。
+    但它仍要求 official bundle evidence 和官方分数抽取口径, 防止手写 clean
+    negative 分数把 target FPR 阈值校准成不可审计结果。
+    """
+
+    return (
+        record.get("metric_status") == "measured_formal"
+        and _has_clean_negative_score_evidence(record)
+        and _has_official_execution_evidence(record)
+        and _has_clean_negative_score_extraction_evidence(record)
+    )
+
+
 def formal_score_record_ready_for_claim(record: Mapping[str, Any]) -> bool:
     """检查 measured_formal baseline row 是否达到公平比较入口要求。
 

@@ -45,6 +45,43 @@ def _formal_baseline_evidence_fields(
     }
 
 
+def _formal_baseline_clean_negative_record(
+    run_root: Path,
+    baseline_id: str,
+    prompt_id: str,
+    seed_id: str,
+    score: float,
+    *,
+    external_baseline_layer: str | None = None,
+) -> dict[str, object]:
+    """构造可参与 target FPR 校准的现代 baseline clean negative 记录。
+
+    该测试 helper 复用 positive 行相同的 official bundle 证据字段, 用于表达
+    clean negative 分数同样来自项目内 official 运行与官方分数抽取结果。
+    """
+
+    row: dict[str, object] = {
+        "external_baseline_name": baseline_id,
+        "metric_status": "measured_formal",
+        "sample_role": "clean_negative",
+        "prompt_id": prompt_id,
+        "seed_id": seed_id,
+        "external_baseline_score_semantics": "watermark_presence_detector_score",
+        "external_baseline_clean_negative_score_semantics": "watermark_presence_detector_score",
+        **_formal_baseline_evidence_fields(
+            run_root,
+            baseline_id,
+            prompt_id,
+            seed_id,
+            "clean_negative",
+            clean_negative_score=score,
+        ),
+    }
+    if external_baseline_layer is not None:
+        row["external_baseline_layer"] = external_baseline_layer
+    return row
+
+
 @pytest.mark.quick
 def test_validation_internal_ablation_writes_proxy_records(tmp_path: Path) -> None:
     """validation 内部消融 runner 必须从 runtime detection records 写出 proxy 消融矩阵。"""
@@ -266,17 +303,14 @@ def test_formal_method_baseline_comparison_requires_sstw_and_five_baselines(tmp_
             ),
         })
         baseline_records.extend(
-            {
-                "external_baseline_name": baseline_id,
-                "external_baseline_layer": "modern_external_baseline",
-                "metric_status": "measured_formal",
-                "sample_role": "clean_negative",
-                "prompt_id": f"negative_{index}",
-                "seed_id": "seed_a",
-                "external_baseline_raw_detector_score": 0.05 + index * 0.001,
-                "external_baseline_score": 0.05 + index * 0.001,
-                "external_baseline_score_semantics": "watermark_presence_detector_score",
-            }
+            _formal_baseline_clean_negative_record(
+                run_root,
+                baseline_id,
+                f"negative_{index}",
+                "seed_a",
+                0.05 + index * 0.001,
+                external_baseline_layer="modern_external_baseline",
+            )
             for index in range(10)
         )
     write_jsonl(run_root / "records" / "external_baseline_score_records.jsonl", baseline_records)
@@ -435,28 +469,22 @@ def test_fair_detection_calibration_rejects_positive_records_without_complete_an
                 "video_compression_runtime",
             ),
         },
-        {
-            "external_baseline_name": "videoseal",
-            "external_baseline_layer": "modern_external_baseline",
-            "metric_status": "measured_formal",
-            "sample_role": "clean_negative",
-            "prompt_id": "negative_0",
-            "seed_id": "seed_a",
-            "external_baseline_raw_detector_score": 0.05,
-            "external_baseline_score": 0.05,
-            "external_baseline_score_semantics": "watermark_presence_detector_score",
-        },
-        {
-            "external_baseline_name": "videoseal",
-            "external_baseline_layer": "modern_external_baseline",
-            "metric_status": "measured_formal",
-            "sample_role": "clean_negative",
-            "prompt_id": "negative_1",
-            "seed_id": "seed_a",
-            "external_baseline_raw_detector_score": 0.06,
-            "external_baseline_score": 0.06,
-            "external_baseline_score_semantics": "watermark_presence_detector_score",
-        },
+        _formal_baseline_clean_negative_record(
+            run_root,
+            "videoseal",
+            "negative_0",
+            "seed_a",
+            0.05,
+            external_baseline_layer="modern_external_baseline",
+        ),
+        _formal_baseline_clean_negative_record(
+            run_root,
+            "videoseal",
+            "negative_1",
+            "seed_a",
+            0.06,
+            external_baseline_layer="modern_external_baseline",
+        ),
     ])
 
     audit = run_fair_detection_calibration(run_root, config_path)
@@ -528,8 +556,96 @@ def test_fair_detection_calibration_rejects_external_positive_without_official_e
             "external_baseline_official_command_manifest_path": str(run_root / "artifacts" / "videoseal_official_command_manifest.json"),
             "external_baseline_official_result_provenance": "manual_result_json",
         },
+        _formal_baseline_clean_negative_record(
+            run_root,
+            "videoseal",
+            "negative_0",
+            "seed_a",
+            0.05,
+            external_baseline_layer="modern_external_baseline",
+        ),
+        _formal_baseline_clean_negative_record(
+            run_root,
+            "videoseal",
+            "negative_1",
+            "seed_a",
+            0.06,
+            external_baseline_layer="modern_external_baseline",
+        ),
+    ])
+
+    audit = run_fair_detection_calibration(run_root, config_path)
+    records = read_jsonl(run_root / "records" / "fair_detection_calibration_records.jsonl")
+    baseline_record = next(record for record in records if record["method_id"] == "videoseal")
+
+    assert audit["fair_detection_calibration_decision"] == "FAIL"
+    assert "videoseal" in audit["fair_detection_calibration_missing_method_ids"]
+    assert baseline_record["fair_comparison_status"] == "blocked"
+    assert baseline_record["positive_formal_evidence_missing_count"] == 1
+    assert "positive_formal_evidence_missing" in baseline_record["fair_comparison_missing_reasons"]
+
+
+@pytest.mark.quick
+def test_fair_detection_calibration_rejects_external_clean_negative_without_official_evidence(tmp_path: Path) -> None:
+    """现代 baseline 的 clean negative 校准分数也必须来自 official evidence。"""
+    run_root = tmp_path / "run"
+    config_path = run_root / "validation_scale_config.json"
+    write_json(config_path, {
+        "paper_result_level": "validation_scale",
+        "target_fpr": 0.1,
+        "minimum_clean_negative_count": 2,
+        "required_modern_external_baseline_adapter_names": ["videoshield"],
+    })
+    write_jsonl(run_root / "records" / "sstw_measured_formal_records.jsonl", [
         {
-            "external_baseline_name": "videoseal",
+            "method_id": "sstw_key_conditioned_flow_trajectory",
+            "method_role": "proposed_method",
+            "metric_status": "measured_formal",
+            "prompt_id": "prompt_a",
+            "seed_id": "seed_a",
+            "attack_name": "video_compression_runtime",
+            "sstw_score": 0.84,
+        },
+        {
+            "method_id": "sstw_key_conditioned_flow_trajectory",
+            "method_role": "proposed_method",
+            "metric_status": "measured_formal",
+            "sample_role": "clean_negative",
+            "prompt_id": "negative_0",
+            "seed_id": "seed_a",
+            "sstw_score": 0.05,
+        },
+        {
+            "method_id": "sstw_key_conditioned_flow_trajectory",
+            "method_role": "proposed_method",
+            "metric_status": "measured_formal",
+            "sample_role": "clean_negative",
+            "prompt_id": "negative_1",
+            "seed_id": "seed_a",
+            "sstw_score": 0.06,
+        },
+    ])
+    write_jsonl(run_root / "records" / "external_baseline_score_records.jsonl", [
+        {
+            "external_baseline_name": "videoshield",
+            "external_baseline_layer": "modern_external_baseline",
+            "metric_status": "measured_formal",
+            "prompt_id": "prompt_a",
+            "seed_id": "seed_a",
+            "attack_name": "video_compression_runtime",
+            "external_baseline_raw_detector_score": 0.8,
+            "external_baseline_score": 0.8,
+            "external_baseline_score_semantics": "watermark_presence_detector_score",
+            **_formal_baseline_evidence_fields(
+                run_root,
+                "videoshield",
+                "prompt_a",
+                "seed_a",
+                "video_compression_runtime",
+            ),
+        },
+        {
+            "external_baseline_name": "videoshield",
             "external_baseline_layer": "modern_external_baseline",
             "metric_status": "measured_formal",
             "sample_role": "clean_negative",
@@ -540,7 +656,7 @@ def test_fair_detection_calibration_rejects_external_positive_without_official_e
             "external_baseline_score_semantics": "watermark_presence_detector_score",
         },
         {
-            "external_baseline_name": "videoseal",
+            "external_baseline_name": "videoshield",
             "external_baseline_layer": "modern_external_baseline",
             "metric_status": "measured_formal",
             "sample_role": "clean_negative",
@@ -554,13 +670,13 @@ def test_fair_detection_calibration_rejects_external_positive_without_official_e
 
     audit = run_fair_detection_calibration(run_root, config_path)
     records = read_jsonl(run_root / "records" / "fair_detection_calibration_records.jsonl")
-    baseline_record = next(record for record in records if record["method_id"] == "videoseal")
+    baseline_record = next(record for record in records if record["method_id"] == "videoshield")
 
     assert audit["fair_detection_calibration_decision"] == "FAIL"
-    assert "videoseal" in audit["fair_detection_calibration_missing_method_ids"]
+    assert "videoshield" in audit["fair_detection_calibration_missing_method_ids"]
     assert baseline_record["fair_comparison_status"] == "blocked"
-    assert baseline_record["positive_formal_evidence_missing_count"] == 1
-    assert "positive_formal_evidence_missing" in baseline_record["fair_comparison_missing_reasons"]
+    assert baseline_record["negative_formal_evidence_missing_count"] == 2
+    assert "clean_negative_formal_evidence_missing" in baseline_record["fair_comparison_missing_reasons"]
 
 
 @pytest.mark.quick
@@ -619,17 +735,14 @@ def test_formal_method_baseline_comparison_rejects_unaligned_prompt_seed_attack_
         }
     ]
     baseline_rows.extend(
-        {
-            "external_baseline_name": "videoshield",
-            "external_baseline_layer": "modern_external_baseline",
-            "metric_status": "measured_formal",
-            "sample_role": "clean_negative",
-            "prompt_id": f"negative_{index}",
-            "seed_id": "seed_a",
-            "external_baseline_score": 0.05 + index * 0.001,
-            "external_baseline_raw_detector_score": 0.05 + index * 0.001,
-            "external_baseline_score_semantics": "watermark_presence_detector_score",
-        }
+        _formal_baseline_clean_negative_record(
+            run_root,
+            "videoshield",
+            f"negative_{index}",
+            "seed_a",
+            0.05 + index * 0.001,
+            external_baseline_layer="modern_external_baseline",
+        )
         for index in range(10)
     )
     write_jsonl(run_root / "records" / "sstw_measured_formal_records.jsonl", sstw_rows)
@@ -700,16 +813,13 @@ def test_formal_baseline_difference_interval_writes_sstw_vs_each_baseline_ci(tmp
                 ),
             })
         baseline_records.extend(
-            {
-                "external_baseline_name": baseline_id,
-                "metric_status": "measured_formal",
-                "sample_role": "clean_negative",
-                "prompt_id": f"negative_{index}",
-                "seed_id": "seed_a",
-                "external_baseline_raw_detector_score": 0.05 + index * 0.001,
-                "external_baseline_score": 0.05 + index * 0.001,
-                "external_baseline_score_semantics": "watermark_presence_detector_score",
-            }
+            _formal_baseline_clean_negative_record(
+                run_root,
+                baseline_id,
+                f"negative_{index}",
+                "seed_a",
+                0.05 + index * 0.001,
+            )
             for index in range(10)
         )
     write_jsonl(run_root / "records" / "external_baseline_score_records.jsonl", baseline_records)

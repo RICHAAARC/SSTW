@@ -1132,3 +1132,12 @@ Notebook 与 repository module 的跨边界数据
 | official_source_ready | governance | none | true | false | false | Whether a baseline official source directory contains required source files. |
 | required_resource_ready | governance | none | true | false | false | Whether required baseline resource environment variables or default Drive resource files are available. |
 | environment_updates | artifact | none | true | false | false | Environment variable updates emitted by a preflight artifact for the Notebook parent process. |
+
+| source_clone_ready | governance | none | true | false | false | External baseline self-containment 行中表示当前 checkout 或 clone manifest 是否已经提供源码克隆证据。 |
+| repository_generated_official_bundle_ready | governance | none | true | false | false | External baseline self-containment 行中表示项目内生成的 official bundle 与 execution manifest 是否足以证明 clone/build/run 证据。 |
+| official_bundle_record_count | artifact | none | true | false | false | 单个 baseline self-containment 行中绑定的 official bundle record 数量。 |
+| official_bundle_record_ok_count | artifact | none | true | false | false | 单个 baseline self-containment 行中通过 provenance 与 execution manifest 校验的 official bundle record 数量。 |
+| official_execution_manifest_count | artifact | none | true | false | false | 单个 baseline self-containment 行中绑定的 official execution manifest 数量。 |
+| official_execution_manifest_ok_count | artifact | none | true | false | false | 单个 baseline self-containment 行中通过项目内执行闭环校验的 official execution manifest 数量。 |
+| materialized_official_bundle_path_count | artifact | none | true | false | false | 单个 baseline self-containment 行中实际落盘可读取的 official bundle 路径数量。 |
+| materialized_official_execution_manifest_path_count | artifact | none | true | false | false | 单个 baseline self-containment 行中实际落盘可读取的 official execution manifest 路径数量。 |

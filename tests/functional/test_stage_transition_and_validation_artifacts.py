@@ -166,6 +166,104 @@ def test_external_baseline_self_containment_requires_measured_formal_evidence(tm
 
 
 @pytest.mark.quick
+def test_external_baseline_self_containment_accepts_repository_generated_official_bundles(tmp_path: Path) -> None:
+    """paper gate 可用项目内 official bundle execution manifest 证明 clone / build / run 闭环。"""
+    run_root = tmp_path / "run"
+    score_records = []
+    evidence_paths = []
+    intake_rows = []
+    inspection_rows = []
+    clone_rows = []
+    for baseline_name in MODERN_BASELINES:
+        evidence_root = run_root / "artifacts" / "external_baseline_evidence" / baseline_name / "unit_000"
+        output_path = evidence_root / "official_output.json"
+        stdout_path = evidence_root / "official_stdout.txt"
+        stderr_path = evidence_root / "official_stderr.txt"
+        command_manifest_path = evidence_root / "official_command_manifest.json"
+        bundle_root = run_root / "external_baseline_official_result_bundles" / "validation_scale" / baseline_name
+        execution_manifest_path = bundle_root / "official_reference_execution_manifest.json"
+        bundle_record_path = bundle_root / "records" / "prompt_0__seed_0__video_compression_runtime.json"
+        write_json(output_path, {"score": 0.7})
+        stdout_path.write_text("ok", encoding="utf-8")
+        stderr_path.write_text("", encoding="utf-8")
+        write_json(command_manifest_path, {
+            "command_return_code": 0,
+            "claim_support_status": "external_baseline_official_command_evidence",
+        })
+        write_json(execution_manifest_path, {
+            "baseline_id": baseline_name,
+            "execution_status": "executed",
+            "failed_bundle_record_count": 0,
+            "generated_bundle_record_count": 1,
+            "command_results": [{"return_code": 0}],
+            "claim_support_status": "official_reference_execution_evidence_not_measured_formal_record",
+        })
+        write_json(bundle_record_path, {
+            "external_baseline_score": 0.7,
+            "official_result_provenance": "repository_generated_from_third_party_official_code",
+            "official_execution_manifest_path": str(execution_manifest_path),
+        })
+        evidence_paths.extend([str(output_path), str(stdout_path), str(stderr_path), str(command_manifest_path)])
+        score_records.append({
+            "external_baseline_name": baseline_name,
+            "external_baseline_layer": "modern_external_baseline",
+            "external_baseline_adapter_path": f"external_baseline/primary/{baseline_name}/adapter/run_sstw_eval.py",
+            "external_baseline_score_source": "official_command_adapter",
+            "metric_status": "measured_formal",
+            "external_baseline_score_status": "measured_formal",
+            "external_baseline_official_output_path": str(output_path),
+            "external_baseline_official_stdout_path": str(stdout_path),
+            "external_baseline_official_stderr_path": str(stderr_path),
+            "external_baseline_official_command_manifest_path": str(command_manifest_path),
+            "external_baseline_official_result_bundle_path": str(bundle_record_path),
+            "external_baseline_official_execution_manifest_path": str(execution_manifest_path),
+        })
+        intake_rows.append({
+            "baseline_id": baseline_name,
+            "source_intake_status": "official_command_configured",
+            "source_dir_exists": False,
+        })
+        inspection_rows.append({
+            "baseline_id": baseline_name,
+            "source_dir_exists": False,
+        })
+        clone_rows.append({
+            "baseline_id": baseline_name,
+            "source_dir_exists": False,
+            "clone_operation_status": "planned_not_executed",
+        })
+    write_jsonl(run_root / "records" / "external_baseline_score_records.jsonl", score_records)
+    write_json(run_root / "artifacts" / "external_baseline_comparison_decision.json", {
+        "external_baseline_comparison_decision": "PASS",
+    })
+    write_json(run_root / "artifacts" / "external_baseline_execution_manifest.json", {
+        "formal_evidence_status": "evidence_paths_bound",
+        "evidence_path_count": len(evidence_paths),
+        "modern_external_baseline_formal_measured_adapter_names": list(MODERN_BASELINES),
+    })
+    write_json(run_root / "artifacts" / "external_baseline_intake_manifest.json", {
+        "baseline_sources": intake_rows,
+    })
+    write_json(run_root / "artifacts" / "external_baseline_source_inspection.json", {
+        "source_inspections": inspection_rows,
+    })
+    write_json(run_root / "artifacts" / "external_baseline_clone_results.json", {
+        "clone_results": clone_rows,
+    })
+
+    audit = write_external_baseline_self_containment_decision(run_root)
+
+    assert audit["external_baseline_self_containment_decision"] == "PASS"
+    assert audit["self_contained_modern_external_baseline_count"] == 5
+    for row in audit["baseline_self_containment_rows"]:
+        assert row["source_clone_ready"] is False
+        assert row["repository_generated_official_bundle_ready"] is True
+        assert row["clone_ready"] is True
+        assert row["official_bundle_record_ok_count"] == 1
+        assert row["official_execution_manifest_ok_count"] == 1
+
+
+@pytest.mark.quick
 def test_data_split_guard_detects_calibration_heldout_identity_leakage(tmp_path: Path) -> None:
     """同一视频身份不能同时出现在 calibration 与 held-out test split。"""
     run_root = tmp_path / "run"

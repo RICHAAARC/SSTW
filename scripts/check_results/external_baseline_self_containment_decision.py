@@ -31,6 +31,11 @@ EVIDENCE_PATH_FIELDS = (
     "external_baseline_official_stderr_path",
     "external_baseline_official_command_manifest_path",
 )
+OFFICIAL_BUNDLE_PATH_FIELDS = (
+    "external_baseline_official_result_bundle_path",
+    "external_baseline_official_execution_manifest_path",
+)
+REPOSITORY_GENERATED_OFFICIAL_PROVENANCE = "repository_generated_from_third_party_official_code"
 
 
 def _read_json(path: Path) -> dict[str, Any]:
@@ -63,26 +68,109 @@ def _load_required_modern_baselines(config_path: str | Path) -> list[str]:
 
 def _path_exists(path_text: str | None, run_root: Path) -> bool:
     """检查 evidence path 是否存在, 同时兼容绝对路径和相对 run_root 路径。"""
+    return _resolve_existing_path(path_text, run_root) is not None
+
+
+def _resolve_existing_path(path_text: str | None, run_root: Path) -> Path | None:
+    """解析已经落盘的证据路径。
+
+    该函数属于通用工程写法。paper gate 在 Colab 中使用绝对路径, 本地测试
+    常使用相对路径, 因此这里统一尝试原路径和相对 `run_root` 的路径。
+    """
     if not path_text:
-        return False
+        return None
     path = Path(path_text)
     candidates = [path]
     if not path.is_absolute():
         candidates.append(run_root / path)
-    return any(candidate.exists() for candidate in candidates)
+    for candidate in candidates:
+        if candidate.exists():
+            return candidate
+    return None
 
 
 def _manifest_return_code_ok(path_text: str | None, run_root: Path) -> bool:
     """读取官方命令 manifest, 确认命令成功返回。"""
-    if not path_text:
-        return False
-    path = Path(path_text)
-    if not path.is_absolute():
-        path = run_root / path
-    if not path.exists():
+    path = _resolve_existing_path(path_text, run_root)
+    if path is None:
         return False
     payload = _read_json(path)
     return payload.get("command_return_code") in {0, "0", None}
+
+
+def _official_execution_manifest_ok(
+    path_text: str | None,
+    run_root: Path,
+    baseline_name: str,
+) -> bool:
+    """校验项目内 official reference 执行 manifest。
+
+    baseline 专用 Notebook 会把 clone / build / run / adapt 的重型证据写入
+    official bundle 下的 execution manifest。paper gate 后处理通常不会保留
+    第三方源码目录本身, 因此 self-containment 不能只看当前 checkout 中的
+    `source_dir_exists`, 还必须接受该 execution manifest 作为项目内运行闭环证据。
+    """
+
+    path = _resolve_existing_path(path_text, run_root)
+    if path is None:
+        return False
+    payload = _read_json(path)
+    manifest_baseline = str(payload.get("baseline_id") or "")
+    if manifest_baseline and manifest_baseline != baseline_name:
+        return False
+    positive_evidence_found = False
+    failed_count = payload.get("failed_bundle_record_count")
+    try:
+        if failed_count is not None and int(failed_count) != 0:
+            return False
+    except (TypeError, ValueError):
+        return False
+    execution_status = str(payload.get("execution_status") or "").strip()
+    if execution_status and execution_status not in {"executed", "completed", "generated", "ready"}:
+        return False
+    if execution_status:
+        positive_evidence_found = True
+    command_results = payload.get("command_results")
+    if isinstance(command_results, list) and command_results:
+        for item in command_results:
+            if not isinstance(item, Mapping):
+                return False
+            if item.get("return_code") not in {0, "0", None}:
+                return False
+        positive_evidence_found = True
+    generated_count = payload.get("generated_bundle_record_count")
+    if generated_count is not None:
+        try:
+            if int(generated_count) <= 0:
+                return False
+            positive_evidence_found = True
+        except (TypeError, ValueError):
+            return False
+    return positive_evidence_found
+
+
+def _official_bundle_payload_ok(path_text: str | None, run_root: Path, baseline_name: str) -> bool:
+    """校验单条 official bundle record 来自项目内生成链路。
+
+    该函数是项目特定门禁。只有带有
+    `repository_generated_from_third_party_official_code` provenance 且绑定
+    official execution manifest 的 bundle JSON, 才能替代当前 paper gate
+    checkout 中的源码目录作为自包含运行证据。
+    """
+
+    path = _resolve_existing_path(path_text, run_root)
+    if path is None:
+        return False
+    payload = _read_json(path)
+    if str(payload.get("official_result_provenance") or "") != REPOSITORY_GENERATED_OFFICIAL_PROVENANCE:
+        return False
+    payload_baseline = str(payload.get("official_adapter_baseline_id") or payload.get("baseline_id") or "")
+    if payload_baseline and payload_baseline != baseline_name:
+        return False
+    manifest_path = str(payload.get("official_execution_manifest_path") or "")
+    if not manifest_path:
+        return False
+    return _official_execution_manifest_ok(manifest_path, run_root, baseline_name)
 
 
 def _index_rows(rows: Iterable[Mapping[str, Any]], key: str) -> dict[str, dict[str, Any]]:
@@ -135,10 +223,36 @@ def _build_baseline_rows(
             for field in EVIDENCE_PATH_FIELDS
             if record.get(field)
         ]
+        official_bundle_paths = [
+            str(record.get(OFFICIAL_BUNDLE_PATH_FIELDS[0]) or "")
+            for record in measured_records
+            if record.get(OFFICIAL_BUNDLE_PATH_FIELDS[0])
+        ]
+        official_execution_manifest_paths = [
+            str(record.get(OFFICIAL_BUNDLE_PATH_FIELDS[1]) or "")
+            for record in measured_records
+            if record.get(OFFICIAL_BUNDLE_PATH_FIELDS[1])
+        ]
         materialized_evidence_paths = [
             path for path in evidence_paths
             if _path_exists(path, run_root)
         ]
+        materialized_official_bundle_paths = [
+            path for path in official_bundle_paths
+            if _path_exists(path, run_root)
+        ]
+        materialized_official_execution_manifest_paths = [
+            path for path in official_execution_manifest_paths
+            if _path_exists(path, run_root)
+        ]
+        official_bundle_record_ok_count = sum(
+            1 for path in official_bundle_paths
+            if _official_bundle_payload_ok(path, run_root, baseline_name)
+        )
+        official_execution_manifest_ok_count = sum(
+            1 for path in official_execution_manifest_paths
+            if _official_execution_manifest_ok(path, run_root, baseline_name)
+        )
         command_manifest_paths = [
             str(record.get("external_baseline_official_command_manifest_path") or "")
             for record in measured_records
@@ -150,7 +264,15 @@ def _build_baseline_rows(
         )
         source_dir_exists = bool(intake.get("source_dir_exists") or inspection.get("source_dir_exists") or clone.get("source_dir_exists"))
         clone_operation_status = str(clone.get("clone_operation_status") or "missing")
-        clone_ready = source_dir_exists or clone_operation_status in {"cloned", "updated"}
+        source_clone_ready = source_dir_exists or clone_operation_status in {"cloned", "updated"}
+        repository_generated_official_bundle_ready = (
+            bool(measured_records)
+            and len(official_bundle_paths) == len(measured_records)
+            and len(official_execution_manifest_paths) == len(measured_records)
+            and official_bundle_record_ok_count == len(measured_records)
+            and official_execution_manifest_ok_count == len(measured_records)
+        )
+        clone_ready = source_clone_ready or repository_generated_official_bundle_ready
         build_ready = bool(command_manifest_paths) and command_manifest_ok_count == len(command_manifest_paths)
         run_ready = bool(measured_records)
         adapt_ready = all(
@@ -164,6 +286,8 @@ def _build_baseline_rows(
             "source_intake_status": intake.get("source_intake_status", "missing"),
             "source_dir_exists": source_dir_exists,
             "clone_operation_status": clone_operation_status,
+            "source_clone_ready": source_clone_ready,
+            "repository_generated_official_bundle_ready": repository_generated_official_bundle_ready,
             "clone_ready": clone_ready,
             "build_ready": build_ready,
             "run_ready": run_ready,
@@ -173,7 +297,13 @@ def _build_baseline_rows(
             "unsupported_record_count": sum(1 for record in records if record.get("metric_status") == "unsupported"),
             "official_command_manifest_count": len(command_manifest_paths),
             "official_command_manifest_ok_count": command_manifest_ok_count,
+            "official_bundle_record_count": len(official_bundle_paths),
+            "official_bundle_record_ok_count": official_bundle_record_ok_count,
+            "official_execution_manifest_count": len(official_execution_manifest_paths),
+            "official_execution_manifest_ok_count": official_execution_manifest_ok_count,
             "materialized_evidence_path_count": len(materialized_evidence_paths),
+            "materialized_official_bundle_path_count": len(materialized_official_bundle_paths),
+            "materialized_official_execution_manifest_path_count": len(materialized_official_execution_manifest_paths),
             "external_baseline_self_contained": all([clone_ready, build_ready, run_ready, adapt_ready, record_ready]),
         })
     return rows

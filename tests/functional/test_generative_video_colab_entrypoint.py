@@ -410,6 +410,8 @@ def test_formal_reference_notebooks_use_stage_zip_handoff() -> None:
         assert "local_zip" in source
         assert "stage_package_publish_result" in source
         assert f"BASELINE_ID = '{baseline_id}'" in source
+        if baseline_id == "sigmark":
+            assert "SSTW_SIGMARK_NUM_VIDEOS_PER_PROMPT" not in source
 
 
 @pytest.mark.quick

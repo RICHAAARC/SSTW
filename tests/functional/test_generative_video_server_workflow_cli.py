@@ -68,4 +68,5 @@ def test_server_workflow_cli_contains_sigmark_notebook_equivalent_defaults() -> 
     assert "SSTW_SIGMARK_HEIGHT" in source
     assert "SSTW_SIGMARK_NUM_FRAMES" in source
     assert "SSTW_SIGMARK_PRECISION" in source
+    assert "SSTW_SIGMARK_NUM_VIDEOS_PER_PROMPT" not in source
     assert "run_default_modern_external_baseline_formal_reference_plan" in source

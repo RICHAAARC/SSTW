@@ -120,7 +120,6 @@ def _apply_server_environment(args: argparse.Namespace) -> None:
     _set_default_env("SSTW_RUN_SIGMARK_OFFICIAL_HUNYUAN_PIPELINE", "true")
     _set_default_env("SSTW_SIGMARK_MODEL_NAME", "HunyuanVideo-community")
     _set_default_env("SSTW_SIGMARK_AUTO_DOWNLOAD_HF_MODEL", "true")
-    _set_default_env("SSTW_SIGMARK_NUM_VIDEOS_PER_PROMPT", "1")
     _set_default_env("SSTW_SIGMARK_WIDTH", "512")
     _set_default_env("SSTW_SIGMARK_HEIGHT", "512")
     _set_default_env("SSTW_SIGMARK_NUM_FRAMES", "65")

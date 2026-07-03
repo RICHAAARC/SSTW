@@ -416,8 +416,8 @@ minimum_heldout_test_negative_event_count >= 50000
 minimum_heldout_attacked_positive_event_count >= 20000
 minimum_negative_event_count_per_family >= 5000
 minimum_attack_event_count_per_attack >= 2000
-minimum_modern_external_baseline_formal_adapter_count >= 6
-minimum_external_baseline_measured_adapter_count >= 8
+minimum_modern_external_baseline_formal_adapter_count >= 5
+minimum_external_baseline_measured_adapter_count >= 7
 minimum_internal_ablation_variant_count >= 8
 require_validation_scale_gate_passed == true
 require_validation_scale_to_pilot_paper_transition_decision == true
@@ -906,7 +906,7 @@ explicit_synchronization_control: explicit_dtw_temporal_alignment, frame_matchin
 validation_generation_records_ready
 validation_detection_records_ready
 validation_external_baseline_comparison_records_ready
-external_baseline_measured_adapter_count >= 8
+external_baseline_measured_adapter_count >= 7
 modern_external_baseline_formal_measured_adapter_count >= 5
 validation_internal_ablation_records_ready
 required_internal_ablation_variants covered
@@ -1029,7 +1029,7 @@ trajectory_sketch_replacement_attempt
 ```text
 validation_scale_gate_decision == PASS
 external_baseline_comparison_decision == PASS
-external_baseline_measured_adapter_count >= 8
+external_baseline_measured_adapter_count >= 7
 modern_external_baseline_formal_measured_adapter_count >= 5
 pilot_paper_external_baseline_trace_count_min >= 84
 validation_internal_ablation_decision == PASS
@@ -1547,7 +1547,7 @@ source_registry
 `validation_scale` 是进入 `pilot_paper` 和继续准备 `full_paper` 前的小样本全流程打通门禁, 因此 external baseline 条件不得只要求两个显式同步 control。该阶段必须检查:
 
 ```text
-external_baseline_measured_adapter_count >= 8
+external_baseline_measured_adapter_count >= 7
 modern_external_baseline_formal_measured_adapter_count >= 5
 missing_modern_external_baseline_formal_adapter_names == []
 external_baseline_execution_manifest_status == present

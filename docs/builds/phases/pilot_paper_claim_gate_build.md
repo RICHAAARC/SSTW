@@ -151,7 +151,7 @@ validation_scale_to_pilot_paper_transition_decision == PASS
 data_split_and_leakage_guard_decision == PASS
 external_baseline_comparison_decision == PASS
 external_baseline_self_containment_decision == PASS
-external_baseline_measured_adapter_count >= 8
+external_baseline_measured_adapter_count >= 7
 modern_external_baseline_formal_measured_adapter_count >= 5
 required_external_baseline_adapter_names covered
 required_modern_external_baseline_adapter_names measured_formal

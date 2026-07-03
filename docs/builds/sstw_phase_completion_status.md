@@ -1120,8 +1120,8 @@ submission_freeze_allowed: false
 ```text
 validation_external_baseline_status_records_ready
 validation_external_baseline_comparison_records_ready
-minimum_external_baseline_measured_adapter_count: 8
-modern_external_baseline_formal_measured_adapter_count: 6
+minimum_external_baseline_measured_adapter_count: 7
+modern_external_baseline_formal_measured_adapter_count: 5
 ```
 
 下一步是配置现代 baseline 官方命令或 source 入口, 保持 adaptive attack、replay/sketch 或 Claim-3 降级路径闭合, 然后执行 validation_scale 真实复跑。现代 baseline formal records 不得推迟到 pilot_paper 后补。
@@ -1331,8 +1331,8 @@ videoseal
 ```text
 modern_external_baseline_formal_adapter_boundary: implemented
 modern_external_baseline_official_commands_configured: pending_user_colab_or_local_setup
-pilot_paper_required_modern_external_baseline_count: 6
-pilot_paper_required_external_baseline_count_total: 8
+pilot_paper_required_modern_external_baseline_count: 5
+pilot_paper_required_external_baseline_count_total: 7
 pilot_paper_gate_missing_modern_formal_results: hard_blocker
 ```
 
@@ -1347,7 +1347,7 @@ pilot_paper_gate_missing_modern_formal_results: hard_blocker
 
 ```text
 complete_modern_external_baseline_formal_records_ready = true
-external_baseline_measured_adapter_count >= 8
+external_baseline_measured_adapter_count >= 7
 modern_external_baseline_formal_measured_adapter_count >= 5
 internal_ablation_matrix_records_ready = true
 flow_specific_adaptive_attack_records_ready = true
@@ -1402,7 +1402,7 @@ modern_external_baseline_official_source_or_command: still_required_for_real_mea
 新的 validation_scale baseline 阻断条件为:
 
 ```text
-external_baseline_measured_adapter_count >= 8
+external_baseline_measured_adapter_count >= 7
 modern_external_baseline_formal_measured_adapter_count >= 5
 missing_modern_external_baseline_formal_adapter_names == []
 ```

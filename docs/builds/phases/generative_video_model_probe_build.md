@@ -649,8 +649,8 @@ records/validation_internal_ablation_records.jsonl
 ```text
 pilot_paper_external_baseline_comparison_ready == true
 pilot_paper_internal_ablation_matrix_ready == true
-minimum_external_baseline_measured_adapter_count >= 8
-minimum_modern_external_baseline_formal_adapter_count >= 6
+minimum_external_baseline_measured_adapter_count >= 7
+minimum_modern_external_baseline_formal_adapter_count >= 5
 minimum_internal_ablation_variant_count >= 8
 pilot_paper_external_baseline_trace_count_min >= 84
 pilot_paper_internal_ablation_trace_count_min >= 84

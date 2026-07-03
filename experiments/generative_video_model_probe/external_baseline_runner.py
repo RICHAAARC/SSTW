@@ -155,6 +155,69 @@ def _mean_numeric(rows: list[Mapping[str, Any]], field: str) -> float | None:
     return round(mean(values), 6)
 
 
+def _has_nonempty_field(record: Mapping[str, Any], field_name: str) -> bool:
+    """判断 governed record 中某个字段是否存在非空值。"""
+
+    return record.get(field_name) not in {None, ""}
+
+
+def _has_numeric_field(record: Mapping[str, Any], field_name: str) -> bool:
+    """判断 governed record 中某个字段是否可作为数值参与校准。"""
+
+    if record.get(field_name) in {None, "", "unsupported"}:
+        return False
+    try:
+        float(record.get(field_name))
+    except (TypeError, ValueError):
+        return False
+    return True
+
+
+def _has_complete_baseline_anchor(record: Mapping[str, Any]) -> bool:
+    """检查 external baseline measured_formal 行是否保留 prompt / seed / attack anchor。"""
+
+    return all(_has_nonempty_field(record, field_name) for field_name in ("prompt_id", "seed_id", "attack_name"))
+
+
+def _has_clean_negative_calibration_fields(record: Mapping[str, Any]) -> bool:
+    """检查 external baseline measured_formal 行是否包含自身 clean negative 校准分数。"""
+
+    return (
+        _has_numeric_field(record, "external_baseline_clean_negative_score")
+        and _has_nonempty_field(record, "external_baseline_clean_negative_video_path")
+    )
+
+
+def _has_official_execution_evidence(record: Mapping[str, Any]) -> bool:
+    """检查 external baseline measured_formal 行是否绑定项目内 official run 证据。"""
+
+    command_evidence_ready = (
+        _has_nonempty_field(record, "external_baseline_official_output_path")
+        and _has_nonempty_field(record, "external_baseline_official_command_manifest_path")
+    )
+    bundle_evidence_ready = (
+        _has_nonempty_field(record, "external_baseline_official_result_bundle_path")
+        and _has_nonempty_field(record, "external_baseline_official_execution_manifest_path")
+    )
+    return command_evidence_ready or bundle_evidence_ready
+
+
+def _formal_score_record_ready_for_claim(record: Mapping[str, Any]) -> bool:
+    """检查 measured_formal baseline row 是否达到公平比较入口要求。
+
+    该函数是项目特定门禁: 单纯写入 `metric_status: measured_formal` 不足以支撑
+    validation_scale 公平比较。每条现代 baseline 结果还必须保留完整 runtime anchor、
+    自身 clean negative 校准分数, 以及项目内 official run / bundle 证据。
+    """
+
+    return (
+        record.get("metric_status") == "measured_formal"
+        and _has_complete_baseline_anchor(record)
+        and _has_clean_negative_calibration_fields(record)
+        and _has_official_execution_evidence(record)
+    )
+
+
 def _proposed_method_row(runtime_detection_records: list[dict[str, Any]]) -> dict[str, Any]:
     """构造 SSTW 当前方法在同一 runtime detection 协议下的比较表行。"""
     ready_records = [record for record in runtime_detection_records if record.get("runtime_detection_status") == "ready"]
@@ -217,8 +280,18 @@ def build_external_baseline_comparison_table_rows(
 
 def audit_external_baseline_comparison_records(records: list[dict[str, Any]]) -> dict[str, Any]:
     """审计 external baseline comparison 是否已经由 adapter 产出。"""
-    measured_records = [record for record in records if record.get("metric_status") in {"measured_proxy", "measured_formal"}]
-    formal_records = [record for record in records if record.get("metric_status") == "measured_formal"]
+    formal_candidate_records = [record for record in records if record.get("metric_status") == "measured_formal"]
+    formal_records = [record for record in formal_candidate_records if _formal_score_record_ready_for_claim(record)]
+    formal_incomplete_records = [
+        record
+        for record in formal_candidate_records
+        if not _formal_score_record_ready_for_claim(record)
+    ]
+    measured_records = [
+        record
+        for record in records
+        if record.get("metric_status") == "measured_proxy" or _formal_score_record_ready_for_claim(record)
+    ]
     measured_adapter_names = {str(record.get("external_baseline_name")) for record in measured_records if record.get("external_baseline_name")}
     formal_adapter_names = {str(record.get("external_baseline_name")) for record in formal_records if record.get("external_baseline_name")}
     modern_formal_adapter_names = {
@@ -234,6 +307,7 @@ def audit_external_baseline_comparison_records(records: list[dict[str, Any]]) ->
         "external_baseline_comparison_record_count": len(records),
         "external_baseline_comparison_ready_count": len(measured_records),
         "external_baseline_formal_ready_count": len(formal_records),
+        "external_baseline_formal_incomplete_record_count": len(formal_incomplete_records),
         "external_baseline_measured_adapter_count": len(measured_adapter_names),
         "external_baseline_measured_adapter_names": sorted(measured_adapter_names),
         "external_baseline_formal_measured_adapter_count": len(formal_adapter_names),

@@ -13,7 +13,11 @@ import pytest
 from main.external_baselines.baseline_registry import audit_external_baseline_records, build_external_baseline_records
 from main.external_baselines.explicit_dtw_temporal_alignment import compute_dtw_alignment_cost
 from main.external_baselines.frame_matching_temporal_registration import compute_registration_cost, match_frames
-from experiments.generative_video_model_probe.external_baseline_runner import write_external_baseline_comparison_outputs, write_external_baseline_status_outputs
+from experiments.generative_video_model_probe.external_baseline_runner import (
+    audit_external_baseline_comparison_records,
+    write_external_baseline_comparison_outputs,
+    write_external_baseline_status_outputs,
+)
 from external_baseline.official_bundle_generator import build_official_bundle_generation_plan
 import external_baseline.official_resource_bootstrap as official_resource_bootstrap
 from external_baseline.official_resource_bootstrap import bootstrap_official_resources
@@ -695,6 +699,29 @@ def test_modern_external_baseline_formal_command_adapters_write_measured_records
     assert execution_manifest["modern_external_baseline_formal_measured_adapter_count"] == 5
     assert execution_manifest["formal_evidence_status"] == "evidence_paths_bound"
     assert execution_manifest["evidence_path_count"] >= len(formal_records)
+
+
+@pytest.mark.quick
+def test_external_baseline_audit_rejects_handwritten_measured_formal_without_evidence() -> None:
+    """external baseline audit 不能把手写 measured_formal 行计入正式 baseline 覆盖。"""
+
+    audit = audit_external_baseline_comparison_records([
+        {
+            "external_baseline_name": "videoseal",
+            "external_baseline_layer": "modern_external_baseline",
+            "metric_status": "measured_formal",
+            "external_baseline_score": 0.61,
+            "prompt_id": "prompt_0",
+            "seed_id": "seed_0",
+            "attack_name": "video_compression_runtime",
+        },
+    ])
+
+    assert audit["external_baseline_comparison_decision"] == "FAIL"
+    assert audit["external_baseline_formal_ready_count"] == 0
+    assert audit["external_baseline_formal_incomplete_record_count"] == 1
+    assert audit["modern_external_baseline_formal_measured_adapter_count"] == 0
+    assert audit["modern_external_baseline_formal_measured_adapter_names"] == []
 
 
 @pytest.mark.quick

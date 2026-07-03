@@ -280,6 +280,7 @@ Notebook 与 repository module 的跨边界数据
 | run_external_baseline_source_clone | protocol | none | true | false | false | Colab 冷启动阶段是否执行可 clone 外部 baseline 官方 source 拉取。 |
 | external_baseline_evidence_path_count | metric | none | true | false | false | Colab preflight 或 execution manifest 中登记的外部 baseline evidence path 数量。 |
 | external_baseline_formal_ready_count | metric | none | true | false | false | external_baseline comparison 中 measured_formal record 数量。 |
+| external_baseline_formal_incomplete_record_count | metric | none | true | true | false | external_baseline comparison 中声明 measured_formal 但缺少 anchor、clean negative 或 official evidence 的 record 数量。 |
 | external_baseline_formal_measured_adapter_count | metric | none | true | false | false | external_baseline comparison 中产出 measured_formal records 的 adapter 数量。 |
 | external_baseline_formal_measured_adapter_names | metric | none | true | false | false | external_baseline comparison 中产出 measured_formal records 的 adapter 名称列表。 |
 | modern_external_baseline_formal_measured_adapter_count | metric | none | true | true | false | 现代视频水印 baseline 中产出 measured_formal records 的 adapter 数量。 |

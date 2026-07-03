@@ -53,19 +53,6 @@
       "external_baseline_version": "formal_command_adapter_v1"
     },
     {
-      "external_baseline_family": "parameter_or_adapter_video_watermark_baseline",
-      "external_baseline_integration_status": "repository_external_baseline_formal_adapter_ready_requires_official_command",
-      "external_baseline_name": "spdmark",
-      "external_baseline_not_run_reason": "official_command_not_configured_until_colab_source_install",
-      "external_baseline_protocol_gap": "none_after_official_command_configuration; before configuration this baseline remains governed non-run",
-      "external_baseline_recommended_priority": 5,
-      "external_baseline_result_used_for_claim": false,
-      "external_baseline_runnable_status": "not_runnable",
-      "external_baseline_selection_role": "modern_parameter_or_adapter_video_watermark_candidate",
-      "external_baseline_source_url": "external_baseline/primary/spdmark/adapter/run_sstw_eval.py",
-      "external_baseline_version": "formal_command_adapter_v1"
-    },
-    {
       "external_baseline_family": "latent_video_signature_baseline",
       "external_baseline_integration_status": "repository_external_baseline_formal_adapter_ready_requires_official_command",
       "external_baseline_name": "videomark",

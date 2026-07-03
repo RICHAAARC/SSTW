@@ -72,7 +72,7 @@ VidSig 的 message decoder / VAE checkpoint 等可复用资源应优先以资源
 ```
 
 其中 `motion_threshold_calibration_colab.ipynb` 写入 `/content/drive/MyDrive/SSTW/motion_threshold/`;
-6 个 baseline 专用 Notebook 写入
+5 个主实验 baseline 专用 Notebook 写入
 `/content/drive/MyDrive/SSTW/<workflow_profile>/external_baseline_official_reference/`;
 历史或辅助 Notebook 写入 `/content/drive/MyDrive/SSTW/helper/`。阶段包默认保留时间戳,
 后续 Notebook 会按文件名时间戳选择最新的完整 zip。
@@ -100,14 +100,14 @@ VidSig 的 message decoder / VAE checkpoint 等可复用资源应优先以资源
 ```text
 motion_threshold_calibration_colab.ipynb  # 仅当 motion calibration artifact 缺失时运行
 -> generative_video_runtime_colab.ipynb
--> 6 个 modern external baseline formal reference Notebook
+-> 5 个主实验 modern external baseline formal reference Notebook
 -> paper_gate_and_package_colab.ipynb
 ```
 
 该拆分设计的主要考虑在于:
 
 1. runtime 生成、external baseline 官方运行、正式 baseline scoring 和 paper gate 的失败原因不同, 不应混在一个 Notebook 中。
-2. 6 个现代 external baseline 的官方源码、权重、key、显存和运行入口差异较大, 需要允许逐个 Notebook 独立重跑。
+2. 5 个主实验现代 external baseline 的官方源码、权重、key、显存和运行入口差异较大, 需要允许逐个 Notebook 独立重跑。
 3. `validation_scale` 是 paper 级前的小样本全流程打通门禁, 不支持正式效果主张; 它通过后只能进入 `pilot_paper`。
 4. `non-run record` 只能作为阻断记录, 不能替代 `metric_status: measured_formal` baseline 结果。
 
@@ -180,9 +180,9 @@ paper_workflow/colab_notebooks/videoseal_formal_reference_colab.ipynb
 paper_workflow/colab_notebooks/vidsig_formal_reference_colab.ipynb
 paper_workflow/colab_notebooks/videomark_formal_reference_colab.ipynb
 paper_workflow/colab_notebooks/videoshield_formal_reference_colab.ipynb
-paper_workflow/colab_notebooks/spdmark_formal_reference_colab.ipynb
 paper_workflow/colab_notebooks/sigmark_formal_reference_colab.ipynb
 ```
+
 
 用途:
 
@@ -191,7 +191,7 @@ paper_workflow/colab_notebooks/sigmark_formal_reference_colab.ipynb
 - 以同一 prompt / seed / attack 协议为锚点生成当前 baseline 的 official bundle。
 - 只打包当前 baseline 的 official bundle 与对应 governed artifacts。
 - 将阶段包保存到 `/content/drive/MyDrive/SSTW/<workflow_profile>/external_baseline_official_reference/`。
-- `paper_gate_and_package_colab.ipynb` 恢复 6 个 official bundle 后, 再统一重建最终 `measured_formal` records。
+- `paper_gate_and_package_colab.ipynb` 恢复 5 个主实验 official bundle 后, 再统一重建最终 `measured_formal` records。
 
 当前 validation-scale 配置:
 
@@ -199,13 +199,12 @@ paper_workflow/colab_notebooks/sigmark_formal_reference_colab.ipynb
 SSTW_WORKFLOW_PROFILE_VALUE = 'validation_scale'
 ```
 
-进入 paper gate 前必须完成 6 个现代 baseline 的 official reference 阶段包。若使用通用 command adapter,
-仍必须配置 6 个现代 baseline command:
+进入 paper gate 前必须完成 5 个主实验现代 baseline 的 official reference 阶段包。若使用通用 command adapter,
+仍必须配置 5 个主实验现代 baseline command:
 
 ```text
 SSTW_VIDEOSHIELD_EVAL_COMMAND
 SSTW_SIGMARK_EVAL_COMMAND
-SSTW_SPDMARK_EVAL_COMMAND
 SSTW_VIDEOMARK_EVAL_COMMAND
 SSTW_VIDSIG_EVAL_COMMAND
 SSTW_VIDEOSEAL_EVAL_COMMAND
@@ -234,16 +233,16 @@ configs/external_baselines/modern_baseline_colab_commands.json
 
 ### 3.3.0 现代 external baseline 独立官方参考 Notebook
 
-若目标是逐个闭合 6 个现代 external baseline 的官方参考结果包, 推荐先按以下顺序运行独立 Notebook:
+若目标是逐个闭合 5 个主实验现代 external baseline 的官方参考结果包, 推荐先按以下顺序运行独立 Notebook:
 
 ```text
 paper_workflow/colab_notebooks/videoseal_formal_reference_colab.ipynb
 paper_workflow/colab_notebooks/vidsig_formal_reference_colab.ipynb
 paper_workflow/colab_notebooks/videomark_formal_reference_colab.ipynb
 paper_workflow/colab_notebooks/videoshield_formal_reference_colab.ipynb
-paper_workflow/colab_notebooks/spdmark_formal_reference_colab.ipynb
 paper_workflow/colab_notebooks/sigmark_formal_reference_colab.ipynb
 ```
+
 
 这些 Notebook 的职责是:
 
@@ -293,7 +292,7 @@ official_reference_notebook
 -> external_baseline_runner unified measured_formal conversion
 ```
 
-`paper_gate_and_package_colab.ipynb` 会在恢复 6 个 baseline official reference 阶段包后,
+`paper_gate_and_package_colab.ipynb` 会在恢复 5 个主实验 baseline official reference 阶段包后,
 重新执行一次全量统一转写和 self-containment 判定, 防止各 baseline 专用包中的单 baseline
 临时 records 互相覆盖。`external_baseline_formal_scoring_colab.ipynb` 仅作为诊断或历史聚合入口保留,
 不再是 validation-scale 推荐主流程中的必跑 Notebook。
@@ -306,7 +305,7 @@ artifacts/external_baseline_comparison_decision.json
 artifacts/external_baseline_self_containment_decision.json
 ```
 
-其中 6 个现代 baseline 的正式记录必须全部为:
+其中 5 个主实验现代 baseline 的正式记录必须全部为:
 
 ```text
 metric_status: measured_formal
@@ -322,25 +321,23 @@ metric_status: measured_formal
 ```text
 SSTW_VIDEOSHIELD_OFFICIAL_EVAL_COMMAND
 SSTW_SIGMARK_OFFICIAL_EVAL_COMMAND
-SSTW_SPDMARK_OFFICIAL_EVAL_COMMAND
 SSTW_VIDEOMARK_OFFICIAL_EVAL_COMMAND
 SSTW_VIDSIG_OFFICIAL_EVAL_COMMAND
 SSTW_VIDEOSEAL_OFFICIAL_EVAL_COMMAND
 ```
 
-当前仓库已经提供 6 个 fail-closed 的 repository official adapter。external baseline scoring Notebook
-和 6 个独立 formal reference Notebook 默认设置:
+当前仓库已经提供 5 个主实验 fail-closed repository official adapter。external baseline scoring Notebook
+和 5 个主实验独立 formal reference Notebook 默认设置:
 
 ```python
 os.environ["SSTW_USE_REPOSITORY_OFFICIAL_BASELINE_ADAPTERS"] = "true"
 ```
 
-此时 Notebook 会自动把 6 个 `SSTW_<BASELINE>_OFFICIAL_EVAL_COMMAND` 指向:
+此时 Notebook 会自动把 5 个主实验 `SSTW_<BASELINE>_OFFICIAL_EVAL_COMMAND` 指向:
 
 ```text
 external_baseline/official_eval_adapters/videoshield.py
 external_baseline/official_eval_adapters/sigmark.py
-external_baseline/official_eval_adapters/spdmark.py
 external_baseline/official_eval_adapters/videomark.py
 external_baseline/official_eval_adapters/vidsig.py
 external_baseline/official_eval_adapters/videoseal.py
@@ -380,18 +377,6 @@ VidSig watermarked videos 应用同名项目 runtime attack, 最后调用官方 
 {official_output_json_path}
 ```
 
-示例:
-
-```python
-import os
-os.environ["SSTW_SPDMARK_OFFICIAL_EVAL_COMMAND"] = (
-    "python /content/SSTW/external_baseline/primary/spdmark/source/<official_eval_script>.py "
-    "--source-video {source_video_path} "
-    "--attacked-video {attacked_video_path} "
-    "--attack-name {attack_name} "
-    "--output-json {official_output_json_path}"
-)
-```
 
 bridge 会读取 `{official_output_json_path}`, 提取 score 字段, 再写出 SSTW 统一的
 `{output_json_path}`。如果缺少内部官方命令, Notebook 会在真实生成前写出:
@@ -403,25 +388,13 @@ artifacts/external_baseline_official_bridge_preflight_decision.json
 并提前失败, 防止只配置 wrapper 壳层却没有真实 baseline 分数。
 
 若某个官方仓库有更适合当前 Colab 环境的原生命令, 可以只覆盖该 baseline 的内部
-native 命令, 变量模式为 `SSTW_<BASELINE>_NATIVE_EVAL_COMMAND`。例如:
-
-```python
-os.environ["SSTW_SPDMARK_NATIVE_EVAL_COMMAND"] = (
-    "python /content/SSTW/external_baseline/primary/spdmark/source/<official_eval_script>.py "
-    "--source-video {source_video_path} "
-    "--attacked-video {attacked_video_path} "
-    "--attack-name {attack_name} "
-    "--output-json {official_output_json_path}"
-)
-```
+native 命令, 变量模式为 `SSTW_<BASELINE>_NATIVE_EVAL_COMMAND`。例如可通过对应 baseline 的 `SSTW_<BASELINE>_NATIVE_EVAL_COMMAND` 覆盖。
 
 常见需要额外提供的官方产物包括:
 
 ```text
 SSTW_VIDEOSHIELD_RESULT_JSON
 SSTW_SIGMARK_BIT_ACCURACY_NPZ
-SSTW_SPDMARK_EXTRACTOR_PATH
-SSTW_SPDMARK_GT_BITS_PATH
 SSTW_VIDEOMARK_TEMPORAL_RESULTS_JSON
 SSTW_VIDSIG_MSG_DECODER_PATH
 SSTW_VIDSIG_VAE_CHECKPOINT_PATH
@@ -522,18 +495,7 @@ import os
 os.environ["SSTW_USE_MODERN_BASELINE_BRIDGE_COMMANDS"] = "0"
 ```
 
-然后直接配置 `SSTW_<BASELINE>_EVAL_COMMAND`, 例如:
-
-```python
-import os
-os.environ["SSTW_SPDMARK_EVAL_COMMAND"] = (
-    "python /content/SSTW/external_baseline/primary/spdmark/source/run_sstw_eval.py "
-    "--source-video {source_video_path} "
-    "--attacked-video {attacked_video_path} "
-    "--attack-name {attack_name} "
-    "--output-json {output_json_path}"
-)
-```
+然后直接配置对应 baseline 的 `SSTW_<BASELINE>_EVAL_COMMAND`。
 
 注意: 即使 `SSTW_USE_MODERN_BASELINE_BRIDGE_COMMANDS` 保持默认启用, 用户显式设置的
 `SSTW_<BASELINE>_EVAL_COMMAND` 也会优先于 repository bridge 模板。此时
@@ -571,7 +533,7 @@ paper_workflow/colab_notebooks/paper_gate_and_package_colab.ipynb
 - 执行 replay/sketch gate。
 - 必要时执行 Claim-3 downgrade gate。
 - 执行 statistical confidence interval。
-- 恢复 6 个 baseline official bundle 后重新执行全量 external baseline comparison。
+- 恢复 5 个主实验 baseline official bundle 后重新执行全量 external baseline comparison。
 - 执行 external baseline self-containment 判定。
 - 执行 validation artifact rebuild dry run。
 - 对 validation-scale 或 pilot-paper 进行最终 gate 判断。
@@ -583,7 +545,7 @@ paper_workflow/colab_notebooks/paper_gate_and_package_colab.ipynb
 SSTW_WORKFLOW_PROFILE_VALUE = 'validation_scale'
 ```
 
-该 Notebook 必须在 runtime 与 6 个 external baseline official reference Notebook 完成后运行, 因为 gate 需要读取前序 artifacts。
+该 Notebook 必须在 runtime 与 5 个主实验 external baseline official reference Notebook 完成后运行, 因为 gate 需要读取前序 artifacts。
 执行 gate 前, Notebook 会再次校验并复制 `motion_calibration` run root 中已冻结的
 `motion_threshold_calibration_decision.json` 到当前 `validation_scale` 或 `pilot_paper`
 run root。该步骤不重新估计阈值, 只把独立 calibration split 的阈值 artifact 固化到当前
@@ -591,7 +553,7 @@ gate 所需的 governed artifacts 中。
 
 ## 4. validation-scale 到 pilot-paper 的切换
 
-validation-scale 是进入 paper 级运行前的最后完整工程门禁。通过后, 可以把 runtime、6 个 baseline official reference Notebook 和 paper gate Notebook 的 profile 从 validation-scale 切到 pilot-paper:
+validation-scale 是进入 paper 级运行前的最后完整工程门禁。通过后, 可以把 runtime、5 个主实验 baseline official reference Notebook 和 paper gate Notebook 的 profile 从 validation-scale 切到 pilot-paper:
 
 ```python
 SSTW_WORKFLOW_PROFILE_VALUE = 'pilot_paper'
@@ -609,7 +571,7 @@ paper_workflow/colab_notebooks/paper_gate_and_package_colab.ipynb
 
 ```text
 generative_video_runtime_colab.ipynb
-6 个 *_formal_reference_colab.ipynb
+5 个主实验 *_formal_reference_colab.ipynb
 paper_gate_and_package_colab.ipynb
 ```
 
@@ -721,7 +683,7 @@ os.environ["SSTW_ENABLE_PIPELINE_PROGRESS_BAR"] = "1"
 ## 7. 常见失败原因
 
 1. 未先运行或未保留 `motion_calibration` artifact, 导致 motion threshold reuse 失败。
-2. 没有配置 6 个现代 baseline command, 或缺少完整的项目内 official bundle cache, 导致 external baseline preflight / bundle preflight / paper gate 阻断。
+2. 没有配置 5 个主实验现代 baseline command, 或缺少完整的项目内 official bundle cache, 导致 external baseline preflight / bundle preflight / paper gate 阻断。
 3. Colab 冷启动后没有重新 clone 仓库或安装依赖, 导致模块导入失败。
 4. 直接运行 `paper_gate_and_package_colab.ipynb`, 但 runtime 与 baseline artifacts 不存在。
 5. Colab 断开前没有打包到 Google Drive, 导致本地临时结果丢失。

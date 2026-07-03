@@ -122,7 +122,7 @@ all_required_phase_decisions_passed_or_explicitly_downgraded
 external_baseline_self_containment_decision_passed
 data_split_and_leakage_guard_passed
 external_baseline_self_contained_outputs_ready
-modern_external_baseline_formal_measured_adapter_count >= 6
+modern_external_baseline_formal_measured_adapter_count >= 5
 external_baseline_measured_adapter_count >= 8
 internal_ablation_records_ready
 adaptive_attack_records_ready
@@ -749,7 +749,7 @@ external_baseline_threshold_policy_compatible: true
 external_baseline_attack_manifest_compatible: true
 external_baseline_result_used_for_claim: true
 metric_status: measured_formal
-modern_external_baseline_formal_measured_adapter_count >= 6
+modern_external_baseline_formal_measured_adapter_count >= 5
 missing_modern_external_baseline_formal_adapter_names == []
 external_baseline_execution_manifest.json: present
 external_baseline_project_clone_status: completed

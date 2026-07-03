@@ -21,7 +21,6 @@ DEFAULT_PROTOCOL_CONFIG = "configs/protocol/validation_scale_generative_probe.js
 DEFAULT_REQUIRED_MODERN_BASELINES = (
     "videoshield",
     "sigmark",
-    "spdmark",
     "videomark",
     "vidsig",
     "videoseal",

@@ -1,6 +1,6 @@
 """现代 external baseline 真实运行闭合要求预检。
 
-该模块的职责是把 6 个现代视频水印 baseline 的真实运行条件收敛为一个
+该模块的职责是把 5 个主实验现代视频水印 baseline 的真实运行条件收敛为一个
 可由 Colab Notebook 自动执行的 governed artifact。它不运行重型第三方模型, 也不
 生成 baseline 分数; 它只检查当前 run_root 是否已经具备 source、requirements、
 runtime videos、官方资源或项目内 official bundle cache。
@@ -32,7 +32,6 @@ MODERN_BASELINE_IDS = (
     "vidsig",
     "videomark",
     "videoshield",
-    "spdmark",
     "sigmark",
 )
 
@@ -516,9 +515,15 @@ def build_official_runtime_closure_requirements(
     config = load_official_runtime_closure_requirements(config_path)
     runtime_input = _runtime_input_audit(resolved_run_root)
     detection_records = comparable_detection_records(resolved_run_root)
+    required_baseline_ids = set(MODERN_BASELINE_IDS)
     selected_rows = [
         row for row in config.get("baseline_runtime_requirements", [])
-        if isinstance(row, Mapping) and (baseline_id is None or str(row.get("baseline_id") or "") == baseline_id)
+        if isinstance(row, Mapping)
+        and (
+            str(row.get("baseline_id") or "") == baseline_id
+            if baseline_id is not None
+            else str(row.get("baseline_id") or "") in required_baseline_ids
+        )
     ]
     baseline_rows: list[dict[str, Any]] = []
     environment_updates: dict[str, str] = {

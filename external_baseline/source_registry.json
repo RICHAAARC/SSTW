@@ -69,23 +69,6 @@
       "source_status": "official_source_or_command_required"
     },
     {
-      "adapter_path": "external_baseline/primary/spdmark/adapter/run_sstw_eval.py",
-      "adapter_status": "formal_command_adapter_ready_requires_official_command",
-      "baseline_family": "parameter_or_adapter_video_watermark_baseline",
-      "baseline_id": "spdmark",
-      "baseline_name": "SPDMark",
-      "comparison_group": "primary",
-      "local_code_tracked": true,
-      "model_alignment_status": "wan21_runtime_video_file_protocol",
-      "official_repository_branch": "main",
-      "official_repository_commit": "4d9a894384a8585734b493301fe9d1a4d6abd07c",
-      "official_repository_url": "https://github.com/Samar-Fares/SPDMark",
-      "paper_claim_support": true,
-      "result_status": "measured_formal_when_official_command_configured",
-      "source_dir": "external_baseline/primary/spdmark/source",
-      "source_status": "official_source_or_command_required"
-    },
-    {
       "adapter_path": "external_baseline/primary/videomark/adapter/run_sstw_eval.py",
       "adapter_status": "formal_command_adapter_ready_requires_official_command",
       "baseline_family": "latent_video_signature_baseline",

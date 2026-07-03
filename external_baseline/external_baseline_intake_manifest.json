@@ -1,6 +1,6 @@
 {
   "artifact_name": "external_baseline_intake_manifest.json",
-  "baseline_source_count": 8,
+  "baseline_source_count": 7,
   "baseline_sources": [
     {
       "adapter_exists": true,
@@ -100,30 +100,6 @@
     },
     {
       "adapter_exists": true,
-      "adapter_path": "external_baseline/primary/spdmark/adapter/run_sstw_eval.py",
-      "adapter_status": "formal_command_adapter_ready_requires_official_command",
-      "baseline_family": "parameter_or_adapter_video_watermark_baseline",
-      "baseline_id": "spdmark",
-      "baseline_name": "SPDMark",
-      "comparison_group": "primary",
-      "external_baseline_command_config_status": "missing",
-      "external_baseline_command_env_var": "SSTW_SPDMARK_EVAL_COMMAND",
-      "official_repository_branch": "main",
-      "official_repository_commit": "4d9a894384a8585734b493301fe9d1a4d6abd07c",
-      "official_repository_url": "https://github.com/Samar-Fares/SPDMark",
-      "paper_claim_support": true,
-      "result_status": "measured_formal_when_official_command_configured",
-      "source_cloneable": true,
-      "source_dir": "external_baseline/primary/spdmark/source",
-      "source_dir_exists": false,
-      "source_dir_file_count": 0,
-      "source_dir_top_level_entries": [],
-      "source_intake_action_required": "run_source_intake_clone_with_execute",
-      "source_intake_status": "source_clone_required",
-      "source_status": "official_source_or_command_required"
-    },
-    {
-      "adapter_exists": true,
       "adapter_path": "external_baseline/primary/videomark/adapter/run_sstw_eval.py",
       "adapter_status": "formal_command_adapter_ready_requires_official_command",
       "baseline_family": "latent_video_signature_baseline",
@@ -198,11 +174,11 @@
   "claim_support_status": "source_intake_manifest_only_not_claim_evidence",
   "external_baseline_source_intake_decision": "PASS",
   "manifest_kind": "external_baseline_source_intake",
-  "modern_external_baseline_source_count": 6,
+  "modern_external_baseline_source_count": 5,
   "modern_external_baseline_source_ready_count": 0,
   "registry_name": "sstw_external_baseline_source_registry",
   "registry_path": "external_baseline\\source_registry.json",
-  "source_intake_missing_count": 6,
+  "source_intake_missing_count": 5,
   "source_intake_ready_count": 2,
   "source_root": "external_baseline"
 }

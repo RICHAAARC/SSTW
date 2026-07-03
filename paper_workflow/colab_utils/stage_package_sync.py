@@ -44,7 +44,6 @@ MODERN_EXTERNAL_BASELINE_IDS = (
     "vidsig",
     "videomark",
     "videoshield",
-    "spdmark",
     "sigmark",
 )
 

@@ -29,7 +29,6 @@ from external_baseline.runtime_trace_io import comparable_detection_records
 MODERN_BASELINE_IDS = (
     "videoshield",
     "sigmark",
-    "spdmark",
     "videomark",
     "vidsig",
     "videoseal",
@@ -55,8 +54,6 @@ def _baseline_runtime_resource_ready(baseline_id: str) -> tuple[bool, str]:
         return True, "videoshield_official_result_json_configured"
     if baseline_id == "sigmark" and _path_env_exists("SSTW_SIGMARK_BIT_ACCURACY_NPZ"):
         return True, "sigmark_official_npz_configured"
-    if baseline_id == "spdmark" and _path_env_exists("SSTW_SPDMARK_EXTRACTOR_PATH") and _path_env_exists("SSTW_SPDMARK_GT_BITS_PATH"):
-        return True, "spdmark_extractor_and_bits_configured"
     if baseline_id == "videomark" and _path_env_exists("SSTW_VIDEOMARK_TEMPORAL_RESULTS_JSON"):
         return True, "videomark_temporal_results_configured"
     if baseline_id == "vidsig":

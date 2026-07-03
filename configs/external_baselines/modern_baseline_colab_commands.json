@@ -156,75 +156,6 @@
       "verified_head_commit": "3713243f2e002cb21bbc3da896094d39b2b528c9"
     },
     {
-      "baseline_id": "spdmark",
-      "colab_source_dir": "/content/SSTW/external_baseline/primary/spdmark/source",
-      "display_name": "SPDMark",
-      "external_baseline_command_env_var": "SSTW_SPDMARK_EVAL_COMMAND",
-      "external_supplemental_result_bundle_allowed": false,
-      "official_baseline_command_env_var": "SSTW_SPDMARK_OFFICIAL_EVAL_COMMAND",
-      "official_entrypoint_candidates": [
-        "ModelScope/generate_watermarked_txt2videos.py",
-        "SVD_xt/generate_watermarked_img2videos.py",
-        "assets/evaluate_robustness_full.py"
-      ],
-      "official_eval_command_contract": {
-        "description": "该命令在 bridge 内部调用第三方官方实现, 并把官方输出 JSON 写入 {official_output_json_path}。",
-        "env_var": "SSTW_SPDMARK_OFFICIAL_EVAL_COMMAND",
-        "fail_closed_policy": "缺少官方源码、官方权重、官方 key/message/maintained info 或官方输出时必须失败, 不允许输出 proxy 分数。",
-        "official_result_bundle_path_convention": [
-          "<bundle_root>/<baseline_id>/records/<prompt_id>__<seed_id>__<attack_name>.json",
-          "<bundle_root>/<baseline_id>/records/<trajectory_trace_id>__<attack_name>.json",
-          "<bundle_root>/<baseline_id>/<prompt_id>/<seed_id>/<attack_name>.json",
-          "<bundle_root>/<baseline_id>/<trajectory_trace_id>/<attack_name>.json"
-        ],
-        "official_result_bundle_supported": true,
-        "repository_official_eval_adapter_module": "external_baseline.official_eval_adapters.spdmark",
-        "repository_official_eval_command_template": "python -m external_baseline.official_eval_adapters.spdmark --official-source-dir /content/SSTW/external_baseline/primary/spdmark/source --source-video {source_video_path} --attacked-video {attacked_video_path} --attack-name {attack_name} --official-output-json {official_output_json_path} --run-root {run_root} --prompt-id {prompt_id} --seed-id {seed_id} --trajectory-trace-id {trajectory_trace_id}",
-        "required_input_tokens": [
-          "{source_video_path}",
-          "{attacked_video_path}",
-          "{attack_name}"
-        ],
-        "required_output_token": "{official_output_json_path}"
-      },
-      "official_repository_branch": "main",
-      "official_repository_url": "https://github.com/Samar-Fares/SPDMark",
-      "official_result_bundle_path_convention": [
-        "<bundle_root>/<baseline_id>/records/<prompt_id>__<seed_id>__<attack_name>.json",
-        "<bundle_root>/<baseline_id>/records/<trajectory_trace_id>__<attack_name>.json",
-        "<bundle_root>/<baseline_id>/<prompt_id>/<seed_id>/<attack_name>.json",
-        "<bundle_root>/<baseline_id>/<trajectory_trace_id>/<attack_name>.json"
-      ],
-      "official_result_bundle_supported": true,
-      "repository_generated_result_cache_allowed": true,
-      "repository_official_eval_adapter_module": "external_baseline.official_eval_adapters.spdmark",
-      "repository_official_eval_command_template": "python -m external_baseline.official_eval_adapters.spdmark --official-source-dir /content/SSTW/external_baseline/primary/spdmark/source --source-video {source_video_path} --attacked-video {attacked_video_path} --attack-name {attack_name} --official-output-json {official_output_json_path} --run-root {run_root} --prompt-id {prompt_id} --seed-id {seed_id} --trajectory-trace-id {trajectory_trace_id}",
-      "repository_official_eval_command_template_status": "repository_official_wrapper_ready_fail_closed_requires_official_source_and_artifacts",
-      "score_output_contract": {
-        "formal_record_policy": "only_command_outputs_are_converted_to_measured_formal_records",
-        "json_object_required": true,
-        "minimum_required_score_field_any_of": [
-          "external_baseline_score",
-          "watermark_score",
-          "detection_score",
-          "score",
-          "bit_accuracy",
-          "confidence",
-          "detected"
-        ]
-      },
-      "source_clone_command": "git clone --branch main https://github.com/Samar-Fares/SPDMark /content/SSTW/external_baseline/primary/spdmark/source",
-      "source_verification_status": "git_ls_remote_head_verified_2026_06_25",
-      "sstw_eval_command_template": "python -m external_baseline.official_command_bridge --baseline-id spdmark --official-source-dir /content/SSTW/external_baseline/primary/spdmark/source --source-video {source_video_path} --attacked-video {attacked_video_path} --attack-name {attack_name} --output-json {output_json_path} --run-root {run_root} --prompt-id {prompt_id} --seed-id {seed_id} --trajectory-trace-id {trajectory_trace_id}",
-      "sstw_eval_command_template_status": "repository_bridge_ready_requires_official_eval_command",
-      "strict_gate_resource_resolution_order": [
-        "SSTW_SPDMARK_NATIVE_EVAL_COMMAND",
-        "repository_official_eval_adapter_default_runtime_when_supported",
-        "repository_generated_official_bundle_cache"
-      ],
-      "verified_head_commit": "4d9a894384a8585734b493301fe9d1a4d6abd07c"
-    },
-    {
       "baseline_id": "videomark",
       "colab_source_dir": "/content/SSTW/external_baseline/primary/videomark/source",
       "display_name": "VideoMark",
@@ -500,7 +431,7 @@
     "attack_name",
     "output_json_path"
   ],
-  "runnability_audit_note": "当前核验结论针对 validation_scale Colab L4 默认路径: VideoSeal、VideoShield、VideoMark 与 VidSig 具备项目内 official bundle 生成路径; SIGMark 具备项目内 Hunyuan runner 但需要高显存; SPDMark 仍需官方 extractor / gt bits 闭合后才能产出 measured_formal。",
+  "runnability_audit_note": "当前核验结论针对 validation_scale Colab 默认路径: 主实验必跑现代 external baseline 为 VideoSeal、VideoShield、VideoMark、VidSig 与 SIGMark 共 5 个。",
   "source_verification_method": "GitHub repository inspection and git ls-remote --heads for configured branch HEAD commits",
   "verified_at_utc": "2026-06-25T00:00:00Z"
 }

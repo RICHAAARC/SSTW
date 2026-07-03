@@ -19,7 +19,6 @@ from scripts.check_results.stage_transition_decision import write_stage_transiti
 MODERN_BASELINES = (
     "videoshield",
     "sigmark",
-    "spdmark",
     "videomark",
     "vidsig",
     "videoseal",
@@ -86,7 +85,7 @@ def test_pilot_to_full_transition_can_consume_sibling_validation_scale_run_root(
 
 
 def _write_self_contained_external_baseline_fixture(run_root: Path) -> None:
-    """构造 6 个现代 baseline 的自包含 measured_formal fixture。"""
+    """构造 5 个主实验现代 baseline 的自包含 measured_formal fixture。"""
     score_records = []
     intake_rows = []
     inspection_rows = []
@@ -161,7 +160,7 @@ def test_external_baseline_self_containment_requires_measured_formal_evidence(tm
     audit = write_external_baseline_self_containment_decision(run_root)
 
     assert audit["external_baseline_self_containment_decision"] == "PASS"
-    assert audit["self_contained_modern_external_baseline_count"] == 6
+    assert audit["self_contained_modern_external_baseline_count"] == 5
     assert audit["missing_self_contained_modern_external_baseline_names"] == []
     assert (run_root / "artifacts" / "external_baseline_self_containment_decision.json").exists()
 

@@ -42,7 +42,7 @@ def test_external_baseline_selection_keeps_modern_non_run_records() -> None:
     names = [record["external_baseline_name"] for record in records]
     assert "explicit_dtw_temporal_alignment" in names
     assert "explicit_frame_matching_temporal_registration" in names
-    assert {"videoshield", "sigmark", "spdmark", "videomark", "vidsig", "videoseal"} <= set(names)
+    assert {"videoshield", "sigmark", "videomark", "vidsig", "videoseal"} <= set(names)
     excluded_related_work_names = {"riva" + "gan", "vid" + "stamp"}
     assert excluded_related_work_names.isdisjoint(names)
     assert config["selection_policy"]["claim_rule"]
@@ -52,7 +52,7 @@ def test_external_baseline_selection_keeps_modern_non_run_records() -> None:
     explicit_records = [record for record in records if record["external_baseline_layer"] == "explicit_synchronization_control"]
     modern_records = [record for record in records if record["external_baseline_layer"] == "modern_external_baseline"]
     assert len(explicit_records) == 2
-    assert len(modern_records) >= 6
+    assert len(modern_records) == 5
     assert all(record["external_baseline_runnable_status"] == "runnable" for record in explicit_records)
     assert all(record["external_baseline_runnable_status"] == "not_runnable" for record in modern_records)
     assert all(record["external_baseline_adapter_status"] == "adapter_ready_command_not_configured" for record in modern_records)
@@ -67,7 +67,7 @@ def test_external_baseline_status_audit_reports_modern_gap() -> None:
 
     assert audit["external_baseline_status_decision"] == "PASS"
     assert audit["modern_external_baseline_status_records_ready"] is True
-    assert audit["modern_external_baseline_record_count"] >= 6
+    assert audit["modern_external_baseline_record_count"] == 5
     assert audit["modern_external_baseline_main_comparison_ready_count"] == 0
     assert audit["external_baseline_claim_support_status"] == "governed_status_records_only"
 
@@ -77,14 +77,14 @@ def test_external_baseline_source_intake_writes_governed_manifests(tmp_path: Pat
     """source intake 必须写出源码、inspection、clone plan 和 table plan 治理文件。"""
     manifest = build_source_intake_manifest()
     assert manifest["external_baseline_source_intake_decision"] == "PASS"
-    assert manifest["baseline_source_count"] >= 8
-    assert manifest["modern_external_baseline_source_count"] >= 6
+    assert manifest["baseline_source_count"] >= 7
+    assert manifest["modern_external_baseline_source_count"] == 5
     modern_rows = [
         row for row in manifest["baseline_sources"]
-        if row["baseline_id"] in {"videoshield", "sigmark", "spdmark", "videomark", "vidsig", "videoseal"}
+        if row["baseline_id"] in {"videoshield", "sigmark", "videomark", "vidsig", "videoseal"}
     ]
     assert all(row["source_cloneable"] is True for row in modern_rows)
-    assert {row["baseline_id"] for row in modern_rows} == {"videoshield", "sigmark", "spdmark", "videomark", "vidsig", "videoseal"}
+    assert {row["baseline_id"] for row in modern_rows} == {"videoshield", "sigmark", "videomark", "vidsig", "videoseal"}
     assert manifest["claim_support_status"] == "source_intake_manifest_only_not_claim_evidence"
 
     summary = write_source_intake_artifacts(tmp_path / "external_baseline_artifacts")
@@ -94,8 +94,6 @@ def test_external_baseline_source_intake_writes_governed_manifests(tmp_path: Pat
     assert Path(summary["table_plan_path"]).exists()
     clone_manifest = json.loads(Path(summary["clone_results_manifest_path"]).read_text(encoding="utf-8"))
     clone_rows = {row["baseline_id"]: row for row in clone_manifest["clone_results"]}
-    assert clone_rows["spdmark"]["planned_repository_url"] == "https://github.com/Samar-Fares/SPDMark"
-    assert clone_rows["spdmark"]["target_repository_commit"] == "4d9a894384a8585734b493301fe9d1a4d6abd07c"
 
 
 @pytest.mark.quick
@@ -105,7 +103,7 @@ def test_modern_baseline_colab_command_config_is_guidance_not_claim_evidence() -
     config = json.loads(config_path.read_text(encoding="utf-8"))
     rows = {row["baseline_id"]: row for row in config["baseline_command_configs"]}
 
-    required_ids = {"videoshield", "sigmark", "spdmark", "videomark", "vidsig", "videoseal"}
+    required_ids = {"videoshield", "sigmark", "videomark", "vidsig", "videoseal"}
     assert set(rows) == required_ids
     assert config["command_configuration_boundary"]["template_file_auto_applied"] == "optional_when_SSTW_USE_MODERN_BASELINE_BRIDGE_COMMANDS_true"
     assert config["bridge_command_policy"]["bridge_module"] == "external_baseline.official_command_bridge"
@@ -113,7 +111,6 @@ def test_modern_baseline_colab_command_config_is_guidance_not_claim_evidence() -
     assert "fail_closed" in config["formal_result_policy"]
     assert rows["videoshield"]["official_repository_url"] == "https://github.com/hurunyi/VideoShield"
     assert rows["sigmark"]["official_repository_url"] == "https://github.com/JeremyZhao1998/SIGMark-release"
-    assert rows["spdmark"]["official_repository_url"] == "https://github.com/Samar-Fares/SPDMark"
     assert rows["videomark"]["official_repository_url"] == "https://github.com/KYRIE-LI11/VideoMark"
     assert rows["vidsig"]["official_repository_url"] == "https://github.com/hardenyu21/Video-Signature"
     assert rows["videoseal"]["official_repository_url"] == "https://github.com/facebookresearch/videoseal"
@@ -160,7 +157,7 @@ def test_official_resource_requirements_define_auto_and_manual_boundaries() -> N
     config = json.loads(config_path.read_text(encoding="utf-8"))
     rows = {row["baseline_id"]: row for row in config["resource_rows"]}
 
-    assert set(rows) == {"videoshield", "sigmark", "spdmark", "videomark", "vidsig", "videoseal"}
+    assert set(rows) == {"videoshield", "sigmark", "videomark", "vidsig", "videoseal"}
     assert rows["videoseal"]["automatic_bundle_generation_supported_by_sstw"] is True
     assert rows["videoseal"]["colab_l4_auto_bundle_status"] == "auto_bundle_supported"
     assert rows["vidsig"]["automatic_bundle_generation_supported_by_sstw"] is True
@@ -168,8 +165,6 @@ def test_official_resource_requirements_define_auto_and_manual_boundaries() -> N
     assert rows["videoshield"]["automatic_bundle_generation_supported_by_sstw"] is True
     assert rows["videoshield"]["colab_l4_auto_bundle_status"] == "auto_bundle_supported_after_hf_model_download_and_colab_gpu_success"
     assert rows["videoshield"]["project_owned_runner_module"] == "external_baseline.videoshield_official_runtime"
-    assert rows["spdmark"]["automatic_bundle_generation_supported_by_sstw"] is False
-    assert rows["spdmark"]["colab_l4_auto_bundle_status"] == "blocked_by_missing_public_trained_weights"
     assert rows["sigmark"]["colab_l4_auto_bundle_status"] == "blocked_by_official_gpu_memory_requirement"
     assert "sstw_proxy" not in json.dumps(config, ensure_ascii=False)
 
@@ -181,7 +176,7 @@ def test_official_runtime_closure_requirements_are_first_class_colab_config() ->
     rows = {row["baseline_id"]: row for row in config["baseline_runtime_requirements"]}
 
     assert config["config_kind"] == "modern_external_baseline_official_runtime_closure_requirements"
-    assert set(rows) == {"videoshield", "sigmark", "spdmark", "videomark", "vidsig", "videoseal"}
+    assert set(rows) == {"videoshield", "sigmark", "videomark", "vidsig", "videoseal"}
     assert config["self_containment_rule"].startswith("external baseline 必须在项目内 clone")
     assert rows["videoseal"]["automatic_bundle_generation_supported_by_sstw"] is True
     assert rows["videoseal"]["colab_default_can_attempt_without_user_files"] is True
@@ -283,11 +278,10 @@ def test_official_runtime_closure_preflight_fails_with_actionable_missing_inputs
     assert audit["official_runtime_closure_decision"] == "FAIL"
     assert audit["runtime_input_audit"]["runtime_input_ready"] is False
     assert "records/runtime_detection_records.jsonl" in audit["runtime_input_audit"]["missing_runtime_requirements"]
-    assert audit["runtime_closure_blocked_count"] == 6
+    assert audit["runtime_closure_blocked_count"] == 5
     assert set(audit["runtime_closure_blocked_baselines"]) == {
         "videoshield",
         "sigmark",
-        "spdmark",
         "videomark",
         "vidsig",
         "videoseal",
@@ -368,14 +362,10 @@ def test_official_bundle_generation_plan_is_fail_closed_about_auto_blocked_basel
     plan = build_official_bundle_generation_plan(run_root, tmp_path / "official_bundles")
 
     assert plan["runtime_comparison_unit_count"] == 2
-    assert plan["baseline_count"] == 6
+    assert plan["baseline_count"] == 5
     assert plan["auto_supported_baselines"] == ["videoshield", "videomark", "vidsig", "videoseal"]
-    assert "spdmark" in plan["auto_blocked_baselines"]
     assert "sigmark" in plan["auto_blocked_baselines"]
-    assert plan["auto_blocked_baseline_count"] == 2
-    spdmark_row = next(row for row in plan["plan_rows"] if row["baseline_id"] == "spdmark")
-    assert spdmark_row["automatic_bundle_generation_supported_by_sstw"] is False
-    assert spdmark_row["resource_blocker"]
+    assert plan["auto_blocked_baseline_count"] == 1
 
 
 @pytest.mark.quick
@@ -394,8 +384,7 @@ def test_official_resource_bootstrap_writes_repair_artifact_without_network(tmp_
     assert decision["official_resource_bootstrap_decision"] == "PASS"
     assert "videoseal" in decision["ready_baselines"]
     assert "videoshield" in decision["ready_baselines"]
-    assert "spdmark" in decision["manual_official_resource_required_baselines"]
-    assert decision["manual_official_resource_required_count"] >= 3
+    assert decision["manual_official_resource_required_count"] >= 2
     assert decision["strict_gate_auto_resource_closure"] is False
     assert decision["environment_updates"]["SSTW_EXTERNAL_BASELINE_RESOURCE_ROOT"].endswith("external_baseline")
 
@@ -595,8 +584,7 @@ def test_modern_external_baseline_formal_command_adapters_write_measured_records
     for env_var in (
         "SSTW_VIDEOSHIELD_EVAL_COMMAND",
         "SSTW_SIGMARK_EVAL_COMMAND",
-        "SSTW_SPDMARK_EVAL_COMMAND",
-        "SSTW_VIDEOMARK_EVAL_COMMAND",
+                "SSTW_VIDEOMARK_EVAL_COMMAND",
         "SSTW_VIDSIG_EVAL_COMMAND",
         "SSTW_VIDEOSEAL_EVAL_COMMAND",
     ):
@@ -607,12 +595,11 @@ def test_modern_external_baseline_formal_command_adapters_write_measured_records
     formal_records = [record for record in records if record.get("metric_status") == "measured_formal"]
 
     assert audit["external_baseline_comparison_decision"] == "PASS"
-    assert audit["external_baseline_measured_adapter_count"] == 8
-    assert audit["modern_external_baseline_formal_measured_adapter_count"] == 6
+    assert audit["external_baseline_measured_adapter_count"] == 7
+    assert audit["modern_external_baseline_formal_measured_adapter_count"] == 5
     assert set(audit["modern_external_baseline_formal_measured_adapter_names"]) == {
         "videoshield",
         "sigmark",
-        "spdmark",
         "videomark",
         "vidsig",
         "videoseal",
@@ -628,7 +615,7 @@ def test_modern_external_baseline_formal_command_adapters_write_measured_records
     assert all(record["external_baseline_generation_model_id"] == "official_baseline_model" for record in formal_records)
     assert all(record.get("S_final") is None for record in records)
     execution_manifest = json.loads((run_root / "artifacts" / "external_baseline_execution_manifest.json").read_text(encoding="utf-8"))
-    assert execution_manifest["modern_external_baseline_formal_measured_adapter_count"] == 6
+    assert execution_manifest["modern_external_baseline_formal_measured_adapter_count"] == 5
     assert execution_manifest["formal_evidence_status"] == "evidence_paths_bound"
     assert execution_manifest["evidence_path_count"] >= len(formal_records)
 
@@ -657,7 +644,7 @@ def test_modern_external_baseline_bridge_commands_require_real_official_output(t
         "--attack-name {attack_name} "
         "--official-output-json {official_output_json_path}"
     )
-    for baseline_id in ("videoshield", "sigmark", "spdmark", "videomark", "vidsig", "videoseal"):
+    for baseline_id in ("videoshield", "sigmark", "videomark", "vidsig", "videoseal"):
         official_source_dir = tmp_path / "official_sources" / baseline_id
         official_source_dir.mkdir(parents=True)
         monkeypatch.setenv(f"SSTW_{baseline_id.upper()}_OFFICIAL_EVAL_COMMAND", official_command)
@@ -680,11 +667,10 @@ def test_modern_external_baseline_bridge_commands_require_real_official_output(t
     records = read_jsonl(run_root / "records" / "external_baseline_score_records.jsonl")
     formal_records = [record for record in records if record.get("metric_status") == "measured_formal"]
 
-    assert audit["modern_external_baseline_formal_measured_adapter_count"] == 6
+    assert audit["modern_external_baseline_formal_measured_adapter_count"] == 5
     assert set(audit["modern_external_baseline_formal_measured_adapter_names"]) == {
         "videoshield",
         "sigmark",
-        "spdmark",
         "videomark",
         "vidsig",
         "videoseal",
@@ -712,15 +698,13 @@ def test_official_result_bundle_preflight_requires_all_modern_baseline_units(
     monkeypatch.setenv("SSTW_EXTERNAL_BASELINE_OFFICIAL_RESULT_BUNDLE_ROOT", str(bundle_root))
     monkeypatch.delenv("SSTW_VIDEOSHIELD_RESULT_JSON", raising=False)
     monkeypatch.delenv("SSTW_SIGMARK_BIT_ACCURACY_NPZ", raising=False)
-    monkeypatch.delenv("SSTW_SPDMARK_EXTRACTOR_PATH", raising=False)
-    monkeypatch.delenv("SSTW_SPDMARK_GT_BITS_PATH", raising=False)
     monkeypatch.delenv("SSTW_VIDEOMARK_TEMPORAL_RESULTS_JSON", raising=False)
     monkeypatch.delenv("SSTW_VIDSIG_MSG_DECODER_PATH", raising=False)
-    for baseline_id in ("VIDEOSHIELD", "SIGMARK", "SPDMARK", "VIDEOMARK", "VIDSIG", "VIDEOSEAL"):
+    for baseline_id in ("VIDEOSHIELD", "SIGMARK", "VIDEOMARK", "VIDSIG", "VIDEOSEAL"):
         monkeypatch.delenv(f"SSTW_{baseline_id}_NATIVE_EVAL_COMMAND", raising=False)
 
     records = read_jsonl(run_root / "records" / "runtime_detection_records.jsonl")
-    for baseline_id in ("videoshield", "sigmark", "spdmark", "videomark", "vidsig", "videoseal"):
+    for baseline_id in ("videoshield", "sigmark", "videomark", "vidsig", "videoseal"):
         manifest_path = bundle_root / baseline_id / "official_reference_execution_manifest.json"
         manifest_path.parent.mkdir(parents=True, exist_ok=True)
         manifest_path.write_text(
@@ -754,8 +738,8 @@ def test_official_result_bundle_preflight_requires_all_modern_baseline_units(
 
     audit = build_official_result_bundle_preflight(run_root)
     assert audit["official_result_bundle_preflight_decision"] == "PASS"
-    assert audit["expected_bundle_result_count"] == 12
-    assert audit["present_bundle_result_count"] == 12
+    assert audit["expected_bundle_result_count"] == 10
+    assert audit["present_bundle_result_count"] == 10
     assert audit["strict_missing_baselines"] == []
 
 
@@ -771,19 +755,17 @@ def test_official_result_bundle_preflight_fails_when_non_runtime_baseline_bundle
     for env_name in (
         "SSTW_VIDEOSHIELD_RESULT_JSON",
         "SSTW_SIGMARK_BIT_ACCURACY_NPZ",
-        "SSTW_SPDMARK_EXTRACTOR_PATH",
-        "SSTW_SPDMARK_GT_BITS_PATH",
         "SSTW_VIDEOMARK_TEMPORAL_RESULTS_JSON",
         "SSTW_VIDSIG_MSG_DECODER_PATH",
         "SSTW_VIDSIG_VAE_CHECKPOINT_PATH",
     ):
         monkeypatch.delenv(env_name, raising=False)
-    for baseline_id in ("VIDEOSHIELD", "SIGMARK", "SPDMARK", "VIDEOMARK", "VIDSIG", "VIDEOSEAL"):
+    for baseline_id in ("VIDEOSHIELD", "SIGMARK", "VIDEOMARK", "VIDSIG", "VIDEOSEAL"):
         monkeypatch.delenv(f"SSTW_{baseline_id}_NATIVE_EVAL_COMMAND", raising=False)
 
     audit = build_official_result_bundle_preflight(run_root)
     assert audit["official_result_bundle_preflight_decision"] == "FAIL"
-    assert "spdmark" in audit["strict_missing_baselines"]
+    assert "sigmark" in audit["strict_missing_baselines"]
     assert audit["missing_bundle_examples"]
 
 
@@ -827,14 +809,12 @@ def test_official_result_bundle_preflight_rejects_external_supplement_bundle(
     for env_name in (
         "SSTW_VIDEOSHIELD_RESULT_JSON",
         "SSTW_SIGMARK_BIT_ACCURACY_NPZ",
-        "SSTW_SPDMARK_EXTRACTOR_PATH",
-        "SSTW_SPDMARK_GT_BITS_PATH",
         "SSTW_VIDEOMARK_TEMPORAL_RESULTS_JSON",
         "SSTW_VIDSIG_MSG_DECODER_PATH",
         "SSTW_VIDSIG_VAE_CHECKPOINT_PATH",
     ):
         monkeypatch.delenv(env_name, raising=False)
-    for baseline_id in ("VIDEOSHIELD", "SIGMARK", "SPDMARK", "VIDEOMARK", "VIDSIG", "VIDEOSEAL"):
+    for baseline_id in ("VIDEOSHIELD", "SIGMARK", "VIDEOMARK", "VIDSIG", "VIDEOSEAL"):
         monkeypatch.delenv(f"SSTW_{baseline_id}_NATIVE_EVAL_COMMAND", raising=False)
 
     record = read_jsonl(run_root / "records" / "runtime_detection_records.jsonl")[0]
@@ -860,10 +840,10 @@ def test_official_result_bundle_preflight_rejects_external_supplement_bundle(
 
 @pytest.mark.quick
 def test_repository_official_eval_adapters_are_tracked_fail_closed_entrypoints() -> None:
-    """6 个现代 baseline 必须有可导入的 repository official adapter 入口。"""
+    """5 个主实验现代 baseline 必须有可导入的 repository official adapter 入口。"""
     import importlib
 
-    for baseline_id in ("videoshield", "sigmark", "spdmark", "videomark", "vidsig", "videoseal"):
+    for baseline_id in ("videoshield", "sigmark", "videomark", "vidsig", "videoseal"):
         module = importlib.import_module(f"external_baseline.official_eval_adapters.{baseline_id}")
         assert callable(module.main)
         assert module.BASELINE_ID == baseline_id

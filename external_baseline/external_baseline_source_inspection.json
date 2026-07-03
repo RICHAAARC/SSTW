@@ -4,9 +4,9 @@
   "manifest_kind": "external_baseline_source_inspection",
   "registry_path": "external_baseline\\source_registry.json",
   "source_inspection_decision": "PASS",
-  "source_inspection_missing_count": 8,
+  "source_inspection_missing_count": 7,
   "source_inspection_ready_count": 0,
-  "source_inspection_record_count": 8,
+  "source_inspection_record_count": 7,
   "source_inspections": [
     {
       "baseline_id": "explicit_dtw_temporal_alignment",
@@ -40,15 +40,6 @@
       "entrypoint_candidate_files": [],
       "metadata_files": [],
       "source_dir": "external_baseline/primary/sigmark/source",
-      "source_dir_exists": false,
-      "source_dir_file_count": 0,
-      "source_inspection_status": "source_missing"
-    },
-    {
-      "baseline_id": "spdmark",
-      "entrypoint_candidate_files": [],
-      "metadata_files": [],
-      "source_dir": "external_baseline/primary/spdmark/source",
       "source_dir_exists": false,
       "source_dir_file_count": 0,
       "source_inspection_status": "source_missing"

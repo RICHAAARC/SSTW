@@ -1189,7 +1189,7 @@ def build_external_baseline_self_containment_decision_command(layout: dict[str, 
     """构造 external baseline 自包含产出判定命令。
 
     该命令只读取 comparison records、source intake manifests 和官方命令 evidence,
-    检查 6 个现代 baseline 是否由项目内 clone / build / run / adapt / record 产出
+    检查 5 个主实验现代 baseline 是否由项目内 clone / build / run / adapt / record 产出
     `measured_formal` 结果。non-run record 会被保留为阻断原因, 不能替代正式结果。
     """
     return [

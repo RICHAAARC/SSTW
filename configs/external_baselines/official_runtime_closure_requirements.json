@@ -143,51 +143,6 @@
     },
     {
       "automatic_bundle_generation_supported_by_sstw": false,
-      "baseline_id": "spdmark",
-      "baseline_name": "SPDMark",
-      "colab_default_can_attempt_without_user_files": false,
-      "colab_default_measured_formal_ready_without_user_files": false,
-      "external_baseline_command_env_var": "SSTW_SPDMARK_EVAL_COMMAND",
-      "external_supplemental_result_bundle_allowed": false,
-      "missing_resource_action": "提供官方训练出的 extractor 与当前 prompt / seed 对应的 ground-truth bits, 或封装完整官方训练/生成/检测 native command。",
-      "native_command_env_var": "SSTW_SPDMARK_NATIVE_EVAL_COMMAND",
-      "official_baseline_command_env_var": "SSTW_SPDMARK_OFFICIAL_EVAL_COMMAND",
-      "official_bundle_policy": "preferred_project_owned_cache; extractor and gt bits must be official resources bound to current comparison units",
-      "official_repository_branch": "main",
-      "official_repository_url": "https://github.com/Samar-Fares/SPDMark",
-      "official_source_dir_candidates": [
-        "external_baseline/primary/spdmark/source",
-        "/content/SSTW/external_baseline/primary/spdmark/source"
-      ],
-      "required_source_files": [
-        "assets/evaluate_robustness_full.py",
-        "assets/utils.py",
-        "ModelScope/generate_watermarked_txt2videos.py"
-      ],
-      "requirements_file": "configs/external_baselines/requirements/spdmark.txt",
-      "resource_env_vars": [
-        {
-          "default_resource_glob_pattern": "spdmark/**/extractor*.pth",
-          "default_resource_relative_path": "spdmark/checkpoints/extractor.pth",
-          "env_var": "SSTW_SPDMARK_EXTRACTOR_PATH",
-          "project_owned_resource_required": true,
-          "required_for_repository_default_adapter": true,
-          "resource_role": "official_trained_extractor_checkpoint"
-        },
-        {
-          "default_resource_glob_pattern": "spdmark/**/*gt*bits*.pt",
-          "default_resource_relative_path": "spdmark/official_outputs/gt_bits.pt",
-          "env_var": "SSTW_SPDMARK_GT_BITS_PATH",
-          "project_owned_resource_required": true,
-          "required_for_repository_default_adapter": true,
-          "resource_role": "official_ground_truth_bits"
-        }
-      ],
-      "runtime_support_mode": "trained_extractor_gt_bits_or_project_owned_bundle_required",
-      "source_dir": "external_baseline/primary/spdmark/source"
-    },
-    {
-      "automatic_bundle_generation_supported_by_sstw": false,
       "baseline_id": "sigmark",
       "baseline_name": "SIGMark",
       "colab_default_can_attempt_without_user_files": false,

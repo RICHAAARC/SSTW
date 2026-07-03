@@ -17,14 +17,14 @@ SOURCE_INSPECTION_NAME = "external_baseline_source_inspection.json"
 CLONE_RESULTS_NAME = "external_baseline_clone_results.json"
 OFFICIAL_COMMAND_EVIDENCE_RELATIVE_ROOT = Path("artifacts/external_baseline_evidence")
 
-MODERN_BASELINE_IDS = {
+REQUIRED_MODERN_BASELINE_IDS = {
     "videoshield",
     "sigmark",
-    "spdmark",
     "videomark",
     "vidsig",
     "videoseal",
 }
+MODERN_BASELINE_IDS = REQUIRED_MODERN_BASELINE_IDS
 
 SOURCE_CANDIDATE_FILE_NAMES = (
     "README.md",
@@ -406,17 +406,22 @@ def build_external_baseline_table_plan(
     for entry in _safe_list(registry.get("baseline_sources")):
         baseline_id = str(entry.get("baseline_id") or "")
         layer = "modern_external_baseline" if baseline_id in MODERN_BASELINE_IDS else "explicit_synchronization_control"
+        required_modern = baseline_id in REQUIRED_MODERN_BASELINE_IDS
         methods.append({
             "method_id": baseline_id,
             "display_name": entry.get("baseline_name"),
-            "table_role": "primary_modern_video_watermark_baseline" if layer == "modern_external_baseline" else "synchronization_control",
+            "table_role": "primary_modern_video_watermark_baseline"
+            if required_modern
+            else "synchronization_control",
             "comparison_layer": layer,
             "source_url": entry.get("official_repository_url"),
             "local_source_root": entry.get("source_dir"),
             "adapter_path": entry.get("adapter_path"),
             "integration_status": entry.get("adapter_status"),
             "paper_claim_support": bool(entry.get("paper_claim_support")),
-            "claim_boundary": "formal_measured_required" if layer == "modern_external_baseline" else "control_only_not_positive_claim",
+            "claim_boundary": "formal_measured_required"
+            if required_modern
+            else "control_only_not_positive_claim",
         })
     return {
         "artifact_name": "external_baseline_table_plan.json",

@@ -26,7 +26,6 @@ DEFAULT_MINIMUM_ATTACK_COUNT = 3
 DEFAULT_REQUIRED_MODERN_EXTERNAL_BASELINE_ADAPTER_NAMES = (
     "videoshield",
     "sigmark",
-    "spdmark",
     "videomark",
     "vidsig",
     "videoseal",

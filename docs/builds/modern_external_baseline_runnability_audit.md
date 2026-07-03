@@ -1,6 +1,6 @@
 # modern external baseline 可运行性审计
 
-本文档记录 `validation_scale` 阶段 6 个现代 external baseline 的当前可运行性判断。
+本文档记录 `validation_scale` 阶段 5 个主实验现代 external baseline 的当前可运行性判断。
 
 ## 1. 审计边界
 
@@ -18,7 +18,7 @@ external_baseline_score_status: measured_formal
 
 ## 2. 源码可获取性核验
 
-已使用 `git ls-remote --heads` 核验 6 个官方仓库的配置 branch 仍可访问, 且当前 HEAD 与
+已使用 `git ls-remote --heads` 核验 5 个官方仓库的配置 branch 仍可访问, 且当前 HEAD 与
 `external_baseline/source_registry.json` 中登记 commit 一致。
 
 这只说明官方源码入口可 clone, 不等价于 baseline 已能真实跑通。真实跑通还需要官方依赖、
@@ -32,7 +32,6 @@ checkpoint、key、message、训练权重、官方中间产物和项目 adapter 
 | VidSig | 有条件可以 | 否 | 已补齐项目内 `external_baseline.vidsig_official_runtime`, 默认运行官方 `generate_ms.py` 生成 VidSig clean / watermarked videos, 再施加项目 runtime attack 并调用官方 `attack.py`; 仍需要公开 checkpoint、Hugging Face 模型下载和可完成 Text-to-Video 的 GPU。 |
 | VideoMark | 有条件可以 | 否 | 已补齐项目内运行官方 PRC key、embedding、extraction 和 temporal tamper 流程; 仍需要 Colab 成功下载模型并完成官方脚本。 |
 | VideoShield | 有条件可以 | 否 | 已补齐项目内 `external_baseline.videoshield_official_runtime`, 默认调用官方 VideoShield watermark、ModelScope 生成、latent inversion 与 temporal matching 流程; 仍需要 Colab 成功下载 Hugging Face 模型并完成 GPU 反演。 |
-| SPDMark | 不能直接完成 | 是 | 需要训练出的 decoder / extractor 权重和 ground-truth bits。 |
 | SIGMark | 有条件可以 | 否 | 已补齐项目内 `external_baseline.sigmark_official_hunyuan_runtime`, 可运行官方 Hunyuan `gen -> extract` 并转写 official bundle; 仍需要高显存 GPU 或可完成 HunyuanVideo 的 Colab 规格。 |
 
 ## 4. 当前适配器状态
@@ -75,7 +74,8 @@ matching 逻辑写出 project-owned official bundle。该 bundle 仍不是最终
 
 ## 5. 结论
 
-当前项目已经具备标准论文 baseline 对比的工程框架, 但 6 个 baseline 的正式结果尚未全部闭合。
+当前项目已经具备标准论文 baseline 对比的工程框架。主实验必跑 baseline 已收敛为 5 个,
+
 
 下一步应按 baseline 逐个补齐:
 
@@ -83,6 +83,6 @@ matching 逻辑写出 project-owned official bundle。该 bundle 仍不是最终
 2. 官方权重、key、message 或生成中间产物。
 3. `SSTW_<BASELINE>_NATIVE_EVAL_COMMAND` 或等价项目内 official bundle 生成逻辑。
 4. 覆盖全部 `validation_scale` runtime comparison units 的 score JSON。
-5. 6 个 independent formal reference Notebook 先各自生成项目内 official bundle, 并默认调用统一 runner 转写当前可用的 `measured_formal` records。
-6. `paper_gate_and_package_colab.ipynb` 在恢复 6 个 official reference 阶段包后执行全量统一转写、self-containment 判定和打包; `external_baseline_formal_scoring_colab.ipynb` 仅作为诊断或历史聚合入口。
+5. 5 个主实验 independent formal reference Notebook 先各自生成项目内 official bundle, 并默认调用统一 runner 转写当前可用的 `measured_formal` records。
+6. `paper_gate_and_package_colab.ipynb` 在恢复 5 个主实验 official reference 阶段包后执行全量统一转写、self-containment 判定和打包; `external_baseline_formal_scoring_colab.ipynb` 仅作为诊断或历史聚合入口。
 7. `external_baseline_self_containment_decision.json` 通过。

@@ -1,4 +1,4 @@
-"""验证 6 个 modern external baseline 的 Colab 官方参考入口。"""
+"""验证 5 个主实验 modern external baseline 的 Colab 官方参考入口。"""
 
 from __future__ import annotations
 
@@ -23,14 +23,13 @@ EXPECTED_BASELINE_ORDER = (
     "vidsig",
     "videomark",
     "videoshield",
-    "spdmark",
     "sigmark",
 )
 
 
 @pytest.mark.quick
 def test_modern_external_baseline_formal_reference_order_is_explicit() -> None:
-    """6 个 modern baseline 的独立参考 Notebook 必须使用稳定执行顺序。"""
+    """5 个主实验 modern baseline 的独立参考 Notebook 必须使用稳定执行顺序。"""
 
     assert MODERN_EXTERNAL_BASELINE_BUILD_ORDER == EXPECTED_BASELINE_ORDER
 
@@ -113,20 +112,20 @@ def test_runtime_closure_blocked_reference_manifest_is_fail_fast(tmp_path: Path)
     preflight = {
         "stage_id": "external_baseline_official_runtime_closure_requirements",
         "stage_status": "FAIL",
-        "runtime_closure_blocked_baselines": ["spdmark"],
+        "runtime_closure_blocked_baselines": ["sigmark"],
         "runtime_closure_missing_requirement_summary": {
-            "spdmark": ["official_bundle_or_native_command_or_required_resources"],
+            "sigmark": ["official_bundle_or_native_command_or_required_resources"],
         },
     }
 
-    assert _runtime_closure_blocks_reference_attempt(preflight, "spdmark") is True
+    assert _runtime_closure_blocks_reference_attempt(preflight, "sigmark") is True
     assert _runtime_closure_blocks_reference_attempt(preflight, "videoseal") is False
 
     manifest = _build_runtime_closure_blocked_reference_manifest(
-        baseline_id="spdmark",
+        baseline_id="sigmark",
         run_root=tmp_path / "runs" / "validation_scale",
         bundle_root=tmp_path / "bundles" / "validation_scale",
-        official_source_dir=tmp_path / "external_baseline" / "primary" / "spdmark" / "source",
+        official_source_dir=tmp_path / "external_baseline" / "primary" / "sigmark" / "source",
         selected_record_count=69,
         runtime_closure_preflight_result=preflight,
     )
@@ -135,7 +134,7 @@ def test_runtime_closure_blocked_reference_manifest_is_fail_fast(tmp_path: Path)
         tmp_path
         / "bundles"
         / "validation_scale"
-        / "spdmark"
+        / "sigmark"
         / "official_reference_execution_manifest.json"
     )
     written = json.loads(manifest_path.read_text(encoding="utf-8"))
@@ -148,7 +147,7 @@ def test_runtime_closure_blocked_reference_manifest_is_fail_fast(tmp_path: Path)
 
 
 @pytest.mark.quick
-def test_six_baseline_wrapper_modules_are_thin_entrypoints() -> None:
+def test_main_five_baseline_wrapper_modules_are_thin_entrypoints() -> None:
     """每个 baseline wrapper 只能绑定身份并转发到共享 helper。"""
 
     for baseline_id in EXPECTED_BASELINE_ORDER:
@@ -159,7 +158,7 @@ def test_six_baseline_wrapper_modules_are_thin_entrypoints() -> None:
 
 
 @pytest.mark.quick
-def test_six_baseline_formal_reference_notebooks_call_repository_helpers() -> None:
+def test_main_five_baseline_formal_reference_notebooks_call_repository_helpers() -> None:
     """独立 Notebook 必须只作为 Colab 入口, 不得直接手写正式 records。"""
 
     for baseline_id in EXPECTED_BASELINE_ORDER:

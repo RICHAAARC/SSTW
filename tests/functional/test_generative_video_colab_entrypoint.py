@@ -359,7 +359,7 @@ def test_formal_reference_notebooks_use_stage_zip_handoff() -> None:
     """每个 baseline 参考 Notebook 必须启用阶段 zip 交接, 避免循环读取 Drive 小文件。"""
 
     notebook_dir = Path("paper_workflow/colab_notebooks")
-    for baseline_id in ("videoseal", "vidsig", "videomark", "videoshield", "spdmark", "sigmark"):
+    for baseline_id in ("videoseal", "vidsig", "videomark", "videoshield", "sigmark"):
         notebook_path = notebook_dir / f"{baseline_id}_formal_reference_colab.ipynb"
         assert notebook_path.exists()
         notebook = json.loads(notebook_path.read_text(encoding="utf-8"))
@@ -387,8 +387,8 @@ def test_colab_workflow_readme_documents_validation_scale_execution() -> None:
     assert "validation_scale_formal_gate_colab.ipynb" not in text
     assert "SSTW_VALIDATION_SCALE_RUN_THROUGH_TEST" not in text
     assert text.index("motion_threshold_calibration_colab.ipynb") < text.index("generative_video_runtime_colab.ipynb")
-    assert text.index("generative_video_runtime_colab.ipynb") < text.index("6 个 modern external baseline formal reference Notebook")
-    assert text.index("6 个 modern external baseline formal reference Notebook") < text.index("paper_gate_and_package_colab.ipynb")
+    assert text.index("generative_video_runtime_colab.ipynb") < text.index("5 个主实验 modern external baseline formal reference Notebook")
+    assert text.index("5 个主实验 modern external baseline formal reference Notebook") < text.index("paper_gate_and_package_colab.ipynb")
     assert "SSTW_WORKFLOW_PROFILE_VALUE = 'validation_scale'" in text
     assert "SSTW_WORKFLOW_PROFILE_VALUE = 'pilot_paper'" in text
     assert "SSTW_COLAB_STAGE_IO_MODE" in text
@@ -397,7 +397,6 @@ def test_colab_workflow_readme_documents_validation_scale_execution() -> None:
     assert "不要把该 Notebook 切换到 `validation_scale` 或 `pilot_paper`" in text
     assert "SSTW_VIDEOSHIELD_EVAL_COMMAND" in text
     assert "SSTW_SIGMARK_EVAL_COMMAND" in text
-    assert "SSTW_SPDMARK_EVAL_COMMAND" in text
     assert "SSTW_VIDEOMARK_EVAL_COMMAND" in text
     assert "SSTW_VIDSIG_EVAL_COMMAND" in text
     assert "SSTW_VIDEOSEAL_EVAL_COMMAND" in text
@@ -700,7 +699,7 @@ def test_profile_specific_layout_reuses_shared_motion_threshold_artifact(tmp_pat
 
 @pytest.mark.quick
 def test_external_baseline_colab_preflight_uses_protocol_config(tmp_path: Path) -> None:
-    """Notebook preflight 必须从 protocol config 读取 6 个现代 baseline 要求并写入 Drive artifact。"""
+    """Notebook preflight 必须从 protocol config 读取 5 个主实验现代 baseline 要求并写入 Drive artifact。"""
     layout = build_drive_layout(str(tmp_path / "SSTW"))
     summary = write_modern_baseline_colab_command_config_summary(layout, profile="validation_scale")
     commands = build_modern_baseline_command_env("validation_scale", {
@@ -719,15 +718,14 @@ def test_external_baseline_colab_preflight_uses_protocol_config(tmp_path: Path) 
 
     assert decision["external_baseline_colab_preflight_decision"] == "FAIL"
     assert decision["external_baseline_colab_preflight_status"] == "commands_missing_for_paper_gate"
-    assert decision["external_baseline_colab_preflight_required_env_var_count"] == 6
+    assert decision["external_baseline_colab_preflight_required_env_var_count"] == 5
     assert decision["external_baseline_colab_preflight_configured_env_var_count"] == 2
-    assert decision["external_baseline_colab_preflight_missing_env_var_count"] == 4
+    assert decision["external_baseline_colab_preflight_missing_env_var_count"] == 3
     assert decision["external_baseline_command_template_config_path"] == "configs/external_baselines/modern_baseline_colab_commands.json"
     assert Path(str(decision["external_baseline_command_template_summary_path"])).name == "external_baseline_command_template_summary.json"
     assert set(decision["required_modern_external_baseline_adapter_names"]) == {
         "videoshield",
         "sigmark",
-        "spdmark",
         "videomark",
         "vidsig",
         "videoseal",
@@ -740,19 +738,18 @@ def test_external_baseline_colab_preflight_uses_protocol_config(tmp_path: Path) 
     summary_path = Path(layout["drive_run_root"]) / "artifacts" / "external_baseline_command_template_summary.json"
     assert summary_path.exists()
     assert summary["command_templates_auto_applied"] is False
-    assert summary["configured_template_row_count"] == 6
+    assert summary["configured_template_row_count"] == 5
     assert summary["missing_template_row_count"] == 0
     assert summary["claim_support_status"] == "external_baseline_command_template_summary_only_not_claim_evidence"
 
 
 @pytest.mark.quick
 def test_external_baseline_colab_preflight_passes_when_all_commands_configured(tmp_path: Path) -> None:
-    """6 个现代 baseline command 均配置时, paper gate preflight 应允许继续进入 GPU 流程。"""
+    """5 个主实验现代 baseline command 均配置时, paper gate preflight 应允许继续进入 GPU 流程。"""
     layout = build_drive_layout(str(tmp_path / "SSTW"))
     commands = build_modern_baseline_command_env("pilot_paper", {
         "videoshield": "python videoshield.py --output-json {output_json_path}",
         "sigmark": "python sigmark.py --output-json {output_json_path}",
-        "spdmark": "python spdmark.py --output-json {output_json_path}",
         "videomark": "python videomark.py --output-json {output_json_path}",
         "vidsig": "python vidsig.py --output-json {output_json_path}",
         "videoseal": "python videoseal.py --output-json {output_json_path}",
@@ -773,7 +770,6 @@ def test_external_baseline_colab_preflight_passes_when_all_commands_configured(t
     assert set(decision["external_baseline_colab_preflight_configured_env_vars"]) == {
         "SSTW_VIDEOSHIELD_EVAL_COMMAND",
         "SSTW_SIGMARK_EVAL_COMMAND",
-        "SSTW_SPDMARK_EVAL_COMMAND",
         "SSTW_VIDEOMARK_EVAL_COMMAND",
         "SSTW_VIDSIG_EVAL_COMMAND",
         "SSTW_VIDEOSEAL_EVAL_COMMAND",
@@ -785,7 +781,7 @@ def test_modern_baseline_direct_eval_command_overrides_bridge_template(tmp_path:
     """用户显式配置直接 command 时, 不应被默认 bridge 模板覆盖或误要求内部官方命令。"""
     layout = build_drive_layout(str(tmp_path / "SSTW"))
     bridge_templates = build_modern_baseline_official_bridge_command_templates("validation_scale")
-    baseline_ids = ("videoshield", "sigmark", "spdmark", "videomark", "vidsig", "videoseal")
+    baseline_ids = ("videoshield", "sigmark", "videomark", "vidsig", "videoseal")
     direct_templates = {
         f"SSTW_{baseline_id.upper()}_EVAL_COMMAND": (
             f"python direct_{baseline_id}.py --source {{source_video_path}} "
@@ -804,8 +800,8 @@ def test_modern_baseline_direct_eval_command_overrides_bridge_template(tmp_path:
         require_bridge_official_commands=True,
     )
 
-    assert command_env["SSTW_SPDMARK_EVAL_COMMAND"].startswith("python direct_spdmark.py")
-    assert "external_baseline.official_command_bridge" not in command_env["SSTW_SPDMARK_EVAL_COMMAND"]
+    assert command_env["SSTW_VIDEOMARK_EVAL_COMMAND"].startswith("python direct_videomark.py")
+    assert "external_baseline.official_command_bridge" not in command_env["SSTW_VIDEOMARK_EVAL_COMMAND"]
     assert bridge_decision["external_baseline_official_bridge_preflight_decision"] == "PASS"
     assert bridge_decision["external_baseline_official_bridge_preflight_status"] == (
         "official_bridge_not_required_for_direct_eval_commands"
@@ -821,7 +817,7 @@ def test_modern_baseline_bridge_preflight_requires_official_inner_commands(tmp_p
     """使用 repository bridge 外层命令时, paper gate 必须检查内部官方命令。"""
     layout = build_drive_layout(str(tmp_path / "SSTW"))
     bridge_templates = build_modern_baseline_official_bridge_command_templates("validation_scale")
-    baseline_ids = ("videoshield", "sigmark", "spdmark", "videomark", "vidsig", "videoseal")
+    baseline_ids = ("videoshield", "sigmark", "videomark", "vidsig", "videoseal")
 
     missing_decision = build_modern_baseline_official_bridge_preflight_decision(
         layout,
@@ -836,8 +832,8 @@ def test_modern_baseline_bridge_preflight_requires_official_inner_commands(tmp_p
         "official_bridge_commands_missing_for_paper_gate"
     )
     assert set(missing_decision["official_bridge_planned_bridge_baseline_ids"]) == set(baseline_ids)
-    assert missing_decision["official_bridge_required_env_var_count"] == 6
-    assert missing_decision["official_bridge_missing_env_var_count"] == 6
+    assert missing_decision["official_bridge_required_env_var_count"] == 5
+    assert missing_decision["official_bridge_missing_env_var_count"] == 5
 
     official_inner_commands = {
         f"SSTW_{baseline_id.upper()}_OFFICIAL_EVAL_COMMAND": (
@@ -858,17 +854,17 @@ def test_modern_baseline_bridge_preflight_requires_official_inner_commands(tmp_p
     assert ready_decision["external_baseline_official_bridge_preflight_status"] == (
         "official_bridge_commands_configured_for_paper_gate"
     )
-    assert ready_decision["official_bridge_configured_env_var_count"] == 6
+    assert ready_decision["official_bridge_configured_env_var_count"] == 5
     assert ready_decision["official_bridge_missing_env_vars"] == []
 
 
 @pytest.mark.quick
 def test_repository_official_baseline_eval_adapters_configure_inner_commands(tmp_path: Path) -> None:
-    """repository official adapter 应能一次性补齐 6 个 bridge 内部官方命令。"""
+    """repository official adapter 应能一次性补齐 5 个主实验 bridge 内部官方命令。"""
     layout = build_drive_layout(str(tmp_path / "SSTW"))
     outer_bridge_templates = build_modern_baseline_official_bridge_command_templates("validation_scale")
     inner_official_templates = build_repository_official_baseline_eval_command_templates("validation_scale")
-    baseline_ids = ("videoshield", "sigmark", "spdmark", "videomark", "vidsig", "videoseal")
+    baseline_ids = ("videoshield", "sigmark", "videomark", "vidsig", "videoseal")
 
     assert set(inner_official_templates) == {
         f"SSTW_{baseline_id.upper()}_OFFICIAL_EVAL_COMMAND"
@@ -890,7 +886,7 @@ def test_repository_official_baseline_eval_adapters_configure_inner_commands(tmp
     )
 
     assert ready_decision["external_baseline_official_bridge_preflight_decision"] == "PASS"
-    assert ready_decision["official_bridge_configured_env_var_count"] == 6
+    assert ready_decision["official_bridge_configured_env_var_count"] == 5
     assert ready_decision["official_bridge_missing_env_vars"] == []
 
 

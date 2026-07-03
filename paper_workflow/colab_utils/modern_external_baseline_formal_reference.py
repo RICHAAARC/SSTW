@@ -33,13 +33,11 @@ MODERN_EXTERNAL_BASELINE_BUILD_ORDER = (
     "vidsig",
     "videomark",
     "videoshield",
-    "spdmark",
     "sigmark",
 )
 REPOSITORY_OFFICIAL_ADAPTER_BASELINES = {
     "videoshield",
     "sigmark",
-    "spdmark",
     "videomark",
     "vidsig",
     "videoseal",
@@ -358,10 +356,10 @@ def _runtime_closure_blocks_reference_attempt(
 ) -> bool:
     """判断 runtime closure 预检是否已经足以阻断正式参考运行。
 
-    该函数属于项目特定门禁写法。对于 SPDMark 这类需要官方 extractor、
-    ground-truth bits 或原生命令的 baseline, 若预检已明确缺少资源, 后续不应再
-    逐条调用官方 adapter。这样可以避免生成 69 条重复失败记录, 也能把阻断原因
-    保持为 governed preflight artifact。
+    该函数属于项目特定门禁写法。对于需要额外官方资源、项目内 official bundle
+    或原生命令的 baseline, 若预检已明确缺少资源, 后续不应再逐条调用官方
+    adapter。这样可以避免生成重复失败记录, 也能把阻断原因保持为 governed
+    preflight artifact。
     """
 
     if str(preflight_result.get("stage_status") or "") != "FAIL":
@@ -782,7 +780,7 @@ def _build_unified_formal_scoring_environment(
     """构造统一 measured_formal 转写阶段需要的环境变量。
 
     各 baseline Notebook 只生成自己的 official bundle。统一转写仍复用
-    `external_baseline_runner` 和现代 command adapter, 因此这里必须为 6 个现代
+    `external_baseline_runner` 和现代 command adapter, 因此这里必须为 5 个主实验现代
     baseline 同时注入外层 bridge command 和内层 repository official adapter command。
     已由用户显式设置的环境变量保持最高优先级。
     """

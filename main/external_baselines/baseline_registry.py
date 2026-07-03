@@ -14,7 +14,6 @@ ADAPTER_STATUS_BUILDERS = {
     "explicit_frame_matching_temporal_registration": lambda: external_adapter_status("explicit_frame_matching_temporal_registration"),
     "videoshield": lambda: external_adapter_status("videoshield"),
     "sigmark": lambda: external_adapter_status("sigmark"),
-    "spdmark": lambda: external_adapter_status("spdmark"),
     "videomark": lambda: external_adapter_status("videomark"),
     "vidsig": lambda: external_adapter_status("vidsig"),
     "videoseal": lambda: external_adapter_status("videoseal"),

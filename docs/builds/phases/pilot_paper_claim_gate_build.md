@@ -63,13 +63,12 @@ explicit_dtw_temporal_alignment
 explicit_frame_matching_temporal_registration
 videoshield
 sigmark
-spdmark
 videomark
 vidsig
 videoseal
 ```
 
-其中显式 DTW 与 frame matching 只能写出 `measured_proxy` control records; 6 个现代视频水印 baseline 必须通过项目内 clone / build / run / adapt / record 和正式 adapter 写出 `metric_status = measured_formal` records。内部消融矩阵至少需要覆盖 `sstw_full_method`、endpoint-only、trajectory-only、去 velocity constraint、去 endpoint-aware control、去 replay uncertainty weighting、去 admissibility 和 generic SSM baseline。若任何现代 baseline 或消融缺失, `pilot_paper` gate 必须失败, 不允许先报告 `TPR@FPR=0.01` 再补表。
+其中显式 DTW 与 frame matching 只能写出 `measured_proxy` control records; 5 个主实验现代视频水印 baseline 必须通过项目内 clone / build / run / adapt / record 和正式 adapter 写出 `metric_status = measured_formal` records。内部消融矩阵至少需要覆盖 `sstw_full_method`、endpoint-only、trajectory-only、去 velocity constraint、去 endpoint-aware control、去 replay uncertainty weighting、去 admissibility 和 generic SSM baseline。若任何现代 baseline 或消融缺失, `pilot_paper` gate 必须失败, 不允许先报告 `TPR@FPR=0.01` 再补表。
 
 
 ## 3. 工程入口
@@ -153,7 +152,7 @@ data_split_and_leakage_guard_decision == PASS
 external_baseline_comparison_decision == PASS
 external_baseline_self_containment_decision == PASS
 external_baseline_measured_adapter_count >= 8
-modern_external_baseline_formal_measured_adapter_count >= 6
+modern_external_baseline_formal_measured_adapter_count >= 5
 required_external_baseline_adapter_names covered
 required_modern_external_baseline_adapter_names measured_formal
 pilot_paper_external_baseline_trace_count_min >= 84

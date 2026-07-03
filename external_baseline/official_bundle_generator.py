@@ -32,7 +32,6 @@ DEFAULT_RESOURCE_REQUIREMENTS = "configs/external_baselines/official_resource_re
 MODERN_BASELINE_IDS = (
     "videoshield",
     "sigmark",
-    "spdmark",
     "videomark",
     "vidsig",
     "videoseal",
@@ -131,7 +130,7 @@ def generate_videoseal_official_bundle(
 ) -> dict[str, Any]:
     """用 VideoSeal 官方 API 为当前 runtime comparison unit 生成 official bundle。
 
-    这是当前 6 个现代 baseline 中唯一可以在普通 Colab 会话中可靠自动生成的完整
+    这是当前 5 个主实验现代 baseline 中唯一可以在普通 Colab 会话中可靠自动生成的完整
     official bundle 路径。它使用 VideoSeal 官方 `videoseal.load`、`model.embed` 和
     `model.detect`, 不使用 SSTW detection score。
     """
@@ -259,7 +258,7 @@ def build_official_bundle_generation_plan(
     *,
     resource_config_path: str | Path = DEFAULT_RESOURCE_REQUIREMENTS,
 ) -> dict[str, Any]:
-    """构建 6 个 modern baseline 的 official bundle 自动生成计划。"""
+    """构建 5 个 modern baseline 的 official bundle 自动生成计划。"""
     records = comparable_detection_records(run_root)
     rows = _load_resource_rows(resource_config_path)
     plan_rows: list[dict[str, Any]] = []

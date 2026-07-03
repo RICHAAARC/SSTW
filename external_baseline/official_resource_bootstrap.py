@@ -459,14 +459,6 @@ def bootstrap_official_resources(
     baseline_rows.append(bootstrap_sigmark(resolved_resource_root, allow_network=allow_network))
     baseline_rows.append(bootstrap_videomark(resolved_resource_root, allow_network=allow_network, source_root=resolved_source_root))
     baseline_rows.append(bootstrap_videoshield(resolved_resource_root, allow_network=allow_network, source_root=resolved_source_root))
-    for baseline_id in ("spdmark",):
-        row = rows.get(baseline_id, {})
-        baseline_rows.append(manual_resource_row(
-            baseline_id,
-            str(row.get("reason_automatic_bundle_not_supported") or "official_resource_not_auto_resolvable"),
-            str(row.get("strict_gate_resolution") or "provide native command or official result bundle"),
-        ))
-
     ready = [row["baseline_id"] for row in baseline_rows if row.get("bootstrap_status") == "ready"]
     manual = [row["baseline_id"] for row in baseline_rows if row.get("bootstrap_status") != "ready"]
     env_updates = {

@@ -131,6 +131,7 @@ def package_generative_video_colab_run(
     replay_and_sketch_decision_path = run_root_path / "artifacts" / "replay_and_sketch_gate_decision.json"
     claim3_downgrade_decision_path = run_root_path / "artifacts" / "claim3_downgrade_decision.json"
     confidence_interval_decision_path = run_root_path / "artifacts" / "statistical_confidence_interval_decision.json"
+    low_fpr_formal_statistics_decision_path = run_root_path / "artifacts" / "low_fpr_formal_statistics_decision.json"
     pilot_paper_decision_path = run_root_path / "artifacts" / "pilot_paper_gate_decision.json"
     artifact_rebuild_decision_path = run_root_path / "artifacts" / "validation_artifact_rebuild_dry_run_decision.json"
     validation_scale_decision_path = run_root_path / "artifacts" / "validation_scale_gate_decision.json"
@@ -163,6 +164,7 @@ def package_generative_video_colab_run(
     replay_and_sketch_decision = _read_json_if_exists(replay_and_sketch_decision_path)
     claim3_downgrade_decision = _read_json_if_exists(claim3_downgrade_decision_path)
     confidence_interval_decision = _read_json_if_exists(confidence_interval_decision_path)
+    low_fpr_formal_statistics_decision = _read_json_if_exists(low_fpr_formal_statistics_decision_path)
     pilot_paper_decision = _read_json_if_exists(pilot_paper_decision_path)
     artifact_rebuild_decision = _read_json_if_exists(artifact_rebuild_decision_path)
     validation_scale_decision = _read_json_if_exists(validation_scale_decision_path)
@@ -258,6 +260,9 @@ def package_generative_video_colab_run(
             "replay_or_sketch_status": claim3_downgrade_decision.get("replay_or_sketch_status"),
             "statistical_confidence_interval_decision": confidence_interval_decision.get("statistical_confidence_interval_decision"),
             "statistical_confidence_interval_total_count": confidence_interval_decision.get("ci_total_count"),
+            "low_fpr_formal_statistics_decision": low_fpr_formal_statistics_decision.get("low_fpr_formal_statistics_decision"),
+            "low_fpr_formal_statistics_record_count": low_fpr_formal_statistics_decision.get("low_fpr_formal_statistics_record_count"),
+            "formal_low_fpr_claim_allowed": low_fpr_formal_statistics_decision.get("formal_low_fpr_claim_allowed"),
             "pilot_paper_gate_decision": pilot_paper_decision.get("pilot_paper_gate_decision"),
             "pilot_paper_claim_support_status": pilot_paper_decision.get("claim_support_status"),
             "pilot_paper_result_level": pilot_paper_decision.get("paper_result_level"),

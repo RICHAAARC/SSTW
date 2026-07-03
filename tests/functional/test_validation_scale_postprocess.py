@@ -7,6 +7,7 @@ import pytest
 
 from experiments.generative_video_model_probe.formal_method_baseline_comparison import run_formal_method_baseline_comparison
 from experiments.generative_video_model_probe.formal_baseline_difference_interval import run_formal_baseline_difference_interval
+from experiments.generative_video_model_probe.low_fpr_formal_statistics import run_low_fpr_formal_statistics
 from experiments.generative_video_model_probe.sstw_formal_result import run_sstw_measured_formal_result
 from experiments.generative_video_model_probe.statistical_confidence_interval import run_statistical_confidence_interval_reporter
 from experiments.generative_video_model_probe.validation_artifact_rebuild import run_validation_artifact_rebuild_dry_run
@@ -302,6 +303,29 @@ def test_validation_scale_formal_internal_ablation_binds_full_method_formal_resu
 
 
 @pytest.mark.quick
+def test_low_fpr_formal_statistics_writes_blocking_record(tmp_path: Path) -> None:
+    """validation_scale 必须显式写出低 FPR 正式统计阻断记录。"""
+    run_root = tmp_path / "run"
+    write_jsonl(run_root / "records" / "generation_records.jsonl", [
+        {"prompt_id": "negative_prompt", "negative_family": "clean_negative"},
+        {"prompt_id": "positive_prompt", "negative_family": "not_applicable"},
+    ])
+
+    audit = run_low_fpr_formal_statistics(run_root)
+    records = read_jsonl(run_root / "records" / "low_fpr_formal_statistics_records.jsonl")
+
+    assert audit["low_fpr_formal_statistics_decision"] == "PASS"
+    assert audit["formal_low_fpr_claim_allowed"] is False
+    assert audit["low_fpr_formal_statistics_record_count"] >= 2
+    assert {record["blocked_result_profile"] for record in records} >= {"pilot_paper", "full_paper"}
+    assert all(record["formal_low_fpr_claim_allowed"] is False for record in records)
+    assert all(record["claim_support_status"] == "low_fpr_formal_statistics_blocking_record" for record in records)
+    assert (run_root / "tables" / "low_fpr_formal_statistics_table.csv").exists()
+    assert (run_root / "artifacts" / "low_fpr_formal_statistics_decision.json").exists()
+    assert (run_root / "reports" / "low_fpr_formal_statistics_report.md").exists()
+
+
+@pytest.mark.quick
 def test_validation_artifact_rebuild_dry_run_reports_missing_and_pass_states(tmp_path: Path) -> None:
     """artifact rebuild dry-run 必须能报告缺失状态, 并在必要产物齐全时通过。"""
     run_root = tmp_path / "run"
@@ -328,6 +352,7 @@ def test_validation_artifact_rebuild_dry_run_reports_missing_and_pass_states(tmp
         "records/wrong_prompt_replay_records.jsonl",
         "records/claim3_downgrade_records.jsonl",
         "records/statistical_confidence_interval_records.jsonl",
+        "records/low_fpr_formal_statistics_records.jsonl",
         "artifacts/generative_video_colab_runtime_decision.json",
         "artifacts/runtime_attack_decision.json",
         "artifacts/runtime_detection_decision.json",
@@ -342,6 +367,7 @@ def test_validation_artifact_rebuild_dry_run_reports_missing_and_pass_states(tmp
         "artifacts/replay_and_sketch_gate_decision.json",
         "artifacts/claim3_downgrade_decision.json",
         "artifacts/statistical_confidence_interval_decision.json",
+        "artifacts/low_fpr_formal_statistics_decision.json",
         "tables/generation_runtime_table.csv",
         "tables/external_baseline_status_table.csv",
         "tables/external_baseline_comparison_table.csv",
@@ -356,6 +382,7 @@ def test_validation_artifact_rebuild_dry_run_reports_missing_and_pass_states(tmp
         "tables/replay_verification_table.csv",
         "tables/claim3_downgrade_table.csv",
         "tables/statistical_confidence_interval_table.csv",
+        "tables/low_fpr_formal_statistics_table.csv",
         "reports/external_baseline_comparison_report.md",
         "reports/sstw_measured_formal_report.md",
         "reports/formal_method_baseline_comparison_report.md",
@@ -366,6 +393,7 @@ def test_validation_artifact_rebuild_dry_run_reports_missing_and_pass_states(tmp
         "reports/replay_and_sketch_gate_report.md",
         "reports/claim3_downgrade_report.md",
         "reports/statistical_confidence_interval_report.md",
+        "reports/low_fpr_formal_statistics_report.md",
     ]
     for relative_path in required_files:
         path = run_root / relative_path

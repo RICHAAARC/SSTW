@@ -322,6 +322,9 @@ def test_validation_scale_figure_and_package_manifest_are_rebuilt_from_artifacts
     write_json(run_root / "artifacts" / "validation_scale_formal_internal_ablation_decision.json", {
         "validation_scale_formal_internal_ablation_decision": "PASS",
     })
+    write_json(run_root / "artifacts" / "low_fpr_formal_statistics_decision.json", {
+        "low_fpr_formal_statistics_decision": "PASS",
+    })
     write_json(run_root / "artifacts" / "data_split_and_leakage_guard_decision.json", {
         "data_split_and_leakage_guard_decision": "PASS",
     })
@@ -338,6 +341,7 @@ def test_validation_scale_figure_and_package_manifest_are_rebuilt_from_artifacts
     assert manifest["formal_method_baseline_comparison_decision"] == "PASS"
     assert manifest["formal_baseline_difference_interval_decision"] == "PASS"
     assert manifest["validation_scale_formal_internal_ablation_decision"] == "PASS"
+    assert manifest["low_fpr_formal_statistics_decision"] == "PASS"
     assert manifest["missing_artifact_relpaths"] == []
     assert (run_root / "figures" / "validation_scale_gate_figure.json").exists()
     assert (run_root / "manifests" / "validation_scale_package_manifest.json").exists()

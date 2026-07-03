@@ -31,6 +31,7 @@ REQUIRED_REBUILD_INPUTS = (
     "records/wrong_prompt_replay_records.jsonl",
     "records/claim3_downgrade_records.jsonl",
     "records/statistical_confidence_interval_records.jsonl",
+    "records/low_fpr_formal_statistics_records.jsonl",
     "artifacts/generative_video_colab_runtime_decision.json",
     "artifacts/runtime_attack_decision.json",
     "artifacts/runtime_detection_decision.json",
@@ -45,6 +46,7 @@ REQUIRED_REBUILD_INPUTS = (
     "artifacts/replay_and_sketch_gate_decision.json",
     "artifacts/claim3_downgrade_decision.json",
     "artifacts/statistical_confidence_interval_decision.json",
+    "artifacts/low_fpr_formal_statistics_decision.json",
 )
 
 REQUIRED_REBUILD_OUTPUTS = (
@@ -62,6 +64,7 @@ REQUIRED_REBUILD_OUTPUTS = (
     "tables/replay_verification_table.csv",
     "tables/claim3_downgrade_table.csv",
     "tables/statistical_confidence_interval_table.csv",
+    "tables/low_fpr_formal_statistics_table.csv",
     "reports/external_baseline_comparison_report.md",
     "reports/sstw_measured_formal_report.md",
     "reports/formal_method_baseline_comparison_report.md",
@@ -72,6 +75,7 @@ REQUIRED_REBUILD_OUTPUTS = (
     "reports/replay_and_sketch_gate_report.md",
     "reports/claim3_downgrade_report.md",
     "reports/statistical_confidence_interval_report.md",
+    "reports/low_fpr_formal_statistics_report.md",
 )
 
 

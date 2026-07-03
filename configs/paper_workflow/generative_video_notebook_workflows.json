@@ -1,6 +1,6 @@
 {
   "config_kind": "generative_video_notebook_workflow_config",
-  "config_version": "2026_07_03_profile_stage_timestamp_zip_v15",
+  "config_version": "2026_07_03_profile_stage_timestamp_zip_v16",
   "default_dataset_root_relative": "datasets/generative_video_prompt_suite",
   "default_drive_project_root": "/content/drive/MyDrive/SSTW",
   "default_prompt_suite_path_relative": "datasets/generative_video_prompt_suite/prompt_seed_suite.json",
@@ -87,6 +87,7 @@
         "replay_and_sketch_gate",
         "claim3_downgrade_gate",
         "statistical_confidence_interval",
+        "low_fpr_formal_statistics",
         "sstw_measured_formal_result",
         "external_baseline_official_result_bundle_preflight",
         "external_baseline_comparison",

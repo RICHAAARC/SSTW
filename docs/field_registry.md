@@ -1209,3 +1209,14 @@ Notebook 与 repository module 的跨边界数据
 | formal_internal_ablation_missing_variants | governance | none | true | true | false | validation_scale 级内部消融缺失的变体列表。 |
 | formal_internal_ablation_missing_variant_count | metric | none | true | true | false | validation_scale 级内部消融缺失的变体数量。 |
 | require_validation_scale_formal_internal_ablation | protocol | none | true | false | false | validation_scale gate 是否要求 formal-compatible 内部消融汇总。 |
+| low_fpr_formal_statistics_decision | governance | none | true | true | false | 低 FPR 正式统计阻断记录阶段判定。 |
+| current_target_fpr | protocol | none | true | false | false | 当前 validation_scale profile 使用的 target_fpr。 |
+| blocked_result_profile | protocol | none | true | false | false | 当前阻断记录所对应的更高层级结果 profile。 |
+| low_fpr_formal_statistics_status | governance | none | true | true | false | 低 FPR 正式统计状态或阻断状态。 |
+| formal_low_fpr_claim_allowed | governance | none | true | true | false | 当前阶段是否允许低 FPR 正式 claim。 |
+| observed_negative_event_count | metric | none | true | false | false | 当前 run_root 中可用于低 FPR 的 negative event 数量估计。 |
+| threshold_protocol_required | protocol | none | true | false | false | 低 FPR 正式统计所需阈值协议。 |
+| low_fpr_blocking_reason | governance | none | true | false | false | 低 FPR 正式统计被阻断的原因说明。 |
+| low_fpr_formal_statistics_record_count | metric | none | true | true | false | 低 FPR 正式统计阻断 records 数量。 |
+| low_fpr_blocked_target_fprs | governance | none | true | true | false | 当前阻断记录覆盖的低 FPR 目标列表。 |
+| require_low_fpr_formal_statistics_blocking_record | protocol | none | true | false | false | validation_scale gate 是否要求低 FPR 正式统计阻断记录。 |

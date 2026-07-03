@@ -1508,6 +1508,19 @@ def build_validation_scale_formal_internal_ablation_command(layout: dict[str, st
     ]
 
 
+def build_low_fpr_formal_statistics_command(layout: dict[str, str]) -> list[str]:
+    """构造 validation_scale 低 FPR 正式统计阻断记录命令。"""
+    return [
+        sys.executable,
+        "-m",
+        "experiments.generative_video_model_probe.low_fpr_formal_statistics",
+        "--run-root",
+        layout["drive_run_root"],
+        "--config-path",
+        layout["protocol_config_path"],
+    ]
+
+
 def build_pilot_paper_gate_command(layout: dict[str, str]) -> list[str]:
     """构建当前 profile 的 fixed-FPR gate 命令, fixed-FPR 口径来自 protocol config。"""
     return [

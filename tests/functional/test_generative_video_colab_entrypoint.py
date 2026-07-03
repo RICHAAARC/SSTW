@@ -22,6 +22,7 @@ from paper_workflow.notebook_utils.generative_video_model_probe_workflow import 
     build_external_baseline_self_containment_decision_command,
     build_formal_baseline_difference_interval_command,
     build_formal_method_baseline_comparison_command,
+    build_low_fpr_formal_statistics_command,
     build_data_split_and_leakage_guard_command,
     build_modern_baseline_official_bridge_command_templates,
     build_modern_baseline_official_bridge_preflight_decision,
@@ -280,6 +281,7 @@ def test_generative_video_colab_notebook_calls_repository_modules() -> None:
     assert "experiments.generative_video_model_probe.replay_and_sketch_gate" in helper_text
     assert "experiments.generative_video_model_probe.claim3_downgrade" in helper_text
     assert "experiments.generative_video_model_probe.statistical_confidence_interval" in helper_text
+    assert "experiments.generative_video_model_probe.low_fpr_formal_statistics" in helper_text
     assert "experiments.generative_video_model_probe.sstw_formal_result" in helper_text
     assert "experiments.generative_video_model_probe.formal_method_baseline_comparison" in helper_text
     assert "experiments.generative_video_model_probe.formal_baseline_difference_interval" in helper_text
@@ -342,6 +344,7 @@ def test_split_colab_notebooks_are_profile_driven() -> None:
     assert "build_external_baseline_official_result_bundle_preflight_command" in gate_source
     assert "build_external_baseline_comparison_command" in gate_source
     assert "build_external_baseline_self_containment_decision_command" in gate_source
+    assert "build_low_fpr_formal_statistics_command" in gate_source
     assert "build_sstw_measured_formal_result_command" in gate_source
     assert "build_formal_method_baseline_comparison_command" in gate_source
     assert "build_formal_baseline_difference_interval_command" in gate_source
@@ -667,6 +670,7 @@ def test_profile_specific_commands_pass_protocol_config_path(tmp_path: Path) -> 
     validation_commands = [
         build_mechanism_postprocess_command(validation_layout),
         build_statistical_confidence_interval_command(validation_layout),
+        build_low_fpr_formal_statistics_command(validation_layout),
         build_sstw_measured_formal_result_command(validation_layout),
         build_formal_method_baseline_comparison_command(validation_layout),
         build_formal_baseline_difference_interval_command(validation_layout),
@@ -1149,6 +1153,11 @@ def test_generative_video_drive_packager_creates_archive_and_manifest(tmp_path: 
         "statistical_confidence_interval_decision": "PASS",
         "ci_total_count": 12,
     })
+    write_json(run_root / "artifacts" / "low_fpr_formal_statistics_decision.json", {
+        "low_fpr_formal_statistics_decision": "PASS",
+        "low_fpr_formal_statistics_record_count": 2,
+        "formal_low_fpr_claim_allowed": False,
+    })
     write_json(run_root / "artifacts" / "pilot_paper_gate_decision.json", {
         "pilot_paper_gate_decision": "PASS",
         "claim_support_status": "pilot_paper_calibrated_heldout_claim_ready",
@@ -1264,6 +1273,9 @@ def test_generative_video_drive_packager_creates_archive_and_manifest(tmp_path: 
     assert manifest["decision_summary"]["replay_or_sketch_status"] == "claim3_explicitly_downgraded"
     assert manifest["decision_summary"]["statistical_confidence_interval_decision"] == "PASS"
     assert manifest["decision_summary"]["statistical_confidence_interval_total_count"] == 12
+    assert manifest["decision_summary"]["low_fpr_formal_statistics_decision"] == "PASS"
+    assert manifest["decision_summary"]["low_fpr_formal_statistics_record_count"] == 2
+    assert manifest["decision_summary"]["formal_low_fpr_claim_allowed"] is False
     assert manifest["decision_summary"]["pilot_paper_gate_decision"] == "PASS"
     assert manifest["decision_summary"]["pilot_paper_claim_support_status"] == "pilot_paper_calibrated_heldout_claim_ready"
     assert manifest["decision_summary"]["pilot_paper_result_level"] == "pilot_paper"

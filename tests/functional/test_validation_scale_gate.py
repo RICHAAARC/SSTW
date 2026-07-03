@@ -59,6 +59,7 @@ def test_validation_scale_gate_blocks_empty_run(tmp_path: Path) -> None:
     assert "validation_formal_method_baseline_comparison_ready" in audit["missing_validation_requirements"]
     assert "validation_formal_baseline_difference_interval_ready" in audit["missing_validation_requirements"]
     assert "validation_scale_formal_internal_ablation_ready" in audit["missing_validation_requirements"]
+    assert "validation_low_fpr_formal_statistics_blocking_record_ready" in audit["missing_validation_requirements"]
 
 
 @pytest.mark.quick
@@ -222,6 +223,15 @@ def test_validation_scale_gate_passes_when_all_governed_inputs_exist(tmp_path: P
         "statistical_confidence_interval_decision": "PASS",
         "claim_support_status": "validation_ci_ready",
     })
+    write_jsonl(run_root / "records" / "low_fpr_formal_statistics_records.jsonl", [
+        {"blocked_result_profile": "pilot_paper", "formal_low_fpr_claim_allowed": False},
+        {"blocked_result_profile": "full_paper", "formal_low_fpr_claim_allowed": False},
+    ])
+    write_json(run_root / "artifacts" / "low_fpr_formal_statistics_decision.json", {
+        "low_fpr_formal_statistics_decision": "PASS",
+        "low_fpr_formal_statistics_record_count": 2,
+        "claim_support_status": "low_fpr_formal_statistics_blocking_record",
+    })
     write_json(run_root / "artifacts" / "validation_artifact_rebuild_dry_run_decision.json", {
         "validation_artifact_rebuild_dry_run_decision": "PASS",
         "claim_support_status": "validation_artifact_rebuild_ready",
@@ -252,6 +262,8 @@ def test_validation_scale_gate_passes_when_all_governed_inputs_exist(tmp_path: P
     assert audit["formal_baseline_difference_interval_status"] == "formal_baseline_difference_interval_validation_scale_only"
     assert audit["validation_scale_formal_internal_ablation_variant_count"] == 8
     assert audit["validation_scale_formal_internal_ablation_status"] == "validation_scale_formal_internal_ablation_ready_not_effect_size_claim"
+    assert audit["low_fpr_formal_statistics_record_count"] == 2
+    assert audit["low_fpr_formal_statistics_status"] == "low_fpr_formal_statistics_blocking_record"
     assert audit["data_split_and_leakage_guard_decision"] == "PASS"
     assert audit["missing_modern_external_baseline_formal_adapter_names"] == []
     assert (run_root / "records" / "validation_scale_gate_records.jsonl").exists()

@@ -89,6 +89,7 @@ def _load_config(config_path: str | Path = DEFAULT_VALIDATION_SCALE_CONFIG) -> d
         "require_adaptive_attack_records": bool(config.get("require_adaptive_attack_records", True)),
         "require_replay_or_sketch_records_or_claim3_downgrade": bool(config.get("require_replay_or_sketch_records_or_claim3_downgrade", True)),
         "require_confidence_interval_report": bool(config.get("require_confidence_interval_report", True)),
+        "require_low_fpr_formal_statistics_blocking_record": bool(config.get("require_low_fpr_formal_statistics_blocking_record", True)),
         "require_artifact_rebuild_dry_run": bool(config.get("require_artifact_rebuild_dry_run", True)),
         "require_data_split_and_leakage_guard": bool(config.get("require_data_split_and_leakage_guard", True)),
     }
@@ -207,6 +208,15 @@ def _confidence_interval_ready(run_root: Path) -> tuple[bool, str]:
     return ready, decision.get("claim_support_status", "missing_confidence_interval_decision")
 
 
+def _low_fpr_formal_statistics_ready(run_root: Path) -> tuple[bool, int, str]:
+    """检查低 FPR 正式统计阻断记录是否已落盘。"""
+    records = _read_jsonl(run_root / "records" / "low_fpr_formal_statistics_records.jsonl")
+    decision = _read_json(run_root / "artifacts" / "low_fpr_formal_statistics_decision.json")
+    ready = bool(records) and _decision_pass(decision, "low_fpr_formal_statistics_decision")
+    record_count = int(decision.get("low_fpr_formal_statistics_record_count") or len(records))
+    return ready, record_count, decision.get("claim_support_status", "missing_low_fpr_formal_statistics_decision")
+
+
 def _sstw_measured_formal_ready(run_root: Path) -> tuple[bool, int, str]:
     """检查 SSTW 本方法是否已转写 measured_formal records。"""
     records = _read_jsonl(run_root / "records" / "sstw_measured_formal_records.jsonl")
@@ -295,6 +305,7 @@ def build_validation_scale_gate_audit(
     adaptive_attack_ready, adaptive_attack_record_count, adaptive_attack_status = _adaptive_attack_ready(run_root)
     replay_or_sketch_ready, replay_or_sketch_status = _replay_or_sketch_ready(run_root)
     confidence_interval_ready, confidence_interval_status = _confidence_interval_ready(run_root)
+    low_fpr_ready, low_fpr_record_count, low_fpr_status = _low_fpr_formal_statistics_ready(run_root)
     sstw_measured_formal_ready, sstw_measured_formal_record_count, sstw_measured_formal_status = _sstw_measured_formal_ready(run_root)
     formal_method_comparison_ready, formal_method_comparison_ready_count, formal_method_comparison_status = _formal_method_baseline_comparison_ready(run_root)
     formal_difference_interval_ready, formal_difference_interval_ready_count, formal_difference_interval_status = _formal_baseline_difference_interval_ready(run_root)
@@ -321,6 +332,7 @@ def build_validation_scale_gate_audit(
         "validation_adaptive_attack_records_ready": (not config["require_adaptive_attack_records"]) or adaptive_attack_ready,
         "validation_replay_or_sketch_records_ready": (not config["require_replay_or_sketch_records_or_claim3_downgrade"]) or replay_or_sketch_ready,
         "validation_confidence_interval_report_ready": (not config["require_confidence_interval_report"]) or confidence_interval_ready,
+        "validation_low_fpr_formal_statistics_blocking_record_ready": (not config["require_low_fpr_formal_statistics_blocking_record"]) or low_fpr_ready,
         "validation_artifact_rebuild_dry_run_ready": (not config["require_artifact_rebuild_dry_run"]) or artifact_rebuild_ready,
     }
     missing_requirements = [name for name, passed in requirement_checks.items() if not passed]
@@ -384,6 +396,8 @@ def build_validation_scale_gate_audit(
         "adaptive_attack_status": adaptive_attack_status,
         "replay_or_sketch_status": replay_or_sketch_status,
         "confidence_interval_status": confidence_interval_status,
+        "low_fpr_formal_statistics_record_count": low_fpr_record_count,
+        "low_fpr_formal_statistics_status": low_fpr_status,
         "artifact_rebuild_status": artifact_rebuild_status,
         "full_paper_allowed": False,
         "full_paper_next_gate": "pilot_paper_generative_probe_gate" if gate_decision == "PASS" else "complete_missing_validation_requirements",
@@ -439,6 +453,8 @@ def write_validation_scale_gate_audit(
         f"- formal_baseline_difference_interval_status: {audit['formal_baseline_difference_interval_status']}\n"
         f"- validation_scale_formal_internal_ablation_variant_count: {audit['validation_scale_formal_internal_ablation_variant_count']}\n"
         f"- validation_scale_formal_internal_ablation_status: {audit['validation_scale_formal_internal_ablation_status']}\n"
+        f"- low_fpr_formal_statistics_record_count: {audit['low_fpr_formal_statistics_record_count']}\n"
+        f"- low_fpr_formal_statistics_status: {audit['low_fpr_formal_statistics_status']}\n"
         f"- data_split_and_leakage_guard_decision: {audit['data_split_and_leakage_guard_decision']}\n"
         f"- missing_modern_external_baseline_formal_adapter_names: {', '.join(audit['missing_modern_external_baseline_formal_adapter_names']) if audit['missing_modern_external_baseline_formal_adapter_names'] else 'none'}\n"
         f"- full_paper_allowed: {str(audit['full_paper_allowed']).lower()}\n"

@@ -290,6 +290,12 @@ Notebook 与 repository module 的跨边界数据
 | formal_anchor_missing_count | metric | none | true | true | false | external baseline self-containment 中缺少 prompt / seed / attack anchor 的 formal 候选记录数量。 |
 | anchor_ready | governance | none | true | true | false | external baseline self-containment 中当前 baseline 的 prompt / seed / attack anchor 是否完整。 |
 | missing_anchor_modern_external_baseline_names | governance | none | true | true | false | external baseline self-containment 中缺少完整 prompt / seed / attack anchor 的现代 baseline 名称列表。 |
+| score_extraction_ready | governance | none | true | true | false | external baseline self-containment 中当前 baseline 的 official bundle 是否具备分数抽取口径、分数方向和协议锚点。 |
+| official_score_extraction_ready_count | metric | none | true | true | false | external baseline self-containment 中通过 official 分数抽取口径检查的 bundle record 数量。 |
+| missing_score_extraction_modern_external_baseline_names | governance | none | true | true | false | external baseline self-containment 中缺少 official 分数抽取口径证据的现代 baseline 名称列表。 |
+| official_score_extraction_policy | protocol | none | true | true | false | official bundle 中记录的逐 baseline 官方分数抽取策略。 |
+| official_reference_protocol_anchor | protocol | none | true | true | false | official bundle 中记录的 prompt / seed / attack comparison unit 锚点。 |
+| attack_protocol_status | protocol | none | true | true | false | official bundle 中记录的攻击协议映射或执行状态。 |
 | external_baseline_detected | metric | none | true | false | false | 外部 baseline 官方 detector 是否给出 detected 判定。 |
 | external_baseline_bit_accuracy | metric | none | true | false | false | 外部 baseline 官方 detector 给出的 bit accuracy 或等价 payload accuracy。 |
 | external_baseline_threshold | protocol | none | true | false | false | 外部 baseline 官方 detector 使用或输出的阈值。 |
@@ -422,6 +428,9 @@ Notebook 与 repository module 的跨边界数据
 | external_baseline_official_result_provenance | governance | none | true | true | false | 现代 external baseline official bundle 是否来自项目内第三方官方代码运行链路的 provenance 标记。 |
 | external_baseline_official_result_bundle_path | artifact | none | true | true | false | 项目内 official reference 流程生成的单条 baseline 结果 bundle JSON 路径。 |
 | external_baseline_official_execution_manifest_path | artifact | none | true | true | false | 项目内 official reference 流程生成的 baseline execution manifest 路径。 |
+| external_baseline_official_score_extraction_policy | protocol | none | true | true | false | measured_formal external baseline record 中从 official bundle 继承的官方分数抽取策略。 |
+| external_baseline_official_reference_protocol_anchor | protocol | none | true | true | false | measured_formal external baseline record 中从 official bundle 继承的 prompt / seed / attack comparison unit 锚点。 |
+| external_baseline_attack_protocol_status | protocol | none | true | true | false | measured_formal external baseline record 中从 official bundle 继承的攻击协议映射或执行状态。 |
 | external_baseline_reference_sequence_length | metric | none | true | false | false | Reference trajectory sequence length consumed by an external synchronization baseline adapter. |
 | external_baseline_observed_sequence_length | metric | none | true | false | false | Observed trajectory or runtime metadata sequence length consumed by an external synchronization baseline adapter. |
 | external_baseline_distance | metric | none | true | false | false | Distance or cost reported by an external synchronization baseline adapter. |

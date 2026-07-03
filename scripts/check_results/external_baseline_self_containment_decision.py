@@ -36,6 +36,22 @@ OFFICIAL_BUNDLE_PATH_FIELDS = (
     "external_baseline_official_execution_manifest_path",
 )
 REPOSITORY_GENERATED_OFFICIAL_PROVENANCE = "repository_generated_from_third_party_official_code"
+REQUIRED_OFFICIAL_REFERENCE_PROTOCOL_ANCHOR = "same_prompt_seed_attack_runtime_comparison_unit"
+OFFICIAL_SCORE_EXTRACTION_POLICY_FIELDS = (
+    "official_score_extraction_policy",
+    "official_score_assignment_policy",
+    "official_detection_logic",
+)
+OFFICIAL_SCORE_FIELDS = (
+    "external_baseline_raw_detector_score",
+    "raw_detector_score",
+    "external_baseline_score",
+    "detection_score",
+    "confidence",
+    "watermark_score",
+    "score",
+    "bit_accuracy",
+)
 
 
 def _read_json(path: Path) -> dict[str, Any]:
@@ -172,7 +188,58 @@ def _official_bundle_payload_ok(path_text: str | None, run_root: Path, baseline_
         return False
     if not _record_clean_negative_ready(payload):
         return False
+    if not _official_score_extraction_ready(payload):
+        return False
     return _official_execution_manifest_ok(manifest_path, run_root, baseline_name)
+
+
+def _official_score_extraction_ready(payload: Mapping[str, Any]) -> bool:
+    """检查 official bundle 是否显式记录官方分数抽取口径。
+
+    逐 baseline 公平比较不能只依赖一个数值字段。每条 official bundle 还必须说明
+    该分数来自哪个官方检测口径、方向是否为 higher-is-more-watermarked, 以及该
+    record 是否锚定同一 prompt / seed / attack comparison unit。
+    """
+
+    score_value = next(
+        (
+            payload.get(field_name)
+            for field_name in OFFICIAL_SCORE_FIELDS
+            if str(payload.get(field_name) or "").strip() not in {"", "unsupported"}
+        ),
+        None,
+    )
+    if score_value is None:
+        return False
+    try:
+        float(score_value)
+    except (TypeError, ValueError):
+        return False
+    score_semantics = str(
+        payload.get("external_baseline_score_semantics")
+        or payload.get("score_semantics")
+        or ""
+    ).strip()
+    if not score_semantics or score_semantics == "unspecified_detector_score":
+        return False
+    score_orientation = str(
+        payload.get("external_baseline_score_orientation")
+        or payload.get("score_orientation")
+        or ""
+    ).strip()
+    if score_orientation != "higher_is_more_watermarked":
+        return False
+    extraction_policy = next(
+        (
+            str(payload.get(field_name) or "").strip()
+            for field_name in OFFICIAL_SCORE_EXTRACTION_POLICY_FIELDS
+            if str(payload.get(field_name) or "").strip()
+        ),
+        "",
+    )
+    if not extraction_policy:
+        return False
+    return str(payload.get("official_reference_protocol_anchor") or "") == REQUIRED_OFFICIAL_REFERENCE_PROTOCOL_ANCHOR
 
 
 def _record_clean_negative_ready(record: Mapping[str, Any]) -> bool:
@@ -286,6 +353,17 @@ def _build_baseline_rows(
             1 for path in official_bundle_paths
             if _official_bundle_payload_ok(path, run_root, baseline_name)
         )
+        official_score_extraction_ready_count = 0
+        for path in official_bundle_paths:
+            resolved_path = _resolve_existing_path(path, run_root)
+            if resolved_path is None:
+                continue
+            try:
+                payload = _read_json(resolved_path)
+            except Exception:
+                continue
+            if _official_score_extraction_ready(payload):
+                official_score_extraction_ready_count += 1
         official_execution_manifest_ok_count = sum(
             1 for path in official_execution_manifest_paths
             if _official_execution_manifest_ok(path, run_root, baseline_name)
@@ -310,6 +388,7 @@ def _build_baseline_rows(
             and official_bundle_record_ok_count == len(measured_records)
             and official_execution_manifest_ok_count == len(measured_records)
         )
+        score_extraction_ready = bool(measured_records) and official_score_extraction_ready_count == len(measured_records)
         clone_ready = source_clone_ready or repository_generated_official_bundle_ready
         build_ready = bool(command_manifest_paths) and command_manifest_ok_count == len(command_manifest_paths)
         run_ready = bool(measured_records) and repository_generated_official_bundle_ready
@@ -335,10 +414,12 @@ def _build_baseline_rows(
             "adapt_ready": adapt_ready,
             "record_ready": record_ready,
             "clean_negative_ready": clean_negative_ready,
+            "score_extraction_ready": score_extraction_ready,
             "measured_formal_record_count": len(measured_records),
             "formal_candidate_record_count": len(formal_candidate_records),
             "formal_anchor_missing_count": formal_anchor_missing_count,
             "clean_negative_ready_count": clean_negative_ready_count,
+            "official_score_extraction_ready_count": official_score_extraction_ready_count,
             "unsupported_record_count": sum(1 for record in records if record.get("metric_status") == "unsupported"),
             "official_command_manifest_count": len(command_manifest_paths),
             "official_command_manifest_ok_count": command_manifest_ok_count,
@@ -358,6 +439,7 @@ def _build_baseline_rows(
                 adapt_ready,
                 record_ready,
                 clean_negative_ready,
+                score_extraction_ready,
             ]),
         })
     return rows
@@ -405,6 +487,11 @@ def build_external_baseline_self_containment_decision(
         for row in rows
         if not row.get("repository_generated_official_bundle_ready")
     ]
+    missing_score_extraction_names = [
+        row["baseline_name"]
+        for row in rows
+        if not row.get("score_extraction_ready")
+    ]
     comparison_passed = comparison_decision.get("external_baseline_comparison_decision") == "PASS"
     execution_manifest_bound = execution_manifest.get("formal_evidence_status") == "evidence_paths_bound"
     formal_measured_names = {
@@ -426,6 +513,8 @@ def build_external_baseline_self_containment_decision(
         missing_requirements.append("all_required_modern_baselines_repository_generated_official_bundles")
     if missing_clean_negative_names:
         missing_requirements.append("all_required_modern_baselines_clean_negative_scores")
+    if missing_score_extraction_names:
+        missing_requirements.append("all_required_modern_baselines_official_score_extraction")
     if missing_anchor_names:
         missing_requirements.append("all_required_modern_baselines_prompt_seed_attack_anchors")
 
@@ -444,6 +533,7 @@ def build_external_baseline_self_containment_decision(
         "missing_clean_negative_modern_external_baseline_names": missing_clean_negative_names,
         "missing_anchor_modern_external_baseline_names": missing_anchor_names,
         "missing_repository_generated_official_bundle_modern_external_baseline_names": missing_repository_generated_official_bundle_names,
+        "missing_score_extraction_modern_external_baseline_names": missing_score_extraction_names,
         "missing_formal_modern_external_baseline_names": missing_formal_names,
         "missing_self_containment_requirements": missing_requirements,
         "self_containment_missing_requirement_count": len(missing_requirements),

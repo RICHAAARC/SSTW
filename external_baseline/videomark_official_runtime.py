@@ -1017,6 +1017,7 @@ def write_videomark_official_bundle_records(
                 "external_baseline_official_execution_mode": "videomark_embedding_extraction_temporal_tamper",
                 "official_output_naming_policy": "safe_prompt_digest_video_id_v1",
                 "official_score_assignment_policy": score_payload["official_score_assignment_policy"],
+                "official_score_extraction_policy": score_payload["official_score_assignment_policy"],
                 "attack_protocol_status": "videomark_official_temporal_attack_mapped_to_runtime_attack_anchor",
                 "official_temporal_results_json_path": str(temporal_path),
                 "official_video_results_json_path": str(video_path),

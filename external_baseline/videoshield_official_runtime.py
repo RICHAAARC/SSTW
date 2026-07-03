@@ -778,6 +778,9 @@ def run_videoshield_official_runtime(config: VideoShieldOfficialRuntimeConfig) -
                             "external_baseline_official_execution_mode": (
                                 "videoshield_generation_watermarked_video_project_runtime_attack_official_inversion"
                             ),
+                            "official_score_extraction_policy": (
+                                "videoshield_official_latent_inversion_template_matching_confidence"
+                            ),
                             "official_reference_protocol_anchor": "same_prompt_seed_attack_runtime_comparison_unit",
                             "attack_protocol_status": attack_info["attack_protocol_status"],
                             "attack_transform": attack_info["attack_transform"],

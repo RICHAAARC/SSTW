@@ -338,6 +338,11 @@ def build_modern_score_records(
             official_bundle_payload = _official_bundle_evidence_payload(payload)
             score = round(float(score_payload["external_baseline_raw_detector_score"]), 6)
             method_score = safe_float(detection_record.get("S_runtime_attack_detection"), 0.0)
+            official_score_extraction_policy = (
+                payload.get("official_score_extraction_policy")
+                or payload.get("official_score_assignment_policy")
+                or payload.get("official_detection_logic")
+            )
             records.append(with_flow_evidence_protocol_defaults({
                 "record_version": "external_baseline_score_v2",
                 "external_baseline_score_record_id": score_record_id,
@@ -363,6 +368,9 @@ def build_modern_score_records(
                     "external_baseline_official_execution_mode",
                     payload.get("official_adapter_status", payload.get("official_bridge_status")),
                 ),
+                "external_baseline_official_score_extraction_policy": official_score_extraction_policy,
+                "external_baseline_official_reference_protocol_anchor": payload.get("official_reference_protocol_anchor"),
+                "external_baseline_attack_protocol_status": payload.get("attack_protocol_status"),
                 **official_bundle_payload,
                 "metric_status": "measured_formal",
                 "external_baseline_score_status": "measured_formal",

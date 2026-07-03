@@ -723,6 +723,7 @@ def write_vidsig_official_bundle_records(
                 "official_baseline_id": BASELINE_ID,
                 "external_baseline_generation_model_id": config.model_id,
                 "external_baseline_official_execution_mode": "vidsig_generate_ms_watermarked_video_project_runtime_attack_official_attack_py",
+                "official_score_extraction_policy": "vidsig_official_attack_log_tpr_at_fpr_1e_2_detection_score",
                 "official_reference_protocol_anchor": "same_prompt_seed_attack_runtime_comparison_unit",
                 "attack_protocol_status": "project_runtime_attack_applied_to_vidsig_watermarked_video",
                 "official_attack_type": "clean",

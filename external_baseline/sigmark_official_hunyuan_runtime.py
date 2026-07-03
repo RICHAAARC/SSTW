@@ -947,6 +947,7 @@ def write_sigmark_official_bundle_records(
                 "external_baseline_generation_model_id": model_name,
                 "external_baseline_official_execution_mode": "sigmark_hunyuan_gen_extract",
                 "official_score_assignment_policy": score_payload["official_score_assignment_policy"],
+                "official_score_extraction_policy": score_payload["official_score_assignment_policy"],
                 "attack_protocol_status": "sigmark_official_clean_extract_score_reused_for_runtime_attack_anchor",
                 "official_bit_accuracy_npz_path": str(npz_path),
                 "official_execution_manifest_path": str(manifest_path),

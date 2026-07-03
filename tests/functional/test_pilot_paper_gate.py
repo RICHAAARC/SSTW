@@ -37,6 +37,53 @@ INTERNAL_ABLATION_VARIANTS = (
 )
 
 
+def _validation_scale_gate_pass_payload() -> dict:
+    """构造 pilot_paper gate 可接受的完整 validation_scale PASS 摘要。"""
+
+    return {
+        "validation_scale_gate_decision": "PASS",
+        "claim_support_status": "validation_scale_ready_for_pilot_paper",
+        "paper_result_level": "validation_scale",
+        "target_fpr": 0.1,
+        "missing_validation_requirements": [],
+        "validation_missing_requirement_count": 0,
+        "required_modern_external_baseline_adapter_names": sorted(MODERN_EXTERNAL_BASELINE_NAMES),
+        "missing_modern_external_baseline_formal_adapter_names": [],
+        "modern_external_baseline_formal_measured_adapter_count": len(MODERN_EXTERNAL_BASELINE_NAMES),
+        "external_baseline_self_containment_decision": "PASS",
+        "data_split_and_leakage_guard_decision": "PASS",
+        "sstw_measured_formal_record_count": 24,
+        "sstw_measured_formal_status": "sstw_measured_formal_validation_scale_only",
+        "fair_detection_calibration_ready_count": len(MODERN_EXTERNAL_BASELINE_NAMES) + 1,
+        "fair_detection_calibration_status": "fair_detection_calibration_validation_scale_ready",
+        "formal_method_baseline_comparison_ready_count": len(MODERN_EXTERNAL_BASELINE_NAMES) + 1,
+        "formal_method_baseline_comparison_status": "formal_method_baseline_comparison_validation_scale_only",
+        "formal_baseline_difference_interval_ready_count": len(MODERN_EXTERNAL_BASELINE_NAMES),
+        "formal_baseline_difference_interval_status": "formal_baseline_difference_interval_validation_scale_only",
+        "full_paper_allowed": False,
+    }
+
+
+def _validation_scale_to_pilot_transition_pass_payload() -> dict:
+    """构造由 stage_transition_decision 写出的完整跳转 PASS 摘要。"""
+
+    return {
+        "stage_id": "stage_transition_decision",
+        "transition_id": "validation_scale_to_pilot_paper",
+        "validation_scale_to_pilot_paper_transition_decision": "PASS",
+        "source_stage": "validation_scale",
+        "target_stage": "pilot_paper",
+        "source_gate_passed": True,
+        "source_gate_decisions": {"validation_scale_gate_decision": "PASS"},
+        "missing_transition_requirements": [],
+        "transition_missing_requirement_count": 0,
+        "allowed_next_result_profiles": ["pilot_paper"],
+        "blocked_next_result_profiles": ["full_paper", "submission_freeze"],
+        "full_paper_allowed": False,
+        "claim_support_status": "validation_scale_ready_to_enter_pilot_paper",
+    }
+
+
 def _write_pilot_paper_fair_comparison_fixture(
     run_root: Path,
     anchor_units: list[dict[str, str]],
@@ -377,17 +424,16 @@ def _seed_pilot_paper_run(
         "motion_threshold_source_split": "calibration",
     })
     if validation_scale_gate_decision is not None:
-        write_json(run_root / "artifacts" / "validation_scale_gate_decision.json", {
+        validation_payload = _validation_scale_gate_pass_payload() if validation_scale_gate_decision == "PASS" else {
             "validation_scale_gate_decision": validation_scale_gate_decision,
-            "claim_support_status": "validation_scale_ready_for_pilot_paper"
-            if validation_scale_gate_decision == "PASS"
-            else "validation_scale_blocked",
-        })
+            "claim_support_status": "validation_scale_blocked",
+        }
+        write_json(run_root / "artifacts" / "validation_scale_gate_decision.json", validation_payload)
         if validation_scale_gate_decision == "PASS":
-            write_json(run_root / "artifacts" / "validation_scale_to_pilot_paper_transition_decision.json", {
-                "validation_scale_to_pilot_paper_transition_decision": "PASS",
-                "claim_support_status": "validation_scale_ready_to_enter_pilot_paper",
-            })
+            write_json(
+                run_root / "artifacts" / "validation_scale_to_pilot_paper_transition_decision.json",
+                _validation_scale_to_pilot_transition_pass_payload(),
+            )
 
 
 @pytest.mark.quick
@@ -524,6 +570,49 @@ def test_pilot_paper_gate_requires_validation_scale_gate(tmp_path: Path) -> None
 
     assert audit["pilot_paper_gate_decision"] == "FAIL"
     assert "validation_scale_gate_passed" in audit["missing_pilot_paper_requirements"]
+    assert audit["pilot_paper_claim_allowed"] is False
+
+
+@pytest.mark.quick
+def test_pilot_paper_gate_rejects_legacy_validation_scale_pass_without_fair_summary(
+    tmp_path: Path,
+) -> None:
+    """旧版 validation_scale PASS 缺少公平比较摘要时, pilot_paper 不能继续放行。"""
+
+    run_root = tmp_path / "run"
+    _seed_pilot_paper_run(run_root)
+    write_json(run_root / "artifacts" / "validation_scale_gate_decision.json", {
+        "validation_scale_gate_decision": "PASS",
+        "claim_support_status": "validation_scale_ready_for_pilot_paper",
+    })
+
+    audit = build_pilot_paper_gate_audit(run_root)
+
+    assert audit["pilot_paper_gate_decision"] == "FAIL"
+    assert "validation_scale_gate_passed" in audit["missing_pilot_paper_requirements"]
+    assert "validation_scale_fair_detection_calibration_ready" in audit["validation_scale_gate_fairness_missing_requirements"]
+    assert "validation_scale_formal_method_baseline_comparison_ready" in audit["validation_scale_gate_fairness_missing_requirements"]
+    assert "validation_scale_formal_baseline_difference_interval_ready" in audit["validation_scale_gate_fairness_missing_requirements"]
+    assert audit["pilot_paper_claim_allowed"] is False
+
+
+@pytest.mark.quick
+def test_pilot_paper_gate_rejects_bare_validation_transition_pass(tmp_path: Path) -> None:
+    """只有裸 PASS 跳转字段时不能替代完整 stage_transition_decision 产物。"""
+
+    run_root = tmp_path / "run"
+    _seed_pilot_paper_run(run_root)
+    write_json(run_root / "artifacts" / "validation_scale_to_pilot_paper_transition_decision.json", {
+        "validation_scale_to_pilot_paper_transition_decision": "PASS",
+        "claim_support_status": "validation_scale_ready_to_enter_pilot_paper",
+    })
+
+    audit = build_pilot_paper_gate_audit(run_root)
+
+    assert audit["pilot_paper_gate_decision"] == "FAIL"
+    assert "validation_scale_to_pilot_paper_transition_decision_passed" in audit["missing_pilot_paper_requirements"]
+    assert "validation_scale_transition_source_gate_passed" in audit["validation_scale_transition_fairness_missing_requirements"]
+    assert "validation_scale_transition_missing_requirements_empty" in audit["validation_scale_transition_fairness_missing_requirements"]
     assert audit["pilot_paper_claim_allowed"] is False
 
 

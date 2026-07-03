@@ -1227,6 +1227,19 @@ Notebook 与 repository module 的跨边界数据
 | difference_interval_missing_baseline_ids | governance | none | true | true | false | 缺失差值置信区间的 baseline 方法 ID 列表。 |
 | difference_interval_missing_baseline_count | metric | none | true | true | false | 缺失差值置信区间的 baseline 数量。 |
 | require_formal_baseline_difference_interval | protocol | none | true | false | false | validation_scale gate 是否要求 SSTW 相对 5 个 baseline 的差值置信区间报告。 |
+| validation_scale_gate_missing_validation_requirements | governance | none | true | false | false | pilot_paper gate 读取到的 validation_scale gate 原始缺失要求列表。 |
+| validation_scale_gate_missing_requirement_count | metric | none | true | false | false | pilot_paper gate 读取到的 validation_scale gate 原始缺失要求数量。 |
+| validation_scale_gate_fairness_missing_requirements | governance | none | true | false | false | pilot_paper gate 复核 validation_scale 公平比较闭环时发现的缺失要求。 |
+| validation_scale_fair_detection_calibration_ready_count | metric | none | true | true | false | validation_scale gate 中已通过 clean negative 公平校准的方法数量。 |
+| validation_scale_formal_method_baseline_comparison_ready_count | metric | none | true | true | false | validation_scale gate 中同协议 method-baseline 比较已 ready 的方法数量。 |
+| validation_scale_formal_baseline_difference_interval_ready_count | metric | none | true | true | false | validation_scale gate 中 SSTW 相对 baseline 差值区间已 ready 的 baseline 数量。 |
+| validation_scale_transition_claim_support_status | governance | none | true | false | false | pilot_paper gate 读取到的 validation_scale -> pilot_paper 跳转 claim_support_status。 |
+| validation_scale_transition_source_gate_passed | governance | none | true | false | false | validation_scale -> pilot_paper 跳转记录中的 source gate 是否已通过。 |
+| validation_scale_transition_missing_requirements | governance | none | true | false | false | validation_scale -> pilot_paper 跳转记录中的原始缺失要求列表。 |
+| validation_scale_transition_missing_requirement_count | metric | none | true | false | false | validation_scale -> pilot_paper 跳转记录中的原始缺失要求数量。 |
+| validation_scale_transition_allowed_next_result_profiles | governance | none | true | false | false | validation_scale 通过后允许进入的下一结果 profile 列表。 |
+| validation_scale_transition_blocked_next_result_profiles | governance | none | true | false | false | validation_scale 通过后仍禁止跳转的后续结果 profile 列表。 |
+| validation_scale_transition_fairness_missing_requirements | governance | none | true | false | false | pilot_paper gate 复核 validation_scale 跳转判定完整性时发现的缺失要求。 |
 | validation_scale_formal_internal_ablation_decision | governance | none | true | true | false | validation_scale 级 formal-compatible 内部消融汇总判定。 |
 | formal_internal_ablation_evidence_level | governance | none | true | true | false | 内部消融汇总中某个变体的证据层级。 |
 | formal_internal_ablation_source_record_family | artifact | none | true | false | false | 内部消融汇总行所使用的源 records 家族。 |

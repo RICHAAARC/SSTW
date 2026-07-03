@@ -38,6 +38,7 @@ def test_server_workflow_cli_dry_run_exposes_paper_gate_stage_plan(tmp_path: Pat
     assert payload["include_videos"] is False
     assert "motion_consistency_exclusion_report" in stage_names
     assert "sstw_measured_formal_result" in stage_names
+    assert "fair_detection_calibration" in stage_names
     assert "formal_method_baseline_comparison" in stage_names
     assert "formal_baseline_difference_interval" in stage_names
     assert "validation_scale_formal_internal_ablation" in stage_names
@@ -55,6 +56,29 @@ def test_server_workflow_complete_pipeline_order_matches_notebook_handoff_model(
         "paper_gate_and_package",
     )
     assert PIPELINE_ROLE_ORDER["validation_scale_complete"] == PIPELINE_ROLE_ORDER["paper_protocol_complete"]
+
+
+@pytest.mark.quick
+def test_server_workflow_cli_dry_run_exposes_all_modern_baseline_references(tmp_path: Path) -> None:
+    """服务器 CLI 必须能脱离 Notebook 调度 5 个 modern baseline 官方参考入口。"""
+
+    command = [
+        sys.executable,
+        "scripts/run_generative_video_server_workflow.py",
+        "--project-root",
+        str(tmp_path / "sstw_server_run"),
+        "--pipeline",
+        "external_baseline_references",
+        "--dry-run",
+    ]
+    completed = subprocess.run(command, check=True, text=True, capture_output=True)
+    payload = json.loads(completed.stdout)
+    reference_plan = payload["pipeline_results"][0]
+
+    assert payload["server_workflow_decision"] == "DRY_RUN"
+    assert reference_plan["notebook_role"] == "external_baseline_formal_scoring"
+    assert reference_plan["stage_execution_kind"] == "external_baseline_formal_reference_helper"
+    assert reference_plan["baseline_ids"] == ["videoseal", "vidsig", "videomark", "videoshield", "sigmark"]
 
 
 @pytest.mark.quick

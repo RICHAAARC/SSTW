@@ -6,6 +6,7 @@ from pathlib import Path
 import pytest
 
 from experiments.generative_video_model_probe.formal_method_baseline_comparison import run_formal_method_baseline_comparison
+from experiments.generative_video_model_probe.formal_baseline_difference_interval import run_formal_baseline_difference_interval
 from experiments.generative_video_model_probe.sstw_formal_result import run_sstw_measured_formal_result
 from experiments.generative_video_model_probe.statistical_confidence_interval import run_statistical_confidence_interval_reporter
 from experiments.generative_video_model_probe.validation_artifact_rebuild import run_validation_artifact_rebuild_dry_run
@@ -217,6 +218,49 @@ def test_formal_method_baseline_comparison_requires_sstw_and_five_baselines(tmp_
 
 
 @pytest.mark.quick
+def test_formal_baseline_difference_interval_writes_sstw_vs_each_baseline_ci(tmp_path: Path) -> None:
+    """差值 CI 报告必须覆盖 SSTW 相对 5 个 modern baseline 的 measured_formal 分数差。"""
+    run_root = tmp_path / "run"
+    write_jsonl(run_root / "records" / "sstw_measured_formal_records.jsonl", [
+        {
+            "metric_status": "measured_formal",
+            "prompt_id": f"prompt_{index}",
+            "seed_id": "seed_a",
+            "attack_name": "video_compression_runtime",
+            "sstw_score": 0.8 + index * 0.01,
+        }
+        for index in range(3)
+    ])
+    baseline_records = []
+    for baseline_id in ("videoshield", "sigmark", "videomark", "vidsig", "videoseal"):
+        for index in range(3):
+            baseline_records.append({
+                "external_baseline_name": baseline_id,
+                "metric_status": "measured_formal",
+                "prompt_id": f"prompt_{index}",
+                "seed_id": "seed_a",
+                "attack_name": "video_compression_runtime",
+                "external_baseline_score": 0.6 + index * 0.01,
+            })
+    write_jsonl(run_root / "records" / "external_baseline_score_records.jsonl", baseline_records)
+
+    audit = run_formal_baseline_difference_interval(run_root)
+    records = read_jsonl(run_root / "records" / "formal_baseline_difference_interval_records.jsonl")
+
+    assert audit["formal_baseline_difference_interval_decision"] == "PASS"
+    assert audit["difference_interval_record_count"] == 5
+    assert audit["difference_interval_ready_count"] == 5
+    assert audit["difference_interval_missing_baseline_ids"] == []
+    assert all(record["score_mean_difference"] == 0.2 for record in records)
+    assert all(record["difference_interval_status"] == "ready" for record in records)
+    assert all(record["significance_claim_status"] == "validation_scale_interval_not_significance_claim" for record in records)
+    assert all(record["paired_comparison_unit_count"] == 3 for record in records)
+    assert (run_root / "tables" / "formal_baseline_difference_interval_table.csv").exists()
+    assert (run_root / "artifacts" / "formal_baseline_difference_interval_decision.json").exists()
+    assert (run_root / "reports" / "formal_baseline_difference_interval_report.md").exists()
+
+
+@pytest.mark.quick
 def test_validation_artifact_rebuild_dry_run_reports_missing_and_pass_states(tmp_path: Path) -> None:
     """artifact rebuild dry-run 必须能报告缺失状态, 并在必要产物齐全时通过。"""
     run_root = tmp_path / "run"
@@ -233,6 +277,7 @@ def test_validation_artifact_rebuild_dry_run_reports_missing_and_pass_states(tmp
         "records/external_baseline_records.jsonl",
         "records/external_baseline_score_records.jsonl",
         "records/formal_method_baseline_comparison_records.jsonl",
+        "records/formal_baseline_difference_interval_records.jsonl",
         "records/validation_internal_ablation_records.jsonl",
         "records/adaptive_attack_records.jsonl",
         "records/trajectory_sketch_verification_records.jsonl",
@@ -248,6 +293,7 @@ def test_validation_artifact_rebuild_dry_run_reports_missing_and_pass_states(tmp
         "artifacts/external_baseline_status_decision.json",
         "artifacts/external_baseline_comparison_decision.json",
         "artifacts/formal_method_baseline_comparison_decision.json",
+        "artifacts/formal_baseline_difference_interval_decision.json",
         "artifacts/validation_internal_ablation_decision.json",
         "artifacts/adaptive_attack_decision.json",
         "artifacts/replay_and_sketch_gate_decision.json",
@@ -260,6 +306,7 @@ def test_validation_artifact_rebuild_dry_run_reports_missing_and_pass_states(tmp
         "tables/runtime_detection_table.csv",
         "tables/sstw_measured_formal_table.csv",
         "tables/formal_method_baseline_comparison_table.csv",
+        "tables/formal_baseline_difference_interval_table.csv",
         "tables/validation_internal_ablation_table.csv",
         "tables/adaptive_attack_table.csv",
         "tables/replay_verification_table.csv",
@@ -268,6 +315,7 @@ def test_validation_artifact_rebuild_dry_run_reports_missing_and_pass_states(tmp
         "reports/external_baseline_comparison_report.md",
         "reports/sstw_measured_formal_report.md",
         "reports/formal_method_baseline_comparison_report.md",
+        "reports/formal_baseline_difference_interval_report.md",
         "reports/validation_internal_ablation_report.md",
         "reports/adaptive_attack_report.md",
         "reports/replay_and_sketch_gate_report.md",

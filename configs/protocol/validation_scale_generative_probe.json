@@ -36,6 +36,7 @@
   "require_external_baseline_self_contained_outputs": true,
   "require_external_baseline_self_containment_decision": true,
   "require_external_baseline_status_records": true,
+  "require_formal_baseline_difference_interval": true,
   "require_formal_motion_claim_ready": true,
   "require_formal_method_baseline_comparison": true,
   "require_internal_ablation_records": true,

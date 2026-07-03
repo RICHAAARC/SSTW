@@ -1482,6 +1482,19 @@ def build_formal_method_baseline_comparison_command(layout: dict[str, str]) -> l
     ]
 
 
+def build_formal_baseline_difference_interval_command(layout: dict[str, str]) -> list[str]:
+    """构造 SSTW 相对现代 external baseline 的差值置信区间报告命令。"""
+    return [
+        sys.executable,
+        "-m",
+        "experiments.generative_video_model_probe.formal_baseline_difference_interval",
+        "--run-root",
+        layout["drive_run_root"],
+        "--config-path",
+        layout["protocol_config_path"],
+    ]
+
+
 def build_pilot_paper_gate_command(layout: dict[str, str]) -> list[str]:
     """构建当前 profile 的 fixed-FPR gate 命令, fixed-FPR 口径来自 protocol config。"""
     return [

@@ -1173,3 +1173,26 @@ Notebook 与 repository module 的跨边界数据
 | comparison_score_mean | metric | none | true | true | false | 同协议 formal 比较行的平均分数。 |
 | comparison_missing_reason | governance | none | true | false | false | 同协议 formal 比较行缺失 measured_formal records 的原因。 |
 | require_formal_method_baseline_comparison | protocol | none | true | false | false | validation_scale gate 是否要求 SSTW 与 5 个 baseline 的同协议 measured_formal 比较表。 |
+| formal_baseline_difference_interval_decision | governance | none | true | true | false | SSTW 相对现代 external baseline 的差值置信区间阶段判定。 |
+| reference_method_id | protocol | none | true | false | false | 差值比较中的参考方法 ID。 |
+| baseline_method_id | protocol | none | true | false | false | 差值比较中的 baseline 方法 ID。 |
+| difference_metric_name | metric | none | true | false | false | 差值置信区间所对应的指标名称。 |
+| reference_score_field | protocol | none | true | false | false | 差值统计中参考方法使用的源分数字段。 |
+| baseline_score_field | protocol | none | true | false | false | 差值统计中 baseline 使用的源分数字段。 |
+| reference_record_count | metric | none | true | false | false | 差值统计中参考方法的 measured_formal 分数数量。 |
+| baseline_record_count | metric | none | true | false | false | 差值统计中 baseline 的 measured_formal 分数数量。 |
+| paired_comparison_unit_count | metric | none | true | false | false | prompt / seed / attack 锚点完全重合的配对比较单元数量。 |
+| reference_score_mean | metric | none | true | true | false | 差值统计中参考方法的平均分数。 |
+| baseline_score_mean | metric | none | true | true | false | 差值统计中 baseline 的平均分数。 |
+| score_mean_difference | metric | none | true | true | false | 参考方法平均分数减 baseline 平均分数的差值。 |
+| difference_ci_confidence_level | metric | none | true | false | false | 差值置信区间的置信水平。 |
+| difference_ci_lower | metric | none | true | true | false | 差值置信区间下界。 |
+| difference_ci_upper | metric | none | true | true | false | 差值置信区间上界。 |
+| difference_interval_method | protocol | none | true | false | false | 差值置信区间使用的统计方法。 |
+| difference_interval_status | governance | none | true | false | false | 单条差值置信区间 record 是否可用。 |
+| significance_claim_status | governance | none | true | true | false | 当前差值区间是否允许支撑显著性 claim 的状态。 |
+| difference_interval_record_count | metric | none | true | true | false | 差值置信区间 records 数量。 |
+| difference_interval_ready_count | metric | none | true | true | false | 已可用差值置信区间 records 数量。 |
+| difference_interval_missing_baseline_ids | governance | none | true | true | false | 缺失差值置信区间的 baseline 方法 ID 列表。 |
+| difference_interval_missing_baseline_count | metric | none | true | true | false | 缺失差值置信区间的 baseline 数量。 |
+| require_formal_baseline_difference_interval | protocol | none | true | false | false | validation_scale gate 是否要求 SSTW 相对 5 个 baseline 的差值置信区间报告。 |

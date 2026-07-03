@@ -9,3 +9,4 @@ release_packages/
 *.pyc
 acl.txt
 external_baseline/__write_test.tmp
+.local/

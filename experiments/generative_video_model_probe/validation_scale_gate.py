@@ -253,6 +253,53 @@ def _target_fpr_matches(record: dict, expected_target_fpr: float) -> bool:
         return False
 
 
+def _nonnegative_int(record: dict, field_name: str) -> int:
+    """读取 governed record 中的非负计数字段, 缺失或不可解析时按 0 处理。"""
+
+    try:
+        return max(int(record.get(field_name) or 0), 0)
+    except (TypeError, ValueError):
+        return 0
+
+
+def _fair_detection_anchor_ready(record: dict) -> bool:
+    """检查 fair calibration record 是否包含可配对的完整 positive anchor。"""
+
+    return (
+        _nonnegative_int(record, "positive_anchor_count") > 0
+        and _nonnegative_int(record, "positive_anchor_missing_count") == 0
+    )
+
+
+def _formal_comparison_anchor_ready(record: dict) -> bool:
+    """检查同协议统计行是否与 SSTW reference anchor 集合对齐。"""
+
+    method_role = str(record.get("method_role") or "")
+    alignment_status = str(record.get("comparison_anchor_alignment_status") or "")
+    if _nonnegative_int(record, "comparison_anchor_count") <= 0:
+        return False
+    if _nonnegative_int(record, "reference_anchor_count") <= 0:
+        return False
+    if method_role == "proposed_method":
+        return alignment_status == "reference_method_anchor_set_ready"
+    return (
+        alignment_status == "aligned_with_sstw_reference_anchors"
+        and _nonnegative_int(record, "missing_reference_anchor_count") == 0
+        and _nonnegative_int(record, "extra_anchor_count") == 0
+    )
+
+
+def _difference_interval_anchor_ready(record: dict) -> bool:
+    """检查差值区间是否来自 prompt / seed / attack 完全配对的比较单元。"""
+
+    return (
+        str(record.get("comparison_anchor_alignment_status") or "") == "aligned_with_sstw_reference_anchors"
+        and _nonnegative_int(record, "paired_comparison_unit_count") > 0
+        and _nonnegative_int(record, "unpaired_reference_anchor_count") == 0
+        and _nonnegative_int(record, "unpaired_baseline_anchor_count") == 0
+    )
+
+
 def _formal_method_baseline_comparison_ready(
     run_root: Path,
     required_modern_adapter_names: list[str],
@@ -267,6 +314,7 @@ def _formal_method_baseline_comparison_ready(
         for record in records
         if record.get("metric_status") == "measured_formal"
         and _target_fpr_matches(record, target_fpr)
+        and _formal_comparison_anchor_ready(record)
     }
     missing_method_ids = sorted(required_method_ids - ready_method_ids)
     ready_count = int(decision.get("formal_comparison_ready_method_count") or len(ready_method_ids))
@@ -295,6 +343,7 @@ def _fair_detection_calibration_ready(
         if record.get("fair_comparison_status") == "ready"
         and record.get("metric_status") == "measured_formal"
         and _target_fpr_matches(record, target_fpr)
+        and _fair_detection_anchor_ready(record)
     }
     missing_method_ids = sorted(required_method_ids - ready_method_ids)
     ready_count = int(decision.get("fair_detection_calibration_ready_count") or len(ready_method_ids))
@@ -323,6 +372,7 @@ def _formal_baseline_difference_interval_ready(
         if record.get("difference_interval_status") == "ready"
         and record.get("metric_status") == "measured_formal"
         and _target_fpr_matches(record, target_fpr)
+        and _difference_interval_anchor_ready(record)
     }
     missing_baseline_ids = sorted(required_baseline_ids - ready_baseline_ids)
     ready_count = int(decision.get("difference_interval_ready_count") or len(ready_baseline_ids))

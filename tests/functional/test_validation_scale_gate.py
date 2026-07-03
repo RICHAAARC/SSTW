@@ -157,9 +157,23 @@ def test_validation_scale_gate_passes_when_all_governed_inputs_exist(tmp_path: P
         "claim_support_status": "sstw_measured_formal_validation_scale_only",
     })
     write_jsonl(run_root / "records" / "fair_detection_calibration_records.jsonl", [
-        {"method_id": "sstw_key_conditioned_flow_trajectory", "fair_comparison_status": "ready", "metric_status": "measured_formal", "target_fpr": 0.1},
+        {
+            "method_id": "sstw_key_conditioned_flow_trajectory",
+            "fair_comparison_status": "ready",
+            "metric_status": "measured_formal",
+            "target_fpr": 0.1,
+            "positive_anchor_count": 3,
+            "positive_anchor_missing_count": 0,
+        },
         *[
-            {"method_id": baseline_id, "fair_comparison_status": "ready", "metric_status": "measured_formal", "target_fpr": 0.1}
+            {
+                "method_id": baseline_id,
+                "fair_comparison_status": "ready",
+                "metric_status": "measured_formal",
+                "target_fpr": 0.1,
+                "positive_anchor_count": 3,
+                "positive_anchor_missing_count": 0,
+            }
             for baseline_id in sorted(MODERN_EXTERNAL_BASELINE_NAMES)
         ],
     ])
@@ -170,9 +184,29 @@ def test_validation_scale_gate_passes_when_all_governed_inputs_exist(tmp_path: P
         "claim_support_status": "fair_detection_calibration_validation_scale_ready",
     })
     write_jsonl(run_root / "records" / "formal_method_baseline_comparison_records.jsonl", [
-        {"method_id": "sstw_key_conditioned_flow_trajectory", "metric_status": "measured_formal", "target_fpr": 0.1},
+        {
+            "method_id": "sstw_key_conditioned_flow_trajectory",
+            "method_role": "proposed_method",
+            "metric_status": "measured_formal",
+            "target_fpr": 0.1,
+            "comparison_anchor_count": 3,
+            "reference_anchor_count": 3,
+            "missing_reference_anchor_count": 0,
+            "extra_anchor_count": 0,
+            "comparison_anchor_alignment_status": "reference_method_anchor_set_ready",
+        },
         *[
-            {"method_id": baseline_id, "metric_status": "measured_formal", "target_fpr": 0.1}
+            {
+                "method_id": baseline_id,
+                "method_role": "modern_external_baseline",
+                "metric_status": "measured_formal",
+                "target_fpr": 0.1,
+                "comparison_anchor_count": 3,
+                "reference_anchor_count": 3,
+                "missing_reference_anchor_count": 0,
+                "extra_anchor_count": 0,
+                "comparison_anchor_alignment_status": "aligned_with_sstw_reference_anchors",
+            }
             for baseline_id in sorted(MODERN_EXTERNAL_BASELINE_NAMES)
         ],
     ])
@@ -183,7 +217,16 @@ def test_validation_scale_gate_passes_when_all_governed_inputs_exist(tmp_path: P
         "claim_support_status": "formal_method_baseline_comparison_validation_scale_only",
     })
     write_jsonl(run_root / "records" / "formal_baseline_difference_interval_records.jsonl", [
-        {"baseline_method_id": baseline_id, "difference_interval_status": "ready", "metric_status": "measured_formal", "target_fpr": 0.1}
+        {
+            "baseline_method_id": baseline_id,
+            "difference_interval_status": "ready",
+            "metric_status": "measured_formal",
+            "target_fpr": 0.1,
+            "paired_comparison_unit_count": 3,
+            "unpaired_reference_anchor_count": 0,
+            "unpaired_baseline_anchor_count": 0,
+            "comparison_anchor_alignment_status": "aligned_with_sstw_reference_anchors",
+        }
         for baseline_id in sorted(MODERN_EXTERNAL_BASELINE_NAMES)
     ])
     write_json(run_root / "artifacts" / "formal_baseline_difference_interval_decision.json", {
@@ -381,6 +424,105 @@ def test_validation_scale_gate_rejects_stale_fair_comparison_decision_without_re
 
 
 @pytest.mark.quick
+def test_validation_scale_gate_rejects_fair_comparison_without_anchor_alignment(tmp_path: Path) -> None:
+    """validation-scale 不能只凭 measured_formal 字段放行缺少 anchor 对齐证据的公平比较。"""
+
+    run_root = tmp_path / "run"
+    config_path = tmp_path / "validation_scale_config.json"
+    config_path.write_text(
+        json.dumps(
+            {
+                "target_fpr": 0.1,
+                "paper_result_level": "validation_scale",
+                "minimum_prompt_count": 0,
+                "minimum_seed_per_prompt": 0,
+                "minimum_attack_count": 0,
+                "required_modern_external_baseline_adapter_names": ["videoseal"],
+                "require_external_baseline_status_records": False,
+                "require_external_baseline_comparison_records": False,
+                "require_external_baseline_self_containment_decision": False,
+                "require_sstw_measured_formal_records": False,
+                "require_fair_detection_calibration": True,
+                "require_formal_method_baseline_comparison": True,
+                "require_formal_baseline_difference_interval": True,
+                "require_motion_threshold_calibration_ready": False,
+                "require_formal_motion_claim_ready": False,
+                "require_motion_consistency_exclusion_report": False,
+                "require_internal_ablation_records": False,
+                "require_validation_scale_formal_internal_ablation": False,
+                "require_adaptive_attack_records": False,
+                "require_replay_or_sketch_records_or_claim3_downgrade": False,
+                "require_confidence_interval_report": False,
+                "require_low_fpr_formal_statistics_blocking_record": False,
+                "require_artifact_rebuild_dry_run": False,
+                "require_data_split_and_leakage_guard": False,
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+    write_jsonl(run_root / "records" / "fair_detection_calibration_records.jsonl", [
+        {
+            "method_id": "sstw_key_conditioned_flow_trajectory",
+            "fair_comparison_status": "ready",
+            "metric_status": "measured_formal",
+            "target_fpr": 0.1,
+        },
+        {
+            "method_id": "videoseal",
+            "fair_comparison_status": "ready",
+            "metric_status": "measured_formal",
+            "target_fpr": 0.1,
+        },
+    ])
+    write_json(run_root / "artifacts" / "fair_detection_calibration_decision.json", {
+        "fair_detection_calibration_decision": "PASS",
+        "fair_detection_calibration_ready_count": 2,
+        "target_fpr": 0.1,
+        "claim_support_status": "fair_detection_calibration_validation_scale_ready",
+    })
+    write_jsonl(run_root / "records" / "formal_method_baseline_comparison_records.jsonl", [
+        {
+            "method_id": "sstw_key_conditioned_flow_trajectory",
+            "metric_status": "measured_formal",
+            "target_fpr": 0.1,
+        },
+        {
+            "method_id": "videoseal",
+            "metric_status": "measured_formal",
+            "target_fpr": 0.1,
+        },
+    ])
+    write_json(run_root / "artifacts" / "formal_method_baseline_comparison_decision.json", {
+        "formal_method_baseline_comparison_decision": "PASS",
+        "formal_comparison_ready_method_count": 2,
+        "target_fpr": 0.1,
+        "claim_support_status": "formal_method_baseline_comparison_validation_scale_only",
+    })
+    write_jsonl(run_root / "records" / "formal_baseline_difference_interval_records.jsonl", [
+        {
+            "baseline_method_id": "videoseal",
+            "difference_interval_status": "ready",
+            "metric_status": "measured_formal",
+            "target_fpr": 0.1,
+        },
+    ])
+    write_json(run_root / "artifacts" / "formal_baseline_difference_interval_decision.json", {
+        "formal_baseline_difference_interval_decision": "PASS",
+        "difference_interval_ready_count": 1,
+        "target_fpr": 0.1,
+        "claim_support_status": "formal_baseline_difference_interval_validation_scale_only",
+    })
+
+    audit = build_validation_scale_gate_audit(run_root, config_path)
+
+    assert audit["validation_scale_gate_decision"] == "FAIL"
+    assert "validation_fair_detection_calibration_ready" in audit["missing_validation_requirements"]
+    assert "validation_formal_method_baseline_comparison_ready" in audit["missing_validation_requirements"]
+    assert "validation_formal_baseline_difference_interval_ready" in audit["missing_validation_requirements"]
+
+
+@pytest.mark.quick
 def test_validation_scale_gate_rejects_fair_comparison_with_wrong_target_fpr(tmp_path: Path) -> None:
     """公平比较产物的 target_fpr 必须与当前 validation-scale protocol config 一致。"""
 
@@ -424,12 +566,16 @@ def test_validation_scale_gate_rejects_fair_comparison_with_wrong_target_fpr(tmp
             "fair_comparison_status": "ready",
             "metric_status": "measured_formal",
             "target_fpr": 0.01,
+            "positive_anchor_count": 3,
+            "positive_anchor_missing_count": 0,
         },
         {
             "method_id": "videoseal",
             "fair_comparison_status": "ready",
             "metric_status": "measured_formal",
             "target_fpr": 0.01,
+            "positive_anchor_count": 3,
+            "positive_anchor_missing_count": 0,
         },
     ])
     write_json(run_root / "artifacts" / "fair_detection_calibration_decision.json", {

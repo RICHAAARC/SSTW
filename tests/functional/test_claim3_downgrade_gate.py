@@ -194,6 +194,8 @@ def test_validation_scale_gate_accepts_claim3_downgrade_path(tmp_path: Path) -> 
             "metric_status": "measured_formal",
             "target_fpr": 0.1,
             "tpr_at_target_fpr": 1.0,
+            "positive_anchor_count": 3,
+            "positive_anchor_missing_count": 0,
         },
         *[
             {
@@ -202,6 +204,8 @@ def test_validation_scale_gate_accepts_claim3_downgrade_path(tmp_path: Path) -> 
                 "metric_status": "measured_formal",
                 "target_fpr": 0.1,
                 "tpr_at_target_fpr": 1.0,
+                "positive_anchor_count": 3,
+                "positive_anchor_missing_count": 0,
             }
             for baseline_id in sorted(MODERN_EXTERNAL_BASELINE_NAMES)
         ],
@@ -213,9 +217,29 @@ def test_validation_scale_gate_accepts_claim3_downgrade_path(tmp_path: Path) -> 
         "claim_support_status": "fair_detection_calibration_validation_scale_ready",
     })
     write_jsonl(run_root / "records" / "formal_method_baseline_comparison_records.jsonl", [
-        {"method_id": "sstw_key_conditioned_flow_trajectory", "metric_status": "measured_formal", "target_fpr": 0.1},
+        {
+            "method_id": "sstw_key_conditioned_flow_trajectory",
+            "method_role": "proposed_method",
+            "metric_status": "measured_formal",
+            "target_fpr": 0.1,
+            "comparison_anchor_count": 3,
+            "reference_anchor_count": 3,
+            "missing_reference_anchor_count": 0,
+            "extra_anchor_count": 0,
+            "comparison_anchor_alignment_status": "reference_method_anchor_set_ready",
+        },
         *[
-            {"method_id": baseline_id, "metric_status": "measured_formal", "target_fpr": 0.1}
+            {
+                "method_id": baseline_id,
+                "method_role": "modern_external_baseline",
+                "metric_status": "measured_formal",
+                "target_fpr": 0.1,
+                "comparison_anchor_count": 3,
+                "reference_anchor_count": 3,
+                "missing_reference_anchor_count": 0,
+                "extra_anchor_count": 0,
+                "comparison_anchor_alignment_status": "aligned_with_sstw_reference_anchors",
+            }
             for baseline_id in sorted(MODERN_EXTERNAL_BASELINE_NAMES)
         ],
     ])
@@ -226,7 +250,16 @@ def test_validation_scale_gate_accepts_claim3_downgrade_path(tmp_path: Path) -> 
         "claim_support_status": "formal_method_baseline_comparison_validation_scale_only",
     })
     write_jsonl(run_root / "records" / "formal_baseline_difference_interval_records.jsonl", [
-        {"baseline_method_id": baseline_id, "difference_interval_status": "ready", "metric_status": "measured_formal", "target_fpr": 0.1}
+        {
+            "baseline_method_id": baseline_id,
+            "difference_interval_status": "ready",
+            "metric_status": "measured_formal",
+            "target_fpr": 0.1,
+            "paired_comparison_unit_count": 3,
+            "unpaired_reference_anchor_count": 0,
+            "unpaired_baseline_anchor_count": 0,
+            "comparison_anchor_alignment_status": "aligned_with_sstw_reference_anchors",
+        }
         for baseline_id in sorted(MODERN_EXTERNAL_BASELINE_NAMES)
     ])
     write_json(run_root / "artifacts" / "formal_baseline_difference_interval_decision.json", {

@@ -41,6 +41,7 @@
   "require_formal_method_baseline_comparison": true,
   "require_internal_ablation_records": true,
   "require_low_fpr_formal_statistics_blocking_record": true,
+  "require_motion_consistency_exclusion_report": true,
   "require_motion_threshold_calibration_ready": true,
   "require_pilot_paper_and_full_paper_blocked_until_pass": true,
   "require_data_split_and_leakage_guard": true,

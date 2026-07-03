@@ -23,6 +23,7 @@ from paper_workflow.notebook_utils.generative_video_model_probe_workflow import 
     build_formal_baseline_difference_interval_command,
     build_formal_method_baseline_comparison_command,
     build_low_fpr_formal_statistics_command,
+    build_motion_consistency_exclusion_report_command,
     build_data_split_and_leakage_guard_command,
     build_modern_baseline_official_bridge_command_templates,
     build_modern_baseline_official_bridge_preflight_decision,
@@ -270,6 +271,7 @@ def test_generative_video_colab_notebook_calls_repository_modules() -> None:
     assert "experiments.generative_video_model_probe.motion_threshold_calibration" in helper_text
     assert "experiments.generative_video_model_probe.postprocess_runner" in helper_text
     assert "experiments.generative_video_model_probe.pilot_matrix_postprocess" in helper_text
+    assert "experiments.generative_video_model_probe.motion_consistency_exclusion_report" in helper_text
     assert "experiments.generative_video_model_probe.attack_runner" in helper_text
     assert "experiments.generative_video_model_probe.detection_runner" in helper_text
     assert "scripts/build_external_baseline_source_intake.py" in helper_text
@@ -341,6 +343,7 @@ def test_split_colab_notebooks_are_profile_driven() -> None:
     assert "external_baseline_colab_preflight" in runtime_source
     assert "build_external_baseline_comparison_command" not in runtime_source
     assert "apply_paper_gate_external_baseline_environment" in gate_source
+    assert "build_motion_consistency_exclusion_report_command" in gate_source
     assert "build_external_baseline_official_result_bundle_preflight_command" in gate_source
     assert "build_external_baseline_comparison_command" in gate_source
     assert "build_external_baseline_self_containment_decision_command" in gate_source
@@ -669,6 +672,7 @@ def test_profile_specific_commands_pass_protocol_config_path(tmp_path: Path) -> 
 
     validation_commands = [
         build_mechanism_postprocess_command(validation_layout),
+        build_motion_consistency_exclusion_report_command(validation_layout),
         build_statistical_confidence_interval_command(validation_layout),
         build_low_fpr_formal_statistics_command(validation_layout),
         build_sstw_measured_formal_result_command(validation_layout),
@@ -1103,6 +1107,11 @@ def test_generative_video_drive_packager_creates_archive_and_manifest(tmp_path: 
         "runtime_detection_record_count": 48,
         "runtime_detection_ready_count": 48,
     })
+    write_json(run_root / "artifacts" / "motion_consistency_exclusion_decision.json", {
+        "motion_consistency_exclusion_decision": "PASS",
+        "motion_consistency_included_count": 46,
+        "motion_consistency_excluded_count": 2,
+    })
     write_json(run_root / "artifacts" / "sstw_measured_formal_decision.json", {
         "sstw_measured_formal_decision": "PASS",
         "sstw_measured_formal_record_count": 48,
@@ -1234,6 +1243,9 @@ def test_generative_video_drive_packager_creates_archive_and_manifest(tmp_path: 
     assert manifest["decision_summary"]["runtime_detection_decision"] == "PASS"
     assert manifest["decision_summary"]["runtime_detection_record_count"] == 48
     assert manifest["decision_summary"]["runtime_detection_ready_count"] == 48
+    assert manifest["decision_summary"]["motion_consistency_exclusion_decision"] == "PASS"
+    assert manifest["decision_summary"]["motion_consistency_included_count"] == 46
+    assert manifest["decision_summary"]["motion_consistency_excluded_count"] == 2
     assert manifest["decision_summary"]["sstw_measured_formal_decision"] == "PASS"
     assert manifest["decision_summary"]["sstw_measured_formal_record_count"] == 48
     assert manifest["decision_summary"]["sstw_measured_formal_score_mean"] == 0.82

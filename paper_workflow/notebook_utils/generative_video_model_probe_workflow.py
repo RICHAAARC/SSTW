@@ -1410,6 +1410,19 @@ def build_validation_internal_ablation_command(layout: dict[str, str]) -> list[s
     ]
 
 
+def build_motion_consistency_exclusion_report_command(layout: dict[str, str]) -> list[str]:
+    """构造 motion consistency 阻断样本处理报告命令。"""
+    return [
+        sys.executable,
+        "-m",
+        "experiments.generative_video_model_probe.motion_consistency_exclusion_report",
+        "--run-root",
+        layout["drive_run_root"],
+        "--config-path",
+        layout["protocol_config_path"],
+    ]
+
+
 def build_adaptive_attack_command(layout: dict[str, str]) -> list[str]:
     """构造 validation-scale adaptive attack proxy 命令。"""
     return [

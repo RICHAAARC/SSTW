@@ -60,6 +60,7 @@ def test_validation_scale_gate_blocks_empty_run(tmp_path: Path) -> None:
     assert "validation_formal_baseline_difference_interval_ready" in audit["missing_validation_requirements"]
     assert "validation_scale_formal_internal_ablation_ready" in audit["missing_validation_requirements"]
     assert "validation_low_fpr_formal_statistics_blocking_record_ready" in audit["missing_validation_requirements"]
+    assert "validation_motion_consistency_exclusion_report_ready" in audit["missing_validation_requirements"]
 
 
 @pytest.mark.quick
@@ -137,6 +138,14 @@ def test_validation_scale_gate_passes_when_all_governed_inputs_exist(tmp_path: P
     write_json(run_root / "artifacts" / "data_split_and_leakage_guard_decision.json", {
         "data_split_and_leakage_guard_decision": "PASS",
         "claim_support_status": "data_split_and_leakage_guard_passed",
+    })
+    write_jsonl(run_root / "records" / "motion_consistency_exclusion_records.jsonl", [
+        {"prompt_id": "prompt_0", "included_in_motion_claim": True, "excluded_from_motion_claim": False},
+    ])
+    write_json(run_root / "artifacts" / "motion_consistency_exclusion_decision.json", {
+        "motion_consistency_exclusion_decision": "PASS",
+        "motion_consistency_excluded_count": 0,
+        "claim_support_status": "motion_consistency_exclusion_audit_record",
     })
     write_jsonl(run_root / "records" / "sstw_measured_formal_records.jsonl", [
         {"metric_status": "measured_formal", "sstw_score": 0.82, "claim_support_status": "sstw_measured_formal_validation_scale_only"},
@@ -254,6 +263,8 @@ def test_validation_scale_gate_passes_when_all_governed_inputs_exist(tmp_path: P
     assert audit["external_baseline_measured_adapter_count"] == 7
     assert audit["modern_external_baseline_formal_measured_adapter_count"] == 5
     assert audit["external_baseline_self_containment_decision"] == "PASS"
+    assert audit["motion_consistency_exclusion_excluded_count"] == 0
+    assert audit["motion_consistency_exclusion_status"] == "motion_consistency_exclusion_audit_record"
     assert audit["sstw_measured_formal_record_count"] == 1
     assert audit["sstw_measured_formal_status"] == "sstw_measured_formal_validation_scale_only"
     assert audit["formal_method_baseline_comparison_ready_count"] == 6

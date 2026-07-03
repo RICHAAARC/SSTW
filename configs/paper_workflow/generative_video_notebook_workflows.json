@@ -1,6 +1,6 @@
 {
   "config_kind": "generative_video_notebook_workflow_config",
-  "config_version": "2026_07_03_profile_stage_timestamp_zip_v16",
+  "config_version": "2026_07_03_profile_stage_timestamp_zip_v17",
   "default_dataset_root_relative": "datasets/generative_video_prompt_suite",
   "default_drive_project_root": "/content/drive/MyDrive/SSTW",
   "default_prompt_suite_path_relative": "datasets/generative_video_prompt_suite/prompt_seed_suite.json",
@@ -82,6 +82,7 @@
       "notebook_path": "paper_workflow/colab_notebooks/paper_gate_and_package_colab.ipynb",
       "stage_plan": [
         "motion_threshold_reuse_check",
+        "motion_consistency_exclusion_report",
         "validation_internal_ablation",
         "adaptive_attack_proxy",
         "replay_and_sketch_gate",

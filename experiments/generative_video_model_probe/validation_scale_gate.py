@@ -84,6 +84,7 @@ def _load_config(config_path: str | Path = DEFAULT_VALIDATION_SCALE_CONFIG) -> d
         "required_modern_external_baseline_adapter_names": list(config.get("required_modern_external_baseline_adapter_names", DEFAULT_REQUIRED_MODERN_EXTERNAL_BASELINE_ADAPTER_NAMES)),
         "require_motion_threshold_calibration_ready": bool(config.get("require_motion_threshold_calibration_ready", True)),
         "require_formal_motion_claim_ready": bool(config.get("require_formal_motion_claim_ready", True)),
+        "require_motion_consistency_exclusion_report": bool(config.get("require_motion_consistency_exclusion_report", True)),
         "require_internal_ablation_records": bool(config.get("require_internal_ablation_records", True)),
         "require_validation_scale_formal_internal_ablation": bool(config.get("require_validation_scale_formal_internal_ablation", True)),
         "require_adaptive_attack_records": bool(config.get("require_adaptive_attack_records", True)),
@@ -171,6 +172,15 @@ def _internal_ablation_ready(run_root: Path) -> tuple[bool, int, str]:
         decision = _read_json(run_root / "artifacts" / "internal_ablation_decision.json")
     decision_ready = not decision or _decision_pass(decision, "validation_internal_ablation_decision", "internal_ablation_decision")
     return bool(records) and decision_ready, len(records), decision.get("claim_support_status", "missing_internal_ablation_decision")
+
+
+def _motion_consistency_exclusion_ready(run_root: Path) -> tuple[bool, int, str]:
+    """检查 motion consistency 阻断样本处理报告是否已写出。"""
+    records = _read_jsonl(run_root / "records" / "motion_consistency_exclusion_records.jsonl")
+    decision = _read_json(run_root / "artifacts" / "motion_consistency_exclusion_decision.json")
+    ready = bool(records) and _decision_pass(decision, "motion_consistency_exclusion_decision")
+    excluded_count = int(decision.get("motion_consistency_excluded_count") or 0)
+    return ready, excluded_count, decision.get("claim_support_status", "missing_motion_consistency_exclusion_decision")
 
 
 def _validation_scale_formal_internal_ablation_ready(run_root: Path) -> tuple[bool, int, str]:
@@ -313,11 +323,13 @@ def build_validation_scale_gate_audit(
     motion_selection = select_motion_claim_generation_records(validation_generation_records, formal_metric_records)
     formal_motion_claim_ready = motion_selection.formal_motion_claim_status in FORMAL_MOTION_CLAIM_READY_STATUSES
     motion_threshold_ready = motion_threshold_decision.get("motion_threshold_calibration_ready") is True
+    motion_exclusion_ready, motion_exclusion_excluded_count, motion_exclusion_status = _motion_consistency_exclusion_ready(run_root)
 
     requirement_checks = {
         "validation_generation_records_ready": prompt_count >= config["minimum_prompt_count"] and seed_per_prompt_min >= config["minimum_seed_per_prompt"],
         "validation_motion_threshold_calibration_ready": (not config["require_motion_threshold_calibration_ready"]) or motion_threshold_ready,
         "validation_formal_motion_claim_ready": (not config["require_formal_motion_claim_ready"]) or formal_motion_claim_ready,
+        "validation_motion_consistency_exclusion_report_ready": (not config["require_motion_consistency_exclusion_report"]) or motion_exclusion_ready,
         "validation_attack_records_ready": _decision_pass(runtime_attack_decision, "runtime_attack_decision") and attack_count >= config["minimum_attack_count"],
         "validation_detection_records_ready": _decision_pass(runtime_detection_decision, "runtime_detection_decision") and runtime_detection_ready_count >= runtime_attack_ready_count > 0,
         "validation_external_baseline_status_records_ready": (not config["require_external_baseline_status_records"]) or external_baseline_audit.get("external_baseline_status_decision") == "PASS",
@@ -364,6 +376,8 @@ def build_validation_scale_gate_audit(
         "formal_motion_consistency_blocked_count": motion_selection.formal_motion_consistency_blocked_count,
         "motion_claim_eligible_generation_count": motion_selection.motion_claim_eligible_generation_count,
         "motion_claim_excluded_generation_count": motion_selection.motion_claim_excluded_generation_count,
+        "motion_consistency_exclusion_excluded_count": motion_exclusion_excluded_count,
+        "motion_consistency_exclusion_status": motion_exclusion_status,
         "runtime_attack_decision": runtime_attack_decision.get("runtime_attack_decision"),
         "runtime_attack_ready_count": runtime_attack_ready_count,
         "runtime_attack_count": attack_count,
@@ -440,6 +454,8 @@ def write_validation_scale_gate_audit(
         f"- validation_seed_per_prompt_min: {audit['validation_seed_per_prompt_min']}\n"
         f"- motion_threshold_calibration_decision: {audit['motion_threshold_calibration_decision']}\n"
         f"- formal_motion_claim_status: {audit['formal_motion_claim_status']}\n"
+        f"- motion_consistency_exclusion_excluded_count: {audit['motion_consistency_exclusion_excluded_count']}\n"
+        f"- motion_consistency_exclusion_status: {audit['motion_consistency_exclusion_status']}\n"
         f"- modern_external_baseline_main_comparison_ready_count: {audit['modern_external_baseline_main_comparison_ready_count']}\n"
         f"- external_baseline_comparison_record_count: {audit['external_baseline_comparison_record_count']}\n"
         f"- external_baseline_measured_adapter_count: {audit['external_baseline_measured_adapter_count']}\n"

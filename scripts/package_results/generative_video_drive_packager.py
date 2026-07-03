@@ -119,6 +119,7 @@ def package_generative_video_colab_run(
     pilot_matrix_decision_path = run_root_path / "artifacts" / "small_scale_claim_pilot_matrix_decision.json"
     runtime_attack_decision_path = run_root_path / "artifacts" / "runtime_attack_decision.json"
     runtime_detection_decision_path = run_root_path / "artifacts" / "runtime_detection_decision.json"
+    motion_consistency_exclusion_decision_path = run_root_path / "artifacts" / "motion_consistency_exclusion_decision.json"
     sstw_measured_formal_decision_path = run_root_path / "artifacts" / "sstw_measured_formal_decision.json"
     external_baseline_decision_path = run_root_path / "artifacts" / "external_baseline_status_decision.json"
     external_baseline_comparison_decision_path = run_root_path / "artifacts" / "external_baseline_comparison_decision.json"
@@ -152,6 +153,7 @@ def package_generative_video_colab_run(
     pilot_matrix_decision = _read_json_if_exists(pilot_matrix_decision_path)
     runtime_attack_decision = _read_json_if_exists(runtime_attack_decision_path)
     runtime_detection_decision = _read_json_if_exists(runtime_detection_decision_path)
+    motion_consistency_exclusion_decision = _read_json_if_exists(motion_consistency_exclusion_decision_path)
     sstw_measured_formal_decision = _read_json_if_exists(sstw_measured_formal_decision_path)
     external_baseline_decision = _read_json_if_exists(external_baseline_decision_path)
     external_baseline_comparison_decision = _read_json_if_exists(external_baseline_comparison_decision_path)
@@ -213,6 +215,9 @@ def package_generative_video_colab_run(
             "runtime_detection_decision": runtime_detection_decision.get("runtime_detection_decision"),
             "runtime_detection_record_count": runtime_detection_decision.get("runtime_detection_record_count"),
             "runtime_detection_ready_count": runtime_detection_decision.get("runtime_detection_ready_count"),
+            "motion_consistency_exclusion_decision": motion_consistency_exclusion_decision.get("motion_consistency_exclusion_decision"),
+            "motion_consistency_excluded_count": motion_consistency_exclusion_decision.get("motion_consistency_excluded_count"),
+            "motion_consistency_included_count": motion_consistency_exclusion_decision.get("motion_consistency_included_count"),
             "sstw_measured_formal_decision": sstw_measured_formal_decision.get("sstw_measured_formal_decision"),
             "sstw_measured_formal_record_count": sstw_measured_formal_decision.get("sstw_measured_formal_record_count"),
             "sstw_measured_formal_score_mean": sstw_measured_formal_decision.get("sstw_measured_formal_score_mean"),

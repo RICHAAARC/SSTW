@@ -1220,3 +1220,15 @@ Notebook 与 repository module 的跨边界数据
 | low_fpr_formal_statistics_record_count | metric | none | true | true | false | 低 FPR 正式统计阻断 records 数量。 |
 | low_fpr_blocked_target_fprs | governance | none | true | true | false | 当前阻断记录覆盖的低 FPR 目标列表。 |
 | require_low_fpr_formal_statistics_blocking_record | protocol | none | true | false | false | validation_scale gate 是否要求低 FPR 正式统计阻断记录。 |
+| motion_consistency_exclusion_decision | governance | none | true | true | false | motion consistency 阻断样本处理报告阶段判定。 |
+| motion_consistency_exclusion_reason | governance | none | true | false | false | 样本被纳入或排除出 motion claim 的具体原因。 |
+| excluded_from_motion_claim | governance | none | true | true | false | 样本是否被排除出 motion / trajectory claim。 |
+| included_in_motion_claim | governance | none | true | true | false | 样本是否进入 motion / trajectory claim 统计。 |
+| excluded_from_effect_size_claim | governance | none | true | true | false | 样本是否被排除出效果大小 claim。 |
+| retained_for_audit | governance | none | true | false | false | 被阻断样本是否仍保留为审计记录。 |
+| motion_consistency_exclusion_record_count | metric | none | true | true | false | motion consistency 阻断处理 records 数量。 |
+| motion_consistency_included_count | metric | none | true | true | false | motion consistency 过滤后纳入 motion claim 的样本数量。 |
+| motion_consistency_excluded_count | metric | none | true | true | false | motion consistency 过滤后排除出 motion claim 的样本数量。 |
+| motion_consistency_exclusion_reasons | governance | none | true | false | false | motion consistency 处理报告中出现的原因集合。 |
+| motion_consistency_claim_filter_applied | governance | none | true | true | false | 是否已经应用 motion consistency claim 过滤。 |
+| require_motion_consistency_exclusion_report | protocol | none | true | false | false | validation_scale gate 是否要求 motion consistency 阻断样本处理报告。 |

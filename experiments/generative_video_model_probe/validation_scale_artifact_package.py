@@ -20,6 +20,7 @@ VALIDATION_SCALE_REQUIRED_PACKAGE_RELPATHS = (
     "tables/validation_scale_gate_table.csv",
     "artifacts/validation_scale_gate_decision.json",
     "reports/validation_scale_gate_report.md",
+    "artifacts/motion_consistency_exclusion_decision.json",
     "artifacts/external_baseline_self_containment_decision.json",
     "artifacts/sstw_measured_formal_decision.json",
     "artifacts/formal_method_baseline_comparison_decision.json",
@@ -60,6 +61,7 @@ def _requirement_rows(decision: Mapping[str, Any]) -> list[dict[str, Any]]:
         "validation_generation_records_ready",
         "validation_motion_threshold_calibration_ready",
         "validation_formal_motion_claim_ready",
+        "validation_motion_consistency_exclusion_report_ready",
         "validation_attack_records_ready",
         "validation_detection_records_ready",
         "validation_external_baseline_status_records_ready",
@@ -142,6 +144,7 @@ def build_validation_scale_package_manifest(run_root: str | Path) -> dict[str, A
     inventory = _inventory_rows(run_root, VALIDATION_SCALE_REQUIRED_PACKAGE_RELPATHS)
     missing = [row["artifact_relpath"] for row in inventory if not row["artifact_exists"]]
     validation_gate = _read_json(run_root / "artifacts" / "validation_scale_gate_decision.json")
+    motion_exclusion = _read_json(run_root / "artifacts" / "motion_consistency_exclusion_decision.json")
     self_containment = _read_json(run_root / "artifacts" / "external_baseline_self_containment_decision.json")
     sstw_formal = _read_json(run_root / "artifacts" / "sstw_measured_formal_decision.json")
     formal_comparison = _read_json(run_root / "artifacts" / "formal_method_baseline_comparison_decision.json")
@@ -152,6 +155,7 @@ def build_validation_scale_package_manifest(run_root: str | Path) -> dict[str, A
     transition = _read_json(run_root / "artifacts" / "validation_scale_to_pilot_paper_transition_decision.json")
     decision_ready = (
         validation_gate.get("validation_scale_gate_decision") == "PASS"
+        and motion_exclusion.get("motion_consistency_exclusion_decision") == "PASS"
         and self_containment.get("external_baseline_self_containment_decision") == "PASS"
         and sstw_formal.get("sstw_measured_formal_decision") == "PASS"
         and formal_comparison.get("formal_method_baseline_comparison_decision") == "PASS"
@@ -174,6 +178,7 @@ def build_validation_scale_package_manifest(run_root: str | Path) -> dict[str, A
         "validation_scale_gate_decision": validation_gate.get("validation_scale_gate_decision"),
         "paper_result_level": validation_gate.get("paper_result_level"),
         "target_fpr": validation_gate.get("target_fpr"),
+        "motion_consistency_exclusion_decision": motion_exclusion.get("motion_consistency_exclusion_decision"),
         "external_baseline_self_containment_decision": self_containment.get("external_baseline_self_containment_decision"),
         "sstw_measured_formal_decision": sstw_formal.get("sstw_measured_formal_decision"),
         "formal_method_baseline_comparison_decision": formal_comparison.get("formal_method_baseline_comparison_decision"),
@@ -203,6 +208,7 @@ def write_validation_scale_package_manifest(run_root: str | Path) -> dict[str, A
         f"- validation_scale_gate_decision: {manifest['validation_scale_gate_decision']}\n"
         f"- paper_result_level: {manifest['paper_result_level']}\n"
         f"- target_fpr: {manifest['target_fpr']}\n"
+        f"- motion_consistency_exclusion_decision: {manifest['motion_consistency_exclusion_decision']}\n"
         f"- external_baseline_self_containment_decision: {manifest['external_baseline_self_containment_decision']}\n"
         f"- sstw_measured_formal_decision: {manifest['sstw_measured_formal_decision']}\n"
         f"- formal_method_baseline_comparison_decision: {manifest['formal_method_baseline_comparison_decision']}\n"

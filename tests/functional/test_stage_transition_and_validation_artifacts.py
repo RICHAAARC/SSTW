@@ -307,6 +307,9 @@ def test_validation_scale_figure_and_package_manifest_are_rebuilt_from_artifacts
         "validation_scale_gate_decision": "PASS",
         "missing_validation_requirements": [],
     })
+    write_json(run_root / "artifacts" / "motion_consistency_exclusion_decision.json", {
+        "motion_consistency_exclusion_decision": "PASS",
+    })
     write_json(run_root / "artifacts" / "external_baseline_self_containment_decision.json", {
         "external_baseline_self_containment_decision": "PASS",
     })
@@ -337,6 +340,7 @@ def test_validation_scale_figure_and_package_manifest_are_rebuilt_from_artifacts
 
     assert figure["validation_scale_gate_decision"] == "PASS"
     assert manifest["validation_scale_package_manifest_decision"] == "PASS"
+    assert manifest["motion_consistency_exclusion_decision"] == "PASS"
     assert manifest["sstw_measured_formal_decision"] == "PASS"
     assert manifest["formal_method_baseline_comparison_decision"] == "PASS"
     assert manifest["formal_baseline_difference_interval_decision"] == "PASS"

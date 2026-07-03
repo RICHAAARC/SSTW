@@ -8,6 +8,7 @@ import pytest
 from experiments.generative_video_model_probe.formal_method_baseline_comparison import run_formal_method_baseline_comparison
 from experiments.generative_video_model_probe.formal_baseline_difference_interval import run_formal_baseline_difference_interval
 from experiments.generative_video_model_probe.low_fpr_formal_statistics import run_low_fpr_formal_statistics
+from experiments.generative_video_model_probe.motion_consistency_exclusion_report import run_motion_consistency_exclusion_report
 from experiments.generative_video_model_probe.sstw_formal_result import run_sstw_measured_formal_result
 from experiments.generative_video_model_probe.statistical_confidence_interval import run_statistical_confidence_interval_reporter
 from experiments.generative_video_model_probe.validation_artifact_rebuild import run_validation_artifact_rebuild_dry_run
@@ -326,6 +327,62 @@ def test_low_fpr_formal_statistics_writes_blocking_record(tmp_path: Path) -> Non
 
 
 @pytest.mark.quick
+def test_motion_consistency_exclusion_report_classifies_blocked_samples(tmp_path: Path) -> None:
+    """motion consistency 阻断样本必须保留审计记录且排除出效果 claim。"""
+    run_root = tmp_path / "run"
+    generation_records = [
+        {
+            "generation_status": "success",
+            "generation_model_id": "model",
+            "prompt_id": "prompt_ready",
+            "seed_id": "seed_a",
+            "trajectory_trace_id": "trace_ready",
+            "motion_claim_role": "positive_motion",
+        },
+        {
+            "generation_status": "success",
+            "generation_model_id": "model",
+            "prompt_id": "prompt_blocked",
+            "seed_id": "seed_a",
+            "trajectory_trace_id": "trace_blocked",
+            "motion_claim_role": "positive_motion",
+        },
+    ]
+    formal_records = [
+        {
+            **generation_records[0],
+            "formal_visual_quality_ready": True,
+            "formal_motion_consistency_ready": True,
+            "formal_semantic_consistency_ready": True,
+            "formal_metric_result_used_for_claim": True,
+        },
+        {
+            **generation_records[1],
+            "formal_visual_quality_ready": True,
+            "formal_motion_consistency_ready": False,
+            "formal_semantic_consistency_ready": True,
+            "formal_metric_result_used_for_claim": True,
+        },
+    ]
+    write_jsonl(run_root / "records" / "generation_records.jsonl", generation_records)
+    write_jsonl(run_root / "records" / "formal_quality_motion_semantic_records.jsonl", formal_records)
+
+    audit = run_motion_consistency_exclusion_report(run_root)
+    records = read_jsonl(run_root / "records" / "motion_consistency_exclusion_records.jsonl")
+
+    assert audit["motion_consistency_exclusion_decision"] == "PASS"
+    assert audit["motion_consistency_included_count"] == 1
+    assert audit["motion_consistency_excluded_count"] == 1
+    blocked = next(record for record in records if record["prompt_id"] == "prompt_blocked")
+    assert blocked["motion_consistency_exclusion_reason"] == "formal_motion_consistency_blocked"
+    assert blocked["excluded_from_effect_size_claim"] is True
+    assert blocked["retained_for_audit"] is True
+    assert (run_root / "tables" / "motion_consistency_exclusion_table.csv").exists()
+    assert (run_root / "artifacts" / "motion_consistency_exclusion_decision.json").exists()
+    assert (run_root / "reports" / "motion_consistency_exclusion_report.md").exists()
+
+
+@pytest.mark.quick
 def test_validation_artifact_rebuild_dry_run_reports_missing_and_pass_states(tmp_path: Path) -> None:
     """artifact rebuild dry-run 必须能报告缺失状态, 并在必要产物齐全时通过。"""
     run_root = tmp_path / "run"
@@ -338,6 +395,7 @@ def test_validation_artifact_rebuild_dry_run_reports_missing_and_pass_states(tmp
         "records/trajectory_trace.jsonl",
         "records/runtime_attack_records.jsonl",
         "records/runtime_detection_records.jsonl",
+        "records/motion_consistency_exclusion_records.jsonl",
         "records/sstw_measured_formal_records.jsonl",
         "records/external_baseline_records.jsonl",
         "records/external_baseline_score_records.jsonl",
@@ -356,6 +414,7 @@ def test_validation_artifact_rebuild_dry_run_reports_missing_and_pass_states(tmp
         "artifacts/generative_video_colab_runtime_decision.json",
         "artifacts/runtime_attack_decision.json",
         "artifacts/runtime_detection_decision.json",
+        "artifacts/motion_consistency_exclusion_decision.json",
         "artifacts/sstw_measured_formal_decision.json",
         "artifacts/external_baseline_status_decision.json",
         "artifacts/external_baseline_comparison_decision.json",
@@ -373,6 +432,7 @@ def test_validation_artifact_rebuild_dry_run_reports_missing_and_pass_states(tmp
         "tables/external_baseline_comparison_table.csv",
         "tables/runtime_attack_table.csv",
         "tables/runtime_detection_table.csv",
+        "tables/motion_consistency_exclusion_table.csv",
         "tables/sstw_measured_formal_table.csv",
         "tables/formal_method_baseline_comparison_table.csv",
         "tables/formal_baseline_difference_interval_table.csv",
@@ -384,6 +444,7 @@ def test_validation_artifact_rebuild_dry_run_reports_missing_and_pass_states(tmp
         "tables/statistical_confidence_interval_table.csv",
         "tables/low_fpr_formal_statistics_table.csv",
         "reports/external_baseline_comparison_report.md",
+        "reports/motion_consistency_exclusion_report.md",
         "reports/sstw_measured_formal_report.md",
         "reports/formal_method_baseline_comparison_report.md",
         "reports/formal_baseline_difference_interval_report.md",

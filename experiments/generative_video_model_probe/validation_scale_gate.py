@@ -74,6 +74,7 @@ def _load_config(config_path: str | Path = DEFAULT_VALIDATION_SCALE_CONFIG) -> d
         "minimum_prompt_count": int(config.get("minimum_prompt_count", DEFAULT_MINIMUM_PROMPT_COUNT)),
         "minimum_seed_per_prompt": int(config.get("minimum_seed_per_prompt", DEFAULT_MINIMUM_SEED_PER_PROMPT)),
         "minimum_attack_count": int(config.get("minimum_attack_count", DEFAULT_MINIMUM_ATTACK_COUNT)),
+        "minimum_clean_negative_count": int(config.get("minimum_clean_negative_count", 0)),
         "require_external_baseline_status_records": bool(config.get("require_external_baseline_status_records", True)),
         "require_external_baseline_comparison_records": bool(config.get("require_external_baseline_comparison_records", True)),
         "require_external_baseline_self_containment_decision": bool(config.get("require_external_baseline_self_containment_decision", True)),
@@ -265,12 +266,21 @@ def _nonnegative_int(record: dict, field_name: str) -> int:
         return 0
 
 
-def _fair_detection_anchor_ready(record: dict) -> bool:
-    """检查 fair calibration record 是否包含可配对的完整 positive anchor。"""
+def _fair_detection_anchor_ready(record: dict, minimum_clean_negative_count: int) -> bool:
+    """检查 fair calibration record 是否具备完整公平比较证据。
+
+    该门禁不能只相信上游写入的 `fair_comparison_status`, 还需要显式核验
+    clean negative 校准数量、positive anchor 和 formal evidence 缺口计数。
+    这样可以阻断手工改写或旧版本产物把未校准 baseline 伪装成可进入
+    pilot_paper 的公平比较结果。
+    """
 
     return (
-        _nonnegative_int(record, "positive_anchor_count") > 0
+        _nonnegative_int(record, "clean_negative_score_count") >= minimum_clean_negative_count
+        and _nonnegative_int(record, "positive_anchor_count") > 0
         and _nonnegative_int(record, "positive_anchor_missing_count") == 0
+        and _nonnegative_int(record, "positive_formal_evidence_missing_count") == 0
+        and _nonnegative_int(record, "negative_formal_evidence_missing_count") == 0
     )
 
 
@@ -335,6 +345,7 @@ def _fair_detection_calibration_ready(
     run_root: Path,
     required_modern_adapter_names: list[str],
     target_fpr: float,
+    minimum_clean_negative_count: int,
 ) -> tuple[bool, int, str]:
     """检查 clean negative calibration 公平比较是否已通过。"""
     records = _read_jsonl(run_root / "records" / "fair_detection_calibration_records.jsonl")
@@ -346,10 +357,10 @@ def _fair_detection_calibration_ready(
         if record.get("fair_comparison_status") == "ready"
         and record.get("metric_status") == "measured_formal"
         and _target_fpr_matches(record, target_fpr)
-        and _fair_detection_anchor_ready(record)
+        and _fair_detection_anchor_ready(record, minimum_clean_negative_count)
     }
     missing_method_ids = sorted(required_method_ids - ready_method_ids)
-    ready_count = int(decision.get("fair_detection_calibration_ready_count") or len(ready_method_ids))
+    ready_count = len(ready_method_ids)
     ready = (
         bool(records)
         and _decision_pass(decision, "fair_detection_calibration_decision")
@@ -456,6 +467,7 @@ def build_validation_scale_gate_audit(
         run_root,
         config["required_modern_external_baseline_adapter_names"],
         config["target_fpr"],
+        config["minimum_clean_negative_count"],
     )
     formal_method_comparison_ready, formal_method_comparison_ready_count, formal_method_comparison_status = _formal_method_baseline_comparison_ready(
         run_root,

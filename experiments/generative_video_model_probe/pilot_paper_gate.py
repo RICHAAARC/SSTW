@@ -157,6 +157,7 @@ def _load_config(config_path: str | Path = DEFAULT_PILOT_PAPER_CONFIG) -> dict[s
         "minimum_calibration_negative_event_count": int(raw.get("minimum_calibration_negative_event_count", DEFAULT_MINIMUM_CALIBRATION_NEGATIVE_EVENT_COUNT)),
         "minimum_heldout_test_negative_event_count": int(raw.get("minimum_heldout_test_negative_event_count", DEFAULT_MINIMUM_HELDOUT_NEGATIVE_EVENT_COUNT)),
         "minimum_heldout_attacked_positive_event_count": int(raw.get("minimum_heldout_attacked_positive_event_count", DEFAULT_MINIMUM_HELDOUT_ATTACKED_POSITIVE_EVENT_COUNT)),
+        "minimum_clean_negative_count": int(raw.get("minimum_clean_negative_count", DEFAULT_MINIMUM_CALIBRATION_NEGATIVE_EVENT_COUNT)),
         "minimum_negative_family_count": int(raw.get("minimum_negative_family_count", DEFAULT_MINIMUM_NEGATIVE_FAMILY_COUNT)),
         "minimum_calibration_negative_event_count_per_family": int(raw.get("minimum_calibration_negative_event_count_per_family", DEFAULT_MINIMUM_NEGATIVE_EVENT_COUNT_PER_FAMILY)),
         "minimum_heldout_negative_event_count_per_family": int(raw.get("minimum_heldout_negative_event_count_per_family", DEFAULT_MINIMUM_NEGATIVE_EVENT_COUNT_PER_FAMILY)),
@@ -310,6 +311,13 @@ def _safe_int(value: Any) -> int | None:
         return None
 
 
+def _nonnegative_int(record: dict, field_name: str) -> int:
+    """读取 governed record 中的非负计数字段, 缺失时按 0 处理。"""
+
+    value = _safe_int(record.get(field_name))
+    return max(value or 0, 0)
+
+
 def _string_list(value: Any) -> list[str]:
     """把上游 artifact 中的列表字段规整为字符串列表。"""
 
@@ -433,13 +441,20 @@ def _validation_scale_transition_ready_for_pilot(decision: dict[str, Any]) -> tu
     }
 
 
-def _fair_detection_anchor_ready(record: dict) -> bool:
-    """检查 fair calibration record 是否含有可配对的 positive anchor。"""
+def _fair_detection_anchor_ready(record: dict, minimum_clean_negative_count: int) -> bool:
+    """检查 fair calibration record 是否具备完整公平比较证据。
+
+    pilot_paper 不能消费 validation_scale 或旧版本流程中手工标成 ready 的
+    fair calibration 记录。这里显式要求 clean negative 数量、positive anchor
+    和 formal evidence 缺口计数全部满足当前 protocol config。
+    """
 
     return (
-        int(record.get("positive_anchor_count") or 0) > 0
-        and int(record.get("positive_anchor_missing_count") or 0) == 0
-        and int(record.get("positive_formal_evidence_missing_count") or 0) == 0
+        _nonnegative_int(record, "clean_negative_score_count") >= minimum_clean_negative_count
+        and _nonnegative_int(record, "positive_anchor_count") > 0
+        and _nonnegative_int(record, "positive_anchor_missing_count") == 0
+        and _nonnegative_int(record, "positive_formal_evidence_missing_count") == 0
+        and _nonnegative_int(record, "negative_formal_evidence_missing_count") == 0
     )
 
 
@@ -491,10 +506,10 @@ def _fair_detection_calibration_ready(run_root: Path, config: dict[str, Any]) ->
         if record.get("fair_comparison_status") == "ready"
         and record.get("metric_status") == "measured_formal"
         and _target_fpr_matches(record, config["target_fpr"])
-        and _fair_detection_anchor_ready(record)
+        and _fair_detection_anchor_ready(record, config["minimum_clean_negative_count"])
     }
     missing_method_ids = sorted(required_method_ids - ready_method_ids)
-    ready_count = int(decision.get("fair_detection_calibration_ready_count") or len(ready_method_ids))
+    ready_count = len(ready_method_ids)
     ready = (
         bool(records)
         and decision.get("fair_detection_calibration_decision") == "PASS"

@@ -214,8 +214,11 @@ def test_validation_scale_gate_accepts_claim3_downgrade_path(tmp_path: Path) -> 
             "metric_status": "measured_formal",
             "target_fpr": 0.1,
             "tpr_at_target_fpr": 1.0,
+            "clean_negative_score_count": 10,
             "positive_anchor_count": 3,
             "positive_anchor_missing_count": 0,
+            "positive_formal_evidence_missing_count": 0,
+            "negative_formal_evidence_missing_count": 0,
         },
         *[
             {
@@ -224,8 +227,11 @@ def test_validation_scale_gate_accepts_claim3_downgrade_path(tmp_path: Path) -> 
                 "metric_status": "measured_formal",
                 "target_fpr": 0.1,
                 "tpr_at_target_fpr": 1.0,
+                "clean_negative_score_count": 10,
                 "positive_anchor_count": 3,
                 "positive_anchor_missing_count": 0,
+                "positive_formal_evidence_missing_count": 0,
+                "negative_formal_evidence_missing_count": 0,
             }
             for baseline_id in sorted(MODERN_EXTERNAL_BASELINE_NAMES)
         ],

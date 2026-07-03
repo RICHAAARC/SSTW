@@ -655,6 +655,26 @@ def test_pilot_paper_gate_requires_fair_detection_calibration_decision(tmp_path:
 
 
 @pytest.mark.quick
+def test_pilot_paper_gate_rejects_fair_comparison_with_negative_evidence_gap(tmp_path: Path) -> None:
+    """pilot_paper 不能消费 clean negative official evidence 缺失的 fair calibration 记录。"""
+    run_root = tmp_path / "run"
+    _seed_pilot_paper_run(run_root)
+    fair_path = run_root / "records" / "fair_detection_calibration_records.jsonl"
+    records = [json.loads(line) for line in fair_path.read_text(encoding="utf-8").splitlines() if line.strip()]
+    for record in records:
+        if record["method_id"] == "videoseal":
+            record["negative_formal_evidence_missing_count"] = 1
+    write_jsonl(fair_path, records)
+
+    audit = build_pilot_paper_gate_audit(run_root)
+
+    assert audit["pilot_paper_gate_decision"] == "FAIL"
+    assert "pilot_paper_fair_detection_calibration_ready" in audit["missing_pilot_paper_requirements"]
+    assert audit["fair_detection_calibration_missing_method_ids"] == ["videoseal"]
+    assert audit["pilot_paper_claim_allowed"] is False
+
+
+@pytest.mark.quick
 def test_pilot_paper_gate_rejects_fair_calibration_target_fpr_mismatch(tmp_path: Path) -> None:
     """pilot_paper 公平比较产物必须与当前 protocol config 的 target_fpr 完全一致。"""
     run_root = tmp_path / "run"

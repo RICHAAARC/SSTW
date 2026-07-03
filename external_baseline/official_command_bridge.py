@@ -14,14 +14,21 @@ import shlex
 import subprocess
 from typing import Any, Mapping
 
+from external_baseline.score_semantics import extract_raw_detector_score, normalized_score_payload
+
 
 SCORE_FIELDS = (
+    "raw_detector_score",
+    "external_baseline_raw_detector_score",
+    "detection_score",
+    "confidence",
     "external_baseline_score",
     "watermark_score",
-    "detection_score",
     "score",
     "bit_accuracy",
-    "confidence",
+    "external_baseline_bit_accuracy",
+    "detected",
+    "external_baseline_detected",
 )
 
 
@@ -40,12 +47,8 @@ def _safe_float(value: Any) -> float:
 
 def _extract_score(payload: Mapping[str, Any]) -> float:
     """从官方输出 JSON 中提取统一 baseline score。"""
-    for field in SCORE_FIELDS:
-        if field in payload:
-            return _safe_float(payload.get(field))
-    if "detected" in payload:
-        return 1.0 if bool(payload.get("detected")) else 0.0
-    raise ValueError("official_output_missing_score")
+    score, _field_name = extract_raw_detector_score(payload)
+    return score
 
 
 def _read_json(path: str | Path) -> dict[str, Any]:
@@ -153,12 +156,26 @@ def run_bridge(args: argparse.Namespace) -> dict[str, Any]:
 
     official_payload = _read_json(official_output_json_path)
     score = round(_extract_score(official_payload), 6)
+    score_payload = normalized_score_payload(official_payload)
     normalized = {
+        **score_payload,
         "external_baseline_score": score,
         "external_baseline_detected": official_payload.get("external_baseline_detected", official_payload.get("detected")),
         "external_baseline_bit_accuracy": official_payload.get("external_baseline_bit_accuracy", official_payload.get("bit_accuracy")),
         "external_baseline_threshold": official_payload.get("external_baseline_threshold", official_payload.get("threshold")),
         "external_baseline_distance": official_payload.get("external_baseline_distance"),
+        "external_baseline_clean_negative_score": official_payload.get(
+            "external_baseline_clean_negative_score",
+            official_payload.get("clean_negative_score", official_payload.get("clean_negative_raw_detector_score")),
+        ),
+        "external_baseline_clean_negative_score_semantics": official_payload.get(
+            "external_baseline_clean_negative_score_semantics",
+            official_payload.get("clean_negative_score_semantics"),
+        ),
+        "external_baseline_clean_negative_video_path": official_payload.get(
+            "external_baseline_clean_negative_video_path",
+            official_payload.get("clean_negative_video_path"),
+        ),
         "official_result_provenance": official_payload.get("official_result_provenance"),
         "official_result_bundle_path": official_payload.get("official_result_bundle_path"),
         "official_execution_manifest_path": official_payload.get("official_execution_manifest_path"),

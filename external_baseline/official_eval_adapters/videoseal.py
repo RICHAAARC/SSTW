@@ -120,14 +120,18 @@ def _run_default(args: argparse.Namespace, source_dir: Path, output_json_path: P
         elif source_sidecar.exists():
             reference_path = str(source_sidecar)
     bit_acc = _bit_accuracy(message_logits.mean(dim=0), _load_reference_bits(reference_path))
-    score = bit_acc if bit_acc is not None else confidence
+    score = confidence
     threshold = safe_float(os.environ.get("SSTW_VIDEOSEAL_DETECTION_THRESHOLD"), 0.5)
     return {
         "external_baseline_score": round(float(score), 6),
+        "raw_detector_score": round(float(confidence), 6),
         "confidence": round(float(confidence), 6),
+        "payload_bit_accuracy": round(float(bit_acc), 6) if bit_acc is not None else None,
         "bit_accuracy": round(float(bit_acc), 6) if bit_acc is not None else None,
         "detected": confidence >= threshold,
         "threshold": threshold,
+        "score_semantics": "watermark_presence_confidence",
+        "score_orientation": "higher_is_more_watermarked",
         "official_adapter_status": "measured_by_videoseal_official_api",
         "official_adapter_baseline_id": BASELINE_ID,
         "official_source_dir": str(source_dir),

@@ -65,9 +65,13 @@ def _run_default(args: argparse.Namespace, source_dir: Path, output_json_path: P
     threshold = safe_float(os.environ.get("SSTW_VIDEOMARK_DECODE_ACC_THRESHOLD"), 0.5)
     return {
         "external_baseline_score": round(score, 6),
+        "raw_detector_score": round(score, 6),
+        "payload_bit_accuracy": round(score, 6),
         "bit_accuracy": round(score, 6),
         "detected": score >= threshold,
         "threshold": threshold,
+        "score_semantics": "payload_bit_accuracy_extraction_score",
+        "score_orientation": "higher_is_more_watermarked",
         "official_adapter_status": "measured_from_videomark_official_temporal_results_json",
         "official_adapter_baseline_id": BASELINE_ID,
         "official_source_dir": str(source_dir),

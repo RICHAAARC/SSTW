@@ -689,6 +689,10 @@ def _score_from_videomark_temporal_results(temporal_results_path: Path) -> dict[
     result: dict[str, Any] = {
         "bit_accuracy": round(float(decode_mean), 6),
         "external_baseline_score": round(float(decode_mean), 6),
+        "raw_detector_score": round(float(decode_mean), 6),
+        "payload_bit_accuracy": round(float(decode_mean), 6),
+        "score_semantics": "payload_bit_accuracy_extraction_score",
+        "score_orientation": "higher_is_more_watermarked",
         "official_decode_acc_count": len(decode_values),
         "official_decode_acc_mean": round(float(decode_mean), 6),
         "official_temporal_attack_names": _collect_temporal_attack_names(payload),

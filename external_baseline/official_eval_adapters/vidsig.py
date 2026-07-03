@@ -114,9 +114,12 @@ def _run_default(args: argparse.Namespace, source_dir: Path, output_json_path: P
     detection_score, detected = _parse_vidsig_log(official_output_dir / "log.txt")
     return {
         "external_baseline_score": round(detection_score, 6),
+        "raw_detector_score": round(detection_score, 6),
         "detection_score": round(detection_score, 6),
         "detected": detected,
         "threshold": 0.5,
+        "score_semantics": "official_tpr_at_fixed_fpr_detection_score",
+        "score_orientation": "higher_is_more_watermarked",
         "official_adapter_status": "measured_by_vidsig_official_attack_py",
         "official_adapter_baseline_id": BASELINE_ID,
         "official_source_dir": str(source_dir),

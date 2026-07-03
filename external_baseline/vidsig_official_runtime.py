@@ -686,9 +686,12 @@ def write_vidsig_official_bundle_records(
             detection_score, detected = _parse_vidsig_attack_log(attack_output_dir / "log.txt")
             payload = {
                 "external_baseline_score": round(float(detection_score), 6),
+                "raw_detector_score": round(float(detection_score), 6),
                 "detection_score": round(float(detection_score), 6),
                 "detected": bool(detected),
                 "threshold": float(config.detection_threshold),
+                "score_semantics": "official_tpr_at_fixed_fpr_detection_score",
+                "score_orientation": "higher_is_more_watermarked",
                 "official_vidsig_tpr_at_fpr_1e_2": round(float(detection_score), 6),
                 "official_result_provenance": REPOSITORY_GENERATED_OFFICIAL_PROVENANCE,
                 "official_baseline_id": BASELINE_ID,

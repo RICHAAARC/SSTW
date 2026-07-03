@@ -15,15 +15,22 @@ import shlex
 import subprocess
 from typing import Any, Callable, Mapping, Sequence
 
+from external_baseline.score_semantics import extract_raw_detector_score
+
 
 SCORE_FIELDS = (
+    "raw_detector_score",
+    "external_baseline_raw_detector_score",
+    "detection_score",
+    "confidence",
     "external_baseline_score",
     "watermark_score",
-    "detection_score",
     "score",
     "bit_accuracy",
+    "external_baseline_bit_accuracy",
     "confidence",
     "detected",
+    "external_baseline_detected",
 )
 REPOSITORY_GENERATED_OFFICIAL_PROVENANCE = "repository_generated_from_third_party_official_code"
 
@@ -240,12 +247,8 @@ def safe_float(value: Any, default: float = 0.0) -> float:
 
 def extract_score(payload: Mapping[str, Any]) -> float:
     """从官方输出 JSON 中提取 SSTW 可接受的 score 字段。"""
-    for field in SCORE_FIELDS:
-        if field == "detected" and field in payload:
-            return 1.0 if bool(payload.get(field)) else 0.0
-        if field in payload:
-            return safe_float(payload.get(field), 0.0)
-    raise ValueError("official_output_missing_score")
+    score, _field_name = extract_raw_detector_score(payload)
+    return score
 
 
 def validate_score_payload(payload: Mapping[str, Any]) -> None:

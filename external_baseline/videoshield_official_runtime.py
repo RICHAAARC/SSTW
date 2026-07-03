@@ -606,9 +606,12 @@ def _detect_attacked_frames(
     detected_fraction = float((max_values >= float(config.detection_threshold)).float().mean().item()) if max_values.numel() else 0.0
     return {
         "external_baseline_score": round(score, 6),
+        "raw_detector_score": round(score, 6),
         "confidence": round(score, 6),
         "detected": score >= float(config.detection_threshold),
         "threshold": float(config.detection_threshold),
+        "score_semantics": "watermark_presence_confidence",
+        "score_orientation": "higher_is_more_watermarked",
         "videoshield_temporal_alignment_score": round(score, 6),
         "videoshield_detected_frame_fraction": round(detected_fraction, 6),
         "observed_frame_count": int(f),

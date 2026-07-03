@@ -1231,4 +1231,15 @@ Notebook 与 repository module 的跨边界数据
 | motion_consistency_excluded_count | metric | none | true | true | false | motion consistency 过滤后排除出 motion claim 的样本数量。 |
 | motion_consistency_exclusion_reasons | governance | none | true | false | false | motion consistency 处理报告中出现的原因集合。 |
 | motion_consistency_claim_filter_applied | governance | none | true | true | false | 是否已经应用 motion consistency claim 过滤。 |
-| require_motion_consistency_exclusion_report | protocol | none | true | false | false | validation_scale gate 是否要求 motion consistency 阻断样本处理报告。 |
+| require_motion_consistency_exclusion_report | protocol | none | true | false | false | validation_scale gate 是否要求 motion consistency 阻断样本处理报告。 || raw_detector_score | metric | none | true | false | false | 官方 wrapper 输出的原始水印存在性检测分数, 由 bridge 归一化为 external_baseline_raw_detector_score。 |
+| payload_bit_accuracy | metric | none | true | false | false | 官方 wrapper 输出的 payload bit accuracy 辅助指标, 不作为主公平比较检测分数。 |
+| score_semantics | protocol | none | true | false | false | 官方 wrapper 对 raw score 含义的显式声明。 |
+| score_orientation | protocol | none | true | false | false | 官方 wrapper 对分数方向的显式声明, 当前主协议要求 higher_is_more_watermarked。 |
+| external_baseline_raw_detector_score | metric | none | true | false | false | 现代 external baseline 归一化后的主检测分数, 用于后续 clean negative 阈值校准。 |
+| external_baseline_score_field | protocol | none | true | false | false | 主检测分数在官方输出 JSON 中来自哪个字段。 |
+| external_baseline_score_semantics | protocol | none | true | false | false | 主检测分数的语义, 用于防止混用 confidence、bit accuracy 和二值 decision。 |
+| external_baseline_score_orientation | protocol | none | true | false | false | 主检测分数方向, 当前公平比较只接受 higher_is_more_watermarked。 |
+| external_baseline_payload_bit_accuracy | metric | none | true | false | false | baseline payload 恢复 bit accuracy 辅助指标, 不替代主检测分数。 |
+| external_baseline_clean_negative_score | metric | none | true | false | false | baseline 自身 clean negative 分布中的检测分数, 用于 target FPR 阈值校准。 |
+| external_baseline_clean_negative_score_semantics | protocol | none | true | false | false | clean negative 分数语义, 必须与 external_baseline_score_semantics 对齐。 |
+| external_baseline_clean_negative_video_path | artifact | none | true | false | false | baseline 自身 clean negative 视频路径, 用于审计阈值校准来源。 |

@@ -12,6 +12,7 @@ import sys
 from typing import Any, Mapping
 
 from external_baseline.runtime_trace_io import build_comparison_unit_id, comparable_detection_records, safe_float
+from external_baseline.score_semantics import normalized_score_payload
 from main.core.digest import build_stable_digest
 from main.core.progress import ProgressReporter
 from main.protocol.flow_evidence_fields import with_flow_evidence_protocol_defaults
@@ -145,19 +146,7 @@ def _official_command_evidence_paths(
 
 def _extract_score(payload: Mapping[str, Any]) -> float:
     """从常见官方输出字段中提取 baseline score。"""
-    for field in (
-        "external_baseline_score",
-        "watermark_score",
-        "detection_score",
-        "score",
-        "bit_accuracy",
-        "confidence",
-    ):
-        if field in payload:
-            return safe_float(payload.get(field), 0.0)
-    if "detected" in payload:
-        return 1.0 if bool(payload.get("detected")) else 0.0
-    raise ValueError("official_output_missing_score")
+    return float(normalized_score_payload(payload)["external_baseline_raw_detector_score"])
 
 
 def _unsupported_record(
@@ -193,8 +182,16 @@ def _unsupported_record(
         "external_baseline_observed_sequence_length": None,
         "external_baseline_distance": None,
         "external_baseline_score": None,
+        "external_baseline_raw_detector_score": None,
+        "external_baseline_score_field": None,
+        "external_baseline_score_semantics": None,
+        "external_baseline_score_orientation": "higher_is_more_watermarked",
         "external_baseline_detected": None,
         "external_baseline_bit_accuracy": None,
+        "external_baseline_payload_bit_accuracy": None,
+        "external_baseline_clean_negative_score": None,
+        "external_baseline_clean_negative_score_semantics": None,
+        "external_baseline_clean_negative_video_path": None,
         "external_baseline_threshold": None,
         "baseline_score_margin": None,
         "external_baseline_result_used_for_claim": False,
@@ -280,7 +277,8 @@ def build_modern_score_records(
             if completed.returncode != 0:
                 raise RuntimeError(f"official_command_failed:{completed.returncode}:{completed.stderr[-500:]}")
             payload = _read_official_output(output_json_path)
-            score = round(_extract_score(payload), 6)
+            score_payload = normalized_score_payload(payload)
+            score = round(float(score_payload["external_baseline_raw_detector_score"]), 6)
             method_score = safe_float(detection_record.get("S_runtime_attack_detection"), 0.0)
             records.append(with_flow_evidence_protocol_defaults({
                 "record_version": "external_baseline_score_v2",
@@ -316,9 +314,13 @@ def build_modern_score_records(
                 "external_baseline_reference_sequence_length": None,
                 "external_baseline_observed_sequence_length": None,
                 "external_baseline_distance": payload.get("external_baseline_distance"),
+                **score_payload,
                 "external_baseline_score": score,
                 "external_baseline_detected": payload.get("external_baseline_detected", payload.get("detected")),
                 "external_baseline_bit_accuracy": payload.get("external_baseline_bit_accuracy", payload.get("bit_accuracy")),
+                "external_baseline_clean_negative_score": payload.get("external_baseline_clean_negative_score"),
+                "external_baseline_clean_negative_score_semantics": payload.get("external_baseline_clean_negative_score_semantics"),
+                "external_baseline_clean_negative_video_path": payload.get("external_baseline_clean_negative_video_path"),
                 "external_baseline_threshold": payload.get("external_baseline_threshold", payload.get("threshold")),
                 "baseline_score_margin": round(method_score - score, 6),
                 "external_baseline_result_used_for_claim": True,

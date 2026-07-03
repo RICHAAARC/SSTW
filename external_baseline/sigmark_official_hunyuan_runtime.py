@@ -708,6 +708,10 @@ def _score_from_sigmark_bit_accuracy_npz(npz_path: Path) -> dict[str, Any]:
     return {
         "bit_accuracy": round(float(mean_score), 6),
         "external_baseline_score": round(float(mean_score), 6),
+        "raw_detector_score": round(float(mean_score), 6),
+        "payload_bit_accuracy": round(float(mean_score), 6),
+        "score_semantics": "payload_bit_accuracy_extraction_score",
+        "score_orientation": "higher_is_more_watermarked",
         "official_npz_key_count": len(npz_keys),
         "official_npz_value_count": len(values),
         "official_npz_keys_sample": npz_keys[:10],

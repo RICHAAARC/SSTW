@@ -15,7 +15,12 @@ import subprocess
 from typing import Any, Mapping
 
 from external_baseline.official_eval_adapters.common import validate_clean_negative_payload
-from external_baseline.score_semantics import extract_raw_detector_score, normalized_score_payload
+from external_baseline.score_semantics import (
+    extract_raw_detector_score,
+    normalized_score_payload,
+    official_score_extraction_policy,
+    validate_official_score_extraction_payload,
+)
 
 
 SCORE_FIELDS = (
@@ -157,6 +162,7 @@ def run_bridge(args: argparse.Namespace) -> dict[str, Any]:
 
     official_payload = _read_json(official_output_json_path)
     validate_clean_negative_payload(official_payload)
+    validate_official_score_extraction_payload(official_payload)
     score = round(_extract_score(official_payload), 6)
     score_payload = normalized_score_payload(official_payload)
     normalized = {
@@ -190,7 +196,9 @@ def run_bridge(args: argparse.Namespace) -> dict[str, Any]:
             official_payload.get("baseline_attacked_video_path"),
         ),
         "external_baseline_generation_model_id": official_payload.get("external_baseline_generation_model_id"),
+        "official_score_extraction_policy": official_score_extraction_policy(official_payload),
         "official_reference_protocol_anchor": official_payload.get("official_reference_protocol_anchor"),
+        "attack_protocol_status": official_payload.get("attack_protocol_status"),
         "runtime_comparison_unit_id": official_payload.get("runtime_comparison_unit_id"),
         "prompt_id": official_payload.get("prompt_id", args.prompt_id),
         "seed_id": official_payload.get("seed_id", args.seed_id),

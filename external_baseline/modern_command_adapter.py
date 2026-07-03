@@ -12,7 +12,11 @@ import sys
 from typing import Any, Mapping
 
 from external_baseline.runtime_trace_io import build_comparison_unit_id, comparable_detection_records, safe_float
-from external_baseline.score_semantics import normalized_score_payload
+from external_baseline.score_semantics import (
+    normalized_score_payload,
+    official_score_extraction_policy,
+    validate_official_score_extraction_payload,
+)
 from external_baseline.official_eval_adapters.common import (
     REPOSITORY_GENERATED_OFFICIAL_PROVENANCE,
     validate_clean_negative_payload,
@@ -333,16 +337,13 @@ def build_modern_score_records(
                 raise RuntimeError(f"official_command_failed:{completed.returncode}:{completed.stderr[-500:]}")
             payload = _read_official_output(output_json_path)
             validate_clean_negative_payload(payload)
+            validate_official_score_extraction_payload(payload)
             score_payload = normalized_score_payload(payload)
             clean_negative_payload = _clean_negative_score_payload(payload)
             official_bundle_payload = _official_bundle_evidence_payload(payload)
             score = round(float(score_payload["external_baseline_raw_detector_score"]), 6)
             method_score = safe_float(detection_record.get("S_runtime_attack_detection"), 0.0)
-            official_score_extraction_policy = (
-                payload.get("official_score_extraction_policy")
-                or payload.get("official_score_assignment_policy")
-                or payload.get("official_detection_logic")
-            )
+            score_extraction_policy = official_score_extraction_policy(payload)
             records.append(with_flow_evidence_protocol_defaults({
                 "record_version": "external_baseline_score_v2",
                 "external_baseline_score_record_id": score_record_id,
@@ -368,7 +369,7 @@ def build_modern_score_records(
                     "external_baseline_official_execution_mode",
                     payload.get("official_adapter_status", payload.get("official_bridge_status")),
                 ),
-                "external_baseline_official_score_extraction_policy": official_score_extraction_policy,
+                "external_baseline_official_score_extraction_policy": score_extraction_policy,
                 "external_baseline_official_reference_protocol_anchor": payload.get("official_reference_protocol_anchor"),
                 "external_baseline_attack_protocol_status": payload.get("attack_protocol_status"),
                 **official_bundle_payload,

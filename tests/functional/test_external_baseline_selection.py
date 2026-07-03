@@ -652,7 +652,7 @@ def test_modern_external_baseline_formal_command_adapters_write_measured_records
         "parser.add_argument('--attack-name')\n"
         "args = parser.parse_args()\n"
         "json.dump({'external_baseline_score': 0.37, 'detected': True, 'bit_accuracy': 0.91, 'threshold': 0.5, "
-        "'external_baseline_clean_negative_score': 0.08, "
+        "'score_semantics': 'watermark_presence_confidence', 'score_orientation': 'higher_is_more_watermarked', 'official_score_extraction_policy': 'test_official_detector_confidence', 'official_reference_protocol_anchor': 'same_prompt_seed_attack_runtime_comparison_unit', 'external_baseline_clean_negative_score': 0.08, "
         "'external_baseline_clean_negative_score_semantics': 'watermark_presence_confidence', "
         "'external_baseline_clean_negative_video_path': 'official/clean_negative.mp4', "
         "'external_baseline_source_video_path': 'official/source.mp4', "
@@ -727,6 +727,37 @@ def test_external_baseline_audit_rejects_handwritten_measured_formal_without_evi
     assert audit["external_baseline_formal_incomplete_record_count"] == 1
     assert audit["modern_external_baseline_formal_measured_adapter_count"] == 0
     assert audit["modern_external_baseline_formal_measured_adapter_names"] == []
+
+
+@pytest.mark.quick
+def test_external_baseline_audit_rejects_formal_row_without_score_extraction_policy() -> None:
+    """measured_formal 行缺少官方分数抽取口径时不能计入公平比较覆盖。"""
+
+    records = [
+        {
+            "external_baseline_name": "videoseal",
+            "external_baseline_layer": "modern_external_baseline",
+            "metric_status": "measured_formal",
+            "external_baseline_score": 0.61,
+            "external_baseline_raw_detector_score": 0.61,
+            "external_baseline_score_semantics": "watermark_presence_detector_score",
+            "external_baseline_score_orientation": "higher_is_more_watermarked",
+            "prompt_id": "prompt_0",
+            "seed_id": "seed_0",
+            "attack_name": "video_compression_runtime",
+            "external_baseline_clean_negative_score": 0.08,
+            "external_baseline_clean_negative_video_path": "official/videoseal/clean_negative.mp4",
+            "external_baseline_official_result_provenance": "repository_generated_from_third_party_official_code",
+            "external_baseline_official_result_bundle_path": "official/videoseal/bundle.json",
+            "external_baseline_official_execution_manifest_path": "official/videoseal/manifest.json",
+        },
+    ]
+    audit = audit_external_baseline_comparison_records(records)
+
+    assert audit["external_baseline_comparison_decision"] == "FAIL"
+    assert audit["external_baseline_formal_ready_count"] == 0
+    assert audit["external_baseline_formal_incomplete_record_count"] == 1
+    assert audit["modern_external_baseline_formal_measured_adapter_count"] == 0
 
 
 @pytest.mark.quick
@@ -843,7 +874,7 @@ def test_modern_external_baseline_formal_command_adapters_require_official_bundl
         "parser.add_argument('--attack-name')\n"
         "args = parser.parse_args()\n"
         "json.dump({'external_baseline_score': 0.37, 'detected': True, "
-        "'external_baseline_clean_negative_score': 0.08, "
+        "'score_semantics': 'watermark_presence_confidence', 'score_orientation': 'higher_is_more_watermarked', 'official_score_extraction_policy': 'test_official_detector_confidence', 'official_reference_protocol_anchor': 'same_prompt_seed_attack_runtime_comparison_unit', 'external_baseline_clean_negative_score': 0.08, "
         "'external_baseline_clean_negative_video_path': 'official/clean_negative.mp4', "
         "'official_result_provenance': 'repository_generated_from_third_party_official_code'}, "
         "open(args.output_json, 'w', encoding='utf-8'))\n",
@@ -903,7 +934,7 @@ def test_modern_external_baseline_formal_command_adapters_reject_external_bundle
         "parser.add_argument('--attack-name')\n"
         "args = parser.parse_args()\n"
         "json.dump({'external_baseline_score': 0.37, 'detected': True, "
-        "'external_baseline_clean_negative_score': 0.08, "
+        "'score_semantics': 'watermark_presence_confidence', 'score_orientation': 'higher_is_more_watermarked', 'official_score_extraction_policy': 'test_official_detector_confidence', 'official_reference_protocol_anchor': 'same_prompt_seed_attack_runtime_comparison_unit', 'external_baseline_clean_negative_score': 0.08, "
         "'external_baseline_clean_negative_video_path': 'official/clean_negative.mp4', "
         "'official_result_provenance': 'external_user_supplied_result', "
         "'official_result_bundle_path': 'official/bundle_record.json', "
@@ -965,7 +996,7 @@ def test_modern_external_baseline_formal_command_adapter_normalizes_clean_negati
         "parser.add_argument('--attack-name')\n"
         "args = parser.parse_args()\n"
         "json.dump({'score': 0.44, 'detected': True, "
-        "'clean_negative_score': 0.09, "
+        "'score_semantics': 'watermark_presence_confidence', 'score_orientation': 'higher_is_more_watermarked', 'official_score_extraction_policy': 'test_official_detector_confidence', 'official_reference_protocol_anchor': 'same_prompt_seed_attack_runtime_comparison_unit', 'clean_negative_score': 0.09, "
         "'clean_negative_score_semantics': 'watermark_presence_confidence', "
         "'clean_negative_video_path': 'official/clean_negative_alias.mp4', "
         "'official_result_provenance': 'repository_generated_from_third_party_official_code', "
@@ -1029,7 +1060,7 @@ def test_modern_external_baseline_bridge_commands_require_real_official_output(t
         "parser.add_argument('--attack-name')\n"
         "args = parser.parse_args()\n"
         "json.dump({'score': 0.42, 'detected': True, 'bit_accuracy': 0.88, "
-        "'external_baseline_clean_negative_score': 0.07, "
+        "'score_semantics': 'watermark_presence_confidence', 'score_orientation': 'higher_is_more_watermarked', 'official_score_extraction_policy': 'test_official_detector_confidence', 'official_reference_protocol_anchor': 'same_prompt_seed_attack_runtime_comparison_unit', 'external_baseline_clean_negative_score': 0.07, "
         "'external_baseline_clean_negative_score_semantics': 'watermark_presence_confidence', "
         "'external_baseline_clean_negative_video_path': 'official/clean_negative.mp4', "
         "'official_result_provenance': 'repository_generated_from_third_party_official_code', "
@@ -1133,6 +1164,10 @@ def test_official_result_bundle_preflight_requires_all_modern_baseline_units(
                     "official_execution_manifest_path": str(manifest_path),
                     "external_baseline_source_video_path": f"{baseline_id}/source.mp4",
                     "external_baseline_attacked_video_path": f"{baseline_id}/attacked.mp4",
+                    "score_semantics": "watermark_presence_confidence",
+                    "score_orientation": "higher_is_more_watermarked",
+                    "official_score_extraction_policy": "test_official_detector_confidence",
+                    "official_reference_protocol_anchor": "same_prompt_seed_attack_runtime_comparison_unit",
                     "external_baseline_clean_negative_score": 0.12,
                     "external_baseline_clean_negative_score_semantics": "watermark_presence_confidence",
                     "external_baseline_clean_negative_video_path": f"{baseline_id}/clean_negative.mp4",
@@ -1187,6 +1222,10 @@ def test_paper_gate_comparison_consumes_repository_official_bundles_without_sour
                     "external_baseline_source_video_path": f"{baseline_id}/source.mp4",
                     "external_baseline_attacked_video_path": f"{baseline_id}/attacked.mp4",
                     "external_baseline_generation_model_id": f"{baseline_id}_official_model",
+                    "score_semantics": "watermark_presence_confidence",
+                    "score_orientation": "higher_is_more_watermarked",
+                    "official_score_extraction_policy": "test_official_detector_confidence",
+                    "official_reference_protocol_anchor": "same_prompt_seed_attack_runtime_comparison_unit",
                     "external_baseline_clean_negative_score": 0.12,
                     "external_baseline_clean_negative_score_semantics": "watermark_presence_confidence",
                     "external_baseline_clean_negative_video_path": f"{baseline_id}/clean_negative.mp4",

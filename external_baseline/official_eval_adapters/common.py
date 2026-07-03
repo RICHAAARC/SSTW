@@ -15,7 +15,7 @@ import shlex
 import subprocess
 from typing import Any, Callable, Mapping, Sequence
 
-from external_baseline.score_semantics import extract_raw_detector_score
+from external_baseline.score_semantics import extract_raw_detector_score, validate_official_score_extraction_payload
 
 
 SCORE_FIELDS = (
@@ -217,6 +217,8 @@ def read_official_result_bundle_if_available(
        `repository_generated_from_third_party_official_code`。
     3. `official_execution_manifest_path` 必须存在, 用于证明该 bundle 来自项目内
        clone / build / run / adapt 链路。
+    4. 必须显式记录 official score extraction policy、score semantics 和
+       prompt / seed / attack anchor, 避免公平校准时静默混用不同分数口径。
     """
     if os.environ.get("SSTW_DISABLE_OFFICIAL_RESULT_BUNDLE_READ", "").strip().lower() in {"1", "true", "yes"}:
         return None
@@ -227,6 +229,7 @@ def read_official_result_bundle_if_available(
         validate_score_payload(payload)
         validate_repository_generated_bundle(payload, candidate)
         validate_clean_negative_payload(payload)
+        validate_official_score_extraction_payload(payload)
         return {
             **payload,
             "official_adapter_status": "measured_from_official_result_bundle",
@@ -326,6 +329,7 @@ def run_native_command_if_configured(
     payload = read_json(output_json_path)
     validate_score_payload(payload)
     validate_clean_negative_payload(payload)
+    validate_official_score_extraction_payload(payload)
     enriched = {
         **payload,
         "official_adapter_status": "measured_by_native_official_command",
@@ -378,6 +382,7 @@ def run_adapter_main(
         payload = default_runner(args, source_dir, output_json_path)
         validate_score_payload(payload)
         validate_clean_negative_payload(payload)
+        validate_official_score_extraction_payload(payload)
         write_json(output_json_path, payload)
     print(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True))
 

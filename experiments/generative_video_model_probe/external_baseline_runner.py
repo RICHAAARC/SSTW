@@ -26,6 +26,7 @@ EXTERNAL_BASELINE_COMPARISON_DECISION = "artifacts/external_baseline_comparison_
 EXTERNAL_BASELINE_COMPARISON_REPORT = "reports/external_baseline_comparison_report.md"
 EXTERNAL_BASELINE_EXECUTION_MANIFEST = "artifacts/external_baseline_execution_manifest.json"
 REPOSITORY_GENERATED_OFFICIAL_PROVENANCE = "repository_generated_from_third_party_official_code"
+REQUIRED_OFFICIAL_REFERENCE_PROTOCOL_ANCHOR = "same_prompt_seed_attack_runtime_comparison_unit"
 
 
 def run_external_baseline_status(config_path: str = DEFAULT_EXTERNAL_BASELINE_CONFIG) -> list[dict[str, Any]]:
@@ -205,12 +206,32 @@ def _has_official_execution_evidence(record: Mapping[str, Any]) -> bool:
     )
 
 
+def _has_official_score_extraction_evidence(record: Mapping[str, Any]) -> bool:
+    """检查 external baseline measured_formal 行是否保留官方分数抽取证据。
+
+    该检查保证后续公平校准不会把不同 baseline 的 bit accuracy、binary decision
+    或 detector confidence 静默混用。只有显式声明分数口径、方向和同一
+    prompt / seed / attack 锚点的 record 才能进入论文级比较。
+    """
+
+    return (
+        _has_numeric_field(record, "external_baseline_score")
+        and _has_nonempty_field(record, "external_baseline_score_semantics")
+        and str(record.get("external_baseline_score_semantics") or "") != "unspecified_detector_score"
+        and str(record.get("external_baseline_score_orientation") or "") == "higher_is_more_watermarked"
+        and _has_nonempty_field(record, "external_baseline_official_score_extraction_policy")
+        and str(record.get("external_baseline_official_reference_protocol_anchor") or "")
+        == REQUIRED_OFFICIAL_REFERENCE_PROTOCOL_ANCHOR
+    )
+
+
 def formal_score_record_ready_for_claim(record: Mapping[str, Any]) -> bool:
     """检查 measured_formal baseline row 是否达到公平比较入口要求。
 
     该函数是项目特定门禁: 单纯写入 `metric_status: measured_formal` 不足以支撑
     validation_scale 公平比较。每条现代 baseline 结果还必须保留完整 runtime anchor、
-    自身 clean negative 校准分数, 以及项目内 official bundle / execution manifest 证据。
+    自身 clean negative 校准分数、项目内 official bundle / execution manifest 证据,
+    以及官方分数抽取口径证据。
     """
 
     return (
@@ -218,6 +239,7 @@ def formal_score_record_ready_for_claim(record: Mapping[str, Any]) -> bool:
         and _has_complete_baseline_anchor(record)
         and _has_clean_negative_calibration_fields(record)
         and _has_official_execution_evidence(record)
+        and _has_official_score_extraction_evidence(record)
     )
 
 

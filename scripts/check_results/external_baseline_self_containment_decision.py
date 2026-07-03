@@ -12,6 +12,7 @@ import json
 from pathlib import Path
 from typing import Any, Iterable, Mapping
 
+from external_baseline.score_semantics import validate_official_score_extraction_payload
 from main.protocol.flow_evidence_fields import with_flow_evidence_protocol_defaults
 from main.protocol.record_writer import write_json, write_jsonl
 from main.protocol.table_builder import write_csv
@@ -36,22 +37,6 @@ OFFICIAL_BUNDLE_PATH_FIELDS = (
     "external_baseline_official_execution_manifest_path",
 )
 REPOSITORY_GENERATED_OFFICIAL_PROVENANCE = "repository_generated_from_third_party_official_code"
-REQUIRED_OFFICIAL_REFERENCE_PROTOCOL_ANCHOR = "same_prompt_seed_attack_runtime_comparison_unit"
-OFFICIAL_SCORE_EXTRACTION_POLICY_FIELDS = (
-    "official_score_extraction_policy",
-    "official_score_assignment_policy",
-    "official_detection_logic",
-)
-OFFICIAL_SCORE_FIELDS = (
-    "external_baseline_raw_detector_score",
-    "raw_detector_score",
-    "external_baseline_score",
-    "detection_score",
-    "confidence",
-    "watermark_score",
-    "score",
-    "bit_accuracy",
-)
 
 
 def _read_json(path: Path) -> dict[str, Any]:
@@ -201,45 +186,11 @@ def _official_score_extraction_ready(payload: Mapping[str, Any]) -> bool:
     record 是否锚定同一 prompt / seed / attack comparison unit。
     """
 
-    score_value = next(
-        (
-            payload.get(field_name)
-            for field_name in OFFICIAL_SCORE_FIELDS
-            if str(payload.get(field_name) or "").strip() not in {"", "unsupported"}
-        ),
-        None,
-    )
-    if score_value is None:
-        return False
     try:
-        float(score_value)
-    except (TypeError, ValueError):
+        validate_official_score_extraction_payload(payload)
+    except Exception:
         return False
-    score_semantics = str(
-        payload.get("external_baseline_score_semantics")
-        or payload.get("score_semantics")
-        or ""
-    ).strip()
-    if not score_semantics or score_semantics == "unspecified_detector_score":
-        return False
-    score_orientation = str(
-        payload.get("external_baseline_score_orientation")
-        or payload.get("score_orientation")
-        or ""
-    ).strip()
-    if score_orientation != "higher_is_more_watermarked":
-        return False
-    extraction_policy = next(
-        (
-            str(payload.get(field_name) or "").strip()
-            for field_name in OFFICIAL_SCORE_EXTRACTION_POLICY_FIELDS
-            if str(payload.get(field_name) or "").strip()
-        ),
-        "",
-    )
-    if not extraction_policy:
-        return False
-    return str(payload.get("official_reference_protocol_anchor") or "") == REQUIRED_OFFICIAL_REFERENCE_PROTOCOL_ANCHOR
+    return True
 
 
 def _record_clean_negative_ready(record: Mapping[str, Any]) -> bool:

@@ -357,6 +357,9 @@ def _seed_pilot_paper_run(
                         ):
                             evidence_id = f"{trace_id}_{attack_name}_{baseline_name}"
                             external_baseline_record.update({
+                                "external_baseline_raw_detector_score": 0.35,
+                                "external_baseline_score_semantics": "watermark_presence_detector_score",
+                                "external_baseline_score_orientation": "higher_is_more_watermarked",
                                 "external_baseline_clean_negative_score": 0.20,
                                 "external_baseline_clean_negative_video_path": str(run_root / "artifacts" / "external_baseline_evidence" / baseline_name / f"{evidence_id}_clean.mp4"),
                                 "external_baseline_official_output_path": str(run_root / "artifacts" / "external_baseline_evidence" / baseline_name / f"{evidence_id}_official_output.json"),
@@ -364,6 +367,8 @@ def _seed_pilot_paper_run(
                                 "external_baseline_official_result_provenance": "repository_generated_from_third_party_official_code",
                                 "external_baseline_official_result_bundle_path": str(run_root / "artifacts" / "external_baseline_evidence" / baseline_name / f"{evidence_id}_official_result_bundle.json"),
                                 "external_baseline_official_execution_manifest_path": str(run_root / "artifacts" / "external_baseline_evidence" / baseline_name / f"{evidence_id}_official_execution_manifest.json"),
+                                "external_baseline_official_score_extraction_policy": "test_official_detector_confidence",
+                                "external_baseline_official_reference_protocol_anchor": "same_prompt_seed_attack_runtime_comparison_unit",
                             })
                         external_baseline_records.append(external_baseline_record)
                     for method_variant in INTERNAL_ABLATION_VARIANTS:

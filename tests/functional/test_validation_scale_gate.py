@@ -46,6 +46,10 @@ def _formal_external_baseline_records() -> list[dict]:
                 "prompt_id": "prompt_0",
                 "seed_id": "seed_0",
                 "attack_name": "video_compression_runtime",
+                "external_baseline_score": 0.6,
+                "external_baseline_raw_detector_score": 0.6,
+                "external_baseline_score_semantics": "watermark_presence_detector_score",
+                "external_baseline_score_orientation": "higher_is_more_watermarked",
                 "external_baseline_clean_negative_score": 0.08,
                 "external_baseline_clean_negative_video_path": f"official/{name}/clean_negative.mp4",
                 "external_baseline_official_output_path": f"official/{name}/official_output.json",
@@ -53,6 +57,8 @@ def _formal_external_baseline_records() -> list[dict]:
                 "external_baseline_official_result_provenance": "repository_generated_from_third_party_official_code",
                 "external_baseline_official_result_bundle_path": f"official/{name}/official_result_bundle.json",
                 "external_baseline_official_execution_manifest_path": f"official/{name}/official_execution_manifest.json",
+                "external_baseline_official_score_extraction_policy": "test_official_detector_confidence",
+                "external_baseline_official_reference_protocol_anchor": "same_prompt_seed_attack_runtime_comparison_unit",
             })
         records.append(record)
     return records

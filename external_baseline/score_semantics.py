@@ -32,6 +32,57 @@ PAYLOAD_BIT_ACCURACY_FIELDS = (
 )
 
 
+
+REQUIRED_OFFICIAL_REFERENCE_PROTOCOL_ANCHOR = "same_prompt_seed_attack_runtime_comparison_unit"
+OFFICIAL_SCORE_EXTRACTION_POLICY_FIELDS = (
+    "official_score_extraction_policy",
+    "official_score_assignment_policy",
+    "official_detection_logic",
+)
+
+
+def explicit_score_semantics(payload: Mapping[str, Any]) -> str:
+    """读取官方输出显式声明的分数语义。"""
+
+    return str(payload.get("score_semantics") or payload.get("external_baseline_score_semantics") or "").strip()
+
+
+def official_score_extraction_policy(payload: Mapping[str, Any]) -> str:
+    """读取官方输出显式声明的分数抽取策略。"""
+
+    for field_name in OFFICIAL_SCORE_EXTRACTION_POLICY_FIELDS:
+        value = str(payload.get(field_name) or "").strip()
+        if value:
+            return value
+    return ""
+
+
+def validate_official_score_extraction_payload(payload: Mapping[str, Any]) -> None:
+    """校验 official 输出是否足以进入公平检测校准。
+
+    validation_scale 的公平比较要求每个 baseline 明确说明分数从哪个官方检测口径
+    抽取、分数方向是什么, 并绑定同一 prompt / seed / attack comparison unit。
+    该函数只检查口径证据, 不替代 clean negative 和 official bundle provenance 检查。
+    """
+
+    extract_raw_detector_score(payload)
+    semantics = explicit_score_semantics(payload)
+    if not semantics or semantics == "unspecified_detector_score":
+        raise RuntimeError("official_score_extraction_missing_score_semantics")
+    orientation = str(
+        payload.get("score_orientation")
+        or payload.get("external_baseline_score_orientation")
+        or ""
+    ).strip()
+    if orientation != "higher_is_more_watermarked":
+        raise RuntimeError(f"official_score_extraction_unsupported_score_orientation:{orientation or 'missing'}")
+    policy = official_score_extraction_policy(payload)
+    if not policy:
+        raise RuntimeError("official_score_extraction_missing_policy")
+    anchor = str(payload.get("official_reference_protocol_anchor") or "").strip()
+    if anchor != REQUIRED_OFFICIAL_REFERENCE_PROTOCOL_ANCHOR:
+        raise RuntimeError(f"official_score_extraction_missing_protocol_anchor:{anchor or 'missing'}")
+
 def safe_float(value: Any, default: float = 0.0) -> float:
     """把官方输出中的数值字段安全转换为 float。"""
 

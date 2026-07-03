@@ -39,6 +39,9 @@ def _formal_baseline_evidence_fields(
         "external_baseline_official_result_provenance": "repository_generated_from_third_party_official_code",
         "external_baseline_official_result_bundle_path": str(evidence_root / f"{evidence_id}_official_result_bundle.json"),
         "external_baseline_official_execution_manifest_path": str(evidence_root / f"{evidence_id}_official_execution_manifest.json"),
+        "external_baseline_score_orientation": "higher_is_more_watermarked",
+        "external_baseline_official_score_extraction_policy": "test_official_detector_confidence",
+        "external_baseline_official_reference_protocol_anchor": "same_prompt_seed_attack_runtime_comparison_unit",
     }
 
 

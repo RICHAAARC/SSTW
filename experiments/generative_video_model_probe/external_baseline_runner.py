@@ -189,17 +189,18 @@ def _has_clean_negative_calibration_fields(record: Mapping[str, Any]) -> bool:
 
 
 def _has_official_execution_evidence(record: Mapping[str, Any]) -> bool:
-    """检查 external baseline measured_formal 行是否绑定项目内 official run 证据。"""
+    """检查 external baseline measured_formal 行是否绑定项目内 official bundle 证据。
 
-    command_evidence_ready = (
-        _has_nonempty_field(record, "external_baseline_official_output_path")
-        and _has_nonempty_field(record, "external_baseline_official_command_manifest_path")
-    )
-    bundle_evidence_ready = (
+    公平比较不能只依赖 detector wrapper 的 command manifest, 因为那只能证明
+    “检测器被调用过”, 不能证明该 baseline 已经按官方生成流程产出自己的
+    watermarked video。正式现代 baseline 必须绑定 baseline 专用 official
+    reference Notebook 或服务器 runner 生成的 result bundle 与 execution manifest。
+    """
+
+    return (
         _has_nonempty_field(record, "external_baseline_official_result_bundle_path")
         and _has_nonempty_field(record, "external_baseline_official_execution_manifest_path")
     )
-    return command_evidence_ready or bundle_evidence_ready
 
 
 def formal_score_record_ready_for_claim(record: Mapping[str, Any]) -> bool:
@@ -207,7 +208,7 @@ def formal_score_record_ready_for_claim(record: Mapping[str, Any]) -> bool:
 
     该函数是项目特定门禁: 单纯写入 `metric_status: measured_formal` 不足以支撑
     validation_scale 公平比较。每条现代 baseline 结果还必须保留完整 runtime anchor、
-    自身 clean negative 校准分数, 以及项目内 official run / bundle 证据。
+    自身 clean negative 校准分数, 以及项目内 official bundle / execution manifest 证据。
     """
 
     return (

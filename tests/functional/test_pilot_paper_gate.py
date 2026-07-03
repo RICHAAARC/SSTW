@@ -156,6 +156,8 @@ def _seed_pilot_paper_run(
                                 "external_baseline_clean_negative_video_path": str(run_root / "artifacts" / "external_baseline_evidence" / baseline_name / f"{evidence_id}_clean.mp4"),
                                 "external_baseline_official_output_path": str(run_root / "artifacts" / "external_baseline_evidence" / baseline_name / f"{evidence_id}_official_output.json"),
                                 "external_baseline_official_command_manifest_path": str(run_root / "artifacts" / "external_baseline_evidence" / baseline_name / f"{evidence_id}_official_command_manifest.json"),
+                                "external_baseline_official_result_bundle_path": str(run_root / "artifacts" / "external_baseline_evidence" / baseline_name / f"{evidence_id}_official_result_bundle.json"),
+                                "external_baseline_official_execution_manifest_path": str(run_root / "artifacts" / "external_baseline_evidence" / baseline_name / f"{evidence_id}_official_execution_manifest.json"),
                             })
                         external_baseline_records.append(external_baseline_record)
                     for method_variant in INTERNAL_ABLATION_VARIANTS:

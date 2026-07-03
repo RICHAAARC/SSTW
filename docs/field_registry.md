@@ -419,6 +419,8 @@ Notebook 与 repository module 的跨边界数据
 | external_baseline_official_stdout_path | artifact | none | true | true | false | Path to persisted stdout from an official external baseline command. |
 | external_baseline_official_stderr_path | artifact | none | true | true | false | Path to persisted stderr from an official external baseline command. |
 | external_baseline_official_command_manifest_path | artifact | none | true | true | false | Path to the governed manifest for one official external baseline command execution. |
+| external_baseline_official_result_bundle_path | artifact | none | true | true | false | 项目内 official reference 流程生成的单条 baseline 结果 bundle JSON 路径。 |
+| external_baseline_official_execution_manifest_path | artifact | none | true | true | false | 项目内 official reference 流程生成的 baseline execution manifest 路径。 |
 | external_baseline_reference_sequence_length | metric | none | true | false | false | Reference trajectory sequence length consumed by an external synchronization baseline adapter. |
 | external_baseline_observed_sequence_length | metric | none | true | false | false | Observed trajectory or runtime metadata sequence length consumed by an external synchronization baseline adapter. |
 | external_baseline_distance | metric | none | true | false | false | Distance or cost reported by an external synchronization baseline adapter. |
@@ -1141,6 +1143,7 @@ Notebook 与 repository module 的跨边界数据
 
 | source_clone_ready | governance | none | true | false | false | External baseline self-containment 行中表示当前 checkout 或 clone manifest 是否已经提供源码克隆证据。 |
 | repository_generated_official_bundle_ready | governance | none | true | false | false | External baseline self-containment 行中表示项目内生成的 official bundle 与 execution manifest 是否足以证明 clone/build/run 证据。 |
+| missing_repository_generated_official_bundle_modern_external_baseline_names | governance | none | true | false | false | External baseline self-containment 中缺少项目内 official bundle 执行闭环的现代 baseline 名称列表。 |
 | official_bundle_record_count | artifact | none | true | false | false | 单个 baseline self-containment 行中绑定的 official bundle record 数量。 |
 | official_bundle_record_ok_count | artifact | none | true | false | false | 单个 baseline self-containment 行中通过 provenance 与 execution manifest 校验的 official bundle record 数量。 |
 | official_execution_manifest_count | artifact | none | true | false | false | 单个 baseline self-containment 行中绑定的 official execution manifest 数量。 |

@@ -312,7 +312,7 @@ def _build_baseline_rows(
         )
         clone_ready = source_clone_ready or repository_generated_official_bundle_ready
         build_ready = bool(command_manifest_paths) and command_manifest_ok_count == len(command_manifest_paths)
-        run_ready = bool(measured_records)
+        run_ready = bool(measured_records) and repository_generated_official_bundle_ready
         anchor_ready = bool(formal_candidate_records) and formal_anchor_missing_count == 0
         adapt_ready = all(
             record.get("external_baseline_adapter_path")
@@ -353,6 +353,7 @@ def _build_baseline_rows(
                 clone_ready,
                 build_ready,
                 run_ready,
+                repository_generated_official_bundle_ready,
                 anchor_ready,
                 adapt_ready,
                 record_ready,
@@ -399,6 +400,11 @@ def build_external_baseline_self_containment_decision(
         for row in rows
         if not row.get("anchor_ready")
     ]
+    missing_repository_generated_official_bundle_names = [
+        row["baseline_name"]
+        for row in rows
+        if not row.get("repository_generated_official_bundle_ready")
+    ]
     comparison_passed = comparison_decision.get("external_baseline_comparison_decision") == "PASS"
     execution_manifest_bound = execution_manifest.get("formal_evidence_status") == "evidence_paths_bound"
     formal_measured_names = {
@@ -416,6 +422,8 @@ def build_external_baseline_self_containment_decision(
         missing_requirements.append("all_required_modern_baselines_measured_formal")
     if missing_names:
         missing_requirements.append("all_required_modern_baselines_clone_build_run_adapt_record")
+    if missing_repository_generated_official_bundle_names:
+        missing_requirements.append("all_required_modern_baselines_repository_generated_official_bundles")
     if missing_clean_negative_names:
         missing_requirements.append("all_required_modern_baselines_clean_negative_scores")
     if missing_anchor_names:
@@ -435,6 +443,7 @@ def build_external_baseline_self_containment_decision(
         "missing_self_contained_modern_external_baseline_names": missing_names,
         "missing_clean_negative_modern_external_baseline_names": missing_clean_negative_names,
         "missing_anchor_modern_external_baseline_names": missing_anchor_names,
+        "missing_repository_generated_official_bundle_modern_external_baseline_names": missing_repository_generated_official_bundle_names,
         "missing_formal_modern_external_baseline_names": missing_formal_names,
         "missing_self_containment_requirements": missing_requirements,
         "self_containment_missing_requirement_count": len(missing_requirements),

@@ -516,14 +516,11 @@ def _formal_score_record_ready_for_manifest(record: Mapping[str, Any]) -> bool:
 
     该检查与 external baseline comparison audit 保持同一证据层级: formal 行必须
     同时包含 prompt / seed / attack anchor、自身 clean negative 校准分数和项目内
-    official command 或 official bundle 证据。这样 manifest 不会把手写分数字段升级为
+    official bundle / execution manifest 证据。detector command manifest 只能证明
+    wrapper 被调用过, 不能证明 baseline 官方生成流程已闭合, 因此不能单独升级为
     论文比较证据。
     """
 
-    command_evidence_ready = (
-        _has_nonempty_field(record, "external_baseline_official_output_path")
-        and _has_nonempty_field(record, "external_baseline_official_command_manifest_path")
-    )
     bundle_evidence_ready = (
         _has_nonempty_field(record, "external_baseline_official_result_bundle_path")
         and _has_nonempty_field(record, "external_baseline_official_execution_manifest_path")
@@ -533,7 +530,7 @@ def _formal_score_record_ready_for_manifest(record: Mapping[str, Any]) -> bool:
         and all(_has_nonempty_field(record, field_name) for field_name in ("prompt_id", "seed_id", "attack_name"))
         and _has_numeric_field(record, "external_baseline_clean_negative_score")
         and _has_nonempty_field(record, "external_baseline_clean_negative_video_path")
-        and (command_evidence_ready or bundle_evidence_ready)
+        and bundle_evidence_ready
     )
 
 

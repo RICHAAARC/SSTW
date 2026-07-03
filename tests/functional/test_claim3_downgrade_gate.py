@@ -47,6 +47,8 @@ def _formal_external_baseline_records() -> list[dict]:
                 "external_baseline_clean_negative_video_path": f"official/{name}/clean_negative.mp4",
                 "external_baseline_official_output_path": f"official/{name}/official_output.json",
                 "external_baseline_official_command_manifest_path": f"official/{name}/official_command_manifest.json",
+                "external_baseline_official_result_bundle_path": f"official/{name}/official_result_bundle.json",
+                "external_baseline_official_execution_manifest_path": f"official/{name}/official_execution_manifest.json",
             })
         records.append(record)
     return records

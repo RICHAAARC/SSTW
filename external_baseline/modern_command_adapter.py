@@ -175,6 +175,25 @@ def _clean_negative_score_payload(payload: Mapping[str, Any]) -> dict[str, Any]:
     }
 
 
+def _official_bundle_evidence_payload(payload: Mapping[str, Any]) -> dict[str, Any]:
+    """从官方输出中提取项目内 official bundle 执行闭环字段。
+
+    该检查是项目特定门禁。现代 external baseline 的正式分数不能只来自
+    detector wrapper 命令输出, 必须绑定由本项目 official reference 流程生成的
+    result bundle 与 execution manifest。这里不检查路径存在性, 路径存在性由
+    self-containment gate 负责, 以便轻量 adapter 测试仍可使用 tmp fixture。
+    """
+
+    result_bundle_path = payload.get("official_result_bundle_path")
+    execution_manifest_path = payload.get("official_execution_manifest_path")
+    if result_bundle_path in {None, ""} or execution_manifest_path in {None, ""}:
+        raise RuntimeError("official_result_bundle_evidence_missing")
+    return {
+        "external_baseline_official_result_bundle_path": result_bundle_path,
+        "external_baseline_official_execution_manifest_path": execution_manifest_path,
+    }
+
+
 def _unsupported_record(
     config: ModernBaselineCommandConfig,
     baseline_record: Mapping[str, Any],
@@ -306,6 +325,7 @@ def build_modern_score_records(
             validate_clean_negative_payload(payload)
             score_payload = normalized_score_payload(payload)
             clean_negative_payload = _clean_negative_score_payload(payload)
+            official_bundle_payload = _official_bundle_evidence_payload(payload)
             score = round(float(score_payload["external_baseline_raw_detector_score"]), 6)
             method_score = safe_float(detection_record.get("S_runtime_attack_detection"), 0.0)
             records.append(with_flow_evidence_protocol_defaults({
@@ -333,8 +353,7 @@ def build_modern_score_records(
                     "external_baseline_official_execution_mode",
                     payload.get("official_adapter_status", payload.get("official_bridge_status")),
                 ),
-                "external_baseline_official_result_bundle_path": payload.get("official_result_bundle_path"),
-                "external_baseline_official_execution_manifest_path": payload.get("official_execution_manifest_path"),
+                **official_bundle_payload,
                 "metric_status": "measured_formal",
                 "external_baseline_score_status": "measured_formal",
                 "external_baseline_score_source": config.score_source,

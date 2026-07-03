@@ -111,6 +111,55 @@ def _normal_difference_of_proportions_interval(
     return round(delta - half_width, 6), round(delta + half_width, 6), "normal_approx_difference_of_tpr_at_target_fpr"
 
 
+def _paired_detection_difference_interval(
+    reference_units: dict[str, bool],
+    baseline_units: dict[str, bool],
+) -> tuple[float | None, float | None, float | None, int, str]:
+    """基于同一 prompt / seed / attack anchor 计算配对检测差值区间。
+
+    这里的单元差值为 `SSTW_detected - baseline_detected`, 取值只能是 -1、0 或 1。
+    该实现比两个非配对 TPR 的差值更严格, 因为它只使用双方都存在的同一
+    comparison anchor。
+    """
+
+    shared_keys = sorted(set(reference_units) & set(baseline_units))
+    if not shared_keys:
+        return None, None, None, 0, "missing_paired_detection_units"
+    differences = [
+        (1.0 if reference_units[key] else 0.0) - (1.0 if baseline_units[key] else 0.0)
+        for key in shared_keys
+    ]
+    delta = float(mean(differences))
+    if len(differences) < 2:
+        return round(delta, 6), round(delta, 6), round(delta, 6), len(differences), "paired_anchor_singleton_interval"
+    value_mean = mean(differences)
+    variance = sum((value - value_mean) ** 2 for value in differences) / (len(differences) - 1)
+    if variance <= 0:
+        return round(delta, 6), round(delta, 6), round(delta, 6), len(differences), "paired_anchor_degenerate_interval"
+    half_width = 1.96 * math.sqrt(variance / len(differences))
+    return (
+        round(delta, 6),
+        round(delta - half_width, 6),
+        round(delta + half_width, 6),
+        len(differences),
+        "paired_anchor_normal_approx_detection_difference",
+    )
+
+
+def _detection_units_by_anchor(record: dict[str, Any]) -> dict[str, bool]:
+    """从 fair calibration record 中读取 anchor -> detected 映射。"""
+
+    units: dict[str, bool] = {}
+    for unit in record.get("positive_detection_units_at_target_fpr") or []:
+        if not isinstance(unit, dict):
+            continue
+        key = str(unit.get("comparison_anchor_key") or "")
+        if not key:
+            continue
+        units[key] = bool(unit.get("detected_at_target_fpr"))
+    return units
+
+
 def _unit_key(record: dict[str, Any]) -> tuple[str, str, str]:
     """构造 prompt / seed / attack 锚点, 用于审计是否存在可配对比较单元。"""
     return (
@@ -144,6 +193,7 @@ def build_formal_baseline_difference_interval_records(
     sstw_record = fair_by_method.get(SSTW_METHOD_ID, {})
     sstw_tpr = _safe_float(sstw_record.get("tpr_at_target_fpr"))
     sstw_count = int(sstw_record.get("attacked_positive_score_count") or 0)
+    sstw_units = _detection_units_by_anchor(sstw_record)
 
     rows: list[dict[str, Any]] = []
     claim_support_status = (
@@ -155,17 +205,28 @@ def build_formal_baseline_difference_interval_records(
         baseline_record = fair_by_method.get(baseline_id, {})
         baseline_tpr = _safe_float(baseline_record.get("tpr_at_target_fpr"))
         baseline_count = int(baseline_record.get("attacked_positive_score_count") or 0)
-        paired_count = min(sstw_count, baseline_count)
-        ci_lower, ci_upper, interval_method = _normal_difference_of_proportions_interval(
-            sstw_tpr,
-            sstw_count,
-            baseline_tpr,
-            baseline_count,
+        baseline_units = _detection_units_by_anchor(baseline_record)
+        paired_delta, ci_lower, ci_upper, paired_count, interval_method = _paired_detection_difference_interval(
+            sstw_units,
+            baseline_units,
         )
-        delta = None
-        if sstw_tpr is not None and baseline_tpr is not None:
+        unpaired_reference_count = len(set(sstw_units) - set(baseline_units))
+        unpaired_baseline_count = len(set(baseline_units) - set(sstw_units))
+        anchor_alignment_status = (
+            "aligned_with_sstw_reference_anchors"
+            if sstw_units and not unpaired_reference_count and not unpaired_baseline_count
+            else "anchor_set_mismatch_with_sstw"
+        )
+        delta = paired_delta
+        if delta is None and sstw_tpr is not None and baseline_tpr is not None:
             delta = round(float(sstw_tpr) - float(baseline_tpr), 6)
-        interval_status = "ready" if ci_lower is not None and ci_upper is not None else "missing_scores"
+        interval_status = (
+            "ready"
+            if ci_lower is not None
+            and ci_upper is not None
+            and anchor_alignment_status == "aligned_with_sstw_reference_anchors"
+            else "missing_or_unaligned_paired_anchors"
+        )
         rows.append(with_flow_evidence_protocol_defaults({
             "record_version": "formal_baseline_difference_interval_v1",
             "reference_method_id": SSTW_METHOD_ID,
@@ -178,6 +239,11 @@ def build_formal_baseline_difference_interval_records(
             "reference_record_count": sstw_count,
             "baseline_record_count": baseline_count,
             "paired_comparison_unit_count": paired_count,
+            "reference_anchor_count": len(sstw_units),
+            "baseline_anchor_count": len(baseline_units),
+            "unpaired_reference_anchor_count": unpaired_reference_count,
+            "unpaired_baseline_anchor_count": unpaired_baseline_count,
+            "comparison_anchor_alignment_status": anchor_alignment_status,
             "reference_score_mean": None,
             "baseline_score_mean": None,
             "reference_tpr_at_target_fpr": sstw_tpr,

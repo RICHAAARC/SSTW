@@ -272,6 +272,90 @@ def test_formal_method_baseline_comparison_requires_sstw_and_five_baselines(tmp_
 
 
 @pytest.mark.quick
+def test_formal_method_baseline_comparison_rejects_unaligned_prompt_seed_attack_anchors(tmp_path: Path) -> None:
+    """baseline 缺少 SSTW 的 prompt / seed / attack anchor 时不能通过公平比较。"""
+    run_root = tmp_path / "run"
+    config_path = run_root / "validation_scale_config.json"
+    write_json(config_path, {
+        "paper_result_level": "validation_scale",
+        "target_fpr": 0.1,
+        "minimum_clean_negative_count": 10,
+        "required_modern_external_baseline_adapter_names": ["videoshield"],
+    })
+    sstw_rows = [
+        {
+            "method_id": "sstw_key_conditioned_flow_trajectory",
+            "method_role": "proposed_method",
+            "metric_status": "measured_formal",
+            "prompt_id": f"prompt_{index}",
+            "seed_id": "seed_a",
+            "attack_name": "video_compression_runtime",
+            "sstw_score": 0.84,
+        }
+        for index in range(2)
+    ]
+    sstw_rows.extend(
+        {
+            "method_id": "sstw_key_conditioned_flow_trajectory",
+            "method_role": "proposed_method",
+            "metric_status": "measured_formal",
+            "sample_role": "clean_negative",
+            "prompt_id": f"negative_{index}",
+            "seed_id": "seed_a",
+            "sstw_score": 0.05 + index * 0.001,
+        }
+        for index in range(10)
+    )
+    baseline_rows = [
+        {
+            "external_baseline_name": "videoshield",
+            "external_baseline_layer": "modern_external_baseline",
+            "metric_status": "measured_formal",
+            "prompt_id": "prompt_0",
+            "seed_id": "seed_a",
+            "attack_name": "video_compression_runtime",
+            "external_baseline_score": 0.7,
+            "external_baseline_raw_detector_score": 0.7,
+            "external_baseline_score_semantics": "watermark_presence_detector_score",
+        }
+    ]
+    baseline_rows.extend(
+        {
+            "external_baseline_name": "videoshield",
+            "external_baseline_layer": "modern_external_baseline",
+            "metric_status": "measured_formal",
+            "sample_role": "clean_negative",
+            "prompt_id": f"negative_{index}",
+            "seed_id": "seed_a",
+            "external_baseline_score": 0.05 + index * 0.001,
+            "external_baseline_raw_detector_score": 0.05 + index * 0.001,
+            "external_baseline_score_semantics": "watermark_presence_detector_score",
+        }
+        for index in range(10)
+    )
+    write_jsonl(run_root / "records" / "sstw_measured_formal_records.jsonl", sstw_rows)
+    write_jsonl(run_root / "records" / "external_baseline_score_records.jsonl", baseline_rows)
+
+    fair_audit = run_fair_detection_calibration(run_root, config_path)
+    audit = run_formal_method_baseline_comparison(run_root, config_path)
+    difference_audit = run_formal_baseline_difference_interval(run_root, config_path)
+    records = read_jsonl(run_root / "records" / "formal_method_baseline_comparison_records.jsonl")
+    difference_records = read_jsonl(run_root / "records" / "formal_baseline_difference_interval_records.jsonl")
+    videoshield_row = next(record for record in records if record["method_id"] == "videoshield")
+    videoshield_difference_row = next(record for record in difference_records if record["baseline_method_id"] == "videoshield")
+
+    assert fair_audit["fair_detection_calibration_decision"] == "PASS"
+    assert audit["formal_method_baseline_comparison_decision"] == "FAIL"
+    assert difference_audit["formal_baseline_difference_interval_decision"] == "FAIL"
+    assert videoshield_row["comparison_anchor_alignment_status"] == "anchor_set_mismatch_with_sstw"
+    assert videoshield_row["missing_reference_anchor_count"] == 1
+    assert videoshield_row["metric_status"] == "missing"
+    assert videoshield_difference_row["comparison_anchor_alignment_status"] == "anchor_set_mismatch_with_sstw"
+    assert videoshield_difference_row["unpaired_reference_anchor_count"] == 1
+    assert videoshield_difference_row["difference_interval_status"] == "missing_or_unaligned_paired_anchors"
+
+
+@pytest.mark.quick
 def test_formal_baseline_difference_interval_writes_sstw_vs_each_baseline_ci(tmp_path: Path) -> None:
     """差值 CI 报告必须覆盖 SSTW 相对 5 个 modern baseline 的 TPR@target FPR 差。"""
     run_root = tmp_path / "run"

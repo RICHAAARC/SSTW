@@ -94,10 +94,23 @@ def _method_row(
     record: dict[str, Any] | None,
     profile_context: dict[str, Any],
     missing_reason: str = "",
+    reference_anchor_keys: set[str] | None = None,
 ) -> dict[str, Any]:
     """将 fair calibration record 转成同协议比较行。"""
     fair_ready = bool(record) and record.get("fair_comparison_status") == "ready"
-    metric_status = "measured_formal" if fair_ready else "missing"
+    anchor_keys = {str(item) for item in (record or {}).get("positive_anchor_keys", []) if str(item)}
+    if method_role == "proposed_method":
+        anchor_alignment_status = "reference_method_anchor_set_ready" if fair_ready and anchor_keys else "reference_method_anchor_set_missing"
+        anchor_aligned = fair_ready and bool(anchor_keys)
+    else:
+        reference_anchor_keys = reference_anchor_keys or set()
+        missing_reference_anchor_keys = sorted(reference_anchor_keys - anchor_keys)
+        extra_anchor_keys = sorted(anchor_keys - reference_anchor_keys)
+        anchor_aligned = fair_ready and bool(reference_anchor_keys) and not missing_reference_anchor_keys and not extra_anchor_keys
+        anchor_alignment_status = "aligned_with_sstw_reference_anchors" if anchor_aligned else "anchor_set_mismatch_with_sstw"
+    metric_status = "measured_formal" if fair_ready and anchor_aligned else "missing"
+    if metric_status == "missing" and fair_ready and not anchor_aligned:
+        missing_reason = "anchor_set_mismatch_with_sstw"
     claim_support_status = (
         "formal_method_baseline_comparison_paper_profile_claim_candidate"
         if profile_context["allow_effect_size_claims"] and metric_status == "measured_formal"
@@ -115,6 +128,11 @@ def _method_row(
         "comparison_primary_metric_value": record.get("tpr_at_target_fpr") if record else None,
         "comparison_score_field": record.get("positive_score_field") if record else "missing_fair_detection_calibration",
         "comparison_record_count": record.get("attacked_positive_score_count") if record else 0,
+        "comparison_anchor_count": len(anchor_keys),
+        "reference_anchor_count": len(reference_anchor_keys or anchor_keys),
+        "missing_reference_anchor_count": 0 if method_role == "proposed_method" else len((reference_anchor_keys or set()) - anchor_keys),
+        "extra_anchor_count": 0 if method_role == "proposed_method" else len(anchor_keys - (reference_anchor_keys or set())),
+        "comparison_anchor_alignment_status": anchor_alignment_status,
         "comparison_prompt_count": record.get("prompt_count") if record else 0,
         "comparison_attack_count": record.get("attack_count") if record else 0,
         "comparison_positive_count": record.get("detected_positive_count_at_target_fpr") if record else None,
@@ -140,12 +158,18 @@ def build_formal_method_baseline_comparison_records(
     rows: list[dict[str, Any]] = []
     fair_records = _read_jsonl(run_root / "records" / "fair_detection_calibration_records.jsonl")
     fair_by_method = {str(record.get("method_id") or ""): record for record in fair_records if record.get("method_id")}
+    sstw_anchor_keys = {
+        str(item)
+        for item in fair_by_method.get(SSTW_METHOD_ID, {}).get("positive_anchor_keys", [])
+        if str(item)
+    }
     rows.append(_method_row(
         method_id=SSTW_METHOD_ID,
         method_role="proposed_method",
         record=fair_by_method.get(SSTW_METHOD_ID),
         profile_context=profile_context,
         missing_reason="missing_or_blocked_sstw_fair_detection_calibration_record",
+        reference_anchor_keys=sstw_anchor_keys,
     ))
 
     for baseline_id in profile_context["required_modern_external_baseline_adapter_names"]:
@@ -155,6 +179,7 @@ def build_formal_method_baseline_comparison_records(
             record=fair_by_method.get(baseline_id),
             profile_context=profile_context,
             missing_reason="missing_or_blocked_external_baseline_fair_detection_calibration_record",
+            reference_anchor_keys=sstw_anchor_keys,
         ))
     return rows
 

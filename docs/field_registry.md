@@ -1302,6 +1302,10 @@ Notebook 与 repository module 的跨边界数据
 | clean_negative_score_field | protocol | none | true | false | false | clean negative 阈值校准使用的分数字段。 |
 | clean_negative_score_count | metric | none | true | true | false | clean negative 校准分数数量。 |
 | attacked_positive_score_count | metric | none | true | true | false | attacked positive 检测分数数量。 |
+| positive_anchor_count | metric | none | true | true | false | fair calibration 中 attacked positive 的 prompt / seed / attack anchor 数量。 |
+| positive_anchor_keys | protocol | none | true | false | false | fair calibration 中 attacked positive 的规范 prompt / seed / attack anchor 键集合。 |
+| positive_detection_units_at_target_fpr | metric | none | true | false | false | target FPR 阈值下每个 prompt / seed / attack anchor 的检测结果列表。 |
+| comparison_anchor_key | protocol | none | true | false | false | 由 prompt_id、seed_id 和 attack_name 组成的公平比较锚点键。 |
 | calibrated_threshold | metric | none | true | true | false | 在方法自身 clean negative 分布上校准得到的检测阈值。 |
 | threshold_selection_policy | protocol | none | true | false | false | 阈值选择策略。 |
 | heldout_fpr_at_calibrated_threshold | metric | none | true | true | false | 校准阈值在 clean negative 分布上的经验 FPR。 |
@@ -1315,6 +1319,14 @@ Notebook 与 repository module 的跨边界数据
 | fair_detection_calibration_missing_method_count | metric | none | true | false | false | 公平校准缺失或阻断的方法数量。 |
 | comparison_primary_metric_name | protocol | none | true | true | false | formal method baseline comparison 的主比较指标名称。 |
 | comparison_primary_metric_value | metric | none | true | true | false | formal method baseline comparison 的主比较指标数值。 |
+| comparison_anchor_count | metric | none | true | true | false | formal comparison 行中可用 prompt / seed / attack anchor 数量。 |
+| reference_anchor_count | metric | none | true | true | false | 参考方法 SSTW 的 prompt / seed / attack anchor 数量。 |
+| baseline_anchor_count | metric | none | true | true | false | baseline 方法的 prompt / seed / attack anchor 数量。 |
+| missing_reference_anchor_count | metric | none | true | true | false | baseline 缺少的 SSTW 参考 anchor 数量。 |
+| extra_anchor_count | metric | none | true | true | false | baseline 相比 SSTW 参考 anchor 多出的 anchor 数量。 |
+| unpaired_reference_anchor_count | metric | none | true | true | false | 差值区间中无法与 baseline 配对的 SSTW anchor 数量。 |
+| unpaired_baseline_anchor_count | metric | none | true | true | false | 差值区间中无法与 SSTW 配对的 baseline anchor 数量。 |
+| comparison_anchor_alignment_status | governance | none | true | true | false | 当前方法是否与 SSTW 使用同一 prompt / seed / attack anchor 集合。 |
 | reference_tpr_at_target_fpr | metric | none | true | true | false | 差值区间中参考方法的 TPR@target FPR。 |
 | baseline_tpr_at_target_fpr | metric | none | true | true | false | 差值区间中 baseline 的 TPR@target FPR。 |
 | tpr_at_target_fpr_difference | metric | none | true | true | false | SSTW TPR@target FPR 减 baseline TPR@target FPR 的差值。 |

@@ -183,12 +183,17 @@ def _positive_score_rows(records: Iterable[Mapping[str, Any]], *, score_fields: 
         score, field_name = _first_score(record, score_fields)
         if score is None:
             continue
+        prompt_id = record.get("prompt_id")
+        seed_id = record.get("seed_id")
+        attack_name = record.get("attack_name")
+        comparison_anchor_key = f"{prompt_id}::{seed_id}::{attack_name}"
         rows.append({
             "score": float(score),
             "score_field": field_name,
-            "prompt_id": record.get("prompt_id"),
-            "seed_id": record.get("seed_id"),
-            "attack_name": record.get("attack_name"),
+            "prompt_id": prompt_id,
+            "seed_id": seed_id,
+            "attack_name": attack_name,
+            "comparison_anchor_key": comparison_anchor_key,
             "comparison_unit_id": record.get("runtime_comparison_unit_id")
             or record.get("external_baseline_score_record_id")
             or record.get("sstw_measured_formal_record_id"),
@@ -263,8 +268,20 @@ def _calibrated_method_record(
     positive_scores = [row["score"] for row in positive_rows]
     threshold, heldout_fpr, threshold_policy = _threshold_for_target_fpr(negative_scores, float(context["target_fpr"]))
     detected_count = 0
+    positive_detection_units: list[dict[str, Any]] = []
     if threshold is not None:
         detected_count = sum(1 for score in positive_scores if score >= threshold)
+        positive_detection_units = [
+            {
+                "comparison_anchor_key": row["comparison_anchor_key"],
+                "prompt_id": row.get("prompt_id"),
+                "seed_id": row.get("seed_id"),
+                "attack_name": row.get("attack_name"),
+                "score": row["score"],
+                "detected_at_target_fpr": row["score"] >= threshold,
+            }
+            for row in positive_rows
+        ]
     tpr = round(detected_count / len(positive_scores), 6) if positive_scores else None
     ci_lower, ci_upper = _wilson_interval(detected_count, len(positive_scores))
     semantics = next(
@@ -296,6 +313,12 @@ def _calibrated_method_record(
         "clean_negative_score_field": negative_rows[0]["score_field"] if negative_rows else (embedded_negative_score_fields or negative_score_fields or ("missing",))[0],
         "clean_negative_score_count": len(negative_rows),
         "attacked_positive_score_count": len(positive_rows),
+        "positive_anchor_count": len({str(row["comparison_anchor_key"]) for row in positive_rows}),
+        "positive_anchor_keys": sorted({str(row["comparison_anchor_key"]) for row in positive_rows}),
+        "positive_detection_units_at_target_fpr": sorted(
+            positive_detection_units,
+            key=lambda item: str(item["comparison_anchor_key"]),
+        ),
         "calibrated_threshold": threshold,
         "threshold_selection_policy": threshold_policy,
         "heldout_fpr_at_calibrated_threshold": heldout_fpr,

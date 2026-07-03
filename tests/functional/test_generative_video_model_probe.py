@@ -12,8 +12,12 @@ from main.protocol.record_writer import read_jsonl
 
 
 @pytest.mark.quick
-def test_generative_video_model_probe_builds_blocked_outputs(tmp_path: Path) -> None:
-    """B5 runner 在无 GPU 环境中必须生成可审计 blocked decision。"""
+def test_generative_video_model_probe_builds_blocked_outputs(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """B5 runner 在显式模拟无 GPU 环境时必须生成可审计 blocked decision。"""
+    monkeypatch.setenv("PATH", "")
     output_root = tmp_path / "generative_video_model_probe"
     summary = run(output_root)
 

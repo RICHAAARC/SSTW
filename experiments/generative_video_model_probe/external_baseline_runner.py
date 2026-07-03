@@ -202,7 +202,7 @@ def _has_official_execution_evidence(record: Mapping[str, Any]) -> bool:
     return command_evidence_ready or bundle_evidence_ready
 
 
-def _formal_score_record_ready_for_claim(record: Mapping[str, Any]) -> bool:
+def formal_score_record_ready_for_claim(record: Mapping[str, Any]) -> bool:
     """检查 measured_formal baseline row 是否达到公平比较入口要求。
 
     该函数是项目特定门禁: 单纯写入 `metric_status: measured_formal` 不足以支撑
@@ -216,6 +216,10 @@ def _formal_score_record_ready_for_claim(record: Mapping[str, Any]) -> bool:
         and _has_clean_negative_calibration_fields(record)
         and _has_official_execution_evidence(record)
     )
+
+
+# 保留旧内部名称, 使既有调用点和测试在迁移期间仍使用同一套判定逻辑。
+_formal_score_record_ready_for_claim = formal_score_record_ready_for_claim
 
 
 def _proposed_method_row(runtime_detection_records: list[dict[str, Any]]) -> dict[str, Any]:

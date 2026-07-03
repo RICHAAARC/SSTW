@@ -26,6 +26,7 @@ from experiments.generative_video_model_probe.formal_motion_claim_filter import 
     record_identity_key,
     select_motion_claim_generation_records,
 )
+from experiments.generative_video_model_probe.external_baseline_runner import formal_score_record_ready_for_claim
 from main.protocol.flow_evidence_fields import with_flow_evidence_protocol_defaults
 from main.protocol.record_writer import write_json, write_jsonl
 from main.protocol.table_builder import write_csv
@@ -295,13 +296,24 @@ def _external_baseline_readiness(
     """审计 pilot_paper 是否已有 external_baseline adapter comparison 结果。
 
     这一检查属于项目特定写法。它不把 unsupported modern baseline 当作正向比较证据。
-    显式同步 control 可以是 measured_proxy, 但现代视频水印 baseline 必须是 measured_formal,
+    显式同步 control 可以是 measured_proxy, 但现代视频水印 baseline 必须是完整 measured_formal,
+    即必须同时具备 prompt / seed / attack anchor、自身 clean negative 校准分数和项目内 official run 证据,
     并且必须覆盖 pilot_paper held-out test trace。
     """
     decision = _read_json(run_root / "artifacts" / "external_baseline_comparison_decision.json")
     records = _read_jsonl(run_root / "records" / "external_baseline_score_records.jsonl")
-    measured_records = [record for record in records if record.get("metric_status") in {"measured_proxy", "measured_formal"}]
-    formal_records = [record for record in records if record.get("metric_status") == "measured_formal"]
+    formal_candidate_records = [record for record in records if record.get("metric_status") == "measured_formal"]
+    formal_records = [record for record in formal_candidate_records if formal_score_record_ready_for_claim(record)]
+    formal_incomplete_records = [
+        record
+        for record in formal_candidate_records
+        if not formal_score_record_ready_for_claim(record)
+    ]
+    measured_records = [
+        record
+        for record in records
+        if record.get("metric_status") == "measured_proxy" or formal_score_record_ready_for_claim(record)
+    ]
     measured_adapter_names = {str(record.get("external_baseline_name")) for record in measured_records if record.get("external_baseline_name")}
     formal_adapter_names = {str(record.get("external_baseline_name")) for record in formal_records if record.get("external_baseline_name")}
     required_adapter_names = set(str(name) for name in config["required_external_baseline_adapter_names"])
@@ -335,6 +347,8 @@ def _external_baseline_readiness(
         "external_baseline_measured_adapter_names": sorted(measured_adapter_names),
         "external_baseline_formal_measured_adapter_count": len(formal_adapter_names),
         "external_baseline_formal_measured_adapter_names": sorted(formal_adapter_names),
+        "external_baseline_formal_candidate_record_count": len(formal_candidate_records),
+        "external_baseline_formal_incomplete_record_count": len(formal_incomplete_records),
         "modern_external_baseline_formal_measured_adapter_count": len(formal_adapter_names & required_modern_adapter_names),
         "modern_external_baseline_formal_measured_adapter_names": sorted(formal_adapter_names & required_modern_adapter_names),
         "required_external_baseline_adapter_names": sorted(required_adapter_names),

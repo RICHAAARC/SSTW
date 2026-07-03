@@ -46,6 +46,7 @@ def _seed_pilot_paper_run(
     validation_scale_gate_decision: str | None = "PASS",
     write_external_baseline: bool = True,
     write_internal_ablation: bool = True,
+    incomplete_modern_external_baseline_names: set[str] | None = None,
 ) -> None:
     """构造轻量 pilot_paper fixture, 不写入任何真实视频文件。
 
@@ -58,6 +59,7 @@ def _seed_pilot_paper_run(
     pilot_matrix_records = []
     external_baseline_records = []
     internal_ablation_records = []
+    incomplete_modern_external_baseline_names = incomplete_modern_external_baseline_names or set()
     split_seed_pairs = [
         ("calibration", seed_id) for seed_id in CALIBRATION_SEEDS[:calibration_seed_count]
     ] + [
@@ -132,16 +134,30 @@ def _seed_pilot_paper_run(
                     })
                 if split_name == "test":
                     for baseline_name in EXTERNAL_BASELINE_NAMES:
-                        external_baseline_records.append({
+                        metric_status = "measured_formal" if baseline_name in MODERN_EXTERNAL_BASELINE_NAMES else "measured_proxy"
+                        external_baseline_record = {
                             **base,
                             "attack_name": attack_name,
                             "external_baseline_name": baseline_name,
-                            "metric_status": "measured_formal" if baseline_name in MODERN_EXTERNAL_BASELINE_NAMES else "measured_proxy",
+                            "metric_status": metric_status,
+                            "external_baseline_score_status": metric_status,
                             "external_baseline_score": 0.35,
                             "external_baseline_distance": 1.85,
                             "baseline_score_margin": 0.45,
                             "claim_support_status": "modern_external_baseline_formal_measured" if baseline_name in MODERN_EXTERNAL_BASELINE_NAMES else "external_baseline_proxy_comparison_not_claim_supporting",
-                        })
+                        }
+                        if (
+                            baseline_name in MODERN_EXTERNAL_BASELINE_NAMES
+                            and baseline_name not in incomplete_modern_external_baseline_names
+                        ):
+                            evidence_id = f"{trace_id}_{attack_name}_{baseline_name}"
+                            external_baseline_record.update({
+                                "external_baseline_clean_negative_score": 0.20,
+                                "external_baseline_clean_negative_video_path": str(run_root / "artifacts" / "external_baseline_evidence" / baseline_name / f"{evidence_id}_clean.mp4"),
+                                "external_baseline_official_output_path": str(run_root / "artifacts" / "external_baseline_evidence" / baseline_name / f"{evidence_id}_official_output.json"),
+                                "external_baseline_official_command_manifest_path": str(run_root / "artifacts" / "external_baseline_evidence" / baseline_name / f"{evidence_id}_official_command_manifest.json"),
+                            })
+                        external_baseline_records.append(external_baseline_record)
                     for method_variant in INTERNAL_ABLATION_VARIANTS:
                         internal_ablation_records.append({
                             **base,
@@ -285,6 +301,22 @@ def test_pilot_paper_gate_passes_calibrated_heldout_fixture(tmp_path: Path) -> N
     assert (run_root / "thresholds" / "pilot_paper_frozen_threshold.json").exists()
     assert (run_root / "artifacts" / "pilot_paper_gate_decision.json").exists()
     assert (run_root / "reports" / "pilot_paper_gate_report.md").exists()
+
+
+@pytest.mark.quick
+def test_pilot_paper_gate_rejects_incomplete_formal_external_baseline(tmp_path: Path) -> None:
+    """pilot_paper 不能把缺少 clean negative 或 official evidence 的 measured_formal 当作公平比较证据。"""
+    run_root = tmp_path / "run"
+    _seed_pilot_paper_run(run_root, incomplete_modern_external_baseline_names={"videoseal"})
+
+    audit = build_pilot_paper_gate_audit(run_root)
+
+    assert audit["pilot_paper_gate_decision"] == "FAIL"
+    assert "pilot_paper_external_baseline_comparison_ready" in audit["missing_pilot_paper_requirements"]
+    assert audit["external_baseline_formal_incomplete_record_count"] > 0
+    assert audit["modern_external_baseline_formal_measured_adapter_count"] == 4
+    assert audit["missing_modern_external_baseline_formal_adapter_names"] == ["videoseal"]
+    assert audit["pilot_paper_claim_allowed"] is False
 
 
 @pytest.mark.quick

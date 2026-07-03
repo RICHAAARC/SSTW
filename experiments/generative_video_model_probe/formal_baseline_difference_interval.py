@@ -90,6 +90,27 @@ def _normal_difference_interval(reference_scores: list[float], baseline_scores: 
     return round(delta - half_width, 6), round(delta + half_width, 6), "normal_approx_difference_of_means"
 
 
+def _normal_difference_of_proportions_interval(
+    reference_tpr: float | None,
+    reference_count: int,
+    baseline_tpr: float | None,
+    baseline_count: int,
+) -> tuple[float | None, float | None, str]:
+    """计算两个 TPR 比例差的轻量 95% 正态近似区间。"""
+
+    if reference_tpr is None or baseline_tpr is None or reference_count <= 0 or baseline_count <= 0:
+        return None, None, "missing_calibrated_tpr"
+    delta = float(reference_tpr) - float(baseline_tpr)
+    variance = (
+        float(reference_tpr) * (1.0 - float(reference_tpr)) / reference_count
+        + float(baseline_tpr) * (1.0 - float(baseline_tpr)) / baseline_count
+    )
+    if variance <= 0:
+        return round(delta, 6), round(delta, 6), "degenerate_interval_singleton_or_zero_variance"
+    half_width = 1.96 * math.sqrt(variance)
+    return round(delta - half_width, 6), round(delta + half_width, 6), "normal_approx_difference_of_tpr_at_target_fpr"
+
+
 def _unit_key(record: dict[str, Any]) -> tuple[str, str, str]:
     """构造 prompt / seed / attack 锚点, 用于审计是否存在可配对比较单元。"""
     return (
@@ -118,21 +139,11 @@ def build_formal_baseline_difference_interval_records(
     """构建 SSTW 相对 5 个现代 baseline 的分数差值 CI records。"""
     run_root = Path(run_root)
     profile_context = _load_profile_context(config_path)
-    sstw_records = [
-        record
-        for record in _read_jsonl(run_root / "records" / "sstw_measured_formal_records.jsonl")
-        if record.get("metric_status") == "measured_formal"
-    ]
-    sstw_scores = _score_values(sstw_records, "sstw_score")
-    sstw_units = {_unit_key(record) for record in sstw_records}
-    external_records = _read_jsonl(run_root / "records" / "external_baseline_score_records.jsonl")
-    records_by_baseline: dict[str, list[dict[str, Any]]] = {}
-    for record in external_records:
-        if record.get("metric_status") != "measured_formal":
-            continue
-        baseline_id = str(record.get("external_baseline_name") or "")
-        if baseline_id:
-            records_by_baseline.setdefault(baseline_id, []).append(record)
+    fair_records = _read_jsonl(run_root / "records" / "fair_detection_calibration_records.jsonl")
+    fair_by_method = {str(record.get("method_id") or ""): record for record in fair_records if record.get("method_id")}
+    sstw_record = fair_by_method.get(SSTW_METHOD_ID, {})
+    sstw_tpr = _safe_float(sstw_record.get("tpr_at_target_fpr"))
+    sstw_count = int(sstw_record.get("attacked_positive_score_count") or 0)
 
     rows: list[dict[str, Any]] = []
     claim_support_status = (
@@ -141,30 +152,38 @@ def build_formal_baseline_difference_interval_records(
         else "formal_baseline_difference_interval_validation_scale_only"
     )
     for baseline_id in profile_context["required_modern_external_baseline_adapter_names"]:
-        baseline_records = records_by_baseline.get(baseline_id, [])
-        baseline_scores = _score_values(baseline_records, "external_baseline_score")
-        baseline_units = {_unit_key(record) for record in baseline_records}
-        paired_count = len({unit for unit in sstw_units & baseline_units if all(unit)})
-        ci_lower, ci_upper, interval_method = _normal_difference_interval(sstw_scores, baseline_scores)
+        baseline_record = fair_by_method.get(baseline_id, {})
+        baseline_tpr = _safe_float(baseline_record.get("tpr_at_target_fpr"))
+        baseline_count = int(baseline_record.get("attacked_positive_score_count") or 0)
+        paired_count = min(sstw_count, baseline_count)
+        ci_lower, ci_upper, interval_method = _normal_difference_of_proportions_interval(
+            sstw_tpr,
+            sstw_count,
+            baseline_tpr,
+            baseline_count,
+        )
         delta = None
-        if sstw_scores and baseline_scores:
-            delta = round(float(mean(sstw_scores) - mean(baseline_scores)), 6)
+        if sstw_tpr is not None and baseline_tpr is not None:
+            delta = round(float(sstw_tpr) - float(baseline_tpr), 6)
         interval_status = "ready" if ci_lower is not None and ci_upper is not None else "missing_scores"
         rows.append(with_flow_evidence_protocol_defaults({
             "record_version": "formal_baseline_difference_interval_v1",
             "reference_method_id": SSTW_METHOD_ID,
             "baseline_method_id": baseline_id,
-            "difference_metric_name": "score_mean_difference",
+            "difference_metric_name": "tpr_at_target_fpr_difference",
             "metric_status": "measured_formal" if interval_status == "ready" else "missing",
-            "comparison_scope": "paper_protocol_formal_adapter",
-            "reference_score_field": "sstw_score",
-            "baseline_score_field": "external_baseline_score",
-            "reference_record_count": len(sstw_scores),
-            "baseline_record_count": len(baseline_scores),
+            "comparison_scope": "fair_detection_calibration_at_target_fpr",
+            "reference_score_field": "tpr_at_target_fpr",
+            "baseline_score_field": "tpr_at_target_fpr",
+            "reference_record_count": sstw_count,
+            "baseline_record_count": baseline_count,
             "paired_comparison_unit_count": paired_count,
-            "reference_score_mean": _mean(sstw_scores),
-            "baseline_score_mean": _mean(baseline_scores),
-            "score_mean_difference": delta,
+            "reference_score_mean": None,
+            "baseline_score_mean": None,
+            "reference_tpr_at_target_fpr": sstw_tpr,
+            "baseline_tpr_at_target_fpr": baseline_tpr,
+            "tpr_at_target_fpr_difference": delta,
+            "score_mean_difference": None,
             "difference_ci_confidence_level": 0.95,
             "difference_ci_lower": ci_lower,
             "difference_ci_upper": ci_upper,
@@ -215,7 +234,7 @@ def run_formal_baseline_difference_interval(
     write_json(run_root / "artifacts" / "formal_baseline_difference_interval_decision.json", audit)
     report = (
         "# Formal Baseline Difference Interval Report\n\n"
-        "该报告计算 SSTW 相对 5 个现代 external baseline 的分数均值差及 95% 置信区间。"
+        "该报告计算 SSTW 相对 5 个现代 external baseline 的 TPR@target FPR 差值及 95% 置信区间。"
         "validation_scale 样本量只用于验证统计产物闭环, 不作为显著性或最终效果主张。\n\n"
         f"- formal_baseline_difference_interval_decision: {audit['formal_baseline_difference_interval_decision']}\n"
         f"- paper_result_level: {audit['paper_result_level']}\n"

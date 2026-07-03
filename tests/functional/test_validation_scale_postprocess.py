@@ -7,6 +7,7 @@ import pytest
 
 from experiments.generative_video_model_probe.formal_method_baseline_comparison import run_formal_method_baseline_comparison
 from experiments.generative_video_model_probe.formal_baseline_difference_interval import run_formal_baseline_difference_interval
+from experiments.generative_video_model_probe.fair_detection_calibration import run_fair_detection_calibration
 from experiments.generative_video_model_probe.low_fpr_formal_statistics import run_low_fpr_formal_statistics
 from experiments.generative_video_model_probe.motion_consistency_exclusion_report import run_motion_consistency_exclusion_report
 from experiments.generative_video_model_probe.sstw_formal_result import run_sstw_measured_formal_result
@@ -165,9 +166,9 @@ def test_sstw_measured_formal_result_writes_project_method_records(tmp_path: Pat
 
 @pytest.mark.quick
 def test_formal_method_baseline_comparison_requires_sstw_and_five_baselines(tmp_path: Path) -> None:
-    """同协议统计表必须同时包含 SSTW 和 5 个 measured_formal modern baseline。"""
+    """同协议统计表必须同时包含 SSTW 和 5 个已完成公平校准的 modern baseline。"""
     run_root = tmp_path / "run"
-    write_jsonl(run_root / "records" / "sstw_measured_formal_records.jsonl", [
+    sstw_rows = [
         {
             "method_id": "sstw_key_conditioned_flow_trajectory",
             "method_role": "proposed_method",
@@ -176,8 +177,23 @@ def test_formal_method_baseline_comparison_requires_sstw_and_five_baselines(tmp_
             "attack_name": "video_compression_runtime",
             "sstw_score": 0.84,
             "sstw_detected": True,
+            "sstw_clean_negative_score": 0.1,
         }
-    ])
+    ]
+    sstw_rows.extend(
+        {
+            "method_id": "sstw_key_conditioned_flow_trajectory",
+            "method_role": "proposed_method",
+            "metric_status": "measured_formal",
+            "sample_role": "clean_negative",
+            "prompt_id": f"negative_{index}",
+            "seed_id": "seed_a",
+            "sstw_score": 0.05 + index * 0.001,
+            "sstw_score_semantics": "sstw_conservative_detector_score",
+        }
+        for index in range(10)
+    )
+    write_jsonl(run_root / "records" / "sstw_measured_formal_records.jsonl", sstw_rows)
     baseline_records = []
     for baseline_id, score in {
         "videoshield": 0.62,
@@ -192,14 +208,33 @@ def test_formal_method_baseline_comparison_requires_sstw_and_five_baselines(tmp_
             "metric_status": "measured_formal",
             "prompt_id": "prompt_a",
             "attack_name": "video_compression_runtime",
+            "external_baseline_raw_detector_score": score,
             "external_baseline_score": score,
             "external_baseline_detected": score > 0.6,
+            "external_baseline_clean_negative_score": 0.1,
+            "external_baseline_score_semantics": "watermark_presence_detector_score",
         })
+        baseline_records.extend(
+            {
+                "external_baseline_name": baseline_id,
+                "external_baseline_layer": "modern_external_baseline",
+                "metric_status": "measured_formal",
+                "sample_role": "clean_negative",
+                "prompt_id": f"negative_{index}",
+                "seed_id": "seed_a",
+                "external_baseline_raw_detector_score": 0.05 + index * 0.001,
+                "external_baseline_score": 0.05 + index * 0.001,
+                "external_baseline_score_semantics": "watermark_presence_detector_score",
+            }
+            for index in range(10)
+        )
     write_jsonl(run_root / "records" / "external_baseline_score_records.jsonl", baseline_records)
 
+    fair_audit = run_fair_detection_calibration(run_root)
     audit = run_formal_method_baseline_comparison(run_root)
     records = read_jsonl(run_root / "records" / "formal_method_baseline_comparison_records.jsonl")
 
+    assert fair_audit["fair_detection_calibration_decision"] == "PASS"
     assert audit["formal_method_baseline_comparison_decision"] == "PASS"
     assert audit["formal_comparison_required_method_count"] == 6
     assert audit["formal_comparison_ready_method_count"] == 6
@@ -214,7 +249,8 @@ def test_formal_method_baseline_comparison_requires_sstw_and_five_baselines(tmp_
         "videoseal",
     }
     assert all(record["metric_status"] == "measured_formal" for record in records)
-    assert all(record["comparison_scope"] == "paper_protocol_formal_adapter" for record in records)
+    assert all(record["comparison_scope"] == "fair_detection_calibration_at_target_fpr" for record in records)
+    assert all(record["comparison_primary_metric_name"] == "tpr_at_target_fpr" for record in records)
     assert (run_root / "tables" / "formal_method_baseline_comparison_table.csv").exists()
     assert (run_root / "artifacts" / "formal_method_baseline_comparison_decision.json").exists()
     assert (run_root / "reports" / "formal_method_baseline_comparison_report.md").exists()
@@ -222,9 +258,9 @@ def test_formal_method_baseline_comparison_requires_sstw_and_five_baselines(tmp_
 
 @pytest.mark.quick
 def test_formal_baseline_difference_interval_writes_sstw_vs_each_baseline_ci(tmp_path: Path) -> None:
-    """差值 CI 报告必须覆盖 SSTW 相对 5 个 modern baseline 的 measured_formal 分数差。"""
+    """差值 CI 报告必须覆盖 SSTW 相对 5 个 modern baseline 的 TPR@target FPR 差。"""
     run_root = tmp_path / "run"
-    write_jsonl(run_root / "records" / "sstw_measured_formal_records.jsonl", [
+    sstw_rows = [
         {
             "metric_status": "measured_formal",
             "prompt_id": f"prompt_{index}",
@@ -233,7 +269,18 @@ def test_formal_baseline_difference_interval_writes_sstw_vs_each_baseline_ci(tmp
             "sstw_score": 0.8 + index * 0.01,
         }
         for index in range(3)
-    ])
+    ]
+    sstw_rows.extend(
+        {
+            "metric_status": "measured_formal",
+            "sample_role": "clean_negative",
+            "prompt_id": f"negative_{index}",
+            "seed_id": "seed_a",
+            "sstw_score": 0.05 + index * 0.001,
+        }
+        for index in range(10)
+    )
+    write_jsonl(run_root / "records" / "sstw_measured_formal_records.jsonl", sstw_rows)
     baseline_records = []
     for baseline_id in ("videoshield", "sigmark", "videomark", "vidsig", "videoseal"):
         for index in range(3):
@@ -243,18 +290,36 @@ def test_formal_baseline_difference_interval_writes_sstw_vs_each_baseline_ci(tmp
                 "prompt_id": f"prompt_{index}",
                 "seed_id": "seed_a",
                 "attack_name": "video_compression_runtime",
+                "external_baseline_raw_detector_score": 0.6 + index * 0.01,
                 "external_baseline_score": 0.6 + index * 0.01,
+                "external_baseline_score_semantics": "watermark_presence_detector_score",
             })
+        baseline_records.extend(
+            {
+                "external_baseline_name": baseline_id,
+                "metric_status": "measured_formal",
+                "sample_role": "clean_negative",
+                "prompt_id": f"negative_{index}",
+                "seed_id": "seed_a",
+                "external_baseline_raw_detector_score": 0.05 + index * 0.001,
+                "external_baseline_score": 0.05 + index * 0.001,
+                "external_baseline_score_semantics": "watermark_presence_detector_score",
+            }
+            for index in range(10)
+        )
     write_jsonl(run_root / "records" / "external_baseline_score_records.jsonl", baseline_records)
 
+    fair_audit = run_fair_detection_calibration(run_root)
     audit = run_formal_baseline_difference_interval(run_root)
     records = read_jsonl(run_root / "records" / "formal_baseline_difference_interval_records.jsonl")
 
+    assert fair_audit["fair_detection_calibration_decision"] == "PASS"
     assert audit["formal_baseline_difference_interval_decision"] == "PASS"
     assert audit["difference_interval_record_count"] == 5
     assert audit["difference_interval_ready_count"] == 5
     assert audit["difference_interval_missing_baseline_ids"] == []
-    assert all(record["score_mean_difference"] == 0.2 for record in records)
+    assert all(record["difference_metric_name"] == "tpr_at_target_fpr_difference" for record in records)
+    assert all(record["tpr_at_target_fpr_difference"] == 0.0 for record in records)
     assert all(record["difference_interval_status"] == "ready" for record in records)
     assert all(record["significance_claim_status"] == "validation_scale_interval_not_significance_claim" for record in records)
     assert all(record["paired_comparison_unit_count"] == 3 for record in records)
@@ -399,6 +464,7 @@ def test_validation_artifact_rebuild_dry_run_reports_missing_and_pass_states(tmp
         "records/sstw_measured_formal_records.jsonl",
         "records/external_baseline_records.jsonl",
         "records/external_baseline_score_records.jsonl",
+        "records/fair_detection_calibration_records.jsonl",
         "records/formal_method_baseline_comparison_records.jsonl",
         "records/formal_baseline_difference_interval_records.jsonl",
         "records/validation_scale_formal_internal_ablation_records.jsonl",
@@ -418,6 +484,7 @@ def test_validation_artifact_rebuild_dry_run_reports_missing_and_pass_states(tmp
         "artifacts/sstw_measured_formal_decision.json",
         "artifacts/external_baseline_status_decision.json",
         "artifacts/external_baseline_comparison_decision.json",
+        "artifacts/fair_detection_calibration_decision.json",
         "artifacts/formal_method_baseline_comparison_decision.json",
         "artifacts/formal_baseline_difference_interval_decision.json",
         "artifacts/validation_scale_formal_internal_ablation_decision.json",
@@ -434,6 +501,7 @@ def test_validation_artifact_rebuild_dry_run_reports_missing_and_pass_states(tmp
         "tables/runtime_detection_table.csv",
         "tables/motion_consistency_exclusion_table.csv",
         "tables/sstw_measured_formal_table.csv",
+        "tables/fair_detection_calibration_table.csv",
         "tables/formal_method_baseline_comparison_table.csv",
         "tables/formal_baseline_difference_interval_table.csv",
         "tables/validation_scale_formal_internal_ablation_table.csv",
@@ -446,6 +514,7 @@ def test_validation_artifact_rebuild_dry_run_reports_missing_and_pass_states(tmp
         "reports/external_baseline_comparison_report.md",
         "reports/motion_consistency_exclusion_report.md",
         "reports/sstw_measured_formal_report.md",
+        "reports/fair_detection_calibration_report.md",
         "reports/formal_method_baseline_comparison_report.md",
         "reports/formal_baseline_difference_interval_report.md",
         "reports/validation_scale_formal_internal_ablation_report.md",

@@ -77,6 +77,7 @@ def _load_config(config_path: str | Path = DEFAULT_VALIDATION_SCALE_CONFIG) -> d
         "require_external_baseline_comparison_records": bool(config.get("require_external_baseline_comparison_records", True)),
         "require_external_baseline_self_containment_decision": bool(config.get("require_external_baseline_self_containment_decision", True)),
         "require_sstw_measured_formal_records": bool(config.get("require_sstw_measured_formal_records", True)),
+        "require_fair_detection_calibration": bool(config.get("require_fair_detection_calibration", True)),
         "require_formal_method_baseline_comparison": bool(config.get("require_formal_method_baseline_comparison", True)),
         "require_formal_baseline_difference_interval": bool(config.get("require_formal_baseline_difference_interval", True)),
         "minimum_external_baseline_measured_adapter_count": int(config.get("minimum_external_baseline_measured_adapter_count", DEFAULT_MINIMUM_EXTERNAL_BASELINE_MEASURED_ADAPTER_COUNT)),
@@ -245,6 +246,15 @@ def _formal_method_baseline_comparison_ready(run_root: Path) -> tuple[bool, int,
     return ready, ready_count, decision.get("claim_support_status", "missing_formal_method_baseline_comparison_decision")
 
 
+def _fair_detection_calibration_ready(run_root: Path) -> tuple[bool, int, str]:
+    """检查 clean negative calibration 公平比较是否已通过。"""
+    records = _read_jsonl(run_root / "records" / "fair_detection_calibration_records.jsonl")
+    decision = _read_json(run_root / "artifacts" / "fair_detection_calibration_decision.json")
+    ready = bool(records) and _decision_pass(decision, "fair_detection_calibration_decision")
+    ready_count = int(decision.get("fair_detection_calibration_ready_count") or 0)
+    return ready, ready_count, decision.get("claim_support_status", "missing_fair_detection_calibration_decision")
+
+
 def _formal_baseline_difference_interval_ready(run_root: Path) -> tuple[bool, int, str]:
     """检查 SSTW 相对 baseline 的差值置信区间报告是否已通过。"""
     records = _read_jsonl(run_root / "records" / "formal_baseline_difference_interval_records.jsonl")
@@ -317,6 +327,7 @@ def build_validation_scale_gate_audit(
     confidence_interval_ready, confidence_interval_status = _confidence_interval_ready(run_root)
     low_fpr_ready, low_fpr_record_count, low_fpr_status = _low_fpr_formal_statistics_ready(run_root)
     sstw_measured_formal_ready, sstw_measured_formal_record_count, sstw_measured_formal_status = _sstw_measured_formal_ready(run_root)
+    fair_detection_ready, fair_detection_ready_count, fair_detection_status = _fair_detection_calibration_ready(run_root)
     formal_method_comparison_ready, formal_method_comparison_ready_count, formal_method_comparison_status = _formal_method_baseline_comparison_ready(run_root)
     formal_difference_interval_ready, formal_difference_interval_ready_count, formal_difference_interval_status = _formal_baseline_difference_interval_ready(run_root)
     artifact_rebuild_ready, artifact_rebuild_status = _artifact_rebuild_ready(run_root)
@@ -336,6 +347,7 @@ def build_validation_scale_gate_audit(
         "validation_external_baseline_comparison_records_ready": (not config["require_external_baseline_comparison_records"]) or external_baseline_comparison_ready,
         "validation_external_baseline_self_containment_ready": (not config["require_external_baseline_self_containment_decision"]) or external_baseline_self_containment_decision.get("external_baseline_self_containment_decision") == "PASS",
         "validation_sstw_measured_formal_records_ready": (not config["require_sstw_measured_formal_records"]) or sstw_measured_formal_ready,
+        "validation_fair_detection_calibration_ready": (not config["require_fair_detection_calibration"]) or fair_detection_ready,
         "validation_formal_method_baseline_comparison_ready": (not config["require_formal_method_baseline_comparison"]) or formal_method_comparison_ready,
         "validation_formal_baseline_difference_interval_ready": (not config["require_formal_baseline_difference_interval"]) or formal_difference_interval_ready,
         "validation_data_split_and_leakage_guard_ready": (not config["require_data_split_and_leakage_guard"]) or data_split_decision.get("data_split_and_leakage_guard_decision") == "PASS",
@@ -396,6 +408,8 @@ def build_validation_scale_gate_audit(
         "external_baseline_self_containment_decision": external_baseline_self_containment_decision.get("external_baseline_self_containment_decision"),
         "sstw_measured_formal_record_count": sstw_measured_formal_record_count,
         "sstw_measured_formal_status": sstw_measured_formal_status,
+        "fair_detection_calibration_ready_count": fair_detection_ready_count,
+        "fair_detection_calibration_status": fair_detection_status,
         "formal_method_baseline_comparison_ready_count": formal_method_comparison_ready_count,
         "formal_method_baseline_comparison_status": formal_method_comparison_status,
         "formal_baseline_difference_interval_ready_count": formal_difference_interval_ready_count,
@@ -440,7 +454,7 @@ def write_validation_scale_gate_audit(
         "该报告由已落盘的 governed records 与 decision artifacts 自动生成。它只判断 validation-scale "
         "是否已经作为 paper 级前的小样本全流程打通层完成闭环。该层级使用当前 protocol config "
         f"指定的 target_fpr={target_fpr_text} "
-        "预演口径验证 records、tables、figures、reports、manifests、baseline、消融、attack、CI "
+        "预演口径验证 records、tables、figures、reports、manifests、baseline、clean negative 公平校准、消融、attack、CI "
         "和 artifact rebuild 是否能够完整产出。它不支撑效果主张, 通过后只能生成 "
         "validation_scale_to_pilot_paper_transition_decision 并进入 pilot_paper; "
         "不能直接进入 full_paper。\n\n"
@@ -463,6 +477,8 @@ def write_validation_scale_gate_audit(
         f"- external_baseline_self_containment_decision: {audit['external_baseline_self_containment_decision']}\n"
         f"- sstw_measured_formal_record_count: {audit['sstw_measured_formal_record_count']}\n"
         f"- sstw_measured_formal_status: {audit['sstw_measured_formal_status']}\n"
+        f"- fair_detection_calibration_ready_count: {audit['fair_detection_calibration_ready_count']}\n"
+        f"- fair_detection_calibration_status: {audit['fair_detection_calibration_status']}\n"
         f"- formal_method_baseline_comparison_ready_count: {audit['formal_method_baseline_comparison_ready_count']}\n"
         f"- formal_method_baseline_comparison_status: {audit['formal_method_baseline_comparison_status']}\n"
         f"- formal_baseline_difference_interval_ready_count: {audit['formal_baseline_difference_interval_ready_count']}\n"

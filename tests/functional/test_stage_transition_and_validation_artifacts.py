@@ -316,6 +316,9 @@ def test_validation_scale_figure_and_package_manifest_are_rebuilt_from_artifacts
     write_json(run_root / "artifacts" / "sstw_measured_formal_decision.json", {
         "sstw_measured_formal_decision": "PASS",
     })
+    write_json(run_root / "artifacts" / "fair_detection_calibration_decision.json", {
+        "fair_detection_calibration_decision": "PASS",
+    })
     write_json(run_root / "artifacts" / "formal_method_baseline_comparison_decision.json", {
         "formal_method_baseline_comparison_decision": "PASS",
     })
@@ -342,6 +345,7 @@ def test_validation_scale_figure_and_package_manifest_are_rebuilt_from_artifacts
     assert manifest["validation_scale_package_manifest_decision"] == "PASS"
     assert manifest["motion_consistency_exclusion_decision"] == "PASS"
     assert manifest["sstw_measured_formal_decision"] == "PASS"
+    assert manifest["fair_detection_calibration_decision"] == "PASS"
     assert manifest["formal_method_baseline_comparison_decision"] == "PASS"
     assert manifest["formal_baseline_difference_interval_decision"] == "PASS"
     assert manifest["validation_scale_formal_internal_ablation_decision"] == "PASS"

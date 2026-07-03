@@ -56,6 +56,7 @@ def test_validation_scale_gate_blocks_empty_run(tmp_path: Path) -> None:
     assert "validation_generation_records_ready" in audit["missing_validation_requirements"]
     assert "validation_internal_ablation_records_ready" in audit["missing_validation_requirements"]
     assert "validation_sstw_measured_formal_records_ready" in audit["missing_validation_requirements"]
+    assert "validation_fair_detection_calibration_ready" in audit["missing_validation_requirements"]
     assert "validation_formal_method_baseline_comparison_ready" in audit["missing_validation_requirements"]
     assert "validation_formal_baseline_difference_interval_ready" in audit["missing_validation_requirements"]
     assert "validation_scale_formal_internal_ablation_ready" in audit["missing_validation_requirements"]
@@ -154,6 +155,18 @@ def test_validation_scale_gate_passes_when_all_governed_inputs_exist(tmp_path: P
         "sstw_measured_formal_decision": "PASS",
         "sstw_measured_formal_record_count": 1,
         "claim_support_status": "sstw_measured_formal_validation_scale_only",
+    })
+    write_jsonl(run_root / "records" / "fair_detection_calibration_records.jsonl", [
+        {"method_id": "sstw_key_conditioned_flow_trajectory", "fair_comparison_status": "ready", "metric_status": "measured_formal"},
+        *[
+            {"method_id": baseline_id, "fair_comparison_status": "ready", "metric_status": "measured_formal"}
+            for baseline_id in sorted(MODERN_EXTERNAL_BASELINE_NAMES)
+        ],
+    ])
+    write_json(run_root / "artifacts" / "fair_detection_calibration_decision.json", {
+        "fair_detection_calibration_decision": "PASS",
+        "fair_detection_calibration_ready_count": 6,
+        "claim_support_status": "fair_detection_calibration_validation_scale_ready",
     })
     write_jsonl(run_root / "records" / "formal_method_baseline_comparison_records.jsonl", [
         {"method_id": "sstw_key_conditioned_flow_trajectory", "metric_status": "measured_formal"},
@@ -267,6 +280,8 @@ def test_validation_scale_gate_passes_when_all_governed_inputs_exist(tmp_path: P
     assert audit["motion_consistency_exclusion_status"] == "motion_consistency_exclusion_audit_record"
     assert audit["sstw_measured_formal_record_count"] == 1
     assert audit["sstw_measured_formal_status"] == "sstw_measured_formal_validation_scale_only"
+    assert audit["fair_detection_calibration_ready_count"] == 6
+    assert audit["fair_detection_calibration_status"] == "fair_detection_calibration_validation_scale_ready"
     assert audit["formal_method_baseline_comparison_ready_count"] == 6
     assert audit["formal_method_baseline_comparison_status"] == "formal_method_baseline_comparison_validation_scale_only"
     assert audit["formal_baseline_difference_interval_ready_count"] == 5

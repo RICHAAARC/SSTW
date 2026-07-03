@@ -1243,3 +1243,30 @@ Notebook 与 repository module 的跨边界数据
 | external_baseline_clean_negative_score | metric | none | true | false | false | baseline 自身 clean negative 分布中的检测分数, 用于 target FPR 阈值校准。 |
 | external_baseline_clean_negative_score_semantics | protocol | none | true | false | false | clean negative 分数语义, 必须与 external_baseline_score_semantics 对齐。 |
 | external_baseline_clean_negative_video_path | artifact | none | true | false | false | baseline 自身 clean negative 视频路径, 用于审计阈值校准来源。 |
+| fair_comparison_protocol | protocol | none | true | false | false | 公平比较协议名称, 当前为 method-specific clean negative calibration 到统一 target FPR。 |
+| require_fair_detection_calibration | protocol | none | true | false | false | validation_scale gate 是否要求 clean negative 公平校准通过。 |
+| minimum_clean_negative_count | protocol | none | true | false | false | 每个方法校准 target FPR 所需的最小 clean negative 分数数量。 |
+| fair_detection_calibration_decision | governance | none | true | true | false | clean negative calibration 公平比较阶段判定。 |
+| fair_detection_calibration_record_id | protocol | none | true | false | false | 单条公平校准记录的稳定标识。 |
+| fair_comparison_status | governance | none | true | true | false | 单个方法的公平校准状态。 |
+| fair_comparison_missing_reasons | governance | none | true | false | false | 单个方法未通过公平校准的原因列表。 |
+| positive_score_field | protocol | none | true | false | false | attacked positive TPR 统计使用的分数字段。 |
+| clean_negative_score_field | protocol | none | true | false | false | clean negative 阈值校准使用的分数字段。 |
+| clean_negative_score_count | metric | none | true | true | false | clean negative 校准分数数量。 |
+| attacked_positive_score_count | metric | none | true | true | false | attacked positive 检测分数数量。 |
+| calibrated_threshold | metric | none | true | true | false | 在方法自身 clean negative 分布上校准得到的检测阈值。 |
+| threshold_selection_policy | protocol | none | true | false | false | 阈值选择策略。 |
+| heldout_fpr_at_calibrated_threshold | metric | none | true | true | false | 校准阈值在 clean negative 分布上的经验 FPR。 |
+| detected_positive_count_at_target_fpr | metric | none | true | true | false | target FPR 阈值下 detected attacked positive 数量。 |
+| tpr_ci_confidence_level | metric | none | true | false | false | TPR 置信区间置信水平。 |
+| tpr_ci_lower | metric | none | true | true | false | TPR 置信区间下界。 |
+| tpr_ci_upper | metric | none | true | true | false | TPR 置信区间上界。 |
+| fair_detection_calibration_method_count | metric | none | true | false | false | 公平校准要求覆盖的方法数量。 |
+| fair_detection_calibration_ready_count | metric | none | true | true | false | 公平校准已通过的方法数量。 |
+| fair_detection_calibration_missing_method_ids | governance | none | true | false | false | 公平校准缺失或阻断的方法列表。 |
+| fair_detection_calibration_missing_method_count | metric | none | true | false | false | 公平校准缺失或阻断的方法数量。 |
+| comparison_primary_metric_name | protocol | none | true | true | false | formal method baseline comparison 的主比较指标名称。 |
+| comparison_primary_metric_value | metric | none | true | true | false | formal method baseline comparison 的主比较指标数值。 |
+| reference_tpr_at_target_fpr | metric | none | true | true | false | 差值区间中参考方法的 TPR@target FPR。 |
+| baseline_tpr_at_target_fpr | metric | none | true | true | false | 差值区间中 baseline 的 TPR@target FPR。 |
+| tpr_at_target_fpr_difference | metric | none | true | true | false | SSTW TPR@target FPR 减 baseline TPR@target FPR 的差值。 |

@@ -1,6 +1,6 @@
 {
   "config_kind": "generative_video_notebook_workflow_config",
-  "config_version": "2026_07_03_profile_stage_timestamp_zip_v17",
+  "config_version": "2026_07_04_fair_comparison_stage_v18",
   "default_dataset_root_relative": "datasets/generative_video_prompt_suite",
   "default_drive_project_root": "/content/drive/MyDrive/SSTW",
   "default_prompt_suite_path_relative": "datasets/generative_video_prompt_suite/prompt_seed_suite.json",
@@ -93,6 +93,7 @@
         "external_baseline_official_result_bundle_preflight",
         "external_baseline_comparison",
         "external_baseline_self_containment_decision",
+        "fair_detection_calibration",
         "formal_method_baseline_comparison",
         "formal_baseline_difference_interval",
         "validation_scale_formal_internal_ablation",
@@ -214,7 +215,7 @@
       "max_content_records": 24,
       "max_source_records": 24,
       "method_sample_count": 24,
-      "minimum_clean_negative_count": 0,
+      "minimum_clean_negative_count": 10,
       "motion_threshold_artifact_run_root_relative": "runs/generative_video_model_probe/motion_calibration",
       "next_allowed_result_profiles_after_pass": [
         "pilot_paper"
@@ -225,8 +226,8 @@
       ],
       "paper_gate_preflight_layer": true,
       "paper_gate_profile": true,
-      "profile_status": "implemented_small_sample_full_pipeline_rehearsal_requires_self_contained_baselines",
-      "profile_switching_note": "validation_scale 是 paper 级前的小样本全流程打通层, 使用 protocol_config_path 指向的 validation_scale protocol config 中的 target_fpr 口径验证所有 records、tables、figures、reports、manifests、baseline、消融、attack、CI 和 artifact rebuild 能闭环; 它不支撑效果主张, 通过后只能生成 validation_scale_to_pilot_paper_transition_decision 并进入 pilot_paper, 不能直接进入 full_paper。",
+      "profile_status": "implemented_small_sample_full_pipeline_rehearsal_requires_self_contained_baselines_and_fair_calibration",
+      "profile_switching_note": "validation_scale 是 paper 级前的小样本全流程打通层, 使用 protocol_config_path 指向的 validation_scale protocol config 中的 target_fpr 口径验证所有 records、tables、figures、reports、manifests、baseline、消融、attack、CI、clean negative 公平校准和 artifact rebuild 能闭环; 它不支撑效果主张, 通过后只能生成 validation_scale_to_pilot_paper_transition_decision 并进入 pilot_paper, 不能直接进入 full_paper。",
       "protocol_config_path": "configs/protocol/validation_scale_generative_probe.json",
       "result_tier": "validation_scale",
       "runtime_profile": "validation_scale"

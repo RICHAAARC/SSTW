@@ -1,0 +1,418 @@
+"""基于方法自身 clean negative 分布的公平检测校准。
+
+该模块实现 validation_scale 必须闭合的公平比较机制: 每个方法先在自己的
+clean negative 分布上校准到同一个 target FPR, 再在同一 prompt / seed / attack
+锚点下比较 attacked positive 的 TPR。Notebook 只调用本模块命令, 不在 cell 中
+手写阈值、TPR 或论文表格。
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import math
+from pathlib import Path
+from typing import Any, Iterable, Mapping
+
+from main.core.digest import build_stable_digest
+from main.protocol.flow_evidence_fields import with_flow_evidence_protocol_defaults
+from main.protocol.record_writer import write_json, write_jsonl
+from main.protocol.table_builder import write_csv
+
+
+DEFAULT_PROTOCOL_CONFIG = "configs/protocol/validation_scale_generative_probe.json"
+SSTW_METHOD_ID = "sstw_key_conditioned_flow_trajectory"
+DEFAULT_REQUIRED_BASELINES = ("videoshield", "sigmark", "videomark", "vidsig", "videoseal")
+
+
+def _read_json(path: Path) -> dict[str, Any]:
+    """读取 JSON 对象, 文件不存在时返回空对象。"""
+
+    if not path.exists():
+        return {}
+    payload = json.loads(path.read_text(encoding="utf-8-sig"))
+    if not isinstance(payload, dict):
+        raise TypeError(f"JSON 顶层必须是对象: {path}")
+    return payload
+
+
+def _read_jsonl(path: Path) -> list[dict[str, Any]]:
+    """读取 JSONL records, 文件不存在时返回空列表。"""
+
+    if not path.exists():
+        return []
+    return [json.loads(line) for line in path.read_text(encoding="utf-8-sig").splitlines() if line.strip()]
+
+
+def _safe_float(value: object) -> float | None:
+    """将 record 中的分数字段安全转换为 float。"""
+
+    if value is None or value == "" or value == "unsupported":
+        return None
+    try:
+        return float(value)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return None
+
+
+def _load_profile_context(config_path: str | Path) -> dict[str, Any]:
+    """读取当前 workflow profile 的公平比较协议。"""
+
+    config_path = Path(config_path)
+    config = _read_json(config_path)
+    if "target_fpr" not in config:
+        raise KeyError(f"protocol config 缺少 target_fpr: {config_path}")
+    return {
+        "paper_result_level": str(config.get("paper_result_level") or "validation_scale"),
+        "target_fpr": float(config["target_fpr"]),
+        "target_fpr_source_config_path": str(config_path),
+        "minimum_clean_negative_count": int(config.get("minimum_clean_negative_count") or 0),
+        "required_modern_external_baseline_adapter_names": [
+            str(item)
+            for item in config.get("required_modern_external_baseline_adapter_names", DEFAULT_REQUIRED_BASELINES)
+            if str(item)
+        ],
+        "fair_comparison_protocol": str(
+            config.get("fair_comparison_protocol")
+            or "method_specific_clean_negative_calibration_to_target_fpr"
+        ),
+    }
+
+
+def _role_values(record: Mapping[str, Any]) -> set[str]:
+    """汇总一个 record 中可表达 positive / negative 角色的字段。"""
+
+    fields = (
+        "sample_role",
+        "negative_family",
+        "calibration_sample_role",
+        "comparison_sample_role",
+        "split_role",
+        "motion_calibration_role",
+    )
+    return {str(record.get(field) or "").strip().lower() for field in fields if record.get(field) not in {None, ""}}
+
+
+def _is_clean_negative_record(record: Mapping[str, Any]) -> bool:
+    """判断 record 是否代表 clean negative 样本。"""
+
+    values = _role_values(record)
+    return any("negative" in value for value in values) or any(value in {"clean", "clean_negative"} for value in values)
+
+
+def _is_attacked_positive_record(record: Mapping[str, Any]) -> bool:
+    """判断 record 是否代表 attacked positive 样本。"""
+
+    if _is_clean_negative_record(record):
+        return False
+    attack_name = str(record.get("attack_name") or "").strip()
+    return bool(attack_name)
+
+
+def _first_score(record: Mapping[str, Any], field_names: tuple[str, ...]) -> tuple[float | None, str]:
+    """按候选字段顺序提取第一个可用分数。"""
+
+    for field_name in field_names:
+        value = _safe_float(record.get(field_name))
+        if value is not None:
+            return value, field_name
+    return None, "missing_score"
+
+
+def _deduplicated_score_rows(
+    records: Iterable[Mapping[str, Any]],
+    *,
+    score_fields: tuple[str, ...],
+    negative_embedded_fields: tuple[str, ...] = (),
+) -> list[dict[str, Any]]:
+    """提取 clean negative 分数, 并按视频路径或 prompt / seed 去重。
+
+    部分 baseline 会把同一个 clean negative 分数随每个 attack positive record
+    重复写出。此处用 clean video path、prompt、seed 和字段名去重, 避免阈值校准
+    被重复攻击数放大。
+    """
+
+    rows: list[dict[str, Any]] = []
+    seen: set[tuple[str, str, str, str]] = set()
+    for record in records:
+        candidate_fields = score_fields if _is_clean_negative_record(record) else negative_embedded_fields
+        if not candidate_fields:
+            continue
+        score, field_name = _first_score(record, candidate_fields)
+        if score is None:
+            continue
+        path = str(
+            record.get("clean_negative_video_path")
+            or record.get("external_baseline_clean_negative_video_path")
+            or record.get("source_video_path")
+            or ""
+        )
+        key = (
+            path,
+            str(record.get("prompt_id") or ""),
+            str(record.get("seed_id") or ""),
+            field_name,
+        )
+        if key in seen:
+            continue
+        seen.add(key)
+        rows.append({
+            "score": float(score),
+            "score_field": field_name,
+            "prompt_id": record.get("prompt_id"),
+            "seed_id": record.get("seed_id"),
+            "video_path": path,
+        })
+    return rows
+
+
+def _positive_score_rows(records: Iterable[Mapping[str, Any]], *, score_fields: tuple[str, ...]) -> list[dict[str, Any]]:
+    """提取 attacked positive 分数。"""
+
+    rows: list[dict[str, Any]] = []
+    for record in records:
+        if record.get("metric_status") != "measured_formal" or not _is_attacked_positive_record(record):
+            continue
+        score, field_name = _first_score(record, score_fields)
+        if score is None:
+            continue
+        rows.append({
+            "score": float(score),
+            "score_field": field_name,
+            "prompt_id": record.get("prompt_id"),
+            "seed_id": record.get("seed_id"),
+            "attack_name": record.get("attack_name"),
+            "comparison_unit_id": record.get("runtime_comparison_unit_id")
+            or record.get("external_baseline_score_record_id")
+            or record.get("sstw_measured_formal_record_id"),
+        })
+    return rows
+
+
+def _fpr_at_threshold(scores: list[float], threshold: float) -> float:
+    """计算 higher-is-more-watermarked 方向下的 FPR。"""
+
+    if not scores:
+        return 0.0
+    return sum(1 for score in scores if score >= threshold) / len(scores)
+
+
+def _threshold_for_target_fpr(scores: list[float], target_fpr: float) -> tuple[float | None, float | None, str]:
+    """从 clean negative 分布选择满足 target FPR 的阈值。"""
+
+    if not scores:
+        return None, None, "missing_clean_negative_scores"
+    unique_scores = sorted({float(score) for score in scores})
+    epsilon = max(1e-12, (max(unique_scores) - min(unique_scores, default=0.0)) * 1e-9)
+    candidates = [unique_scores[-1] + epsilon, *unique_scores]
+    candidates = sorted({float(value) for value in candidates})
+    selected_threshold: float | None = None
+    selected_fpr: float | None = None
+    for threshold in candidates:
+        fpr = _fpr_at_threshold(scores, threshold)
+        if fpr <= target_fpr:
+            selected_threshold = threshold
+            selected_fpr = fpr
+            break
+    if selected_threshold is None:
+        selected_threshold = unique_scores[-1] + epsilon
+        selected_fpr = 0.0
+    return round(float(selected_threshold), 12), round(float(selected_fpr), 6), "empirical_clean_negative_quantile"
+
+
+def _wilson_interval(success_count: int, total_count: int, z: float = 1.96) -> tuple[float | None, float | None]:
+    """计算二项比例 Wilson 95% 置信区间。"""
+
+    if total_count <= 0:
+        return None, None
+    phat = success_count / total_count
+    denom = 1.0 + z * z / total_count
+    centre = phat + z * z / (2 * total_count)
+    radius = z * math.sqrt((phat * (1.0 - phat) + z * z / (4 * total_count)) / total_count)
+    return round((centre - radius) / denom, 6), round((centre + radius) / denom, 6)
+
+
+def _calibrated_method_record(
+    *,
+    method_id: str,
+    method_role: str,
+    records: list[dict[str, Any]],
+    positive_score_fields: tuple[str, ...],
+    negative_score_fields: tuple[str, ...],
+    embedded_negative_score_fields: tuple[str, ...],
+    score_semantics_field: str,
+    default_score_semantics: str,
+    context: dict[str, Any],
+) -> dict[str, Any]:
+    """构建单个方法的公平校准记录。"""
+
+    positive_rows = _positive_score_rows(records, score_fields=positive_score_fields)
+    negative_rows = _deduplicated_score_rows(
+        records,
+        score_fields=negative_score_fields,
+        negative_embedded_fields=embedded_negative_score_fields,
+    )
+    negative_scores = [row["score"] for row in negative_rows]
+    positive_scores = [row["score"] for row in positive_rows]
+    threshold, heldout_fpr, threshold_policy = _threshold_for_target_fpr(negative_scores, float(context["target_fpr"]))
+    detected_count = 0
+    if threshold is not None:
+        detected_count = sum(1 for score in positive_scores if score >= threshold)
+    tpr = round(detected_count / len(positive_scores), 6) if positive_scores else None
+    ci_lower, ci_upper = _wilson_interval(detected_count, len(positive_scores))
+    semantics = next(
+        (
+            str(record.get(score_semantics_field))
+            for record in records
+            if record.get(score_semantics_field) not in {None, ""}
+        ),
+        default_score_semantics,
+    )
+    missing_reasons: list[str] = []
+    if len(negative_rows) < int(context["minimum_clean_negative_count"]):
+        missing_reasons.append("clean_negative_score_count_below_minimum")
+    if not positive_rows:
+        missing_reasons.append("attacked_positive_scores_missing")
+    if any(str(record.get("external_baseline_score_orientation") or "higher_is_more_watermarked") != "higher_is_more_watermarked" for record in records):
+        missing_reasons.append("unsupported_score_orientation")
+    calibration_status = "ready" if not missing_reasons and threshold is not None and tpr is not None else "blocked"
+    payload = {
+        "method_id": method_id,
+        "method_role": method_role,
+        "metric_status": "measured_formal" if calibration_status == "ready" else "missing",
+        "fair_comparison_status": calibration_status,
+        "fair_comparison_missing_reasons": missing_reasons,
+        "fair_comparison_protocol": context["fair_comparison_protocol"],
+        "score_semantics": semantics,
+        "score_orientation": "higher_is_more_watermarked",
+        "positive_score_field": positive_rows[0]["score_field"] if positive_rows else positive_score_fields[0],
+        "clean_negative_score_field": negative_rows[0]["score_field"] if negative_rows else (embedded_negative_score_fields or negative_score_fields or ("missing",))[0],
+        "clean_negative_score_count": len(negative_rows),
+        "attacked_positive_score_count": len(positive_rows),
+        "calibrated_threshold": threshold,
+        "threshold_selection_policy": threshold_policy,
+        "heldout_fpr_at_calibrated_threshold": heldout_fpr,
+        "detected_positive_count_at_target_fpr": detected_count,
+        "tpr_at_target_fpr": tpr,
+        "tpr_ci_confidence_level": 0.95,
+        "tpr_ci_lower": ci_lower,
+        "tpr_ci_upper": ci_upper,
+        "prompt_count": len({str(row["prompt_id"]) for row in positive_rows if row.get("prompt_id")}),
+        "attack_count": len({str(row["attack_name"]) for row in positive_rows if row.get("attack_name")}),
+        "claim_support_status": "fair_detection_calibration_validation_scale_ready"
+        if calibration_status == "ready"
+        else "fair_detection_calibration_blocked",
+        **{key: value for key, value in context.items() if key != "required_modern_external_baseline_adapter_names"},
+    }
+    digest = build_stable_digest(payload)
+    return with_flow_evidence_protocol_defaults({
+        "record_version": "fair_detection_calibration_v1",
+        "fair_detection_calibration_record_id": f"fair_detection_calibration_{digest[:16]}",
+        **payload,
+    }, trajectory_source_level="fair_detection_calibration_from_measured_formal_records", claim_support_status=payload["claim_support_status"])
+
+
+def build_fair_detection_calibration_records(
+    run_root: str | Path,
+    config_path: str | Path = DEFAULT_PROTOCOL_CONFIG,
+) -> list[dict[str, Any]]:
+    """构建 SSTW 和现代 baseline 的公平校准 records。"""
+
+    run_root = Path(run_root)
+    context = _load_profile_context(config_path)
+    rows: list[dict[str, Any]] = []
+    sstw_records = _read_jsonl(run_root / "records" / "sstw_measured_formal_records.jsonl")
+    rows.append(_calibrated_method_record(
+        method_id=SSTW_METHOD_ID,
+        method_role="proposed_method",
+        records=sstw_records,
+        positive_score_fields=("sstw_raw_detector_score", "sstw_score", "raw_detector_score"),
+        negative_score_fields=("sstw_clean_negative_score", "clean_negative_score", "sstw_raw_detector_score", "sstw_score", "raw_detector_score"),
+        embedded_negative_score_fields=("sstw_clean_negative_score", "clean_negative_score"),
+        score_semantics_field="sstw_score_semantics",
+        default_score_semantics="sstw_conservative_detector_score",
+        context=context,
+    ))
+    external_records = _read_jsonl(run_root / "records" / "external_baseline_score_records.jsonl")
+    records_by_baseline: dict[str, list[dict[str, Any]]] = {}
+    for record in external_records:
+        if record.get("metric_status") != "measured_formal":
+            continue
+        baseline_id = str(record.get("external_baseline_name") or "")
+        if baseline_id:
+            records_by_baseline.setdefault(baseline_id, []).append(record)
+    for baseline_id in context["required_modern_external_baseline_adapter_names"]:
+        rows.append(_calibrated_method_record(
+            method_id=baseline_id,
+            method_role="modern_external_baseline",
+            records=records_by_baseline.get(baseline_id, []),
+            positive_score_fields=("external_baseline_raw_detector_score", "external_baseline_score", "raw_detector_score"),
+            negative_score_fields=("external_baseline_clean_negative_score", "clean_negative_score", "external_baseline_raw_detector_score", "external_baseline_score"),
+            embedded_negative_score_fields=("external_baseline_clean_negative_score", "clean_negative_score"),
+            score_semantics_field="external_baseline_score_semantics",
+            default_score_semantics="external_baseline_detector_score",
+            context=context,
+        ))
+    return rows
+
+
+def audit_fair_detection_calibration_records(records: list[dict[str, Any]]) -> dict[str, Any]:
+    """审计公平校准是否覆盖 SSTW 与所有现代 baseline。"""
+
+    ready_records = [record for record in records if record.get("fair_comparison_status") == "ready"]
+    missing_method_ids = [str(record.get("method_id")) for record in records if record.get("fair_comparison_status") != "ready"]
+    decision = "PASS" if records and len(ready_records) == len(records) else "FAIL"
+    return {
+        "stage_id": "fair_detection_calibration",
+        "fair_detection_calibration_decision": decision,
+        "claim_support_status": "fair_detection_calibration_validation_scale_ready" if decision == "PASS" else "fair_detection_calibration_blocked",
+        "paper_result_level": records[0].get("paper_result_level") if records else None,
+        "target_fpr": records[0].get("target_fpr") if records else None,
+        "fair_comparison_protocol": records[0].get("fair_comparison_protocol") if records else None,
+        "fair_detection_calibration_method_count": len(records),
+        "fair_detection_calibration_ready_count": len(ready_records),
+        "fair_detection_calibration_missing_method_ids": missing_method_ids,
+        "fair_detection_calibration_missing_method_count": len(missing_method_ids),
+    }
+
+
+def run_fair_detection_calibration(
+    run_root: str | Path,
+    config_path: str | Path = DEFAULT_PROTOCOL_CONFIG,
+) -> dict[str, Any]:
+    """写出公平校准 records、table、decision 和 report。"""
+
+    run_root = Path(run_root)
+    records = build_fair_detection_calibration_records(run_root, config_path)
+    audit = audit_fair_detection_calibration_records(records)
+    write_jsonl(run_root / "records" / "fair_detection_calibration_records.jsonl", records)
+    write_csv(run_root / "tables" / "fair_detection_calibration_table.csv", records)
+    write_json(run_root / "artifacts" / "fair_detection_calibration_decision.json", audit)
+    report = (
+        "# Fair Detection Calibration Report\n\n"
+        "该报告在每个方法自身 clean negative 分布上校准到相同 target FPR, 再统计 attacked positive "
+        "TPR。validation_scale 必须通过该门禁后才允许进入 pilot_paper, 但 validation_scale "
+        "本身仍不支持最终效果大小主张。\n\n"
+        f"- fair_detection_calibration_decision: {audit['fair_detection_calibration_decision']}\n"
+        f"- target_fpr: {audit['target_fpr']}\n"
+        f"- fair_detection_calibration_ready_count: {audit['fair_detection_calibration_ready_count']}\n"
+        f"- fair_detection_calibration_missing_method_ids: {', '.join(audit['fair_detection_calibration_missing_method_ids']) if audit['fair_detection_calibration_missing_method_ids'] else 'none'}\n"
+        f"- claim_support_status: {audit['claim_support_status']}\n"
+    )
+    report_path = run_root / "reports" / "fair_detection_calibration_report.md"
+    report_path.parent.mkdir(parents=True, exist_ok=True)
+    report_path.write_text(report, encoding="utf-8")
+    return audit
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description="生成基于 clean negative calibration 的公平比较记录。")
+    parser.add_argument("--run-root", required=True)
+    parser.add_argument("--config-path", default=DEFAULT_PROTOCOL_CONFIG)
+    args = parser.parse_args()
+    payload = run_fair_detection_calibration(args.run_root, args.config_path)
+    print(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True))
+
+
+if __name__ == "__main__":
+    main()

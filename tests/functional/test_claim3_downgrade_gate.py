@@ -187,6 +187,26 @@ def test_validation_scale_gate_accepts_claim3_downgrade_path(tmp_path: Path) -> 
         "sstw_measured_formal_record_count": 1,
         "claim_support_status": "sstw_measured_formal_validation_scale_only",
     })
+    write_jsonl(run_root / "records" / "fair_detection_calibration_records.jsonl", [
+        {
+            "method_id": "sstw_key_conditioned_flow_trajectory",
+            "fair_comparison_status": "ready",
+            "tpr_at_target_fpr": 1.0,
+        },
+        *[
+            {
+                "method_id": baseline_id,
+                "fair_comparison_status": "ready",
+                "tpr_at_target_fpr": 1.0,
+            }
+            for baseline_id in sorted(MODERN_EXTERNAL_BASELINE_NAMES)
+        ],
+    ])
+    write_json(run_root / "artifacts" / "fair_detection_calibration_decision.json", {
+        "fair_detection_calibration_decision": "PASS",
+        "fair_detection_calibration_ready_count": 6,
+        "claim_support_status": "fair_detection_calibration_validation_scale_ready",
+    })
     write_jsonl(run_root / "records" / "formal_method_baseline_comparison_records.jsonl", [
         {"method_id": "sstw_key_conditioned_flow_trajectory", "metric_status": "measured_formal"},
         *[

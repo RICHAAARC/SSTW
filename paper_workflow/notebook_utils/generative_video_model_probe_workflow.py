@@ -1483,6 +1483,19 @@ def build_sstw_measured_formal_result_command(layout: dict[str, str]) -> list[st
     ]
 
 
+def build_fair_detection_calibration_command(layout: dict[str, str]) -> list[str]:
+    """构造 clean negative calibration 公平比较命令。"""
+    return [
+        sys.executable,
+        "-m",
+        "experiments.generative_video_model_probe.fair_detection_calibration",
+        "--run-root",
+        layout["drive_run_root"],
+        "--config-path",
+        layout["protocol_config_path"],
+    ]
+
+
 def build_formal_method_baseline_comparison_command(layout: dict[str, str]) -> list[str]:
     """构造 SSTW 与现代 external baseline 的同协议 measured_formal 比较表命令。"""
     return [
@@ -1851,6 +1864,7 @@ def build_configured_colab_stage_command(
         "statistical_confidence_interval": build_statistical_confidence_interval_command,
         "low_fpr_formal_statistics": build_low_fpr_formal_statistics_command,
         "sstw_measured_formal_result": build_sstw_measured_formal_result_command,
+        "fair_detection_calibration": build_fair_detection_calibration_command,
         "formal_method_baseline_comparison": build_formal_method_baseline_comparison_command,
         "formal_baseline_difference_interval": build_formal_baseline_difference_interval_command,
         "validation_scale_formal_internal_ablation": build_validation_scale_formal_internal_ablation_command,

@@ -23,6 +23,7 @@ VALIDATION_SCALE_REQUIRED_PACKAGE_RELPATHS = (
     "artifacts/motion_consistency_exclusion_decision.json",
     "artifacts/external_baseline_self_containment_decision.json",
     "artifacts/sstw_measured_formal_decision.json",
+    "artifacts/fair_detection_calibration_decision.json",
     "artifacts/formal_method_baseline_comparison_decision.json",
     "artifacts/formal_baseline_difference_interval_decision.json",
     "artifacts/validation_scale_formal_internal_ablation_decision.json",
@@ -68,6 +69,7 @@ def _requirement_rows(decision: Mapping[str, Any]) -> list[dict[str, Any]]:
         "validation_external_baseline_comparison_records_ready",
         "validation_external_baseline_self_containment_ready",
         "validation_sstw_measured_formal_records_ready",
+        "validation_fair_detection_calibration_ready",
         "validation_formal_method_baseline_comparison_ready",
         "validation_formal_baseline_difference_interval_ready",
         "validation_scale_formal_internal_ablation_ready",
@@ -147,6 +149,7 @@ def build_validation_scale_package_manifest(run_root: str | Path) -> dict[str, A
     motion_exclusion = _read_json(run_root / "artifacts" / "motion_consistency_exclusion_decision.json")
     self_containment = _read_json(run_root / "artifacts" / "external_baseline_self_containment_decision.json")
     sstw_formal = _read_json(run_root / "artifacts" / "sstw_measured_formal_decision.json")
+    fair_calibration = _read_json(run_root / "artifacts" / "fair_detection_calibration_decision.json")
     formal_comparison = _read_json(run_root / "artifacts" / "formal_method_baseline_comparison_decision.json")
     difference_interval = _read_json(run_root / "artifacts" / "formal_baseline_difference_interval_decision.json")
     formal_ablation = _read_json(run_root / "artifacts" / "validation_scale_formal_internal_ablation_decision.json")
@@ -158,6 +161,7 @@ def build_validation_scale_package_manifest(run_root: str | Path) -> dict[str, A
         and motion_exclusion.get("motion_consistency_exclusion_decision") == "PASS"
         and self_containment.get("external_baseline_self_containment_decision") == "PASS"
         and sstw_formal.get("sstw_measured_formal_decision") == "PASS"
+        and fair_calibration.get("fair_detection_calibration_decision") == "PASS"
         and formal_comparison.get("formal_method_baseline_comparison_decision") == "PASS"
         and difference_interval.get("formal_baseline_difference_interval_decision") == "PASS"
         and formal_ablation.get("validation_scale_formal_internal_ablation_decision") == "PASS"
@@ -181,6 +185,7 @@ def build_validation_scale_package_manifest(run_root: str | Path) -> dict[str, A
         "motion_consistency_exclusion_decision": motion_exclusion.get("motion_consistency_exclusion_decision"),
         "external_baseline_self_containment_decision": self_containment.get("external_baseline_self_containment_decision"),
         "sstw_measured_formal_decision": sstw_formal.get("sstw_measured_formal_decision"),
+        "fair_detection_calibration_decision": fair_calibration.get("fair_detection_calibration_decision"),
         "formal_method_baseline_comparison_decision": formal_comparison.get("formal_method_baseline_comparison_decision"),
         "formal_baseline_difference_interval_decision": difference_interval.get("formal_baseline_difference_interval_decision"),
         "validation_scale_formal_internal_ablation_decision": formal_ablation.get("validation_scale_formal_internal_ablation_decision"),
@@ -211,6 +216,7 @@ def write_validation_scale_package_manifest(run_root: str | Path) -> dict[str, A
         f"- motion_consistency_exclusion_decision: {manifest['motion_consistency_exclusion_decision']}\n"
         f"- external_baseline_self_containment_decision: {manifest['external_baseline_self_containment_decision']}\n"
         f"- sstw_measured_formal_decision: {manifest['sstw_measured_formal_decision']}\n"
+        f"- fair_detection_calibration_decision: {manifest['fair_detection_calibration_decision']}\n"
         f"- formal_method_baseline_comparison_decision: {manifest['formal_method_baseline_comparison_decision']}\n"
         f"- formal_baseline_difference_interval_decision: {manifest['formal_baseline_difference_interval_decision']}\n"
         f"- validation_scale_formal_internal_ablation_decision: {manifest['validation_scale_formal_internal_ablation_decision']}\n"

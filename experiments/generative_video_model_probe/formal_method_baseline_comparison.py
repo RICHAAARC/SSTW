@@ -91,21 +91,13 @@ def _method_row(
     *,
     method_id: str,
     method_role: str,
-    records: list[dict[str, Any]],
-    score_field: str,
-    positive_field: str,
+    record: dict[str, Any] | None,
     profile_context: dict[str, Any],
     missing_reason: str = "",
 ) -> dict[str, Any]:
-    """将一个方法的一组 measured_formal records 聚合为同协议比较行。"""
-    measured_records = [record for record in records if record.get("metric_status") == "measured_formal"]
-    scores = [_safe_float(record.get(score_field)) for record in measured_records]
-    positives = [_truthy_positive(record.get(positive_field)) for record in measured_records]
-    positive_values = [value for value in positives if value is not None]
-    prompts = {str(record.get("prompt_id")) for record in measured_records if record.get("prompt_id")}
-    attacks = {str(record.get("attack_name")) for record in measured_records if record.get("attack_name")}
-    positive_count = sum(1 for value in positive_values if value is True)
-    metric_status = "measured_formal" if measured_records else "missing"
+    """将 fair calibration record 转成同协议比较行。"""
+    fair_ready = bool(record) and record.get("fair_comparison_status") == "ready"
+    metric_status = "measured_formal" if fair_ready else "missing"
     claim_support_status = (
         "formal_method_baseline_comparison_paper_profile_claim_candidate"
         if profile_context["allow_effect_size_claims"] and metric_status == "measured_formal"
@@ -118,14 +110,20 @@ def _method_row(
         "method_id": method_id,
         "method_role": method_role,
         "metric_status": metric_status,
-        "comparison_scope": "paper_protocol_formal_adapter",
-        "comparison_score_field": score_field,
-        "comparison_record_count": len(measured_records),
-        "comparison_prompt_count": len(prompts),
-        "comparison_attack_count": len(attacks),
-        "comparison_positive_count": positive_count if positive_values else None,
-        "comparison_positive_rate": round(positive_count / len(positive_values), 6) if positive_values else None,
-        "comparison_score_mean": _mean(scores),
+        "comparison_scope": "fair_detection_calibration_at_target_fpr",
+        "comparison_primary_metric_name": "tpr_at_target_fpr",
+        "comparison_primary_metric_value": record.get("tpr_at_target_fpr") if record else None,
+        "comparison_score_field": record.get("positive_score_field") if record else "missing_fair_detection_calibration",
+        "comparison_record_count": record.get("attacked_positive_score_count") if record else 0,
+        "comparison_prompt_count": record.get("prompt_count") if record else 0,
+        "comparison_attack_count": record.get("attack_count") if record else 0,
+        "comparison_positive_count": record.get("detected_positive_count_at_target_fpr") if record else None,
+        "comparison_positive_rate": record.get("tpr_at_target_fpr") if record else None,
+        "comparison_score_mean": None,
+        "calibrated_threshold": record.get("calibrated_threshold") if record else None,
+        "heldout_fpr_at_calibrated_threshold": record.get("heldout_fpr_at_calibrated_threshold") if record else None,
+        "clean_negative_score_count": record.get("clean_negative_score_count") if record else 0,
+        "score_semantics": record.get("score_semantics") if record else None,
         "comparison_missing_reason": missing_reason if metric_status == "missing" else "none",
         "claim_support_status": claim_support_status,
         **{key: value for key, value in profile_context.items() if key != "required_modern_external_baseline_adapter_names"},
@@ -140,32 +138,23 @@ def build_formal_method_baseline_comparison_records(
     run_root = Path(run_root)
     profile_context = _load_profile_context(config_path)
     rows: list[dict[str, Any]] = []
-    sstw_records = _read_jsonl(run_root / "records" / "sstw_measured_formal_records.jsonl")
+    fair_records = _read_jsonl(run_root / "records" / "fair_detection_calibration_records.jsonl")
+    fair_by_method = {str(record.get("method_id") or ""): record for record in fair_records if record.get("method_id")}
     rows.append(_method_row(
         method_id=SSTW_METHOD_ID,
         method_role="proposed_method",
-        records=sstw_records,
-        score_field="sstw_score",
-        positive_field="sstw_detected",
+        record=fair_by_method.get(SSTW_METHOD_ID),
         profile_context=profile_context,
-        missing_reason="missing_sstw_measured_formal_records",
+        missing_reason="missing_or_blocked_sstw_fair_detection_calibration_record",
     ))
 
-    external_records = _read_jsonl(run_root / "records" / "external_baseline_score_records.jsonl")
-    records_by_baseline: dict[str, list[dict[str, Any]]] = {}
-    for record in external_records:
-        baseline_id = str(record.get("external_baseline_name") or "")
-        if baseline_id:
-            records_by_baseline.setdefault(baseline_id, []).append(record)
     for baseline_id in profile_context["required_modern_external_baseline_adapter_names"]:
         rows.append(_method_row(
             method_id=baseline_id,
             method_role="modern_external_baseline",
-            records=records_by_baseline.get(baseline_id, []),
-            score_field="external_baseline_score",
-            positive_field="external_baseline_detected",
+            record=fair_by_method.get(baseline_id),
             profile_context=profile_context,
-            missing_reason="missing_external_baseline_measured_formal_records",
+            missing_reason="missing_or_blocked_external_baseline_fair_detection_calibration_record",
         ))
     return rows
 
@@ -218,8 +207,9 @@ def run_formal_method_baseline_comparison(
     write_json(run_root / "artifacts" / "formal_method_baseline_comparison_decision.json", audit)
     report = (
         "# Formal Method Baseline Comparison Report\n\n"
-        "该报告只聚合 `metric_status: measured_formal` 的 SSTW 本方法记录和 5 个现代 external baseline "
-        "记录, 用于确认双方处在同协议、同指标、同层级的统计表中。validation_scale 结果仍不支持最终效果主张。\n\n"
+        "该报告只聚合已经通过 clean negative calibration 的 fair_detection_calibration records, "
+        "主指标为 `tpr_at_target_fpr`。这保证 SSTW 与 5 个现代 external baseline 处在同 FPR、"
+        "同攻击锚点、同证据层级的统计表中。validation_scale 结果仍不支持最终效果主张。\n\n"
         f"- formal_method_baseline_comparison_decision: {audit['formal_method_baseline_comparison_decision']}\n"
         f"- paper_result_level: {audit['paper_result_level']}\n"
         f"- target_fpr: {audit['target_fpr']}\n"

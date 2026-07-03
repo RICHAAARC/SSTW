@@ -192,6 +192,7 @@ def test_validation_scale_gate_accepts_claim3_downgrade_path(tmp_path: Path) -> 
             "method_id": "sstw_key_conditioned_flow_trajectory",
             "fair_comparison_status": "ready",
             "metric_status": "measured_formal",
+            "target_fpr": 0.1,
             "tpr_at_target_fpr": 1.0,
         },
         *[
@@ -199,6 +200,7 @@ def test_validation_scale_gate_accepts_claim3_downgrade_path(tmp_path: Path) -> 
                 "method_id": baseline_id,
                 "fair_comparison_status": "ready",
                 "metric_status": "measured_formal",
+                "target_fpr": 0.1,
                 "tpr_at_target_fpr": 1.0,
             }
             for baseline_id in sorted(MODERN_EXTERNAL_BASELINE_NAMES)
@@ -207,27 +209,30 @@ def test_validation_scale_gate_accepts_claim3_downgrade_path(tmp_path: Path) -> 
     write_json(run_root / "artifacts" / "fair_detection_calibration_decision.json", {
         "fair_detection_calibration_decision": "PASS",
         "fair_detection_calibration_ready_count": 6,
+        "target_fpr": 0.1,
         "claim_support_status": "fair_detection_calibration_validation_scale_ready",
     })
     write_jsonl(run_root / "records" / "formal_method_baseline_comparison_records.jsonl", [
-        {"method_id": "sstw_key_conditioned_flow_trajectory", "metric_status": "measured_formal"},
+        {"method_id": "sstw_key_conditioned_flow_trajectory", "metric_status": "measured_formal", "target_fpr": 0.1},
         *[
-            {"method_id": baseline_id, "metric_status": "measured_formal"}
+            {"method_id": baseline_id, "metric_status": "measured_formal", "target_fpr": 0.1}
             for baseline_id in sorted(MODERN_EXTERNAL_BASELINE_NAMES)
         ],
     ])
     write_json(run_root / "artifacts" / "formal_method_baseline_comparison_decision.json", {
         "formal_method_baseline_comparison_decision": "PASS",
         "formal_comparison_ready_method_count": 6,
+        "target_fpr": 0.1,
         "claim_support_status": "formal_method_baseline_comparison_validation_scale_only",
     })
     write_jsonl(run_root / "records" / "formal_baseline_difference_interval_records.jsonl", [
-        {"baseline_method_id": baseline_id, "difference_interval_status": "ready", "metric_status": "measured_formal"}
+        {"baseline_method_id": baseline_id, "difference_interval_status": "ready", "metric_status": "measured_formal", "target_fpr": 0.1}
         for baseline_id in sorted(MODERN_EXTERNAL_BASELINE_NAMES)
     ])
     write_json(run_root / "artifacts" / "formal_baseline_difference_interval_decision.json", {
         "formal_baseline_difference_interval_decision": "PASS",
         "difference_interval_ready_count": 5,
+        "target_fpr": 0.1,
         "claim_support_status": "formal_baseline_difference_interval_validation_scale_only",
     })
     write_jsonl(run_root / "records" / "validation_scale_formal_internal_ablation_records.jsonl", [

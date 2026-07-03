@@ -24,6 +24,7 @@ VALIDATION_SCALE_REQUIRED_PACKAGE_RELPATHS = (
     "artifacts/sstw_measured_formal_decision.json",
     "artifacts/formal_method_baseline_comparison_decision.json",
     "artifacts/formal_baseline_difference_interval_decision.json",
+    "artifacts/validation_scale_formal_internal_ablation_decision.json",
     "artifacts/data_split_and_leakage_guard_decision.json",
     "artifacts/validation_scale_to_pilot_paper_transition_decision.json",
     "figures/validation_scale_gate_figure.json",
@@ -66,6 +67,7 @@ def _requirement_rows(decision: Mapping[str, Any]) -> list[dict[str, Any]]:
         "validation_sstw_measured_formal_records_ready",
         "validation_formal_method_baseline_comparison_ready",
         "validation_formal_baseline_difference_interval_ready",
+        "validation_scale_formal_internal_ablation_ready",
         "validation_data_split_and_leakage_guard_ready",
         "validation_internal_ablation_records_ready",
         "validation_adaptive_attack_records_ready",
@@ -142,6 +144,7 @@ def build_validation_scale_package_manifest(run_root: str | Path) -> dict[str, A
     sstw_formal = _read_json(run_root / "artifacts" / "sstw_measured_formal_decision.json")
     formal_comparison = _read_json(run_root / "artifacts" / "formal_method_baseline_comparison_decision.json")
     difference_interval = _read_json(run_root / "artifacts" / "formal_baseline_difference_interval_decision.json")
+    formal_ablation = _read_json(run_root / "artifacts" / "validation_scale_formal_internal_ablation_decision.json")
     data_guard = _read_json(run_root / "artifacts" / "data_split_and_leakage_guard_decision.json")
     transition = _read_json(run_root / "artifacts" / "validation_scale_to_pilot_paper_transition_decision.json")
     decision_ready = (
@@ -150,6 +153,7 @@ def build_validation_scale_package_manifest(run_root: str | Path) -> dict[str, A
         and sstw_formal.get("sstw_measured_formal_decision") == "PASS"
         and formal_comparison.get("formal_method_baseline_comparison_decision") == "PASS"
         and difference_interval.get("formal_baseline_difference_interval_decision") == "PASS"
+        and formal_ablation.get("validation_scale_formal_internal_ablation_decision") == "PASS"
         and data_guard.get("data_split_and_leakage_guard_decision") == "PASS"
         and transition.get("validation_scale_to_pilot_paper_transition_decision") == "PASS"
         and not missing
@@ -170,6 +174,7 @@ def build_validation_scale_package_manifest(run_root: str | Path) -> dict[str, A
         "sstw_measured_formal_decision": sstw_formal.get("sstw_measured_formal_decision"),
         "formal_method_baseline_comparison_decision": formal_comparison.get("formal_method_baseline_comparison_decision"),
         "formal_baseline_difference_interval_decision": difference_interval.get("formal_baseline_difference_interval_decision"),
+        "validation_scale_formal_internal_ablation_decision": formal_ablation.get("validation_scale_formal_internal_ablation_decision"),
         "data_split_and_leakage_guard_decision": data_guard.get("data_split_and_leakage_guard_decision"),
         "validation_scale_to_pilot_paper_transition_decision": transition.get("validation_scale_to_pilot_paper_transition_decision"),
         "required_artifact_count": len(inventory),
@@ -197,6 +202,7 @@ def write_validation_scale_package_manifest(run_root: str | Path) -> dict[str, A
         f"- sstw_measured_formal_decision: {manifest['sstw_measured_formal_decision']}\n"
         f"- formal_method_baseline_comparison_decision: {manifest['formal_method_baseline_comparison_decision']}\n"
         f"- formal_baseline_difference_interval_decision: {manifest['formal_baseline_difference_interval_decision']}\n"
+        f"- validation_scale_formal_internal_ablation_decision: {manifest['validation_scale_formal_internal_ablation_decision']}\n"
         f"- data_split_and_leakage_guard_decision: {manifest['data_split_and_leakage_guard_decision']}\n"
         f"- validation_scale_to_pilot_paper_transition_decision: {manifest['validation_scale_to_pilot_paper_transition_decision']}\n"
         f"- missing_artifact_relpaths: {', '.join(manifest['missing_artifact_relpaths']) if manifest['missing_artifact_relpaths'] else 'none'}\n"

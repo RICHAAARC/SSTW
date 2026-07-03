@@ -126,6 +126,7 @@ def package_generative_video_colab_run(
     formal_baseline_difference_interval_decision_path = run_root_path / "artifacts" / "formal_baseline_difference_interval_decision.json"
     external_baseline_execution_manifest_path = run_root_path / "artifacts" / "external_baseline_execution_manifest.json"
     internal_ablation_decision_path = run_root_path / "artifacts" / "validation_internal_ablation_decision.json"
+    formal_internal_ablation_decision_path = run_root_path / "artifacts" / "validation_scale_formal_internal_ablation_decision.json"
     adaptive_attack_decision_path = run_root_path / "artifacts" / "adaptive_attack_decision.json"
     replay_and_sketch_decision_path = run_root_path / "artifacts" / "replay_and_sketch_gate_decision.json"
     claim3_downgrade_decision_path = run_root_path / "artifacts" / "claim3_downgrade_decision.json"
@@ -157,6 +158,7 @@ def package_generative_video_colab_run(
     formal_baseline_difference_interval_decision = _read_json_if_exists(formal_baseline_difference_interval_decision_path)
     external_baseline_execution_manifest = _read_json_if_exists(external_baseline_execution_manifest_path)
     internal_ablation_decision = _read_json_if_exists(internal_ablation_decision_path)
+    formal_internal_ablation_decision = _read_json_if_exists(formal_internal_ablation_decision_path)
     adaptive_attack_decision = _read_json_if_exists(adaptive_attack_decision_path)
     replay_and_sketch_decision = _read_json_if_exists(replay_and_sketch_decision_path)
     claim3_downgrade_decision = _read_json_if_exists(claim3_downgrade_decision_path)
@@ -235,6 +237,9 @@ def package_generative_video_colab_run(
             "formal_baseline_difference_interval_decision": formal_baseline_difference_interval_decision.get("formal_baseline_difference_interval_decision"),
             "difference_interval_ready_count": formal_baseline_difference_interval_decision.get("difference_interval_ready_count"),
             "difference_interval_missing_baseline_count": formal_baseline_difference_interval_decision.get("difference_interval_missing_baseline_count"),
+            "validation_scale_formal_internal_ablation_decision": formal_internal_ablation_decision.get("validation_scale_formal_internal_ablation_decision"),
+            "formal_internal_ablation_variant_count": formal_internal_ablation_decision.get("formal_internal_ablation_variant_count"),
+            "formal_internal_ablation_full_method_formal_ready": formal_internal_ablation_decision.get("formal_internal_ablation_full_method_formal_ready"),
             "validation_internal_ablation_decision": internal_ablation_decision.get("validation_internal_ablation_decision"),
             "validation_internal_ablation_record_count": internal_ablation_decision.get("internal_ablation_record_count"),
             "adaptive_attack_decision": adaptive_attack_decision.get("adaptive_attack_decision"),

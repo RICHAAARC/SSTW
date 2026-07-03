@@ -85,6 +85,7 @@ def _load_config(config_path: str | Path = DEFAULT_VALIDATION_SCALE_CONFIG) -> d
         "require_motion_threshold_calibration_ready": bool(config.get("require_motion_threshold_calibration_ready", True)),
         "require_formal_motion_claim_ready": bool(config.get("require_formal_motion_claim_ready", True)),
         "require_internal_ablation_records": bool(config.get("require_internal_ablation_records", True)),
+        "require_validation_scale_formal_internal_ablation": bool(config.get("require_validation_scale_formal_internal_ablation", True)),
         "require_adaptive_attack_records": bool(config.get("require_adaptive_attack_records", True)),
         "require_replay_or_sketch_records_or_claim3_downgrade": bool(config.get("require_replay_or_sketch_records_or_claim3_downgrade", True)),
         "require_confidence_interval_report": bool(config.get("require_confidence_interval_report", True)),
@@ -169,6 +170,15 @@ def _internal_ablation_ready(run_root: Path) -> tuple[bool, int, str]:
         decision = _read_json(run_root / "artifacts" / "internal_ablation_decision.json")
     decision_ready = not decision or _decision_pass(decision, "validation_internal_ablation_decision", "internal_ablation_decision")
     return bool(records) and decision_ready, len(records), decision.get("claim_support_status", "missing_internal_ablation_decision")
+
+
+def _validation_scale_formal_internal_ablation_ready(run_root: Path) -> tuple[bool, int, str]:
+    """检查 validation_scale 级 formal-compatible 内部消融汇总是否已通过。"""
+    records = _read_jsonl(run_root / "records" / "validation_scale_formal_internal_ablation_records.jsonl")
+    decision = _read_json(run_root / "artifacts" / "validation_scale_formal_internal_ablation_decision.json")
+    ready = bool(records) and _decision_pass(decision, "validation_scale_formal_internal_ablation_decision")
+    ready_count = int(decision.get("formal_internal_ablation_variant_count") or 0)
+    return ready, ready_count, decision.get("claim_support_status", "missing_validation_scale_formal_internal_ablation_decision")
 
 
 def _adaptive_attack_ready(run_root: Path) -> tuple[bool, int, str]:
@@ -281,6 +291,7 @@ def build_validation_scale_gate_audit(
         config["required_modern_external_baseline_adapter_names"],
     )
     internal_ablation_ready, internal_ablation_record_count, internal_ablation_status = _internal_ablation_ready(run_root)
+    formal_internal_ablation_ready, formal_internal_ablation_variant_count, formal_internal_ablation_status = _validation_scale_formal_internal_ablation_ready(run_root)
     adaptive_attack_ready, adaptive_attack_record_count, adaptive_attack_status = _adaptive_attack_ready(run_root)
     replay_or_sketch_ready, replay_or_sketch_status = _replay_or_sketch_ready(run_root)
     confidence_interval_ready, confidence_interval_status = _confidence_interval_ready(run_root)
@@ -306,6 +317,7 @@ def build_validation_scale_gate_audit(
         "validation_formal_baseline_difference_interval_ready": (not config["require_formal_baseline_difference_interval"]) or formal_difference_interval_ready,
         "validation_data_split_and_leakage_guard_ready": (not config["require_data_split_and_leakage_guard"]) or data_split_decision.get("data_split_and_leakage_guard_decision") == "PASS",
         "validation_internal_ablation_records_ready": (not config["require_internal_ablation_records"]) or internal_ablation_ready,
+        "validation_scale_formal_internal_ablation_ready": (not config["require_validation_scale_formal_internal_ablation"]) or formal_internal_ablation_ready,
         "validation_adaptive_attack_records_ready": (not config["require_adaptive_attack_records"]) or adaptive_attack_ready,
         "validation_replay_or_sketch_records_ready": (not config["require_replay_or_sketch_records_or_claim3_downgrade"]) or replay_or_sketch_ready,
         "validation_confidence_interval_report_ready": (not config["require_confidence_interval_report"]) or confidence_interval_ready,
@@ -366,6 +378,8 @@ def build_validation_scale_gate_audit(
         "minimum_external_baseline_measured_adapter_count": config["minimum_external_baseline_measured_adapter_count"],
         "internal_ablation_record_count": internal_ablation_record_count,
         "internal_ablation_status": internal_ablation_status,
+        "validation_scale_formal_internal_ablation_variant_count": formal_internal_ablation_variant_count,
+        "validation_scale_formal_internal_ablation_status": formal_internal_ablation_status,
         "adaptive_attack_record_count": adaptive_attack_record_count,
         "adaptive_attack_status": adaptive_attack_status,
         "replay_or_sketch_status": replay_or_sketch_status,
@@ -423,6 +437,8 @@ def write_validation_scale_gate_audit(
         f"- formal_method_baseline_comparison_status: {audit['formal_method_baseline_comparison_status']}\n"
         f"- formal_baseline_difference_interval_ready_count: {audit['formal_baseline_difference_interval_ready_count']}\n"
         f"- formal_baseline_difference_interval_status: {audit['formal_baseline_difference_interval_status']}\n"
+        f"- validation_scale_formal_internal_ablation_variant_count: {audit['validation_scale_formal_internal_ablation_variant_count']}\n"
+        f"- validation_scale_formal_internal_ablation_status: {audit['validation_scale_formal_internal_ablation_status']}\n"
         f"- data_split_and_leakage_guard_decision: {audit['data_split_and_leakage_guard_decision']}\n"
         f"- missing_modern_external_baseline_formal_adapter_names: {', '.join(audit['missing_modern_external_baseline_formal_adapter_names']) if audit['missing_modern_external_baseline_formal_adapter_names'] else 'none'}\n"
         f"- full_paper_allowed: {str(audit['full_paper_allowed']).lower()}\n"

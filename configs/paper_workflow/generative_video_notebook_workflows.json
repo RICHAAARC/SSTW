@@ -1,6 +1,6 @@
 {
   "config_kind": "generative_video_notebook_workflow_config",
-  "config_version": "2026_07_03_profile_stage_timestamp_zip_v14",
+  "config_version": "2026_07_03_profile_stage_timestamp_zip_v15",
   "default_dataset_root_relative": "datasets/generative_video_prompt_suite",
   "default_drive_project_root": "/content/drive/MyDrive/SSTW",
   "default_prompt_suite_path_relative": "datasets/generative_video_prompt_suite/prompt_seed_suite.json",
@@ -93,6 +93,7 @@
         "external_baseline_self_containment_decision",
         "formal_method_baseline_comparison",
         "formal_baseline_difference_interval",
+        "validation_scale_formal_internal_ablation",
         "data_split_and_leakage_guard",
         "pilot_paper_gate",
         "pilot_paper_to_full_paper_transition_decision",

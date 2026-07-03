@@ -28,6 +28,7 @@ from paper_workflow.notebook_utils.generative_video_model_probe_workflow import 
     build_repository_official_baseline_eval_command_templates,
     build_sstw_measured_formal_result_command,
     build_statistical_confidence_interval_command,
+    build_validation_scale_formal_internal_ablation_command,
     build_pilot_paper_gate_command,
     build_validation_scale_gate_command,
     build_validation_scale_to_pilot_paper_transition_decision_command,
@@ -282,6 +283,7 @@ def test_generative_video_colab_notebook_calls_repository_modules() -> None:
     assert "experiments.generative_video_model_probe.sstw_formal_result" in helper_text
     assert "experiments.generative_video_model_probe.formal_method_baseline_comparison" in helper_text
     assert "experiments.generative_video_model_probe.formal_baseline_difference_interval" in helper_text
+    assert "experiments.generative_video_model_probe.validation_scale_formal_internal_ablation" in helper_text
     assert "experiments.generative_video_model_probe.pilot_paper_gate" in helper_text
     assert "experiments.generative_video_model_probe.validation_artifact_rebuild" in helper_text
     assert "experiments.generative_video_model_probe.validation_scale_gate" in helper_text
@@ -343,6 +345,7 @@ def test_split_colab_notebooks_are_profile_driven() -> None:
     assert "build_sstw_measured_formal_result_command" in gate_source
     assert "build_formal_method_baseline_comparison_command" in gate_source
     assert "build_formal_baseline_difference_interval_command" in gate_source
+    assert "build_validation_scale_formal_internal_ablation_command" in gate_source
     assert "build_pilot_paper_gate_command" in gate_source
     assert "build_validation_scale_gate_command" in gate_source
     assert not Path("paper_workflow/colab_notebooks/validation_scale_formal_gate_colab.ipynb").exists()
@@ -667,6 +670,7 @@ def test_profile_specific_commands_pass_protocol_config_path(tmp_path: Path) -> 
         build_sstw_measured_formal_result_command(validation_layout),
         build_formal_method_baseline_comparison_command(validation_layout),
         build_formal_baseline_difference_interval_command(validation_layout),
+        build_validation_scale_formal_internal_ablation_command(validation_layout),
         build_validation_scale_gate_command(validation_layout),
     ]
     pilot_command = build_pilot_paper_gate_command(pilot_layout)
@@ -1197,6 +1201,11 @@ def test_generative_video_drive_packager_creates_archive_and_manifest(tmp_path: 
         "difference_interval_ready_count": 5,
         "difference_interval_missing_baseline_count": 0,
     })
+    write_json(run_root / "artifacts" / "validation_scale_formal_internal_ablation_decision.json", {
+        "validation_scale_formal_internal_ablation_decision": "PASS",
+        "formal_internal_ablation_variant_count": 8,
+        "formal_internal_ablation_full_method_formal_ready": True,
+    })
 
     payload = package_generative_video_colab_run(run_root, package_dir, include_videos=False)
     archive_path = Path(payload["archive_path"])
@@ -1237,6 +1246,9 @@ def test_generative_video_drive_packager_creates_archive_and_manifest(tmp_path: 
     assert manifest["decision_summary"]["formal_baseline_difference_interval_decision"] == "PASS"
     assert manifest["decision_summary"]["difference_interval_ready_count"] == 5
     assert manifest["decision_summary"]["difference_interval_missing_baseline_count"] == 0
+    assert manifest["decision_summary"]["validation_scale_formal_internal_ablation_decision"] == "PASS"
+    assert manifest["decision_summary"]["formal_internal_ablation_variant_count"] == 8
+    assert manifest["decision_summary"]["formal_internal_ablation_full_method_formal_ready"] is True
     assert manifest["decision_summary"]["validation_internal_ablation_decision"] == "PASS"
     assert manifest["decision_summary"]["validation_internal_ablation_record_count"] == 12
     assert manifest["decision_summary"]["adaptive_attack_decision"] == "PASS"

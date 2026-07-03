@@ -1196,3 +1196,16 @@ Notebook 与 repository module 的跨边界数据
 | difference_interval_missing_baseline_ids | governance | none | true | true | false | 缺失差值置信区间的 baseline 方法 ID 列表。 |
 | difference_interval_missing_baseline_count | metric | none | true | true | false | 缺失差值置信区间的 baseline 数量。 |
 | require_formal_baseline_difference_interval | protocol | none | true | false | false | validation_scale gate 是否要求 SSTW 相对 5 个 baseline 的差值置信区间报告。 |
+| validation_scale_formal_internal_ablation_decision | governance | none | true | true | false | validation_scale 级 formal-compatible 内部消融汇总判定。 |
+| formal_internal_ablation_evidence_level | governance | none | true | true | false | 内部消融汇总中某个变体的证据层级。 |
+| formal_internal_ablation_source_record_family | artifact | none | true | false | false | 内部消融汇总行所使用的源 records 家族。 |
+| formal_internal_ablation_record_count | metric | none | true | false | false | 内部消融汇总行聚合的源分数数量。 |
+| formal_internal_ablation_score_mean | metric | none | true | true | false | 内部消融汇总行的平均分数。 |
+| formal_internal_ablation_full_method_score_mean | metric | none | true | true | false | 内部消融汇总中 full-method measured_formal 平均分数。 |
+| formal_internal_ablation_delta_vs_full_method | metric | none | true | true | false | 内部消融变体相对 full-method 平均分数的差值。 |
+| formal_internal_ablation_variant_count | metric | none | true | true | false | validation_scale 级内部消融已覆盖变体数量。 |
+| formal_internal_ablation_expected_variant_count | metric | none | true | false | false | validation_scale 级内部消融应覆盖变体数量。 |
+| formal_internal_ablation_full_method_formal_ready | governance | none | true | true | false | full-method 行是否来自 SSTW measured_formal 结果。 |
+| formal_internal_ablation_missing_variants | governance | none | true | true | false | validation_scale 级内部消融缺失的变体列表。 |
+| formal_internal_ablation_missing_variant_count | metric | none | true | true | false | validation_scale 级内部消融缺失的变体数量。 |
+| require_validation_scale_formal_internal_ablation | protocol | none | true | false | false | validation_scale gate 是否要求 formal-compatible 内部消融汇总。 |

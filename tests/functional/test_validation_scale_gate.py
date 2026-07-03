@@ -58,6 +58,7 @@ def test_validation_scale_gate_blocks_empty_run(tmp_path: Path) -> None:
     assert "validation_sstw_measured_formal_records_ready" in audit["missing_validation_requirements"]
     assert "validation_formal_method_baseline_comparison_ready" in audit["missing_validation_requirements"]
     assert "validation_formal_baseline_difference_interval_ready" in audit["missing_validation_requirements"]
+    assert "validation_scale_formal_internal_ablation_ready" in audit["missing_validation_requirements"]
 
 
 @pytest.mark.quick
@@ -165,6 +166,26 @@ def test_validation_scale_gate_passes_when_all_governed_inputs_exist(tmp_path: P
         "difference_interval_ready_count": 5,
         "claim_support_status": "formal_baseline_difference_interval_validation_scale_only",
     })
+    write_jsonl(run_root / "records" / "validation_scale_formal_internal_ablation_records.jsonl", [
+        {"method_variant": "sstw_full_method", "metric_status": "measured_formal"},
+        *[
+            {"method_variant": variant, "metric_status": "measured_proxy"}
+            for variant in (
+                "endpoint_only_control",
+                "trajectory_only_score",
+                "without_velocity_constraint",
+                "without_endpoint_aware_control",
+                "without_replay_uncertainty_weighting",
+                "without_flow_state_admissibility",
+                "generic_ssm_baseline",
+            )
+        ],
+    ])
+    write_json(run_root / "artifacts" / "validation_scale_formal_internal_ablation_decision.json", {
+        "validation_scale_formal_internal_ablation_decision": "PASS",
+        "formal_internal_ablation_variant_count": 8,
+        "claim_support_status": "validation_scale_formal_internal_ablation_ready_not_effect_size_claim",
+    })
     write_jsonl(run_root / "records" / "validation_internal_ablation_records.jsonl", [
         {"method_variant": "without_velocity_constraint", "ablation_status": "ready"},
     ])
@@ -229,6 +250,8 @@ def test_validation_scale_gate_passes_when_all_governed_inputs_exist(tmp_path: P
     assert audit["formal_method_baseline_comparison_status"] == "formal_method_baseline_comparison_validation_scale_only"
     assert audit["formal_baseline_difference_interval_ready_count"] == 5
     assert audit["formal_baseline_difference_interval_status"] == "formal_baseline_difference_interval_validation_scale_only"
+    assert audit["validation_scale_formal_internal_ablation_variant_count"] == 8
+    assert audit["validation_scale_formal_internal_ablation_status"] == "validation_scale_formal_internal_ablation_ready_not_effect_size_claim"
     assert audit["data_split_and_leakage_guard_decision"] == "PASS"
     assert audit["missing_modern_external_baseline_formal_adapter_names"] == []
     assert (run_root / "records" / "validation_scale_gate_records.jsonl").exists()

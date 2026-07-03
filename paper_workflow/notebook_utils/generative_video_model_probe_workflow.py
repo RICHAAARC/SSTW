@@ -1495,6 +1495,19 @@ def build_formal_baseline_difference_interval_command(layout: dict[str, str]) ->
     ]
 
 
+def build_validation_scale_formal_internal_ablation_command(layout: dict[str, str]) -> list[str]:
+    """构造 validation_scale 级内部消融汇总命令。"""
+    return [
+        sys.executable,
+        "-m",
+        "experiments.generative_video_model_probe.validation_scale_formal_internal_ablation",
+        "--run-root",
+        layout["drive_run_root"],
+        "--config-path",
+        layout["protocol_config_path"],
+    ]
+
+
 def build_pilot_paper_gate_command(layout: dict[str, str]) -> list[str]:
     """构建当前 profile 的 fixed-FPR gate 命令, fixed-FPR 口径来自 protocol config。"""
     return [

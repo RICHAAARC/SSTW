@@ -11,6 +11,7 @@ from experiments.generative_video_model_probe.sstw_formal_result import run_sstw
 from experiments.generative_video_model_probe.statistical_confidence_interval import run_statistical_confidence_interval_reporter
 from experiments.generative_video_model_probe.validation_artifact_rebuild import run_validation_artifact_rebuild_dry_run
 from experiments.generative_video_model_probe.validation_internal_ablation import run_validation_internal_ablation
+from experiments.generative_video_model_probe.validation_scale_formal_internal_ablation import run_validation_scale_formal_internal_ablation
 from main.protocol.record_writer import read_jsonl, write_json, write_jsonl
 
 
@@ -261,6 +262,46 @@ def test_formal_baseline_difference_interval_writes_sstw_vs_each_baseline_ci(tmp
 
 
 @pytest.mark.quick
+def test_validation_scale_formal_internal_ablation_binds_full_method_formal_result(tmp_path: Path) -> None:
+    """validation_scale 内部消融汇总必须把 full-method 行绑定到 SSTW measured_formal。"""
+    run_root = tmp_path / "run"
+    write_jsonl(run_root / "records" / "sstw_measured_formal_records.jsonl", [
+        {"metric_status": "measured_formal", "sstw_score": 0.8},
+        {"metric_status": "measured_formal", "sstw_score": 0.82},
+    ])
+    proxy_records = []
+    for variant_name in (
+        "endpoint_only_control",
+        "trajectory_only_score",
+        "without_velocity_constraint",
+        "without_endpoint_aware_control",
+        "without_replay_uncertainty_weighting",
+        "without_flow_state_admissibility",
+        "generic_ssm_baseline",
+    ):
+        proxy_records.append({
+            "method_variant": variant_name,
+            "ablation_status": "ready",
+            "validation_ablation_proxy_score": 0.6,
+        })
+    write_jsonl(run_root / "records" / "validation_internal_ablation_records.jsonl", proxy_records)
+
+    audit = run_validation_scale_formal_internal_ablation(run_root)
+    records = read_jsonl(run_root / "records" / "validation_scale_formal_internal_ablation_records.jsonl")
+
+    assert audit["validation_scale_formal_internal_ablation_decision"] == "PASS"
+    assert audit["formal_internal_ablation_variant_count"] == 8
+    full_row = next(record for record in records if record["method_variant"] == "sstw_full_method")
+    assert full_row["metric_status"] == "measured_formal"
+    assert full_row["formal_internal_ablation_score_mean"] == 0.81
+    assert full_row["formal_internal_ablation_evidence_level"] == "sstw_measured_formal_full_method"
+    assert any(record["metric_status"] == "measured_proxy" for record in records if record["method_variant"] != "sstw_full_method")
+    assert (run_root / "tables" / "validation_scale_formal_internal_ablation_table.csv").exists()
+    assert (run_root / "artifacts" / "validation_scale_formal_internal_ablation_decision.json").exists()
+    assert (run_root / "reports" / "validation_scale_formal_internal_ablation_report.md").exists()
+
+
+@pytest.mark.quick
 def test_validation_artifact_rebuild_dry_run_reports_missing_and_pass_states(tmp_path: Path) -> None:
     """artifact rebuild dry-run 必须能报告缺失状态, 并在必要产物齐全时通过。"""
     run_root = tmp_path / "run"
@@ -278,6 +319,7 @@ def test_validation_artifact_rebuild_dry_run_reports_missing_and_pass_states(tmp
         "records/external_baseline_score_records.jsonl",
         "records/formal_method_baseline_comparison_records.jsonl",
         "records/formal_baseline_difference_interval_records.jsonl",
+        "records/validation_scale_formal_internal_ablation_records.jsonl",
         "records/validation_internal_ablation_records.jsonl",
         "records/adaptive_attack_records.jsonl",
         "records/trajectory_sketch_verification_records.jsonl",
@@ -294,6 +336,7 @@ def test_validation_artifact_rebuild_dry_run_reports_missing_and_pass_states(tmp
         "artifacts/external_baseline_comparison_decision.json",
         "artifacts/formal_method_baseline_comparison_decision.json",
         "artifacts/formal_baseline_difference_interval_decision.json",
+        "artifacts/validation_scale_formal_internal_ablation_decision.json",
         "artifacts/validation_internal_ablation_decision.json",
         "artifacts/adaptive_attack_decision.json",
         "artifacts/replay_and_sketch_gate_decision.json",
@@ -307,6 +350,7 @@ def test_validation_artifact_rebuild_dry_run_reports_missing_and_pass_states(tmp
         "tables/sstw_measured_formal_table.csv",
         "tables/formal_method_baseline_comparison_table.csv",
         "tables/formal_baseline_difference_interval_table.csv",
+        "tables/validation_scale_formal_internal_ablation_table.csv",
         "tables/validation_internal_ablation_table.csv",
         "tables/adaptive_attack_table.csv",
         "tables/replay_verification_table.csv",
@@ -316,6 +360,7 @@ def test_validation_artifact_rebuild_dry_run_reports_missing_and_pass_states(tmp
         "reports/sstw_measured_formal_report.md",
         "reports/formal_method_baseline_comparison_report.md",
         "reports/formal_baseline_difference_interval_report.md",
+        "reports/validation_scale_formal_internal_ablation_report.md",
         "reports/validation_internal_ablation_report.md",
         "reports/adaptive_attack_report.md",
         "reports/replay_and_sketch_gate_report.md",

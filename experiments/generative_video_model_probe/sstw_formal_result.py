@@ -51,7 +51,7 @@ def _load_profile_context(config_path: str | Path) -> dict[str, Any]:
 
 def _safe_float(value: object) -> float | None:
     """把 record 中可能为空的数值字段转换为 float。"""
-    if value in {None, "", "unsupported"}:
+    if value is None or value == "" or value == "unsupported":
         return None
     try:
         return float(value)  # type: ignore[arg-type]

@@ -119,8 +119,10 @@ def package_generative_video_colab_run(
     pilot_matrix_decision_path = run_root_path / "artifacts" / "small_scale_claim_pilot_matrix_decision.json"
     runtime_attack_decision_path = run_root_path / "artifacts" / "runtime_attack_decision.json"
     runtime_detection_decision_path = run_root_path / "artifacts" / "runtime_detection_decision.json"
+    sstw_measured_formal_decision_path = run_root_path / "artifacts" / "sstw_measured_formal_decision.json"
     external_baseline_decision_path = run_root_path / "artifacts" / "external_baseline_status_decision.json"
     external_baseline_comparison_decision_path = run_root_path / "artifacts" / "external_baseline_comparison_decision.json"
+    formal_method_baseline_comparison_decision_path = run_root_path / "artifacts" / "formal_method_baseline_comparison_decision.json"
     external_baseline_execution_manifest_path = run_root_path / "artifacts" / "external_baseline_execution_manifest.json"
     internal_ablation_decision_path = run_root_path / "artifacts" / "validation_internal_ablation_decision.json"
     adaptive_attack_decision_path = run_root_path / "artifacts" / "adaptive_attack_decision.json"
@@ -147,8 +149,10 @@ def package_generative_video_colab_run(
     pilot_matrix_decision = _read_json_if_exists(pilot_matrix_decision_path)
     runtime_attack_decision = _read_json_if_exists(runtime_attack_decision_path)
     runtime_detection_decision = _read_json_if_exists(runtime_detection_decision_path)
+    sstw_measured_formal_decision = _read_json_if_exists(sstw_measured_formal_decision_path)
     external_baseline_decision = _read_json_if_exists(external_baseline_decision_path)
     external_baseline_comparison_decision = _read_json_if_exists(external_baseline_comparison_decision_path)
+    formal_method_baseline_comparison_decision = _read_json_if_exists(formal_method_baseline_comparison_decision_path)
     external_baseline_execution_manifest = _read_json_if_exists(external_baseline_execution_manifest_path)
     internal_ablation_decision = _read_json_if_exists(internal_ablation_decision_path)
     adaptive_attack_decision = _read_json_if_exists(adaptive_attack_decision_path)
@@ -203,6 +207,10 @@ def package_generative_video_colab_run(
             "runtime_detection_decision": runtime_detection_decision.get("runtime_detection_decision"),
             "runtime_detection_record_count": runtime_detection_decision.get("runtime_detection_record_count"),
             "runtime_detection_ready_count": runtime_detection_decision.get("runtime_detection_ready_count"),
+            "sstw_measured_formal_decision": sstw_measured_formal_decision.get("sstw_measured_formal_decision"),
+            "sstw_measured_formal_record_count": sstw_measured_formal_decision.get("sstw_measured_formal_record_count"),
+            "sstw_measured_formal_score_mean": sstw_measured_formal_decision.get("sstw_measured_formal_score_mean"),
+            "sstw_measured_formal_detectable_rate": sstw_measured_formal_decision.get("sstw_measured_formal_detectable_rate"),
             "external_baseline_status_decision": external_baseline_decision.get("external_baseline_status_decision"),
             "external_baseline_record_count": external_baseline_decision.get("external_baseline_record_count"),
             "modern_external_baseline_record_count": external_baseline_decision.get("modern_external_baseline_record_count"),
@@ -218,6 +226,10 @@ def package_generative_video_colab_run(
             "external_baseline_evidence_path_count": external_baseline_execution_manifest.get("evidence_path_count"),
             "external_baseline_comparison_status": external_baseline_comparison_decision.get("external_baseline_comparison_status"),
             "external_baseline_comparison_table_status": external_baseline_comparison_decision.get("external_baseline_comparison_table_status"),
+            "formal_method_baseline_comparison_decision": formal_method_baseline_comparison_decision.get("formal_method_baseline_comparison_decision"),
+            "formal_comparison_ready_method_count": formal_method_baseline_comparison_decision.get("formal_comparison_ready_method_count"),
+            "formal_comparison_modern_baseline_ready_count": formal_method_baseline_comparison_decision.get("formal_comparison_modern_baseline_ready_count"),
+            "formal_comparison_missing_method_count": formal_method_baseline_comparison_decision.get("formal_comparison_missing_method_count"),
             "validation_internal_ablation_decision": internal_ablation_decision.get("validation_internal_ablation_decision"),
             "validation_internal_ablation_record_count": internal_ablation_decision.get("internal_ablation_record_count"),
             "adaptive_attack_decision": adaptive_attack_decision.get("adaptive_attack_decision"),

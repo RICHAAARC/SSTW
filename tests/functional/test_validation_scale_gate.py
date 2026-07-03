@@ -56,6 +56,7 @@ def test_validation_scale_gate_blocks_empty_run(tmp_path: Path) -> None:
     assert "validation_generation_records_ready" in audit["missing_validation_requirements"]
     assert "validation_internal_ablation_records_ready" in audit["missing_validation_requirements"]
     assert "validation_sstw_measured_formal_records_ready" in audit["missing_validation_requirements"]
+    assert "validation_formal_method_baseline_comparison_ready" in audit["missing_validation_requirements"]
 
 
 @pytest.mark.quick
@@ -142,6 +143,18 @@ def test_validation_scale_gate_passes_when_all_governed_inputs_exist(tmp_path: P
         "sstw_measured_formal_record_count": 1,
         "claim_support_status": "sstw_measured_formal_validation_scale_only",
     })
+    write_jsonl(run_root / "records" / "formal_method_baseline_comparison_records.jsonl", [
+        {"method_id": "sstw_key_conditioned_flow_trajectory", "metric_status": "measured_formal"},
+        *[
+            {"method_id": baseline_id, "metric_status": "measured_formal"}
+            for baseline_id in sorted(MODERN_EXTERNAL_BASELINE_NAMES)
+        ],
+    ])
+    write_json(run_root / "artifacts" / "formal_method_baseline_comparison_decision.json", {
+        "formal_method_baseline_comparison_decision": "PASS",
+        "formal_comparison_ready_method_count": 6,
+        "claim_support_status": "formal_method_baseline_comparison_validation_scale_only",
+    })
     write_jsonl(run_root / "records" / "validation_internal_ablation_records.jsonl", [
         {"method_variant": "without_velocity_constraint", "ablation_status": "ready"},
     ])
@@ -202,6 +215,8 @@ def test_validation_scale_gate_passes_when_all_governed_inputs_exist(tmp_path: P
     assert audit["external_baseline_self_containment_decision"] == "PASS"
     assert audit["sstw_measured_formal_record_count"] == 1
     assert audit["sstw_measured_formal_status"] == "sstw_measured_formal_validation_scale_only"
+    assert audit["formal_method_baseline_comparison_ready_count"] == 6
+    assert audit["formal_method_baseline_comparison_status"] == "formal_method_baseline_comparison_validation_scale_only"
     assert audit["data_split_and_leakage_guard_decision"] == "PASS"
     assert audit["missing_modern_external_baseline_formal_adapter_names"] == []
     assert (run_root / "records" / "validation_scale_gate_records.jsonl").exists()

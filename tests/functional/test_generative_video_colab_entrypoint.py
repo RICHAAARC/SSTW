@@ -20,6 +20,7 @@ from paper_workflow.notebook_utils.generative_video_model_probe_workflow import 
     build_external_baseline_official_resource_bootstrap_command,
     build_external_baseline_official_result_bundle_preflight_command,
     build_external_baseline_self_containment_decision_command,
+    build_formal_method_baseline_comparison_command,
     build_data_split_and_leakage_guard_command,
     build_modern_baseline_official_bridge_command_templates,
     build_modern_baseline_official_bridge_preflight_decision,
@@ -278,6 +279,7 @@ def test_generative_video_colab_notebook_calls_repository_modules() -> None:
     assert "experiments.generative_video_model_probe.claim3_downgrade" in helper_text
     assert "experiments.generative_video_model_probe.statistical_confidence_interval" in helper_text
     assert "experiments.generative_video_model_probe.sstw_formal_result" in helper_text
+    assert "experiments.generative_video_model_probe.formal_method_baseline_comparison" in helper_text
     assert "experiments.generative_video_model_probe.pilot_paper_gate" in helper_text
     assert "experiments.generative_video_model_probe.validation_artifact_rebuild" in helper_text
     assert "experiments.generative_video_model_probe.validation_scale_gate" in helper_text
@@ -337,6 +339,7 @@ def test_split_colab_notebooks_are_profile_driven() -> None:
     assert "build_external_baseline_comparison_command" in gate_source
     assert "build_external_baseline_self_containment_decision_command" in gate_source
     assert "build_sstw_measured_formal_result_command" in gate_source
+    assert "build_formal_method_baseline_comparison_command" in gate_source
     assert "build_pilot_paper_gate_command" in gate_source
     assert "build_validation_scale_gate_command" in gate_source
     assert not Path("paper_workflow/colab_notebooks/validation_scale_formal_gate_colab.ipynb").exists()
@@ -659,6 +662,7 @@ def test_profile_specific_commands_pass_protocol_config_path(tmp_path: Path) -> 
         build_mechanism_postprocess_command(validation_layout),
         build_statistical_confidence_interval_command(validation_layout),
         build_sstw_measured_formal_result_command(validation_layout),
+        build_formal_method_baseline_comparison_command(validation_layout),
         build_validation_scale_gate_command(validation_layout),
     ]
     pilot_command = build_pilot_paper_gate_command(pilot_layout)
@@ -1087,6 +1091,12 @@ def test_generative_video_drive_packager_creates_archive_and_manifest(tmp_path: 
         "runtime_detection_record_count": 48,
         "runtime_detection_ready_count": 48,
     })
+    write_json(run_root / "artifacts" / "sstw_measured_formal_decision.json", {
+        "sstw_measured_formal_decision": "PASS",
+        "sstw_measured_formal_record_count": 48,
+        "sstw_measured_formal_score_mean": 0.82,
+        "sstw_measured_formal_detectable_rate": 1.0,
+    })
     write_json(run_root / "artifacts" / "motion_threshold_calibration_decision.json", {
         "motion_threshold_calibration_decision": "INSUFFICIENT_SAMPLE",
         "motion_threshold_id": "motion_delta_heuristic_v1",
@@ -1172,6 +1182,12 @@ def test_generative_video_drive_packager_creates_archive_and_manifest(tmp_path: 
         "external_baseline_comparison_status": "adapter_proxy_records_written",
         "external_baseline_comparison_table_status": "ready",
     })
+    write_json(run_root / "artifacts" / "formal_method_baseline_comparison_decision.json", {
+        "formal_method_baseline_comparison_decision": "PASS",
+        "formal_comparison_ready_method_count": 6,
+        "formal_comparison_modern_baseline_ready_count": 5,
+        "formal_comparison_missing_method_count": 0,
+    })
 
     payload = package_generative_video_colab_run(run_root, package_dir, include_videos=False)
     archive_path = Path(payload["archive_path"])
@@ -1191,6 +1207,10 @@ def test_generative_video_drive_packager_creates_archive_and_manifest(tmp_path: 
     assert manifest["decision_summary"]["runtime_detection_decision"] == "PASS"
     assert manifest["decision_summary"]["runtime_detection_record_count"] == 48
     assert manifest["decision_summary"]["runtime_detection_ready_count"] == 48
+    assert manifest["decision_summary"]["sstw_measured_formal_decision"] == "PASS"
+    assert manifest["decision_summary"]["sstw_measured_formal_record_count"] == 48
+    assert manifest["decision_summary"]["sstw_measured_formal_score_mean"] == 0.82
+    assert manifest["decision_summary"]["sstw_measured_formal_detectable_rate"] == 1.0
     assert manifest["decision_summary"]["validation_scale_gate_decision"] == "FAIL"
     assert manifest["decision_summary"]["validation_scale_claim_support_status"] == "validation_scale_blocked"
     assert manifest["decision_summary"]["validation_scale_result_level"] == "validation_scale"
@@ -1201,6 +1221,10 @@ def test_generative_video_drive_packager_creates_archive_and_manifest(tmp_path: 
     assert manifest["decision_summary"]["external_baseline_comparison_ready_count"] == 48
     assert manifest["decision_summary"]["external_baseline_measured_adapter_count"] == 2
     assert manifest["decision_summary"]["external_baseline_comparison_table_status"] == "ready"
+    assert manifest["decision_summary"]["formal_method_baseline_comparison_decision"] == "PASS"
+    assert manifest["decision_summary"]["formal_comparison_ready_method_count"] == 6
+    assert manifest["decision_summary"]["formal_comparison_modern_baseline_ready_count"] == 5
+    assert manifest["decision_summary"]["formal_comparison_missing_method_count"] == 0
     assert manifest["decision_summary"]["validation_internal_ablation_decision"] == "PASS"
     assert manifest["decision_summary"]["validation_internal_ablation_record_count"] == 12
     assert manifest["decision_summary"]["adaptive_attack_decision"] == "PASS"

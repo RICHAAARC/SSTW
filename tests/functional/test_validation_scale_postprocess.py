@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pytest
 
+from experiments.generative_video_model_probe.formal_method_baseline_comparison import run_formal_method_baseline_comparison
 from experiments.generative_video_model_probe.sstw_formal_result import run_sstw_measured_formal_result
 from experiments.generative_video_model_probe.statistical_confidence_interval import run_statistical_confidence_interval_reporter
 from experiments.generative_video_model_probe.validation_artifact_rebuild import run_validation_artifact_rebuild_dry_run
@@ -159,6 +160,63 @@ def test_sstw_measured_formal_result_writes_project_method_records(tmp_path: Pat
 
 
 @pytest.mark.quick
+def test_formal_method_baseline_comparison_requires_sstw_and_five_baselines(tmp_path: Path) -> None:
+    """同协议统计表必须同时包含 SSTW 和 5 个 measured_formal modern baseline。"""
+    run_root = tmp_path / "run"
+    write_jsonl(run_root / "records" / "sstw_measured_formal_records.jsonl", [
+        {
+            "method_id": "sstw_key_conditioned_flow_trajectory",
+            "method_role": "proposed_method",
+            "metric_status": "measured_formal",
+            "prompt_id": "prompt_a",
+            "attack_name": "video_compression_runtime",
+            "sstw_score": 0.84,
+            "sstw_detected": True,
+        }
+    ])
+    baseline_records = []
+    for baseline_id, score in {
+        "videoshield": 0.62,
+        "sigmark": 0.67,
+        "videomark": 0.58,
+        "vidsig": 0.55,
+        "videoseal": 0.71,
+    }.items():
+        baseline_records.append({
+            "external_baseline_name": baseline_id,
+            "external_baseline_layer": "modern_external_baseline",
+            "metric_status": "measured_formal",
+            "prompt_id": "prompt_a",
+            "attack_name": "video_compression_runtime",
+            "external_baseline_score": score,
+            "external_baseline_detected": score > 0.6,
+        })
+    write_jsonl(run_root / "records" / "external_baseline_score_records.jsonl", baseline_records)
+
+    audit = run_formal_method_baseline_comparison(run_root)
+    records = read_jsonl(run_root / "records" / "formal_method_baseline_comparison_records.jsonl")
+
+    assert audit["formal_method_baseline_comparison_decision"] == "PASS"
+    assert audit["formal_comparison_required_method_count"] == 6
+    assert audit["formal_comparison_ready_method_count"] == 6
+    assert audit["formal_comparison_modern_baseline_ready_count"] == 5
+    assert audit["formal_comparison_missing_method_ids"] == []
+    assert {record["method_id"] for record in records} == {
+        "sstw_key_conditioned_flow_trajectory",
+        "videoshield",
+        "sigmark",
+        "videomark",
+        "vidsig",
+        "videoseal",
+    }
+    assert all(record["metric_status"] == "measured_formal" for record in records)
+    assert all(record["comparison_scope"] == "paper_protocol_formal_adapter" for record in records)
+    assert (run_root / "tables" / "formal_method_baseline_comparison_table.csv").exists()
+    assert (run_root / "artifacts" / "formal_method_baseline_comparison_decision.json").exists()
+    assert (run_root / "reports" / "formal_method_baseline_comparison_report.md").exists()
+
+
+@pytest.mark.quick
 def test_validation_artifact_rebuild_dry_run_reports_missing_and_pass_states(tmp_path: Path) -> None:
     """artifact rebuild dry-run 必须能报告缺失状态, 并在必要产物齐全时通过。"""
     run_root = tmp_path / "run"
@@ -174,6 +232,7 @@ def test_validation_artifact_rebuild_dry_run_reports_missing_and_pass_states(tmp
         "records/sstw_measured_formal_records.jsonl",
         "records/external_baseline_records.jsonl",
         "records/external_baseline_score_records.jsonl",
+        "records/formal_method_baseline_comparison_records.jsonl",
         "records/validation_internal_ablation_records.jsonl",
         "records/adaptive_attack_records.jsonl",
         "records/trajectory_sketch_verification_records.jsonl",
@@ -188,6 +247,7 @@ def test_validation_artifact_rebuild_dry_run_reports_missing_and_pass_states(tmp
         "artifacts/sstw_measured_formal_decision.json",
         "artifacts/external_baseline_status_decision.json",
         "artifacts/external_baseline_comparison_decision.json",
+        "artifacts/formal_method_baseline_comparison_decision.json",
         "artifacts/validation_internal_ablation_decision.json",
         "artifacts/adaptive_attack_decision.json",
         "artifacts/replay_and_sketch_gate_decision.json",
@@ -199,6 +259,7 @@ def test_validation_artifact_rebuild_dry_run_reports_missing_and_pass_states(tmp
         "tables/runtime_attack_table.csv",
         "tables/runtime_detection_table.csv",
         "tables/sstw_measured_formal_table.csv",
+        "tables/formal_method_baseline_comparison_table.csv",
         "tables/validation_internal_ablation_table.csv",
         "tables/adaptive_attack_table.csv",
         "tables/replay_verification_table.csv",
@@ -206,6 +267,7 @@ def test_validation_artifact_rebuild_dry_run_reports_missing_and_pass_states(tmp
         "tables/statistical_confidence_interval_table.csv",
         "reports/external_baseline_comparison_report.md",
         "reports/sstw_measured_formal_report.md",
+        "reports/formal_method_baseline_comparison_report.md",
         "reports/validation_internal_ablation_report.md",
         "reports/adaptive_attack_report.md",
         "reports/replay_and_sketch_gate_report.md",

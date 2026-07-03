@@ -37,6 +37,7 @@
   "require_external_baseline_self_containment_decision": true,
   "require_external_baseline_status_records": true,
   "require_formal_motion_claim_ready": true,
+  "require_formal_method_baseline_comparison": true,
   "require_internal_ablation_records": true,
   "require_motion_threshold_calibration_ready": true,
   "require_pilot_paper_and_full_paper_blocked_until_pass": true,

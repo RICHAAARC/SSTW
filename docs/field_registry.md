@@ -1159,3 +1159,17 @@ Notebook 与 repository module 的跨边界数据
 | sstw_measured_formal_metric_status | governance | none | true | false | false | SSTW 本方法 measured_formal 转写阶段的 metric_status 汇总。 |
 | require_sstw_measured_formal_records | protocol | none | true | false | false | validation_scale gate 是否要求 SSTW 本方法 measured_formal records 已落盘。 |
 | allow_effect_size_claims | protocol | none | true | false | false | 当前 protocol profile 是否允许效果大小 claim。 |
+| formal_method_baseline_comparison_decision | governance | none | true | true | false | SSTW 与现代 external baseline 同协议 measured_formal 比较表阶段判定。 |
+| formal_comparison_required_method_count | metric | none | true | true | false | 同协议 formal 比较表要求覆盖的方法数量。 |
+| formal_comparison_ready_method_count | metric | none | true | true | false | 同协议 formal 比较表已产出 measured_formal 的方法数量。 |
+| formal_comparison_modern_baseline_ready_count | metric | none | true | true | false | 同协议 formal 比较表中已产出 measured_formal 的现代 external baseline 数量。 |
+| formal_comparison_sstw_ready | governance | none | true | true | false | 同协议 formal 比较表中 SSTW 本方法 measured_formal 是否可用。 |
+| formal_comparison_missing_method_ids | governance | none | true | true | false | 同协议 formal 比较表缺失 measured_formal records 的方法 ID 列表。 |
+| formal_comparison_missing_method_count | metric | none | true | true | false | 同协议 formal 比较表缺失 measured_formal records 的方法数量。 |
+| comparison_score_field | protocol | none | true | false | false | 同协议 formal 比较表聚合时使用的源分数字段。 |
+| comparison_prompt_count | metric | none | true | false | false | 同协议 formal 比较行覆盖的 prompt 数量。 |
+| comparison_positive_count | metric | none | true | true | false | 同协议 formal 比较行中 positive 检测数量。 |
+| comparison_positive_rate | metric | none | true | true | false | 同协议 formal 比较行中 positive 检测比例。 |
+| comparison_score_mean | metric | none | true | true | false | 同协议 formal 比较行的平均分数。 |
+| comparison_missing_reason | governance | none | true | false | false | 同协议 formal 比较行缺失 measured_formal records 的原因。 |
+| require_formal_method_baseline_comparison | protocol | none | true | false | false | validation_scale gate 是否要求 SSTW 与 5 个 baseline 的同协议 measured_formal 比较表。 |

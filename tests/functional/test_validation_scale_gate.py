@@ -55,6 +55,7 @@ def test_validation_scale_gate_blocks_empty_run(tmp_path: Path) -> None:
     assert "small_scale_claim_pilot_gate_passed" not in audit["missing_validation_requirements"]
     assert "validation_generation_records_ready" in audit["missing_validation_requirements"]
     assert "validation_internal_ablation_records_ready" in audit["missing_validation_requirements"]
+    assert "validation_sstw_measured_formal_records_ready" in audit["missing_validation_requirements"]
 
 
 @pytest.mark.quick
@@ -133,6 +134,14 @@ def test_validation_scale_gate_passes_when_all_governed_inputs_exist(tmp_path: P
         "data_split_and_leakage_guard_decision": "PASS",
         "claim_support_status": "data_split_and_leakage_guard_passed",
     })
+    write_jsonl(run_root / "records" / "sstw_measured_formal_records.jsonl", [
+        {"metric_status": "measured_formal", "sstw_score": 0.82, "claim_support_status": "sstw_measured_formal_validation_scale_only"},
+    ])
+    write_json(run_root / "artifacts" / "sstw_measured_formal_decision.json", {
+        "sstw_measured_formal_decision": "PASS",
+        "sstw_measured_formal_record_count": 1,
+        "claim_support_status": "sstw_measured_formal_validation_scale_only",
+    })
     write_jsonl(run_root / "records" / "validation_internal_ablation_records.jsonl", [
         {"method_variant": "without_velocity_constraint", "ablation_status": "ready"},
     ])
@@ -191,6 +200,8 @@ def test_validation_scale_gate_passes_when_all_governed_inputs_exist(tmp_path: P
     assert audit["external_baseline_measured_adapter_count"] == 7
     assert audit["modern_external_baseline_formal_measured_adapter_count"] == 5
     assert audit["external_baseline_self_containment_decision"] == "PASS"
+    assert audit["sstw_measured_formal_record_count"] == 1
+    assert audit["sstw_measured_formal_status"] == "sstw_measured_formal_validation_scale_only"
     assert audit["data_split_and_leakage_guard_decision"] == "PASS"
     assert audit["missing_modern_external_baseline_formal_adapter_names"] == []
     assert (run_root / "records" / "validation_scale_gate_records.jsonl").exists()

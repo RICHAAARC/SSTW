@@ -1141,3 +1141,21 @@ Notebook 与 repository module 的跨边界数据
 | official_execution_manifest_ok_count | artifact | none | true | false | false | 单个 baseline self-containment 行中通过项目内执行闭环校验的 official execution manifest 数量。 |
 | materialized_official_bundle_path_count | artifact | none | true | false | false | 单个 baseline self-containment 行中实际落盘可读取的 official bundle 路径数量。 |
 | materialized_official_execution_manifest_path_count | artifact | none | true | false | false | 单个 baseline self-containment 行中实际落盘可读取的 official execution manifest 路径数量。 |
+
+| sstw_measured_formal_record_id | protocol | none | true | false | false | SSTW 本方法 measured_formal record 的稳定标识。 |
+| sstw_measured_formal_decision | governance | none | true | true | false | SSTW 本方法 measured_formal 转写阶段的门禁判定。 |
+| sstw_measured_formal_status | governance | none | true | false | false | 单条 SSTW measured_formal record 的可用状态。 |
+| sstw_score | metric | none | true | true | false | SSTW 本方法在同协议攻击样本上的检测分数。 |
+| sstw_detected | metric | none | true | true | false | SSTW 本方法在同协议攻击样本上的检测布尔结果。 |
+| sstw_detection_score_field | governance | none | true | false | false | SSTW measured_formal 转写所使用的源检测分数字段。 |
+| source_runtime_detection_record_index | artifact | none | true | false | false | SSTW measured_formal record 对应的 runtime_detection_records 源记录序号。 |
+| sstw_measured_formal_record_count | metric | none | true | true | false | SSTW 本方法 measured_formal records 数量。 |
+| sstw_measured_formal_ready_count | metric | none | true | false | false | SSTW 本方法 measured_formal ready records 数量。 |
+| sstw_measured_formal_prompt_count | metric | none | true | false | false | SSTW 本方法 measured_formal records 覆盖的 prompt 数量。 |
+| sstw_measured_formal_attack_count | metric | none | true | false | false | SSTW 本方法 measured_formal records 覆盖的 attack 数量。 |
+| sstw_measured_formal_detected_count | metric | none | true | true | false | SSTW 本方法 measured_formal records 中检测为 positive 的数量。 |
+| sstw_measured_formal_detectable_rate | metric | none | true | true | false | SSTW 本方法 measured_formal records 的 positive rate。 |
+| sstw_measured_formal_score_mean | metric | none | true | true | false | SSTW 本方法 measured_formal records 的平均检测分数。 |
+| sstw_measured_formal_metric_status | governance | none | true | false | false | SSTW 本方法 measured_formal 转写阶段的 metric_status 汇总。 |
+| require_sstw_measured_formal_records | protocol | none | true | false | false | validation_scale gate 是否要求 SSTW 本方法 measured_formal records 已落盘。 |
+| allow_effect_size_claims | protocol | none | true | false | false | 当前 protocol profile 是否允许效果大小 claim。 |

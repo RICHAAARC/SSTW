@@ -1456,6 +1456,19 @@ def build_statistical_confidence_interval_command(layout: dict[str, str]) -> lis
     ]
 
 
+def build_sstw_measured_formal_result_command(layout: dict[str, str]) -> list[str]:
+    """构造 SSTW 本方法 measured_formal 结果转写命令。"""
+    return [
+        sys.executable,
+        "-m",
+        "experiments.generative_video_model_probe.sstw_formal_result",
+        "--run-root",
+        layout["drive_run_root"],
+        "--config-path",
+        layout["protocol_config_path"],
+    ]
+
+
 def build_pilot_paper_gate_command(layout: dict[str, str]) -> list[str]:
     """构建当前 profile 的 fixed-FPR gate 命令, fixed-FPR 口径来自 protocol config。"""
     return [

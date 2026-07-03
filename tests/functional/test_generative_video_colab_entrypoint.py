@@ -24,6 +24,7 @@ from paper_workflow.notebook_utils.generative_video_model_probe_workflow import 
     build_modern_baseline_official_bridge_command_templates,
     build_modern_baseline_official_bridge_preflight_decision,
     build_repository_official_baseline_eval_command_templates,
+    build_sstw_measured_formal_result_command,
     build_statistical_confidence_interval_command,
     build_pilot_paper_gate_command,
     build_validation_scale_gate_command,
@@ -276,6 +277,7 @@ def test_generative_video_colab_notebook_calls_repository_modules() -> None:
     assert "experiments.generative_video_model_probe.replay_and_sketch_gate" in helper_text
     assert "experiments.generative_video_model_probe.claim3_downgrade" in helper_text
     assert "experiments.generative_video_model_probe.statistical_confidence_interval" in helper_text
+    assert "experiments.generative_video_model_probe.sstw_formal_result" in helper_text
     assert "experiments.generative_video_model_probe.pilot_paper_gate" in helper_text
     assert "experiments.generative_video_model_probe.validation_artifact_rebuild" in helper_text
     assert "experiments.generative_video_model_probe.validation_scale_gate" in helper_text
@@ -334,6 +336,7 @@ def test_split_colab_notebooks_are_profile_driven() -> None:
     assert "build_external_baseline_official_result_bundle_preflight_command" in gate_source
     assert "build_external_baseline_comparison_command" in gate_source
     assert "build_external_baseline_self_containment_decision_command" in gate_source
+    assert "build_sstw_measured_formal_result_command" in gate_source
     assert "build_pilot_paper_gate_command" in gate_source
     assert "build_validation_scale_gate_command" in gate_source
     assert not Path("paper_workflow/colab_notebooks/validation_scale_formal_gate_colab.ipynb").exists()
@@ -655,6 +658,7 @@ def test_profile_specific_commands_pass_protocol_config_path(tmp_path: Path) -> 
     validation_commands = [
         build_mechanism_postprocess_command(validation_layout),
         build_statistical_confidence_interval_command(validation_layout),
+        build_sstw_measured_formal_result_command(validation_layout),
         build_validation_scale_gate_command(validation_layout),
     ]
     pilot_command = build_pilot_paper_gate_command(pilot_layout)

@@ -76,6 +76,7 @@ def _load_config(config_path: str | Path = DEFAULT_VALIDATION_SCALE_CONFIG) -> d
         "require_external_baseline_status_records": bool(config.get("require_external_baseline_status_records", True)),
         "require_external_baseline_comparison_records": bool(config.get("require_external_baseline_comparison_records", True)),
         "require_external_baseline_self_containment_decision": bool(config.get("require_external_baseline_self_containment_decision", True)),
+        "require_sstw_measured_formal_records": bool(config.get("require_sstw_measured_formal_records", True)),
         "minimum_external_baseline_measured_adapter_count": int(config.get("minimum_external_baseline_measured_adapter_count", DEFAULT_MINIMUM_EXTERNAL_BASELINE_MEASURED_ADAPTER_COUNT)),
         "minimum_modern_external_baseline_formal_adapter_count": int(config.get("minimum_modern_external_baseline_formal_adapter_count", DEFAULT_MINIMUM_MODERN_EXTERNAL_BASELINE_FORMAL_ADAPTER_COUNT)),
         "required_modern_external_baseline_adapter_names": list(config.get("required_modern_external_baseline_adapter_names", DEFAULT_REQUIRED_MODERN_EXTERNAL_BASELINE_ADAPTER_NAMES)),
@@ -194,6 +195,15 @@ def _confidence_interval_ready(run_root: Path) -> tuple[bool, str]:
     return ready, decision.get("claim_support_status", "missing_confidence_interval_decision")
 
 
+def _sstw_measured_formal_ready(run_root: Path) -> tuple[bool, int, str]:
+    """检查 SSTW 本方法是否已转写 measured_formal records。"""
+    records = _read_jsonl(run_root / "records" / "sstw_measured_formal_records.jsonl")
+    decision = _read_json(run_root / "artifacts" / "sstw_measured_formal_decision.json")
+    ready_records = [record for record in records if record.get("metric_status") == "measured_formal"]
+    ready = bool(ready_records) and _decision_pass(decision, "sstw_measured_formal_decision")
+    return ready, len(ready_records), decision.get("claim_support_status", "missing_sstw_measured_formal_decision")
+
+
 def _artifact_rebuild_ready(run_root: Path) -> tuple[bool, str]:
     """检查 validation-scale artifact rebuild dry-run 是否通过。"""
     decision = _read_json(run_root / "artifacts" / "validation_artifact_rebuild_dry_run_decision.json")
@@ -254,6 +264,7 @@ def build_validation_scale_gate_audit(
     adaptive_attack_ready, adaptive_attack_record_count, adaptive_attack_status = _adaptive_attack_ready(run_root)
     replay_or_sketch_ready, replay_or_sketch_status = _replay_or_sketch_ready(run_root)
     confidence_interval_ready, confidence_interval_status = _confidence_interval_ready(run_root)
+    sstw_measured_formal_ready, sstw_measured_formal_record_count, sstw_measured_formal_status = _sstw_measured_formal_ready(run_root)
     artifact_rebuild_ready, artifact_rebuild_status = _artifact_rebuild_ready(run_root)
     motion_selection = select_motion_claim_generation_records(validation_generation_records, formal_metric_records)
     formal_motion_claim_ready = motion_selection.formal_motion_claim_status in FORMAL_MOTION_CLAIM_READY_STATUSES
@@ -268,6 +279,7 @@ def build_validation_scale_gate_audit(
         "validation_external_baseline_status_records_ready": (not config["require_external_baseline_status_records"]) or external_baseline_audit.get("external_baseline_status_decision") == "PASS",
         "validation_external_baseline_comparison_records_ready": (not config["require_external_baseline_comparison_records"]) or external_baseline_comparison_ready,
         "validation_external_baseline_self_containment_ready": (not config["require_external_baseline_self_containment_decision"]) or external_baseline_self_containment_decision.get("external_baseline_self_containment_decision") == "PASS",
+        "validation_sstw_measured_formal_records_ready": (not config["require_sstw_measured_formal_records"]) or sstw_measured_formal_ready,
         "validation_data_split_and_leakage_guard_ready": (not config["require_data_split_and_leakage_guard"]) or data_split_decision.get("data_split_and_leakage_guard_decision") == "PASS",
         "validation_internal_ablation_records_ready": (not config["require_internal_ablation_records"]) or internal_ablation_ready,
         "validation_adaptive_attack_records_ready": (not config["require_adaptive_attack_records"]) or adaptive_attack_ready,
@@ -320,6 +332,8 @@ def build_validation_scale_gate_audit(
         "missing_modern_external_baseline_formal_adapter_names": missing_modern_external_baseline_formal_adapter_names,
         "external_baseline_comparison_status": external_baseline_comparison_status,
         "external_baseline_self_containment_decision": external_baseline_self_containment_decision.get("external_baseline_self_containment_decision"),
+        "sstw_measured_formal_record_count": sstw_measured_formal_record_count,
+        "sstw_measured_formal_status": sstw_measured_formal_status,
         "data_split_and_leakage_guard_decision": data_split_decision.get("data_split_and_leakage_guard_decision"),
         "minimum_external_baseline_measured_adapter_count": config["minimum_external_baseline_measured_adapter_count"],
         "internal_ablation_record_count": internal_ablation_record_count,
@@ -375,6 +389,8 @@ def write_validation_scale_gate_audit(
         f"- external_baseline_measured_adapter_count: {audit['external_baseline_measured_adapter_count']}\n"
         f"- modern_external_baseline_formal_measured_adapter_count: {audit['modern_external_baseline_formal_measured_adapter_count']}\n"
         f"- external_baseline_self_containment_decision: {audit['external_baseline_self_containment_decision']}\n"
+        f"- sstw_measured_formal_record_count: {audit['sstw_measured_formal_record_count']}\n"
+        f"- sstw_measured_formal_status: {audit['sstw_measured_formal_status']}\n"
         f"- data_split_and_leakage_guard_decision: {audit['data_split_and_leakage_guard_decision']}\n"
         f"- missing_modern_external_baseline_formal_adapter_names: {', '.join(audit['missing_modern_external_baseline_formal_adapter_names']) if audit['missing_modern_external_baseline_formal_adapter_names'] else 'none'}\n"
         f"- full_paper_allowed: {str(audit['full_paper_allowed']).lower()}\n"

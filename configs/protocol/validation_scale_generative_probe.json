@@ -42,6 +42,7 @@
   "require_pilot_paper_and_full_paper_blocked_until_pass": true,
   "require_data_split_and_leakage_guard": true,
   "require_replay_or_sketch_records_or_claim3_downgrade": true,
+  "require_sstw_measured_formal_records": true,
   "required_modern_external_baseline_adapter_names": [
     "videoshield",
     "sigmark",

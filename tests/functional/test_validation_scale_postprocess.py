@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pytest
 
+from experiments.generative_video_model_probe.sstw_formal_result import run_sstw_measured_formal_result
 from experiments.generative_video_model_probe.statistical_confidence_interval import run_statistical_confidence_interval_reporter
 from experiments.generative_video_model_probe.validation_artifact_rebuild import run_validation_artifact_rebuild_dry_run
 from experiments.generative_video_model_probe.validation_internal_ablation import run_validation_internal_ablation
@@ -111,6 +112,53 @@ def test_statistical_confidence_interval_reporter_writes_wilson_interval(tmp_pat
 
 
 @pytest.mark.quick
+def test_sstw_measured_formal_result_writes_project_method_records(tmp_path: Path) -> None:
+    """SSTW 本方法必须转写为与 external baseline 对齐的 measured_formal records。"""
+    run_root = tmp_path / "run"
+    write_jsonl(run_root / "records" / "runtime_detection_records.jsonl", [
+        {
+            "runtime_detection_status": "ready",
+            "runtime_detection_evidence_level": "runtime_attacked_video_file",
+            "generation_model_id": "wan21",
+            "prompt_id": "prompt_a",
+            "seed_id": "seed_a",
+            "trajectory_trace_id": "trace_a",
+            "attack_name": "video_compression_runtime",
+            "source_video_path": "videos/source.mp4",
+            "source_video_sha256": "source_digest",
+            "attacked_video_path": "videos/attacked.mp4",
+            "attacked_video_sha256": "attacked_digest",
+            "S_runtime_attack_detection": 0.82,
+            "S_final_conservative": 0.8,
+            "attacked_video_detectable": True,
+        },
+        {
+            "runtime_detection_status": "failed",
+            "prompt_id": "prompt_b",
+            "S_runtime_attack_detection": 0.1,
+        },
+    ])
+
+    audit = run_sstw_measured_formal_result(run_root)
+    records = read_jsonl(run_root / "records" / "sstw_measured_formal_records.jsonl")
+    protocol = json.loads(Path("configs/protocol/validation_scale_generative_probe.json").read_text(encoding="utf-8"))
+
+    assert audit["sstw_measured_formal_decision"] == "PASS"
+    assert audit["sstw_measured_formal_record_count"] == 1
+    assert audit["sstw_measured_formal_score_mean"] == 0.8
+    assert audit["target_fpr"] == protocol["target_fpr"]
+    assert records[0]["metric_status"] == "measured_formal"
+    assert records[0]["method_id"] == "sstw_key_conditioned_flow_trajectory"
+    assert records[0]["method_role"] == "proposed_method"
+    assert records[0]["comparison_scope"] == "paper_protocol_formal_adapter"
+    assert records[0]["claim_support_status"] == "sstw_measured_formal_validation_scale_only"
+    assert records[0]["sstw_detection_score_field"] == "S_final_conservative"
+    assert (run_root / "tables" / "sstw_measured_formal_table.csv").exists()
+    assert (run_root / "artifacts" / "sstw_measured_formal_decision.json").exists()
+    assert (run_root / "reports" / "sstw_measured_formal_report.md").exists()
+
+
+@pytest.mark.quick
 def test_validation_artifact_rebuild_dry_run_reports_missing_and_pass_states(tmp_path: Path) -> None:
     """artifact rebuild dry-run 必须能报告缺失状态, 并在必要产物齐全时通过。"""
     run_root = tmp_path / "run"
@@ -123,6 +171,7 @@ def test_validation_artifact_rebuild_dry_run_reports_missing_and_pass_states(tmp
         "records/trajectory_trace.jsonl",
         "records/runtime_attack_records.jsonl",
         "records/runtime_detection_records.jsonl",
+        "records/sstw_measured_formal_records.jsonl",
         "records/external_baseline_records.jsonl",
         "records/external_baseline_score_records.jsonl",
         "records/validation_internal_ablation_records.jsonl",
@@ -136,6 +185,7 @@ def test_validation_artifact_rebuild_dry_run_reports_missing_and_pass_states(tmp
         "artifacts/generative_video_colab_runtime_decision.json",
         "artifacts/runtime_attack_decision.json",
         "artifacts/runtime_detection_decision.json",
+        "artifacts/sstw_measured_formal_decision.json",
         "artifacts/external_baseline_status_decision.json",
         "artifacts/external_baseline_comparison_decision.json",
         "artifacts/validation_internal_ablation_decision.json",
@@ -148,12 +198,14 @@ def test_validation_artifact_rebuild_dry_run_reports_missing_and_pass_states(tmp
         "tables/external_baseline_comparison_table.csv",
         "tables/runtime_attack_table.csv",
         "tables/runtime_detection_table.csv",
+        "tables/sstw_measured_formal_table.csv",
         "tables/validation_internal_ablation_table.csv",
         "tables/adaptive_attack_table.csv",
         "tables/replay_verification_table.csv",
         "tables/claim3_downgrade_table.csv",
         "tables/statistical_confidence_interval_table.csv",
         "reports/external_baseline_comparison_report.md",
+        "reports/sstw_measured_formal_report.md",
         "reports/validation_internal_ablation_report.md",
         "reports/adaptive_attack_report.md",
         "reports/replay_and_sketch_gate_report.md",

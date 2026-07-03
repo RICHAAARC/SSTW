@@ -721,6 +721,7 @@ def write_videomark_official_bundle_records(
     video_results_json_path: str | Path,
     model_name: str,
     max_records: int | None = None,
+    clean_negative_results_json_path: str | Path | None = None,
 ) -> dict[str, Any]:
     """把 VideoMark 官方 temporal_results 输出转写为 official bundle records。
 
@@ -734,6 +735,19 @@ def write_videomark_official_bundle_records(
     temporal_path = Path(temporal_results_json_path)
     video_path = Path(video_results_json_path)
     score_payload = _score_from_videomark_temporal_results(temporal_path)
+    clean_negative_payload: dict[str, Any] = {}
+    clean_path = Path(clean_negative_results_json_path) if clean_negative_results_json_path else None
+    if clean_path is not None and clean_path.is_file():
+        clean_score_payload = _score_from_videomark_temporal_results(clean_path)
+        clean_negative_payload = {
+            "external_baseline_clean_negative_score": clean_score_payload["raw_detector_score"],
+            "external_baseline_clean_negative_score_semantics": clean_score_payload["score_semantics"],
+            "external_baseline_clean_negative_video_path": str(clean_path),
+            "official_clean_negative_results_json_path": str(clean_path),
+            "official_clean_negative_score_assignment_policy": (
+                "aggregate_mean_over_videomark_official_clean_negative_results_json"
+            ),
+        }
     records = _selected_runtime_records(root, max_records)
     generated = 0
     failures: list[dict[str, Any]] = []
@@ -743,6 +757,7 @@ def write_videomark_official_bundle_records(
         try:
             payload = {
                 **score_payload,
+                **clean_negative_payload,
                 "detected": float(score_payload["external_baseline_score"]) >= threshold,
                 "threshold": threshold,
                 "official_result_provenance": REPOSITORY_GENERATED_OFFICIAL_PROVENANCE,
@@ -863,6 +878,7 @@ def run_videomark_official_runtime(config: VideoMarkOfficialRuntimeConfig) -> di
     if not config.dry_run and not execution_failure_reason:
         if temporal_results_path.is_file():
             os.environ["SSTW_VIDEOMARK_TEMPORAL_RESULTS_JSON"] = str(temporal_results_path)
+            clean_negative_results_path = os.environ.get("SSTW_VIDEOMARK_CLEAN_NEGATIVE_RESULTS_JSON", "").strip() or None
             bundle_result = write_videomark_official_bundle_records(
                 run_root=run_root,
                 bundle_root=bundle_root,
@@ -871,6 +887,7 @@ def run_videomark_official_runtime(config: VideoMarkOfficialRuntimeConfig) -> di
                 video_results_json_path=video_results_path,
                 model_name=config.model_name,
                 max_records=config.max_records,
+                clean_negative_results_json_path=clean_negative_results_path,
             )
         else:
             execution_failure_reason = f"videomark_temporal_results_json_missing:{temporal_results_path}"

@@ -226,6 +226,7 @@ def read_official_result_bundle_if_available(
         payload = read_json(candidate)
         validate_score_payload(payload)
         validate_repository_generated_bundle(payload, candidate)
+        validate_clean_negative_payload(payload)
         return {
             **payload,
             "official_adapter_status": "measured_from_official_result_bundle",
@@ -254,6 +255,32 @@ def extract_score(payload: Mapping[str, Any]) -> float:
 def validate_score_payload(payload: Mapping[str, Any]) -> None:
     """确认输出中存在至少一个可审计分数字段。"""
     extract_score(payload)
+
+
+def validate_clean_negative_payload(payload: Mapping[str, Any]) -> None:
+    """确认 official bundle 包含同方法 clean negative 校准分数。
+
+    validation_scale 的公平比较不再允许只给 attacked positive 分数。每个
+    external baseline 的 official bundle 必须同时携带该 baseline 自己的
+    clean negative detector score, 后续才能在相同 target FPR 下校准阈值。
+    """
+
+    score = payload.get(
+        "external_baseline_clean_negative_score",
+        payload.get("clean_negative_score", payload.get("clean_negative_raw_detector_score")),
+    )
+    if score in {None, "", "unsupported"}:
+        raise RuntimeError("official_result_bundle_missing_clean_negative_score")
+    try:
+        float(score)
+    except (TypeError, ValueError) as exc:
+        raise RuntimeError(f"official_result_bundle_invalid_clean_negative_score:{score}") from exc
+    video_path = payload.get(
+        "external_baseline_clean_negative_video_path",
+        payload.get("clean_negative_video_path"),
+    )
+    if video_path in {None, ""}:
+        raise RuntimeError("official_result_bundle_missing_clean_negative_video_path")
 
 
 def format_command(template: str, args: argparse.Namespace, output_json_path: Path) -> list[str]:

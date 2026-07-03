@@ -646,6 +646,9 @@ def test_modern_external_baseline_formal_command_adapters_write_measured_records
         "parser.add_argument('--attack-name')\n"
         "args = parser.parse_args()\n"
         "json.dump({'external_baseline_score': 0.37, 'detected': True, 'bit_accuracy': 0.91, 'threshold': 0.5, "
+        "'external_baseline_clean_negative_score': 0.08, "
+        "'external_baseline_clean_negative_score_semantics': 'watermark_presence_confidence', "
+        "'external_baseline_clean_negative_video_path': 'official/clean_negative.mp4', "
         "'external_baseline_source_video_path': 'official/source.mp4', "
         "'external_baseline_attacked_video_path': 'official/attacked.mp4', "
         "'external_baseline_generation_model_id': 'official_baseline_model', "
@@ -684,6 +687,7 @@ def test_modern_external_baseline_formal_command_adapters_write_measured_records
     assert all(Path(record["external_baseline_official_command_manifest_path"]).exists() for record in formal_records)
     assert all(record["external_baseline_source_video_path"] == "official/source.mp4" for record in formal_records)
     assert all(record["external_baseline_attacked_video_path"] == "official/attacked.mp4" for record in formal_records)
+    assert all(record["external_baseline_clean_negative_score"] == 0.08 for record in formal_records)
     assert all(record["external_baseline_generation_model_id"] == "official_baseline_model" for record in formal_records)
     assert all(record.get("S_final") is None for record in records)
     execution_manifest = json.loads((run_root / "artifacts" / "external_baseline_execution_manifest.json").read_text(encoding="utf-8"))
@@ -706,7 +710,10 @@ def test_modern_external_baseline_bridge_commands_require_real_official_output(t
         "parser.add_argument('--attacked-video')\n"
         "parser.add_argument('--attack-name')\n"
         "args = parser.parse_args()\n"
-        "json.dump({'score': 0.42, 'detected': True, 'bit_accuracy': 0.88}, open(args.official_output_json, 'w', encoding='utf-8'))\n",
+        "json.dump({'score': 0.42, 'detected': True, 'bit_accuracy': 0.88, "
+        "'external_baseline_clean_negative_score': 0.07, "
+        "'external_baseline_clean_negative_score_semantics': 'watermark_presence_confidence', "
+        "'external_baseline_clean_negative_video_path': 'official/clean_negative.mp4'}, open(args.official_output_json, 'w', encoding='utf-8'))\n",
         encoding="utf-8",
     )
     official_command = (
@@ -749,6 +756,7 @@ def test_modern_external_baseline_bridge_commands_require_real_official_output(t
     }
     assert formal_records
     assert all(record["external_baseline_score"] == 0.42 for record in formal_records)
+    assert all(record["external_baseline_clean_negative_score"] == 0.07 for record in formal_records)
     raw_paths = [
         Path(record["external_baseline_official_output_path"]).with_name(
             Path(record["external_baseline_official_output_path"]).stem + "_official_raw.json"
@@ -804,6 +812,9 @@ def test_official_result_bundle_preflight_requires_all_modern_baseline_units(
                     "official_execution_manifest_path": str(manifest_path),
                     "external_baseline_source_video_path": f"{baseline_id}/source.mp4",
                     "external_baseline_attacked_video_path": f"{baseline_id}/attacked.mp4",
+                    "external_baseline_clean_negative_score": 0.12,
+                    "external_baseline_clean_negative_score_semantics": "watermark_presence_confidence",
+                    "external_baseline_clean_negative_video_path": f"{baseline_id}/clean_negative.mp4",
                 }),
                 encoding="utf-8",
             )
@@ -855,6 +866,9 @@ def test_paper_gate_comparison_consumes_repository_official_bundles_without_sour
                     "external_baseline_source_video_path": f"{baseline_id}/source.mp4",
                     "external_baseline_attacked_video_path": f"{baseline_id}/attacked.mp4",
                     "external_baseline_generation_model_id": f"{baseline_id}_official_model",
+                    "external_baseline_clean_negative_score": 0.12,
+                    "external_baseline_clean_negative_score_semantics": "watermark_presence_confidence",
+                    "external_baseline_clean_negative_video_path": f"{baseline_id}/clean_negative.mp4",
                 }),
                 encoding="utf-8",
             )
@@ -883,6 +897,7 @@ def test_paper_gate_comparison_consumes_repository_official_bundles_without_sour
     assert set(audit["modern_external_baseline_formal_measured_adapter_names"]) == set(baseline_ids)
     assert len(formal_records) == len(baseline_ids) * len(records)
     assert all(record["external_baseline_score"] == 0.61 for record in formal_records)
+    assert all(record["external_baseline_clean_negative_score"] == 0.12 for record in formal_records)
     assert all(record["external_baseline_official_execution_mode"] == "measured_formal_from_official_command" for record in formal_records)
 
 

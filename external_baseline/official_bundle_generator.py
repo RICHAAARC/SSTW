@@ -121,6 +121,45 @@ def _bit_accuracy(pred_bits: Any, reference_bits: Any) -> float | None:
     return float((pred[:length] == ref[:length]).float().mean().item())
 
 
+def _videoseal_detect_payload(
+    model: Any,
+    video: Any,
+    *,
+    reference_message: Any = None,
+) -> dict[str, Any]:
+    """调用 VideoSeal 官方 detector 并返回统一分数字段。
+
+    该函数同时用于 watermarked positive 与 clean negative。这样校准分数与
+    attacked positive 分数来自同一个官方 detector 输出口径。
+    """
+
+    import torch
+
+    with torch.no_grad():
+        detected_outputs = model.detect(video, is_video=True)
+    preds = detected_outputs.get("preds")
+    if preds is None:
+        raise RuntimeError("videoseal_detect_missing_preds")
+    detection_column = preds[:, 0] if preds.ndim >= 2 and preds.shape[-1] > 1 else preds
+    message_logits = preds[:, 1:] if preds.ndim >= 2 and preds.shape[-1] > 1 else preds
+    confidence = _sigmoid_mean(detection_column)
+    bit_acc = _bit_accuracy(
+        message_logits.mean(dim=0),
+        reference_message[0] if reference_message is not None and reference_message.ndim >= 2 else reference_message,
+    )
+    return {
+        "external_baseline_score": round(float(confidence), 6),
+        "raw_detector_score": round(float(confidence), 6),
+        "confidence": round(float(confidence), 6),
+        "payload_bit_accuracy": round(float(bit_acc), 6) if bit_acc is not None else None,
+        "bit_accuracy": round(float(bit_acc), 6) if bit_acc is not None else None,
+        "detected": confidence >= float(os.environ.get("SSTW_VIDEOSEAL_DETECTION_THRESHOLD", "0.5")),
+        "threshold": float(os.environ.get("SSTW_VIDEOSEAL_DETECTION_THRESHOLD", "0.5")),
+        "score_semantics": "watermark_presence_confidence",
+        "score_orientation": "higher_is_more_watermarked",
+    }
+
+
 def generate_videoseal_official_bundle(
     run_root: str | Path,
     bundle_root: str | Path,
@@ -188,26 +227,16 @@ def generate_videoseal_official_bundle(
             baseline_video_dir.mkdir(parents=True, exist_ok=True)
             write_video_tchw(baseline_source_video, watermarked, fps=fps)
             write_video_tchw(baseline_attacked_video, attacked, fps=fps)
-            with torch.no_grad():
-                detected_outputs = model.detect(attacked, is_video=True)
-            preds = detected_outputs.get("preds")
-            if preds is None:
-                raise RuntimeError("videoseal_detect_missing_preds")
-            detection_column = preds[:, 0] if preds.ndim >= 2 and preds.shape[-1] > 1 else preds
-            message_logits = preds[:, 1:] if preds.ndim >= 2 and preds.shape[-1] > 1 else preds
-            confidence = _sigmoid_mean(detection_column)
-            bit_acc = _bit_accuracy(message_logits.mean(dim=0), reference_message[0] if reference_message is not None and reference_message.ndim >= 2 else reference_message)
-            score = confidence
+            clean_negative = _apply_video_tensor_attack(video, str(record.get("attack_name") or ""))
+            clean_negative_video = baseline_video_dir / f"{video_stem}_clean_negative.mp4"
+            write_video_tchw(clean_negative_video, clean_negative, fps=fps)
+            score_payload = _videoseal_detect_payload(model, attacked, reference_message=reference_message)
+            clean_negative_payload = _videoseal_detect_payload(model, clean_negative)
             payload = {
-                "external_baseline_score": round(float(score), 6),
-                "raw_detector_score": round(float(confidence), 6),
-                "confidence": round(float(confidence), 6),
-                "payload_bit_accuracy": round(float(bit_acc), 6) if bit_acc is not None else None,
-                "bit_accuracy": round(float(bit_acc), 6) if bit_acc is not None else None,
-                "detected": confidence >= float(os.environ.get("SSTW_VIDEOSEAL_DETECTION_THRESHOLD", "0.5")),
-                "threshold": float(os.environ.get("SSTW_VIDEOSEAL_DETECTION_THRESHOLD", "0.5")),
-                "score_semantics": "watermark_presence_confidence",
-                "score_orientation": "higher_is_more_watermarked",
+                **score_payload,
+                "external_baseline_clean_negative_score": clean_negative_payload["raw_detector_score"],
+                "external_baseline_clean_negative_score_semantics": clean_negative_payload["score_semantics"],
+                "external_baseline_clean_negative_video_path": str(clean_negative_video),
                 "official_result_provenance": "repository_generated_from_third_party_official_code",
                 "official_baseline_id": "videoseal",
                 "official_source_layout_status": source_layout_audit["layout_status"],

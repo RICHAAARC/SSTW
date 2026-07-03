@@ -146,10 +146,12 @@ def test_sigmark_bundle_writer_records_project_owned_provenance(tmp_path: Path) 
     bundle_root = tmp_path / "bundles" / "validation_scale"
     manifest_path = bundle_root / "sigmark" / "official_reference_execution_manifest.json"
     npz_path = tmp_path / "official_outputs" / "HunyuanVideo-community-sigmark-bit_accuracy.npz"
+    clean_npz_path = tmp_path / "official_outputs" / "HunyuanVideo-community-sigmark-clean-negative-bit_accuracy.npz"
     _write_runtime_records(run_root)
     _write_json(manifest_path, {"manifest_kind": "test_sigmark_execution_manifest"})
     npz_path.parent.mkdir(parents=True, exist_ok=True)
     np.savez(npz_path, **{"sstw_runtime_prompt/example": np.array([0.75, 1.0])})
+    np.savez(clean_npz_path, **{"sstw_runtime_prompt/example_clean": np.array([0.25, 0.5])})
 
     result = write_sigmark_official_bundle_records(
         run_root=run_root,
@@ -157,6 +159,7 @@ def test_sigmark_bundle_writer_records_project_owned_provenance(tmp_path: Path) 
         manifest_path=manifest_path,
         bit_accuracy_npz_path=npz_path,
         model_name="HunyuanVideo-community",
+        clean_negative_bit_accuracy_npz_path=clean_npz_path,
     )
 
     assert result["generated_bundle_record_count"] == 1
@@ -166,6 +169,8 @@ def test_sigmark_bundle_writer_records_project_owned_provenance(tmp_path: Path) 
     assert payload["external_baseline_official_execution_mode"] == "sigmark_hunyuan_gen_extract"
     assert "metric_status" not in payload
     assert payload["bit_accuracy"] == 0.875
+    assert payload["external_baseline_clean_negative_score"] == 0.375
+    assert payload["official_clean_negative_bit_accuracy_npz_path"] == str(clean_npz_path)
     assert payload["official_execution_manifest_path"] == str(manifest_path)
 
 

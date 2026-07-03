@@ -1231,7 +1231,8 @@ Notebook 与 repository module 的跨边界数据
 | motion_consistency_excluded_count | metric | none | true | true | false | motion consistency 过滤后排除出 motion claim 的样本数量。 |
 | motion_consistency_exclusion_reasons | governance | none | true | false | false | motion consistency 处理报告中出现的原因集合。 |
 | motion_consistency_claim_filter_applied | governance | none | true | true | false | 是否已经应用 motion consistency claim 过滤。 |
-| require_motion_consistency_exclusion_report | protocol | none | true | false | false | validation_scale gate 是否要求 motion consistency 阻断样本处理报告。 || raw_detector_score | metric | none | true | false | false | 官方 wrapper 输出的原始水印存在性检测分数, 由 bridge 归一化为 external_baseline_raw_detector_score。 |
+| require_motion_consistency_exclusion_report | protocol | none | true | false | false | validation_scale gate 是否要求 motion consistency 阻断样本处理报告。 |
+| raw_detector_score | metric | none | true | false | false | 官方 wrapper 输出的原始水印存在性检测分数, 由 bridge 归一化为 external_baseline_raw_detector_score。 |
 | payload_bit_accuracy | metric | none | true | false | false | 官方 wrapper 输出的 payload bit accuracy 辅助指标, 不作为主公平比较检测分数。 |
 | score_semantics | protocol | none | true | false | false | 官方 wrapper 对 raw score 含义的显式声明。 |
 | score_orientation | protocol | none | true | false | false | 官方 wrapper 对分数方向的显式声明, 当前主协议要求 higher_is_more_watermarked。 |
@@ -1243,6 +1244,17 @@ Notebook 与 repository module 的跨边界数据
 | external_baseline_clean_negative_score | metric | none | true | false | false | baseline 自身 clean negative 分布中的检测分数, 用于 target FPR 阈值校准。 |
 | external_baseline_clean_negative_score_semantics | protocol | none | true | false | false | clean negative 分数语义, 必须与 external_baseline_score_semantics 对齐。 |
 | external_baseline_clean_negative_video_path | artifact | none | true | false | false | baseline 自身 clean negative 视频路径, 用于审计阈值校准来源。 |
+| official_clean_negative_source_video_path | artifact | none | true | false | false | official runtime 中未施加 runtime attack 的 baseline clean negative 视频路径。 |
+| official_clean_negative_frame_array_path | artifact | none | true | false | false | VidSig official attack.py 读取的 clean negative 帧数组路径。 |
+| official_clean_negative_attack_log_path | artifact | none | true | false | false | official detector 在 clean negative 视频上的日志路径。 |
+| official_clean_negative_attack_stdout_path | artifact | none | true | false | false | official clean negative 检测命令 stdout 证据路径。 |
+| official_clean_negative_attack_stderr_path | artifact | none | true | false | false | official clean negative 检测命令 stderr 证据路径。 |
+| official_clean_negative_bit_accuracy_npz_path | artifact | none | true | false | false | SIGMark clean negative 官方 bit accuracy npz 路径。 |
+| official_clean_negative_results_json_path | artifact | none | true | false | false | VideoMark clean negative 官方结果 JSON 路径。 |
+| official_clean_negative_score_assignment_policy | protocol | none | true | false | false | 聚合型 official clean negative 分数如何映射到 comparison unit。 |
+| official_clean_negative_video_io_backend | protocol | none | true | false | false | official clean negative 视频读取所使用的 I/O 后端。 |
+| clean_negative_attack_transform | protocol | none | true | false | false | clean negative 视频施加的 runtime attack 变换描述。 |
+| clean_negative_attack_strength | protocol | none | true | false | false | clean negative 视频施加的 runtime attack 强度描述。 |
 | fair_comparison_protocol | protocol | none | true | false | false | 公平比较协议名称, 当前为 method-specific clean negative calibration 到统一 target FPR。 |
 | require_fair_detection_calibration | protocol | none | true | false | false | validation_scale gate 是否要求 clean negative 公平校准通过。 |
 | minimum_clean_negative_count | protocol | none | true | false | false | 每个方法校准 target FPR 所需的最小 clean negative 分数数量。 |

@@ -196,6 +196,7 @@ def test_videomark_bundle_writer_records_project_owned_provenance(tmp_path: Path
     manifest_path = bundle_root / "videomark" / "official_reference_execution_manifest.json"
     temporal_path = tmp_path / "official_outputs" / "videomark" / "modelscope" / "512bit" / "temporal_results.json"
     video_path = temporal_path.with_name("video_results.json")
+    clean_path = temporal_path.with_name("clean_negative_results.json")
     _write_runtime_records(run_root)
     _write_json(manifest_path, {"manifest_kind": "test_videomark_execution_manifest"})
     _write_json(
@@ -208,6 +209,7 @@ def test_videomark_bundle_writer_records_project_owned_provenance(tmp_path: Path
         },
     )
     _write_json(video_path, {"toy_car_0": {"decode_acc": 0.9}})
+    _write_json(clean_path, {"toy_car_clean": {"decode_acc": 0.25}})
 
     result = write_videomark_official_bundle_records(
         run_root=run_root,
@@ -216,6 +218,7 @@ def test_videomark_bundle_writer_records_project_owned_provenance(tmp_path: Path
         temporal_results_json_path=temporal_path,
         video_results_json_path=video_path,
         model_name="modelscope",
+        clean_negative_results_json_path=clean_path,
     )
 
     assert result["generated_bundle_record_count"] == 1
@@ -224,6 +227,8 @@ def test_videomark_bundle_writer_records_project_owned_provenance(tmp_path: Path
     assert payload["official_result_provenance"] == "repository_generated_from_third_party_official_code"
     assert payload["external_baseline_official_execution_mode"] == "videomark_embedding_extraction_temporal_tamper"
     assert payload["external_baseline_score"] == 0.875
+    assert payload["external_baseline_clean_negative_score"] == 0.25
+    assert payload["official_clean_negative_results_json_path"] == str(clean_path)
     assert payload["official_frames_acc_mean"] == 0.65
     assert payload["official_temporal_attack_names"] == ["frame drop", "frame swap"]
     assert "metric_status" not in payload

@@ -63,6 +63,20 @@ def _run_default(args: argparse.Namespace, source_dir: Path, output_json_path: P
         raise RuntimeError("videomark_decode_acc_missing")
     score = sum(values) / len(values)
     threshold = safe_float(os.environ.get("SSTW_VIDEOMARK_DECODE_ACC_THRESHOLD"), 0.5)
+    clean_negative_payload: dict[str, Any] = {}
+    clean_result_json = resolve_existing_env_file("SSTW_VIDEOMARK_CLEAN_NEGATIVE_RESULTS_JSON")
+    if clean_result_json is not None:
+        clean_payload = read_json(clean_result_json)
+        clean_values = _collect_decode_acc(clean_payload)
+        if not clean_values:
+            raise RuntimeError("videomark_clean_negative_decode_acc_missing")
+        clean_score = sum(clean_values) / len(clean_values)
+        clean_negative_payload = {
+            "external_baseline_clean_negative_score": round(clean_score, 6),
+            "external_baseline_clean_negative_score_semantics": "payload_bit_accuracy_extraction_score",
+            "external_baseline_clean_negative_video_path": str(clean_result_json),
+            "official_clean_negative_results_json_path": str(clean_result_json),
+        }
     return {
         "external_baseline_score": round(score, 6),
         "raw_detector_score": round(score, 6),
@@ -78,6 +92,7 @@ def _run_default(args: argparse.Namespace, source_dir: Path, output_json_path: P
         "official_temporal_results_json_path": str(result_json),
         "official_decode_acc_count": len(values),
         "official_output_json_path": str(output_json_path),
+        **clean_negative_payload,
     }
 
 

@@ -735,6 +735,7 @@ def write_sigmark_official_bundle_records(
     bit_accuracy_npz_path: str | Path,
     model_name: str,
     max_records: int | None = None,
+    clean_negative_bit_accuracy_npz_path: str | Path | None = None,
 ) -> dict[str, Any]:
     """把 SIGMark 官方 extract 输出转写为 official bundle records。
 
@@ -747,6 +748,19 @@ def write_sigmark_official_bundle_records(
     bundle = Path(bundle_root)
     npz_path = Path(bit_accuracy_npz_path)
     score_payload = _score_from_sigmark_bit_accuracy_npz(npz_path)
+    clean_negative_payload: dict[str, Any] = {}
+    clean_npz_path = Path(clean_negative_bit_accuracy_npz_path) if clean_negative_bit_accuracy_npz_path else None
+    if clean_npz_path is not None and clean_npz_path.is_file():
+        clean_score_payload = _score_from_sigmark_bit_accuracy_npz(clean_npz_path)
+        clean_negative_payload = {
+            "external_baseline_clean_negative_score": clean_score_payload["raw_detector_score"],
+            "external_baseline_clean_negative_score_semantics": clean_score_payload["score_semantics"],
+            "external_baseline_clean_negative_video_path": str(clean_npz_path),
+            "official_clean_negative_bit_accuracy_npz_path": str(clean_npz_path),
+            "official_clean_negative_score_assignment_policy": (
+                "aggregate_mean_over_sigmark_official_clean_negative_bit_accuracy_npz"
+            ),
+        }
     records = _selected_runtime_records(root, max_records)
     generated = 0
     failures: list[dict[str, Any]] = []
@@ -756,6 +770,7 @@ def write_sigmark_official_bundle_records(
         try:
             payload = {
                 **score_payload,
+                **clean_negative_payload,
                 "detected": float(score_payload["external_baseline_score"]) >= threshold,
                 "threshold": threshold,
                 "official_result_provenance": REPOSITORY_GENERATED_OFFICIAL_PROVENANCE,
@@ -891,6 +906,7 @@ def run_sigmark_official_hunyuan_runtime(config: SigmarkOfficialHunyuanRuntimeCo
     selected_bit_accuracy_path = ""
     if bit_accuracy_candidates:
         selected_bit_accuracy_path = str(bit_accuracy_candidates[-1])
+        clean_negative_npz_path = os.environ.get("SSTW_SIGMARK_CLEAN_NEGATIVE_BIT_ACCURACY_NPZ", "").strip() or None
         bundle_result = write_sigmark_official_bundle_records(
             run_root=run_root,
             bundle_root=bundle_root,
@@ -898,6 +914,7 @@ def run_sigmark_official_hunyuan_runtime(config: SigmarkOfficialHunyuanRuntimeCo
             bit_accuracy_npz_path=selected_bit_accuracy_path,
             model_name=config.model_name,
             max_records=config.max_records,
+            clean_negative_bit_accuracy_npz_path=clean_negative_npz_path,
         )
     elif not config.dry_run and not execution_failure_reason:
         execution_failure_reason = f"sigmark_bit_accuracy_npz_missing:{output_path}"

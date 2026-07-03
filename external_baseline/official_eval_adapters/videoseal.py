@@ -122,6 +122,17 @@ def _run_default(args: argparse.Namespace, source_dir: Path, output_json_path: P
     bit_acc = _bit_accuracy(message_logits.mean(dim=0), _load_reference_bits(reference_path))
     score = confidence
     threshold = safe_float(os.environ.get("SSTW_VIDEOSEAL_DETECTION_THRESHOLD"), 0.5)
+    clean_video, clean_info = read_video_tchw_uint8(args.source_video, empty_error="videoseal_clean_negative_video_empty")
+    clean_video = clean_video.float().to(device) / 255.0
+    if max_frames > 0:
+        clean_video = clean_video[:max_frames]
+    with torch.no_grad():
+        clean_outputs = video_model.detect(clean_video, is_video=True)
+    clean_preds = clean_outputs.get("preds")
+    if clean_preds is None:
+        raise RuntimeError("videoseal_clean_negative_detect_output_missing_preds")
+    clean_detection_column = clean_preds[:, 0] if clean_preds.ndim >= 2 and clean_preds.shape[-1] > 1 else clean_preds
+    clean_confidence = _sigmoid_mean(clean_detection_column)
     return {
         "external_baseline_score": round(float(score), 6),
         "raw_detector_score": round(float(confidence), 6),
@@ -132,12 +143,16 @@ def _run_default(args: argparse.Namespace, source_dir: Path, output_json_path: P
         "threshold": threshold,
         "score_semantics": "watermark_presence_confidence",
         "score_orientation": "higher_is_more_watermarked",
+        "external_baseline_clean_negative_score": round(float(clean_confidence), 6),
+        "external_baseline_clean_negative_score_semantics": "watermark_presence_confidence",
+        "external_baseline_clean_negative_video_path": str(args.source_video),
         "official_adapter_status": "measured_by_videoseal_official_api",
         "official_adapter_baseline_id": BASELINE_ID,
         "official_source_dir": str(source_dir),
         "official_source_layout_status": source_layout_audit["layout_status"],
         "official_source_runtime_cwd": source_layout_audit["required_working_directory"],
         "official_video_io_backend": info.get("video_io_backend"),
+        "official_clean_negative_video_io_backend": clean_info.get("video_io_backend"),
         "official_model_name": model_name,
         "official_video_frame_count": int(video.shape[0]),
         "official_video_fps": float(info.get("video_fps") or 0.0),

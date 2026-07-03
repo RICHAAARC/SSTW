@@ -8,10 +8,12 @@ from pathlib import Path
 import pytest
 
 from external_baseline.official_eval_adapters.vidsig import _run_default
+import external_baseline.vidsig_official_runtime as vidsig_runtime
 from external_baseline.vidsig_official_runtime import (
     VidSigOfficialRuntimeConfig,
     build_default_vidsig_official_config_from_env,
     run_vidsig_official_runtime,
+    write_vidsig_official_bundle_records,
 )
 
 
@@ -200,3 +202,75 @@ def test_vidsig_direct_detector_adapter_fails_closed_without_official_bundle(
 
     with pytest.raises(RuntimeError, match="vidsig_official_bundle_required"):
         _run_default(args, source_dir, tmp_path / "out.json")
+
+
+@pytest.mark.quick
+def test_vidsig_bundle_writer_records_clean_negative_score(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """VidSig official bundle 必须包含 clean negative 官方检测分数。"""
+
+    run_root = tmp_path / "runs" / "generative_video_model_probe" / "validation_scale"
+    bundle_root = tmp_path / "bundles"
+    output_root = tmp_path / "vidsig_runtime"
+    source_dir = tmp_path / "source"
+    prompt_suite_path = tmp_path / "datasets" / "generative_video_prompt_suite" / "prompt_seed_suite.json"
+    manifest_path = bundle_root / "vidsig" / "official_reference_execution_manifest.json"
+    _write_runtime_records(run_root)
+    _write_prompt_suite(prompt_suite_path)
+    _write_fake_vidsig_source(source_dir)
+    clean_dir = output_root / "official_generate_ms_outputs" / "original"
+    watermarked_dir = output_root / "official_generate_ms_outputs" / "video_signature"
+    clean_dir.mkdir(parents=True, exist_ok=True)
+    watermarked_dir.mkdir(parents=True, exist_ok=True)
+    (clean_dir / "0.mp4").write_bytes(b"clean")
+    (watermarked_dir / "0.mp4").write_bytes(b"watermarked")
+    prompt_manifest = {
+        "prompt_rows": [{"prompt_id": "prompt_a", "prompt_text": "prompt"}],
+        "seed_rows": [{"seed_id": "seed_main_a", "seed_value": 101}],
+        "clean_video_dir": str(clean_dir),
+        "watermarked_video_dir": str(watermarked_dir),
+    }
+    config = VidSigOfficialRuntimeConfig(
+        run_root=str(run_root),
+        bundle_root=str(bundle_root),
+        source_dir=str(source_dir),
+        output_root=str(output_root),
+        resource_root=str(tmp_path / "resources"),
+        prompt_suite_path=str(prompt_suite_path),
+        msg_decoder_path=str(tmp_path / "decoder.pt"),
+        vae_checkpoint_path=str(tmp_path / "vae.pt"),
+    )
+
+    monkeypatch.setattr(vidsig_runtime, "_read_video_frames", lambda _path: ["frame_0", "frame_1", "frame_2", "frame_3"])
+    monkeypatch.setattr(vidsig_runtime, "_write_video_frames", lambda path, _frames, *, fps: Path(path).parent.mkdir(parents=True, exist_ok=True) or Path(path).write_bytes(b"video"))
+    monkeypatch.setattr(vidsig_runtime, "_save_frame_array", lambda path, _frames: Path(path).parent.mkdir(parents=True, exist_ok=True) or Path(path).write_bytes(b"npy"))
+
+    call_state = {"count": 0}
+
+    def fake_attack(**kwargs: object) -> dict[str, object]:
+        call_state["count"] += 1
+        output_dir = Path(kwargs["output_dir"])  # type: ignore[index]
+        output_dir.mkdir(parents=True, exist_ok=True)
+        score = 0.8 if call_state["count"] == 1 else 0.1
+        (output_dir / "log.txt").write_text(f"fpr = 1e-2 : {score}\n", encoding="utf-8")
+        return {"return_code": 0, "stdout_path": str(output_dir / "stdout.txt"), "stderr_path": str(output_dir / "stderr.txt")}
+
+    monkeypatch.setattr(vidsig_runtime, "_run_vidsig_attack_py", fake_attack)
+
+    result = write_vidsig_official_bundle_records(
+        run_root=run_root,
+        bundle_root=bundle_root,
+        manifest_path=manifest_path,
+        runtime_source_dir=source_dir,
+        prompt_manifest=prompt_manifest,
+        config=config,
+    )
+
+    assert result["generated_bundle_record_count"] == 1
+    payload = json.loads((bundle_root / "vidsig" / "records" / "prompt_a__seed_main_a__video_compression_runtime.json").read_text(encoding="utf-8"))
+    assert payload["external_baseline_score"] == 0.8
+    assert payload["external_baseline_clean_negative_score"] == 0.1
+    assert payload["external_baseline_clean_negative_score_semantics"] == "official_tpr_at_fixed_fpr_detection_score"
+    assert payload["external_baseline_clean_negative_video_path"].endswith("_clean_negative.mp4")

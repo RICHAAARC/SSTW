@@ -92,6 +92,17 @@ def _run_default(args: argparse.Namespace, source_dir: Path, output_json_path: P
     else:
         score = _mean_numeric(list(payload.values()))
     threshold = float(os.environ.get("SSTW_SIGMARK_BIT_ACCURACY_THRESHOLD", "0.5"))
+    clean_negative_payload: dict[str, Any] = {}
+    clean_negative_npz = resolve_existing_env_file("SSTW_SIGMARK_CLEAN_NEGATIVE_BIT_ACCURACY_NPZ")
+    if clean_negative_npz is not None:
+        clean_payload = dict(np.load(str(clean_negative_npz), allow_pickle=True))
+        clean_score = _mean_numeric(list(clean_payload.values()))
+        clean_negative_payload = {
+            "external_baseline_clean_negative_score": round(clean_score, 6),
+            "external_baseline_clean_negative_score_semantics": "payload_bit_accuracy_extraction_score",
+            "external_baseline_clean_negative_video_path": str(clean_negative_npz),
+            "official_clean_negative_bit_accuracy_npz_path": str(clean_negative_npz),
+        }
     return {
         "external_baseline_score": round(score, 6),
         "raw_detector_score": round(score, 6),
@@ -107,6 +118,7 @@ def _run_default(args: argparse.Namespace, source_dir: Path, output_json_path: P
         "official_bit_accuracy_npz_path": str(bit_accuracy_npz),
         "official_result_key": preferred_key or "mean_over_npz_entries",
         "official_output_json_path": str(output_json_path),
+        **clean_negative_payload,
     }
 
 

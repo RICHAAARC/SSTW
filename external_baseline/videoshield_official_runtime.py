@@ -503,7 +503,12 @@ def _generate_watermarked_unit(
     scheduler: Any,
     config: VideoShieldOfficialRuntimeConfig,
 ) -> dict[str, Any]:
-    """按官方 VideoShield 生成路径产生单个 watermarked 视频和 wm_info。"""
+    """按官方 VideoShield 生成路径产生 watermarked 视频与同基座 clean negative 视频。
+
+    clean negative 使用同一个 prompt / seed / 生成模型, 但不注入 VideoShield
+    watermark latents。后续检测仍使用同一 official watermark template, 用于在
+    validation_scale 中校准该 baseline 自身的 clean negative 分布。
+    """
 
     import torch
 
@@ -538,14 +543,32 @@ def _generate_watermarked_unit(
     save_video_frames(frames, str(frames_dir))
     reversed_latents = _invert_frames_modelscope(pipe, inverse_scheduler, frames, config)
     positive_control_score = float(watermark.eval_watermark(reversed_latents))
+    _set_generation_seed(int(unit["seed_value"]))
+    pipe.scheduler = scheduler
+    clean_generated_frames = pipe(
+        prompt=str(unit["prompt_text"]),
+        num_frames=int(config.num_frames),
+        height=int(config.height),
+        width=int(config.width),
+        num_inference_steps=int(config.num_inference_steps),
+        guidance_scale=9.0,
+    ).frames[0]
+    clean_frames = _normalise_frames(clean_generated_frames)
+    clean_video_path = unit_root / "clean_negative.mp4"
+    write_video_tchw(clean_video_path, _frames_to_tchw(clean_frames), fps=float(config.fps))
+    clean_reversed_latents = _invert_frames_modelscope(pipe, inverse_scheduler, clean_frames, config)
+    clean_negative_score = float(watermark.eval_watermark(clean_reversed_latents))
     return {
         "unit": dict(unit),
         "unit_root": str(unit_root),
         "watermarked_video_path": str(watermarked_video_path),
+        "clean_negative_video_path": str(clean_video_path),
         "frames_dir": str(frames_dir),
         "wm_info_path": str(wm_info_path),
         "watermark": watermark,
         "frames": frames,
+        "clean_frames": clean_frames,
+        "clean_negative_score": clean_negative_score,
         "positive_control_score": positive_control_score,
         "positive_control_status": "PASS" if positive_control_score >= float(config.positive_control_threshold) else "FAIL",
     }
@@ -558,7 +581,7 @@ def _apply_runtime_attack_to_frames(
     output_video_path: Path,
     fps: int,
 ) -> tuple[list[Any], dict[str, Any]]:
-    """对 VideoShield 自己的 watermarked 视频施加 SSTW runtime attack 锚点。"""
+    """对 VideoShield 自己生成的视频施加 SSTW runtime attack 锚点。"""
 
     attacked_frames = list(frames)
     protocol_status = "video_compression_or_identity_runtime_reencode"
@@ -728,8 +751,25 @@ def run_videoshield_official_runtime(config: VideoShieldOfficialRuntimeConfig) -
                             inverse_scheduler=inverse_scheduler,
                             config=config,
                         )
+                        clean_negative_video_path = video_dir / f"{output_json.stem}_clean_negative.mp4"
+                        clean_negative_frames, clean_negative_attack_info = _apply_runtime_attack_to_frames(
+                            unit_result["clean_frames"],
+                            attack_name=str(record.get("attack_name") or ""),
+                            output_video_path=clean_negative_video_path,
+                            fps=int(config.fps),
+                        )
+                        clean_negative_payload = _detect_attacked_frames(
+                            frames=clean_negative_frames,
+                            watermark=unit_result["watermark"],
+                            pipe=pipe,
+                            inverse_scheduler=inverse_scheduler,
+                            config=config,
+                        )
                         payload = {
                             **score_payload,
+                            "external_baseline_clean_negative_score": clean_negative_payload["raw_detector_score"],
+                            "external_baseline_clean_negative_score_semantics": clean_negative_payload["score_semantics"],
+                            "external_baseline_clean_negative_video_path": clean_negative_attack_info["attacked_video_path"],
                             "official_result_provenance": REPOSITORY_GENERATED_OFFICIAL_PROVENANCE,
                             "official_baseline_id": BASELINE_ID,
                             "official_source_dir": str(source_dir),
@@ -744,6 +784,7 @@ def run_videoshield_official_runtime(config: VideoShieldOfficialRuntimeConfig) -
                             "official_watermark_entropy_policy": "official_chacha20_key_nonce_recorded_in_wm_info_bin",
                             "external_baseline_source_video_path": unit_result["watermarked_video_path"],
                             "external_baseline_attacked_video_path": attack_info["attacked_video_path"],
+                            "official_clean_negative_source_video_path": unit_result["clean_negative_video_path"],
                             "official_wm_info_path": unit_result["wm_info_path"],
                             "official_frames_dir": unit_result["frames_dir"],
                             "source_sstw_video_path": str(record.get("source_video_path") or ""),

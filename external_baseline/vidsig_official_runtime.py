@@ -668,12 +668,22 @@ def write_vidsig_official_bundle_records(
             video_stem = output_json_path.stem
             official_record_work_dir = bundle / BASELINE_ID / "official_attack_work" / video_stem
             attacked_video_path = bundle / BASELINE_ID / "videos" / f"{video_stem}_attacked.mp4"
+            clean_negative_video_path = bundle / BASELINE_ID / "videos" / f"{video_stem}_clean_negative.mp4"
             frame_array_dir = official_record_work_dir / "frame_arrays"
             frame_array_path = frame_array_dir / "sstw_attacked_video.npy"
+            clean_frame_array_dir = official_record_work_dir / "clean_negative_frame_arrays"
+            clean_frame_array_path = clean_frame_array_dir / "sstw_clean_negative_video.npy"
             frames = _read_video_frames(watermarked_video_path)
+            clean_frames = _read_video_frames(clean_video_path)
             attacked_frames, attack_metadata = _apply_runtime_attack_to_frames(frames, str(record.get("attack_name") or ""))
+            clean_negative_frames, clean_negative_attack_metadata = _apply_runtime_attack_to_frames(
+                clean_frames,
+                str(record.get("attack_name") or ""),
+            )
             _write_video_frames(attacked_video_path, attacked_frames, fps=int(config.fps))
+            _write_video_frames(clean_negative_video_path, clean_negative_frames, fps=int(config.fps))
             _save_frame_array(frame_array_path, attacked_frames)
+            _save_frame_array(clean_frame_array_path, clean_negative_frames)
             attack_output_dir = official_record_work_dir / "official_attack_output"
             attack_result = _run_vidsig_attack_py(
                 runtime_source_dir=runtime_source,
@@ -684,6 +694,19 @@ def write_vidsig_official_bundle_records(
             if int(attack_result["return_code"]) != 0:
                 raise RuntimeError(f"vidsig_official_attack_py_failed:{attack_result['return_code']}:{attack_result['stderr_tail']}")
             detection_score, detected = _parse_vidsig_attack_log(attack_output_dir / "log.txt")
+            clean_attack_output_dir = official_record_work_dir / "official_clean_negative_attack_output"
+            clean_attack_result = _run_vidsig_attack_py(
+                runtime_source_dir=runtime_source,
+                output_dir=clean_attack_output_dir,
+                frame_array_dir=clean_frame_array_dir,
+                config=config,
+            )
+            if int(clean_attack_result["return_code"]) != 0:
+                raise RuntimeError(
+                    "vidsig_official_clean_negative_attack_py_failed:"
+                    f"{clean_attack_result['return_code']}:{clean_attack_result['stderr_tail']}"
+                )
+            clean_negative_score, _clean_detected = _parse_vidsig_attack_log(clean_attack_output_dir / "log.txt")
             payload = {
                 "external_baseline_score": round(float(detection_score), 6),
                 "raw_detector_score": round(float(detection_score), 6),
@@ -692,6 +715,9 @@ def write_vidsig_official_bundle_records(
                 "threshold": float(config.detection_threshold),
                 "score_semantics": "official_tpr_at_fixed_fpr_detection_score",
                 "score_orientation": "higher_is_more_watermarked",
+                "external_baseline_clean_negative_score": round(float(clean_negative_score), 6),
+                "external_baseline_clean_negative_score_semantics": "official_tpr_at_fixed_fpr_detection_score",
+                "external_baseline_clean_negative_video_path": str(clean_negative_video_path),
                 "official_vidsig_tpr_at_fpr_1e_2": round(float(detection_score), 6),
                 "official_result_provenance": REPOSITORY_GENERATED_OFFICIAL_PROVENANCE,
                 "official_baseline_id": BASELINE_ID,
@@ -705,9 +731,13 @@ def write_vidsig_official_bundle_records(
                 "external_baseline_source_video_path": str(watermarked_video_path),
                 "external_baseline_attacked_video_path": str(attacked_video_path),
                 "official_attacked_frame_array_path": str(frame_array_path),
+                "official_clean_negative_frame_array_path": str(clean_frame_array_path),
                 "official_attack_log_path": str(attack_output_dir / "log.txt"),
+                "official_clean_negative_attack_log_path": str(clean_attack_output_dir / "log.txt"),
                 "official_attack_stdout_path": attack_result["stdout_path"],
                 "official_attack_stderr_path": attack_result["stderr_path"],
+                "official_clean_negative_attack_stdout_path": clean_attack_result["stdout_path"],
+                "official_clean_negative_attack_stderr_path": clean_attack_result["stderr_path"],
                 "official_execution_manifest_path": str(manifest),
                 "runtime_comparison_unit_id": build_comparison_unit_id(BASELINE_ID, record),
                 "prompt_id": record.get("prompt_id"),
@@ -718,6 +748,8 @@ def write_vidsig_official_bundle_records(
                 "sstw_attacked_video_path": record.get("attacked_video_path"),
                 "claim_support_status": "official_reference_bundle_written_not_claim_by_itself",
                 **attack_metadata,
+                "clean_negative_attack_transform": clean_negative_attack_metadata["attack_transform"],
+                "clean_negative_attack_strength": clean_negative_attack_metadata["attack_strength"],
             }
             _write_json(output_json_path, payload)
             generated += 1

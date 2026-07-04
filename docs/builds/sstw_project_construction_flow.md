@@ -793,14 +793,20 @@ pilot_paper_additional_runtime_attack_names:
   gaussian_blur_runtime
   gaussian_noise_runtime
 full_paper_required_runtime_attack_families:
-  multi_strength_codec_compression
-  complete_temporal_disturbance
+  multi_strength_codec_and_platform_transcode_compression
+  complete_temporal_disturbance_including_irregular_drop_insert_speed
   spatial_geometry
-  visual_degradation
-  combined_transformations
-vae_reencode_attack
-wrong_sampler_replay
-wrong_key_control
+  visual_degradation_including_denoise_gamma_sharpen
+  combined_transformations_including_compression_color_and_crop_rotation
+full_paper_required_non_runtime_or_adaptive_attack_protocols:
+  generative_recompression_or_regeneration_attack
+  wrong_sampler_replay_attack
+  wrong_key_attack
+  detector_probing_with_public_negatives
+  watermark_removal_optimization_attack
+  watermark_spoofing_or_copy_attack
+  collusion_multi_sample_attack
+  adversarial_detector_evasion_attack
 ```
 
 `validation_scale` 的三类 runtime attack 是 paper 级前的小样本全流程打通门禁,

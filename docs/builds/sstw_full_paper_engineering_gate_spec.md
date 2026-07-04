@@ -344,6 +344,10 @@ velocity_projection_suppression
 time_grid_or_scheduler_mismatch
 trajectory_sketch_replacement
 public_negative_tail_probe
+watermark_removal_optimization
+watermark_spoofing_or_copy
+collusion_multi_sample
+adversarial_detector_evasion
 ```
 
 ### 6.3 必须记录字段

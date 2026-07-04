@@ -179,19 +179,24 @@ without_quality_guard 是否造成质量退化
 攻击至少覆盖:
 
 ```text
-compression_attack: H.264 / H.265 / MPEG-4, 多 CRF 或 bitrate 强度
+compression_attack: H.264 / H.265 / MPEG-4 / platform_transcode_proxy, 多 CRF 或 bitrate 强度
 temporal_crop_attack
 temporal_resampling_attack
-frame_drop_insert_swap_or_average_attack
+frame_drop_insert_swap_average_speed_or_irregular_attack
 spatial_transform_attack: crop / resize / rotation / perspective
-visual_degradation_attack: Gaussian noise / Gaussian blur / median blur / brightness / contrast
-combined_attack: compression + crop, compression + brightness, compression + temporal disturbance
+visual_degradation_attack: Gaussian noise / salt-and-pepper / blur / median blur / denoise / brightness / contrast / gamma / color jitter / sharpen
+combined_attack: compression + crop, compression + brightness, compression + temporal disturbance, compression + noise, compression + color jitter, crop + rotation
 generative_recompression_or_regeneration_attack
 endpoint_preserving_path_perturbation_attack
 flow_time_grid_mismatch_attack
 wrong_sampler_replay_attack
 wrong_prompt_replay_attack
 wrong_key_attack
+detector_probing_with_public_negatives
+watermark_removal_optimization_attack
+watermark_spoofing_or_copy_attack
+collusion_multi_sample_attack
+adversarial_detector_evasion_attack
 ```
 
 当前工程协议采用三层 attack 要求:

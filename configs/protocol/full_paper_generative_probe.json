@@ -96,13 +96,17 @@
     "mpeg4_crf28_runtime",
     "mpeg4_q2_runtime",
     "mpeg4_q8_runtime",
+    "platform_transcode_proxy_runtime",
     "jpeg_frame_compression_runtime",
     "temporal_crop_runtime",
     "temporal_clip_middle_runtime",
     "frame_rate_resampling_runtime",
     "frame_drop_uniform_runtime",
+    "irregular_frame_drop_runtime",
     "frame_insert_duplicate_runtime",
+    "frame_insert_noise_runtime",
     "frame_duplicate_runtime",
+    "speed_change_runtime",
     "frame_swap_adjacent_runtime",
     "frame_average_runtime",
     "spatial_resize_runtime",
@@ -115,20 +119,25 @@
     "salt_pepper_noise_runtime",
     "gaussian_blur_runtime",
     "median_blur_runtime",
+    "denoise_proxy_runtime",
     "brightness_contrast_runtime",
+    "gamma_correction_runtime",
     "color_jitter_runtime",
+    "sharpen_runtime",
     "compression_crop_combined_runtime",
     "compression_brightness_combined_runtime",
     "compression_temporal_combined_runtime",
-    "compression_noise_combined_runtime"
+    "compression_noise_combined_runtime",
+    "compression_color_jitter_combined_runtime",
+    "crop_rotation_combined_runtime"
   ],
-  "required_runtime_attack_protocol_note": "full_paper 使用顶会/顶刊级多类别、多强度 runtime attack 协议, 同时要求非 runtime 的生成式重压缩/重生成、Flow-specific adaptive、wrong sampler、wrong prompt、wrong key 和 detector probing 协议产物; 所有结果必须从当前 protocol config 读取 attack manifest, 不允许 Notebook 或手工参数缩减。",
+  "required_runtime_attack_protocol_note": "full_paper 使用顶会/顶刊级多类别、多强度 runtime attack 协议, 覆盖 codec/platform 转码、时间结构扰动、空间几何、视觉退化和组合攻击; 同时要求生成式重压缩/重生成、Flow-specific adaptive、wrong sampler、wrong prompt、wrong key、detector probing、watermark removal、spoofing、collusion 和 adversarial evasion 等非 runtime/adaptive 协议产物; 所有结果必须从当前 protocol config 读取 attack manifest, 不允许 Notebook 或手工参数缩减。",
   "runtime_attack_family_minimums": {
-    "compression": 8,
-    "temporal": 6,
+    "compression": 9,
+    "temporal": 8,
     "spatial_geometry": 5,
-    "visual_degradation": 6,
-    "combined": 4
+    "visual_degradation": 8,
+    "combined": 5
   },
   "required_non_runtime_attack_protocols": [
     "generative_recompression_or_regeneration_attack",
@@ -137,6 +146,10 @@
     "wrong_sampler_replay_attack",
     "wrong_prompt_replay_attack",
     "wrong_key_attack",
-    "detector_probing_with_public_negatives"
+    "detector_probing_with_public_negatives",
+    "watermark_removal_optimization_attack",
+    "watermark_spoofing_or_copy_attack",
+    "collusion_multi_sample_attack",
+    "adversarial_detector_evasion_attack"
   ]
 }

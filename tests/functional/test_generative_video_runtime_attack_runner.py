@@ -138,6 +138,23 @@ def test_pilot_and_full_paper_attack_protocol_registers_top_tier_coverage() -> N
     assert pilot_audit["runtime_attack_protocol_decision"] == "PASS"
     assert full_audit["runtime_attack_protocol_decision"] == "PASS"
     assert set(PILOT_PAPER_RUNTIME_ATTACKS) < set(FULL_PAPER_RUNTIME_ATTACKS)
+    assert {
+        "platform_transcode_proxy_runtime",
+        "irregular_frame_drop_runtime",
+        "frame_insert_noise_runtime",
+        "speed_change_runtime",
+        "denoise_proxy_runtime",
+        "gamma_correction_runtime",
+        "sharpen_runtime",
+        "compression_color_jitter_combined_runtime",
+        "crop_rotation_combined_runtime",
+    }.issubset(set(FULL_PAPER_RUNTIME_ATTACKS))
+    assert {
+        "watermark_removal_optimization_attack",
+        "watermark_spoofing_or_copy_attack",
+        "collusion_multi_sample_attack",
+        "adversarial_detector_evasion_attack",
+    }.issubset(set(FULL_PAPER_NON_RUNTIME_ATTACK_PROTOCOLS))
     for family, minimum_count in RUNTIME_ATTACK_FAMILY_MINIMUMS_BY_PROFILE["full_paper"].items():
         assert full_audit["runtime_attack_family_counts"][family] >= minimum_count
     assert full_audit["missing_non_runtime_attack_protocols"] == []
@@ -165,6 +182,15 @@ def test_new_top_tier_runtime_attack_transforms_are_executable_on_frames() -> No
         "color_jitter_runtime",
         "jpeg_frame_compression_runtime",
         "compression_noise_combined_runtime",
+        "platform_transcode_proxy_runtime",
+        "irregular_frame_drop_runtime",
+        "frame_insert_noise_runtime",
+        "speed_change_runtime",
+        "denoise_proxy_runtime",
+        "gamma_correction_runtime",
+        "sharpen_runtime",
+        "compression_color_jitter_combined_runtime",
+        "crop_rotation_combined_runtime",
     ):
         attacked_frames, metadata = apply_runtime_attack_to_frames(frames, attack_name)
         assert attacked_frames

@@ -786,6 +786,77 @@ def _external_baseline_publish_blocker(
     return None
 
 
+def _validation_scale_paper_gate_publish_blocker(
+    layout: Mapping[str, str],
+    *,
+    stage_package_id: str,
+    notebook_role: str,
+    workflow_profile: str,
+) -> dict[str, Any] | None:
+    """判断 validation_scale paper gate 包是否允许发布完整 zip。
+
+    该门禁属于项目特定写法。普通阶段 zip 只是文件交接容器, 但
+    validation_scale 的 paper gate zip 同时承担“进入 pilot_paper 前最终证据包”
+    的职责。若 package manifest 缺失或失败, 说明公平比较、artifact rebuild、
+    stage transition 等闭环没有被当前运行证明, 因此只能写阻断 manifest, 不能
+    发布可被误用的完整 zip。
+    """
+
+    role = sanitize_filename_token(notebook_role)
+    profile = sanitize_filename_token(workflow_profile)
+    package_id = sanitize_filename_token(stage_package_id)
+    if role != "paper_gate_and_package" or profile != "validation_scale" or package_id != "paper_gate_and_package_colab":
+        return None
+
+    run_root = Path(str(layout.get("drive_run_root") or ""))
+    manifest_path = run_root / "manifests" / "validation_scale_package_manifest.json"
+    if not manifest_path.exists():
+        return {
+            "stage_package_publish_status": "blocked_missing_validation_scale_package_manifest",
+            "validation_scale_package_manifest_path": str(manifest_path),
+            "validation_scale_package_manifest_decision": "MISSING",
+            "validation_scale_gate_decision": "UNKNOWN",
+            "validation_scale_to_pilot_paper_transition_decision": "UNKNOWN",
+            "stage_package_publish_block_reason": "missing_validation_scale_package_manifest",
+        }
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8-sig"))
+    except json.JSONDecodeError as exc:
+        return {
+            "stage_package_publish_status": "blocked_invalid_validation_scale_package_manifest",
+            "validation_scale_package_manifest_path": str(manifest_path),
+            "validation_scale_package_manifest_decision": "INVALID",
+            "validation_scale_gate_decision": "UNKNOWN",
+            "validation_scale_to_pilot_paper_transition_decision": "UNKNOWN",
+            "stage_package_publish_block_reason": f"invalid_validation_scale_package_manifest_json:{exc}",
+        }
+    if not isinstance(manifest, dict):
+        return {
+            "stage_package_publish_status": "blocked_invalid_validation_scale_package_manifest",
+            "validation_scale_package_manifest_path": str(manifest_path),
+            "validation_scale_package_manifest_decision": "INVALID",
+            "validation_scale_gate_decision": "UNKNOWN",
+            "validation_scale_to_pilot_paper_transition_decision": "UNKNOWN",
+            "stage_package_publish_block_reason": "validation_scale_package_manifest_top_level_not_object",
+        }
+
+    decision = str(manifest.get("validation_scale_package_manifest_decision") or "UNKNOWN")
+    gate_decision = str(manifest.get("validation_scale_gate_decision") or "UNKNOWN")
+    transition_decision = str(manifest.get("validation_scale_to_pilot_paper_transition_decision") or "UNKNOWN")
+    if decision == "PASS" and gate_decision == "PASS" and transition_decision == "PASS":
+        return None
+    return {
+        "stage_package_publish_status": "blocked_failed_validation_scale_package_manifest",
+        "validation_scale_package_manifest_path": str(manifest_path),
+        "validation_scale_package_manifest_decision": decision,
+        "validation_scale_gate_decision": gate_decision,
+        "validation_scale_to_pilot_paper_transition_decision": transition_decision,
+        "missing_artifact_count": manifest.get("missing_artifact_count", 0),
+        "missing_artifact_relpaths": manifest.get("missing_artifact_relpaths", []),
+        "stage_package_publish_block_reason": "validation_scale_package_manifest_not_pass",
+    }
+
+
 def _prune_remote_stage_package_snapshots(remote_package_dir: Path, workflow_profile: str, stage_package_id: str) -> list[str]:
     """按显式开关删除当前阶段目录下的历史时间戳包。"""
 
@@ -918,6 +989,19 @@ def publish_colab_stage_package(
         stage_package_id=stage_package_id,
         notebook_role=notebook_role,
         baseline_id=baseline_id,
+    )
+    if blocker is not None:
+        return _write_manifest_only_stage_package(
+            layout=layout,
+            remote_package_dir=remote_package_dir,
+            remote_manifest=remote_manifest,
+            manifest={**base_manifest, **blocker},
+        )
+    blocker = _validation_scale_paper_gate_publish_blocker(
+        layout,
+        stage_package_id=stage_package_id,
+        notebook_role=notebook_role,
+        workflow_profile=workflow_profile,
     )
     if blocker is not None:
         return _write_manifest_only_stage_package(

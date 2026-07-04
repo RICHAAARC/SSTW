@@ -14,6 +14,29 @@ from paper_workflow.colab_utils.stage_package_sync import (
 from paper_workflow.notebook_utils.generative_video_model_probe_workflow import build_drive_packaging_command
 
 
+def _write_validation_scale_package_pass_manifest(run_root: Path) -> None:
+    """写入 validation_scale paper gate 发布所需的最小 PASS manifest。
+
+    该 helper 属于测试内的通用写法, 用于表达 paper gate 阶段 zip 只有在
+    validation_scale package manifest 已证明门禁闭环通过后才允许发布。
+    """
+
+    manifest_path = run_root / "manifests" / "validation_scale_package_manifest.json"
+    manifest_path.parent.mkdir(parents=True, exist_ok=True)
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "validation_scale_package_manifest_decision": "PASS",
+                "validation_scale_gate_decision": "PASS",
+                "validation_scale_to_pilot_paper_transition_decision": "PASS",
+                "missing_artifact_count": 0,
+                "missing_artifact_relpaths": [],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+
 @pytest.mark.quick
 def test_stage_package_publish_keeps_timestamp_zip_by_default(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """阶段 zip 默认保留时间戳包, 不再写 latest 小入口。"""
@@ -83,6 +106,7 @@ def test_paper_gate_stage_package_includes_fair_comparison_governed_artifacts(
         path = run_root / relpath
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(content, encoding="utf-8")
+    _write_validation_scale_package_pass_manifest(run_root)
     layout = {
         "drive_project_root": str(drive_root),
         "workflow_profile": "validation_scale",
@@ -98,6 +122,39 @@ def test_paper_gate_stage_package_includes_fair_comparison_governed_artifacts(
         names = archive.namelist()
     for relpath in write_targets:
         assert any(name.endswith(relpath) for name in names)
+
+
+@pytest.mark.quick
+def test_validation_scale_paper_gate_package_blocks_without_package_manifest(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """validation_scale paper gate 缺少最终 package manifest 时只能写阻断 manifest。"""
+
+    monkeypatch.setenv("SSTW_COLAB_STAGE_IO_MODE", "local_zip")
+    drive_root = tmp_path / "drive" / "SSTW"
+    run_root = tmp_path / "workspace" / "runs" / "generative_video_model_probe" / "validation_scale"
+    (run_root / "records").mkdir(parents=True)
+    (run_root / "records" / "generation_records.jsonl").write_text("{}\n", encoding="utf-8")
+    layout = {
+        "drive_project_root": str(drive_root),
+        "workflow_profile": "validation_scale",
+        "drive_run_root": str(run_root),
+        "local_stage_package_cache_root": str(tmp_path / "local_cache"),
+        "local_stage_workspace_root": str(tmp_path / "workspace"),
+    }
+
+    result = publish_colab_stage_package(layout, notebook_role="paper_gate_and_package", include_videos=False)
+
+    package_dir = drive_root / "validation_scale" / "paper_gate_and_package_colab"
+    manifests = list(package_dir.glob("validation_scale_paper_gate_and_package_colab_*_manifest.json"))
+    assert result["stage_package_publish_status"] == "blocked_missing_validation_scale_package_manifest"
+    assert result["drive_stage_package_zip"] == ""
+    assert not list(package_dir.glob("validation_scale_paper_gate_and_package_colab_*.zip"))
+    assert len(manifests) == 1
+    manifest = json.loads(manifests[0].read_text(encoding="utf-8"))
+    assert manifest["stage_package_publish_status"] == "blocked_missing_validation_scale_package_manifest"
+    assert manifest["claim_support_status"] == "stage_package_blocked_not_claim_evidence"
 
 
 @pytest.mark.quick
@@ -354,6 +411,7 @@ def test_stage_package_excludes_obsolete_spdmark_and_small_scale_artifacts(
         path = run_root / relpath
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(content, encoding="utf-8")
+    _write_validation_scale_package_pass_manifest(run_root)
     layout = {
         "drive_project_root": str(drive_root),
         "workflow_profile": "validation_scale",

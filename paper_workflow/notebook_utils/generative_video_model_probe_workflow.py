@@ -15,6 +15,7 @@ from paper_workflow.colab_utils.stage_package_sync import (
     stage_package_id_for_notebook,
     stage_zip_handoff_enabled,
 )
+from paper_workflow.colab_utils.notebook_run_timing import start_notebook_run_timer
 from paper_workflow.notebook_utils.streaming_command import run_streaming_command
 
 
@@ -1939,85 +1940,137 @@ def run_configured_colab_stage_plan(
     options = {**dict(runtime_options or {}), "include_videos": include_videos}
     stage_results: list[dict[str, Any]] = []
     stage_package: dict[str, Any] = {}
+    notebook_timer = start_notebook_run_timer(
+        layout,
+        notebook_role=notebook_role,
+        workflow_profile=str(resolved.get("workflow_profile") or workflow_profile),
+        enabled_stage_plan=stage_plan,
+    )
+    notebook_timing_manifest: dict[str, Any] = {}
 
-    for stage_name in stage_plan:
-        if stage_name == "external_baseline_colab_preflight":
-            stage_results.append(
-                write_external_baseline_colab_preflight_for_profile(
-                    layout,
-                    workflow_profile=workflow_profile,
-                )
-            )
-            continue
-
-        if stage_name == "motion_threshold_reuse_check":
-            if resolved.get("workflow_profile") == "motion_calibration":
-                stage_results.append({
-                    "stage_name": stage_name,
-                    "stage_execution_status": "skipped",
-                    "stage_execution_kind": "python_helper",
-                    "skip_reason": "motion_calibration_profile_owns_threshold_calibration",
-                })
-            else:
-                payload = write_motion_threshold_reuse_artifact_for_profile(layout, workflow_profile)
-                print(json.dumps(payload, ensure_ascii=False, indent=2))
-                stage_results.append({
-                    "stage_name": stage_name,
-                    "stage_execution_status": "completed",
-                    "stage_execution_kind": "python_helper",
-                    "motion_threshold_reuse": payload,
-                })
-            continue
-
-        if stage_name == "motion_threshold_calibration_or_reuse_check":
-            if resolved.get("workflow_profile") == "motion_calibration":
+    try:
+        for stage_name in stage_plan:
+            if stage_name == "external_baseline_colab_preflight":
                 stage_results.append(
-                    _run_stage_command_or_raise(
-                        "motion_threshold_calibration",
-                        build_motion_threshold_calibration_command(layout),
+                    notebook_timer.run_stage(
+                        stage_name,
+                        "python_helper",
+                        lambda stage_name=stage_name: write_external_baseline_colab_preflight_for_profile(
+                            layout,
+                            workflow_profile=workflow_profile,
+                        ),
                     )
                 )
-            else:
-                payload = validate_motion_threshold_ready_for_profile(layout, workflow_profile)
-                print(json.dumps(payload, ensure_ascii=False, indent=2))
-                stage_results.append({
-                    "stage_name": stage_name,
-                    "stage_execution_status": "completed",
-                    "stage_execution_kind": "python_helper",
-                    "motion_threshold_reuse": payload,
-                })
-            continue
+                continue
 
-        if stage_name == "quick_tests_and_harness":
-            stage_results.append(
-                _run_stage_command_or_raise(
-                    "quick_tests",
-                    [sys.executable, "-m", "pytest", "-q"],
+            if stage_name == "motion_threshold_reuse_check":
+                def _motion_threshold_reuse_stage() -> dict[str, Any]:
+                    if resolved.get("workflow_profile") == "motion_calibration":
+                        return {
+                            "stage_name": stage_name,
+                            "stage_execution_status": "skipped",
+                            "stage_execution_kind": "python_helper",
+                            "skip_reason": "motion_calibration_profile_owns_threshold_calibration",
+                        }
+                    payload = write_motion_threshold_reuse_artifact_for_profile(layout, workflow_profile)
+                    print(json.dumps(payload, ensure_ascii=False, indent=2))
+                    return {
+                        "stage_name": stage_name,
+                        "stage_execution_status": "completed",
+                        "stage_execution_kind": "python_helper",
+                        "motion_threshold_reuse": payload,
+                    }
+
+                stage_results.append(notebook_timer.run_stage(stage_name, "python_helper", _motion_threshold_reuse_stage))
+                continue
+
+            if stage_name == "motion_threshold_calibration_or_reuse_check":
+                if resolved.get("workflow_profile") == "motion_calibration":
+                    stage_results.append(
+                        notebook_timer.run_stage(
+                            "motion_threshold_calibration",
+                            "command",
+                            lambda: _run_stage_command_or_raise(
+                                "motion_threshold_calibration",
+                                build_motion_threshold_calibration_command(layout),
+                            ),
+                        )
+                    )
+                else:
+                    def _motion_threshold_validate_stage() -> dict[str, Any]:
+                        payload = validate_motion_threshold_ready_for_profile(layout, workflow_profile)
+                        print(json.dumps(payload, ensure_ascii=False, indent=2))
+                        return {
+                            "stage_name": stage_name,
+                            "stage_execution_status": "completed",
+                            "stage_execution_kind": "python_helper",
+                            "motion_threshold_reuse": payload,
+                        }
+
+                    stage_results.append(
+                        notebook_timer.run_stage(stage_name, "python_helper", _motion_threshold_validate_stage)
+                    )
+                continue
+
+            if stage_name == "quick_tests_and_harness":
+                stage_results.append(
+                    notebook_timer.run_stage(
+                        "quick_tests",
+                        "command",
+                        lambda: _run_stage_command_or_raise(
+                            "quick_tests",
+                            [sys.executable, "-m", "pytest", "-q"],
+                        ),
+                    )
                 )
-            )
-            stage_results.append(
-                _run_stage_command_or_raise(
-                    "harness_audits",
-                    [sys.executable, "tools/harness/run_all_audits.py"],
+                stage_results.append(
+                    notebook_timer.run_stage(
+                        "harness_audits",
+                        "command",
+                        lambda: _run_stage_command_or_raise(
+                            "harness_audits",
+                            [sys.executable, "tools/harness/run_all_audits.py"],
+                        ),
+                    )
                 )
-            )
-            continue
+                continue
 
-        command = build_configured_colab_stage_command(
-            stage_name,
-            layout,
-            workflow_profile=workflow_profile,
-            runtime_options=options,
-        )
-        stage_results.append(_run_stage_command_or_raise(stage_name, command))
-
-        if stage_name == "drive_packaging":
-            stage_package = publish_colab_stage_package(
+            command = build_configured_colab_stage_command(
+                stage_name,
                 layout,
-                notebook_role=notebook_role,
-                include_videos=include_videos,
+                workflow_profile=workflow_profile,
+                runtime_options=options,
             )
-            print(json.dumps(stage_package, ensure_ascii=False, indent=2))
+            stage_results.append(
+                notebook_timer.run_stage(
+                    stage_name,
+                    "command",
+                    lambda stage_name=stage_name, command=command: _run_stage_command_or_raise(stage_name, command),
+                )
+            )
+
+            if stage_name == "drive_packaging":
+                notebook_timing_manifest = notebook_timer.finish(
+                    "completed_before_stage_package_publish",
+                    extra={
+                        "stage_package_publish_timing_policy": (
+                            "stage_package_publish_elapsed_is_recorded_in_stage_package_manifest_not_in_zip_timing"
+                        ),
+                        "stage_package_publish_included_in_notebook_elapsed": False,
+                    },
+                )
+                stage_package = publish_colab_stage_package(
+                    layout,
+                    notebook_role=notebook_role,
+                    include_videos=include_videos,
+                )
+                print(json.dumps(stage_package, ensure_ascii=False, indent=2))
+        if not notebook_timer.finished:
+            notebook_timing_manifest = notebook_timer.finish("completed")
+    except BaseException:
+        if not notebook_timer.finished:
+            notebook_timing_manifest = notebook_timer.finish("failed")
+        raise
 
     stage_package_dir_path = Path(layout["stage_package_dir"])
     package_path_checks: dict[str, Any] = {}
@@ -2037,4 +2090,7 @@ def run_configured_colab_stage_plan(
         "stage_package": stage_package,
         "stage_package_dir": str(stage_package_dir_path),
         "package_path_checks": package_path_checks,
+        "notebook_runtime_report": notebook_timing_manifest,
+        "notebook_run_timing_manifest": notebook_timing_manifest,
+        "notebook_stage_timing_records_path": str(notebook_timer.stage_records_path),
     }

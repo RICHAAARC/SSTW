@@ -1478,3 +1478,42 @@ Notebook 与 repository module 的跨边界数据
 | reference_tpr_at_target_fpr | metric | none | true | true | false | 差值区间中参考方法的 TPR@target FPR。 |
 | baseline_tpr_at_target_fpr | metric | none | true | true | false | 差值区间中 baseline 的 TPR@target FPR。 |
 | tpr_at_target_fpr_difference | metric | none | true | true | false | SSTW TPR@target FPR 减 baseline TPR@target FPR 的差值。 |
+| baseline_id | protocol | none | true | false | false | modern external baseline 的稳定身份标识。 |
+| git_short_commit | artifact | none | true | false | false | Notebook 计时 manifest 记录的当前 Git 短 commit。 |
+| notebook_run_id | protocol | none | true | false | false | 单次 Notebook repository stage plan 运行的稳定标识。 |
+| notebook_started_at_utc | artifact | none | true | false | false | Notebook repository stage plan 计时开始 UTC 时间。 |
+| notebook_finished_at_utc | artifact | none | true | false | false | Notebook repository stage plan 计时结束 UTC 时间。 |
+| notebook_elapsed_sec | metric | none | true | false | false | Notebook repository stage plan 总耗时秒数, 用于运行成本估算。 |
+| notebook_elapsed_min | metric | none | true | false | false | Notebook repository stage plan 总耗时分钟数, 用于运行成本估算。 |
+| notebook_timing_status | governance | none | true | false | false | Notebook 计时状态, 例如 running、completed 或 completed_before_stage_package_publish。 |
+| notebook_timing_scope | protocol | none | true | false | false | Notebook 计时覆盖范围, 例如 repository_stage_plan 或 external_baseline_formal_reference_plan。 |
+| notebook_timing_coverage_status | governance | none | true | false | false | Notebook 计时覆盖说明, 明确是否排除人工 Colab 设置或阶段包发布耗时。 |
+| notebook_run_timing_manifest_path | artifact | none | true | false | false | Notebook 总耗时 manifest 路径。 |
+| notebook_run_timing_manifest | artifact | none | true | false | false | Notebook 总耗时 manifest 的内联摘要。 |
+| notebook_stage_timing_record_count | metric | none | true | false | false | Notebook 阶段耗时记录条数。 |
+| notebook_stage_timing_records_path | artifact | none | true | false | false | Notebook 阶段耗时 JSONL 路径。 |
+| stage_name | protocol | none | true | false | false | Notebook stage plan 中单个阶段的语义名称。 |
+| stage_execution_kind | protocol | none | true | false | false | 阶段执行方式, 例如 command 或 python_helper。 |
+| stage_execution_status | governance | none | true | false | false | 阶段计时层归一化后的执行状态。 |
+| stage_started_at_utc | artifact | none | true | false | false | 单个 Notebook 阶段开始 UTC 时间。 |
+| stage_finished_at_utc | artifact | none | true | false | false | 单个 Notebook 阶段结束 UTC 时间。 |
+| stage_elapsed_sec | metric | none | true | false | false | 单个 Notebook 阶段耗时秒数。 |
+| stage_elapsed_min | metric | none | true | false | false | 单个 Notebook 阶段耗时分钟数。 |
+| stage_failure_type | governance | none | true | false | false | 阶段失败时记录的异常类型。 |
+| stage_failure_message | governance | none | true | false | false | 阶段失败时记录的异常摘要。 |
+| stage_package_publish_timing_policy | governance | none | true | false | false | 阶段包发布耗时与 Notebook 总耗时之间的记录策略说明。 |
+| stage_package_publish_included_in_notebook_elapsed | governance | none | true | false | false | 阶段包发布耗时是否计入 notebook_elapsed_sec。 |
+| completed_stage_count | metric | none | true | false | false | Notebook 计时 manifest 中已完成阶段数量。 |
+| failed_stage_count | metric | none | true | false | false | Notebook 计时 manifest 中失败阶段数量。 |
+| notebook_timing_start_source | governance | none | true | false | false | Notebook 总耗时计时起点来源, 例如第一格环境变量或 helper 初始化。 |
+| stage_package_publish_elapsed_sec | metric | none | true | false | false | publish_colab_stage_package 从开始到写出远端 zip 和 manifest 的耗时秒数。 |
+| notebook_runtime_report_path | artifact | none | true | false | false | 每个阶段结果包必须包含的 notebook_runtime_report.json 路径。 |
+| notebook_runtime_started_at_utc | artifact | none | true | false | false | 共享 Colab layout 入口层记录的 Notebook 运行时间起点。 |
+| notebook_runtime_start_perf_counter | metric | none | true | false | false | 共享 Colab layout 入口层记录的 Python 单调时钟起点。 |
+| notebook_runtime_start_source | governance | none | true | false | false | Notebook runtime 起点来源, 当前为 shared_colab_stage_layout。 |
+| notebook_runtime_timing_scope | protocol | none | true | false | false | 共享入口层 runtime 计时覆盖范围。 |
+| notebook_runtime_workflow_profile | protocol | none | true | false | false | runtime session 初始化时绑定的 workflow profile。 |
+| notebook_runtime_notebook_role | protocol | none | true | false | false | runtime session 初始化时绑定的 Notebook role。 |
+| notebook_runtime_baseline_id | protocol | none | true | false | false | runtime session 初始化时绑定的 external baseline 身份。 |
+| notebook_runtime_repo_root | artifact | none | true | false | false | runtime session 初始化时记录的仓库根目录。 |
+| notebook_runtime_report | artifact | none | true | false | false | Notebook 运行时间报告的内联摘要对象。 |

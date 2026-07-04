@@ -18,6 +18,7 @@ import json
 import os
 from pathlib import Path, PurePosixPath
 import shutil
+import time
 import zipfile
 from typing import Any, Mapping
 
@@ -27,6 +28,10 @@ from main.protocol.package_naming import (
     current_short_commit,
     current_utc_time_for_filename,
     sanitize_filename_token,
+)
+from paper_workflow.colab_utils.notebook_run_timing import (
+    finalize_notebook_runtime_report_for_package,
+    initialize_notebook_runtime_session,
 )
 
 
@@ -163,6 +168,47 @@ def _stage_package_manifest_path_for_zip(package_zip: Path) -> Path:
     """根据 zip 名称推导同阶段 manifest 路径。"""
 
     return package_zip.with_name(f"{package_zip.stem}_manifest.json")
+
+
+def _load_notebook_timing_metadata(layout: Mapping[str, str]) -> dict[str, Any]:
+    """读取 Notebook 总耗时摘要, 写入阶段包 manifest 便于在 Drive 侧快速查看。"""
+
+    run_root = Path(str(layout.get("drive_run_root") or ""))
+    report_path = run_root / "artifacts" / "notebook_runtime_report.json"
+    legacy_path = run_root / "artifacts" / "notebook_run_timing_manifest.json"
+    timing_path = report_path
+    if not timing_path.exists():
+        timing_path = legacy_path
+    if not timing_path.exists():
+        return {
+            "notebook_runtime_report_path": str(report_path),
+            "notebook_run_timing_manifest_path": str(legacy_path),
+            "notebook_timing_status": "missing",
+        }
+    try:
+        timing = json.loads(timing_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return {
+            "notebook_runtime_report_path": str(report_path),
+            "notebook_run_timing_manifest_path": str(legacy_path),
+            "notebook_timing_status": "invalid_json",
+        }
+    return {
+        "notebook_runtime_report_path": str(report_path),
+        "notebook_run_timing_manifest_path": str(legacy_path),
+        "notebook_run_id": str(timing.get("notebook_run_id") or ""),
+        "notebook_elapsed_sec": timing.get("notebook_elapsed_sec"),
+        "notebook_elapsed_min": timing.get("notebook_elapsed_min"),
+        "notebook_timing_status": str(timing.get("notebook_timing_status") or ""),
+        "notebook_timing_scope": str(timing.get("notebook_timing_scope") or ""),
+        "notebook_timing_start_source": str(timing.get("notebook_timing_start_source") or ""),
+        "notebook_timing_coverage_status": str(timing.get("notebook_timing_coverage_status") or ""),
+        "notebook_stage_timing_record_count": timing.get("notebook_stage_timing_record_count"),
+        "notebook_stage_timing_records_path": str(timing.get("notebook_stage_timing_records_path") or ""),
+        "stage_package_publish_included_in_notebook_elapsed": bool(
+            timing.get("stage_package_publish_included_in_notebook_elapsed", False)
+        ),
+    }
 
 
 def _stage_package_zip_allowed_for_restore(package_zip: Path, stage_package_id: str) -> bool:
@@ -554,8 +600,17 @@ def prepare_colab_stage_layout(
     """为 Notebook 准备本地化 layout, 并恢复前置阶段包。"""
 
     if not stage_zip_handoff_enabled():
-        return dict(layout)
+        return initialize_notebook_runtime_session(
+            dict(layout),
+            notebook_role=notebook_role,
+            baseline_id=baseline_id,
+        )
     localized = activate_local_stage_layout(layout, notebook_role=notebook_role, baseline_id=baseline_id)
+    localized = initialize_notebook_runtime_session(
+        localized,
+        notebook_role=notebook_role,
+        baseline_id=baseline_id,
+    )
     resource_restore = hydrate_external_baseline_resource_packages(localized)
     if resource_restore.get("external_baseline_resource_package_restore_status") == "restored":
         localized["external_baseline_resource_root"] = str(resource_restore["external_baseline_resource_root"])
@@ -606,6 +661,24 @@ def _iter_package_sources(
                 sources.append((
                     decision_path,
                     f"{run_archive_root}/artifacts/external_baseline_formal_reference",
+                ))
+            runtime_report_path = run_root / "artifacts" / "notebook_runtime_report.json"
+            if runtime_report_path.exists():
+                sources.append((
+                    runtime_report_path,
+                    f"{run_archive_root}/artifacts",
+                ))
+            timing_manifest_path = run_root / "artifacts" / "notebook_run_timing_manifest.json"
+            if timing_manifest_path.exists():
+                sources.append((
+                    timing_manifest_path,
+                    f"{run_archive_root}/artifacts",
+                ))
+            timing_records_path = run_root / "records" / "notebook_stage_timing_records.jsonl"
+            if timing_records_path.exists():
+                sources.append((
+                    timing_records_path,
+                    f"{run_archive_root}/records",
                 ))
             evidence_dir = run_root / "artifacts" / "external_baseline_evidence" / baseline_token
             if evidence_dir.exists():
@@ -921,6 +994,7 @@ def publish_colab_stage_package(
             "stage_package_handoff_mode": "disabled",
             "stage_package_publish_status": "skipped",
         }
+    stage_package_publish_start = time.perf_counter()
 
     stage_package_id = str(layout.get("stage_package_id") or stage_package_id_for_notebook(notebook_role, baseline_id=baseline_id))
     workflow_profile = str(layout.get("workflow_profile") or layout.get("runtime_profile") or "default")
@@ -941,6 +1015,19 @@ def publish_colab_stage_package(
     remote_manifest = remote_package_dir / f"{stem}_manifest.json"
     keep_timestamp_snapshot = _env_flag("SSTW_STAGE_PACKAGE_KEEP_TIMESTAMP_SNAPSHOT", default=True)
     prune_timestamp_snapshots = _env_flag("SSTW_STAGE_PACKAGE_PRUNE_TIMESTAMP_SNAPSHOTS", default=False)
+    finalize_notebook_runtime_report_for_package(
+        layout,
+        notebook_role=notebook_role,
+        baseline_id=baseline_id,
+        notebook_timing_status="completed_before_stage_package_publish",
+        extra={
+            "stage_package_id": stage_package_id,
+            "stage_package_publish_timing_policy": (
+                "stage_package_publish_elapsed_is_recorded_in_stage_package_manifest_not_in_runtime_report"
+            ),
+            "stage_package_publish_included_in_notebook_elapsed": False,
+        },
+    )
     external_decision = _load_external_baseline_decision(layout, baseline_id) if _is_external_baseline_stage_package(stage_package_id) else None
     external_decision_path = _external_baseline_decision_path(layout, baseline_id) if _is_external_baseline_stage_package(stage_package_id) else None
     external_decision_metadata = (
@@ -960,6 +1047,7 @@ def publish_colab_stage_package(
             else {}
         )
     )
+    notebook_timing_metadata = _load_notebook_timing_metadata(layout)
 
     base_manifest: dict[str, Any] = {
         "manifest_kind": STAGE_PACKAGE_MANIFEST_KIND,
@@ -981,6 +1069,7 @@ def publish_colab_stage_package(
         "retention_policy": "timestamp_snapshots_retained_by_default",
         "keep_timestamp_snapshot": keep_timestamp_snapshot,
         "prune_timestamp_snapshots": prune_timestamp_snapshots,
+        **notebook_timing_metadata,
         **external_decision_metadata,
     }
 
@@ -1046,9 +1135,13 @@ def publish_colab_stage_package(
         "removed_timestamp_stage_package_snapshots": removed_timestamp_snapshots,
         "claim_support_status": "stage_package_handoff_container_not_claim_evidence",
     }
+    _copy_file(local_zip, remote_zip)
+    manifest = {
+        **manifest,
+        "stage_package_publish_elapsed_sec": round(time.perf_counter() - stage_package_publish_start, 3),
+    }
     local_manifest.parent.mkdir(parents=True, exist_ok=True)
     local_manifest.write_text(json.dumps(manifest, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-    _copy_file(local_zip, remote_zip)
     _copy_file(local_manifest, remote_manifest)
     return {
         **manifest,

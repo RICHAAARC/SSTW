@@ -30,6 +30,7 @@ from paper_workflow.colab_utils.stage_package_sync import (
     prepare_colab_stage_layout,
     publish_colab_stage_package,
 )
+from paper_workflow.colab_utils.notebook_run_timing import start_notebook_run_timer
 from paper_workflow.notebook_utils import generative_video_model_probe_workflow as probe_workflow
 
 
@@ -952,172 +953,219 @@ def run_modern_external_baseline_formal_reference_plan(
     bundle_root = Path(layout["external_baseline_official_result_bundle_root"])
     os.environ["SSTW_EXTERNAL_BASELINE_OFFICIAL_RESULT_BUNDLE_ROOT"] = str(bundle_root)
     os.environ.setdefault("SSTW_EXTERNAL_BASELINE_RESOURCE_ROOT", layout["external_baseline_resource_root"])
-
-    source_intake_result = (
-        _run_source_intake(layout, config)
-        if config.run_source_intake
-        else {"stage_id": "external_baseline_source_intake", "stage_status": "SKIPPED"}
-    )
-    resource_bootstrap_result = (
-        _run_official_resource_bootstrap(layout, config)
-        if config.run_official_resource_bootstrap
-        else {"stage_id": "external_baseline_official_resource_bootstrap", "stage_status": "SKIPPED"}
-    )
-    runtime_closure_preflight_result = (
-        _run_official_runtime_closure_preflight(layout, config)
-        if config.run_official_runtime_closure_preflight
-        else {"stage_id": "external_baseline_official_runtime_closure_requirements", "stage_status": "SKIPPED"}
-    )
-    official_source_dir = official_source_dir_for_baseline(config.baseline_id, repo_root=repo_root)
-    records = comparable_detection_records(run_root)
-    if config.max_records is not None:
-        selected_record_count = min(len(records), int(config.max_records))
-    else:
-        selected_record_count = len(records)
-
-    runtime_closure_blocked = _runtime_closure_blocks_reference_attempt(
-        runtime_closure_preflight_result,
-        config.baseline_id,
-    )
-
-    if runtime_closure_blocked:
-        reference_manifest = _build_runtime_closure_blocked_reference_manifest(
-            baseline_id=config.baseline_id,
-            run_root=run_root,
-            bundle_root=bundle_root,
-            official_source_dir=official_source_dir,
-            selected_record_count=selected_record_count,
-            runtime_closure_preflight_result=runtime_closure_preflight_result,
-        )
-    elif config.baseline_id == "videoseal":
-        reference_manifest = _run_videoseal_reference(
-            run_root=run_root,
-            bundle_root=bundle_root,
-            official_source_dir=official_source_dir,
-            max_records=config.max_records,
-            generate_auto_supported_bundle=config.generate_auto_supported_bundle,
-        )
-    elif config.baseline_id == "sigmark" and os.environ.get(
-        "SSTW_RUN_SIGMARK_OFFICIAL_HUNYUAN_PIPELINE",
-        "true",
-    ).lower() == "true":
-        reference_manifest = _run_sigmark_hunyuan_reference(
-            run_root=run_root,
-            bundle_root=bundle_root,
-            official_source_dir=official_source_dir,
-            repo_root=repo_root,
-            resource_root=layout["external_baseline_resource_root"],
-            max_records=config.max_records,
-        )
-    elif config.baseline_id == "videomark" and os.environ.get(
-        "SSTW_RUN_VIDEOMARK_OFFICIAL_PIPELINE",
-        "true",
-    ).lower() == "true":
-        reference_manifest = _run_videomark_official_reference(
-            run_root=run_root,
-            bundle_root=bundle_root,
-            official_source_dir=official_source_dir,
-            repo_root=repo_root,
-            resource_root=layout["external_baseline_resource_root"],
-            max_records=config.max_records,
-        )
-    elif config.baseline_id == "videoshield" and os.environ.get(
-        "SSTW_RUN_VIDEOSHIELD_OFFICIAL_PIPELINE",
-        "true",
-    ).lower() == "true":
-        reference_manifest = _run_videoshield_official_reference(
-            run_root=run_root,
-            bundle_root=bundle_root,
-            official_source_dir=official_source_dir,
-            repo_root=repo_root,
-            resource_root=layout["external_baseline_resource_root"],
-            max_records=config.max_records,
-        )
-    elif config.baseline_id == "vidsig" and os.environ.get(
-        "SSTW_RUN_VIDSIG_OFFICIAL_PIPELINE",
-        "true",
-    ).lower() == "true":
-        reference_manifest = _run_vidsig_official_reference(
-            run_root=run_root,
-            bundle_root=bundle_root,
-            official_source_dir=official_source_dir,
-            repo_root=repo_root,
-            resource_root=layout["external_baseline_resource_root"],
-            max_records=config.max_records,
-        )
-    else:
-        reference_manifest = _run_generic_repository_official_adapter(
-            baseline_id=config.baseline_id,
-            run_root=run_root,
-            bundle_root=bundle_root,
-            official_source_dir=official_source_dir,
-            repo_root=repo_root,
-            max_records=config.max_records,
-            allow_existing_official_bundle_as_reference_input=config.allow_existing_official_bundle_as_reference_input,
-        )
-
-    followup_results = (
-        [
-            {
-                "stage_id": "external_baseline_followup_commands",
-                "stage_status": "SKIPPED",
-                "skip_reason": "runtime_closure_preflight_failed_for_selected_baseline",
-                "claim_support_status": "followup_skipped_not_claim_evidence",
-            }
-        ]
-        if runtime_closure_blocked
-        else _run_optional_followup_commands(layout, config)
-    )
-    generated_count = int(reference_manifest.get("generated_bundle_record_count") or 0)
-    failed_count = int(reference_manifest.get("failed_bundle_record_count") or 0)
-    reference_decision = "PASS" if selected_record_count > 0 and generated_count == selected_record_count and failed_count == 0 else "FAIL"
-    if runtime_closure_blocked:
-        reference_status = "blocked_missing_official_runtime_requirements"
-    elif selected_record_count == 0:
-        reference_status = "missing_runtime_detection_records"
-    elif generated_count != selected_record_count:
-        reference_status = "bundle_record_coverage_incomplete"
-    elif failed_count:
-        reference_status = "official_reference_failures_present"
-    else:
-        reference_status = "official_reference_bundle_complete"
-    decision = {
-        "artifact_name": f"{config.baseline_id}_formal_reference_decision.json",
-        "manifest_kind": "modern_external_baseline_formal_reference_decision",
-        "baseline_id": config.baseline_id,
-        "build_order": list(MODERN_EXTERNAL_BASELINE_BUILD_ORDER),
-        "config": config.to_dict(),
-        "layout": dict(layout),
-        "run_root": str(run_root),
-        "official_result_bundle_root": str(bundle_root),
-        "official_source_dir": str(official_source_dir),
-        "runtime_detection_record_count": len(records),
-        "selected_runtime_detection_record_count": selected_record_count,
-        "generated_bundle_record_count": generated_count,
-        "failed_bundle_record_count": failed_count,
-        "formal_reference_decision": reference_decision,
-        "formal_reference_status": reference_status,
-        "source_intake_result": source_intake_result,
-        "resource_bootstrap_result": resource_bootstrap_result,
-        "runtime_closure_preflight_result": runtime_closure_preflight_result,
-        "reference_manifest": reference_manifest,
-        "followup_results": followup_results,
-        "created_at_utc": _utc_now(),
-        "claim_support_status": "official_reference_bundle_ready_not_measured_formal_record"
-        if reference_decision == "PASS"
-        else "official_reference_bundle_blocked_not_claim_evidence",
-    }
-    decision_path = run_root / "artifacts" / "external_baseline_formal_reference" / f"{config.baseline_id}_formal_reference_decision.json"
-    _write_json(decision_path, decision)
-    package_manifest = publish_colab_stage_package(
+    notebook_timer = start_notebook_run_timer(
         layout,
         notebook_role=DEFAULT_NOTEBOOK_ROLE_FOR_LAYOUT,
+        workflow_profile=config.workflow_profile,
         baseline_id=config.baseline_id,
-        include_videos=os.environ.get("SSTW_INCLUDE_VIDEOS_IN_PACKAGE", "true").lower() == "true",
+        timing_scope="external_baseline_formal_reference_plan",
+        enabled_stage_plan=[
+            "external_baseline_source_intake",
+            "external_baseline_official_resource_bootstrap",
+            "external_baseline_official_runtime_closure_requirements",
+            f"{config.baseline_id}_official_reference_bundle_generation",
+            "external_baseline_optional_followup_commands",
+        ],
+        repo_root=repo_root,
     )
-    decision["stage_package_publish_result"] = package_manifest
-    _write_json(decision_path, decision)
-    return decision
+
+    try:
+        source_intake_result = notebook_timer.run_stage(
+            "external_baseline_source_intake",
+            "python_helper",
+            lambda: _run_source_intake(layout, config)
+            if config.run_source_intake
+            else {"stage_id": "external_baseline_source_intake", "stage_status": "SKIPPED"},
+        )
+        resource_bootstrap_result = notebook_timer.run_stage(
+            "external_baseline_official_resource_bootstrap",
+            "python_helper",
+            lambda: _run_official_resource_bootstrap(layout, config)
+            if config.run_official_resource_bootstrap
+            else {"stage_id": "external_baseline_official_resource_bootstrap", "stage_status": "SKIPPED"},
+        )
+        runtime_closure_preflight_result = notebook_timer.run_stage(
+            "external_baseline_official_runtime_closure_requirements",
+            "python_helper",
+            lambda: _run_official_runtime_closure_preflight(layout, config)
+            if config.run_official_runtime_closure_preflight
+            else {"stage_id": "external_baseline_official_runtime_closure_requirements", "stage_status": "SKIPPED"},
+        )
+        official_source_dir = official_source_dir_for_baseline(config.baseline_id, repo_root=repo_root)
+        records = comparable_detection_records(run_root)
+        if config.max_records is not None:
+            selected_record_count = min(len(records), int(config.max_records))
+        else:
+            selected_record_count = len(records)
+
+        runtime_closure_blocked = _runtime_closure_blocks_reference_attempt(
+            runtime_closure_preflight_result,
+            config.baseline_id,
+        )
+
+        def _reference_stage() -> dict[str, Any]:
+            """按 baseline 身份执行对应的官方参考流程。"""
+
+            if runtime_closure_blocked:
+                return _build_runtime_closure_blocked_reference_manifest(
+                    baseline_id=config.baseline_id,
+                    run_root=run_root,
+                    bundle_root=bundle_root,
+                    official_source_dir=official_source_dir,
+                    selected_record_count=selected_record_count,
+                    runtime_closure_preflight_result=runtime_closure_preflight_result,
+                )
+            if config.baseline_id == "videoseal":
+                return _run_videoseal_reference(
+                    run_root=run_root,
+                    bundle_root=bundle_root,
+                    official_source_dir=official_source_dir,
+                    max_records=config.max_records,
+                    generate_auto_supported_bundle=config.generate_auto_supported_bundle,
+                )
+            if config.baseline_id == "sigmark" and os.environ.get(
+                "SSTW_RUN_SIGMARK_OFFICIAL_HUNYUAN_PIPELINE",
+                "true",
+            ).lower() == "true":
+                return _run_sigmark_hunyuan_reference(
+                    run_root=run_root,
+                    bundle_root=bundle_root,
+                    official_source_dir=official_source_dir,
+                    repo_root=repo_root,
+                    resource_root=layout["external_baseline_resource_root"],
+                    max_records=config.max_records,
+                )
+            if config.baseline_id == "videomark" and os.environ.get(
+                "SSTW_RUN_VIDEOMARK_OFFICIAL_PIPELINE",
+                "true",
+            ).lower() == "true":
+                return _run_videomark_official_reference(
+                    run_root=run_root,
+                    bundle_root=bundle_root,
+                    official_source_dir=official_source_dir,
+                    repo_root=repo_root,
+                    resource_root=layout["external_baseline_resource_root"],
+                    max_records=config.max_records,
+                )
+            if config.baseline_id == "videoshield" and os.environ.get(
+                "SSTW_RUN_VIDEOSHIELD_OFFICIAL_PIPELINE",
+                "true",
+            ).lower() == "true":
+                return _run_videoshield_official_reference(
+                    run_root=run_root,
+                    bundle_root=bundle_root,
+                    official_source_dir=official_source_dir,
+                    repo_root=repo_root,
+                    resource_root=layout["external_baseline_resource_root"],
+                    max_records=config.max_records,
+                )
+            if config.baseline_id == "vidsig" and os.environ.get(
+                "SSTW_RUN_VIDSIG_OFFICIAL_PIPELINE",
+                "true",
+            ).lower() == "true":
+                return _run_vidsig_official_reference(
+                    run_root=run_root,
+                    bundle_root=bundle_root,
+                    official_source_dir=official_source_dir,
+                    repo_root=repo_root,
+                    resource_root=layout["external_baseline_resource_root"],
+                    max_records=config.max_records,
+                )
+            return _run_generic_repository_official_adapter(
+                baseline_id=config.baseline_id,
+                run_root=run_root,
+                bundle_root=bundle_root,
+                official_source_dir=official_source_dir,
+                repo_root=repo_root,
+                max_records=config.max_records,
+                allow_existing_official_bundle_as_reference_input=config.allow_existing_official_bundle_as_reference_input,
+            )
+
+        reference_manifest = notebook_timer.run_stage(
+            f"{config.baseline_id}_official_reference_bundle_generation",
+            "python_helper",
+            _reference_stage,
+        )
+        followup_results = notebook_timer.run_stage(
+            "external_baseline_optional_followup_commands",
+            "python_helper",
+            lambda: [
+                {
+                    "stage_id": "external_baseline_followup_commands",
+                    "stage_status": "SKIPPED",
+                    "skip_reason": "runtime_closure_preflight_failed_for_selected_baseline",
+                    "claim_support_status": "followup_skipped_not_claim_evidence",
+                }
+            ]
+            if runtime_closure_blocked
+            else _run_optional_followup_commands(layout, config),
+        )
+        generated_count = int(reference_manifest.get("generated_bundle_record_count") or 0)
+        failed_count = int(reference_manifest.get("failed_bundle_record_count") or 0)
+        reference_decision = "PASS" if selected_record_count > 0 and generated_count == selected_record_count and failed_count == 0 else "FAIL"
+        if runtime_closure_blocked:
+            reference_status = "blocked_missing_official_runtime_requirements"
+        elif selected_record_count == 0:
+            reference_status = "missing_runtime_detection_records"
+        elif generated_count != selected_record_count:
+            reference_status = "bundle_record_coverage_incomplete"
+        elif failed_count:
+            reference_status = "official_reference_failures_present"
+        else:
+            reference_status = "official_reference_bundle_complete"
+        notebook_timing_manifest = notebook_timer.finish(
+            "completed_before_stage_package_publish",
+            extra={
+                "stage_package_publish_timing_policy": (
+                    "stage_package_publish_elapsed_is_recorded_in_stage_package_manifest_not_in_zip_timing"
+                ),
+                "stage_package_publish_included_in_notebook_elapsed": False,
+            },
+        )
+        decision = {
+            "artifact_name": f"{config.baseline_id}_formal_reference_decision.json",
+            "manifest_kind": "modern_external_baseline_formal_reference_decision",
+            "baseline_id": config.baseline_id,
+            "build_order": list(MODERN_EXTERNAL_BASELINE_BUILD_ORDER),
+            "config": config.to_dict(),
+            "layout": dict(layout),
+            "run_root": str(run_root),
+            "official_result_bundle_root": str(bundle_root),
+            "official_source_dir": str(official_source_dir),
+            "runtime_detection_record_count": len(records),
+            "selected_runtime_detection_record_count": selected_record_count,
+            "generated_bundle_record_count": generated_count,
+            "failed_bundle_record_count": failed_count,
+            "formal_reference_decision": reference_decision,
+            "formal_reference_status": reference_status,
+            "source_intake_result": source_intake_result,
+            "resource_bootstrap_result": resource_bootstrap_result,
+            "runtime_closure_preflight_result": runtime_closure_preflight_result,
+            "reference_manifest": reference_manifest,
+            "followup_results": followup_results,
+            "notebook_runtime_report": notebook_timing_manifest,
+            "notebook_run_timing_manifest": notebook_timing_manifest,
+            "notebook_stage_timing_records_path": str(notebook_timer.stage_records_path),
+            "created_at_utc": _utc_now(),
+            "claim_support_status": "official_reference_bundle_ready_not_measured_formal_record"
+            if reference_decision == "PASS"
+            else "official_reference_bundle_blocked_not_claim_evidence",
+        }
+        decision_path = run_root / "artifacts" / "external_baseline_formal_reference" / f"{config.baseline_id}_formal_reference_decision.json"
+        _write_json(decision_path, decision)
+        package_manifest = publish_colab_stage_package(
+            layout,
+            notebook_role=DEFAULT_NOTEBOOK_ROLE_FOR_LAYOUT,
+            baseline_id=config.baseline_id,
+            include_videos=os.environ.get("SSTW_INCLUDE_VIDEOS_IN_PACKAGE", "true").lower() == "true",
+        )
+        decision["stage_package_publish_result"] = package_manifest
+        _write_json(decision_path, decision)
+        return decision
+    except BaseException:
+        if not notebook_timer.finished:
+            notebook_timer.finish("failed")
+        raise
 
 
 def run_default_modern_external_baseline_formal_reference_plan(

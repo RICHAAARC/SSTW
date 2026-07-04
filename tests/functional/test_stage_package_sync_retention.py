@@ -380,6 +380,7 @@ def test_external_baseline_package_contains_only_current_baseline_bundle_and_res
         names = archive.namelist()
     assert any("videoseal/records/sample.json" in name for name in names)
     assert any("videoseal_formal_reference_decision.json" in name for name in names)
+    assert any(name.endswith("artifacts/notebook_runtime_report.json") for name in names)
     assert any("external_baseline_evidence/videoseal/unit_000/manifest.json" in name for name in names)
     assert not any("vidsig/records/other.json" in name for name in names)
     assert not any("vidsig_formal_reference_decision.json" in name for name in names)

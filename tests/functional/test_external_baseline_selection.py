@@ -274,7 +274,7 @@ def test_external_baseline_video_tensor_io_uses_imageio_backend(tmp_path: Path) 
 
 @pytest.mark.quick
 def test_videoseal_runtime_attack_mapping_is_explicit_and_fail_closed() -> None:
-    """VideoSeal official bundle 只允许三类 runtime attack, 未知 attack 必须阻断。"""
+    """VideoSeal official bundle 的 runtime attack 映射必须显式登记并对未知 attack 阻断。"""
 
     import torch
 

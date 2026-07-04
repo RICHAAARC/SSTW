@@ -481,7 +481,8 @@ def test_notebook_workflow_profile_config_supports_profile_switching() -> None:
 
     assert validation["workflow_profile"] == "validation_scale"
     assert validation["result_tier"] == "validation_scale"
-    assert validation["enabled_for_claim"] is False
+    assert validation["enabled_for_claim"] is True
+    assert validation["claim_support_status"] == "validation_scale_target_fpr_0_1_paper_claim_candidate"
     assert validation["target_fpr"] == validation_protocol["target_fpr"]
     assert validation["protocol_target_fpr"] == validation_protocol["target_fpr"]
     assert validation["target_fpr_source_config_path"] == validation["protocol_config_path"]

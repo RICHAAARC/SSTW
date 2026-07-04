@@ -317,17 +317,27 @@ def audit_formal_baseline_difference_interval_records(records: list[dict[str, An
         if record.get("difference_interval_status") != "ready"
     ]
     decision = "PASS" if records and len(ready_records) == len(records) else "FAIL"
+    ready_claim_statuses = {str(record.get("claim_support_status")) for record in ready_records}
+    if decision == "PASS" and ready_claim_statuses == {"formal_baseline_difference_interval_paper_profile_claim_candidate"}:
+        claim_support_status = "formal_baseline_difference_interval_paper_profile_claim_candidate"
+        significance_claim_status = "paper_profile_interval_ready_requires_claim_audit"
+    elif decision == "PASS":
+        claim_support_status = "formal_baseline_difference_interval_validation_scale_only"
+        significance_claim_status = "validation_scale_interval_not_significance_claim"
+    else:
+        claim_support_status = "formal_baseline_difference_interval_blocked"
+        significance_claim_status = "formal_baseline_difference_interval_blocked"
     return {
         "stage_id": "formal_baseline_difference_interval",
         "formal_baseline_difference_interval_decision": decision,
-        "claim_support_status": "formal_baseline_difference_interval_validation_scale_only" if decision == "PASS" else "formal_baseline_difference_interval_blocked",
+        "claim_support_status": claim_support_status,
         "paper_result_level": records[0].get("paper_result_level") if records else None,
         "target_fpr": records[0].get("target_fpr") if records else None,
         "difference_interval_record_count": len(records),
         "difference_interval_ready_count": len(ready_records),
         "difference_interval_missing_baseline_ids": missing_baseline_ids,
         "difference_interval_missing_baseline_count": len(missing_baseline_ids),
-        "significance_claim_status": "validation_scale_interval_not_significance_claim",
+        "significance_claim_status": significance_claim_status,
     }
 
 
@@ -345,7 +355,8 @@ def run_formal_baseline_difference_interval(
     report = (
         "# Formal Baseline Difference Interval Report\n\n"
         "该报告计算 SSTW 相对 5 个现代 external baseline 的 TPR@target FPR 差值及 95% 置信区间。"
-        "validation_scale 样本量只用于验证统计产物闭环, 不作为显著性或最终效果主张。\n\n"
+        "当 protocol config 启用 allow_effect_size_claims 时, validation_scale 差值区间用于支撑 target_fpr=0.1 "
+        "的小样本优势结论候选, 且仍需由 claim audit 限定其不能外推到更低 FPR 或更大样本结论。\n\n"
         f"- formal_baseline_difference_interval_decision: {audit['formal_baseline_difference_interval_decision']}\n"
         f"- paper_result_level: {audit['paper_result_level']}\n"
         f"- target_fpr: {audit['target_fpr']}\n"

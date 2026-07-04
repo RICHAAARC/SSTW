@@ -392,7 +392,7 @@ def _validation_scale_gate_ready_for_pilot(
     missing: list[str] = []
     if decision.get("validation_scale_gate_decision") != "PASS":
         missing.append("validation_scale_gate_decision_passed")
-    if decision.get("claim_support_status") != "validation_scale_ready_for_pilot_paper":
+    if decision.get("claim_support_status") != "validation_scale_target_fpr_0_1_paper_claim_supported":
         missing.append("validation_scale_claim_support_status_ready")
     if decision.get("paper_result_level") != "validation_scale":
         missing.append("validation_scale_paper_result_level_current")
@@ -408,7 +408,7 @@ def _validation_scale_gate_ready_for_pilot(
         missing.append("validation_scale_data_split_and_leakage_guard_passed")
     if (_safe_int(decision.get("sstw_measured_formal_record_count")) or 0) <= 0:
         missing.append("validation_scale_sstw_measured_formal_records_ready")
-    if decision.get("sstw_measured_formal_status") != "sstw_measured_formal_validation_scale_only":
+    if decision.get("sstw_measured_formal_status") != "sstw_measured_formal_paper_profile_claim_candidate":
         missing.append("validation_scale_sstw_measured_formal_status_ready")
     if fair_ready_count is None or fair_ready_count < required_method_count:
         missing.append("validation_scale_fair_detection_calibration_ready")
@@ -416,12 +416,14 @@ def _validation_scale_gate_ready_for_pilot(
         missing.append("validation_scale_fair_detection_calibration_status_ready")
     if comparison_ready_count is None or comparison_ready_count < required_method_count:
         missing.append("validation_scale_formal_method_baseline_comparison_ready")
-    if decision.get("formal_method_baseline_comparison_status") != "formal_method_baseline_comparison_validation_scale_only":
+    if decision.get("formal_method_baseline_comparison_status") != "formal_method_baseline_comparison_paper_profile_claim_candidate":
         missing.append("validation_scale_formal_method_baseline_comparison_status_ready")
     if interval_ready_count is None or interval_ready_count < len(required_baseline_ids):
         missing.append("validation_scale_formal_baseline_difference_interval_ready")
-    if decision.get("formal_baseline_difference_interval_status") != "formal_baseline_difference_interval_validation_scale_only":
+    if decision.get("formal_baseline_difference_interval_status") != "formal_baseline_difference_interval_paper_profile_claim_candidate":
         missing.append("validation_scale_formal_baseline_difference_interval_status_ready")
+    if decision.get("validation_scale_sstw_advantage_claim_ready") is not True:
+        missing.append("validation_scale_sstw_advantage_claim_ready")
     if decision.get("full_paper_allowed") is not False:
         missing.append("validation_scale_must_not_allow_full_paper")
     return not missing, {
@@ -433,6 +435,8 @@ def _validation_scale_gate_ready_for_pilot(
         "validation_scale_fair_detection_calibration_ready_count": fair_ready_count,
         "validation_scale_formal_method_baseline_comparison_ready_count": comparison_ready_count,
         "validation_scale_formal_baseline_difference_interval_ready_count": interval_ready_count,
+        "validation_scale_sstw_advantage_claim_ready": decision.get("validation_scale_sstw_advantage_claim_ready"),
+        "validation_scale_sstw_advantage_claim_status": decision.get("validation_scale_sstw_advantage_claim_status"),
     }
 
 

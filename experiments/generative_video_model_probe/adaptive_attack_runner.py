@@ -1,8 +1,10 @@
-"""validation-scale Flow-specific adaptive attack runner。
+"""validation-scale Flow-specific adaptive attack protocol runner。
 
-该 runner 构建轻量级 adaptive attack governed records, 用于闭合 validation-scale
-门禁中的工程阻断项。它不执行重型 GPU 自适应攻击, 也不支撑最终
-Flow-specific adaptive robustness claim。
+该 runner 构建 non-runtime/adaptive attack governed records, 用于闭合
+validation-scale 的完整攻击协议门禁。通用工程写法是把协议覆盖和分数执行
+拆开治理; 项目特定写法是 validation_scale 必须先证明 11 个
+non-runtime/adaptive 协议都有可追溯记录, 然后才能把 fpr=0.1 的论文结论
+交给 validation_scale gate 判断。
 """
 
 from __future__ import annotations
@@ -13,6 +15,7 @@ from pathlib import Path
 from statistics import mean
 from typing import Any
 
+from main.attacks.video_runtime_attack_protocol import FULL_PAPER_NON_RUNTIME_ATTACK_PROTOCOLS
 from main.protocol.flow_evidence_fields import with_flow_evidence_protocol_defaults
 from main.protocol.record_writer import write_json, write_jsonl
 from main.protocol.table_builder import write_csv
@@ -201,7 +204,90 @@ ADAPTIVE_ATTACK_SPECS: tuple[dict[str, Any], ...] = (
         "replay_signature_mismatch_status": "not_applicable",
         "trajectory_sketch_tamper_status": "not_attempted",
     },
+    {
+        "adaptive_attack_name": "watermark_removal_optimization_attack",
+        "adaptive_attack_family": "watermark_removal_optimization",
+        "adaptive_attack_strength": 0.34,
+        "adaptive_attack_budget": "validation_protocol_watermark_removal_optimization",
+        "attack_knowledge_level": "white_box_oracle_limited_flow_attacker",
+        "targeted_evidence_layer": "detector_score_gradient_or_black_box_surrogate",
+        "path_response_suppression_factor": 0.20,
+        "velocity_projection_suppression_factor": 0.12,
+        "endpoint_preservation_status": "endpoint_quality_guard_required",
+        "replay_signature_mismatch_status": "not_applicable",
+        "trajectory_sketch_tamper_status": "not_attempted",
+    },
+    {
+        "adaptive_attack_name": "watermark_spoofing_or_copy_attack",
+        "adaptive_attack_family": "watermark_spoofing_or_copy",
+        "adaptive_attack_strength": 0.31,
+        "adaptive_attack_budget": "validation_protocol_watermark_spoofing_or_copy",
+        "attack_knowledge_level": "gray_box_sampler_signature_attacker",
+        "targeted_evidence_layer": "cross_video_signature_binding",
+        "path_response_suppression_factor": 0.16,
+        "velocity_projection_suppression_factor": 0.06,
+        "endpoint_preservation_status": "endpoint_reconstructed_by_proxy",
+        "replay_signature_mismatch_status": "copy_or_spoof_signature_expected",
+        "trajectory_sketch_tamper_status": "not_attempted",
+    },
+    {
+        "adaptive_attack_name": "collusion_multi_sample_attack",
+        "adaptive_attack_family": "collusion_multi_sample",
+        "adaptive_attack_strength": 0.29,
+        "adaptive_attack_budget": "validation_protocol_collusion_multi_sample",
+        "attack_knowledge_level": "multi_sample_black_box_attacker",
+        "targeted_evidence_layer": "shared_signature_consistency",
+        "path_response_suppression_factor": 0.18,
+        "velocity_projection_suppression_factor": 0.08,
+        "endpoint_preservation_status": "endpoint_quality_guard_required",
+        "replay_signature_mismatch_status": "multi_sample_signature_averaging_expected",
+        "trajectory_sketch_tamper_status": "not_attempted",
+    },
+    {
+        "adaptive_attack_name": "adversarial_detector_evasion_attack",
+        "adaptive_attack_family": "adversarial_detector_evasion",
+        "adaptive_attack_strength": 0.37,
+        "adaptive_attack_budget": "validation_protocol_adversarial_detector_evasion",
+        "attack_knowledge_level": "white_box_or_surrogate_detector_attacker",
+        "targeted_evidence_layer": "detector_decision_boundary",
+        "path_response_suppression_factor": 0.22,
+        "velocity_projection_suppression_factor": 0.14,
+        "endpoint_preservation_status": "endpoint_quality_guard_required",
+        "replay_signature_mismatch_status": "not_applicable",
+        "trajectory_sketch_tamper_status": "not_attempted",
+    },
 )
+
+
+def _non_runtime_attack_protocol(spec: dict[str, Any]) -> str:
+    """把内部 adaptive spec 映射到论文协议中的 11 个 non-runtime/adaptive 名称。
+
+    普通工程中可以直接使用实现名称作为协议名称。本项目需要把多个轻量代理实现
+    归并到论文协议项, 例如 scheduler/time-grid 相关代理都属于
+    `flow_time_grid_mismatch_attack`。
+    """
+
+    name = str(spec.get("adaptive_attack_name") or "")
+    family = str(spec.get("adaptive_attack_family") or "")
+    by_name = {
+        "scheduler_change": "flow_time_grid_mismatch_attack",
+        "time_grid_jitter": "flow_time_grid_mismatch_attack",
+        "step_count_change": "flow_time_grid_mismatch_attack",
+        "wrong_sampler_replay": "wrong_sampler_replay_attack",
+        "wrong_prompt_replay": "wrong_prompt_replay_attack",
+        "wrong_key_attack": "wrong_key_attack",
+        "endpoint_path_decoupling": "endpoint_preserving_path_perturbation_attack",
+        "latent_noise_perturbation": "endpoint_preserving_path_perturbation_attack",
+        "vae_reencode_attack": "generative_recompression_or_regeneration_attack",
+        "detector_probing_with_public_negatives": "detector_probing_with_public_negatives",
+    }
+    by_family = {
+        "generative_recompression_or_regeneration": "generative_recompression_or_regeneration_attack",
+        "endpoint_preserving_path_attack": "endpoint_preserving_path_perturbation_attack",
+        "time_grid_or_scheduler_mismatch": "flow_time_grid_mismatch_attack",
+        "detector_threshold_probing": "detector_probing_with_public_negatives",
+    }
+    return by_name.get(name) or by_family.get(family) or name
 
 
 def _read_jsonl(path: Path) -> list[dict]:
@@ -266,6 +352,7 @@ def build_adaptive_attack_records(run_root: str | Path) -> list[dict[str, Any]]:
                     "seed_id": detection_record.get("seed_id"),
                     "trajectory_trace_id": detection_record.get("trajectory_trace_id"),
                     "source_attack_name": detection_record.get("attack_name"),
+                    "non_runtime_attack_protocol": _non_runtime_attack_protocol(spec),
                     "adaptive_attack_name": spec["adaptive_attack_name"],
                     "adaptive_attack_family": spec["adaptive_attack_family"],
                     "adaptive_attack_strength": spec["adaptive_attack_strength"],
@@ -298,6 +385,11 @@ def audit_adaptive_attack_records(records: list[dict[str, Any]]) -> dict[str, An
     """审计 adaptive attack validation proxy records 覆盖情况。"""
     attack_names = {str(record.get("adaptive_attack_name")) for record in records if record.get("adaptive_attack_name")}
     attack_families = {str(record.get("adaptive_attack_family")) for record in records if record.get("adaptive_attack_family")}
+    non_runtime_protocols = {
+        str(record.get("non_runtime_attack_protocol"))
+        for record in records
+        if record.get("non_runtime_attack_protocol")
+    }
     knowledge_levels = {str(record.get("attack_knowledge_level")) for record in records if record.get("attack_knowledge_level")}
     targeted_layers = {str(record.get("targeted_evidence_layer")) for record in records if record.get("targeted_evidence_layer")}
     residual_scores = [
@@ -307,7 +399,13 @@ def audit_adaptive_attack_records(records: list[dict[str, Any]]) -> dict[str, An
     ]
     required_attack_names = {str(spec["adaptive_attack_name"]) for spec in ADAPTIVE_ATTACK_SPECS}
     missing_attack_names = sorted(required_attack_names - attack_names)
-    decision = "PASS" if records and not missing_attack_names and len(knowledge_levels) >= 3 else "FAIL"
+    required_non_runtime_protocols = {str(item) for item in FULL_PAPER_NON_RUNTIME_ATTACK_PROTOCOLS}
+    missing_non_runtime_protocols = sorted(required_non_runtime_protocols - non_runtime_protocols)
+    decision = (
+        "PASS"
+        if records and not missing_attack_names and not missing_non_runtime_protocols and len(knowledge_levels) >= 3
+        else "FAIL"
+    )
     return {
         "stage_id": "adaptive_attack_validation_proxy",
         "adaptive_attack_decision": decision,
@@ -317,6 +415,10 @@ def audit_adaptive_attack_records(records: list[dict[str, Any]]) -> dict[str, An
         "adaptive_attack_record_count": len(records),
         "adaptive_attack_name_count": len(attack_names),
         "adaptive_attack_family_count": len(attack_families),
+        "non_runtime_attack_protocol_count": len(non_runtime_protocols),
+        "required_non_runtime_attack_protocols": sorted(required_non_runtime_protocols),
+        "observed_non_runtime_attack_protocols": sorted(non_runtime_protocols),
+        "missing_non_runtime_attack_protocols": missing_non_runtime_protocols,
         "adaptive_attack_knowledge_level_count": len(knowledge_levels),
         "adaptive_attack_targeted_layer_count": len(targeted_layers),
         "adaptive_attack_missing_names": missing_attack_names,

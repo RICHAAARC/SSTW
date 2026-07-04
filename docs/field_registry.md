@@ -998,6 +998,7 @@ Notebook 与 repository module 的跨边界数据
 | next_forbidden_action | governance | none | true | false | false | 当前 gate 后明确禁止执行的动作。 |
 | pilot_paper_claim_support_status | claim | none | true | true | false | package manifest 中记录的 pilot_paper claim 支撑状态摘要。 |
 | validation_scale_claim_support_status | claim | none | true | true | false | package manifest 或 pilot_paper gate 中记录的 validation-scale claim 支撑状态摘要。 |
+| paper_gate_preflight_layer | protocol | none | true | false | false | 当前 workflow profile 是否只是 paper gate 前置预演层, validation_scale 在 target_fpr=0.1 论文主张候选语义下必须为 false。 |
 | pilot_paper_result_level | governance | none | true | true | false | package manifest 中记录的 pilot_paper 结果级别。 |
 | pilot_paper_protocol_level | governance | none | true | true | false | package manifest 中记录的 pilot_paper 协议级别。 |
 | pilot_paper_protocol_difference_from_full_paper | governance | none | true | true | false | package manifest 中记录的 pilot_paper 与 full_paper 差异。 |
@@ -1277,6 +1278,15 @@ Notebook 与 repository module 的跨边界数据
 | validation_scale_fair_detection_calibration_ready_count | metric | none | true | true | false | validation_scale gate 中已通过 clean negative 公平校准的方法数量。 |
 | validation_scale_formal_method_baseline_comparison_ready_count | metric | none | true | true | false | validation_scale gate 中同协议 method-baseline 比较已 ready 的方法数量。 |
 | validation_scale_formal_baseline_difference_interval_ready_count | metric | none | true | true | false | validation_scale gate 中 SSTW 相对 baseline 差值区间已 ready 的 baseline 数量。 |
+| require_validation_scale_sstw_advantage_claim_ready | protocol | none | true | false | false | validation_scale gate 是否要求 SSTW 相对 5 个现代 baseline 的 target_fpr=0.1 优势证据 ready。 |
+| validation_scale_sstw_advantage_claim_ready | governance | none | true | true | false | validation_scale gate 中 SSTW target_fpr=0.1 优势证据是否满足论文主张候选标准。 |
+| validation_scale_sstw_advantage_ready_baseline_count | metric | none | true | true | false | validation_scale gate 中 SSTW 优势差值和置信区间已 ready 的现代 baseline 数量。 |
+| validation_scale_sstw_advantage_missing_baseline_names | governance | none | true | false | false | validation_scale gate 中尚未满足 SSTW 优势证据标准的现代 baseline 名称集合。 |
+| validation_scale_sstw_advantage_blocking_reasons | governance | none | true | false | false | validation_scale gate 阻断 SSTW target_fpr=0.1 优势主张候选的原因列表。 |
+| validation_scale_sstw_advantage_claim_status | claim | none | true | true | false | validation_scale gate 对 SSTW target_fpr=0.1 优势主张候选的 claim 支撑状态。 |
+| minimum_sstw_advantage_baseline_count | protocol | none | true | false | false | validation_scale gate 要求 SSTW 优势证据覆盖的现代 baseline 最小数量。 |
+| minimum_sstw_tpr_at_target_fpr_difference | protocol | none | true | false | false | validation_scale gate 要求 SSTW 相对 baseline 的 TPR@target FPR 差值下限。 |
+| require_sstw_advantage_ci_lower_above_zero | protocol | none | true | false | false | validation_scale gate 是否要求 SSTW 相对 baseline 的差值置信区间下界大于0。 |
 | validation_scale_transition_claim_support_status | governance | none | true | false | false | pilot_paper gate 读取到的 validation_scale -> pilot_paper 跳转 claim_support_status。 |
 | validation_scale_transition_source_gate_passed | governance | none | true | false | false | validation_scale -> pilot_paper 跳转记录中的 source gate 是否已通过。 |
 | validation_scale_transition_missing_requirements | governance | none | true | false | false | validation_scale -> pilot_paper 跳转记录中的原始缺失要求列表。 |
@@ -1424,7 +1434,13 @@ Notebook 与 repository module 的跨边界数据
 | runtime_attack_missing_family_minimums | governance | none | true | false | false | 当前 runtime attack manifest 未满足的 family 最低覆盖要求列表。 |
 | runtime_attack_protocol_decision | governance | none | true | true | false | 当前 runtime attack manifest 是否满足 profile 分层协议要求。 |
 | required_non_runtime_attack_protocols | protocol | none | true | false | false | full_paper 还必须覆盖的非 runtime 自适应攻击或生成式重压缩协议名称集合。 |
+| minimum_non_runtime_attack_protocol_count | protocol | none | true | false | false | validation_scale 或 full_paper gate 要求覆盖的非 runtime / adaptive 协议最小数量。 |
+| non_runtime_attack_protocol | protocol | none | true | false | false | 单条 adaptive attack record 映射到论文协议中的非 runtime / adaptive 攻击名称。 |
+| non_runtime_attack_protocol_count | metric | none | true | true | false | 当前 run_root 中 adaptive attack records 已覆盖的非 runtime / adaptive 协议数量。 |
+| observed_non_runtime_attack_protocols | governance | none | true | false | false | 当前 run_root 中实际观测到的非 runtime / adaptive 协议名称集合。 |
 | missing_non_runtime_attack_protocols | governance | none | true | false | false | full_paper protocol config 尚未登记的非 runtime 攻击协议名称集合。 |
+| adaptive_attack_missing_non_runtime_protocols | governance | none | true | false | false | validation_scale gate 从 adaptive attack records 中发现的缺失非 runtime / adaptive 协议集合。 |
+| adaptive_attack_missing_non_runtime_protocol_count | metric | none | true | true | false | validation_scale gate 从 adaptive attack records 中发现的缺失非 runtime / adaptive 协议数量。 |
 | top_tier_attack_protocol_status | governance | none | true | false | false | protocol config 对顶会顶刊级 attack 覆盖的摘要状态。 |
 | required_runtime_attack_protocol_note | protocol | none | true | false | false | 解释 validation_scale、pilot_paper 和 full_paper 分层 attack 协议差异的配置说明。 |
 | missing_required_runtime_attack_names | governance | none | true | false | false | 当前 record 相对 required_runtime_attack_names 缺失的 runtime attack 名称集合。 |

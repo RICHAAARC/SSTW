@@ -14,6 +14,7 @@ from experiments.generative_video_model_probe.formal_motion_claim_filter import 
     select_motion_claim_generation_records,
 )
 from main.attacks.video_runtime_attack_protocol import (
+    FULL_PAPER_NON_RUNTIME_ATTACK_PROTOCOLS,
     audit_runtime_attack_protocol_config,
     required_runtime_attack_names_from_config,
 )
@@ -27,6 +28,7 @@ DEFAULT_VALIDATION_PROFILE_NAMES = {"validation_scale"}
 DEFAULT_MINIMUM_PROMPT_COUNT = 8
 DEFAULT_MINIMUM_SEED_PER_PROMPT = 3
 DEFAULT_MINIMUM_ATTACK_COUNT = 3
+DEFAULT_MINIMUM_NON_RUNTIME_ATTACK_PROTOCOL_COUNT = len(FULL_PAPER_NON_RUNTIME_ATTACK_PROTOCOLS)
 DEFAULT_REQUIRED_MODERN_EXTERNAL_BASELINE_ADAPTER_NAMES = (
     "videoshield",
     "sigmark",
@@ -45,6 +47,7 @@ HARD_REQUIRED_VALIDATION_SCALE_CONFIG_FLAGS = (
     "require_formal_method_baseline_comparison",
     "require_formal_baseline_difference_interval",
     "require_data_split_and_leakage_guard",
+    "require_validation_scale_sstw_advantage_claim_ready",
 )
 
 
@@ -80,14 +83,23 @@ def _load_config(config_path: str | Path = DEFAULT_VALIDATION_SCALE_CONFIG) -> d
     """读取 validation-scale 门禁配置。"""
     path = Path(config_path)
     config = _read_json(path)
+    required_runtime_attack_names = list(required_runtime_attack_names_from_config(config))
+    raw_required_non_runtime_attack_protocols = config.get("required_non_runtime_attack_protocols")
+    required_non_runtime_attack_protocols = (
+        [str(item) for item in raw_required_non_runtime_attack_protocols if str(item)]
+        if isinstance(raw_required_non_runtime_attack_protocols, list)
+        else list(FULL_PAPER_NON_RUNTIME_ATTACK_PROTOCOLS)
+    )
     return {
         "validation_profile_names": config.get("validation_profile_names", sorted(DEFAULT_VALIDATION_PROFILE_NAMES)),
         "target_fpr": _required_float(config, "target_fpr", path),
         "paper_result_level": config.get("paper_result_level", "validation_scale"),
         "minimum_prompt_count": int(config.get("minimum_prompt_count", DEFAULT_MINIMUM_PROMPT_COUNT)),
         "minimum_seed_per_prompt": int(config.get("minimum_seed_per_prompt", DEFAULT_MINIMUM_SEED_PER_PROMPT)),
-        "minimum_attack_count": int(config.get("minimum_attack_count", DEFAULT_MINIMUM_ATTACK_COUNT)),
-        "required_runtime_attack_names": list(required_runtime_attack_names_from_config(config)),
+        "minimum_attack_count": int(config.get("minimum_attack_count", max(DEFAULT_MINIMUM_ATTACK_COUNT, len(required_runtime_attack_names)))),
+        "required_runtime_attack_names": required_runtime_attack_names,
+        "required_non_runtime_attack_protocols": required_non_runtime_attack_protocols,
+        "minimum_non_runtime_attack_protocol_count": int(config.get("minimum_non_runtime_attack_protocol_count", max(DEFAULT_MINIMUM_NON_RUNTIME_ATTACK_PROTOCOL_COUNT, len(required_non_runtime_attack_protocols)))),
         "runtime_attack_protocol_audit": audit_runtime_attack_protocol_config(config),
         "minimum_clean_negative_count": int(config.get("minimum_clean_negative_count", 0)),
         "require_external_baseline_status_records": bool(config.get("require_external_baseline_status_records", True)),
@@ -111,6 +123,10 @@ def _load_config(config_path: str | Path = DEFAULT_VALIDATION_SCALE_CONFIG) -> d
         "require_low_fpr_formal_statistics_blocking_record": bool(config.get("require_low_fpr_formal_statistics_blocking_record", True)),
         "require_artifact_rebuild_dry_run": bool(config.get("require_artifact_rebuild_dry_run", True)),
         "require_data_split_and_leakage_guard": bool(config.get("require_data_split_and_leakage_guard", True)),
+        "require_validation_scale_sstw_advantage_claim_ready": bool(config.get("require_validation_scale_sstw_advantage_claim_ready", True)),
+        "minimum_sstw_advantage_baseline_count": int(config.get("minimum_sstw_advantage_baseline_count", DEFAULT_MINIMUM_MODERN_EXTERNAL_BASELINE_FORMAL_ADAPTER_COUNT)),
+        "minimum_sstw_tpr_at_target_fpr_difference": float(config.get("minimum_sstw_tpr_at_target_fpr_difference", 0.0)),
+        "require_sstw_advantage_ci_lower_above_zero": bool(config.get("require_sstw_advantage_ci_lower_above_zero", True)),
     }
 
 
@@ -227,12 +243,35 @@ def _validation_scale_formal_internal_ablation_ready(run_root: Path) -> tuple[bo
     return ready, ready_count, decision.get("claim_support_status", "missing_validation_scale_formal_internal_ablation_decision")
 
 
-def _adaptive_attack_ready(run_root: Path) -> tuple[bool, int, str]:
-    """检查 validation-scale 是否已有 Flow-specific adaptive attack 记录。"""
+def _adaptive_attack_ready(
+    run_root: Path,
+    required_non_runtime_attack_protocols: list[str],
+    minimum_non_runtime_attack_protocol_count: int,
+) -> tuple[bool, int, int, list[str], list[str], str]:
+    """检查 validation-scale 是否已有完整 non-runtime/adaptive attack 协议记录。"""
     records = _read_jsonl(run_root / "records" / "adaptive_attack_records.jsonl")
     decision = _read_json(run_root / "artifacts" / "adaptive_attack_decision.json")
-    ready = bool(records) and _decision_pass(decision, "adaptive_attack_decision")
-    return ready, len(records), decision.get("claim_support_status", "missing_adaptive_attack_decision")
+    observed_protocols = {
+        str(record.get("non_runtime_attack_protocol") or record.get("adaptive_attack_name") or "")
+        for record in records
+        if record.get("non_runtime_attack_protocol") or record.get("adaptive_attack_name")
+    }
+    required_protocols = {str(item) for item in required_non_runtime_attack_protocols if str(item)}
+    missing_protocols = sorted(required_protocols - observed_protocols)
+    ready = (
+        bool(records)
+        and _decision_pass(decision, "adaptive_attack_decision")
+        and len(observed_protocols) >= minimum_non_runtime_attack_protocol_count
+        and not missing_protocols
+    )
+    return (
+        ready,
+        len(records),
+        len(observed_protocols),
+        sorted(observed_protocols),
+        missing_protocols,
+        decision.get("claim_support_status", "missing_adaptive_attack_decision"),
+    )
 
 
 def _replay_or_sketch_ready(run_root: Path) -> tuple[bool, str]:
@@ -260,6 +299,72 @@ def _low_fpr_formal_statistics_ready(run_root: Path) -> tuple[bool, int, str]:
     ready = bool(records) and _decision_pass(decision, "low_fpr_formal_statistics_decision")
     record_count = int(decision.get("low_fpr_formal_statistics_record_count") or len(records))
     return ready, record_count, decision.get("claim_support_status", "missing_low_fpr_formal_statistics_decision")
+
+
+def _validation_scale_sstw_advantage_claim_ready(
+    run_root: Path,
+    *,
+    required_modern_adapter_names: list[str],
+    target_fpr: float,
+    minimum_advantage_baseline_count: int,
+    minimum_difference: float,
+    require_ci_lower_above_zero: bool,
+) -> tuple[bool, int, list[str], list[str], str]:
+    """检查 validation_scale 是否足以支持 SSTW 在 target FPR 下优于 5 个 baseline。
+
+    该函数属于项目特定论文 claim 门禁。它不重新计算指标, 只读取
+    `formal_baseline_difference_interval_records.jsonl` 中由公平比较链路生成的
+    差值记录。通过条件是: 每个现代 baseline 都有同 target_fpr、同 attack anchor
+    的 ready 差值记录, 且 SSTW 的 TPR@FPR 差值大于配置阈值; 若配置要求, 差值
+    置信区间下界也必须大于 0。
+    """
+
+    records = _read_jsonl(run_root / "records" / "formal_baseline_difference_interval_records.jsonl")
+    required_baselines = {str(item) for item in required_modern_adapter_names if str(item)}
+    ready_baselines: set[str] = set()
+    blocked_reasons: list[str] = []
+    for record in records:
+        baseline_id = str(record.get("baseline_method_id") or "")
+        if baseline_id not in required_baselines:
+            continue
+        if not _target_fpr_matches(record, target_fpr):
+            blocked_reasons.append(f"{baseline_id}:target_fpr_mismatch")
+            continue
+        if record.get("difference_interval_status") != "ready" or record.get("metric_status") != "measured_formal":
+            blocked_reasons.append(f"{baseline_id}:difference_interval_not_ready")
+            continue
+        difference = record.get("tpr_at_target_fpr_difference")
+        try:
+            difference_value = float(difference)
+        except (TypeError, ValueError):
+            blocked_reasons.append(f"{baseline_id}:difference_missing")
+            continue
+        if difference_value <= minimum_difference:
+            blocked_reasons.append(f"{baseline_id}:difference_not_above_minimum")
+            continue
+        if require_ci_lower_above_zero:
+            try:
+                ci_lower = float(record.get("difference_ci_lower"))
+            except (TypeError, ValueError):
+                blocked_reasons.append(f"{baseline_id}:difference_ci_lower_missing")
+                continue
+            if ci_lower <= 0.0:
+                blocked_reasons.append(f"{baseline_id}:difference_ci_lower_not_above_zero")
+                continue
+        ready_baselines.add(baseline_id)
+
+    missing_baselines = sorted(required_baselines - ready_baselines)
+    ready = (
+        len(ready_baselines) >= minimum_advantage_baseline_count
+        and not missing_baselines
+        and not blocked_reasons
+    )
+    status = (
+        "validation_scale_target_fpr_0_1_sstw_advantage_claim_supported"
+        if ready
+        else "validation_scale_sstw_advantage_claim_blocked"
+    )
+    return ready, len(ready_baselines), missing_baselines, blocked_reasons, status
 
 
 def _sstw_measured_formal_ready(run_root: Path) -> tuple[bool, int, str]:
@@ -686,7 +791,18 @@ def build_validation_scale_gate_audit(
     )
     internal_ablation_ready, internal_ablation_record_count, internal_ablation_status = _internal_ablation_ready(run_root)
     formal_internal_ablation_ready, formal_internal_ablation_variant_count, formal_internal_ablation_status = _validation_scale_formal_internal_ablation_ready(run_root)
-    adaptive_attack_ready, adaptive_attack_record_count, adaptive_attack_status = _adaptive_attack_ready(run_root)
+    (
+        adaptive_attack_ready,
+        adaptive_attack_record_count,
+        non_runtime_attack_protocol_count,
+        observed_non_runtime_attack_protocols,
+        missing_non_runtime_attack_protocols,
+        adaptive_attack_status,
+    ) = _adaptive_attack_ready(
+        run_root,
+        config["required_non_runtime_attack_protocols"],
+        config["minimum_non_runtime_attack_protocol_count"],
+    )
     replay_or_sketch_ready, replay_or_sketch_status = _replay_or_sketch_ready(run_root)
     confidence_interval_ready, confidence_interval_status = _confidence_interval_ready(run_root)
     low_fpr_ready, low_fpr_record_count, low_fpr_status = _low_fpr_formal_statistics_ready(run_root)
@@ -709,6 +825,20 @@ def build_validation_scale_gate_audit(
         config["required_modern_external_baseline_adapter_names"],
         config["target_fpr"],
         config["required_runtime_attack_names"],
+    )
+    (
+        sstw_advantage_claim_ready,
+        sstw_advantage_ready_baseline_count,
+        sstw_advantage_missing_baseline_names,
+        sstw_advantage_blocking_reasons,
+        sstw_advantage_claim_status,
+    ) = _validation_scale_sstw_advantage_claim_ready(
+        run_root,
+        required_modern_adapter_names=config["required_modern_external_baseline_adapter_names"],
+        target_fpr=config["target_fpr"],
+        minimum_advantage_baseline_count=config["minimum_sstw_advantage_baseline_count"],
+        minimum_difference=config["minimum_sstw_tpr_at_target_fpr_difference"],
+        require_ci_lower_above_zero=config["require_sstw_advantage_ci_lower_above_zero"],
     )
     external_baseline_self_containment_ready, external_baseline_self_containment_summary = _external_baseline_self_containment_ready(
         external_baseline_self_containment_decision,
@@ -739,6 +869,7 @@ def build_validation_scale_gate_audit(
         "validation_fair_detection_calibration_ready": (not config["require_fair_detection_calibration"]) or fair_detection_ready,
         "validation_formal_method_baseline_comparison_ready": (not config["require_formal_method_baseline_comparison"]) or formal_method_comparison_ready,
         "validation_formal_baseline_difference_interval_ready": (not config["require_formal_baseline_difference_interval"]) or formal_difference_interval_ready,
+        "validation_scale_sstw_advantage_claim_ready": (not config["require_validation_scale_sstw_advantage_claim_ready"]) or sstw_advantage_claim_ready,
         "validation_data_split_and_leakage_guard_ready": (not config["require_data_split_and_leakage_guard"]) or data_split_decision.get("data_split_and_leakage_guard_decision") == "PASS",
         "validation_internal_ablation_records_ready": (not config["require_internal_ablation_records"]) or internal_ablation_ready,
         "validation_scale_formal_internal_ablation_ready": (not config["require_validation_scale_formal_internal_ablation"]) or formal_internal_ablation_ready,
@@ -752,7 +883,11 @@ def build_validation_scale_gate_audit(
         [name for name, passed in requirement_checks.items() if not passed] + hard_config_missing
     ))
     gate_decision = "PASS" if not missing_requirements else "FAIL"
-    claim_support_status = "validation_scale_ready_for_pilot_paper" if gate_decision == "PASS" else "validation_scale_blocked"
+    claim_support_status = (
+        "validation_scale_target_fpr_0_1_paper_claim_supported"
+        if gate_decision == "PASS"
+        else "validation_scale_blocked"
+    )
 
     return {
         "stage_id": "validation_scale_generative_probe_gate",
@@ -787,6 +922,8 @@ def build_validation_scale_gate_audit(
         "runtime_attack_protocol_decision": config["runtime_attack_protocol_audit"]["runtime_attack_protocol_decision"],
         "runtime_attack_family_counts": config["runtime_attack_protocol_audit"]["runtime_attack_family_counts"],
         "runtime_attack_missing_family_minimums": config["runtime_attack_protocol_audit"]["runtime_attack_missing_family_minimums"],
+        "required_non_runtime_attack_protocols": sorted(config["required_non_runtime_attack_protocols"]),
+        "missing_non_runtime_attack_protocols": config["runtime_attack_protocol_audit"]["missing_non_runtime_attack_protocols"],
         "runtime_attack_ready_count": runtime_attack_ready_count,
         "runtime_attack_count": attack_count,
         "required_runtime_attack_names": sorted(config["required_runtime_attack_names"]),
@@ -817,6 +954,14 @@ def build_validation_scale_gate_audit(
         "formal_method_baseline_comparison_status": formal_method_comparison_status,
         "formal_baseline_difference_interval_ready_count": formal_difference_interval_ready_count,
         "formal_baseline_difference_interval_status": formal_difference_interval_status,
+        "validation_scale_sstw_advantage_claim_ready": sstw_advantage_claim_ready,
+        "validation_scale_sstw_advantage_ready_baseline_count": sstw_advantage_ready_baseline_count,
+        "validation_scale_sstw_advantage_missing_baseline_names": sstw_advantage_missing_baseline_names,
+        "validation_scale_sstw_advantage_blocking_reasons": sstw_advantage_blocking_reasons,
+        "validation_scale_sstw_advantage_claim_status": sstw_advantage_claim_status,
+        "minimum_sstw_advantage_baseline_count": config["minimum_sstw_advantage_baseline_count"],
+        "minimum_sstw_tpr_at_target_fpr_difference": config["minimum_sstw_tpr_at_target_fpr_difference"],
+        "require_sstw_advantage_ci_lower_above_zero": config["require_sstw_advantage_ci_lower_above_zero"],
         "data_split_and_leakage_guard_decision": data_split_decision.get("data_split_and_leakage_guard_decision"),
         "minimum_external_baseline_measured_adapter_count": config["minimum_external_baseline_measured_adapter_count"],
         "internal_ablation_record_count": internal_ablation_record_count,
@@ -825,6 +970,10 @@ def build_validation_scale_gate_audit(
         "validation_scale_formal_internal_ablation_status": formal_internal_ablation_status,
         "adaptive_attack_record_count": adaptive_attack_record_count,
         "adaptive_attack_status": adaptive_attack_status,
+        "non_runtime_attack_protocol_count": non_runtime_attack_protocol_count,
+        "observed_non_runtime_attack_protocols": observed_non_runtime_attack_protocols,
+        "adaptive_attack_missing_non_runtime_protocols": missing_non_runtime_attack_protocols,
+        "adaptive_attack_missing_non_runtime_protocol_count": len(missing_non_runtime_attack_protocols),
         "replay_or_sketch_status": replay_or_sketch_status,
         "confidence_interval_status": confidence_interval_status,
         "low_fpr_formal_statistics_record_count": low_fpr_record_count,
@@ -855,12 +1004,12 @@ def write_validation_scale_gate_audit(
     report = (
         "# Validation-scale Generative Probe Gate Report\n\n"
         "该报告由已落盘的 governed records 与 decision artifacts 自动生成。它只判断 validation-scale "
-        "是否已经作为 paper 级前的小样本全流程打通层完成闭环。该层级使用当前 protocol config "
+        "是否已经作为 target_fpr=0.1 论文设定下的小样本完整协议层完成闭环。该层级使用当前 protocol config "
         f"指定的 target_fpr={target_fpr_text} "
-        "预演口径验证 records、tables、figures、reports、manifests、baseline、clean negative 公平校准、消融、attack、CI "
-        "和 artifact rebuild 是否能够完整产出。它不支撑效果主张, 通过后只能生成 "
-        "validation_scale_to_pilot_paper_transition_decision 并进入 pilot_paper; "
-        "不能直接进入 full_paper。\n\n"
+        "验证 records、tables、figures、reports、manifests、baseline、clean negative 公平校准、消融、46 个 runtime attack、"
+        "11 个 non-runtime/adaptive 协议、CI、SSTW 对 5 个现代 baseline 的优势证据和 artifact rebuild 是否能够完整产出。"
+        "通过后表示如果论文结论限定在 FPR=0.1 设定, 当前 validation_scale 结果可以支撑论文写作; "
+        "它仍不能外推到 pilot_paper 的 FPR=0.01 或 full_paper 的 FPR=0.001, 也不能直接进入 full_paper。\n\n"
         f"- validation_scale_gate_decision: {audit['validation_scale_gate_decision']}\n"
         f"- claim_support_status: {audit['claim_support_status']}\n"
         f"- paper_result_level: {audit['paper_result_level']}\n"
@@ -874,6 +1023,8 @@ def write_validation_scale_gate_audit(
         f"- required_runtime_attack_names: {', '.join(audit['required_runtime_attack_names'])}\n"
         f"- runtime_attack_missing_required_names: {', '.join(audit['runtime_attack_missing_required_names']) if audit['runtime_attack_missing_required_names'] else 'none'}\n"
         f"- runtime_detection_missing_required_names: {', '.join(audit['runtime_detection_missing_required_names']) if audit['runtime_detection_missing_required_names'] else 'none'}\n"
+        f"- required_non_runtime_attack_protocols: {', '.join(audit['required_non_runtime_attack_protocols'])}\n"
+        f"- adaptive_attack_missing_non_runtime_protocols: {', '.join(audit['adaptive_attack_missing_non_runtime_protocols']) if audit['adaptive_attack_missing_non_runtime_protocols'] else 'none'}\n"
         f"- motion_threshold_calibration_decision: {audit['motion_threshold_calibration_decision']}\n"
         f"- formal_motion_claim_status: {audit['formal_motion_claim_status']}\n"
         f"- motion_consistency_exclusion_excluded_count: {audit['motion_consistency_exclusion_excluded_count']}\n"
@@ -893,6 +1044,10 @@ def write_validation_scale_gate_audit(
         f"- formal_method_baseline_comparison_status: {audit['formal_method_baseline_comparison_status']}\n"
         f"- formal_baseline_difference_interval_ready_count: {audit['formal_baseline_difference_interval_ready_count']}\n"
         f"- formal_baseline_difference_interval_status: {audit['formal_baseline_difference_interval_status']}\n"
+        f"- validation_scale_sstw_advantage_claim_ready: {str(audit['validation_scale_sstw_advantage_claim_ready']).lower()}\n"
+        f"- validation_scale_sstw_advantage_ready_baseline_count: {audit['validation_scale_sstw_advantage_ready_baseline_count']}\n"
+        f"- validation_scale_sstw_advantage_missing_baseline_names: {', '.join(audit['validation_scale_sstw_advantage_missing_baseline_names']) if audit['validation_scale_sstw_advantage_missing_baseline_names'] else 'none'}\n"
+        f"- validation_scale_sstw_advantage_blocking_reasons: {', '.join(audit['validation_scale_sstw_advantage_blocking_reasons']) if audit['validation_scale_sstw_advantage_blocking_reasons'] else 'none'}\n"
         f"- validation_scale_formal_internal_ablation_variant_count: {audit['validation_scale_formal_internal_ablation_variant_count']}\n"
         f"- validation_scale_formal_internal_ablation_status: {audit['validation_scale_formal_internal_ablation_status']}\n"
         f"- low_fpr_formal_statistics_record_count: {audit['low_fpr_formal_statistics_record_count']}\n"

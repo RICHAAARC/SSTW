@@ -308,7 +308,7 @@ submission_package_freeze
 
 `mechanism_validation` 聚合以下机制前置与实现 phase: `synthetic_state_inference_sanity`、`real_video_latent_transfer_check`、`state_space_inference_formalization`、`trajectory_observation_core_probe`、`flow_model_adapter_preflight`、`sampling_time_constraint_probe`、`motion_threshold_calibration`、历史 small-scale 机制 pilot 记录和真实生成式视频模型实现包。`small_scale_claim_pilot_gate` 不再作为主干门禁使用, 只能作为机制层的历史小样本检查记录; `generative_video_model_probe` 不再作为独立门禁使用, 只表示真实生成式视频模型实验的实现 package。
 
-其中 `validation_scale` 重新定义为“小样本全流程打通验证”, 是进入 paper 级运行前的全流程打通层。它不是效果充分性证明, 而是使用 `configs/protocol/validation_scale_generative_probe.json` 中 `target_fpr` 指定的低成本口径跑通与论文协议同构的全部产物链路。`replay_and_authenticated_sketch_gate`、`flow_specific_adaptive_attack_gate`、external baseline、internal ablation、CI reporter、artifact rebuild 和 claim audit 都必须在 `validation_scale` 中形成可落盘、可检查、可失败闭环, 不得推迟到 `pilot_paper` 或 `full_paper` 后再补。`validation_scale` 必须能在小样本规模上产出 paper 相关的全部 governed artifact 类型: generation / detection records、主方法结果、完整外部 baseline 对比、内部消融、adaptive attack、replay/sketch 或受治理 Claim-3 downgrade、fixed-FPR CI、tables、figures、reports、package manifest 和 claim audit。只有 `validation_scale` 通过并生成 `validation_scale_to_pilot_paper_transition_decision` 后, 才允许进入 `pilot_paper`; `validation_scale` 不能直接允许进入 `full_paper`。`full_paper` 仍必须等待 `pilot_paper`、`pilot_paper_to_full_paper_transition_decision`、`full_paper_result_checker`、CI、claim audit、artifact rebuild 和 submission freeze 相关门禁通过。`pilot_paper` 的定位是在 `validation_scale` 通过后, 使用代表性 paper 协议执行 FPR=1% 小规模结果运行并报告 pilot 级 `TPR@FPR=0.01`; 它不应再承担补机制、补 baseline 或补消融的职责, 也不能替代 full_paper 顶会顶刊级完整 attack coverage。
+其中 `validation_scale` 重新定义为“target_fpr=0.1 小样本完整协议论文主张候选验证”, 是进入 `pilot_paper` 前的完整协议打通层。它必须使用 `configs/protocol/validation_scale_generative_probe.json` 中 `target_fpr=0.1` 指定的口径跑通与论文协议同构的全部产物链路, 并在该 FPR 设定下判断 SSTW 是否成立以及是否相对 5 个现代 external baseline 具备优势证据。`replay_and_authenticated_sketch_gate`、`flow_specific_adaptive_attack_gate`、external baseline、internal ablation、CI reporter、artifact rebuild 和 claim audit 都必须在 `validation_scale` 中形成可落盘、可检查、可失败闭环, 不得推迟到 `pilot_paper` 或 `full_paper` 后再补。`validation_scale` 必须能在小样本规模上产出 paper 相关的全部 governed artifact 类型: generation / detection records、主方法 measured_formal 结果、完整外部 baseline 对比、内部消融、46 个 runtime attack、11 个 non-runtime/adaptive 协议、replay/sketch 或受治理 Claim-3 downgrade、fixed-FPR CI、tables、figures、reports、package manifest 和 claim audit。只有 `validation_scale` 通过并生成 `validation_scale_to_pilot_paper_transition_decision` 后, 才允许进入 `pilot_paper`; `validation_scale` 不能直接允许进入 `full_paper`。`full_paper` 仍必须等待 `pilot_paper`、`pilot_paper_to_full_paper_transition_decision`、`full_paper_result_checker`、CI、claim audit、artifact rebuild 和 submission freeze 相关门禁通过。`pilot_paper` 的定位是在 `validation_scale` 通过后, 使用代表性 paper 协议执行 FPR=1% 小规模结果运行并报告 pilot 级 `TPR@FPR=0.01`; 它不应再承担补机制、补 baseline 或补消融的职责。
 
 核心原则是:
 
@@ -800,7 +800,10 @@ full_paper_required_runtime_attack_families:
   combined_transformations_including_compression_color_and_crop_rotation
 full_paper_required_non_runtime_or_adaptive_attack_protocols:
   generative_recompression_or_regeneration_attack
+  endpoint_preserving_path_perturbation_attack
+  flow_time_grid_mismatch_attack
   wrong_sampler_replay_attack
+  wrong_prompt_replay_attack
   wrong_key_attack
   detector_probing_with_public_negatives
   watermark_removal_optimization_attack
@@ -809,10 +812,10 @@ full_paper_required_non_runtime_or_adaptive_attack_protocols:
   adversarial_detector_evasion_attack
 ```
 
-`validation_scale` 的三类 runtime attack 是 paper 级前的小样本全流程打通门禁,
-不能被写成完整鲁棒性协议。`pilot_paper` 与 `full_paper` 必须通过 protocol
-config 的 `required_runtime_attack_names` 显式切换攻击集合, 不允许在 Notebook
-中手写或临时删减 attack。
+`validation_scale` 必须使用与 `full_paper` 一致的 46 个 runtime attack 和 11 个
+non-runtime/adaptive 协议, 但样本量和目标 FPR 保持 validation_scale 配置口径。
+`pilot_paper` 与 `full_paper` 必须通过 protocol config 的 `required_runtime_attack_names`
+显式切换样本规模和 FPR 等级, 不允许在 Notebook 中手写或临时删减 attack。
 
 ### 12.5 通过标准
 
@@ -916,14 +919,14 @@ explicit_synchronization_control: explicit_dtw_temporal_alignment, frame_matchin
 
 1. Wan2.1 主线记录必须标记为 Flow Matching / velocity-field sampler 相关模型。
 2. velocity / flow trajectory proxy 必须参与水印同步证据。
-3. 在 `pilot_paper` 层, SSTW full method 可以报告 `TPR@FPR=0.01` 级别的 pilot 对比; `validation_scale` 只负责小样本全流程打通, 不支持效果主张。
+3. 在 `validation_scale` 层, SSTW full method 必须在 `target_fpr=0.1` 下完成小样本完整协议公平比较, 并可支撑 fpr=0.1 论文设定下的有效性与优势结论候选; 在 `pilot_paper` 层才可以报告 `TPR@FPR=0.01` 级别的 pilot 对比。
 4. `validation_scale` gate 前必须已经生成同批小样本 test trace 的 external_baseline comparison records、内部消融 records、adaptive attack records、replay/sketch 或 Claim-3 downgrade records、CI report 和 artifact rebuild report。
 5. 质量、运动和语义指标不能显示不可接受退化。
 6. `validation_scale` 通过并生成 `validation_scale_to_pilot_paper_transition_decision` 后只能进入 `pilot_paper`; 不得直接进入 `full_paper`。full_paper claim 仍需 `pilot_paper_gate`、`pilot_paper_to_full_paper_transition_decision`、`full_paper_result_checker` 和轻量判定通过。若完整现代 baseline、内部消融或 replay/sketch 机制仍缺失, 只能报告阻断原因, 不能进入 paper 级结果运行。
 
 ### 13.6 validation_scale 作为 paper 级前小样本全流程打通层
 
-`validation_scale` 的职责是证明 paper 级运行所需的全部机制和产物链路已经在小样本规模上闭合。它采用 validation_scale protocol config 中的 `target_fpr` 作为全流程打通口径, 目标是以最小成本提前发现 baseline、消融、attack、CI、artifact rebuild、claim audit 和 package 阻断。它与 `pilot_paper` 的区别在于结果等级和评价口径: `validation_scale` 产出 validation 级小样本全链路结果且不支撑效果主张, `pilot_paper` 在通过该门禁后产出可报告的 FPR=1% pilot 级 paper 结果。
+`validation_scale` 的职责是证明 paper 级运行所需的全部机制和产物链路已经在小样本规模上闭合, 并在 `target_fpr=0.1` 的登记口径下判断 SSTW 是否成立以及是否具备相对 5 个现代 external baseline 的优势证据。它采用 validation_scale protocol config 中的 `target_fpr` 作为全流程打通口径, 目标是以最小成本提前发现 baseline、消融、attack、CI、artifact rebuild、claim audit 和 package 阻断。它与 `pilot_paper` 的区别不再是机制或攻击协议不同, 而是样本规模和 FPR 等级不同: `validation_scale` 产出 fpr=0.1 小样本完整协议论文结论候选, `pilot_paper` 在通过该门禁后产出可报告的 FPR=1% pilot 级 paper 结果。
 
 `validation_scale` 至少必须满足:
 
@@ -938,6 +941,7 @@ required_internal_ablation_variants covered
 validation_adaptive_attack_records_ready
 validation_replay_or_sketch_records_ready 或受治理 Claim-3 downgrade 已写入
 validation_confidence_interval_report_ready
+validation_scale_sstw_advantage_claim_ready
 validation_tables_figures_reports_ready
 validation_artifact_rebuild_dry_run_ready
 validation_claim_audit_ready

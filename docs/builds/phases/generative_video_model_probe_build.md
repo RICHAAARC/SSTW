@@ -86,7 +86,7 @@ generic_ssm_baseline
 
 ### 1.8 validation_scale 运行要求
 
-在进入 paper 级结果运行前, 本实现 package 必须先服务于 `validation_scale` 运行。`validation_scale` 是 paper 级前的小样本全流程打通门禁, 不支持正式效果主张。它不要求达到 full_paper 样本量, 但必须完成 paper 相关的全部机制构建, 并能够在小样本规模上产出全部结果类型。
+在进入 pilot_paper 和 full_paper 结果运行前, 本实现 package 必须先服务于 `validation_scale` 运行。`validation_scale` 是 target_fpr=0.1 的小样本完整协议论文主张候选门禁。它不要求达到 pilot_paper 或 full_paper 样本量, 但必须完成 paper 相关的全部机制构建, 覆盖与 full_paper 一致的 46 个 runtime attack 和 11 个 non-runtime/adaptive 协议, 并能够在小样本规模上产出全部结果类型。
 
 必须覆盖:
 

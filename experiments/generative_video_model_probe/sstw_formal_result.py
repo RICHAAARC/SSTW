@@ -93,8 +93,9 @@ def build_sstw_measured_formal_records(
 
     该函数属于项目特定转写层。它不重新运行 GPU, 只把本项目已经完成的
     generation -> attack -> detection 链路转成与 external baseline 对齐的
-    `metric_status: measured_formal` 记录形状。validation_scale 产物仍只能说明
-    小样本全流程可打通, 不支持最终效果大小 claim。
+    `metric_status: measured_formal` 记录形状。当 protocol config 启用
+    `allow_effect_size_claims` 且 target_fpr 为0.1 时, validation_scale 产物用于支撑
+    fpr=0.1 论文设定下的小样本结论候选, 但不能外推到 pilot_paper 或 full_paper 的更低 FPR。
     """
     run_root = Path(run_root)
     profile_context = _load_profile_context(config_path)
@@ -263,8 +264,8 @@ def run_sstw_measured_formal_result(
     report = (
         "# SSTW Measured Formal Result Report\n\n"
         "该报告把本项目 SSTW generation -> attack -> detection 链路转写为与 external baseline "
-        "同层级的 measured_formal 记录。validation_scale 结果只用于小样本全流程打通验证, "
-        "不能作为最终论文效果大小结论。\n\n"
+        "同层级的 measured_formal 记录。validation_scale 在 target_fpr=0.1 配置下用于支撑 "
+        "fpr=0.1 论文设定的小样本结论候选, 但不能外推到 pilot_paper 或 full_paper 的更低 FPR。\n\n"
         f"- sstw_measured_formal_decision: {audit['sstw_measured_formal_decision']}\n"
         f"- paper_result_level: {audit['paper_result_level']}\n"
         f"- target_fpr: {audit['target_fpr']}\n"

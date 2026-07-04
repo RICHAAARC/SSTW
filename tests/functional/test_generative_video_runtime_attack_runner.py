@@ -20,6 +20,12 @@ from main.attacks.video_runtime_attack_protocol import (
 )
 from main.protocol.record_writer import write_jsonl
 
+SMOKE_RUNTIME_ATTACKS = (
+    "video_compression_runtime",
+    "temporal_crop_runtime",
+    "frame_rate_resampling_runtime",
+)
+
 
 def _write_tiny_video(path: Path) -> None:
     """写出一个极小 mp4, 用于验证 runtime attack 文件级链路。"""
@@ -53,7 +59,7 @@ def test_runtime_attack_runner_writes_attacked_videos_and_records(tmp_path: Path
         "trajectory_trace_id": "trace_0000",
     }])
 
-    summary = run_runtime_attacks(run_root)
+    summary = run_runtime_attacks(run_root, attack_names=SMOKE_RUNTIME_ATTACKS)
     records = [json.loads(line) for line in (run_root / "records" / "runtime_attack_records.jsonl").read_text(encoding="utf-8").splitlines()]
 
     assert summary["runtime_attack_decision"] == "PASS"
@@ -95,7 +101,7 @@ def test_runtime_detection_runner_scores_attacked_videos(tmp_path: Path) -> None
         {"trajectory_trace_id": "trace_0000", "trajectory_step_index": 2, "latent_norm": 70.0, "latent_std": 0.6},
     ])
 
-    attack_summary = run_runtime_attacks(run_root)
+    attack_summary = run_runtime_attacks(run_root, attack_names=SMOKE_RUNTIME_ATTACKS)
     detection_summary = run_runtime_detection(run_root)
     records = [json.loads(line) for line in (run_root / "records" / "runtime_detection_records.jsonl").read_text(encoding="utf-8").splitlines()]
 
@@ -118,9 +124,16 @@ def test_runtime_detection_runner_scores_attacked_videos(tmp_path: Path) -> None
 
 
 @pytest.mark.quick
-def test_pilot_and_full_paper_attack_protocol_registers_top_tier_coverage() -> None:
-    """pilot/full paper 必须登记分层 attack manifest, 不能退回三类最小攻击。"""
+def test_validation_pilot_and_full_paper_attack_protocol_registers_top_tier_coverage() -> None:
+    """validation/pilot/full paper 必须登记分层 attack manifest, 不能退回三类最小攻击。"""
 
+    validation_audit = audit_runtime_attack_protocol_config(
+        {
+            "paper_result_level": "validation_scale",
+            "required_runtime_attack_names": list(FULL_PAPER_RUNTIME_ATTACKS),
+            "required_non_runtime_attack_protocols": list(FULL_PAPER_NON_RUNTIME_ATTACK_PROTOCOLS),
+        }
+    )
     pilot_audit = audit_runtime_attack_protocol_config(
         {
             "paper_result_level": "pilot_paper",
@@ -135,8 +148,11 @@ def test_pilot_and_full_paper_attack_protocol_registers_top_tier_coverage() -> N
         }
     )
 
+    assert validation_audit["runtime_attack_protocol_decision"] == "PASS"
     assert pilot_audit["runtime_attack_protocol_decision"] == "PASS"
     assert full_audit["runtime_attack_protocol_decision"] == "PASS"
+    assert validation_audit["required_runtime_attack_count"] == len(FULL_PAPER_RUNTIME_ATTACKS)
+    assert validation_audit["missing_non_runtime_attack_protocols"] == []
     assert set(PILOT_PAPER_RUNTIME_ATTACKS) < set(FULL_PAPER_RUNTIME_ATTACKS)
     assert {
         "platform_transcode_proxy_runtime",

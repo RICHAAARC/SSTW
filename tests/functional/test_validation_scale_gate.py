@@ -8,6 +8,10 @@ from experiments.generative_video_model_probe.validation_scale_gate import (
     build_validation_scale_gate_audit,
     write_validation_scale_gate_audit,
 )
+from main.attacks.video_runtime_attack_protocol import (
+    FULL_PAPER_NON_RUNTIME_ATTACK_PROTOCOLS,
+    FULL_PAPER_RUNTIME_ATTACKS,
+)
 from main.protocol.record_writer import write_json, write_jsonl
 
 
@@ -27,11 +31,8 @@ MODERN_EXTERNAL_BASELINE_NAMES = {
     "vidsig",
     "videoseal",
 }
-REQUIRED_RUNTIME_ATTACK_NAMES = (
-    "video_compression_runtime",
-    "temporal_crop_runtime",
-    "frame_rate_resampling_runtime",
-)
+REQUIRED_RUNTIME_ATTACK_NAMES = FULL_PAPER_RUNTIME_ATTACKS
+REQUIRED_NON_RUNTIME_ATTACK_PROTOCOLS = FULL_PAPER_NON_RUNTIME_ATTACK_PROTOCOLS
 REQUIRED_ANCHOR_KEYS = tuple(f"prompt_0::seed_0::{attack_name}" for attack_name in REQUIRED_RUNTIME_ATTACK_NAMES)
 
 
@@ -166,6 +167,7 @@ def test_validation_scale_gate_cannot_disable_fair_comparison_hard_requirements(
         "require_formal_method_baseline_comparison": False,
         "require_formal_baseline_difference_interval": False,
         "require_data_split_and_leakage_guard": False,
+        "require_validation_scale_sstw_advantage_claim_ready": False,
         "require_motion_threshold_calibration_ready": False,
         "require_formal_motion_claim_ready": False,
         "require_motion_consistency_exclusion_report": False,
@@ -182,11 +184,12 @@ def test_validation_scale_gate_cannot_disable_fair_comparison_hard_requirements(
 
     assert audit["validation_scale_gate_decision"] == "FAIL"
     assert audit["claim_support_status"] == "validation_scale_blocked"
-    assert audit["validation_scale_hard_required_config_missing_count"] == 7
+    assert audit["validation_scale_hard_required_config_missing_count"] == 8
     assert "require_fair_detection_calibration_must_be_true" in audit["missing_validation_requirements"]
     assert "require_formal_method_baseline_comparison_must_be_true" in audit["missing_validation_requirements"]
     assert "require_formal_baseline_difference_interval_must_be_true" in audit["missing_validation_requirements"]
     assert "require_sstw_measured_formal_records_must_be_true" in audit["missing_validation_requirements"]
+    assert "require_validation_scale_sstw_advantage_claim_ready_must_be_true" in audit["missing_validation_requirements"]
 
 
 @pytest.mark.quick
@@ -262,14 +265,12 @@ def test_validation_scale_gate_passes_when_all_governed_inputs_exist(tmp_path: P
         for record in generation_records
     ])
     write_jsonl(run_root / "records" / "runtime_attack_records.jsonl", [
-        {"attack_name": "video_compression_runtime", "attack_runtime_status": "ready"},
-        {"attack_name": "temporal_crop_runtime", "attack_runtime_status": "ready"},
-        {"attack_name": "frame_rate_resampling_runtime", "attack_runtime_status": "ready"},
+        {"attack_name": attack_name, "attack_runtime_status": "ready"}
+        for attack_name in REQUIRED_RUNTIME_ATTACK_NAMES
     ])
     write_jsonl(run_root / "records" / "runtime_detection_records.jsonl", [
-        {"attack_name": "video_compression_runtime", "runtime_detection_status": "ready"},
-        {"attack_name": "temporal_crop_runtime", "runtime_detection_status": "ready"},
-        {"attack_name": "frame_rate_resampling_runtime", "runtime_detection_status": "ready"},
+        {"attack_name": attack_name, "runtime_detection_status": "ready"}
+        for attack_name in REQUIRED_RUNTIME_ATTACK_NAMES
     ])
     write_jsonl(run_root / "records" / "external_baseline_records.jsonl", run_external_baseline_status())
     write_jsonl(run_root / "records" / "external_baseline_score_records.jsonl", _formal_external_baseline_records())
@@ -305,14 +306,14 @@ def test_validation_scale_gate_passes_when_all_governed_inputs_exist(tmp_path: P
             "prompt_id": "prompt_0",
             "seed_id": "seed_0",
             "attack_name": attack_name,
-            "claim_support_status": "sstw_measured_formal_validation_scale_only",
+            "claim_support_status": "sstw_measured_formal_paper_profile_claim_candidate",
         }
         for attack_name in REQUIRED_RUNTIME_ATTACK_NAMES
     ])
     write_json(run_root / "artifacts" / "sstw_measured_formal_decision.json", {
         "sstw_measured_formal_decision": "PASS",
-        "sstw_measured_formal_record_count": 3,
-        "claim_support_status": "sstw_measured_formal_validation_scale_only",
+        "sstw_measured_formal_record_count": len(REQUIRED_RUNTIME_ATTACK_NAMES),
+        "claim_support_status": "sstw_measured_formal_paper_profile_claim_candidate",
     })
     write_jsonl(run_root / "records" / "fair_detection_calibration_records.jsonl", [
         {
@@ -321,7 +322,7 @@ def test_validation_scale_gate_passes_when_all_governed_inputs_exist(tmp_path: P
             "metric_status": "measured_formal",
             "target_fpr": 0.1,
             "clean_negative_score_count": 10,
-            "positive_anchor_count": 3,
+            "positive_anchor_count": len(REQUIRED_ANCHOR_KEYS),
             "positive_anchor_keys": list(REQUIRED_ANCHOR_KEYS),
             "positive_attack_names": list(REQUIRED_RUNTIME_ATTACK_NAMES),
             "positive_anchor_missing_count": 0,
@@ -335,7 +336,7 @@ def test_validation_scale_gate_passes_when_all_governed_inputs_exist(tmp_path: P
                 "metric_status": "measured_formal",
                 "target_fpr": 0.1,
                 "clean_negative_score_count": 10,
-                "positive_anchor_count": 3,
+                "positive_anchor_count": len(REQUIRED_ANCHOR_KEYS),
                 "positive_anchor_keys": list(REQUIRED_ANCHOR_KEYS),
                 "positive_attack_names": list(REQUIRED_RUNTIME_ATTACK_NAMES),
                 "positive_anchor_missing_count": 0,
@@ -357,10 +358,10 @@ def test_validation_scale_gate_passes_when_all_governed_inputs_exist(tmp_path: P
             "method_role": "proposed_method",
             "metric_status": "measured_formal",
             "target_fpr": 0.1,
-            "comparison_anchor_count": 3,
+            "comparison_anchor_count": len(REQUIRED_ANCHOR_KEYS),
             "comparison_anchor_keys": list(REQUIRED_ANCHOR_KEYS),
             "comparison_attack_names": list(REQUIRED_RUNTIME_ATTACK_NAMES),
-            "reference_anchor_count": 3,
+            "reference_anchor_count": len(REQUIRED_ANCHOR_KEYS),
             "missing_reference_anchor_count": 0,
             "extra_anchor_count": 0,
             "comparison_anchor_alignment_status": "reference_method_anchor_set_ready",
@@ -371,10 +372,10 @@ def test_validation_scale_gate_passes_when_all_governed_inputs_exist(tmp_path: P
                 "method_role": "modern_external_baseline",
                 "metric_status": "measured_formal",
                 "target_fpr": 0.1,
-                "comparison_anchor_count": 3,
+                "comparison_anchor_count": len(REQUIRED_ANCHOR_KEYS),
                 "comparison_anchor_keys": list(REQUIRED_ANCHOR_KEYS),
                 "comparison_attack_names": list(REQUIRED_RUNTIME_ATTACK_NAMES),
-                "reference_anchor_count": 3,
+                "reference_anchor_count": len(REQUIRED_ANCHOR_KEYS),
                 "missing_reference_anchor_count": 0,
                 "extra_anchor_count": 0,
                 "comparison_anchor_alignment_status": "aligned_with_sstw_reference_anchors",
@@ -386,7 +387,7 @@ def test_validation_scale_gate_passes_when_all_governed_inputs_exist(tmp_path: P
         "formal_method_baseline_comparison_decision": "PASS",
         "formal_comparison_ready_method_count": 6,
         "target_fpr": 0.1,
-        "claim_support_status": "formal_method_baseline_comparison_validation_scale_only",
+        "claim_support_status": "formal_method_baseline_comparison_paper_profile_claim_candidate",
     })
     write_jsonl(run_root / "records" / "formal_baseline_difference_interval_records.jsonl", [
         {
@@ -394,12 +395,15 @@ def test_validation_scale_gate_passes_when_all_governed_inputs_exist(tmp_path: P
             "difference_interval_status": "ready",
             "metric_status": "measured_formal",
             "target_fpr": 0.1,
-            "paired_comparison_unit_count": 3,
+            "paired_comparison_unit_count": len(REQUIRED_ANCHOR_KEYS),
             "paired_comparison_anchor_keys": list(REQUIRED_ANCHOR_KEYS),
             "paired_attack_names": list(REQUIRED_RUNTIME_ATTACK_NAMES),
             "unpaired_reference_anchor_count": 0,
             "unpaired_baseline_anchor_count": 0,
             "comparison_anchor_alignment_status": "aligned_with_sstw_reference_anchors",
+            "tpr_at_target_fpr_difference": 0.18,
+            "difference_ci_lower": 0.02,
+            "difference_ci_upper": 0.34,
         }
         for baseline_id in sorted(MODERN_EXTERNAL_BASELINE_NAMES)
     ])
@@ -407,7 +411,7 @@ def test_validation_scale_gate_passes_when_all_governed_inputs_exist(tmp_path: P
         "formal_baseline_difference_interval_decision": "PASS",
         "difference_interval_ready_count": 5,
         "target_fpr": 0.1,
-        "claim_support_status": "formal_baseline_difference_interval_validation_scale_only",
+        "claim_support_status": "formal_baseline_difference_interval_paper_profile_claim_candidate",
     })
     write_jsonl(run_root / "records" / "validation_scale_formal_internal_ablation_records.jsonl", [
         {"method_variant": "sstw_full_method", "metric_status": "measured_formal"},
@@ -427,13 +431,18 @@ def test_validation_scale_gate_passes_when_all_governed_inputs_exist(tmp_path: P
     write_json(run_root / "artifacts" / "validation_scale_formal_internal_ablation_decision.json", {
         "validation_scale_formal_internal_ablation_decision": "PASS",
         "formal_internal_ablation_variant_count": 8,
-        "claim_support_status": "validation_scale_formal_internal_ablation_ready_not_effect_size_claim",
+        "claim_support_status": "validation_scale_formal_internal_ablation_ready_for_target_fpr_0_1_claim_context",
     })
     write_jsonl(run_root / "records" / "validation_internal_ablation_records.jsonl", [
         {"method_variant": "without_velocity_constraint", "ablation_status": "ready"},
     ])
     write_jsonl(run_root / "records" / "adaptive_attack_records.jsonl", [
-        {"adaptive_attack_name": "time_grid_jitter", "adaptive_attack_status": "ready"},
+        {
+            "adaptive_attack_name": protocol_name,
+            "non_runtime_attack_protocol": protocol_name,
+            "adaptive_attack_status": "ready",
+        }
+        for protocol_name in REQUIRED_NON_RUNTIME_ATTACK_PROTOCOLS
     ])
     write_json(run_root / "artifacts" / "motion_threshold_calibration_decision.json", {
         "motion_threshold_calibration_decision": "PASS",
@@ -443,12 +452,12 @@ def test_validation_scale_gate_passes_when_all_governed_inputs_exist(tmp_path: P
     })
     write_json(run_root / "artifacts" / "runtime_attack_decision.json", {
         "runtime_attack_decision": "PASS",
-        "runtime_attack_ready_count": 3,
-        "runtime_attack_count": 3,
+        "runtime_attack_ready_count": len(REQUIRED_RUNTIME_ATTACK_NAMES),
+        "runtime_attack_count": len(REQUIRED_RUNTIME_ATTACK_NAMES),
     })
     write_json(run_root / "artifacts" / "runtime_detection_decision.json", {
         "runtime_detection_decision": "PASS",
-        "runtime_detection_ready_count": 3,
+        "runtime_detection_ready_count": len(REQUIRED_RUNTIME_ATTACK_NAMES),
     })
     write_json(run_root / "artifacts" / "validation_internal_ablation_decision.json", {
         "validation_internal_ablation_decision": "PASS",
@@ -483,7 +492,7 @@ def test_validation_scale_gate_passes_when_all_governed_inputs_exist(tmp_path: P
     protocol = json.loads(Path("configs/protocol/validation_scale_generative_probe.json").read_text(encoding="utf-8"))
 
     assert audit["validation_scale_gate_decision"] == "PASS"
-    assert audit["claim_support_status"] == "validation_scale_ready_for_pilot_paper"
+    assert audit["claim_support_status"] == "validation_scale_target_fpr_0_1_paper_claim_supported"
     assert audit["paper_result_level"] == "validation_scale"
     assert audit["target_fpr"] == protocol["target_fpr"]
     assert audit["validation_generation_record_count"] == 24
@@ -503,16 +512,20 @@ def test_validation_scale_gate_passes_when_all_governed_inputs_exist(tmp_path: P
     assert audit["external_baseline_self_containment_gate_missing_requirements"] == []
     assert audit["motion_consistency_exclusion_excluded_count"] == 0
     assert audit["motion_consistency_exclusion_status"] == "motion_consistency_exclusion_audit_record"
-    assert audit["sstw_measured_formal_record_count"] == 3
-    assert audit["sstw_measured_formal_status"] == "sstw_measured_formal_validation_scale_only"
+    assert audit["sstw_measured_formal_record_count"] == len(REQUIRED_RUNTIME_ATTACK_NAMES)
+    assert audit["sstw_measured_formal_status"] == "sstw_measured_formal_paper_profile_claim_candidate"
     assert audit["fair_detection_calibration_ready_count"] == 6
     assert audit["fair_detection_calibration_status"] == "fair_detection_calibration_validation_scale_ready"
     assert audit["formal_method_baseline_comparison_ready_count"] == 6
-    assert audit["formal_method_baseline_comparison_status"] == "formal_method_baseline_comparison_validation_scale_only"
+    assert audit["formal_method_baseline_comparison_status"] == "formal_method_baseline_comparison_paper_profile_claim_candidate"
     assert audit["formal_baseline_difference_interval_ready_count"] == 5
-    assert audit["formal_baseline_difference_interval_status"] == "formal_baseline_difference_interval_validation_scale_only"
+    assert audit["formal_baseline_difference_interval_status"] == "formal_baseline_difference_interval_paper_profile_claim_candidate"
+    assert audit["validation_scale_sstw_advantage_claim_ready"] is True
+    assert audit["validation_scale_sstw_advantage_ready_baseline_count"] == 5
+    assert audit["adaptive_attack_missing_non_runtime_protocols"] == []
+    assert audit["non_runtime_attack_protocol_count"] == len(REQUIRED_NON_RUNTIME_ATTACK_PROTOCOLS)
     assert audit["validation_scale_formal_internal_ablation_variant_count"] == 8
-    assert audit["validation_scale_formal_internal_ablation_status"] == "validation_scale_formal_internal_ablation_ready_not_effect_size_claim"
+    assert audit["validation_scale_formal_internal_ablation_status"] == "validation_scale_formal_internal_ablation_ready_for_target_fpr_0_1_claim_context"
     assert audit["low_fpr_formal_statistics_record_count"] == 2
     assert audit["low_fpr_formal_statistics_status"] == "low_fpr_formal_statistics_blocking_record"
     assert audit["data_split_and_leakage_guard_decision"] == "PASS"

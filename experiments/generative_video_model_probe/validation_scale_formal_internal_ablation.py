@@ -93,7 +93,7 @@ def build_validation_scale_formal_internal_ablation_records(run_root: str | Path
         score_mean = _mean_or_none(variant_scores)
         delta = round(score_mean - full_score_mean, 6) if score_mean is not None and full_score_mean is not None else None
         claim_support_status = (
-            "validation_scale_formal_internal_ablation_ready_not_effect_size_claim"
+            "validation_scale_formal_internal_ablation_ready_for_target_fpr_0_1_claim_context"
             if metric_status != "missing"
             else "validation_scale_formal_internal_ablation_missing_variant"
         )
@@ -131,7 +131,7 @@ def audit_validation_scale_formal_internal_ablation_records(records: list[dict[s
     return {
         "stage_id": "validation_scale_formal_internal_ablation",
         "validation_scale_formal_internal_ablation_decision": decision,
-        "claim_support_status": "validation_scale_formal_internal_ablation_ready_not_effect_size_claim"
+        "claim_support_status": "validation_scale_formal_internal_ablation_ready_for_target_fpr_0_1_claim_context"
         if decision == "PASS"
         else "validation_scale_formal_internal_ablation_blocked",
         "formal_internal_ablation_variant_count": len(ready_variants),
@@ -154,7 +154,7 @@ def run_validation_scale_formal_internal_ablation(run_root: str | Path) -> dict[
         "# Validation-scale Formal Internal Ablation Report\n\n"
         "该报告把 SSTW full-method measured_formal 结果与 validation-scale proxy component-removal "
         "消融矩阵绑定, 用于确认内部消融产物在 validation_scale 阶段闭环。除 full-method 行外, "
-        "component-removal 行仍不等价于 full-paper 正式消融效果主张。\n\n"
+        "component-removal 行用于支撑 target_fpr=0.1 小样本机制解释, 但不能外推为 full_paper 规模正式消融结论。\n\n"
         f"- validation_scale_formal_internal_ablation_decision: {audit['validation_scale_formal_internal_ablation_decision']}\n"
         f"- formal_internal_ablation_variant_count: {audit['formal_internal_ablation_variant_count']}\n"
         f"- formal_internal_ablation_full_method_formal_ready: {str(audit['formal_internal_ablation_full_method_formal_ready']).lower()}\n"

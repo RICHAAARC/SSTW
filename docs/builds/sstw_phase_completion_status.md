@@ -1738,13 +1738,13 @@ workflow 会写出 `manual_official_resource_required`, 仍然不会把该 basel
 
 ## 2026-06-26 validation_scale 语义重定义与 full_paper protocol 补齐
 
-本次更新把 `validation_scale` 明确定义为“小样本全流程打通验证”。它的功能是 paper 级前的全流程打通层, 使用 validation_scale protocol config 中 `target_fpr` 的低成本评价口径验证全部论文产物链路是否可生成, 不用于支撑效果主张。
+本次更新把 `validation_scale` 明确定义为“target_fpr=0.1 小样本完整协议论文主张候选验证”。它的功能是 pilot_paper 前的完整协议打通层, 使用 validation_scale protocol config 中 `target_fpr=0.1` 的评价口径验证全部论文产物链路是否可生成, 并要求 SSTW 本方法 measured_formal、同协议 external baseline 比较、优势差值置信区间、内部消融和攻击协议覆盖均能支撑 fpr=0.1 论文设定下的结论候选。
 
 更新后的阶段边界为:
 
 ```text
 method_mechanism_validation: 验证 SSTW 方法机制和基础 runner
-validation_scale: FPR=10% 小样本全流程打通验证
+validation_scale: FPR=10% 小样本完整协议论文主张候选验证
 pilot_paper: FPR=1% 小规模 paper 协议结果
 full_paper: FPR=0.1% 正式 paper 协议结果
 ```
@@ -1752,9 +1752,9 @@ full_paper: FPR=0.1% 正式 paper 协议结果
 关键配置与文档变更:
 
 ```text
-configs/protocol/validation_scale_generative_probe.json: target_fpr 由该 protocol config 作为唯一语义来源, validation_scale_definition = small_sample_full_pipeline_rehearsal
+configs/protocol/validation_scale_generative_probe.json: target_fpr 由该 protocol config 作为唯一语义来源, validation_scale_definition = small_sample_full_protocol_target_fpr_0_1_claim_validation
 configs/protocol/full_paper_generative_probe.json: 新增 full_paper 正式协议配置, target_fpr 由该 protocol config 作为唯一语义来源
-configs/paper_workflow/generative_video_notebook_workflows.json: validation_scale profile 改为 paper_gate_preflight_layer
+configs/paper_workflow/generative_video_notebook_workflows.json: validation_scale profile 改为 target_fpr=0.1 论文主张候选入口, paper_gate_preflight_layer = false
 configs/external_baselines/official_resource_requirements.json: external baseline 改为项目内自包含产出要求
 configs/external_baselines/modern_baseline_colab_commands.json: repository-generated official cache 语义改为 repository-generated cache only
 ```

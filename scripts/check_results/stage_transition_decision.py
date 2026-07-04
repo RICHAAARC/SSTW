@@ -121,7 +121,7 @@ def _validation_scale_fair_gate_missing_requirements(source_payload: Mapping[str
     missing: list[str] = []
     if source_payload.get("paper_result_level") != "validation_scale":
         missing.append("validation_scale_paper_result_level_current")
-    if source_payload.get("claim_support_status") != "validation_scale_ready_for_pilot_paper":
+    if source_payload.get("claim_support_status") != "validation_scale_target_fpr_0_1_paper_claim_supported":
         missing.append("validation_scale_claim_support_status_ready")
     target_fpr = _safe_float(source_payload.get("target_fpr"))
     if target_fpr is None:
@@ -185,7 +185,7 @@ def _validation_scale_fair_gate_missing_requirements(source_payload: Mapping[str
 
     if (_safe_int(source_payload.get("sstw_measured_formal_record_count")) or 0) <= 0:
         missing.append("validation_scale_sstw_measured_formal_records_ready")
-    if source_payload.get("sstw_measured_formal_status") != "sstw_measured_formal_validation_scale_only":
+    if source_payload.get("sstw_measured_formal_status") != "sstw_measured_formal_paper_profile_claim_candidate":
         missing.append("validation_scale_sstw_measured_formal_status_ready")
 
     fair_count = _safe_int(source_payload.get("fair_detection_calibration_ready_count"))
@@ -196,14 +196,16 @@ def _validation_scale_fair_gate_missing_requirements(source_payload: Mapping[str
         missing.append("validation_scale_formal_method_baseline_comparison_ready")
     if source_payload.get("fair_detection_calibration_status") != "fair_detection_calibration_validation_scale_ready":
         missing.append("validation_scale_fair_detection_calibration_status_ready")
-    if source_payload.get("formal_method_baseline_comparison_status") != "formal_method_baseline_comparison_validation_scale_only":
+    if source_payload.get("formal_method_baseline_comparison_status") != "formal_method_baseline_comparison_paper_profile_claim_candidate":
         missing.append("validation_scale_formal_method_baseline_comparison_status_ready")
 
     interval_count = _safe_int(source_payload.get("formal_baseline_difference_interval_ready_count"))
     if interval_count is None or (required_baseline_count and interval_count < required_baseline_count):
         missing.append("validation_scale_formal_baseline_difference_interval_ready")
-    if source_payload.get("formal_baseline_difference_interval_status") != "formal_baseline_difference_interval_validation_scale_only":
+    if source_payload.get("formal_baseline_difference_interval_status") != "formal_baseline_difference_interval_paper_profile_claim_candidate":
         missing.append("validation_scale_formal_baseline_difference_interval_status_ready")
+    if source_payload.get("validation_scale_sstw_advantage_claim_ready") is not True:
+        missing.append("validation_scale_sstw_advantage_claim_ready")
 
     return missing
 

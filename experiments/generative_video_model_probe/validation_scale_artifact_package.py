@@ -1,7 +1,8 @@
 """重建 validation_scale 诊断图与 package manifest。
 
 该模块只从 run_root 中已经存在的 governed records、tables、reports 和 decision
-artifacts 生成派生产物。它不写入正式效果结论, 也不手工补造缺失的实验结果。
+artifacts 生成派生产物。它只记录已由门禁审计过的 target_fpr=0.1 结论状态,
+不手工补造缺失的实验结果。
 """
 
 from __future__ import annotations
@@ -75,6 +76,7 @@ def _requirement_rows(decision: Mapping[str, Any]) -> list[dict[str, Any]]:
         "validation_fair_detection_calibration_ready",
         "validation_formal_method_baseline_comparison_ready",
         "validation_formal_baseline_difference_interval_ready",
+        "validation_scale_sstw_advantage_claim_ready",
         "validation_scale_formal_internal_ablation_ready",
         "validation_low_fpr_formal_statistics_blocking_record_ready",
         "validation_data_split_and_leakage_guard_ready",
@@ -111,7 +113,7 @@ def build_validation_scale_gate_figure(run_root: str | Path) -> dict[str, Any]:
         "validation_scale_gate_decision": decision.get("validation_scale_gate_decision", "missing"),
         "paper_result_level": decision.get("paper_result_level"),
         "target_fpr": decision.get("target_fpr"),
-        "claim_support_status": "validation_scale_diagnostic_figure_not_effect_size_claim",
+        "claim_support_status": decision.get("claim_support_status", "validation_scale_diagnostic_figure_blocked"),
         "encoding": {
             "x": "requirement_name",
             "y": "requirement_ready_value",
@@ -179,7 +181,7 @@ def build_validation_scale_package_manifest(run_root: str | Path) -> dict[str, A
         "manifest_kind": "validation_scale_package_manifest",
         "run_root": str(run_root),
         "validation_scale_package_manifest_decision": "PASS" if decision_ready else "FAIL",
-        "claim_support_status": "validation_scale_package_ready_not_effect_size_claim"
+        "claim_support_status": validation_gate.get("claim_support_status", "validation_scale_package_blocked")
         if decision_ready
         else "validation_scale_package_blocked",
         "validation_scale_gate_decision": validation_gate.get("validation_scale_gate_decision"),
@@ -211,7 +213,7 @@ def write_validation_scale_package_manifest(run_root: str | Path) -> dict[str, A
     report = (
         "# Validation-scale Package Manifest Report\n\n"
         "该报告由 validation_scale package manifest 自动派生, 用于确认门禁产物是否齐全。"
-        "它不包含人工填写的效果结论。\n\n"
+        "其中 claim_support_status 只能来自已通过的 governed gate, 不能人工填写效果结论。\n\n"
         f"- validation_scale_package_manifest_decision: {manifest['validation_scale_package_manifest_decision']}\n"
         f"- validation_scale_gate_decision: {manifest['validation_scale_gate_decision']}\n"
         f"- paper_result_level: {manifest['paper_result_level']}\n"

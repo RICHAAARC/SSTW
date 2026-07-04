@@ -43,7 +43,7 @@ def _validation_scale_gate_pass_payload() -> dict:
 
     return {
         "validation_scale_gate_decision": "PASS",
-        "claim_support_status": "validation_scale_ready_for_pilot_paper",
+        "claim_support_status": "validation_scale_target_fpr_0_1_paper_claim_supported",
         "paper_result_level": "validation_scale",
         "target_fpr": 0.1,
         "missing_validation_requirements": [],
@@ -54,13 +54,15 @@ def _validation_scale_gate_pass_payload() -> dict:
         "external_baseline_self_containment_decision": "PASS",
         "data_split_and_leakage_guard_decision": "PASS",
         "sstw_measured_formal_record_count": 24,
-        "sstw_measured_formal_status": "sstw_measured_formal_validation_scale_only",
+        "sstw_measured_formal_status": "sstw_measured_formal_paper_profile_claim_candidate",
         "fair_detection_calibration_ready_count": len(MODERN_EXTERNAL_BASELINE_NAMES) + 1,
         "fair_detection_calibration_status": "fair_detection_calibration_validation_scale_ready",
         "formal_method_baseline_comparison_ready_count": len(MODERN_EXTERNAL_BASELINE_NAMES) + 1,
-        "formal_method_baseline_comparison_status": "formal_method_baseline_comparison_validation_scale_only",
+        "formal_method_baseline_comparison_status": "formal_method_baseline_comparison_paper_profile_claim_candidate",
         "formal_baseline_difference_interval_ready_count": len(MODERN_EXTERNAL_BASELINE_NAMES),
-        "formal_baseline_difference_interval_status": "formal_baseline_difference_interval_validation_scale_only",
+        "formal_baseline_difference_interval_status": "formal_baseline_difference_interval_paper_profile_claim_candidate",
+        "validation_scale_sstw_advantage_claim_ready": True,
+        "validation_scale_sstw_advantage_claim_status": "validation_scale_target_fpr_0_1_sstw_advantage_claim_supported",
         "full_paper_allowed": False,
     }
 

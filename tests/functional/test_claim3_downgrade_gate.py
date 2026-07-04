@@ -8,6 +8,10 @@ from experiments.generative_video_model_probe.claim3_downgrade import (
 )
 from experiments.generative_video_model_probe.external_baseline_runner import run_external_baseline_status
 from experiments.generative_video_model_probe.validation_scale_gate import build_validation_scale_gate_audit
+from main.attacks.video_runtime_attack_protocol import (
+    FULL_PAPER_NON_RUNTIME_ATTACK_PROTOCOLS,
+    FULL_PAPER_RUNTIME_ATTACKS,
+)
 from main.protocol.record_writer import read_jsonl, write_json, write_jsonl
 
 
@@ -27,11 +31,8 @@ MODERN_EXTERNAL_BASELINE_NAMES = {
     "vidsig",
     "videoseal",
 }
-REQUIRED_RUNTIME_ATTACK_NAMES = (
-    "video_compression_runtime",
-    "temporal_crop_runtime",
-    "frame_rate_resampling_runtime",
-)
+REQUIRED_RUNTIME_ATTACK_NAMES = FULL_PAPER_RUNTIME_ATTACKS
+REQUIRED_NON_RUNTIME_ATTACK_PROTOCOLS = FULL_PAPER_NON_RUNTIME_ATTACK_PROTOCOLS
 REQUIRED_ANCHOR_KEYS = tuple(f"prompt_0::seed_0::{attack_name}" for attack_name in REQUIRED_RUNTIME_ATTACK_NAMES)
 
 
@@ -183,14 +184,12 @@ def test_validation_scale_gate_accepts_claim3_downgrade_path(tmp_path: Path) -> 
         for record in generation_records
     ])
     write_jsonl(run_root / "records" / "runtime_attack_records.jsonl", [
-        {"attack_name": "video_compression_runtime", "attack_runtime_status": "ready"},
-        {"attack_name": "temporal_crop_runtime", "attack_runtime_status": "ready"},
-        {"attack_name": "frame_rate_resampling_runtime", "attack_runtime_status": "ready"},
+        {"attack_name": attack_name, "attack_runtime_status": "ready"}
+        for attack_name in REQUIRED_RUNTIME_ATTACK_NAMES
     ])
     write_jsonl(run_root / "records" / "runtime_detection_records.jsonl", [
-        {"attack_name": "video_compression_runtime", "runtime_detection_status": "ready"},
-        {"attack_name": "temporal_crop_runtime", "runtime_detection_status": "ready"},
-        {"attack_name": "frame_rate_resampling_runtime", "runtime_detection_status": "ready"},
+        {"attack_name": attack_name, "runtime_detection_status": "ready"}
+        for attack_name in REQUIRED_RUNTIME_ATTACK_NAMES
     ])
     write_jsonl(run_root / "records" / "external_baseline_records.jsonl", run_external_baseline_status())
     write_jsonl(run_root / "records" / "external_baseline_score_records.jsonl", _formal_external_baseline_records())
@@ -198,7 +197,12 @@ def test_validation_scale_gate_accepts_claim3_downgrade_path(tmp_path: Path) -> 
         {"method_variant": "without_velocity_constraint", "ablation_status": "ready"},
     ])
     write_jsonl(run_root / "records" / "adaptive_attack_records.jsonl", [
-        {"adaptive_attack_name": "time_grid_jitter", "adaptive_attack_status": "ready"},
+        {
+            "adaptive_attack_name": protocol_name,
+            "non_runtime_attack_protocol": protocol_name,
+            "adaptive_attack_status": "ready",
+        }
+        for protocol_name in REQUIRED_NON_RUNTIME_ATTACK_PROTOCOLS
     ])
     write_json(run_root / "artifacts" / "small_scale_claim_pilot_gate_decision.json", {"pilot_gate_decision": "PASS"})
     write_json(run_root / "artifacts" / "motion_threshold_calibration_decision.json", {
@@ -209,12 +213,12 @@ def test_validation_scale_gate_accepts_claim3_downgrade_path(tmp_path: Path) -> 
     })
     write_json(run_root / "artifacts" / "runtime_attack_decision.json", {
         "runtime_attack_decision": "PASS",
-        "runtime_attack_ready_count": 3,
-        "runtime_attack_count": 3,
+        "runtime_attack_ready_count": len(REQUIRED_RUNTIME_ATTACK_NAMES),
+        "runtime_attack_count": len(REQUIRED_RUNTIME_ATTACK_NAMES),
     })
     write_json(run_root / "artifacts" / "runtime_detection_decision.json", {
         "runtime_detection_decision": "PASS",
-        "runtime_detection_ready_count": 3,
+        "runtime_detection_ready_count": len(REQUIRED_RUNTIME_ATTACK_NAMES),
     })
     write_json(run_root / "artifacts" / "external_baseline_comparison_decision.json", {
         "external_baseline_comparison_decision": "PASS",
@@ -246,14 +250,14 @@ def test_validation_scale_gate_accepts_claim3_downgrade_path(tmp_path: Path) -> 
             "prompt_id": "prompt_0",
             "seed_id": "seed_0",
             "attack_name": attack_name,
-            "claim_support_status": "sstw_measured_formal_validation_scale_only",
+            "claim_support_status": "sstw_measured_formal_paper_profile_claim_candidate",
         }
         for attack_name in REQUIRED_RUNTIME_ATTACK_NAMES
     ])
     write_json(run_root / "artifacts" / "sstw_measured_formal_decision.json", {
         "sstw_measured_formal_decision": "PASS",
-        "sstw_measured_formal_record_count": 3,
-        "claim_support_status": "sstw_measured_formal_validation_scale_only",
+        "sstw_measured_formal_record_count": len(REQUIRED_RUNTIME_ATTACK_NAMES),
+        "claim_support_status": "sstw_measured_formal_paper_profile_claim_candidate",
     })
     write_jsonl(run_root / "records" / "fair_detection_calibration_records.jsonl", [
         {
@@ -263,7 +267,7 @@ def test_validation_scale_gate_accepts_claim3_downgrade_path(tmp_path: Path) -> 
             "target_fpr": 0.1,
             "tpr_at_target_fpr": 1.0,
             "clean_negative_score_count": 10,
-            "positive_anchor_count": 3,
+            "positive_anchor_count": len(REQUIRED_ANCHOR_KEYS),
             "positive_anchor_keys": list(REQUIRED_ANCHOR_KEYS),
             "positive_attack_names": list(REQUIRED_RUNTIME_ATTACK_NAMES),
             "positive_anchor_missing_count": 0,
@@ -278,7 +282,7 @@ def test_validation_scale_gate_accepts_claim3_downgrade_path(tmp_path: Path) -> 
                 "target_fpr": 0.1,
                 "tpr_at_target_fpr": 1.0,
                 "clean_negative_score_count": 10,
-                "positive_anchor_count": 3,
+                "positive_anchor_count": len(REQUIRED_ANCHOR_KEYS),
                 "positive_anchor_keys": list(REQUIRED_ANCHOR_KEYS),
                 "positive_attack_names": list(REQUIRED_RUNTIME_ATTACK_NAMES),
                 "positive_anchor_missing_count": 0,
@@ -300,10 +304,10 @@ def test_validation_scale_gate_accepts_claim3_downgrade_path(tmp_path: Path) -> 
             "method_role": "proposed_method",
             "metric_status": "measured_formal",
             "target_fpr": 0.1,
-            "comparison_anchor_count": 3,
+            "comparison_anchor_count": len(REQUIRED_ANCHOR_KEYS),
             "comparison_anchor_keys": list(REQUIRED_ANCHOR_KEYS),
             "comparison_attack_names": list(REQUIRED_RUNTIME_ATTACK_NAMES),
-            "reference_anchor_count": 3,
+            "reference_anchor_count": len(REQUIRED_ANCHOR_KEYS),
             "missing_reference_anchor_count": 0,
             "extra_anchor_count": 0,
             "comparison_anchor_alignment_status": "reference_method_anchor_set_ready",
@@ -314,10 +318,10 @@ def test_validation_scale_gate_accepts_claim3_downgrade_path(tmp_path: Path) -> 
                 "method_role": "modern_external_baseline",
                 "metric_status": "measured_formal",
                 "target_fpr": 0.1,
-                "comparison_anchor_count": 3,
+                "comparison_anchor_count": len(REQUIRED_ANCHOR_KEYS),
                 "comparison_anchor_keys": list(REQUIRED_ANCHOR_KEYS),
                 "comparison_attack_names": list(REQUIRED_RUNTIME_ATTACK_NAMES),
-                "reference_anchor_count": 3,
+                "reference_anchor_count": len(REQUIRED_ANCHOR_KEYS),
                 "missing_reference_anchor_count": 0,
                 "extra_anchor_count": 0,
                 "comparison_anchor_alignment_status": "aligned_with_sstw_reference_anchors",
@@ -329,7 +333,7 @@ def test_validation_scale_gate_accepts_claim3_downgrade_path(tmp_path: Path) -> 
         "formal_method_baseline_comparison_decision": "PASS",
         "formal_comparison_ready_method_count": 6,
         "target_fpr": 0.1,
-        "claim_support_status": "formal_method_baseline_comparison_validation_scale_only",
+        "claim_support_status": "formal_method_baseline_comparison_paper_profile_claim_candidate",
     })
     write_jsonl(run_root / "records" / "formal_baseline_difference_interval_records.jsonl", [
         {
@@ -337,12 +341,16 @@ def test_validation_scale_gate_accepts_claim3_downgrade_path(tmp_path: Path) -> 
             "difference_interval_status": "ready",
             "metric_status": "measured_formal",
             "target_fpr": 0.1,
-            "paired_comparison_unit_count": 3,
+            "paired_comparison_unit_count": len(REQUIRED_ANCHOR_KEYS),
             "paired_comparison_anchor_keys": list(REQUIRED_ANCHOR_KEYS),
             "paired_attack_names": list(REQUIRED_RUNTIME_ATTACK_NAMES),
             "unpaired_reference_anchor_count": 0,
             "unpaired_baseline_anchor_count": 0,
             "comparison_anchor_alignment_status": "aligned_with_sstw_reference_anchors",
+            "tpr_at_target_fpr_difference": 0.18,
+            "difference_ci_lower": 0.02,
+            "difference_ci_upper": 0.34,
+            "claim_support_status": "formal_baseline_difference_interval_paper_profile_claim_candidate",
         }
         for baseline_id in sorted(MODERN_EXTERNAL_BASELINE_NAMES)
     ])
@@ -350,7 +358,7 @@ def test_validation_scale_gate_accepts_claim3_downgrade_path(tmp_path: Path) -> 
         "formal_baseline_difference_interval_decision": "PASS",
         "difference_interval_ready_count": 5,
         "target_fpr": 0.1,
-        "claim_support_status": "formal_baseline_difference_interval_validation_scale_only",
+        "claim_support_status": "formal_baseline_difference_interval_paper_profile_claim_candidate",
     })
     write_jsonl(run_root / "records" / "validation_scale_formal_internal_ablation_records.jsonl", [
         {"method_variant": "sstw_full_method", "metric_status": "measured_formal"},
@@ -359,7 +367,7 @@ def test_validation_scale_gate_accepts_claim3_downgrade_path(tmp_path: Path) -> 
     write_json(run_root / "artifacts" / "validation_scale_formal_internal_ablation_decision.json", {
         "validation_scale_formal_internal_ablation_decision": "PASS",
         "formal_internal_ablation_variant_count": 8,
-        "claim_support_status": "validation_scale_formal_internal_ablation_ready_not_effect_size_claim",
+        "claim_support_status": "validation_scale_formal_internal_ablation_ready_for_target_fpr_0_1_claim_context",
     })
     write_json(run_root / "artifacts" / "validation_internal_ablation_decision.json", {
         "validation_internal_ablation_decision": "PASS",

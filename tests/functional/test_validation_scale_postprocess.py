@@ -15,14 +15,11 @@ from experiments.generative_video_model_probe.statistical_confidence_interval im
 from experiments.generative_video_model_probe.validation_artifact_rebuild import run_validation_artifact_rebuild_dry_run
 from experiments.generative_video_model_probe.validation_internal_ablation import run_validation_internal_ablation
 from experiments.generative_video_model_probe.validation_scale_formal_internal_ablation import run_validation_scale_formal_internal_ablation
+from main.attacks.video_runtime_attack_protocol import FULL_PAPER_RUNTIME_ATTACKS
 from main.protocol.record_writer import read_jsonl, write_json, write_jsonl
 
 
-REQUIRED_RUNTIME_ATTACK_NAMES = (
-    "video_compression_runtime",
-    "temporal_crop_runtime",
-    "frame_rate_resampling_runtime",
-)
+REQUIRED_RUNTIME_ATTACK_NAMES = FULL_PAPER_RUNTIME_ATTACKS
 
 
 def _formal_baseline_evidence_fields(
@@ -250,7 +247,7 @@ def test_sstw_measured_formal_result_writes_project_method_records(tmp_path: Pat
     assert records[0]["method_id"] == "sstw_key_conditioned_flow_trajectory"
     assert records[0]["method_role"] == "proposed_method"
     assert records[0]["comparison_scope"] == "paper_protocol_formal_adapter"
-    assert records[0]["claim_support_status"] == "sstw_measured_formal_validation_scale_only"
+    assert records[0]["claim_support_status"] == "sstw_measured_formal_paper_profile_claim_candidate"
     assert records[0]["sstw_detection_score_field"] == "S_final_conservative"
     assert any(record.get("sample_role") == "clean_negative" for record in records)
     assert (run_root / "tables" / "sstw_measured_formal_table.csv").exists()
@@ -1049,8 +1046,8 @@ def test_formal_baseline_difference_interval_writes_sstw_vs_each_baseline_ci(tmp
     assert all(record["difference_metric_name"] == "tpr_at_target_fpr_difference" for record in records)
     assert all(record["tpr_at_target_fpr_difference"] == 0.0 for record in records)
     assert all(record["difference_interval_status"] == "ready" for record in records)
-    assert all(record["significance_claim_status"] == "validation_scale_interval_not_significance_claim" for record in records)
-    assert all(record["paired_comparison_unit_count"] == 3 for record in records)
+    assert all(record["significance_claim_status"] == "paper_profile_interval_ready_requires_claim_audit" for record in records)
+    assert all(record["paired_comparison_unit_count"] == len(REQUIRED_RUNTIME_ATTACK_NAMES) for record in records)
     assert (run_root / "tables" / "formal_baseline_difference_interval_table.csv").exists()
     assert (run_root / "artifacts" / "formal_baseline_difference_interval_decision.json").exists()
     assert (run_root / "reports" / "formal_baseline_difference_interval_report.md").exists()

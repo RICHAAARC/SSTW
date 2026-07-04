@@ -350,10 +350,10 @@ def test_videomark_bundle_writer_uses_prompt_seed_attack_specific_key(tmp_path: 
 
 
 @pytest.mark.quick
-def test_videomark_bundle_writer_aligns_all_three_runtime_attacks_without_aggregate_fallback(
+def test_videomark_bundle_writer_aligns_declared_runtime_attacks_without_aggregate_fallback(
     tmp_path: Path,
 ) -> None:
-    """VideoMark 的正式 bundle 必须覆盖 SSTW 三类 runtime attack。"""
+    """VideoMark 的正式 bundle 必须覆盖输入 records 中声明的 runtime attack 集合。"""
 
     run_root = tmp_path / "runs" / "generative_video_model_probe" / "validation_scale"
     bundle_root = tmp_path / "bundles" / "validation_scale"

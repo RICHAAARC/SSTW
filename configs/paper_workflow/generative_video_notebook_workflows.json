@@ -201,7 +201,7 @@
     "validation_scale": {
       "baseline_sample_count": 24,
       "bootstrap_iteration_count": 200,
-      "claim_support_status": "validation_scale_rehearsal_only_not_effect_size_claim_evidence",
+      "claim_support_status": "validation_scale_target_fpr_0_1_paper_claim_candidate",
       "disabled_stage_names": [
         "motion_threshold_calibration",
         "pilot_paper_gate",
@@ -210,7 +210,7 @@
       "drive_log_dir_relative": "logs/generative_video_model_probe/validation_scale",
       "drive_package_dir_relative": "validation_scale",
       "drive_run_root_relative": "runs/generative_video_model_probe/validation_scale",
-      "enabled_for_claim": false,
+      "enabled_for_claim": true,
       "enabled_for_run": true,
       "max_content_records": 24,
       "max_source_records": 24,
@@ -224,10 +224,10 @@
         "full_paper",
         "submission_freeze"
       ],
-      "paper_gate_preflight_layer": true,
+      "paper_gate_preflight_layer": false,
       "paper_gate_profile": true,
-      "profile_status": "implemented_small_sample_full_pipeline_rehearsal_requires_self_contained_baselines_and_fair_calibration",
-      "profile_switching_note": "validation_scale 是 paper 级前的小样本全流程打通层, 使用 protocol_config_path 指向的 validation_scale protocol config 中的 target_fpr 口径验证所有 records、tables、figures、reports、manifests、baseline、消融、attack、CI、clean negative 公平校准和 artifact rebuild 能闭环; 它不支撑效果主张, 通过后只能生成 validation_scale_to_pilot_paper_transition_decision 并进入 pilot_paper, 不能直接进入 full_paper。",
+      "profile_status": "implemented_small_sample_full_protocol_target_fpr_0_1_claim_gate_requires_self_contained_baselines_and_fair_calibration",
+      "profile_switching_note": "validation_scale 是 target_fpr=0.1 的小样本完整协议论文主张候选门禁, 使用 protocol_config_path 指向的 validation_scale protocol config 验证所有 records、tables、figures、reports、manifests、baseline、消融、46 个 runtime attack、11 个 non-runtime/adaptive 协议、CI、clean negative 公平校准和 artifact rebuild 能闭环; 通过后可支撑 fpr=0.1 论文设定下的 SSTW 有效性与优势结论候选, 但不能直接进入 full_paper, 也不能外推到 pilot_paper 的 fpr=0.01 或 full_paper 的 fpr=0.001。",
       "protocol_config_path": "configs/protocol/validation_scale_generative_probe.json",
       "result_tier": "validation_scale",
       "runtime_profile": "validation_scale"

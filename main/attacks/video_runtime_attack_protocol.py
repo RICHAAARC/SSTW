@@ -30,12 +30,6 @@ class RuntimeAttackSpec:
     video_writer_output_params: tuple[str, ...] = ()
 
 
-VALIDATION_SCALE_RUNTIME_ATTACKS = (
-    "video_compression_runtime",
-    "temporal_crop_runtime",
-    "frame_rate_resampling_runtime",
-)
-
 FULL_PAPER_RUNTIME_ATTACKS = (
     "video_compression_runtime",
     "h264_crf18_runtime",
@@ -85,6 +79,8 @@ FULL_PAPER_RUNTIME_ATTACKS = (
     "crop_rotation_combined_runtime",
 )
 
+VALIDATION_SCALE_RUNTIME_ATTACKS = FULL_PAPER_RUNTIME_ATTACKS
+
 PILOT_PAPER_RUNTIME_ATTACKS = (
     "video_compression_runtime",
     "temporal_crop_runtime",
@@ -98,8 +94,11 @@ PILOT_PAPER_RUNTIME_ATTACKS = (
 
 RUNTIME_ATTACK_FAMILY_MINIMUMS_BY_PROFILE: dict[str, dict[str, int]] = {
     "validation_scale": {
-        "compression": 1,
-        "temporal": 2,
+        "compression": 9,
+        "temporal": 8,
+        "spatial_geometry": 5,
+        "visual_degradation": 8,
+        "combined": 5,
     },
     "pilot_paper": {
         "compression": 1,
@@ -497,7 +496,7 @@ def runtime_attack_names_for_profile(profile_name: str) -> tuple[str, ...]:
     """按 workflow profile 返回默认 runtime attack 列表。"""
 
     normalized = str(profile_name or "").strip().lower()
-    if normalized == "full_paper":
+    if normalized in {"validation_scale", "full_paper"}:
         return FULL_PAPER_RUNTIME_ATTACKS
     if normalized == "pilot_paper":
         return PILOT_PAPER_RUNTIME_ATTACKS
@@ -558,7 +557,7 @@ def audit_runtime_attack_protocol_config(config: Mapping[str, Any]) -> dict[str,
         else ()
     )
     missing_non_runtime = []
-    if profile == "full_paper":
+    if profile in {"validation_scale", "full_paper"}:
         missing_non_runtime = sorted(set(FULL_PAPER_NON_RUNTIME_ATTACK_PROTOCOLS) - set(non_runtime_required))
 
     decision = "PASS" if not missing_registered_names and not missing_family_minimums and not missing_non_runtime else "FAIL"
@@ -574,7 +573,7 @@ def audit_runtime_attack_protocol_config(config: Mapping[str, Any]) -> dict[str,
         "required_non_runtime_attack_protocols": list(non_runtime_required),
         "missing_non_runtime_attack_protocols": missing_non_runtime,
         "top_tier_attack_protocol_status": "top_tier_runtime_and_adaptive_protocol_registered"
-        if decision == "PASS" and profile in {"pilot_paper", "full_paper"}
+        if decision == "PASS" and profile in {"validation_scale", "pilot_paper", "full_paper"}
         else "runtime_attack_protocol_needs_completion",
     }
 

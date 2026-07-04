@@ -240,10 +240,17 @@ def audit_formal_method_baseline_comparison_records(records: list[dict[str, Any]
         and record.get("metric_status") == "measured_formal"
     )
     decision = "PASS" if records and sstw_ready and not missing_method_ids else "FAIL"
+    ready_claim_statuses = {str(record.get("claim_support_status")) for record in ready_rows}
+    if decision == "PASS" and ready_claim_statuses == {"formal_method_baseline_comparison_paper_profile_claim_candidate"}:
+        claim_support_status = "formal_method_baseline_comparison_paper_profile_claim_candidate"
+    elif decision == "PASS":
+        claim_support_status = "formal_method_baseline_comparison_validation_scale_only"
+    else:
+        claim_support_status = "formal_method_baseline_comparison_blocked"
     return {
         "stage_id": "formal_method_baseline_comparison",
         "formal_method_baseline_comparison_decision": decision,
-        "claim_support_status": "formal_method_baseline_comparison_validation_scale_only" if decision == "PASS" else "formal_method_baseline_comparison_blocked",
+        "claim_support_status": claim_support_status,
         "paper_result_level": records[0].get("paper_result_level") if records else None,
         "target_fpr": records[0].get("target_fpr") if records else None,
         "formal_comparison_required_method_count": required_method_count,
@@ -270,7 +277,8 @@ def run_formal_method_baseline_comparison(
         "# Formal Method Baseline Comparison Report\n\n"
         "该报告只聚合已经通过 clean negative calibration 的 fair_detection_calibration records, "
         "主指标为 `tpr_at_target_fpr`。这保证 SSTW 与 5 个现代 external baseline 处在同 FPR、"
-        "同攻击锚点、同证据层级的统计表中。validation_scale 结果仍不支持最终效果主张。\n\n"
+        "同攻击锚点、同证据层级的统计表中。若 protocol config 启用 allow_effect_size_claims, "
+        "validation_scale 结果可支撑 target_fpr=0.1 的小样本论文结论候选, 但不能外推到更低 FPR。\n\n"
         f"- formal_method_baseline_comparison_decision: {audit['formal_method_baseline_comparison_decision']}\n"
         f"- paper_result_level: {audit['paper_result_level']}\n"
         f"- target_fpr: {audit['target_fpr']}\n"

@@ -861,6 +861,162 @@ def _copy_sigmark_state_for_clean_negative(
     }
 
 
+def _copy_sigmark_reference_files(*, source_output_path: Path, destination_output_path: Path) -> dict[str, Any]:
+    """复制 SIGMark extract 所需的 maintained info 与 ground-truth message 文件。
+
+    SIGMark 官方 `extract` 以 `output_path` 下的状态文件和视频文件作为输入。为了对
+    每个 runtime attack 生成独立 official extract 目录, 需要把同一次官方生成得到的
+    key / message 状态复制到 attack-specific 输出目录, 然后只替换其中的视频文件。
+    """
+
+    destination_output_path.mkdir(parents=True, exist_ok=True)
+    copied: list[dict[str, str]] = []
+    missing: list[str] = []
+    for pattern in ("*-sigmark-*-maintained_info.pkl", "*-sigmark-*-gt_watermark_messages.npz"):
+        matches = sorted(path for path in source_output_path.glob(pattern) if path.is_file())
+        if not matches:
+            missing.append(pattern)
+            continue
+        for source in matches:
+            destination = destination_output_path / source.name
+            shutil.copy2(source, destination)
+            copied.append({"source_path": str(source), "destination_path": str(destination)})
+    if missing:
+        raise FileNotFoundError(f"sigmark_reference_state_missing:{missing}:source={source_output_path}")
+    return {
+        "reference_state_copy_status": "copied",
+        "copied_reference_state_count": len(copied),
+        "copied_reference_state_files": copied,
+    }
+
+
+def _read_video_frames(video_path: Path) -> list[Any]:
+    """读取 mp4 帧序列。"""
+
+    import imageio.v3 as iio
+
+    return [frame for frame in iio.imiter(video_path)]
+
+
+def _write_video_frames(video_path: Path, frames: list[Any], *, fps: int) -> None:
+    """写出 mp4 帧序列。"""
+
+    import imageio.v3 as iio
+
+    video_path.parent.mkdir(parents=True, exist_ok=True)
+    iio.imwrite(video_path, frames, fps=fps)
+
+
+def _apply_runtime_attack_to_frames(frames: list[Any], attack_name: str) -> tuple[list[Any], dict[str, Any]]:
+    """对 SIGMark 官方生成视频施加与 SSTW 主流程同名的轻量 runtime attack。"""
+
+    if not frames:
+        raise ValueError("sigmark_no_decodable_frames")
+    normalized = str(attack_name or "").strip()
+    if normalized in {"", "clean", "none", "video_compression_runtime"}:
+        return list(frames), {
+            "attack_transform": "decode_reencode",
+            "attack_strength": "runtime_reencode_default_quality",
+            "attack_protocol_status": "project_runtime_attack_applied_to_sigmark_watermarked_video",
+        }
+    if normalized == "temporal_crop_runtime":
+        return (frames[1:-1] if len(frames) >= 4 else list(frames)), {
+            "attack_transform": "drop_first_and_last_frame_when_possible",
+            "attack_strength": "crop_boundary_frames",
+            "attack_protocol_status": "project_runtime_attack_applied_to_sigmark_watermarked_video",
+        }
+    if normalized == "frame_rate_resampling_runtime":
+        return (frames[::2] if len(frames) >= 3 else list(frames)), {
+            "attack_transform": "keep_every_second_frame_when_possible",
+            "attack_strength": "fps_downsample_by_2_proxy",
+            "attack_protocol_status": "project_runtime_attack_applied_to_sigmark_watermarked_video",
+        }
+    raise ValueError(f"unsupported_sigmark_runtime_attack:{attack_name}")
+
+
+def _video_path_for_sigmark_result_key(output_path: Path, result_key: str) -> Path:
+    """把 SIGMark official result key 映射为 output_path 下的视频路径。"""
+
+    normalized = str(result_key).replace("\\", "/").strip("/")
+    return output_path / f"{normalized}.mp4"
+
+
+def _prepare_sigmark_attack_extract_outputs(
+    *,
+    records: list[Mapping[str, Any]],
+    source_output_path: Path,
+    attack_output_root: Path,
+    state_source_output_path: Path,
+    prompt_text_by_id: Mapping[str, str],
+    seed_indices: Mapping[str, Mapping[str, int]],
+    runtime_dimension: str,
+    allow_prompt_id_fallback: bool,
+    fps: int,
+    role: str,
+) -> dict[str, Any]:
+    """为每个 runtime attack 构造可直接运行官方 `extract` 的 SIGMark 输出目录。
+
+    该函数属于项目特定适配: 官方 SIGMark 不直接接收 SSTW attack 名称, 因此本项目
+    先在 attack-specific 目录中放置被攻击的视频和同一组官方状态文件, 再调用官方
+    `main.py --mode=extract`。这样生成的 bit accuracy 才是逐 prompt / seed / attack
+    的正式分数, 而不是把 clean extraction 分数重复填到所有攻击上。
+    """
+
+    attack_output_root.mkdir(parents=True, exist_ok=True)
+    rows: list[dict[str, Any]] = []
+    attack_output_paths: dict[str, str] = {}
+    copied_video_count = 0
+    failures: list[dict[str, Any]] = []
+    for record in records:
+        attack_name = str(record.get("attack_name") or "clean")
+        attack_dir = attack_output_root / _safe_token(attack_name)
+        if attack_name not in attack_output_paths:
+            _copy_sigmark_reference_files(
+                source_output_path=state_source_output_path,
+                destination_output_path=attack_dir,
+            )
+            attack_output_paths[attack_name] = str(attack_dir)
+        try:
+            result_key = _sigmark_result_key_for_record(
+                record,
+                prompt_text_by_id=prompt_text_by_id,
+                seed_indices=seed_indices,
+                runtime_dimension=runtime_dimension,
+                allow_prompt_id_fallback=allow_prompt_id_fallback,
+            )
+            source_video_path = _video_path_for_sigmark_result_key(source_output_path, result_key)
+            destination_video_path = _video_path_for_sigmark_result_key(attack_dir, result_key)
+            frames = _read_video_frames(source_video_path)
+            attacked_frames, attack_info = _apply_runtime_attack_to_frames(frames, attack_name)
+            _write_video_frames(destination_video_path, attacked_frames, fps=fps)
+            copied_video_count += 1
+            rows.append({
+                "role": role,
+                "attack_name": attack_name,
+                "result_key": result_key,
+                "source_video_path": str(source_video_path),
+                "destination_video_path": str(destination_video_path),
+                **attack_info,
+            })
+        except Exception as exc:  # noqa: BLE001 - 需要把单条准备失败写入 governed manifest。
+            failures.append({
+                "role": role,
+                "attack_name": attack_name,
+                "prompt_id": record.get("prompt_id"),
+                "seed_id": record.get("seed_id"),
+                "failure_reason": str(exc),
+            })
+    if failures:
+        raise RuntimeError(f"sigmark_attack_extract_output_prepare_failed:{failures[:3]}")
+    return {
+        "attack_extract_output_prepare_status": "ready",
+        "role": role,
+        "attack_output_paths": attack_output_paths,
+        "prepared_video_count": copied_video_count,
+        "prepared_rows": rows[:20],
+    }
+
+
 def _bundle_record_path(bundle_root: Path, record: Mapping[str, Any]) -> Path:
     """构造 SIGMark official bundle 的单条记录路径。"""
 
@@ -879,6 +1035,8 @@ def write_sigmark_official_bundle_records(
     model_name: str,
     max_records: int | None = None,
     clean_negative_bit_accuracy_npz_path: str | Path | None = None,
+    attack_bit_accuracy_npz_paths: Mapping[str, str | Path] | None = None,
+    clean_negative_attack_bit_accuracy_npz_paths: Mapping[str, str | Path] | None = None,
     prompt_suite_path: str | Path | None = None,
     runtime_dimension: str = DEFAULT_RUNTIME_DIMENSION,
     allow_prompt_id_fallback: bool = False,
@@ -894,6 +1052,16 @@ def write_sigmark_official_bundle_records(
     bundle = Path(bundle_root)
     npz_path = Path(bit_accuracy_npz_path)
     clean_npz_path = Path(clean_negative_bit_accuracy_npz_path) if clean_negative_bit_accuracy_npz_path else None
+    attack_npz_paths = {
+        str(name): Path(path)
+        for name, path in (attack_bit_accuracy_npz_paths or {}).items()
+        if str(path)
+    }
+    clean_attack_npz_paths = {
+        str(name): Path(path)
+        for name, path in (clean_negative_attack_bit_accuracy_npz_paths or {}).items()
+        if str(path)
+    }
     records = _selected_runtime_records(root, max_records)
     prompt_text_by_id: dict[str, str] = {}
     seed_indices: dict[str, dict[str, int]] = {}
@@ -906,6 +1074,9 @@ def write_sigmark_official_bundle_records(
     for record in records:
         output_json_path = _bundle_record_path(bundle, record)
         try:
+            attack_name = str(record.get("attack_name") or "clean")
+            selected_npz_path = attack_npz_paths.get(attack_name, npz_path)
+            selected_clean_npz_path = clean_attack_npz_paths.get(attack_name, clean_npz_path)
             if prompt_suite_path is not None:
                 result_key = _sigmark_result_key_for_record(
                     record,
@@ -914,27 +1085,36 @@ def write_sigmark_official_bundle_records(
                     runtime_dimension=runtime_dimension,
                     allow_prompt_id_fallback=allow_prompt_id_fallback,
                 )
-                score_payload = _score_from_sigmark_bit_accuracy_npz_key(npz_path, result_key)
+                score_payload = _score_from_sigmark_bit_accuracy_npz_key(selected_npz_path, result_key)
+                if attack_name in attack_npz_paths:
+                    score_payload["official_score_assignment_policy"] = (
+                        "per_prompt_seed_runtime_attack_sigmark_bit_accuracy_npz_key"
+                    )
             else:
                 result_key = "mean_over_npz_entries"
                 score_payload = {
-                    **_score_from_sigmark_bit_accuracy_npz(npz_path),
+                    **_score_from_sigmark_bit_accuracy_npz(selected_npz_path),
                     "official_result_key": result_key,
                     "official_score_assignment_policy": "aggregate_mean_over_sigmark_official_bit_accuracy_npz",
                 }
             clean_negative_payload: dict[str, Any] = {}
-            if clean_npz_path is not None and clean_npz_path.is_file():
+            if selected_clean_npz_path is not None and selected_clean_npz_path.is_file():
                 if prompt_suite_path is not None:
-                    clean_score_payload = _score_from_sigmark_bit_accuracy_npz_key(clean_npz_path, result_key)
-                    clean_policy = "per_prompt_seed_sigmark_clean_negative_bit_accuracy_npz_key"
+                    clean_score_payload = _score_from_sigmark_bit_accuracy_npz_key(selected_clean_npz_path, result_key)
+                    clean_policy = (
+                        "per_prompt_seed_runtime_attack_sigmark_clean_negative_bit_accuracy_npz_key"
+                        if attack_name in clean_attack_npz_paths
+                        else "per_prompt_seed_sigmark_clean_negative_bit_accuracy_npz_key"
+                    )
                 else:
-                    clean_score_payload = _score_from_sigmark_bit_accuracy_npz(clean_npz_path)
+                    clean_score_payload = _score_from_sigmark_bit_accuracy_npz(selected_clean_npz_path)
                     clean_policy = "aggregate_mean_over_sigmark_official_clean_negative_bit_accuracy_npz"
                 clean_negative_payload = {
                     "external_baseline_clean_negative_score": clean_score_payload["raw_detector_score"],
                     "external_baseline_clean_negative_score_semantics": clean_score_payload["score_semantics"],
-                    "external_baseline_clean_negative_video_path": str(clean_npz_path),
-                    "official_clean_negative_bit_accuracy_npz_path": str(clean_npz_path),
+                    "external_baseline_clean_negative_payload_bit_accuracy": clean_score_payload["payload_bit_accuracy"],
+                    "external_baseline_clean_negative_video_path": str(selected_clean_npz_path),
+                    "official_clean_negative_bit_accuracy_npz_path": str(selected_clean_npz_path),
                     "official_clean_negative_result_key": result_key,
                     "official_clean_negative_score_assignment_policy": clean_policy,
                 }
@@ -950,8 +1130,12 @@ def write_sigmark_official_bundle_records(
                 "external_baseline_official_execution_mode": "sigmark_hunyuan_gen_extract",
                 "official_score_assignment_policy": score_payload["official_score_assignment_policy"],
                 "official_score_extraction_policy": score_payload["official_score_assignment_policy"],
-                "attack_protocol_status": "sigmark_official_clean_extract_score_reused_for_runtime_attack_anchor",
-                "official_bit_accuracy_npz_path": str(npz_path),
+                "attack_protocol_status": (
+                    "project_runtime_attack_applied_to_sigmark_watermarked_video"
+                    if attack_name in attack_npz_paths
+                    else "sigmark_official_clean_extract_score_reused_for_runtime_attack_anchor"
+                ),
+                "official_bit_accuracy_npz_path": str(selected_npz_path),
                 "official_execution_manifest_path": str(manifest_path),
                 "official_reference_protocol_anchor": "same_prompt_seed_attack_runtime_comparison_unit",
                 "runtime_comparison_unit_id": build_comparison_unit_id(BASELINE_ID, record),
@@ -1066,6 +1250,14 @@ def run_sigmark_official_hunyuan_runtime(config: SigmarkOfficialHunyuanRuntimeCo
         output_path=clean_negative_output_path,
     )
     command_results: list[dict[str, Any]] = []
+    positive_attack_extract_commands: list[dict[str, Any]] = []
+    clean_negative_attack_extract_commands: list[dict[str, Any]] = []
+    attack_preparation_manifest: dict[str, Any] = {
+        "attack_extract_output_prepare_status": "not_run",
+        "reason": "dry_run_or_generation_not_finished",
+    }
+    attack_bit_accuracy_paths: dict[str, str] = {}
+    clean_negative_attack_bit_accuracy_paths: dict[str, str] = {}
     execution_status = "dry_run_planned" if config.dry_run else "executed"
     clean_negative_reference_state_manifest: dict[str, Any] = {
         "clean_negative_reference_state_status": "not_run",
@@ -1083,18 +1275,6 @@ def run_sigmark_official_hunyuan_runtime(config: SigmarkOfficialHunyuanRuntimeCo
             execution_failure_reason = (
                 f"sigmark_official_gen_failed:{gen_result['return_code']}:{gen_result['stderr_tail']}"
             )
-        if not execution_failure_reason:
-            extract_result = _run_sigmark_command(
-                extract_command,
-                cwd=runtime_source_dir,
-                log_path=output_root / "logs" / "sigmark_extract",
-                timeout_seconds=float(config.timeout_seconds),
-            )
-            command_results.append(extract_result)
-            if int(extract_result["return_code"]) != 0:
-                execution_failure_reason = (
-                    f"sigmark_official_extract_failed:{extract_result['return_code']}:{extract_result['stderr_tail']}"
-                )
         if not execution_failure_reason and config.generate_clean_negative_reference:
             clean_gen_result = _run_sigmark_command(
                 clean_negative_gen_command,
@@ -1117,26 +1297,113 @@ def run_sigmark_official_hunyuan_runtime(config: SigmarkOfficialHunyuanRuntimeCo
             except Exception as exc:  # noqa: BLE001 - 需要写入 governed failure artifact。
                 execution_failure_reason = f"sigmark_clean_negative_reference_state_copy_failed:{exc}"
         if not execution_failure_reason and config.generate_clean_negative_reference:
-            clean_extract_result = _run_sigmark_command(
-                clean_negative_extract_command,
-                cwd=runtime_source_dir,
-                log_path=output_root / "logs" / "sigmark_clean_negative_extract",
-                timeout_seconds=float(config.timeout_seconds),
-            )
-            command_results.append(clean_extract_result)
-            if int(clean_extract_result["return_code"]) != 0:
-                execution_failure_reason = (
-                    "sigmark_official_clean_negative_extract_failed:"
-                    f"{clean_extract_result['return_code']}:{clean_extract_result['stderr_tail']}"
+            try:
+                prompt_text_by_id = {str(row["prompt_id"]): str(row["prompt_text"]) for row in prompt_rows}
+                seed_indices = _seed_index_by_prompt(records)
+                positive_prepare = _prepare_sigmark_attack_extract_outputs(
+                    records=records,
+                    source_output_path=output_path,
+                    attack_output_root=output_root / "official_attack_extract_outputs" / "positive",
+                    state_source_output_path=output_path,
+                    prompt_text_by_id=prompt_text_by_id,
+                    seed_indices=seed_indices,
+                    runtime_dimension=config.runtime_dimension,
+                    allow_prompt_id_fallback=config.allow_prompt_id_fallback,
+                    fps=int(config.fps),
+                    role="positive",
                 )
+                clean_prepare = _prepare_sigmark_attack_extract_outputs(
+                    records=records,
+                    source_output_path=clean_negative_output_path,
+                    attack_output_root=output_root / "official_attack_extract_outputs" / "clean_negative",
+                    state_source_output_path=clean_negative_output_path,
+                    prompt_text_by_id=prompt_text_by_id,
+                    seed_indices=seed_indices,
+                    runtime_dimension=config.runtime_dimension,
+                    allow_prompt_id_fallback=config.allow_prompt_id_fallback,
+                    fps=int(config.fps),
+                    role="clean_negative",
+                )
+                attack_preparation_manifest = {
+                    "attack_extract_output_prepare_status": "ready",
+                    "positive": positive_prepare,
+                    "clean_negative": clean_prepare,
+                }
+            except Exception as exc:  # noqa: BLE001 - 需要写入 governed failure artifact。
+                execution_failure_reason = f"sigmark_attack_extract_output_prepare_failed:{exc}"
+        if not execution_failure_reason and config.generate_clean_negative_reference:
+            for attack_name, attack_output in attack_preparation_manifest["positive"]["attack_output_paths"].items():
+                attack_extract_command = _sigmark_command(
+                    config,
+                    runtime_source_dir=runtime_source_dir,
+                    mode="extract",
+                    watermark_method="sigmark",
+                    output_path=attack_output,
+                )
+                positive_attack_extract_commands.append({"attack_name": attack_name, "command": attack_extract_command})
+                attack_extract_result = _run_sigmark_command(
+                    attack_extract_command,
+                    cwd=runtime_source_dir,
+                    log_path=output_root / "logs" / f"sigmark_extract_{_safe_token(attack_name)}",
+                    timeout_seconds=float(config.timeout_seconds),
+                )
+                command_results.append(attack_extract_result)
+                if int(attack_extract_result["return_code"]) != 0:
+                    execution_failure_reason = (
+                        "sigmark_official_attack_extract_failed:"
+                        f"{attack_name}:{attack_extract_result['return_code']}:{attack_extract_result['stderr_tail']}"
+                    )
+                    break
+        if not execution_failure_reason and config.generate_clean_negative_reference:
+            for attack_name, attack_output in attack_preparation_manifest["clean_negative"]["attack_output_paths"].items():
+                clean_attack_extract_command = _sigmark_command(
+                    config,
+                    runtime_source_dir=runtime_source_dir,
+                    mode="extract",
+                    watermark_method="sigmark",
+                    output_path=attack_output,
+                )
+                clean_negative_attack_extract_commands.append({
+                    "attack_name": attack_name,
+                    "command": clean_attack_extract_command,
+                })
+                clean_attack_extract_result = _run_sigmark_command(
+                    clean_attack_extract_command,
+                    cwd=runtime_source_dir,
+                    log_path=output_root / "logs" / f"sigmark_clean_negative_extract_{_safe_token(attack_name)}",
+                    timeout_seconds=float(config.timeout_seconds),
+                )
+                command_results.append(clean_attack_extract_result)
+                if int(clean_attack_extract_result["return_code"]) != 0:
+                    execution_failure_reason = (
+                        "sigmark_official_clean_negative_attack_extract_failed:"
+                        f"{attack_name}:{clean_attack_extract_result['return_code']}:{clean_attack_extract_result['stderr_tail']}"
+                    )
+                    break
 
     manifest_path = bundle_root / BASELINE_ID / "official_reference_execution_manifest.json"
-    bit_accuracy_candidates = _find_bit_accuracy_npz(output_path) if not config.dry_run and not execution_failure_reason else []
-    clean_negative_bit_accuracy_candidates = (
-        _find_bit_accuracy_npz(clean_negative_output_path)
-        if not config.dry_run and not execution_failure_reason and config.generate_clean_negative_reference
-        else []
-    )
+    bit_accuracy_candidates: list[Path] = []
+    clean_negative_bit_accuracy_candidates: list[Path] = []
+    if not config.dry_run and not execution_failure_reason and config.generate_clean_negative_reference:
+        for attack_name, attack_output in attack_preparation_manifest["positive"]["attack_output_paths"].items():
+            candidates = _find_bit_accuracy_npz(Path(attack_output))
+            bit_accuracy_candidates.extend(candidates)
+            if candidates:
+                attack_bit_accuracy_paths[str(attack_name)] = str(candidates[-1])
+            else:
+                execution_failure_reason = f"sigmark_attack_bit_accuracy_npz_missing:{attack_name}:{attack_output}"
+                break
+        if not execution_failure_reason:
+            for attack_name, attack_output in attack_preparation_manifest["clean_negative"]["attack_output_paths"].items():
+                candidates = _find_bit_accuracy_npz(Path(attack_output))
+                clean_negative_bit_accuracy_candidates.extend(candidates)
+                if candidates:
+                    clean_negative_attack_bit_accuracy_paths[str(attack_name)] = str(candidates[-1])
+                else:
+                    execution_failure_reason = (
+                        f"sigmark_clean_negative_attack_bit_accuracy_npz_missing:{attack_name}:{attack_output}"
+                    )
+                    break
     bundle_result = {
         "input_runtime_detection_record_count": len(records),
         "generated_bundle_record_count": 0,
@@ -1145,7 +1412,7 @@ def run_sigmark_official_hunyuan_runtime(config: SigmarkOfficialHunyuanRuntimeCo
     }
     selected_bit_accuracy_path = ""
     selected_clean_negative_bit_accuracy_path = ""
-    if bit_accuracy_candidates:
+    if bit_accuracy_candidates and not execution_failure_reason:
         selected_bit_accuracy_path = str(bit_accuracy_candidates[-1])
         clean_negative_npz_path = os.environ.get("SSTW_SIGMARK_CLEAN_NEGATIVE_BIT_ACCURACY_NPZ", "").strip() or None
         if clean_negative_npz_path is None and clean_negative_bit_accuracy_candidates:
@@ -1162,6 +1429,8 @@ def run_sigmark_official_hunyuan_runtime(config: SigmarkOfficialHunyuanRuntimeCo
                 model_name=config.model_name,
                 max_records=config.max_records,
                 clean_negative_bit_accuracy_npz_path=clean_negative_npz_path,
+                attack_bit_accuracy_npz_paths=attack_bit_accuracy_paths,
+                clean_negative_attack_bit_accuracy_npz_paths=clean_negative_attack_bit_accuracy_paths,
                 prompt_suite_path=prompt_suite_path,
                 runtime_dimension=config.runtime_dimension,
                 allow_prompt_id_fallback=config.allow_prompt_id_fallback,
@@ -1211,12 +1480,17 @@ def run_sigmark_official_hunyuan_runtime(config: SigmarkOfficialHunyuanRuntimeCo
         "extract_command": extract_command,
         "clean_negative_gen_command": clean_negative_gen_command,
         "clean_negative_extract_command": clean_negative_extract_command,
+        "positive_attack_extract_commands": positive_attack_extract_commands,
+        "clean_negative_attack_extract_commands": clean_negative_attack_extract_commands,
+        "attack_preparation_manifest": attack_preparation_manifest,
         "clean_negative_reference_state_manifest": clean_negative_reference_state_manifest,
         "command_results": command_results,
         "bit_accuracy_npz_candidates": [str(path) for path in bit_accuracy_candidates],
         "clean_negative_bit_accuracy_npz_candidates": [
             str(path) for path in clean_negative_bit_accuracy_candidates
         ],
+        "attack_bit_accuracy_npz_paths": attack_bit_accuracy_paths,
+        "clean_negative_attack_bit_accuracy_npz_paths": clean_negative_attack_bit_accuracy_paths,
         "selected_bit_accuracy_npz_path": selected_bit_accuracy_path,
         "selected_clean_negative_bit_accuracy_npz_path": selected_clean_negative_bit_accuracy_path,
         "input_runtime_detection_record_count": len(records),

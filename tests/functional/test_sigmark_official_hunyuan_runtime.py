@@ -8,6 +8,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
+import external_baseline.sigmark_official_hunyuan_runtime as sigmark_runtime
 from external_baseline.sigmark_official_hunyuan_runtime import (
     SigmarkOfficialHunyuanRuntimeConfig,
     normalize_sigmark_precision,
@@ -241,6 +242,111 @@ def test_sigmark_bundle_writer_uses_prompt_seed_specific_npz_key(tmp_path: Path)
     )
     assert payload["official_clean_negative_score_granularity"] == "per_prompt_seed"
     assert payload["official_clean_negative_score_formal_comparison_eligibility"] == "eligible"
+
+
+@pytest.mark.quick
+def test_sigmark_bundle_writer_uses_runtime_attack_specific_npz_key(tmp_path: Path) -> None:
+    """SIGMark 只有使用逐 runtime attack 的 official extract 结果时才能进入公平比较。"""
+
+    run_root = tmp_path / "runs" / "generative_video_model_probe" / "validation_scale"
+    bundle_root = tmp_path / "bundles" / "validation_scale"
+    manifest_path = bundle_root / "sigmark" / "official_reference_execution_manifest.json"
+    prompt_suite_path = tmp_path / "datasets" / "generative_video_prompt_suite" / "prompt_seed_suite.json"
+    attack_name = "video_compression_runtime"
+    npz_path = tmp_path / "official_outputs" / "positive" / attack_name / "bit_accuracy.npz"
+    clean_npz_path = tmp_path / "official_outputs" / "clean_negative" / attack_name / "bit_accuracy.npz"
+    _write_runtime_records(run_root)
+    records_path = run_root / "records" / "runtime_detection_records.jsonl"
+    record = json.loads(records_path.read_text(encoding="utf-8").splitlines()[0])
+    record["attack_name"] = attack_name
+    records_path.write_text(json.dumps(record, ensure_ascii=False) + "\n", encoding="utf-8")
+    _write_prompt_suite(prompt_suite_path)
+    _write_json(manifest_path, {"manifest_kind": "test_sigmark_execution_manifest"})
+    result_key = "sstw_runtime_prompt/A small red toy car moves across a table with clear motion.-0"
+    npz_path.parent.mkdir(parents=True, exist_ok=True)
+    clean_npz_path.parent.mkdir(parents=True, exist_ok=True)
+    np.savez(npz_path, **{result_key: np.array([0.82])})
+    np.savez(clean_npz_path, **{result_key: np.array([0.22])})
+
+    result = write_sigmark_official_bundle_records(
+        run_root=run_root,
+        bundle_root=bundle_root,
+        manifest_path=manifest_path,
+        bit_accuracy_npz_path=npz_path,
+        model_name="HunyuanVideo-community",
+        clean_negative_bit_accuracy_npz_path=clean_npz_path,
+        attack_bit_accuracy_npz_paths={attack_name: npz_path},
+        clean_negative_attack_bit_accuracy_npz_paths={attack_name: clean_npz_path},
+        prompt_suite_path=prompt_suite_path,
+    )
+
+    assert result["generated_bundle_record_count"] == 1
+    record_path = bundle_root / "sigmark" / "records" / f"prompt_a__seed_0__{attack_name}.json"
+    payload = json.loads(record_path.read_text(encoding="utf-8"))
+    assert payload["external_baseline_score"] == 0.82
+    assert payload["external_baseline_clean_negative_score"] == 0.22
+    assert payload["official_score_assignment_policy"] == "per_prompt_seed_runtime_attack_sigmark_bit_accuracy_npz_key"
+    assert payload["official_clean_negative_score_assignment_policy"] == (
+        "per_prompt_seed_runtime_attack_sigmark_clean_negative_bit_accuracy_npz_key"
+    )
+    assert payload["attack_protocol_status"] == "project_runtime_attack_applied_to_sigmark_watermarked_video"
+    assert payload["official_score_granularity"] == "per_prompt_seed_attack"
+    assert payload["official_score_value_type"] == "payload_bit_accuracy_score"
+    assert payload["official_score_formal_comparison_eligibility"] == "eligible"
+    assert payload["official_clean_negative_score_formal_comparison_eligibility"] == "eligible"
+
+
+@pytest.mark.quick
+def test_sigmark_attack_extract_output_preparation_copies_state_and_attacks_video(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """SIGMark per-attack official extract 目录必须复用官方状态并写入攻击后视频。"""
+
+    source_output = tmp_path / "official_positive_outputs"
+    attack_output_root = tmp_path / "official_attack_outputs"
+    dimension = "sstw_runtime_prompt"
+    prompt_text = "A small red toy car moves across a table with clear motion."
+    sample_name = f"{prompt_text[:180]}-0"
+    source_video = source_output / dimension / f"{sample_name}.mp4"
+    source_video.parent.mkdir(parents=True, exist_ok=True)
+    source_video.write_bytes(b"video")
+    (source_output / "HunyuanVideo-community-VBench2_aug-512x512-65frams-sigmark-1024bits-maintained_info.pkl").write_bytes(b"state")
+    (source_output / "HunyuanVideo-community-VBench2_aug-512x512-65frams-sigmark-1024bits-gt_watermark_messages.npz").write_bytes(b"gt")
+    records = [
+        {
+            "prompt_id": "prompt_a",
+            "seed_id": "seed_0",
+            "attack_name": "temporal_crop_runtime",
+        }
+    ]
+
+    monkeypatch.setattr(sigmark_runtime, "_read_video_frames", lambda _path: ["f0", "f1", "f2", "f3"])
+    monkeypatch.setattr(
+        sigmark_runtime,
+        "_write_video_frames",
+        lambda path, _frames, *, fps: Path(path).parent.mkdir(parents=True, exist_ok=True) or Path(path).write_bytes(b"attacked"),
+    )
+
+    manifest = sigmark_runtime._prepare_sigmark_attack_extract_outputs(
+        records=records,
+        source_output_path=source_output,
+        attack_output_root=attack_output_root,
+        state_source_output_path=source_output,
+        prompt_text_by_id={"prompt_a": prompt_text},
+        seed_indices={"prompt_a": {"seed_0": 0}},
+        runtime_dimension=dimension,
+        allow_prompt_id_fallback=False,
+        fps=8,
+        role="positive",
+    )
+
+    attack_dir = Path(manifest["attack_output_paths"]["temporal_crop_runtime"])
+    assert manifest["attack_extract_output_prepare_status"] == "ready"
+    assert (attack_dir / source_video.relative_to(source_output)).exists()
+    assert list(attack_dir.glob("*-maintained_info.pkl"))
+    assert list(attack_dir.glob("*-gt_watermark_messages.npz"))
+    assert manifest["prepared_rows"][0]["attack_transform"] == "drop_first_and_last_frame_when_possible"
 
 
 @pytest.mark.quick

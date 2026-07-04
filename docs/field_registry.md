@@ -1355,10 +1355,19 @@ Notebook 与 repository module 的跨边界数据
 | clean_negative_bit_accuracy_npz_candidates | artifact | none | true | false | false | SIGMark clean negative extract 阶段发现的 bit accuracy npz 候选列表。 |
 | clean_negative_reference_state_manifest | artifact | none | true | false | false | SIGMark clean negative extract 复用官方 key/message 状态的复制审计。 |
 | clean_negative_reference_state_status | governance | none | true | false | false | SIGMark clean negative reference 状态文件复制是否完成。 |
+| reference_state_copy_status | governance | none | true | false | false | SIGMark attack-specific extract 目录复用官方状态文件的复制状态。 |
 | copied_reference_state_count | metric | none | true | false | false | SIGMark clean negative reference 复制的官方状态文件数量。 |
 | copied_reference_state_files | artifact | none | true | false | false | SIGMark clean negative reference 复制的状态文件路径列表。 |
 | clean_negative_gen_command | artifact | none | true | false | false | SIGMark clean negative 官方 gen 命令。 |
 | clean_negative_extract_command | artifact | none | true | false | false | SIGMark clean negative 官方 extract 命令。 |
+| positive_attack_extract_commands | artifact | none | true | false | false | SIGMark 对每个 positive runtime attack 输出目录执行官方 extract 的命令列表。 |
+| clean_negative_attack_extract_commands | artifact | none | true | false | false | SIGMark 对每个 clean negative runtime attack 输出目录执行官方 extract 的命令列表。 |
+| attack_preparation_manifest | artifact | none | true | false | false | SIGMark attack-specific official extract 输入目录准备审计 manifest。 |
+| attack_extract_output_prepare_status | governance | none | true | false | false | SIGMark attack-specific official extract 输入目录是否准备完成。 |
+| attack_bit_accuracy_npz_paths | artifact | none | true | false | false | SIGMark 各 runtime attack 对应 positive bit accuracy npz 路径映射。 |
+| clean_negative_attack_bit_accuracy_npz_paths | artifact | none | true | false | false | SIGMark 各 runtime attack 对应 clean negative bit accuracy npz 路径映射。 |
+| prepared_video_count | metric | none | true | false | false | SIGMark attack-specific official extract 输入目录中准备的视频数量。 |
+| prepared_rows | artifact | none | true | false | false | SIGMark attack-specific official extract 输入目录的样本级准备摘要。 |
 | clean_negative_embedding_command | artifact | none | true | false | false | VideoMark clean negative 官方 embedding/extraction 命令。 |
 | clean_negative_temporal_tamper_command | artifact | none | true | false | false | VideoMark clean negative 官方 temporal tamper 命令。 |
 | clean_negative_video_results_json_path | artifact | none | true | false | false | VideoMark clean negative video_results.json 路径。 |

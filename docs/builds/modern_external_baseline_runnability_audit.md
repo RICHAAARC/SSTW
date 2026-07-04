@@ -75,6 +75,13 @@ watermarked video 施加项目 runtime attack, 最后调用官方 latent inversi
 matching 逻辑写出 project-owned official bundle。该 bundle 仍不是最终论文记录, 后续
 必须由统一 external baseline runner 转写为 `metric_status: measured_formal`。
 
+VideoMark 的特殊点在于官方仓库把鲁棒性评估集中在 `temporal_tamper.py` 中。
+项目运行器会在 runtime copy 中注入 `SSTW_VIDEOMARK_RUNTIME_ATTACK_NAMES`, 使
+VideoMark 按当前 protocol config 的 attack 集合运行, 并把每个 prompt / seed /
+attack 的 `decode_acc` 转写为 project-owned official bundle。该实现必须保持
+fail-closed: 若某个 required runtime attack 在官方 `temporal_results.json` 中没有
+逐 attack 条目, 不允许退回到聚合均值。
+
 ## 5. 结论
 
 当前项目已经具备标准论文 baseline 对比的工程框架。主实验必跑 baseline 已收敛为 5 个,

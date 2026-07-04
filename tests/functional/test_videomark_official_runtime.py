@@ -186,6 +186,9 @@ def test_videomark_runtime_dry_run_builds_prompt_set_and_commands(tmp_path: Path
     assert "'video_compression_runtime'" in runtime_temporal_text
     assert "'temporal_crop_runtime'" in runtime_temporal_text
     assert "'frame_rate_resampling_runtime'" in runtime_temporal_text
+    assert "SSTW_VIDEOMARK_RUNTIME_ATTACK_NAMES" in runtime_temporal_text
+    assert "spatial_crop_resize_runtime" in runtime_temporal_text
+    assert "brightness_contrast_runtime" in runtime_temporal_text
     assert "sstw_videomark_runtime_temporal_tamper(video_frames, temporal_tampering_type" in runtime_temporal_text
     assert {
         row["patch_name"]: row["patch_status"] for row in manifest["patch_manifest"]["patch_results"]
@@ -420,6 +423,73 @@ def test_videomark_bundle_writer_aligns_all_three_runtime_attacks_without_aggreg
         assert payload["official_score_granularity"] == "per_prompt_seed_attack"
         assert payload["official_score_formal_comparison_eligibility"] == "eligible"
         assert payload["official_clean_negative_score_granularity"] == "per_prompt_seed_attack"
+
+
+@pytest.mark.quick
+def test_videomark_bundle_writer_aligns_expanded_runtime_attacks_without_aggregate_fallback(
+    tmp_path: Path,
+) -> None:
+    """VideoMark bundle writer 必须支持 pilot/full 扩展 runtime attack 的逐 attack 分数抽取。"""
+
+    run_root = tmp_path / "runs" / "generative_video_model_probe" / "pilot_paper"
+    bundle_root = tmp_path / "bundles" / "pilot_paper"
+    manifest_path = bundle_root / "videomark" / "official_reference_execution_manifest.json"
+    prompt_suite_path = tmp_path / "datasets" / "generative_video_prompt_suite" / "prompt_seed_suite.json"
+    temporal_path = tmp_path / "official_outputs" / "videomark" / "modelscope" / "512bit" / "temporal_results.json"
+    video_path = temporal_path.with_name("video_results.json")
+    clean_path = tmp_path / "official_clean_negative_outputs" / "without_watermark" / "modelscope" / "temporal_results.json"
+    expanded_attacks = (
+        "frame_drop_uniform_runtime",
+        "spatial_crop_resize_runtime",
+        "gaussian_noise_runtime",
+        "brightness_contrast_runtime",
+        "compression_temporal_combined_runtime",
+    )
+    _write_runtime_records(run_root, attack_names=expanded_attacks)
+    _write_prompt_suite(prompt_suite_path)
+    _write_json(manifest_path, {"manifest_kind": "test_videomark_execution_manifest"})
+    prompt_text = "A small red toy car moves across a table with clear motion."
+    digest = hashlib.sha1(prompt_text.encode("utf-8")).hexdigest()[:12]
+    video_key = f"prompt_0000_{digest}_0"
+    _write_json(
+        temporal_path,
+        {
+            video_key: {
+                attack_name: {"decode_acc": round(0.50 + index * 0.03, 3), "frames_acc": 0.5}
+                for index, attack_name in enumerate(expanded_attacks)
+            }
+        },
+    )
+    _write_json(video_path, {video_key: {"decode_acc": 0.9}})
+    _write_json(
+        clean_path,
+        {
+            video_key: {
+                attack_name: {"decode_acc": round(0.20 + index * 0.01, 3), "frames_acc": 0.3}
+                for index, attack_name in enumerate(expanded_attacks)
+            }
+        },
+    )
+
+    result = write_videomark_official_bundle_records(
+        run_root=run_root,
+        bundle_root=bundle_root,
+        manifest_path=manifest_path,
+        temporal_results_json_path=temporal_path,
+        video_results_json_path=video_path,
+        model_name="modelscope",
+        clean_negative_results_json_path=clean_path,
+        prompt_suite_path=prompt_suite_path,
+    )
+
+    assert result["generated_bundle_record_count"] == len(expanded_attacks)
+    assert result["failed_bundle_record_count"] == 0
+    for index, attack_name in enumerate(expanded_attacks):
+        record_path = bundle_root / "videomark" / "records" / f"prompt_a__seed_0__{attack_name}.json"
+        payload = json.loads(record_path.read_text(encoding="utf-8"))
+        assert payload["official_temporal_attack_key"] == attack_name
+        assert payload["external_baseline_score"] == round(0.50 + index * 0.03, 3)
+        assert payload["official_score_assignment_policy"] == "per_prompt_seed_runtime_attack_mapped_to_videomark_temporal_attack"
 
 
 @pytest.mark.quick

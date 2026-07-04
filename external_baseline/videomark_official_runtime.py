@@ -23,6 +23,7 @@ from typing import Any, Mapping
 from external_baseline.official_eval_adapters.common import REPOSITORY_GENERATED_OFFICIAL_PROVENANCE
 from external_baseline.runtime_trace_io import build_comparison_unit_id, comparable_detection_records
 from external_baseline.score_semantics import official_score_formal_comparison_summary
+from main.attacks.video_runtime_attack_protocol import FULL_PAPER_RUNTIME_ATTACKS, RUNTIME_ATTACK_SPECS
 
 
 BASELINE_ID = "videomark"
@@ -176,27 +177,143 @@ def sstw_videomark_reencode_frames_for_video_compression_runtime(video_frames):
     return jpeg_frames
 
 
+def sstw_videomark_spatial_resize_frames(video_frames, ratio=0.75):
+    """先缩小再恢复, 模拟 resize 类攻击。"""
+
+    resized_frames = []
+    for frame in video_frames:
+        height, width = frame.shape[:2]
+        small_size = (max(1, int(width * ratio)), max(1, int(height * ratio)))
+        small = cv2.resize(frame, small_size, interpolation=cv2.INTER_LINEAR)
+        resized = cv2.resize(small, (width, height), interpolation=cv2.INTER_LINEAR)
+        resized_frames.append(resized)
+    return resized_frames
+
+
+def sstw_videomark_center_crop_resize_frames(video_frames, ratio=0.80):
+    """中心裁剪后恢复原分辨率, 模拟 crop / crop+resize 攻击。"""
+
+    cropped_frames = []
+    for frame in video_frames:
+        height, width = frame.shape[:2]
+        crop_h = max(1, int(height * ratio))
+        crop_w = max(1, int(width * ratio))
+        top = max(0, (height - crop_h) // 2)
+        left = max(0, (width - crop_w) // 2)
+        cropped = frame[top:top + crop_h, left:left + crop_w]
+        restored = cv2.resize(cropped, (width, height), interpolation=cv2.INTER_LINEAR)
+        cropped_frames.append(restored)
+    return cropped_frames
+
+
+def sstw_videomark_rotate_frames(video_frames):
+    """小角度旋转, 用于空间同步扰动。"""
+
+    rotated_frames = []
+    for frame in video_frames:
+        height, width = frame.shape[:2]
+        matrix = cv2.getRotationMatrix2D((width / 2.0, height / 2.0), 5.0, 1.0)
+        rotated = cv2.warpAffine(frame, matrix, (width, height), flags=cv2.INTER_LINEAR, borderMode=cv2.BORDER_REFLECT)
+        rotated_frames.append(rotated)
+    return rotated_frames
+
+
+def sstw_videomark_perspective_frames(video_frames):
+    """轻量 perspective 近似, 用于几何失同步测试。"""
+
+    warped_frames = []
+    for frame in video_frames:
+        height, width = frame.shape[:2]
+        offset = max(1, int(min(height, width) * 0.04))
+        src = np.float32([[0, 0], [width - 1, 0], [0, height - 1], [width - 1, height - 1]])
+        dst = np.float32([[offset, 0], [width - 1 - offset, offset], [0, height - 1 - offset], [width - 1, height - 1]])
+        matrix = cv2.getPerspectiveTransform(src, dst)
+        warped = cv2.warpPerspective(frame, matrix, (width, height), flags=cv2.INTER_LINEAR, borderMode=cv2.BORDER_REFLECT)
+        warped_frames.append(warped)
+    return warped_frames
+
+
+def sstw_videomark_noise_frames(video_frames):
+    """添加确定性小幅噪声, 保证官方流程可复现。"""
+
+    rng = np.random.default_rng(20260704)
+    noisy_frames = []
+    for frame in video_frames:
+        noise = rng.normal(loc=0.0, scale=4.0 / 255.0, size=frame.shape)
+        noisy_frames.append(np.clip(frame + noise, 0.0, 1.0))
+    return noisy_frames
+
+
+def sstw_videomark_blur_frames(video_frames):
+    """Gaussian blur。"""
+
+    return [cv2.GaussianBlur(frame, (3, 3), 0) for frame in video_frames]
+
+
+def sstw_videomark_median_blur_frames(video_frames):
+    """Median blur。"""
+
+    blurred = []
+    for frame in video_frames:
+        uint8_frame = (np.clip(frame, 0.0, 1.0) * 255.0).astype(np.uint8)
+        median = cv2.medianBlur(uint8_frame, 3)
+        blurred.append(median.astype(np.float32) / 255.0)
+    return blurred
+
+
+def sstw_videomark_brightness_contrast_frames(video_frames):
+    """亮度和对比度扰动。"""
+
+    adjusted_frames = []
+    for frame in video_frames:
+        mean = np.mean(frame, axis=(0, 1), keepdims=True)
+        adjusted = (frame - mean) * 1.10 + mean
+        adjusted = adjusted * 1.08
+        adjusted_frames.append(np.clip(adjusted, 0.0, 1.0))
+    return adjusted_frames
+
+
+def sstw_videomark_frame_average_frames(video_frames):
+    """相邻帧平均。"""
+
+    if len(video_frames) < 2:
+        return copy.deepcopy(video_frames)
+    averaged = [copy.deepcopy(video_frames[0])]
+    for index in range(1, len(video_frames)):
+        averaged.append(np.clip((video_frames[index - 1] + video_frames[index]) / 2.0, 0.0, 1.0))
+    return averaged
+
+
 def sstw_videomark_runtime_temporal_tamper(video_frames, tampering_type_list, shift_value, message_bits_sequence):
-    """按 SSTW 三类 runtime attack 生成 VideoMark 可检测的帧序列。
+    """按 SSTW runtime attack 协议生成 VideoMark 可检测的帧序列。
 
     该函数是项目内 runtime copy 适配层, 用于让 VideoMark 与其他 baseline 共享
-    video_compression_runtime / temporal_crop_runtime / frame_rate_resampling_runtime
-    三个 comparison unit。它保留每个攻击后的 frame id 与 message bit 对齐关系,
+    protocol config 中的同名 comparison unit。它保留每个攻击后的 frame id 与 message bit 对齐关系,
     避免把多个官方 temporal attack 聚合成一个不可公平比较的均值。
     """
 
     tampered_videos = {}
     video_frames_ids = get_label_index(shift_value, length=len(video_frames))
     message_bits_label = message_bits_sequence[shift_value:shift_value+len(video_frames)].tolist()
+
+    def add_tampered(name, frames, frame_ids, bits):
+        aligned_length = min(len(frames), len(frame_ids), len(bits))
+        tampered_videos[name] = [
+            frames[:aligned_length],
+            copy.deepcopy(frame_ids[:aligned_length]),
+            np.array(copy.deepcopy(bits[:aligned_length])),
+        ]
+
     for tampering_type in tampering_type_list:
-        if tampering_type == 'video_compression_runtime':
+        if tampering_type in [
+            'video_compression_runtime',
+            'h264_crf23_runtime',
+            'h264_crf33_runtime',
+            'h265_crf28_runtime',
+            'mpeg4_crf28_runtime',
+        ]:
             video_frames_tampered = sstw_videomark_reencode_frames_for_video_compression_runtime(video_frames)
-            aligned_length = min(len(video_frames_tampered), len(video_frames_ids), len(message_bits_label))
-            tampered_videos['video_compression_runtime'] = [
-                video_frames_tampered[:aligned_length],
-                copy.deepcopy(video_frames_ids[:aligned_length]),
-                np.array(copy.deepcopy(message_bits_label[:aligned_length])),
-            ]
+            add_tampered(tampering_type, video_frames_tampered, video_frames_ids, message_bits_label)
         elif tampering_type == 'temporal_crop_runtime':
             if len(video_frames) >= 4:
                 video_frames_tampered = copy.deepcopy(video_frames[1:-1])
@@ -206,11 +323,7 @@ def sstw_videomark_runtime_temporal_tamper(video_frames, tampering_type_list, sh
                 video_frames_tampered = copy.deepcopy(video_frames)
                 video_frames_tampered_ids = copy.deepcopy(video_frames_ids)
                 message_bits_tampered = copy.deepcopy(message_bits_label)
-            tampered_videos['temporal_crop_runtime'] = [
-                video_frames_tampered,
-                video_frames_tampered_ids,
-                np.array(message_bits_tampered),
-            ]
+            add_tampered(tampering_type, video_frames_tampered, video_frames_tampered_ids, message_bits_tampered)
         elif tampering_type == 'frame_rate_resampling_runtime':
             if len(video_frames) >= 3:
                 video_frames_tampered = copy.deepcopy(video_frames[::2])
@@ -220,11 +333,51 @@ def sstw_videomark_runtime_temporal_tamper(video_frames, tampering_type_list, sh
                 video_frames_tampered = copy.deepcopy(video_frames)
                 video_frames_tampered_ids = copy.deepcopy(video_frames_ids)
                 message_bits_tampered = copy.deepcopy(message_bits_label)
-            tampered_videos['frame_rate_resampling_runtime'] = [
-                video_frames_tampered,
-                video_frames_tampered_ids,
-                np.array(message_bits_tampered),
-            ]
+            add_tampered(tampering_type, video_frames_tampered, video_frames_tampered_ids, message_bits_tampered)
+        elif tampering_type in ['frame_drop_uniform_runtime', 'compression_temporal_combined_runtime']:
+            keep_indices = [index for index in range(len(video_frames)) if (index + 1) % 3 != 0]
+            if not keep_indices:
+                keep_indices = list(range(len(video_frames)))
+            add_tampered(
+                tampering_type,
+                [copy.deepcopy(video_frames[index]) for index in keep_indices],
+                [copy.deepcopy(video_frames_ids[index]) for index in keep_indices],
+                [copy.deepcopy(message_bits_label[index]) for index in keep_indices],
+            )
+        elif tampering_type == 'frame_insert_duplicate_runtime':
+            midpoint = max(0, len(video_frames) // 2)
+            frames = copy.deepcopy(video_frames[:midpoint]) + [copy.deepcopy(video_frames[midpoint])] + copy.deepcopy(video_frames[midpoint:])
+            frame_ids = copy.deepcopy(video_frames_ids[:midpoint]) + [copy.deepcopy(video_frames_ids[midpoint])] + copy.deepcopy(video_frames_ids[midpoint:])
+            bits = copy.deepcopy(message_bits_label[:midpoint]) + [copy.deepcopy(message_bits_label[midpoint])] + copy.deepcopy(message_bits_label[midpoint:])
+            add_tampered(tampering_type, frames, frame_ids, bits)
+        elif tampering_type == 'frame_swap_adjacent_runtime':
+            frames = copy.deepcopy(video_frames)
+            frame_ids = copy.deepcopy(video_frames_ids)
+            bits = copy.deepcopy(message_bits_label)
+            if len(frames) >= 4:
+                midpoint = len(frames) // 2
+                frames[midpoint - 1], frames[midpoint] = frames[midpoint], frames[midpoint - 1]
+                frame_ids[midpoint - 1], frame_ids[midpoint] = frame_ids[midpoint], frame_ids[midpoint - 1]
+                bits[midpoint - 1], bits[midpoint] = bits[midpoint], bits[midpoint - 1]
+            add_tampered(tampering_type, frames, frame_ids, bits)
+        elif tampering_type == 'frame_average_runtime':
+            add_tampered(tampering_type, sstw_videomark_frame_average_frames(video_frames), video_frames_ids, message_bits_label)
+        elif tampering_type == 'spatial_resize_runtime':
+            add_tampered(tampering_type, sstw_videomark_spatial_resize_frames(video_frames), video_frames_ids, message_bits_label)
+        elif tampering_type in ['spatial_crop_resize_runtime', 'compression_crop_combined_runtime']:
+            add_tampered(tampering_type, sstw_videomark_center_crop_resize_frames(video_frames), video_frames_ids, message_bits_label)
+        elif tampering_type == 'rotation_runtime':
+            add_tampered(tampering_type, sstw_videomark_rotate_frames(video_frames), video_frames_ids, message_bits_label)
+        elif tampering_type == 'perspective_runtime':
+            add_tampered(tampering_type, sstw_videomark_perspective_frames(video_frames), video_frames_ids, message_bits_label)
+        elif tampering_type == 'gaussian_noise_runtime':
+            add_tampered(tampering_type, sstw_videomark_noise_frames(video_frames), video_frames_ids, message_bits_label)
+        elif tampering_type == 'gaussian_blur_runtime':
+            add_tampered(tampering_type, sstw_videomark_blur_frames(video_frames), video_frames_ids, message_bits_label)
+        elif tampering_type == 'median_blur_runtime':
+            add_tampered(tampering_type, sstw_videomark_median_blur_frames(video_frames), video_frames_ids, message_bits_label)
+        elif tampering_type in ['brightness_contrast_runtime', 'compression_brightness_combined_runtime']:
+            add_tampered(tampering_type, sstw_videomark_brightness_contrast_frames(video_frames), video_frames_ids, message_bits_label)
         else:
             legacy_videos = temporal_tamper(video_frames, [tampering_type], shift_value, message_bits_sequence)
             tampered_videos.update(legacy_videos)
@@ -232,6 +385,13 @@ def sstw_videomark_runtime_temporal_tamper(video_frames, tampering_type_list, sh
 '''
 TEMPORAL_RUNTIME_ATTACK_LIST_TARGET = "        temporal_tampering_type = ['frame insert','frame drop','frame swap']"
 TEMPORAL_RUNTIME_ATTACK_LIST_REPLACEMENT = (
+    "        temporal_tampering_type = [item.strip() for item in os.environ.get(\n"
+    "            'SSTW_VIDEOMARK_RUNTIME_ATTACK_NAMES',\n"
+    "            'video_compression_runtime,temporal_crop_runtime,frame_rate_resampling_runtime',\n"
+    "        ).split(',') if item.strip()]"
+)
+TEMPORAL_RUNTIME_ATTACK_LIST_DYNAMIC_MARKER = "SSTW_VIDEOMARK_RUNTIME_ATTACK_NAMES"
+TEMPORAL_RUNTIME_ATTACK_LIST_LEGACY_REPLACEMENT = (
     "        temporal_tampering_type = [\n"
     "            'video_compression_runtime',\n"
     "            'temporal_crop_runtime',\n"
@@ -624,8 +784,15 @@ def _patch_videomark_runtime_source(runtime_source_dir: Path) -> dict[str, Any]:
         temporal_text = temporal_text.rstrip() + "\n" + TEMPORAL_RUNTIME_ATTACK_HELPER_CODE + "\n"
         runtime_attack_patch_statuses.append("patched_runtime_copy")
 
-    if "temporal_tampering_type = [\n            'video_compression_runtime'" in temporal_text:
+    if TEMPORAL_RUNTIME_ATTACK_LIST_DYNAMIC_MARKER in temporal_text:
         runtime_attack_patch_statuses.append("already_patched")
+    elif TEMPORAL_RUNTIME_ATTACK_LIST_LEGACY_REPLACEMENT in temporal_text:
+        temporal_text = temporal_text.replace(
+            TEMPORAL_RUNTIME_ATTACK_LIST_LEGACY_REPLACEMENT,
+            TEMPORAL_RUNTIME_ATTACK_LIST_REPLACEMENT,
+            1,
+        )
+        runtime_attack_patch_statuses.append("patched_runtime_copy")
     elif TEMPORAL_RUNTIME_ATTACK_LIST_TARGET in temporal_text:
         temporal_text = temporal_text.replace(
             TEMPORAL_RUNTIME_ATTACK_LIST_TARGET,
@@ -657,11 +824,7 @@ def _patch_videomark_runtime_source(runtime_source_dir: Path) -> dict[str, Any]:
     patch_results.append({
         "patch_name": "temporal_runtime_attack_protocol_guard",
         "patch_status": runtime_attack_patch_status,
-        "runtime_attack_names": [
-            "video_compression_runtime",
-            "temporal_crop_runtime",
-            "frame_rate_resampling_runtime",
-        ],
+        "runtime_attack_names": list(FULL_PAPER_RUNTIME_ATTACKS),
         "runtime_attack_patch_statuses": runtime_attack_patch_statuses,
     })
     temporal_path.write_text(temporal_text, encoding="utf-8")
@@ -870,11 +1033,14 @@ def _run_videomark_command(
     log_path: Path,
     timeout_seconds: float,
     prompt_variants: int,
+    runtime_attack_names: tuple[str, ...] = (),
 ) -> dict[str, Any]:
     """运行单条 VideoMark 官方命令并写出 stdout / stderr。"""
 
     env = dict(os.environ)
     env["SSTW_VIDEOMARK_PROMPT_VARIANTS"] = str(int(prompt_variants))
+    if runtime_attack_names:
+        env["SSTW_VIDEOMARK_RUNTIME_ATTACK_NAMES"] = ",".join(runtime_attack_names)
     timeout_expired = False
     execution_error = ""
     try:
@@ -999,12 +1165,8 @@ def _videomark_temporal_attack_key_for_runtime_attack(attack_name: str) -> str |
     """把 SSTW runtime attack 名称映射到 VideoMark 官方 temporal attack 名称。"""
 
     normalized = str(attack_name or "").strip().lower().replace("-", "_").replace(" ", "_")
-    if normalized == "video_compression_runtime" or "compression_runtime" in normalized:
-        return "video_compression_runtime"
-    if normalized == "temporal_crop_runtime":
-        return "temporal_crop_runtime"
-    if normalized == "frame_rate_resampling_runtime":
-        return "frame_rate_resampling_runtime"
+    if normalized in RUNTIME_ATTACK_SPECS:
+        return normalized
     if "insert" in normalized:
         return "frame insert"
     if "drop" in normalized or "delete" in normalized or "crop" in normalized:
@@ -1271,6 +1433,7 @@ def run_videomark_official_runtime(config: VideoMarkOfficialRuntimeConfig) -> di
     records = _selected_runtime_records(run_root, config.max_records)
     if not records:
         raise RuntimeError(f"videomark_runtime_detection_records_missing:{run_root / 'records/runtime_detection_records.jsonl'}")
+    runtime_attack_names = tuple(sorted({str(record.get("attack_name")) for record in records if record.get("attack_name")}))
     prompt_rows = _runtime_prompt_rows(
         records,
         prompt_suite_path=prompt_suite_path,
@@ -1332,6 +1495,7 @@ def run_videomark_official_runtime(config: VideoMarkOfficialRuntimeConfig) -> di
                 log_path=output_root / "logs" / "videomark_temporal_tamper",
                 timeout_seconds=float(config.timeout_seconds),
                 prompt_variants=int(config.prompt_variants),
+                runtime_attack_names=runtime_attack_names,
             )
             command_results.append(temporal_result)
             if int(temporal_result["return_code"]) != 0:
@@ -1359,6 +1523,7 @@ def run_videomark_official_runtime(config: VideoMarkOfficialRuntimeConfig) -> di
                 log_path=output_root / "logs" / "videomark_clean_negative_temporal_tamper",
                 timeout_seconds=float(config.timeout_seconds),
                 prompt_variants=int(config.prompt_variants),
+                runtime_attack_names=runtime_attack_names,
             )
             command_results.append(clean_temporal_result)
             if int(clean_temporal_result["return_code"]) != 0:
@@ -1446,6 +1611,7 @@ def run_videomark_official_runtime(config: VideoMarkOfficialRuntimeConfig) -> di
         "temporal_results_json_exists": temporal_results_path.is_file(),
         "clean_negative_temporal_results_json_exists": clean_negative_temporal_results_path.is_file(),
         "input_runtime_detection_record_count": len(records),
+        "runtime_attack_names": list(runtime_attack_names),
         "generated_bundle_record_count": int(bundle_result["generated_bundle_record_count"]),
         "failed_bundle_record_count": int(bundle_result["failed_bundle_record_count"]),
         "failures": bundle_result.get("failures", []),

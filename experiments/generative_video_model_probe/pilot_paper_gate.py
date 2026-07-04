@@ -69,6 +69,16 @@ DEFAULT_REQUIRED_INTERNAL_ABLATION_VARIANTS = (
     "without_flow_state_admissibility",
     "generic_ssm_baseline",
 )
+HARD_REQUIRED_PILOT_PAPER_CONFIG_FLAGS = (
+    "require_validation_scale_gate_passed",
+    "require_validation_scale_to_pilot_paper_transition_decision",
+    "require_external_baseline_comparison_ready",
+    "require_external_baseline_self_contained_outputs",
+    "require_modern_external_baseline_formal_results",
+    "require_fair_detection_calibration",
+    "require_formal_method_baseline_comparison",
+    "require_formal_baseline_difference_interval",
+)
 SCORE_FIELDS = (
     "S_final_conservative",
     "S_runtime_attack_detection",
@@ -182,6 +192,20 @@ def _load_config(config_path: str | Path = DEFAULT_PILOT_PAPER_CONFIG) -> dict[s
         "require_validation_scale_to_pilot_paper_transition_decision": bool(raw.get("require_validation_scale_to_pilot_paper_transition_decision", True)),
         "require_formal_motion_claim_ready": bool(raw.get("require_formal_motion_claim_ready", True)),
     }
+
+
+def _hard_required_config_missing(config: dict[str, Any]) -> list[str]:
+    """检查 pilot_paper 是否试图关闭 validation_scale 与公平比较硬前置。
+
+    pilot_paper 必须从已完成的 validation_scale 公平比较门禁进入。该函数防止
+    通过 protocol config 跳过上游 validation_scale gate、阶段跳转判定、
+    external baseline 自包含输出、measured_formal 结果和同 FPR 公平比较证据链。
+    """
+    return [
+        f"{field_name}_must_be_true"
+        for field_name in HARD_REQUIRED_PILOT_PAPER_CONFIG_FLAGS
+        if config.get(field_name) is not True
+    ]
 
 
 def _unique_nonempty(records: Iterable[dict], field: str) -> set[str]:
@@ -763,6 +787,7 @@ def build_pilot_paper_gate_audit(
     run_root = Path(run_root)
     config = _load_config(config_path)
     profile_names = set(config["pilot_profile_names"])
+    hard_config_missing = _hard_required_config_missing(config)
 
     generation_records = _read_jsonl(run_root / "records" / "generation_records.jsonl")
     formal_metric_records = _read_jsonl(run_root / "records" / "formal_quality_motion_semantic_records.jsonl")
@@ -904,7 +929,9 @@ def build_pilot_paper_gate_audit(
         "pilot_paper_formal_baseline_difference_interval_ready": (not config["require_formal_baseline_difference_interval"]) or formal_difference_interval_ready,
         "pilot_paper_internal_ablation_matrix_ready": (not config["require_internal_ablation_matrix_ready"]) or internal_ablation_ready,
     }
-    missing = [name for name, passed in requirement_checks.items() if not passed]
+    missing = list(dict.fromkeys(
+        [name for name, passed in requirement_checks.items() if not passed] + hard_config_missing
+    ))
     gate_decision = "PASS" if not missing else "FAIL"
 
     if not pilot_generation_records:
@@ -926,6 +953,8 @@ def build_pilot_paper_gate_audit(
         "pilot_paper_claim_allowed": gate_decision == "PASS",
         "missing_pilot_paper_requirements": missing,
         "pilot_paper_missing_requirement_count": len(missing),
+        "pilot_paper_hard_required_config_missing": hard_config_missing,
+        "pilot_paper_hard_required_config_missing_count": len(hard_config_missing),
         "pilot_profile_names": sorted(profile_names),
         "threshold_protocol": config["threshold_protocol"],
         **validation_scale_summary,
@@ -1056,6 +1085,7 @@ def write_pilot_paper_gate_audit(
         f"- paper_result_level: {audit['paper_result_level']}\n"
         f"- paper_protocol_difference_from_full_paper: {audit['paper_protocol_difference_from_full_paper']}\n"
         f"- threshold_protocol: {audit['threshold_protocol']}\n"
+        f"- pilot_paper_hard_required_config_missing: {', '.join(audit['pilot_paper_hard_required_config_missing']) if audit['pilot_paper_hard_required_config_missing'] else 'none'}\n"
         f"- validation_scale_gate_decision: {audit['validation_scale_gate_decision']}\n"
         f"- validation_scale_gate_fairness_missing_requirements: {', '.join(audit['validation_scale_gate_fairness_missing_requirements']) if audit['validation_scale_gate_fairness_missing_requirements'] else 'none'}\n"
         f"- validation_scale_to_pilot_paper_transition_decision: {audit['validation_scale_to_pilot_paper_transition_decision']}\n"

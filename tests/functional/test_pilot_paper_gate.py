@@ -460,6 +460,64 @@ def test_pilot_paper_gate_blocks_empty_run(tmp_path: Path) -> None:
 
 
 @pytest.mark.quick
+def test_pilot_paper_gate_cannot_disable_validation_scale_fairness_prerequisites(tmp_path: Path) -> None:
+    """pilot_paper 不能通过配置关闭 validation_scale 与公平比较硬前置。"""
+    config_path = tmp_path / "pilot_paper_config.json"
+    config_path.write_text(json.dumps({
+        "target_fpr": 0.01,
+        "blocked_target_fpr": 0.001,
+        "paper_result_level": "pilot_paper",
+        "paper_protocol_level": "paper_grade_protocol",
+        "paper_protocol_difference_from_full_paper": "sample_scale_only",
+        "minimum_prompt_count": 0,
+        "minimum_seed_per_prompt": 0,
+        "minimum_calibration_seed_per_prompt": 0,
+        "minimum_test_seed_per_prompt": 0,
+        "minimum_unique_video_count": 0,
+        "minimum_calibration_unique_video_count": 0,
+        "minimum_test_unique_video_count": 0,
+        "minimum_calibration_negative_event_count": 0,
+        "minimum_heldout_test_negative_event_count": 0,
+        "minimum_heldout_attacked_positive_event_count": 0,
+        "minimum_clean_negative_count": 0,
+        "minimum_negative_family_count": 0,
+        "minimum_calibration_negative_event_count_per_family": 0,
+        "minimum_heldout_negative_event_count_per_family": 0,
+        "minimum_attack_event_count_per_attack": 0,
+        "minimum_external_baseline_measured_adapter_count": 0,
+        "minimum_modern_external_baseline_formal_adapter_count": 0,
+        "minimum_pilot_paper_external_baseline_trace_count": 0,
+        "minimum_pilot_paper_internal_ablation_trace_count": 0,
+        "minimum_internal_ablation_variant_count": 0,
+        "required_external_baseline_adapter_names": [],
+        "required_modern_external_baseline_adapter_names": [],
+        "required_internal_ablation_variants": [],
+        "require_validation_scale_gate_passed": False,
+        "require_validation_scale_to_pilot_paper_transition_decision": False,
+        "require_external_baseline_comparison_ready": False,
+        "require_external_baseline_self_contained_outputs": False,
+        "require_modern_external_baseline_formal_results": False,
+        "require_fair_detection_calibration": False,
+        "require_formal_method_baseline_comparison": False,
+        "require_formal_baseline_difference_interval": False,
+        "require_internal_ablation_matrix_ready": False,
+        "require_motion_threshold_calibration_ready": False,
+        "require_formal_motion_claim_ready": False,
+    }), encoding="utf-8")
+
+    audit = build_pilot_paper_gate_audit(tmp_path / "run", config_path)
+
+    assert audit["pilot_paper_gate_decision"] == "FAIL"
+    assert audit["pilot_paper_claim_allowed"] is False
+    assert audit["pilot_paper_hard_required_config_missing_count"] == 8
+    assert "require_validation_scale_gate_passed_must_be_true" in audit["missing_pilot_paper_requirements"]
+    assert "require_validation_scale_to_pilot_paper_transition_decision_must_be_true" in audit["missing_pilot_paper_requirements"]
+    assert "require_fair_detection_calibration_must_be_true" in audit["missing_pilot_paper_requirements"]
+    assert "require_formal_method_baseline_comparison_must_be_true" in audit["missing_pilot_paper_requirements"]
+    assert "require_formal_baseline_difference_interval_must_be_true" in audit["missing_pilot_paper_requirements"]
+
+
+@pytest.mark.quick
 def test_pilot_paper_gate_rejects_validation_scale_profile(tmp_path: Path) -> None:
     """validation_scale profile 不能冒充 pilot_paper profile。"""
     run_root = tmp_path / "run"
@@ -486,6 +544,7 @@ def test_pilot_paper_gate_passes_calibrated_heldout_fixture(tmp_path: Path) -> N
     assert audit["paper_protocol_level"] == "paper_grade_protocol"
     assert audit["paper_protocol_difference_from_full_paper"] == "sample_scale_only"
     assert audit["pilot_paper_protocol_matches_full_paper"] is True
+    assert audit["pilot_paper_hard_required_config_missing_count"] == 0
     assert audit["validation_scale_gate_decision"] == "PASS"
     assert audit["validation_scale_to_pilot_paper_transition_decision"] == "PASS"
     assert audit["external_baseline_comparison_decision"] == "PASS"

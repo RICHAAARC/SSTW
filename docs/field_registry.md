@@ -907,6 +907,8 @@ Notebook 与 repository module 的跨边界数据
 | pilot_paper_gate_decision | governance | none | true | false | false | pilot_paper fixed-FPR gate 的 PASS / FAIL 判定。 |
 | missing_pilot_paper_requirements | governance | none | true | false | false | 阻断 pilot_paper fixed-FPR claim 的缺失条件列表。 |
 | pilot_paper_missing_requirement_count | metric | none | true | false | false | pilot_paper fixed-FPR gate 的缺失条件数量。 |
+| pilot_paper_hard_required_config_missing | governance | none | true | false | false | pilot_paper 不可通过配置关闭的 validation_scale 与公平比较硬前置缺口列表。 |
+| pilot_paper_hard_required_config_missing_count | metric | none | true | false | false | pilot_paper 硬前置配置缺口数量。 |
 | paper_result_level | governance | none | true | true | false | 结果包的论文级别, 例如 pilot_paper 或 full_paper。 |
 | paper_protocol_level | governance | none | true | true | false | 结果包采用的协议级别, 例如 paper_grade_protocol。 |
 | paper_protocol_difference_from_full_paper | governance | none | true | true | false | 当前结果级别与 full_paper 的协议差异说明。 |

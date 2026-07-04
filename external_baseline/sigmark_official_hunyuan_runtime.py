@@ -21,6 +21,7 @@ from typing import Any, Mapping
 
 from external_baseline.official_eval_adapters.common import REPOSITORY_GENERATED_OFFICIAL_PROVENANCE
 from external_baseline.runtime_trace_io import build_comparison_unit_id, comparable_detection_records
+from external_baseline.score_semantics import official_score_formal_comparison_summary
 
 
 BASELINE_ID = "sigmark"
@@ -961,6 +962,11 @@ def write_sigmark_official_bundle_records(
                 "source_video_path": record.get("source_video_path"),
                 "attacked_video_path": record.get("attacked_video_path"),
                 "claim_support_status": "official_reference_bundle_written_not_claim_by_itself",
+            }
+            payload = {
+                **payload,
+                **official_score_formal_comparison_summary(payload),
+                **official_score_formal_comparison_summary(payload, clean_negative=True),
             }
             _write_json(output_json_path, payload)
             generated += 1

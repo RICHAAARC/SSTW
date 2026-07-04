@@ -145,6 +145,26 @@ def _policy_uses_aggregate_assignment(policy: str, result_key: str = "") -> bool
     return any(marker in text for marker in aggregate_markers)
 
 
+def _result_key_for_score(payload: Mapping[str, Any], *, clean_negative: bool = False) -> str:
+    """读取 positive 或 clean negative 分数绑定的官方 result key。"""
+
+    if clean_negative:
+        return _first_text(
+            payload,
+            (
+                "official_clean_negative_result_key",
+                "external_baseline_official_clean_negative_result_key",
+            ),
+        )
+    return _first_text(
+        payload,
+        (
+            "official_result_key",
+            "external_baseline_official_result_key",
+        ),
+    )
+
+
 def infer_official_score_granularity(payload: Mapping[str, Any], *, clean_negative: bool = False) -> str:
     """推断官方分数的样本粒度。
 
@@ -163,14 +183,7 @@ def infer_official_score_granularity(payload: Mapping[str, Any], *, clean_negati
     if explicit:
         return explicit
     policy = _policy_for_score(payload, clean_negative=clean_negative)
-    result_key = _first_text(
-        payload,
-        (
-            "official_clean_negative_result_key",
-            "official_result_key",
-            "external_baseline_official_result_key",
-        ),
-    )
+    result_key = _result_key_for_score(payload, clean_negative=clean_negative)
     if _policy_uses_aggregate_assignment(policy, result_key):
         return "aggregate"
     policy_lower = policy.lower()
@@ -256,14 +269,7 @@ def official_score_formal_comparison_summary(
         selected_score_field=selected_score_field,
     )
     policy = _policy_for_score(payload, clean_negative=clean_negative)
-    result_key = _first_text(
-        payload,
-        (
-            "official_clean_negative_result_key",
-            "official_result_key",
-            "external_baseline_official_result_key",
-        ),
-    )
+    result_key = _result_key_for_score(payload, clean_negative=clean_negative)
     eligible_granularities = (
         FORMAL_CLEAN_NEGATIVE_SCORE_GRANULARITIES
         if clean_negative

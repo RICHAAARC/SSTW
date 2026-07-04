@@ -20,6 +20,7 @@ import sys
 from typing import Any, Mapping
 
 from external_baseline.runtime_trace_io import comparable_detection_records
+from external_baseline.score_semantics import official_score_formal_comparison_summary
 from external_baseline.video_tensor_io import read_video_tchw_uint8, write_video_tchw
 from external_baseline.videoseal_official_runtime import (
     ensure_videoseal_official_runtime_layout,
@@ -256,6 +257,11 @@ def generate_videoseal_official_bundle(
                 "seed_id": record.get("seed_id"),
                 "trajectory_trace_id": record.get("trajectory_trace_id"),
                 "official_execution_manifest_path": str(bundle / "videoseal" / "official_bundle_generation_manifest.json"),
+            }
+            payload = {
+                **payload,
+                **official_score_formal_comparison_summary(payload),
+                **official_score_formal_comparison_summary(payload, clean_negative=True),
             }
             _write_json(output_json, payload)
             generated += 1

@@ -276,3 +276,9 @@ def test_vidsig_bundle_writer_records_clean_negative_score(
     assert payload["external_baseline_clean_negative_score"] == 0.1
     assert payload["external_baseline_clean_negative_score_semantics"] == "official_tpr_at_fixed_fpr_detection_score"
     assert payload["external_baseline_clean_negative_video_path"].endswith("_clean_negative.mp4")
+    assert payload["official_score_granularity"] == "per_prompt_seed_attack"
+    assert payload["official_score_value_type"] == "fixed_fpr_detection_score"
+    assert payload["official_score_formal_comparison_eligibility"] == "blocked"
+    assert payload["official_score_formal_comparison_block_reason"] == (
+        "score_value_type_not_formal_comparison_eligible:fixed_fpr_detection_score"
+    )

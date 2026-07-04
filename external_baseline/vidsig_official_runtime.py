@@ -21,6 +21,7 @@ from typing import Any, Mapping
 
 from external_baseline.official_eval_adapters.common import REPOSITORY_GENERATED_OFFICIAL_PROVENANCE
 from external_baseline.runtime_trace_io import build_comparison_unit_id, comparable_detection_records
+from external_baseline.score_semantics import official_score_formal_comparison_summary
 
 
 BASELINE_ID = "vidsig"
@@ -752,6 +753,11 @@ def write_vidsig_official_bundle_records(
                 **attack_metadata,
                 "clean_negative_attack_transform": clean_negative_attack_metadata["attack_transform"],
                 "clean_negative_attack_strength": clean_negative_attack_metadata["attack_strength"],
+            }
+            payload = {
+                **payload,
+                **official_score_formal_comparison_summary(payload),
+                **official_score_formal_comparison_summary(payload, clean_negative=True),
             }
             _write_json(output_json_path, payload)
             generated += 1

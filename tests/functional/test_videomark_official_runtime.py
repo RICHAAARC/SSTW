@@ -253,6 +253,11 @@ def test_videomark_bundle_writer_records_project_owned_provenance(tmp_path: Path
     assert payload["official_frames_acc_mean"] == 0.65
     assert payload["official_temporal_attack_names"] == ["frame drop", "frame swap"]
     assert "metric_status" not in payload
+    assert payload["official_score_granularity"] == "aggregate"
+    assert payload["official_score_formal_comparison_eligibility"] == "blocked"
+    assert payload["official_score_formal_comparison_block_reason"] == (
+        "aggregate_score_assignment_not_formal_comparison_eligible"
+    )
 
 
 @pytest.mark.quick
@@ -317,3 +322,7 @@ def test_videomark_bundle_writer_uses_prompt_seed_attack_specific_key(tmp_path: 
     assert payload["official_temporal_attack_key"] == "frame drop"
     assert payload["official_score_assignment_policy"] == "per_prompt_seed_runtime_attack_mapped_to_videomark_temporal_attack"
     assert payload["official_clean_negative_result_key"] == video_key
+    assert payload["official_score_granularity"] == "per_prompt_seed_attack"
+    assert payload["official_score_formal_comparison_eligibility"] == "eligible"
+    assert payload["official_clean_negative_score_granularity"] == "per_prompt_seed"
+    assert payload["official_clean_negative_score_formal_comparison_eligibility"] == "eligible"

@@ -327,3 +327,4 @@ def test_videoseal_auto_bundle_generator_writes_fair_comparison_fields() -> None
     assert "same_prompt_seed_attack_runtime_comparison_unit" in generator_text
     assert "repository_generated_from_third_party_official_code" in generator_text
     assert "official_execution_manifest_path" in generator_text
+    assert "official_score_formal_comparison_summary" in generator_text

@@ -177,6 +177,11 @@ def test_sigmark_bundle_writer_records_project_owned_provenance(tmp_path: Path) 
     assert payload["external_baseline_clean_negative_score"] == 0.375
     assert payload["official_clean_negative_bit_accuracy_npz_path"] == str(clean_npz_path)
     assert payload["official_execution_manifest_path"] == str(manifest_path)
+    assert payload["official_score_granularity"] == "aggregate"
+    assert payload["official_score_formal_comparison_eligibility"] == "blocked"
+    assert payload["official_score_formal_comparison_block_reason"] == (
+        "aggregate_score_assignment_not_formal_comparison_eligible"
+    )
 
 
 @pytest.mark.quick
@@ -229,6 +234,13 @@ def test_sigmark_bundle_writer_uses_prompt_seed_specific_npz_key(tmp_path: Path)
     assert payload["official_result_key"] == result_key
     assert payload["official_clean_negative_result_key"] == result_key
     assert payload["official_score_assignment_policy"] == "per_prompt_seed_sigmark_bit_accuracy_npz_key"
+    assert payload["official_score_granularity"] == "per_prompt_seed"
+    assert payload["official_score_formal_comparison_eligibility"] == "blocked"
+    assert payload["official_score_formal_comparison_block_reason"] == (
+        "score_granularity_not_formal_comparison_eligible:per_prompt_seed"
+    )
+    assert payload["official_clean_negative_score_granularity"] == "per_prompt_seed"
+    assert payload["official_clean_negative_score_formal_comparison_eligibility"] == "eligible"
 
 
 @pytest.mark.quick

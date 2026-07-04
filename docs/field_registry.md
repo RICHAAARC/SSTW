@@ -1311,6 +1311,7 @@ Notebook 与 repository module 的跨边界数据
 | external_baseline_payload_bit_accuracy | metric | none | true | false | false | baseline payload 恢复 bit accuracy 辅助指标, 不替代主检测分数。 |
 | external_baseline_clean_negative_score | metric | none | true | false | false | baseline 自身 clean negative 分布中的检测分数, 用于 target FPR 阈值校准。 |
 | external_baseline_clean_negative_score_semantics | protocol | none | true | false | false | clean negative 分数语义, 必须与 external_baseline_score_semantics 对齐。 |
+| external_baseline_clean_negative_payload_bit_accuracy | metric | none | true | false | false | baseline clean negative 视频的 payload bit accuracy 辅助分数, 用于审计与主分数口径是否一致。 |
 | external_baseline_clean_negative_video_path | artifact | none | true | false | false | baseline 自身 clean negative 视频路径, 用于审计阈值校准来源。 |
 | clean_negative_ready | governance | none | true | true | false | self-containment 行中 measured_formal baseline 是否已经携带 clean negative 分数证据。 |
 | clean_negative_ready_count | metric | none | true | true | false | self-containment 行中具备 clean negative 分数证据的 measured_formal record 数量。 |
@@ -1320,6 +1321,8 @@ Notebook 与 repository module 的跨边界数据
 | official_clean_negative_attack_log_path | artifact | none | true | false | false | official detector 在 clean negative 视频上的日志路径。 |
 | official_clean_negative_attack_stdout_path | artifact | none | true | false | false | official clean negative 检测命令 stdout 证据路径。 |
 | official_clean_negative_attack_stderr_path | artifact | none | true | false | false | official clean negative 检测命令 stderr 证据路径。 |
+| official_vidsig_tpr_at_fpr_1e_2 | metric | none | true | false | false | VidSig 官方固定 FPR=1e-2 日志中的 TPR 辅助值, 不作为公平比较主分数。 |
+| official_clean_negative_vidsig_tpr_at_fpr_1e_2 | metric | none | true | false | false | VidSig clean negative 官方固定 FPR=1e-2 日志辅助值, 不替代 clean negative bit accuracy 校准。 |
 | official_clean_negative_bit_accuracy_npz_path | artifact | none | true | false | false | SIGMark clean negative 官方 bit accuracy npz 路径。 |
 | official_clean_negative_results_json_path | artifact | none | true | false | false | VideoMark clean negative 官方结果 JSON 路径。 |
 | official_result_key | protocol | none | true | false | false | 官方输出文件中与当前 prompt / seed comparison unit 对应的 result key。 |

@@ -87,7 +87,23 @@ def _write_fake_vidsig_source(source_dir: Path) -> None:
         ]),
         encoding="utf-8",
     )
-    (source_dir / "src" / "attack.py").write_text("# fake attack\n", encoding="utf-8")
+    (source_dir / "src" / "attack.py").write_text(
+        "\n".join([
+            "import os",
+            "import numpy as np",
+            "def main():",
+            "    params = type('P', (), {'output_dir': '.', 'attack_type': 'clean', 'factor': 2.0})()",
+            "    accuracys = [0.8]",
+            "    fprs = ['1e-2']",
+            "    tprs = {'1e-2': [1]}",
+            "    with open(os.path.join(params.output_dir, 'log.txt'), 'a') as f:",
+            "        f.write(f'{params.attack_type} {params.factor}\\n')     ",
+            "        for fpr in fprs:",
+            "            f.write(f'{params.attack_type} fpr = {fpr}: {np.mean(tprs[fpr])}\\n')",
+            "",
+        ]),
+        encoding="utf-8",
+    )
     (source_dir / "yamls" / "generate_ms.yml").write_text("prompt_file: prompt.txt\n", encoding="utf-8")
 
 
@@ -130,9 +146,12 @@ def test_vidsig_runtime_dry_run_builds_prompt_seed_yaml_and_command(tmp_path: Pa
     assert manifest["prompt_manifest"]["seed_count"] == 1
     assert manifest["runtime_patch_audit"]["patch_status"] == "patched"
     assert "convert_diffusers_frames_before_decoder" in manifest["runtime_patch_audit"]["patched_steps"]
+    assert "write_attack_log_bit_accuracy_for_formal_score" in manifest["runtime_patch_audit"]["patched_steps"]
     assert manifest["generate_command"][-1] == "src/generate_ms.py"
     patched_source_text = Path(manifest["runtime_source_dir"]) / "src" / "generate_ms.py"
     assert "sstw_prepare_vidsig_decoder_input" in patched_source_text.read_text(encoding="utf-8")
+    patched_attack_text = Path(manifest["runtime_source_dir"]) / "src" / "attack.py"
+    assert "sstw formal bit accuracy" in patched_attack_text.read_text(encoding="utf-8")
     yaml_text = Path(manifest["prompt_manifest"]["yaml_path"]).read_text(encoding="utf-8")
     assert "damo-vilab/text-to-video-ms-1.7b" in yaml_text
     assert str(msg_decoder_path).replace("\\", "\\\\") in yaml_text
@@ -254,7 +273,11 @@ def test_vidsig_bundle_writer_records_clean_negative_score(
         output_dir = Path(kwargs["output_dir"])  # type: ignore[index]
         output_dir.mkdir(parents=True, exist_ok=True)
         score = 0.8 if call_state["count"] == 1 else 0.1
-        (output_dir / "log.txt").write_text(f"fpr = 1e-2 : {score}\n", encoding="utf-8")
+        fixed_fpr_score = 1.0 if call_state["count"] == 1 else 0.0
+        (output_dir / "log.txt").write_text(
+            f"clean bit accuracy: {score}\nclean fpr = 1e-2: {fixed_fpr_score}\n",
+            encoding="utf-8",
+        )
         return {"return_code": 0, "stdout_path": str(output_dir / "stdout.txt"), "stderr_path": str(output_dir / "stderr.txt")}
 
     monkeypatch.setattr(vidsig_runtime, "_run_vidsig_attack_py", fake_attack)
@@ -274,11 +297,11 @@ def test_vidsig_bundle_writer_records_clean_negative_score(
     assert payload["official_baseline_id"] == "vidsig"
     assert payload["external_baseline_score"] == 0.8
     assert payload["external_baseline_clean_negative_score"] == 0.1
-    assert payload["external_baseline_clean_negative_score_semantics"] == "official_tpr_at_fixed_fpr_detection_score"
+    assert payload["external_baseline_clean_negative_score_semantics"] == "payload_bit_accuracy_extraction_score"
     assert payload["external_baseline_clean_negative_video_path"].endswith("_clean_negative.mp4")
+    assert payload["official_vidsig_tpr_at_fpr_1e_2"] == 1.0
+    assert payload["official_clean_negative_vidsig_tpr_at_fpr_1e_2"] == 0.0
     assert payload["official_score_granularity"] == "per_prompt_seed_attack"
-    assert payload["official_score_value_type"] == "fixed_fpr_detection_score"
-    assert payload["official_score_formal_comparison_eligibility"] == "blocked"
-    assert payload["official_score_formal_comparison_block_reason"] == (
-        "score_value_type_not_formal_comparison_eligible:fixed_fpr_detection_score"
-    )
+    assert payload["official_score_value_type"] == "payload_bit_accuracy_score"
+    assert payload["official_score_formal_comparison_eligibility"] == "eligible"
+    assert payload["official_score_formal_comparison_block_reason"] == "none"

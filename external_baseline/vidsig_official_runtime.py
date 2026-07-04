@@ -343,6 +343,61 @@ def sstw_prepare_vidsig_decoder_input(frames, device):
     return {"patch_status": patch_status, "generate_ms_path": str(generate_path), "patched_steps": patched_steps}
 
 
+def _patch_attack_py_for_formal_score(runtime_source_dir: Path) -> dict[str, Any]:
+    """修补 runtime 副本中的 VidSig `attack.py`, 额外写出逐样本 bit accuracy。
+
+    官方 `attack.py` 原本只把若干固定 FPR 阈值下的 TPR 写入日志。该数值已经
+    过官方固定阈值, 不能再用本项目的 clean negative 分布重新校准, 因此不适合
+    validation_scale 的公平比较。官方脚本内部已经计算 `accuracys`, 本修补只在
+    runtime 工作副本中把该连续 bit accuracy 写入日志, 不改变官方检测计算。
+    """
+
+    attack_path = runtime_source_dir / "src" / "attack.py"
+    if not attack_path.exists():
+        return {"patch_status": "source_missing", "attack_py_path": str(attack_path)}
+    text = attack_path.read_text(encoding="utf-8")
+    patched_steps: list[str] = []
+    marker = "sstw formal bit accuracy"
+    if marker not in text:
+        target = (
+            "    with open(os.path.join(params.output_dir, 'log.txt'), 'a') as f:\n"
+            "        f.write(f'{params.attack_type} {params.factor}\\n')     \n"
+            "        for fpr in fprs:\n"
+            "            f.write(f'{params.attack_type} fpr = {fpr}: {np.mean(tprs[fpr])}\\n')\n"
+        )
+        replacement = (
+            "    with open(os.path.join(params.output_dir, 'log.txt'), 'a') as f:\n"
+            "        f.write(f'{params.attack_type} {params.factor}\\n')     \n"
+            "        f.write(f'{params.attack_type} bit accuracy: {np.mean(accuracys)}  # sstw formal bit accuracy\\n')\n"
+            "        for fpr in fprs:\n"
+            "            f.write(f'{params.attack_type} fpr = {fpr}: {np.mean(tprs[fpr])}\\n')\n"
+        )
+        if target in text:
+            text = text.replace(target, replacement, 1)
+            patched_steps.append("write_attack_log_bit_accuracy_for_formal_score")
+    attack_path.write_text(text, encoding="utf-8")
+    patch_status = "patched" if patched_steps else "no_matching_patch_points"
+    return {"patch_status": patch_status, "attack_py_path": str(attack_path), "patched_steps": patched_steps}
+
+
+def _patch_vidsig_runtime_source(runtime_source_dir: Path) -> dict[str, Any]:
+    """统一修补 VidSig runtime 工作副本, 供 Colab 与命令行入口复用。"""
+
+    generate_patch = _patch_generate_ms_for_colab(runtime_source_dir)
+    attack_patch = _patch_attack_py_for_formal_score(runtime_source_dir)
+    patched_steps = [
+        *list(generate_patch.get("patched_steps") or []),
+        *list(attack_patch.get("patched_steps") or []),
+    ]
+    patch_status = "patched" if patched_steps else "no_matching_patch_points"
+    return {
+        "patch_status": patch_status,
+        "patched_steps": patched_steps,
+        "generate_ms_patch": generate_patch,
+        "attack_py_patch": attack_patch,
+    }
+
+
 def _prompt_rows_from_suite(prompt_suite_path: Path) -> dict[str, str]:
     """读取 prompt_id 到 prompt_text 映射。"""
 
@@ -525,18 +580,31 @@ def _parse_generation_positive_control(log_path: Path) -> dict[str, Any]:
     return {"official_generation_bit_accuracy": bit_accuracy, "official_generation_video_bit_accuracy": video_bit_accuracy}
 
 
-def _parse_vidsig_attack_log(log_path: Path) -> tuple[float, bool]:
-    """从 VidSig 官方 attack.py 日志中读取 `fpr = 1e-2` 的检测结果。"""
+def _parse_vidsig_attack_log(log_path: Path) -> dict[str, float]:
+    """从 VidSig 官方 attack.py 日志中读取正式 bit accuracy 与固定 FPR 辅助值。
+
+    `bit_accuracy` 是逐视频的连续解码分数, 可以作为同方法 clean negative 分布上的
+    threshold calibration 输入。`fpr = 1e-2` 行是官方固定阈值后的 TPR 结果,
+    只能作为辅助审计字段, 不能作为本项目公平比较主分数。
+    """
 
     if not log_path.exists():
         raise FileNotFoundError(f"vidsig_attack_log_missing:{log_path}")
-    score = None
+    bit_accuracy = None
+    fixed_fpr_score = None
     for line in log_path.read_text(encoding="utf-8", errors="ignore").splitlines():
+        normalized = line.strip().lower()
+        if "bit accuracy" in normalized and ":" in line:
+            value_text = line.rsplit(":", 1)[-1].split("#", 1)[0].strip()
+            bit_accuracy = float(value_text)
         if "fpr = 1e-2" in line and ":" in line:
-            score = float(line.rsplit(":", 1)[-1].strip())
-    if score is None:
-        raise RuntimeError(f"vidsig_detection_score_missing_in_log:{log_path}")
-    return float(score), bool(score > 0.0)
+            fixed_fpr_score = float(line.rsplit(":", 1)[-1].strip())
+    if bit_accuracy is None:
+        raise RuntimeError(f"vidsig_bit_accuracy_score_missing_in_log:{log_path}")
+    return {
+        "bit_accuracy": float(bit_accuracy),
+        "tpr_at_fpr_1e_2": float(fixed_fpr_score) if fixed_fpr_score is not None else 0.0,
+    }
 
 
 def _read_video_frames(video_path: Path) -> list[Any]:
@@ -694,7 +762,9 @@ def write_vidsig_official_bundle_records(
             )
             if int(attack_result["return_code"]) != 0:
                 raise RuntimeError(f"vidsig_official_attack_py_failed:{attack_result['return_code']}:{attack_result['stderr_tail']}")
-            detection_score, detected = _parse_vidsig_attack_log(attack_output_dir / "log.txt")
+            detection_result = _parse_vidsig_attack_log(attack_output_dir / "log.txt")
+            detection_score = float(detection_result["bit_accuracy"])
+            detected = detection_score >= float(config.detection_threshold)
             clean_attack_output_dir = official_record_work_dir / "official_clean_negative_attack_output"
             clean_attack_result = _run_vidsig_attack_py(
                 runtime_source_dir=runtime_source,
@@ -707,25 +777,33 @@ def write_vidsig_official_bundle_records(
                     "vidsig_official_clean_negative_attack_py_failed:"
                     f"{clean_attack_result['return_code']}:{clean_attack_result['stderr_tail']}"
                 )
-            clean_negative_score, _clean_detected = _parse_vidsig_attack_log(clean_attack_output_dir / "log.txt")
+            clean_detection_result = _parse_vidsig_attack_log(clean_attack_output_dir / "log.txt")
+            clean_negative_score = float(clean_detection_result["bit_accuracy"])
             payload = {
                 "external_baseline_score": round(float(detection_score), 6),
                 "raw_detector_score": round(float(detection_score), 6),
                 "detection_score": round(float(detection_score), 6),
+                "payload_bit_accuracy": round(float(detection_score), 6),
+                "bit_accuracy": round(float(detection_score), 6),
                 "detected": bool(detected),
                 "threshold": float(config.detection_threshold),
-                "score_semantics": "official_tpr_at_fixed_fpr_detection_score",
+                "score_semantics": "payload_bit_accuracy_extraction_score",
                 "score_orientation": "higher_is_more_watermarked",
                 "external_baseline_clean_negative_score": round(float(clean_negative_score), 6),
-                "external_baseline_clean_negative_score_semantics": "official_tpr_at_fixed_fpr_detection_score",
+                "external_baseline_clean_negative_score_semantics": "payload_bit_accuracy_extraction_score",
+                "external_baseline_clean_negative_payload_bit_accuracy": round(float(clean_negative_score), 6),
                 "external_baseline_clean_negative_video_path": str(clean_negative_video_path),
-                "official_vidsig_tpr_at_fpr_1e_2": round(float(detection_score), 6),
+                "official_vidsig_tpr_at_fpr_1e_2": round(float(detection_result["tpr_at_fpr_1e_2"]), 6),
+                "official_clean_negative_vidsig_tpr_at_fpr_1e_2": round(
+                    float(clean_detection_result["tpr_at_fpr_1e_2"]),
+                    6,
+                ),
                 "official_result_provenance": REPOSITORY_GENERATED_OFFICIAL_PROVENANCE,
                 "official_adapter_baseline_id": BASELINE_ID,
                 "official_baseline_id": BASELINE_ID,
                 "external_baseline_generation_model_id": config.model_id,
                 "external_baseline_official_execution_mode": "vidsig_generate_ms_watermarked_video_project_runtime_attack_official_attack_py",
-                "official_score_extraction_policy": "vidsig_official_attack_log_tpr_at_fpr_1e_2_detection_score",
+                "official_score_extraction_policy": "vidsig_official_attack_log_bit_accuracy_after_project_runtime_attack",
                 "official_reference_protocol_anchor": "same_prompt_seed_attack_runtime_comparison_unit",
                 "attack_protocol_status": "project_runtime_attack_applied_to_vidsig_watermarked_video",
                 "official_attack_type": "clean",
@@ -798,7 +876,7 @@ def run_vidsig_official_runtime(config: VidSigOfficialRuntimeConfig) -> dict[str
     )
     runtime_source_dir = output_root / "source_runtime"
     _copy_official_source_to_runtime(source_dir, runtime_source_dir, output_root, force=config.force_rebuild_runtime_source)
-    runtime_patch_audit = _patch_generate_ms_for_colab(runtime_source_dir)
+    runtime_patch_audit = _patch_vidsig_runtime_source(runtime_source_dir)
     prompt_manifest = _write_vidsig_generation_inputs(
         runtime_source_dir=runtime_source_dir,
         output_root=output_root,

@@ -122,6 +122,129 @@ TEMPORAL_OUTPUT_ENTRY_REPLACEMENT = (
     "            continue\n"
     "        shift_value = np.load(shift_value_path)"
 )
+TEMPORAL_RUNTIME_ATTACK_HELPER_MARKER = "def sstw_videomark_runtime_temporal_tamper("
+TEMPORAL_RUNTIME_ATTACK_HELPER_INSERT_TARGET = "\ndef simulate_one_round(args):"
+TEMPORAL_RUNTIME_ATTACK_HELPER_CODE = r'''
+
+def sstw_videomark_reencode_frames_for_video_compression_runtime(video_frames):
+    """在 VideoMark 帧域内模拟 SSTW 的 video_compression_runtime。
+
+    SSTW 的主 runtime attack runner 对 mp4 执行 decode / re-encode。VideoMark 官方
+    temporal_tamper.py 在帧列表上工作, 因此这里先尝试临时 mp4 重编码再解码,
+    若当前 Colab / 服务器缺少可用 codec, 则退回 JPEG 量化代理, 保证该 attack
+    不会被静默跳过。
+    """
+
+    if not video_frames:
+        return []
+    try:
+        tempfile = __import__('tempfile')
+        with tempfile.TemporaryDirectory(prefix='sstw_videomark_codec_') as tmp_dir:
+            output_path = os.path.join(tmp_dir, 'runtime_reencode.mp4')
+            height, width = video_frames[0].shape[:2]
+            writer = cv2.VideoWriter(output_path, cv2.VideoWriter_fourcc(*'mp4v'), 8, (width, height))
+            if writer.isOpened():
+                for frame in video_frames:
+                    rgb_frame = (np.clip(frame, 0.0, 1.0) * 255.0).astype(np.uint8)
+                    writer.write(cv2.cvtColor(rgb_frame, cv2.COLOR_RGB2BGR))
+                writer.release()
+                capture = cv2.VideoCapture(output_path)
+                decoded_frames = []
+                while True:
+                    ok, bgr_frame = capture.read()
+                    if not ok:
+                        break
+                    decoded_frames.append(cv2.cvtColor(bgr_frame, cv2.COLOR_BGR2RGB) / 255.0)
+                capture.release()
+                if decoded_frames:
+                    return decoded_frames
+            else:
+                writer.release()
+    except Exception as exc:
+        print(f'SSTW VideoMark video_compression_runtime mp4 proxy fallback: {exc}')
+
+    jpeg_frames = []
+    for frame in video_frames:
+        rgb_frame = (np.clip(frame, 0.0, 1.0) * 255.0).astype(np.uint8)
+        bgr_frame = cv2.cvtColor(rgb_frame, cv2.COLOR_RGB2BGR)
+        ok, encoded = cv2.imencode('.jpg', bgr_frame, [int(cv2.IMWRITE_JPEG_QUALITY), 75])
+        if ok:
+            decoded = cv2.imdecode(encoded, cv2.IMREAD_COLOR)
+            jpeg_frames.append(cv2.cvtColor(decoded, cv2.COLOR_BGR2RGB) / 255.0)
+        else:
+            jpeg_frames.append(copy.deepcopy(frame))
+    return jpeg_frames
+
+
+def sstw_videomark_runtime_temporal_tamper(video_frames, tampering_type_list, shift_value, message_bits_sequence):
+    """按 SSTW 三类 runtime attack 生成 VideoMark 可检测的帧序列。
+
+    该函数是项目内 runtime copy 适配层, 用于让 VideoMark 与其他 baseline 共享
+    video_compression_runtime / temporal_crop_runtime / frame_rate_resampling_runtime
+    三个 comparison unit。它保留每个攻击后的 frame id 与 message bit 对齐关系,
+    避免把多个官方 temporal attack 聚合成一个不可公平比较的均值。
+    """
+
+    tampered_videos = {}
+    video_frames_ids = get_label_index(shift_value, length=len(video_frames))
+    message_bits_label = message_bits_sequence[shift_value:shift_value+len(video_frames)].tolist()
+    for tampering_type in tampering_type_list:
+        if tampering_type == 'video_compression_runtime':
+            video_frames_tampered = sstw_videomark_reencode_frames_for_video_compression_runtime(video_frames)
+            aligned_length = min(len(video_frames_tampered), len(video_frames_ids), len(message_bits_label))
+            tampered_videos['video_compression_runtime'] = [
+                video_frames_tampered[:aligned_length],
+                copy.deepcopy(video_frames_ids[:aligned_length]),
+                np.array(copy.deepcopy(message_bits_label[:aligned_length])),
+            ]
+        elif tampering_type == 'temporal_crop_runtime':
+            if len(video_frames) >= 4:
+                video_frames_tampered = copy.deepcopy(video_frames[1:-1])
+                video_frames_tampered_ids = copy.deepcopy(video_frames_ids[1:-1])
+                message_bits_tampered = copy.deepcopy(message_bits_label[1:-1])
+            else:
+                video_frames_tampered = copy.deepcopy(video_frames)
+                video_frames_tampered_ids = copy.deepcopy(video_frames_ids)
+                message_bits_tampered = copy.deepcopy(message_bits_label)
+            tampered_videos['temporal_crop_runtime'] = [
+                video_frames_tampered,
+                video_frames_tampered_ids,
+                np.array(message_bits_tampered),
+            ]
+        elif tampering_type == 'frame_rate_resampling_runtime':
+            if len(video_frames) >= 3:
+                video_frames_tampered = copy.deepcopy(video_frames[::2])
+                video_frames_tampered_ids = copy.deepcopy(video_frames_ids[::2])
+                message_bits_tampered = copy.deepcopy(message_bits_label[::2])
+            else:
+                video_frames_tampered = copy.deepcopy(video_frames)
+                video_frames_tampered_ids = copy.deepcopy(video_frames_ids)
+                message_bits_tampered = copy.deepcopy(message_bits_label)
+            tampered_videos['frame_rate_resampling_runtime'] = [
+                video_frames_tampered,
+                video_frames_tampered_ids,
+                np.array(message_bits_tampered),
+            ]
+        else:
+            legacy_videos = temporal_tamper(video_frames, [tampering_type], shift_value, message_bits_sequence)
+            tampered_videos.update(legacy_videos)
+    return tampered_videos
+'''
+TEMPORAL_RUNTIME_ATTACK_LIST_TARGET = "        temporal_tampering_type = ['frame insert','frame drop','frame swap']"
+TEMPORAL_RUNTIME_ATTACK_LIST_REPLACEMENT = (
+    "        temporal_tampering_type = [\n"
+    "            'video_compression_runtime',\n"
+    "            'temporal_crop_runtime',\n"
+    "            'frame_rate_resampling_runtime',\n"
+    "        ]"
+)
+TEMPORAL_RUNTIME_ATTACK_CALL_TARGET = (
+    "        video_frames_tampered = temporal_tamper(video_frames, temporal_tampering_type, shift_value, message_bits_sequence)"
+)
+TEMPORAL_RUNTIME_ATTACK_CALL_REPLACEMENT = (
+    "        video_frames_tampered = sstw_videomark_runtime_temporal_tamper("
+    "video_frames, temporal_tampering_type, shift_value, message_bits_sequence)"
+)
 
 
 @dataclass(frozen=True)
@@ -390,6 +513,7 @@ def _patch_videomark_runtime_source(runtime_source_dir: Path) -> dict[str, Any]:
     2. 当官方提取未检测到 watermark 时, 避免 `decode_message` 未定义导致流程中断。
     3. 为 temporal_tamper.py 补齐官方脚本读取但 argparse 未声明的轻量参数。
     4. 跳过 VideoMark 输出目录中的 args.json 等非视频子目录, 避免 temporal tamper 中断。
+    5. 将 VideoMark temporal tamper 运行协议对齐到 SSTW 的三类 runtime attack。
     """
 
     embedding_path = runtime_source_dir / "embedding_and_extraction.py"
@@ -485,6 +609,61 @@ def _patch_videomark_runtime_source(runtime_source_dir: Path) -> dict[str, Any]:
             "patch_name": "temporal_output_file_skip_guard",
             "patch_status": "pattern_missing_no_change",
         })
+
+    runtime_attack_patch_statuses: list[str] = []
+    if TEMPORAL_RUNTIME_ATTACK_HELPER_MARKER in temporal_text:
+        runtime_attack_patch_statuses.append("already_patched")
+    elif TEMPORAL_RUNTIME_ATTACK_HELPER_INSERT_TARGET in temporal_text:
+        temporal_text = temporal_text.replace(
+            TEMPORAL_RUNTIME_ATTACK_HELPER_INSERT_TARGET,
+            TEMPORAL_RUNTIME_ATTACK_HELPER_CODE + TEMPORAL_RUNTIME_ATTACK_HELPER_INSERT_TARGET,
+            1,
+        )
+        runtime_attack_patch_statuses.append("patched_runtime_copy")
+    else:
+        temporal_text = temporal_text.rstrip() + "\n" + TEMPORAL_RUNTIME_ATTACK_HELPER_CODE + "\n"
+        runtime_attack_patch_statuses.append("patched_runtime_copy")
+
+    if "temporal_tampering_type = [\n            'video_compression_runtime'" in temporal_text:
+        runtime_attack_patch_statuses.append("already_patched")
+    elif TEMPORAL_RUNTIME_ATTACK_LIST_TARGET in temporal_text:
+        temporal_text = temporal_text.replace(
+            TEMPORAL_RUNTIME_ATTACK_LIST_TARGET,
+            TEMPORAL_RUNTIME_ATTACK_LIST_REPLACEMENT,
+            1,
+        )
+        runtime_attack_patch_statuses.append("patched_runtime_copy")
+    else:
+        runtime_attack_patch_statuses.append("pattern_missing_no_change")
+
+    if TEMPORAL_RUNTIME_ATTACK_CALL_REPLACEMENT in temporal_text:
+        runtime_attack_patch_statuses.append("already_patched")
+    elif TEMPORAL_RUNTIME_ATTACK_CALL_TARGET in temporal_text:
+        temporal_text = temporal_text.replace(
+            TEMPORAL_RUNTIME_ATTACK_CALL_TARGET,
+            TEMPORAL_RUNTIME_ATTACK_CALL_REPLACEMENT,
+            1,
+        )
+        runtime_attack_patch_statuses.append("patched_runtime_copy")
+    else:
+        runtime_attack_patch_statuses.append("pattern_missing_no_change")
+
+    if "patched_runtime_copy" in runtime_attack_patch_statuses:
+        runtime_attack_patch_status = "patched_runtime_copy"
+    elif all(status == "already_patched" for status in runtime_attack_patch_statuses):
+        runtime_attack_patch_status = "already_patched"
+    else:
+        runtime_attack_patch_status = "pattern_missing_no_change"
+    patch_results.append({
+        "patch_name": "temporal_runtime_attack_protocol_guard",
+        "patch_status": runtime_attack_patch_status,
+        "runtime_attack_names": [
+            "video_compression_runtime",
+            "temporal_crop_runtime",
+            "frame_rate_resampling_runtime",
+        ],
+        "runtime_attack_patch_statuses": runtime_attack_patch_statuses,
+    })
     temporal_path.write_text(temporal_text, encoding="utf-8")
 
     status = "patched_runtime_copy" if any(
@@ -820,6 +999,12 @@ def _videomark_temporal_attack_key_for_runtime_attack(attack_name: str) -> str |
     """把 SSTW runtime attack 名称映射到 VideoMark 官方 temporal attack 名称。"""
 
     normalized = str(attack_name or "").strip().lower().replace("-", "_").replace(" ", "_")
+    if normalized == "video_compression_runtime" or "compression_runtime" in normalized:
+        return "video_compression_runtime"
+    if normalized == "temporal_crop_runtime":
+        return "temporal_crop_runtime"
+    if normalized == "frame_rate_resampling_runtime":
+        return "frame_rate_resampling_runtime"
     if "insert" in normalized:
         return "frame insert"
     if "drop" in normalized or "delete" in normalized or "crop" in normalized:
@@ -868,7 +1053,7 @@ def _score_from_videomark_temporal_entry(
         "official_decode_acc_mean": round(float(decode_mean), 6),
         "official_temporal_attack_names": _collect_temporal_attack_names(entry),
         "official_result_key": video_key,
-        "official_temporal_attack_key": official_attack_key or "mean_over_available_temporal_attacks",
+        "official_temporal_attack_key": official_attack_key,
         "official_score_assignment_policy": assignment_policy,
     }
     if frame_mean is not None:
@@ -1002,7 +1187,7 @@ def write_videomark_official_bundle_records(
                         video_key=video_key,
                         attack_name=str(record.get("attack_name") or ""),
                     )
-                    clean_policy = "per_prompt_seed_videomark_clean_negative_temporal_results_json_key"
+                    clean_policy = "per_prompt_seed_runtime_attack_videomark_clean_negative_temporal_results_json_key"
                 else:
                     clean_score_payload = _score_from_videomark_temporal_results(clean_path)
                     clean_policy = "aggregate_mean_over_videomark_official_clean_negative_results_json"

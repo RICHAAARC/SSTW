@@ -1327,6 +1327,8 @@ Notebook 与 repository module 的跨边界数据
 | official_clean_negative_results_json_path | artifact | none | true | false | false | VideoMark clean negative 官方结果 JSON 路径。 |
 | official_result_key | protocol | none | true | false | false | 官方输出文件中与当前 prompt / seed comparison unit 对应的 result key。 |
 | official_temporal_attack_key | protocol | none | true | false | false | VideoMark 官方 temporal_results 中与当前 runtime attack 对齐的攻击 key。 |
+| runtime_attack_names | protocol | none | true | false | false | 运行器或补丁 manifest 中声明的 runtime attack 名称集合, 用于审计 baseline 是否覆盖同一攻击协议。 |
+| runtime_attack_patch_statuses | governance | none | true | false | false | runtime attack 适配补丁各子步骤的状态列表, 用于定位 helper、attack list 和调用替换是否完成。 |
 | official_clean_negative_result_key | protocol | none | true | false | false | clean negative 官方输出文件中与当前 prompt / seed calibration unit 对应的 result key。 |
 | official_clean_negative_output_path | artifact | none | true | false | false | 自动生成 clean negative 官方产物的输出目录。 |
 | official_clean_negative_score_assignment_policy | protocol | none | true | false | false | 聚合型 official clean negative 分数如何映射到 comparison unit。 |

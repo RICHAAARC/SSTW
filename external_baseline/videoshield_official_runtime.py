@@ -584,14 +584,18 @@ def _apply_runtime_attack_to_frames(
 ) -> tuple[list[Any], dict[str, Any]]:
     """对 VideoShield 自己生成的视频施加 SSTW runtime attack 锚点。"""
 
-    attacked_frames = list(frames)
-    protocol_status = "video_compression_or_identity_runtime_reencode"
-    if "temporal_crop" in attack_name and len(attacked_frames) >= 4:
-        attacked_frames = attacked_frames[1:-1]
+    normalized = str(attack_name or "").strip().lower()
+    if normalized == "video_compression_runtime":
+        attacked_frames = list(frames)
+        protocol_status = "video_compression_runtime_decode_reencode"
+    elif normalized == "temporal_crop_runtime":
+        attacked_frames = frames[1:-1] if len(frames) >= 4 else list(frames)
         protocol_status = "temporal_crop_runtime_drop_first_and_last_frame"
-    elif "frame_rate_resampling" in attack_name and len(attacked_frames) >= 3:
-        attacked_frames = attacked_frames[::2]
+    elif normalized == "frame_rate_resampling_runtime":
+        attacked_frames = frames[::2] if len(frames) >= 3 else list(frames)
         protocol_status = "frame_rate_resampling_runtime_keep_every_second_frame"
+    else:
+        raise ValueError(f"unsupported_videoshield_runtime_attack:{attack_name}")
     video_tensor = _frames_to_tchw(attacked_frames)
     write_info = write_video_tchw(output_video_path, video_tensor, fps=float(fps))
     decoded_frames = _read_video_frames_float(output_video_path)

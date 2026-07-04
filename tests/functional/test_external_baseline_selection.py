@@ -19,7 +19,7 @@ from experiments.generative_video_model_probe.external_baseline_runner import (
     write_external_baseline_comparison_outputs,
     write_external_baseline_status_outputs,
 )
-from external_baseline.official_bundle_generator import build_official_bundle_generation_plan
+from external_baseline.official_bundle_generator import _apply_video_tensor_attack, build_official_bundle_generation_plan
 import external_baseline.official_resource_bootstrap as official_resource_bootstrap
 from external_baseline.official_resource_bootstrap import bootstrap_official_resources
 from external_baseline.official_result_bundle import build_official_result_bundle_preflight
@@ -270,6 +270,21 @@ def test_external_baseline_video_tensor_io_uses_imageio_backend(tmp_path: Path) 
     assert decoded.ndim == 4
     assert decoded.shape[1] == 3
     assert decoded.shape[0] >= 1
+
+
+@pytest.mark.quick
+def test_videoseal_runtime_attack_mapping_is_explicit_and_fail_closed() -> None:
+    """VideoSeal official bundle 只允许三类 runtime attack, 未知 attack 必须阻断。"""
+
+    import torch
+
+    video = torch.arange(5, dtype=torch.float32).reshape(5, 1, 1, 1)
+
+    assert _apply_video_tensor_attack(video, "video_compression_runtime").shape[0] == 5
+    assert _apply_video_tensor_attack(video, "temporal_crop_runtime").shape[0] == 3
+    assert _apply_video_tensor_attack(video, "frame_rate_resampling_runtime").shape[0] == 3
+    with pytest.raises(ValueError, match="unsupported_videoseal_runtime_attack"):
+        _apply_video_tensor_attack(video, "unexpected_runtime_attack")
 
 
 @pytest.mark.quick

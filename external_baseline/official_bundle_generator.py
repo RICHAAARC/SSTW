@@ -89,11 +89,14 @@ def _apply_video_tensor_attack(video: Any, attack_name: str) -> Any:
     调用方会把结果写为 mp4 并重新读取后再检测, 因此 `video_compression_runtime`
     即使在这里不裁剪帧, 也会通过 decode / re-encode 路径真实参与评分。
     """
-    if "temporal_crop" in attack_name and video.shape[0] >= 4:
-        return video[1:-1]
-    if "frame_rate_resampling" in attack_name and video.shape[0] >= 3:
-        return video[::2]
-    return video
+    normalized = str(attack_name or "").strip().lower()
+    if normalized == "video_compression_runtime":
+        return video
+    if normalized == "temporal_crop_runtime":
+        return video[1:-1] if video.shape[0] >= 4 else video
+    if normalized == "frame_rate_resampling_runtime":
+        return video[::2] if video.shape[0] >= 3 else video
+    raise ValueError(f"unsupported_videoseal_runtime_attack:{attack_name}")
 
 
 def _sigmoid_mean(values: Any) -> float:

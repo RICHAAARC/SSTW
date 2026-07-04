@@ -7,6 +7,7 @@ from pathlib import Path
 
 import pytest
 
+import external_baseline.videoshield_official_runtime as videoshield_runtime
 from external_baseline.videoshield_official_runtime import (
     VideoShieldOfficialRuntimeConfig,
     build_default_videoshield_official_config_from_env,
@@ -117,6 +118,22 @@ def test_videoshield_runtime_payload_stamps_official_adapter_identity() -> None:
     assert '"official_adapter_baseline_id": BASELINE_ID' in runtime_text
     assert '"official_baseline_id": BASELINE_ID' in runtime_text
     assert "official_score_formal_comparison_summary" in runtime_text
+    assert 'normalized == "video_compression_runtime"' in runtime_text
+    assert 'normalized == "temporal_crop_runtime"' in runtime_text
+    assert 'normalized == "frame_rate_resampling_runtime"' in runtime_text
+
+
+@pytest.mark.quick
+def test_videoshield_runtime_attack_mapping_is_fail_closed(tmp_path: Path) -> None:
+    """VideoShield 不能把未知 runtime attack 当作 compression 继续运行。"""
+
+    with pytest.raises(ValueError, match="unsupported_videoshield_runtime_attack"):
+        videoshield_runtime._apply_runtime_attack_to_frames(
+            ["frame_0", "frame_1"],
+            attack_name="unexpected_runtime_attack",
+            output_video_path=tmp_path / "unexpected.mp4",
+            fps=8,
+        )
 
 
 @pytest.mark.quick

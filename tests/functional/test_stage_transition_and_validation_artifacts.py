@@ -205,62 +205,69 @@ def _write_self_contained_external_baseline_fixture(run_root: Path) -> None:
     clone_rows = []
     evidence_paths = []
     for baseline_name in MODERN_BASELINES:
-        evidence_root = run_root / "artifacts" / "external_baseline_evidence" / baseline_name / "unit_000"
-        output_path = evidence_root / "official_output.json"
-        stdout_path = evidence_root / "official_stdout.txt"
-        stderr_path = evidence_root / "official_stderr.txt"
-        manifest_path = evidence_root / "official_command_manifest.json"
         bundle_root = run_root / "external_baseline_official_result_bundles" / "validation_scale" / baseline_name
         execution_manifest_path = bundle_root / "official_reference_execution_manifest.json"
-        bundle_record_path = bundle_root / "records" / "prompt_0__seed_0__video_compression_runtime.json"
-        write_json(output_path, {"score": 0.7})
-        stdout_path.write_text("ok", encoding="utf-8")
-        stderr_path.write_text("", encoding="utf-8")
-        write_json(manifest_path, {
-            "command_return_code": 0,
-            "claim_support_status": "external_baseline_official_command_evidence",
-        })
         write_json(execution_manifest_path, {
             "baseline_id": baseline_name,
             "execution_status": "executed",
             "failed_bundle_record_count": 0,
-            "generated_bundle_record_count": 1,
+            "generated_bundle_record_count": len(VALIDATION_SCALE_RUNTIME_ATTACKS),
             "command_results": [{"return_code": 0}],
             "claim_support_status": "official_reference_execution_evidence_not_measured_formal_record",
         })
-        write_json(bundle_record_path, {
-            "external_baseline_score": 0.7,
-            "external_baseline_clean_negative_score": 0.2,
-            "external_baseline_clean_negative_video_path": str(bundle_record_path),
-            "official_result_provenance": "repository_generated_from_third_party_official_code",
-            "official_adapter_baseline_id": baseline_name,
-            "official_baseline_id": baseline_name,
-            "official_execution_manifest_path": str(execution_manifest_path),
-            **_official_score_extraction_payload(),
-        })
-        evidence_paths.extend([str(output_path), str(stdout_path), str(stderr_path), str(manifest_path)])
-        score_records.append({
-            "external_baseline_name": baseline_name,
-            "external_baseline_layer": "modern_external_baseline",
-            "external_baseline_adapter_path": f"external_baseline/primary/{baseline_name}/adapter/run_sstw_eval.py",
-            "external_baseline_score_source": "official_command_adapter",
-            "metric_status": "measured_formal",
-            "external_baseline_score_status": "measured_formal",
-            "prompt_id": "prompt_0",
-            "seed_id": "seed_0",
-            "attack_name": "video_compression_runtime",
-            "external_baseline_clean_negative_score": 0.2,
-            "external_baseline_clean_negative_video_path": str(output_path),
-            "external_baseline_official_output_path": str(output_path),
-            "external_baseline_official_stdout_path": str(stdout_path),
-            "external_baseline_official_stderr_path": str(stderr_path),
-            "external_baseline_official_command_manifest_path": str(manifest_path),
-            "external_baseline_official_result_provenance": "repository_generated_from_third_party_official_code",
-            "external_baseline_official_result_bundle_path": str(bundle_record_path),
-            "external_baseline_official_execution_manifest_path": str(execution_manifest_path),
-            "external_baseline_official_adapter_baseline_id": baseline_name,
-            "external_baseline_official_baseline_id": baseline_name,
-        })
+        for attack_index, attack_name in enumerate(VALIDATION_SCALE_RUNTIME_ATTACKS):
+            evidence_root = (
+                run_root
+                / "artifacts"
+                / "external_baseline_evidence"
+                / baseline_name
+                / f"unit_{attack_index:03d}"
+            )
+            output_path = evidence_root / "official_output.json"
+            stdout_path = evidence_root / "official_stdout.txt"
+            stderr_path = evidence_root / "official_stderr.txt"
+            manifest_path = evidence_root / "official_command_manifest.json"
+            bundle_record_path = bundle_root / "records" / f"prompt_0__seed_0__{attack_name}.json"
+            write_json(output_path, {"score": 0.7})
+            stdout_path.write_text("ok", encoding="utf-8")
+            stderr_path.write_text("", encoding="utf-8")
+            write_json(manifest_path, {
+                "command_return_code": 0,
+                "claim_support_status": "external_baseline_official_command_evidence",
+            })
+            write_json(bundle_record_path, {
+                "external_baseline_score": 0.7,
+                "external_baseline_clean_negative_score": 0.2,
+                "external_baseline_clean_negative_video_path": str(bundle_record_path),
+                "official_result_provenance": "repository_generated_from_third_party_official_code",
+                "official_adapter_baseline_id": baseline_name,
+                "official_baseline_id": baseline_name,
+                "official_execution_manifest_path": str(execution_manifest_path),
+                **_official_score_extraction_payload(),
+            })
+            evidence_paths.extend([str(output_path), str(stdout_path), str(stderr_path), str(manifest_path)])
+            score_records.append({
+                "external_baseline_name": baseline_name,
+                "external_baseline_layer": "modern_external_baseline",
+                "external_baseline_adapter_path": f"external_baseline/primary/{baseline_name}/adapter/run_sstw_eval.py",
+                "external_baseline_score_source": "official_command_adapter",
+                "metric_status": "measured_formal",
+                "external_baseline_score_status": "measured_formal",
+                "prompt_id": "prompt_0",
+                "seed_id": "seed_0",
+                "attack_name": attack_name,
+                "external_baseline_clean_negative_score": 0.2,
+                "external_baseline_clean_negative_video_path": str(output_path),
+                "external_baseline_official_output_path": str(output_path),
+                "external_baseline_official_stdout_path": str(stdout_path),
+                "external_baseline_official_stderr_path": str(stderr_path),
+                "external_baseline_official_command_manifest_path": str(manifest_path),
+                "external_baseline_official_result_provenance": "repository_generated_from_third_party_official_code",
+                "external_baseline_official_result_bundle_path": str(bundle_record_path),
+                "external_baseline_official_execution_manifest_path": str(execution_manifest_path),
+                "external_baseline_official_adapter_baseline_id": baseline_name,
+                "external_baseline_official_baseline_id": baseline_name,
+            })
         intake_rows.append({
             "baseline_id": baseline_name,
             "source_intake_status": "source_snapshot_available",
@@ -307,6 +314,38 @@ def test_external_baseline_self_containment_requires_measured_formal_evidence(tm
     assert audit["self_contained_modern_external_baseline_count"] == 5
     assert audit["missing_self_contained_modern_external_baseline_names"] == []
     assert (run_root / "artifacts" / "external_baseline_self_containment_decision.json").exists()
+
+
+@pytest.mark.quick
+def test_external_baseline_self_containment_requires_each_runtime_attack_per_baseline(tmp_path: Path) -> None:
+    """每个现代 baseline 都必须覆盖 validation_scale 的三类 runtime attack。"""
+
+    run_root = tmp_path / "run"
+    _write_self_contained_external_baseline_fixture(run_root)
+    score_path = run_root / "records" / "external_baseline_score_records.jsonl"
+    score_records = [
+        json.loads(line)
+        for line in score_path.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+    score_records = [
+        record
+        for record in score_records
+        if not (
+            record.get("external_baseline_name") == "videoseal"
+            and record.get("attack_name") == "frame_rate_resampling_runtime"
+        )
+    ]
+    write_jsonl(score_path, score_records)
+
+    audit = write_external_baseline_self_containment_decision(run_root)
+    row = next(item for item in audit["baseline_self_containment_rows"] if item["baseline_name"] == "videoseal")
+
+    assert audit["external_baseline_self_containment_decision"] == "FAIL"
+    assert row["runtime_attack_coverage_ready"] is False
+    assert row["missing_runtime_attack_names"] == ["frame_rate_resampling_runtime"]
+    assert audit["missing_runtime_attack_coverage_modern_external_baseline_names"] == ["videoseal"]
+    assert "all_required_modern_baselines_required_runtime_attack_coverage" in audit["missing_self_containment_requirements"]
 
 
 @pytest.mark.quick
@@ -383,62 +422,69 @@ def test_external_baseline_self_containment_accepts_repository_generated_officia
     inspection_rows = []
     clone_rows = []
     for baseline_name in MODERN_BASELINES:
-        evidence_root = run_root / "artifacts" / "external_baseline_evidence" / baseline_name / "unit_000"
-        output_path = evidence_root / "official_output.json"
-        stdout_path = evidence_root / "official_stdout.txt"
-        stderr_path = evidence_root / "official_stderr.txt"
-        command_manifest_path = evidence_root / "official_command_manifest.json"
         bundle_root = run_root / "external_baseline_official_result_bundles" / "validation_scale" / baseline_name
         execution_manifest_path = bundle_root / "official_reference_execution_manifest.json"
-        bundle_record_path = bundle_root / "records" / "prompt_0__seed_0__video_compression_runtime.json"
-        write_json(output_path, {"score": 0.7})
-        stdout_path.write_text("ok", encoding="utf-8")
-        stderr_path.write_text("", encoding="utf-8")
-        write_json(command_manifest_path, {
-            "command_return_code": 0,
-            "claim_support_status": "external_baseline_official_command_evidence",
-        })
         write_json(execution_manifest_path, {
             "baseline_id": baseline_name,
             "execution_status": "executed",
             "failed_bundle_record_count": 0,
-            "generated_bundle_record_count": 1,
+            "generated_bundle_record_count": len(VALIDATION_SCALE_RUNTIME_ATTACKS),
             "command_results": [{"return_code": 0}],
             "claim_support_status": "official_reference_execution_evidence_not_measured_formal_record",
         })
-        write_json(bundle_record_path, {
-            "external_baseline_score": 0.7,
-            "external_baseline_clean_negative_score": 0.2,
-            "external_baseline_clean_negative_video_path": str(bundle_record_path),
-            "official_result_provenance": "repository_generated_from_third_party_official_code",
-            "official_adapter_baseline_id": baseline_name,
-            "official_baseline_id": baseline_name,
-            "official_execution_manifest_path": str(execution_manifest_path),
-            **_official_score_extraction_payload(),
-        })
-        evidence_paths.extend([str(output_path), str(stdout_path), str(stderr_path), str(command_manifest_path)])
-        score_records.append({
-            "external_baseline_name": baseline_name,
-            "external_baseline_layer": "modern_external_baseline",
-            "external_baseline_adapter_path": f"external_baseline/primary/{baseline_name}/adapter/run_sstw_eval.py",
-            "external_baseline_score_source": "official_command_adapter",
-            "metric_status": "measured_formal",
-            "external_baseline_score_status": "measured_formal",
-            "prompt_id": "prompt_0",
-            "seed_id": "seed_0",
-            "attack_name": "video_compression_runtime",
-            "external_baseline_clean_negative_score": 0.2,
-            "external_baseline_clean_negative_video_path": str(bundle_record_path),
-            "external_baseline_official_output_path": str(output_path),
-            "external_baseline_official_stdout_path": str(stdout_path),
-            "external_baseline_official_stderr_path": str(stderr_path),
-            "external_baseline_official_command_manifest_path": str(command_manifest_path),
-            "external_baseline_official_result_provenance": "repository_generated_from_third_party_official_code",
-            "external_baseline_official_result_bundle_path": str(bundle_record_path),
-            "external_baseline_official_execution_manifest_path": str(execution_manifest_path),
-            "external_baseline_official_adapter_baseline_id": baseline_name,
-            "external_baseline_official_baseline_id": baseline_name,
-        })
+        for attack_index, attack_name in enumerate(VALIDATION_SCALE_RUNTIME_ATTACKS):
+            evidence_root = (
+                run_root
+                / "artifacts"
+                / "external_baseline_evidence"
+                / baseline_name
+                / f"unit_{attack_index:03d}"
+            )
+            output_path = evidence_root / "official_output.json"
+            stdout_path = evidence_root / "official_stdout.txt"
+            stderr_path = evidence_root / "official_stderr.txt"
+            command_manifest_path = evidence_root / "official_command_manifest.json"
+            bundle_record_path = bundle_root / "records" / f"prompt_0__seed_0__{attack_name}.json"
+            write_json(output_path, {"score": 0.7})
+            stdout_path.write_text("ok", encoding="utf-8")
+            stderr_path.write_text("", encoding="utf-8")
+            write_json(command_manifest_path, {
+                "command_return_code": 0,
+                "claim_support_status": "external_baseline_official_command_evidence",
+            })
+            write_json(bundle_record_path, {
+                "external_baseline_score": 0.7,
+                "external_baseline_clean_negative_score": 0.2,
+                "external_baseline_clean_negative_video_path": str(bundle_record_path),
+                "official_result_provenance": "repository_generated_from_third_party_official_code",
+                "official_adapter_baseline_id": baseline_name,
+                "official_baseline_id": baseline_name,
+                "official_execution_manifest_path": str(execution_manifest_path),
+                **_official_score_extraction_payload(),
+            })
+            evidence_paths.extend([str(output_path), str(stdout_path), str(stderr_path), str(command_manifest_path)])
+            score_records.append({
+                "external_baseline_name": baseline_name,
+                "external_baseline_layer": "modern_external_baseline",
+                "external_baseline_adapter_path": f"external_baseline/primary/{baseline_name}/adapter/run_sstw_eval.py",
+                "external_baseline_score_source": "official_command_adapter",
+                "metric_status": "measured_formal",
+                "external_baseline_score_status": "measured_formal",
+                "prompt_id": "prompt_0",
+                "seed_id": "seed_0",
+                "attack_name": attack_name,
+                "external_baseline_clean_negative_score": 0.2,
+                "external_baseline_clean_negative_video_path": str(bundle_record_path),
+                "external_baseline_official_output_path": str(output_path),
+                "external_baseline_official_stdout_path": str(stdout_path),
+                "external_baseline_official_stderr_path": str(stderr_path),
+                "external_baseline_official_command_manifest_path": str(command_manifest_path),
+                "external_baseline_official_result_provenance": "repository_generated_from_third_party_official_code",
+                "external_baseline_official_result_bundle_path": str(bundle_record_path),
+                "external_baseline_official_execution_manifest_path": str(execution_manifest_path),
+                "external_baseline_official_adapter_baseline_id": baseline_name,
+                "external_baseline_official_baseline_id": baseline_name,
+            })
         intake_rows.append({
             "baseline_id": baseline_name,
             "source_intake_status": "official_command_configured",
@@ -480,8 +526,9 @@ def test_external_baseline_self_containment_accepts_repository_generated_officia
         assert row["source_clone_ready"] is False
         assert row["repository_generated_official_bundle_ready"] is True
         assert row["clone_ready"] is True
-        assert row["official_bundle_record_ok_count"] == 1
-        assert row["official_execution_manifest_ok_count"] == 1
+        assert row["official_bundle_record_ok_count"] == len(VALIDATION_SCALE_RUNTIME_ATTACKS)
+        assert row["official_execution_manifest_ok_count"] == len(VALIDATION_SCALE_RUNTIME_ATTACKS)
+        assert row["runtime_attack_coverage_ready"] is True
         assert row["clean_negative_ready"] is True
 
 

@@ -14,6 +14,7 @@ from typing import Any, Iterable, Mapping
 
 from external_baseline.official_eval_adapters.common import validate_complete_official_bundle_baseline_identity
 from external_baseline.score_semantics import validate_official_score_extraction_payload
+from main.attacks.video_runtime_attack_protocol import VALIDATION_SCALE_RUNTIME_ATTACKS
 from main.protocol.flow_evidence_fields import with_flow_evidence_protocol_defaults
 from main.protocol.record_writer import write_json, write_jsonl
 from main.protocol.table_builder import write_csv
@@ -66,6 +67,18 @@ def _load_required_modern_baselines(config_path: str | Path) -> list[str]:
         if str(name)
     ]
     return names or list(DEFAULT_REQUIRED_MODERN_BASELINES)
+
+
+def _load_required_runtime_attack_names(config_path: str | Path) -> list[str]:
+    """从 protocol config 中读取每个 baseline 必须覆盖的 runtime attack 清单。"""
+
+    config = _read_json(Path(config_path))
+    names = [
+        str(name)
+        for name in config.get("required_runtime_attack_names", [])
+        if str(name)
+    ]
+    return names or list(VALIDATION_SCALE_RUNTIME_ATTACKS)
 
 
 def _path_exists(path_text: str | None, run_root: Path) -> bool:
@@ -260,6 +273,7 @@ def _rows_from_manifest(manifest: Mapping[str, Any], field_name: str) -> list[di
 def _build_baseline_rows(
     run_root: Path,
     required_names: list[str],
+    required_runtime_attack_names: list[str],
     score_records: list[dict[str, Any]],
     intake_manifest: Mapping[str, Any],
     inspection_manifest: Mapping[str, Any],
@@ -284,6 +298,14 @@ def _build_baseline_rows(
             record for record in formal_candidate_records
             if _record_anchor_ready(record)
         ]
+        measured_runtime_attack_names = sorted({
+            str(record.get("attack_name") or "")
+            for record in measured_records
+            if str(record.get("attack_name") or "")
+        })
+        missing_runtime_attack_names = sorted(
+            set(required_runtime_attack_names) - set(measured_runtime_attack_names)
+        )
         formal_anchor_missing_count = len(formal_candidate_records) - len(measured_records)
         intake = intake_by_name.get(baseline_name, {})
         inspection = inspection_by_name.get(baseline_name, {})
@@ -372,6 +394,7 @@ def _build_baseline_rows(
         record_ready = bool(measured_records) and len(materialized_evidence_paths) >= len(command_manifest_paths)
         clean_negative_ready = bool(measured_records) and clean_negative_ready_count == len(measured_records)
         official_baseline_identity_ready = bool(measured_records) and official_identity_ready_count == len(measured_records)
+        runtime_attack_coverage_ready = bool(required_runtime_attack_names) and not missing_runtime_attack_names
         rows.append({
             "baseline_name": baseline_name,
             "source_intake_status": intake.get("source_intake_status", "missing"),
@@ -388,9 +411,14 @@ def _build_baseline_rows(
             "clean_negative_ready": clean_negative_ready,
             "official_baseline_identity_ready": official_baseline_identity_ready,
             "score_extraction_ready": score_extraction_ready,
+            "runtime_attack_coverage_ready": runtime_attack_coverage_ready,
             "measured_formal_record_count": len(measured_records),
             "formal_candidate_record_count": len(formal_candidate_records),
             "formal_anchor_missing_count": formal_anchor_missing_count,
+            "required_runtime_attack_names": list(required_runtime_attack_names),
+            "measured_runtime_attack_names": measured_runtime_attack_names,
+            "missing_runtime_attack_names": missing_runtime_attack_names,
+            "missing_runtime_attack_count": len(missing_runtime_attack_names),
             "clean_negative_ready_count": clean_negative_ready_count,
             "official_baseline_identity_ready_count": official_identity_ready_count,
             "official_score_extraction_ready_count": official_score_extraction_ready_count,
@@ -415,6 +443,7 @@ def _build_baseline_rows(
                 clean_negative_ready,
                 official_baseline_identity_ready,
                 score_extraction_ready,
+                runtime_attack_coverage_ready,
             ]),
         })
     return rows
@@ -427,6 +456,7 @@ def build_external_baseline_self_containment_decision(
     """构建 external baseline 自包含产出判定。"""
     run_root = Path(run_root)
     required_names = _load_required_modern_baselines(config_path)
+    required_runtime_attack_names = _load_required_runtime_attack_names(config_path)
     score_records = _read_jsonl(run_root / "records" / "external_baseline_score_records.jsonl")
     comparison_decision = _read_json(run_root / "artifacts" / "external_baseline_comparison_decision.json")
     execution_manifest = _read_json(run_root / "artifacts" / "external_baseline_execution_manifest.json")
@@ -437,6 +467,7 @@ def build_external_baseline_self_containment_decision(
     rows = _build_baseline_rows(
         run_root,
         required_names,
+        required_runtime_attack_names,
         score_records,
         intake_manifest,
         inspection_manifest,
@@ -472,6 +503,11 @@ def build_external_baseline_self_containment_decision(
         for row in rows
         if not row.get("official_baseline_identity_ready")
     ]
+    missing_runtime_attack_coverage_names = [
+        row["baseline_name"]
+        for row in rows
+        if not row.get("runtime_attack_coverage_ready")
+    ]
     comparison_passed = comparison_decision.get("external_baseline_comparison_decision") == "PASS"
     execution_manifest_bound = execution_manifest.get("formal_evidence_status") == "evidence_paths_bound"
     formal_measured_names = {
@@ -499,6 +535,8 @@ def build_external_baseline_self_containment_decision(
         missing_requirements.append("all_required_modern_baselines_official_baseline_identity")
     if missing_anchor_names:
         missing_requirements.append("all_required_modern_baselines_prompt_seed_attack_anchors")
+    if missing_runtime_attack_coverage_names:
+        missing_requirements.append("all_required_modern_baselines_required_runtime_attack_coverage")
 
     decision = "PASS" if not missing_requirements else "FAIL"
     return {
@@ -510,6 +548,8 @@ def build_external_baseline_self_containment_decision(
         else "external_baseline_self_containment_blocked",
         "required_modern_external_baseline_adapter_names": required_names,
         "required_modern_external_baseline_adapter_count": len(required_names),
+        "required_runtime_attack_names": required_runtime_attack_names,
+        "required_runtime_attack_count": len(required_runtime_attack_names),
         "self_contained_modern_external_baseline_count": sum(1 for row in rows if row["external_baseline_self_contained"]),
         "missing_self_contained_modern_external_baseline_names": missing_names,
         "missing_clean_negative_modern_external_baseline_names": missing_clean_negative_names,
@@ -517,6 +557,7 @@ def build_external_baseline_self_containment_decision(
         "missing_repository_generated_official_bundle_modern_external_baseline_names": missing_repository_generated_official_bundle_names,
         "missing_score_extraction_modern_external_baseline_names": missing_score_extraction_names,
         "missing_official_identity_modern_external_baseline_names": missing_official_identity_names,
+        "missing_runtime_attack_coverage_modern_external_baseline_names": missing_runtime_attack_coverage_names,
         "missing_formal_modern_external_baseline_names": missing_formal_names,
         "missing_self_containment_requirements": missing_requirements,
         "self_containment_missing_requirement_count": len(missing_requirements),
@@ -552,6 +593,8 @@ def write_external_baseline_self_containment_decision(
         f"- required_modern_external_baseline_adapter_count: {audit['required_modern_external_baseline_adapter_count']}\n"
         f"- missing_self_contained_modern_external_baseline_names: "
         f"{', '.join(audit['missing_self_contained_modern_external_baseline_names']) if audit['missing_self_contained_modern_external_baseline_names'] else 'none'}\n"
+        f"- missing_runtime_attack_coverage_modern_external_baseline_names: "
+        f"{', '.join(audit['missing_runtime_attack_coverage_modern_external_baseline_names']) if audit['missing_runtime_attack_coverage_modern_external_baseline_names'] else 'none'}\n"
         f"- missing_self_containment_requirements: "
         f"{', '.join(audit['missing_self_containment_requirements']) if audit['missing_self_containment_requirements'] else 'none'}\n"
     )

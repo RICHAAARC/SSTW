@@ -18,6 +18,13 @@ from experiments.generative_video_model_probe.validation_scale_formal_internal_a
 from main.protocol.record_writer import read_jsonl, write_json, write_jsonl
 
 
+REQUIRED_RUNTIME_ATTACK_NAMES = (
+    "video_compression_runtime",
+    "temporal_crop_runtime",
+    "frame_rate_resampling_runtime",
+)
+
+
 def _formal_baseline_evidence_fields(
     run_root: Path,
     baseline_id: str,
@@ -262,11 +269,12 @@ def test_formal_method_baseline_comparison_requires_sstw_and_five_baselines(tmp_
             "metric_status": "measured_formal",
             "prompt_id": "prompt_a",
             "seed_id": "seed_a",
-            "attack_name": "video_compression_runtime",
+            "attack_name": attack_name,
             "sstw_score": 0.84,
             "sstw_detected": True,
             "sstw_clean_negative_score": 0.1,
         }
+        for attack_name in REQUIRED_RUNTIME_ATTACK_NAMES
     ]
     sstw_rows.extend(
         {
@@ -290,26 +298,27 @@ def test_formal_method_baseline_comparison_requires_sstw_and_five_baselines(tmp_
         "vidsig": 0.55,
         "videoseal": 0.71,
     }.items():
-        baseline_records.append({
-            "external_baseline_name": baseline_id,
-            "external_baseline_layer": "modern_external_baseline",
-            "metric_status": "measured_formal",
-            "prompt_id": "prompt_a",
-            "seed_id": "seed_a",
-            "attack_name": "video_compression_runtime",
-            "external_baseline_raw_detector_score": score,
-            "external_baseline_score": score,
-            "external_baseline_detected": score > 0.6,
-            "external_baseline_clean_negative_score": 0.1,
-            "external_baseline_score_semantics": "watermark_presence_detector_score",
-            **_formal_baseline_evidence_fields(
-                run_root,
-                baseline_id,
-                "prompt_a",
-                "seed_a",
-                "video_compression_runtime",
-            ),
-        })
+        for attack_name in REQUIRED_RUNTIME_ATTACK_NAMES:
+            baseline_records.append({
+                "external_baseline_name": baseline_id,
+                "external_baseline_layer": "modern_external_baseline",
+                "metric_status": "measured_formal",
+                "prompt_id": "prompt_a",
+                "seed_id": "seed_a",
+                "attack_name": attack_name,
+                "external_baseline_raw_detector_score": score,
+                "external_baseline_score": score,
+                "external_baseline_detected": score > 0.6,
+                "external_baseline_clean_negative_score": 0.1,
+                "external_baseline_score_semantics": "watermark_presence_detector_score",
+                **_formal_baseline_evidence_fields(
+                    run_root,
+                    baseline_id,
+                    "prompt_a",
+                    "seed_a",
+                    attack_name,
+                ),
+            })
         baseline_records.extend(
             _formal_baseline_clean_negative_record(
                 run_root,
@@ -978,12 +987,12 @@ def test_formal_baseline_difference_interval_writes_sstw_vs_each_baseline_ci(tmp
     sstw_rows = [
         {
             "metric_status": "measured_formal",
-            "prompt_id": f"prompt_{index}",
+            "prompt_id": "prompt_a",
             "seed_id": "seed_a",
-            "attack_name": "video_compression_runtime",
+            "attack_name": attack_name,
             "sstw_score": 0.8 + index * 0.01,
         }
-        for index in range(3)
+        for index, attack_name in enumerate(REQUIRED_RUNTIME_ATTACK_NAMES)
     ]
     sstw_rows.extend(
         {
@@ -998,22 +1007,22 @@ def test_formal_baseline_difference_interval_writes_sstw_vs_each_baseline_ci(tmp
     write_jsonl(run_root / "records" / "sstw_measured_formal_records.jsonl", sstw_rows)
     baseline_records = []
     for baseline_id in ("videoshield", "sigmark", "videomark", "vidsig", "videoseal"):
-        for index in range(3):
+        for index, attack_name in enumerate(REQUIRED_RUNTIME_ATTACK_NAMES):
             baseline_records.append({
                 "external_baseline_name": baseline_id,
                 "metric_status": "measured_formal",
-                "prompt_id": f"prompt_{index}",
+                "prompt_id": "prompt_a",
                 "seed_id": "seed_a",
-                "attack_name": "video_compression_runtime",
+                "attack_name": attack_name,
                 "external_baseline_raw_detector_score": 0.6 + index * 0.01,
                 "external_baseline_score": 0.6 + index * 0.01,
                 "external_baseline_score_semantics": "watermark_presence_detector_score",
                 **_formal_baseline_evidence_fields(
                     run_root,
                     baseline_id,
-                    f"prompt_{index}",
+                    "prompt_a",
                     "seed_a",
-                    "video_compression_runtime",
+                    attack_name,
                 ),
             })
         baseline_records.extend(

@@ -10,23 +10,21 @@ from pathlib import Path
 from typing import Any
 
 from experiments.generative_video_model_probe.formal_motion_claim_filter import select_motion_claim_generation_records
+from main.attacks.video_runtime_attack_protocol import (
+    RUNTIME_ATTACK_SPECS,
+    VALIDATION_SCALE_RUNTIME_ATTACKS,
+    apply_runtime_attack_to_frames,
+    required_runtime_attack_names_from_config,
+)
 from main.core.progress import ProgressReporter
 from main.protocol.flow_evidence_fields import with_flow_evidence_protocol_defaults
 from main.protocol.record_writer import write_json, write_jsonl
 from main.protocol.table_builder import write_csv
 
 
-ATTACK_NAMES = (
-    "no_attack", "h264_compression", "h265_compression", "spatial_resize", "crop_resize",
-    "temporal_crop", "local_clip", "regular_frame_dropping", "irregular_frame_dropping",
-    "frame_duplication", "speed_change", "frame_rate_resampling", "gaussian_noise", "blur",
-)
-
-RUNTIME_PILOT_ATTACKS = (
-    "video_compression_runtime",
-    "temporal_crop_runtime",
-    "frame_rate_resampling_runtime",
-)
+ATTACK_NAMES = tuple(RUNTIME_ATTACK_SPECS)
+RUNTIME_PILOT_ATTACKS = VALIDATION_SCALE_RUNTIME_ATTACKS
+DEFAULT_PROTOCOL_CONFIG = "configs/protocol/validation_scale_generative_probe.json"
 
 
 def _read_jsonl(path: Path) -> list[dict]:
@@ -75,49 +73,32 @@ def _load_video_frames(video_path: Path, max_frames: int | None = None) -> list[
     return frames
 
 
-def _write_video_frames(video_path: Path, frames: list[Any], fps: int = 8) -> None:
-    """把帧序列写回 mp4 文件。"""
+def _write_video_frames(video_path: Path, frames: list[Any], fps: int = 8, attack_metadata: dict | None = None) -> None:
+    """把帧序列写回 mp4 文件。
+
+    若 attack metadata 声明了 codec 或 CRF 参数, 这里会交给 imageio/ffmpeg。
+    如果当前环境缺少对应编码器, 上层会把该 attack 记录为 failed, 避免将未执行
+    的 H.264 / H.265 强度攻击误写成论文级证据。
+    """
     import imageio.v3 as iio
 
     video_path.parent.mkdir(parents=True, exist_ok=True)
-    iio.imwrite(video_path, frames, fps=fps)
+    kwargs: dict[str, Any] = {"fps": fps}
+    attack_metadata = attack_metadata or {}
+    if attack_metadata.get("video_writer_codec"):
+        kwargs["codec"] = attack_metadata["video_writer_codec"]
+    if attack_metadata.get("video_writer_output_params"):
+        kwargs["output_params"] = list(attack_metadata["video_writer_output_params"])
+    iio.imwrite(video_path, frames, **kwargs)
 
 
 def _apply_runtime_attack(frames: list[Any], attack_name: str) -> tuple[list[Any], dict]:
     """对视频帧执行 runtime attack。
 
-    当前实现用于 small-scale pilot 工程验证, 攻击实际作用在 mp4 解码帧上。它不是最终论文级攻击强度定义,
-    但比 proxy_postprocess 更接近真实 runtime 路径。
+    具体 attack 协议和帧级实现由 `main.attacks.video_runtime_attack_protocol`
+    统一管理, 本函数保留为 runner 内部兼容入口。
     """
-    if not frames:
-        raise ValueError("no_decodable_frames")
-    if attack_name == "video_compression_runtime":
-        return list(frames), {
-            "attack_transform": "decode_reencode",
-            "attack_strength": "runtime_reencode_default_quality",
-            "runtime_attack_expected_effect": "codec_quantization_or_container_rewrite",
-        }
-    if attack_name == "temporal_crop_runtime":
-        if len(frames) >= 4:
-            attacked = frames[1:-1]
-        else:
-            attacked = list(frames)
-        return attacked, {
-            "attack_transform": "drop_first_and_last_frame_when_possible",
-            "attack_strength": "crop_boundary_frames",
-            "runtime_attack_expected_effect": "temporal_boundary_shift",
-        }
-    if attack_name == "frame_rate_resampling_runtime":
-        if len(frames) >= 3:
-            attacked = frames[::2]
-        else:
-            attacked = list(frames)
-        return attacked, {
-            "attack_transform": "keep_every_second_frame_when_possible",
-            "attack_strength": "fps_downsample_by_2_proxy",
-            "runtime_attack_expected_effect": "time_grid_resampling",
-        }
-    raise ValueError(f"unsupported_runtime_attack:{attack_name}")
+    return apply_runtime_attack_to_frames(frames, attack_name)
 
 
 def _build_attacked_video_path(run_root: Path, generation_record: dict, attack_name: str) -> Path:
@@ -143,9 +124,27 @@ def build_attack_status_records(runnable_status: str) -> list[dict]:
     return records
 
 
-def build_runtime_attack_records(run_root: str | Path, attack_names: tuple[str, ...] = RUNTIME_PILOT_ATTACKS) -> list[dict]:
+def _load_required_attack_names(config_path: str | Path | None, attack_names: tuple[str, ...] | None) -> tuple[str, ...]:
+    """从命令行参数或 protocol config 解析本次必须执行的 attack 名称。"""
+
+    if attack_names:
+        return tuple(str(item) for item in attack_names if str(item))
+    if config_path is None:
+        return RUNTIME_PILOT_ATTACKS
+    config = json.loads(Path(config_path).read_text(encoding="utf-8-sig"))
+    if not isinstance(config, dict):
+        raise TypeError(f"protocol config 顶层必须是对象: {config_path}")
+    return required_runtime_attack_names_from_config(config)
+
+
+def build_runtime_attack_records(
+    run_root: str | Path,
+    attack_names: tuple[str, ...] | None = None,
+    config_path: str | Path | None = DEFAULT_PROTOCOL_CONFIG,
+) -> list[dict]:
     """对 generation records 中的真实 mp4 执行 runtime attacks 并返回 records。"""
     run_root = Path(run_root)
+    selected_attack_names = _load_required_attack_names(config_path, attack_names)
     generation_records = [
         record for record in _read_jsonl(run_root / "records" / "generation_records.jsonl")
         if record.get("generation_status") == "success"
@@ -153,12 +152,12 @@ def build_runtime_attack_records(run_root: str | Path, attack_names: tuple[str, 
     formal_metric_records = _read_jsonl(run_root / "records" / "formal_quality_motion_semantic_records.jsonl")
     selection = select_motion_claim_generation_records(generation_records, formal_metric_records)
     records: list[dict] = []
-    total_attack_jobs = len(selection.eligible_generation_records) * len(attack_names)
+    total_attack_jobs = len(selection.eligible_generation_records) * len(selected_attack_names)
     progress = ProgressReporter("runtime_attack_video_transform", total_attack_jobs, "attack_video")
     progress_index = 0
     for generation_record in selection.eligible_generation_records:
         source_video_path = _resolve_video_path(run_root, generation_record)
-        for attack_name in attack_names:
+        for attack_name in selected_attack_names:
             progress_index += 1
             progress.update(
                 progress_index,
@@ -193,7 +192,7 @@ def build_runtime_attack_records(run_root: str | Path, attack_names: tuple[str, 
                 frames = _load_video_frames(source_video_path)
                 attacked_frames, attack_metadata = _apply_runtime_attack(frames, attack_name)
                 attacked_video_path = _build_attacked_video_path(run_root, generation_record, attack_name)
-                _write_video_frames(attacked_video_path, attacked_frames)
+                _write_video_frames(attacked_video_path, attacked_frames, attack_metadata=attack_metadata)
                 record.update({
                     "attack_runtime_status": "ready",
                     "attack_runtime_failure_reason": "none",
@@ -215,10 +214,16 @@ def build_runtime_attack_records(run_root: str | Path, attack_names: tuple[str, 
     return records
 
 
-def audit_runtime_attack_records(records: list[dict], run_root: str | Path | None = None) -> dict:
+def audit_runtime_attack_records(
+    records: list[dict],
+    run_root: str | Path | None = None,
+    required_attack_names: tuple[str, ...] | None = None,
+) -> dict:
     """审计 runtime attack records 的覆盖情况。"""
     ready_records = [record for record in records if record.get("attack_runtime_status") == "ready"]
     attack_names = {str(record.get("attack_name")) for record in ready_records if record.get("attack_name")}
+    required_attack_set = {str(name) for name in (required_attack_names or ()) if str(name)}
+    missing_required_attack_names = sorted(required_attack_set - attack_names)
     selection_fields: dict = {}
     if run_root is not None:
         root = Path(run_root)
@@ -227,21 +232,32 @@ def audit_runtime_attack_records(records: list[dict], run_root: str | Path | Non
         selection_fields = select_motion_claim_generation_records(generation_records, formal_metric_records).audit_fields()
     return {
         "stage_id": "generative_video_runtime_attack_runner",
-        "runtime_attack_decision": "PASS" if ready_records and len(ready_records) == len(records) else "FAIL",
+        "runtime_attack_decision": "PASS"
+        if ready_records and len(ready_records) == len(records) and not missing_required_attack_names
+        else "FAIL",
         "runtime_attack_record_count": len(records),
         "runtime_attack_ready_count": len(ready_records),
         "runtime_attack_count": len(attack_names),
+        "runtime_attack_names": sorted(attack_names),
+        "required_runtime_attack_names": sorted(required_attack_set),
+        "missing_required_runtime_attack_names": missing_required_attack_names,
+        "missing_required_runtime_attack_count": len(missing_required_attack_names),
         "attack_matrix_evidence_level": "runtime_video_file",
         "claim_support_status": "runtime_attack_evidence_only",
         **selection_fields,
     }
 
 
-def run_runtime_attacks(run_root: str | Path, attack_names: tuple[str, ...] = RUNTIME_PILOT_ATTACKS) -> dict:
+def run_runtime_attacks(
+    run_root: str | Path,
+    attack_names: tuple[str, ...] | None = None,
+    config_path: str | Path | None = DEFAULT_PROTOCOL_CONFIG,
+) -> dict:
     """执行 runtime attacks 并写出 governed records、table、decision 和 report。"""
     run_root = Path(run_root)
-    records = build_runtime_attack_records(run_root, attack_names=attack_names)
-    audit = audit_runtime_attack_records(records, run_root)
+    selected_attack_names = _load_required_attack_names(config_path, attack_names)
+    records = build_runtime_attack_records(run_root, attack_names=selected_attack_names, config_path=None)
+    audit = audit_runtime_attack_records(records, run_root, required_attack_names=selected_attack_names)
     write_jsonl(run_root / "records" / "runtime_attack_records.jsonl", records)
     write_csv(run_root / "tables" / "runtime_attack_table.csv", records)
     write_json(run_root / "artifacts" / "runtime_attack_decision.json", audit)
@@ -253,6 +269,8 @@ def run_runtime_attacks(run_root: str | Path, attack_names: tuple[str, ...] = RU
         f"- runtime_attack_record_count: {audit['runtime_attack_record_count']}\n"
         f"- runtime_attack_ready_count: {audit['runtime_attack_ready_count']}\n"
         f"- runtime_attack_count: {audit['runtime_attack_count']}\n"
+        f"- required_runtime_attack_names: {', '.join(audit['required_runtime_attack_names'])}\n"
+        f"- missing_required_runtime_attack_names: {', '.join(audit['missing_required_runtime_attack_names']) if audit['missing_required_runtime_attack_names'] else 'none'}\n"
         f"- motion_claim_eligible_generation_count: {audit.get('motion_claim_eligible_generation_count')}\n"
         f"- motion_claim_excluded_generation_count: {audit.get('motion_claim_excluded_generation_count')}\n"
         f"- claim_support_status: {audit['claim_support_status']}\n"
@@ -266,9 +284,14 @@ def run_runtime_attacks(run_root: str | Path, attack_names: tuple[str, ...] = RU
 def main() -> None:
     parser = argparse.ArgumentParser(description="对生成视频执行 runtime 文件级攻击。")
     parser.add_argument("--run-root", required=True)
-    parser.add_argument("--attacks", nargs="*", default=list(RUNTIME_PILOT_ATTACKS))
+    parser.add_argument("--config-path", default=DEFAULT_PROTOCOL_CONFIG)
+    parser.add_argument("--attacks", nargs="*", default=None)
     args = parser.parse_args()
-    payload = run_runtime_attacks(args.run_root, attack_names=tuple(args.attacks))
+    payload = run_runtime_attacks(
+        args.run_root,
+        attack_names=tuple(args.attacks) if args.attacks else None,
+        config_path=args.config_path,
+    )
     print(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True))
 
 

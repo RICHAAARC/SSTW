@@ -13,6 +13,7 @@ from experiments.generative_video_model_probe.formal_motion_claim_filter import 
     FORMAL_MOTION_CLAIM_READY_STATUSES,
     select_motion_claim_generation_records,
 )
+from main.attacks.video_runtime_attack_protocol import required_runtime_attack_names_from_config
 from main.protocol.flow_evidence_fields import with_flow_evidence_protocol_defaults
 from main.protocol.record_writer import write_json, write_jsonl
 from main.protocol.table_builder import write_csv
@@ -83,6 +84,7 @@ def _load_config(config_path: str | Path = DEFAULT_VALIDATION_SCALE_CONFIG) -> d
         "minimum_prompt_count": int(config.get("minimum_prompt_count", DEFAULT_MINIMUM_PROMPT_COUNT)),
         "minimum_seed_per_prompt": int(config.get("minimum_seed_per_prompt", DEFAULT_MINIMUM_SEED_PER_PROMPT)),
         "minimum_attack_count": int(config.get("minimum_attack_count", DEFAULT_MINIMUM_ATTACK_COUNT)),
+        "required_runtime_attack_names": list(required_runtime_attack_names_from_config(config)),
         "minimum_clean_negative_count": int(config.get("minimum_clean_negative_count", 0)),
         "require_external_baseline_status_records": bool(config.get("require_external_baseline_status_records", True)),
         "require_external_baseline_comparison_records": bool(config.get("require_external_baseline_comparison_records", True)),
@@ -289,7 +291,56 @@ def _nonnegative_int(record: dict, field_name: str) -> int:
         return 0
 
 
-def _fair_detection_anchor_ready(record: dict, minimum_clean_negative_count: int) -> bool:
+def _attack_names_from_anchor_keys(anchor_keys: Any) -> set[str]:
+    """从 prompt / seed / attack anchor key 中解析 attack 名称。
+
+    当前 anchor 规范是 `prompt_id::seed_id::attack_name`。该函数只作为门禁
+    兜底解析; 新 records 应优先显式写出 `positive_attack_names`、
+    `comparison_attack_names` 或 `paired_attack_names`。
+    """
+
+    if not isinstance(anchor_keys, list):
+        return set()
+    names: set[str] = set()
+    for item in anchor_keys:
+        parts = str(item or "").split("::")
+        if len(parts) >= 3 and parts[-1]:
+            names.add(parts[-1])
+    return names
+
+
+def _record_attack_names(record: dict, explicit_field_name: str, anchor_field_name: str | None = None) -> set[str]:
+    """读取 record 中声明的 attack 名称集合。"""
+
+    raw_names = record.get(explicit_field_name)
+    if isinstance(raw_names, list):
+        names = {str(item) for item in raw_names if str(item)}
+        if names:
+            return names
+    if anchor_field_name:
+        return _attack_names_from_anchor_keys(record.get(anchor_field_name))
+    return set()
+
+
+def _missing_required_attack_names(record: dict, explicit_field_name: str, required_attack_names: list[str], anchor_field_name: str | None = None) -> list[str]:
+    """计算 record 相对当前 profile 必须 attack 集合的缺口。"""
+
+    observed = _record_attack_names(record, explicit_field_name, anchor_field_name)
+    required = {str(item) for item in required_attack_names if str(item)}
+    return sorted(required - observed)
+
+
+def _records_cover_required_attacks(records: list[dict], status_field: str, ready_value: str, required_attack_names: list[str]) -> tuple[bool, list[str], list[str]]:
+    """检查 runtime attack / detection records 是否覆盖当前 profile 的完整 attack 集合。"""
+
+    ready_records = [record for record in records if record.get(status_field) == ready_value]
+    observed = sorted({str(record.get("attack_name")) for record in ready_records if record.get("attack_name")})
+    required = {str(item) for item in required_attack_names if str(item)}
+    missing = sorted(required - set(observed))
+    return not missing, observed, missing
+
+
+def _fair_detection_anchor_ready(record: dict, minimum_clean_negative_count: int, required_attack_names: list[str]) -> bool:
     """检查 fair calibration record 是否具备完整公平比较证据。
 
     该门禁不能只相信上游写入的 `fair_comparison_status`, 还需要显式核验
@@ -304,10 +355,11 @@ def _fair_detection_anchor_ready(record: dict, minimum_clean_negative_count: int
         and _nonnegative_int(record, "positive_anchor_missing_count") == 0
         and _nonnegative_int(record, "positive_formal_evidence_missing_count") == 0
         and _nonnegative_int(record, "negative_formal_evidence_missing_count") == 0
+        and not _missing_required_attack_names(record, "positive_attack_names", required_attack_names, "positive_anchor_keys")
     )
 
 
-def _formal_comparison_anchor_ready(record: dict) -> bool:
+def _formal_comparison_anchor_ready(record: dict, required_attack_names: list[str]) -> bool:
     """检查同协议统计行是否与 SSTW reference anchor 集合对齐。"""
 
     method_role = str(record.get("method_role") or "")
@@ -315,6 +367,8 @@ def _formal_comparison_anchor_ready(record: dict) -> bool:
     if _nonnegative_int(record, "comparison_anchor_count") <= 0:
         return False
     if _nonnegative_int(record, "reference_anchor_count") <= 0:
+        return False
+    if _missing_required_attack_names(record, "comparison_attack_names", required_attack_names, "comparison_anchor_keys"):
         return False
     if method_role == "proposed_method":
         return alignment_status == "reference_method_anchor_set_ready"
@@ -325,7 +379,7 @@ def _formal_comparison_anchor_ready(record: dict) -> bool:
     )
 
 
-def _difference_interval_anchor_ready(record: dict) -> bool:
+def _difference_interval_anchor_ready(record: dict, required_attack_names: list[str]) -> bool:
     """检查差值区间是否来自 prompt / seed / attack 完全配对的比较单元。"""
 
     return (
@@ -333,6 +387,7 @@ def _difference_interval_anchor_ready(record: dict) -> bool:
         and _nonnegative_int(record, "paired_comparison_unit_count") > 0
         and _nonnegative_int(record, "unpaired_reference_anchor_count") == 0
         and _nonnegative_int(record, "unpaired_baseline_anchor_count") == 0
+        and not _missing_required_attack_names(record, "paired_attack_names", required_attack_names, "paired_comparison_anchor_keys")
     )
 
 
@@ -340,6 +395,7 @@ def _formal_method_baseline_comparison_ready(
     run_root: Path,
     required_modern_adapter_names: list[str],
     target_fpr: float,
+    required_attack_names: list[str],
 ) -> tuple[bool, int, str]:
     """检查 SSTW 与 5 个现代 baseline 的同协议统计表是否已通过。"""
     records = _read_jsonl(run_root / "records" / "formal_method_baseline_comparison_records.jsonl")
@@ -350,7 +406,7 @@ def _formal_method_baseline_comparison_ready(
         for record in records
         if record.get("metric_status") == "measured_formal"
         and _target_fpr_matches(record, target_fpr)
-        and _formal_comparison_anchor_ready(record)
+        and _formal_comparison_anchor_ready(record, required_attack_names)
     }
     missing_method_ids = sorted(required_method_ids - ready_method_ids)
     ready_count = int(decision.get("formal_comparison_ready_method_count") or len(ready_method_ids))
@@ -369,6 +425,7 @@ def _fair_detection_calibration_ready(
     required_modern_adapter_names: list[str],
     target_fpr: float,
     minimum_clean_negative_count: int,
+    required_attack_names: list[str],
 ) -> tuple[bool, int, str]:
     """检查 clean negative calibration 公平比较是否已通过。"""
     records = _read_jsonl(run_root / "records" / "fair_detection_calibration_records.jsonl")
@@ -380,7 +437,7 @@ def _fair_detection_calibration_ready(
         if record.get("fair_comparison_status") == "ready"
         and record.get("metric_status") == "measured_formal"
         and _target_fpr_matches(record, target_fpr)
-        and _fair_detection_anchor_ready(record, minimum_clean_negative_count)
+        and _fair_detection_anchor_ready(record, minimum_clean_negative_count, required_attack_names)
     }
     missing_method_ids = sorted(required_method_ids - ready_method_ids)
     ready_count = len(ready_method_ids)
@@ -398,6 +455,7 @@ def _formal_baseline_difference_interval_ready(
     run_root: Path,
     required_modern_adapter_names: list[str],
     target_fpr: float,
+    required_attack_names: list[str],
 ) -> tuple[bool, int, str]:
     """检查 SSTW 相对 baseline 的差值置信区间报告是否已通过。"""
     records = _read_jsonl(run_root / "records" / "formal_baseline_difference_interval_records.jsonl")
@@ -409,7 +467,7 @@ def _formal_baseline_difference_interval_ready(
         if record.get("difference_interval_status") == "ready"
         and record.get("metric_status") == "measured_formal"
         and _target_fpr_matches(record, target_fpr)
-        and _difference_interval_anchor_ready(record)
+        and _difference_interval_anchor_ready(record, required_attack_names)
     }
     missing_baseline_ids = sorted(required_baseline_ids - ready_baseline_ids)
     ready_count = int(decision.get("difference_interval_ready_count") or len(ready_baseline_ids))
@@ -595,6 +653,18 @@ def build_validation_scale_gate_audit(
     attack_count = int(runtime_attack_decision.get("runtime_attack_count") or len(_unique_nonempty(runtime_attack_records, "attack_name")))
     runtime_attack_ready_count = int(runtime_attack_decision.get("runtime_attack_ready_count") or sum(1 for record in runtime_attack_records if record.get("attack_runtime_status") == "ready"))
     runtime_detection_ready_count = int(runtime_detection_decision.get("runtime_detection_ready_count") or sum(1 for record in runtime_detection_records if record.get("runtime_detection_status") == "ready"))
+    runtime_attack_required_ready, runtime_attack_observed_names, runtime_attack_missing_names = _records_cover_required_attacks(
+        runtime_attack_records,
+        "attack_runtime_status",
+        "ready",
+        config["required_runtime_attack_names"],
+    )
+    runtime_detection_required_ready, runtime_detection_observed_names, runtime_detection_missing_names = _records_cover_required_attacks(
+        runtime_detection_records,
+        "runtime_detection_status",
+        "ready",
+        config["required_runtime_attack_names"],
+    )
 
     external_baseline_audit = audit_external_baseline_records(external_baseline_records) if external_baseline_records else {}
     (
@@ -622,16 +692,19 @@ def build_validation_scale_gate_audit(
         config["required_modern_external_baseline_adapter_names"],
         config["target_fpr"],
         config["minimum_clean_negative_count"],
+        config["required_runtime_attack_names"],
     )
     formal_method_comparison_ready, formal_method_comparison_ready_count, formal_method_comparison_status = _formal_method_baseline_comparison_ready(
         run_root,
         config["required_modern_external_baseline_adapter_names"],
         config["target_fpr"],
+        config["required_runtime_attack_names"],
     )
     formal_difference_interval_ready, formal_difference_interval_ready_count, formal_difference_interval_status = _formal_baseline_difference_interval_ready(
         run_root,
         config["required_modern_external_baseline_adapter_names"],
         config["target_fpr"],
+        config["required_runtime_attack_names"],
     )
     external_baseline_self_containment_ready, external_baseline_self_containment_summary = _external_baseline_self_containment_ready(
         external_baseline_self_containment_decision,
@@ -648,8 +721,12 @@ def build_validation_scale_gate_audit(
         "validation_motion_threshold_calibration_ready": (not config["require_motion_threshold_calibration_ready"]) or motion_threshold_ready,
         "validation_formal_motion_claim_ready": (not config["require_formal_motion_claim_ready"]) or formal_motion_claim_ready,
         "validation_motion_consistency_exclusion_report_ready": (not config["require_motion_consistency_exclusion_report"]) or motion_exclusion_ready,
-        "validation_attack_records_ready": _decision_pass(runtime_attack_decision, "runtime_attack_decision") and attack_count >= config["minimum_attack_count"],
-        "validation_detection_records_ready": _decision_pass(runtime_detection_decision, "runtime_detection_decision") and runtime_detection_ready_count >= runtime_attack_ready_count > 0,
+        "validation_attack_records_ready": _decision_pass(runtime_attack_decision, "runtime_attack_decision")
+        and attack_count >= config["minimum_attack_count"]
+        and runtime_attack_required_ready,
+        "validation_detection_records_ready": _decision_pass(runtime_detection_decision, "runtime_detection_decision")
+        and runtime_detection_ready_count >= runtime_attack_ready_count > 0
+        and runtime_detection_required_ready,
         "validation_external_baseline_status_records_ready": (not config["require_external_baseline_status_records"]) or external_baseline_audit.get("external_baseline_status_decision") == "PASS",
         "validation_external_baseline_comparison_records_ready": (not config["require_external_baseline_comparison_records"]) or external_baseline_comparison_ready,
         "validation_external_baseline_self_containment_ready": (not config["require_external_baseline_self_containment_decision"]) or external_baseline_self_containment_ready,
@@ -704,8 +781,15 @@ def build_validation_scale_gate_audit(
         "runtime_attack_decision": runtime_attack_decision.get("runtime_attack_decision"),
         "runtime_attack_ready_count": runtime_attack_ready_count,
         "runtime_attack_count": attack_count,
+        "required_runtime_attack_names": sorted(config["required_runtime_attack_names"]),
+        "runtime_attack_observed_names": runtime_attack_observed_names,
+        "runtime_attack_missing_required_names": runtime_attack_missing_names,
+        "runtime_attack_missing_required_count": len(runtime_attack_missing_names),
         "runtime_detection_decision": runtime_detection_decision.get("runtime_detection_decision"),
         "runtime_detection_ready_count": runtime_detection_ready_count,
+        "runtime_detection_observed_names": runtime_detection_observed_names,
+        "runtime_detection_missing_required_names": runtime_detection_missing_names,
+        "runtime_detection_missing_required_count": len(runtime_detection_missing_names),
         "external_baseline_status_decision": external_baseline_audit.get("external_baseline_status_decision"),
         "modern_external_baseline_record_count": external_baseline_audit.get("modern_external_baseline_record_count", 0),
         "modern_external_baseline_main_comparison_ready_count": external_baseline_audit.get("modern_external_baseline_main_comparison_ready_count", 0),
@@ -778,6 +862,9 @@ def write_validation_scale_gate_audit(
         f"- validation_generation_record_count: {audit['validation_generation_record_count']}\n"
         f"- validation_prompt_count: {audit['validation_prompt_count']}\n"
         f"- validation_seed_per_prompt_min: {audit['validation_seed_per_prompt_min']}\n"
+        f"- required_runtime_attack_names: {', '.join(audit['required_runtime_attack_names'])}\n"
+        f"- runtime_attack_missing_required_names: {', '.join(audit['runtime_attack_missing_required_names']) if audit['runtime_attack_missing_required_names'] else 'none'}\n"
+        f"- runtime_detection_missing_required_names: {', '.join(audit['runtime_detection_missing_required_names']) if audit['runtime_detection_missing_required_names'] else 'none'}\n"
         f"- motion_threshold_calibration_decision: {audit['motion_threshold_calibration_decision']}\n"
         f"- formal_motion_claim_status: {audit['formal_motion_claim_status']}\n"
         f"- motion_consistency_exclusion_excluded_count: {audit['motion_consistency_exclusion_excluded_count']}\n"

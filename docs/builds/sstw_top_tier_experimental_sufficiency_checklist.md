@@ -179,17 +179,26 @@ without_quality_guard 是否造成质量退化
 攻击至少覆盖:
 
 ```text
-spatial_transform_attack
+compression_attack: H.264 / H.265 / MPEG-4, 多 CRF 或 bitrate 强度
+temporal_crop_attack
 temporal_resampling_attack
-compression_attack
-frame_drop_or_duplication_attack
-generative_recompression_attack
+frame_drop_insert_swap_or_average_attack
+spatial_transform_attack: crop / resize / rotation / perspective
+visual_degradation_attack: Gaussian noise / Gaussian blur / median blur / brightness / contrast
+combined_attack: compression + crop, compression + brightness, compression + temporal disturbance
+generative_recompression_or_regeneration_attack
 endpoint_preserving_path_perturbation_attack
 flow_time_grid_mismatch_attack
 wrong_sampler_replay_attack
 wrong_prompt_replay_attack
 wrong_key_attack
 ```
+
+当前工程协议采用三层 attack 要求:
+
+- `validation_scale`: `video_compression_runtime`、`temporal_crop_runtime`、`frame_rate_resampling_runtime`, 只用于小样本全流程打通和公平比较门禁。
+- `pilot_paper`: 增加 `frame_drop_uniform_runtime`、`spatial_resize_runtime`、`spatial_crop_resize_runtime`、`gaussian_blur_runtime`、`gaussian_noise_runtime`, 用于代表性论文协议试运行。
+- `full_paper`: 使用多强度压缩、完整时间扰动、空间几何、视觉退化和组合攻击。此层级才可支撑顶会 / 顶刊级“完整鲁棒性”讨论。
 
 如果 flow-specific adaptive attack 未完成, 必须降级 adaptive robustness claim, 不能把普通视频攻击结果写成 Flow-specific robustness。
 

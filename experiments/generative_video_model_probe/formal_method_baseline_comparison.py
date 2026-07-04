@@ -77,6 +77,11 @@ def _load_profile_context(config_path: str | Path) -> dict[str, Any]:
         "target_fpr": float(config["target_fpr"]),
         "target_fpr_source_config_path": str(config_path),
         "required_modern_external_baseline_adapter_names": required_baselines,
+        "required_runtime_attack_names": [
+            str(item)
+            for item in config.get("required_runtime_attack_names", [])
+            if str(item)
+        ],
         "allow_effect_size_claims": bool(config.get("allow_effect_size_claims", False)),
     }
 
@@ -111,6 +116,11 @@ def _method_row(
     record_target_matches = _target_fpr_matches(record, float(profile_context["target_fpr"]))
     fair_ready = bool(record) and record.get("fair_comparison_status") == "ready" and record_target_matches
     anchor_keys = {str(item) for item in (record or {}).get("positive_anchor_keys", []) if str(item)}
+    comparison_attack_names = sorted({str(item) for item in (record or {}).get("positive_attack_names", []) if str(item)})
+    if not comparison_attack_names:
+        comparison_attack_names = sorted({key.split("::")[-1] for key in anchor_keys if "::" in key})
+    required_attack_names = [str(item) for item in profile_context.get("required_runtime_attack_names", []) if str(item)]
+    missing_required_attack_names = sorted(set(required_attack_names) - set(comparison_attack_names))
     if record and not record_target_matches:
         missing_reason = "fair_detection_calibration_target_fpr_mismatch"
     if method_role == "proposed_method":
@@ -122,9 +132,11 @@ def _method_row(
         extra_anchor_keys = sorted(anchor_keys - reference_anchor_keys)
         anchor_aligned = fair_ready and bool(reference_anchor_keys) and not missing_reference_anchor_keys and not extra_anchor_keys
         anchor_alignment_status = "aligned_with_sstw_reference_anchors" if anchor_aligned else "anchor_set_mismatch_with_sstw"
-    metric_status = "measured_formal" if fair_ready and anchor_aligned else "missing"
+    metric_status = "measured_formal" if fair_ready and anchor_aligned and not missing_required_attack_names else "missing"
     if metric_status == "missing" and fair_ready and not anchor_aligned:
         missing_reason = "anchor_set_mismatch_with_sstw"
+    if metric_status == "missing" and fair_ready and anchor_aligned and missing_required_attack_names:
+        missing_reason = "required_runtime_attack_coverage_missing"
     claim_support_status = (
         "formal_method_baseline_comparison_paper_profile_claim_candidate"
         if profile_context["allow_effect_size_claims"] and metric_status == "measured_formal"
@@ -144,12 +156,17 @@ def _method_row(
         "comparison_score_field": record.get("positive_score_field") if record else "missing_fair_detection_calibration",
         "comparison_record_count": record.get("attacked_positive_score_count") if record else 0,
         "comparison_anchor_count": len(anchor_keys),
+        "comparison_anchor_keys": sorted(anchor_keys),
         "reference_anchor_count": len(reference_anchor_keys or anchor_keys),
         "missing_reference_anchor_count": 0 if method_role == "proposed_method" else len((reference_anchor_keys or set()) - anchor_keys),
         "extra_anchor_count": 0 if method_role == "proposed_method" else len(anchor_keys - (reference_anchor_keys or set())),
         "comparison_anchor_alignment_status": anchor_alignment_status,
         "comparison_prompt_count": record.get("prompt_count") if record else 0,
         "comparison_attack_count": record.get("attack_count") if record else 0,
+        "comparison_attack_names": comparison_attack_names,
+        "required_runtime_attack_names": required_attack_names,
+        "missing_required_runtime_attack_names": missing_required_attack_names,
+        "missing_required_runtime_attack_count": len(missing_required_attack_names),
         "comparison_positive_count": record.get("detected_positive_count_at_target_fpr") if record else None,
         "comparison_positive_rate": record.get("tpr_at_target_fpr") if record else None,
         "comparison_score_mean": None,
@@ -159,7 +176,11 @@ def _method_row(
         "score_semantics": record.get("score_semantics") if record else None,
         "comparison_missing_reason": missing_reason if metric_status == "missing" else "none",
         "claim_support_status": claim_support_status,
-        **{key: value for key, value in profile_context.items() if key != "required_modern_external_baseline_adapter_names"},
+        **{
+            key: value
+            for key, value in profile_context.items()
+            if key not in {"required_modern_external_baseline_adapter_names", "required_runtime_attack_names"}
+        },
     }, trajectory_source_level="formal_method_baseline_comparison", claim_support_status=claim_support_status)
 
 

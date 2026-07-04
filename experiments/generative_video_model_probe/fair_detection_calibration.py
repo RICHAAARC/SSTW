@@ -76,6 +76,11 @@ def _load_profile_context(config_path: str | Path) -> dict[str, Any]:
             for item in config.get("required_modern_external_baseline_adapter_names", DEFAULT_REQUIRED_BASELINES)
             if str(item)
         ],
+        "required_runtime_attack_names": [
+            str(item)
+            for item in config.get("required_runtime_attack_names", [])
+            if str(item)
+        ],
         "fair_comparison_protocol": str(
             config.get("fair_comparison_protocol")
             or "method_specific_clean_negative_calibration_to_target_fpr"
@@ -388,6 +393,9 @@ def _calibrated_method_record(
     )
     negative_scores = [row["score"] for row in negative_rows]
     positive_scores = [row["score"] for row in positive_rows]
+    positive_attack_names = sorted({str(row["attack_name"]) for row in positive_rows if row.get("attack_name")})
+    required_attack_names = [str(item) for item in context.get("required_runtime_attack_names", []) if str(item)]
+    missing_required_attack_names = sorted(set(required_attack_names) - set(positive_attack_names))
     threshold, heldout_fpr, threshold_policy = _threshold_for_target_fpr(negative_scores, float(context["target_fpr"]))
     detected_count = 0
     positive_detection_units: list[dict[str, Any]] = []
@@ -425,6 +433,8 @@ def _calibrated_method_record(
         missing_reasons.append("positive_formal_evidence_missing")
     if negative_formal_evidence_missing_count:
         missing_reasons.append("clean_negative_formal_evidence_missing")
+    if missing_required_attack_names:
+        missing_reasons.append("required_runtime_attack_coverage_missing")
     if any(str(record.get("external_baseline_score_orientation") or "higher_is_more_watermarked") != "higher_is_more_watermarked" for record in records):
         missing_reasons.append("unsupported_score_orientation")
     calibration_status = "ready" if not missing_reasons and threshold is not None and tpr is not None else "blocked"
@@ -446,6 +456,10 @@ def _calibrated_method_record(
         "negative_formal_evidence_missing_count": negative_formal_evidence_missing_count,
         "positive_anchor_count": len({str(row["comparison_anchor_key"]) for row in positive_rows}),
         "positive_anchor_keys": sorted({str(row["comparison_anchor_key"]) for row in positive_rows}),
+        "positive_attack_names": positive_attack_names,
+        "required_runtime_attack_names": required_attack_names,
+        "missing_required_runtime_attack_names": missing_required_attack_names,
+        "missing_required_runtime_attack_count": len(missing_required_attack_names),
         "positive_detection_units_at_target_fpr": sorted(
             positive_detection_units,
             key=lambda item: str(item["comparison_anchor_key"]),
@@ -463,7 +477,11 @@ def _calibrated_method_record(
         "claim_support_status": "fair_detection_calibration_validation_scale_ready"
         if calibration_status == "ready"
         else "fair_detection_calibration_blocked",
-        **{key: value for key, value in context.items() if key != "required_modern_external_baseline_adapter_names"},
+        **{
+            key: value
+            for key, value in context.items()
+            if key not in {"required_modern_external_baseline_adapter_names", "required_runtime_attack_names"}
+        },
     }
     digest = build_stable_digest(payload)
     return with_flow_evidence_protocol_defaults({

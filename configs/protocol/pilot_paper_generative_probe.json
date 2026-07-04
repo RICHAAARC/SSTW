@@ -77,5 +77,16 @@
   ],
   "stage_id": "pilot_paper_generative_probe_gate",
   "target_fpr": 0.01,
-  "threshold_protocol": "calibration_split_to_frozen_threshold_to_heldout_test_split"
+  "threshold_protocol": "calibration_split_to_frozen_threshold_to_heldout_test_split",
+  "required_runtime_attack_names": [
+    "video_compression_runtime",
+    "temporal_crop_runtime",
+    "frame_rate_resampling_runtime",
+    "frame_drop_uniform_runtime",
+    "spatial_resize_runtime",
+    "spatial_crop_resize_runtime",
+    "gaussian_blur_runtime",
+    "gaussian_noise_runtime"
+  ],
+  "required_runtime_attack_protocol_note": "validation_scale 只要求三类核心 runtime attack; pilot_paper 扩展到代表性压缩、时间、空间和视觉退化攻击; full_paper 要求多类别、多强度和组合攻击, 用于顶会/顶刊级完整鲁棒性协议。"
 }

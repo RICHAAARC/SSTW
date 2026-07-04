@@ -118,9 +118,9 @@ def test_videoshield_runtime_payload_stamps_official_adapter_identity() -> None:
     assert '"official_adapter_baseline_id": BASELINE_ID' in runtime_text
     assert '"official_baseline_id": BASELINE_ID' in runtime_text
     assert "official_score_formal_comparison_summary" in runtime_text
-    assert 'normalized == "video_compression_runtime"' in runtime_text
-    assert 'normalized == "temporal_crop_runtime"' in runtime_text
-    assert 'normalized == "frame_rate_resampling_runtime"' in runtime_text
+    assert "apply_runtime_attack_to_frames" in runtime_text
+    assert "unsupported_videoshield_runtime_attack" in runtime_text
+    assert "attack_metadata" in runtime_text
 
 
 @pytest.mark.quick

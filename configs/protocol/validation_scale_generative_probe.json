@@ -65,5 +65,11 @@
     "validation_scale"
   ],
   "validation_scale_definition": "small_sample_full_pipeline_rehearsal",
-  "validation_scale_role": "paper_grade_preflight_full_pipeline_gate"
+  "validation_scale_role": "paper_grade_preflight_full_pipeline_gate",
+  "required_runtime_attack_names": [
+    "video_compression_runtime",
+    "temporal_crop_runtime",
+    "frame_rate_resampling_runtime"
+  ],
+  "required_runtime_attack_protocol_note": "validation_scale 只要求三类核心 runtime attack; pilot_paper 扩展到代表性压缩、时间、空间和视觉退化攻击; full_paper 要求多类别、多强度和组合攻击, 用于顶会/顶刊级完整鲁棒性协议。"
 }

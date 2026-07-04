@@ -27,6 +27,12 @@ MODERN_EXTERNAL_BASELINE_NAMES = {
     "vidsig",
     "videoseal",
 }
+REQUIRED_RUNTIME_ATTACK_NAMES = (
+    "video_compression_runtime",
+    "temporal_crop_runtime",
+    "frame_rate_resampling_runtime",
+)
+REQUIRED_ANCHOR_KEYS = tuple(f"prompt_0::seed_0::{attack_name}" for attack_name in REQUIRED_RUNTIME_ATTACK_NAMES)
 
 
 def _external_baseline_self_containment_pass_payload() -> dict:
@@ -293,11 +299,19 @@ def test_validation_scale_gate_passes_when_all_governed_inputs_exist(tmp_path: P
         "claim_support_status": "motion_consistency_exclusion_audit_record",
     })
     write_jsonl(run_root / "records" / "sstw_measured_formal_records.jsonl", [
-        {"metric_status": "measured_formal", "sstw_score": 0.82, "claim_support_status": "sstw_measured_formal_validation_scale_only"},
+        {
+            "metric_status": "measured_formal",
+            "sstw_score": 0.82,
+            "prompt_id": "prompt_0",
+            "seed_id": "seed_0",
+            "attack_name": attack_name,
+            "claim_support_status": "sstw_measured_formal_validation_scale_only",
+        }
+        for attack_name in REQUIRED_RUNTIME_ATTACK_NAMES
     ])
     write_json(run_root / "artifacts" / "sstw_measured_formal_decision.json", {
         "sstw_measured_formal_decision": "PASS",
-        "sstw_measured_formal_record_count": 1,
+        "sstw_measured_formal_record_count": 3,
         "claim_support_status": "sstw_measured_formal_validation_scale_only",
     })
     write_jsonl(run_root / "records" / "fair_detection_calibration_records.jsonl", [
@@ -308,6 +322,8 @@ def test_validation_scale_gate_passes_when_all_governed_inputs_exist(tmp_path: P
             "target_fpr": 0.1,
             "clean_negative_score_count": 10,
             "positive_anchor_count": 3,
+            "positive_anchor_keys": list(REQUIRED_ANCHOR_KEYS),
+            "positive_attack_names": list(REQUIRED_RUNTIME_ATTACK_NAMES),
             "positive_anchor_missing_count": 0,
             "positive_formal_evidence_missing_count": 0,
             "negative_formal_evidence_missing_count": 0,
@@ -320,6 +336,8 @@ def test_validation_scale_gate_passes_when_all_governed_inputs_exist(tmp_path: P
                 "target_fpr": 0.1,
                 "clean_negative_score_count": 10,
                 "positive_anchor_count": 3,
+                "positive_anchor_keys": list(REQUIRED_ANCHOR_KEYS),
+                "positive_attack_names": list(REQUIRED_RUNTIME_ATTACK_NAMES),
                 "positive_anchor_missing_count": 0,
                 "positive_formal_evidence_missing_count": 0,
                 "negative_formal_evidence_missing_count": 0,
@@ -340,6 +358,8 @@ def test_validation_scale_gate_passes_when_all_governed_inputs_exist(tmp_path: P
             "metric_status": "measured_formal",
             "target_fpr": 0.1,
             "comparison_anchor_count": 3,
+            "comparison_anchor_keys": list(REQUIRED_ANCHOR_KEYS),
+            "comparison_attack_names": list(REQUIRED_RUNTIME_ATTACK_NAMES),
             "reference_anchor_count": 3,
             "missing_reference_anchor_count": 0,
             "extra_anchor_count": 0,
@@ -352,6 +372,8 @@ def test_validation_scale_gate_passes_when_all_governed_inputs_exist(tmp_path: P
                 "metric_status": "measured_formal",
                 "target_fpr": 0.1,
                 "comparison_anchor_count": 3,
+                "comparison_anchor_keys": list(REQUIRED_ANCHOR_KEYS),
+                "comparison_attack_names": list(REQUIRED_RUNTIME_ATTACK_NAMES),
                 "reference_anchor_count": 3,
                 "missing_reference_anchor_count": 0,
                 "extra_anchor_count": 0,
@@ -373,6 +395,8 @@ def test_validation_scale_gate_passes_when_all_governed_inputs_exist(tmp_path: P
             "metric_status": "measured_formal",
             "target_fpr": 0.1,
             "paired_comparison_unit_count": 3,
+            "paired_comparison_anchor_keys": list(REQUIRED_ANCHOR_KEYS),
+            "paired_attack_names": list(REQUIRED_RUNTIME_ATTACK_NAMES),
             "unpaired_reference_anchor_count": 0,
             "unpaired_baseline_anchor_count": 0,
             "comparison_anchor_alignment_status": "aligned_with_sstw_reference_anchors",
@@ -465,6 +489,9 @@ def test_validation_scale_gate_passes_when_all_governed_inputs_exist(tmp_path: P
     assert audit["validation_generation_record_count"] == 24
     assert audit["validation_prompt_count"] == 8
     assert audit["validation_seed_per_prompt_min"] == 3
+    assert audit["required_runtime_attack_names"] == sorted(REQUIRED_RUNTIME_ATTACK_NAMES)
+    assert audit["runtime_attack_missing_required_names"] == []
+    assert audit["runtime_detection_missing_required_names"] == []
     assert audit["motion_threshold_calibration_ready"] is True
     assert audit["formal_motion_claim_status"] == "ready"
     assert audit["full_paper_allowed"] is False
@@ -476,7 +503,7 @@ def test_validation_scale_gate_passes_when_all_governed_inputs_exist(tmp_path: P
     assert audit["external_baseline_self_containment_gate_missing_requirements"] == []
     assert audit["motion_consistency_exclusion_excluded_count"] == 0
     assert audit["motion_consistency_exclusion_status"] == "motion_consistency_exclusion_audit_record"
-    assert audit["sstw_measured_formal_record_count"] == 1
+    assert audit["sstw_measured_formal_record_count"] == 3
     assert audit["sstw_measured_formal_status"] == "sstw_measured_formal_validation_scale_only"
     assert audit["fair_detection_calibration_ready_count"] == 6
     assert audit["fair_detection_calibration_status"] == "fair_detection_calibration_validation_scale_ready"
@@ -755,6 +782,7 @@ def test_validation_scale_gate_rejects_fair_comparison_with_negative_evidence_ga
                 "minimum_seed_per_prompt": 0,
                 "minimum_attack_count": 0,
                 "minimum_clean_negative_count": 2,
+                "required_runtime_attack_names": list(REQUIRED_RUNTIME_ATTACK_NAMES),
                 "required_modern_external_baseline_adapter_names": ["videoseal"],
                 "require_external_baseline_status_records": False,
                 "require_external_baseline_comparison_records": False,
@@ -785,9 +813,11 @@ def test_validation_scale_gate_rejects_fair_comparison_with_negative_evidence_ga
             "fair_comparison_status": "ready",
             "metric_status": "measured_formal",
             "target_fpr": 0.1,
-            "clean_negative_score_count": 2,
-            "positive_anchor_count": 1,
-            "positive_anchor_missing_count": 0,
+                "clean_negative_score_count": 2,
+                "positive_anchor_count": 3,
+                "positive_anchor_keys": list(REQUIRED_ANCHOR_KEYS),
+                "positive_attack_names": list(REQUIRED_RUNTIME_ATTACK_NAMES),
+                "positive_anchor_missing_count": 0,
             "positive_formal_evidence_missing_count": 0,
             "negative_formal_evidence_missing_count": 0,
         },
@@ -796,9 +826,11 @@ def test_validation_scale_gate_rejects_fair_comparison_with_negative_evidence_ga
             "fair_comparison_status": "ready",
             "metric_status": "measured_formal",
             "target_fpr": 0.1,
-            "clean_negative_score_count": 2,
-            "positive_anchor_count": 1,
-            "positive_anchor_missing_count": 0,
+                "clean_negative_score_count": 2,
+                "positive_anchor_count": 3,
+                "positive_anchor_keys": list(REQUIRED_ANCHOR_KEYS),
+                "positive_attack_names": list(REQUIRED_RUNTIME_ATTACK_NAMES),
+                "positive_anchor_missing_count": 0,
             "positive_formal_evidence_missing_count": 0,
             "negative_formal_evidence_missing_count": 1,
         },

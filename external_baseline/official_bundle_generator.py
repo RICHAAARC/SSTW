@@ -26,6 +26,7 @@ from external_baseline.videoseal_official_runtime import (
     ensure_videoseal_official_runtime_layout,
     videoseal_official_source_cwd,
 )
+from main.attacks.video_runtime_attack_protocol import apply_runtime_attack_to_video_tensor
 from main.core.progress import ProgressReporter
 
 
@@ -89,14 +90,10 @@ def _apply_video_tensor_attack(video: Any, attack_name: str) -> Any:
     调用方会把结果写为 mp4 并重新读取后再检测, 因此 `video_compression_runtime`
     即使在这里不裁剪帧, 也会通过 decode / re-encode 路径真实参与评分。
     """
-    normalized = str(attack_name or "").strip().lower()
-    if normalized == "video_compression_runtime":
-        return video
-    if normalized == "temporal_crop_runtime":
-        return video[1:-1] if video.shape[0] >= 4 else video
-    if normalized == "frame_rate_resampling_runtime":
-        return video[::2] if video.shape[0] >= 3 else video
-    raise ValueError(f"unsupported_videoseal_runtime_attack:{attack_name}")
+    try:
+        return apply_runtime_attack_to_video_tensor(video, attack_name)
+    except ValueError as exc:
+        raise ValueError(f"unsupported_videoseal_runtime_attack:{attack_name}") from exc
 
 
 def _sigmoid_mean(values: Any) -> float:

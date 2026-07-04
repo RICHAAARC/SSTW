@@ -1222,6 +1222,8 @@ def build_runtime_attack_command(layout: dict[str, str]) -> list[str]:
         "experiments.generative_video_model_probe.attack_runner",
         "--run-root",
         layout["drive_run_root"],
+        "--config-path",
+        layout["protocol_config_path"],
     ]
 
 

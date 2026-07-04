@@ -62,7 +62,10 @@ VidSig 也是特殊项: 它是生成过程中嵌入签名的方法, 因此 adapt
 正式结果不得来自“把 SSTW / Wan 视频直接送入 VidSig detector”。`vidsig_formal_reference_colab.ipynb`
 默认调用 `external_baseline.vidsig_official_runtime`, 先运行官方 `generate_ms.py` 生成
 VidSig 自己的 clean / watermarked videos, 再对 VidSig watermarked videos 应用同名
-`video_compression_runtime`、`temporal_crop_runtime`、`frame_rate_resampling_runtime`,
+runtime attack。`validation_scale` 默认只要求 `video_compression_runtime`、
+`temporal_crop_runtime`、`frame_rate_resampling_runtime`; `pilot_paper` 和
+`full_paper` 必须从 protocol config 的 `required_runtime_attack_names` 读取扩展
+attack 集合,
 最后调用官方 `attack.py` 写出 project-owned official bundle。
 
 VideoShield 同样是生成过程中嵌入水印的方法。`videoshield_formal_reference_colab.ipynb`

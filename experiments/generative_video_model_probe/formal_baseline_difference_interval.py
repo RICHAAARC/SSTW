@@ -61,6 +61,11 @@ def _load_profile_context(config_path: str | Path) -> dict[str, Any]:
             for item in config.get("required_modern_external_baseline_adapter_names", DEFAULT_REQUIRED_BASELINES)
             if str(item)
         ],
+        "required_runtime_attack_names": [
+            str(item)
+            for item in config.get("required_runtime_attack_names", [])
+            if str(item)
+        ],
         "allow_effect_size_claims": bool(config.get("allow_effect_size_claims", False)),
     }
 
@@ -160,6 +165,17 @@ def _detection_units_by_anchor(record: dict[str, Any]) -> dict[str, bool]:
     return units
 
 
+def _attack_names_from_unit_keys(unit_keys: Iterable[str]) -> list[str]:
+    """从 prompt / seed / attack comparison key 中解析 attack 名称。"""
+
+    names: set[str] = set()
+    for key in unit_keys:
+        parts = str(key or "").split("::")
+        if len(parts) >= 3 and parts[-1]:
+            names.add(parts[-1])
+    return sorted(names)
+
+
 def _unit_key(record: dict[str, Any]) -> tuple[str, str, str]:
     """构造 prompt / seed / attack 锚点, 用于审计是否存在可配对比较单元。"""
     return (
@@ -225,9 +241,13 @@ def build_formal_baseline_difference_interval_records(
         )
         unpaired_reference_count = len(set(sstw_units) - set(baseline_units))
         unpaired_baseline_count = len(set(baseline_units) - set(sstw_units))
+        paired_anchor_keys = sorted(set(sstw_units) & set(baseline_units))
+        paired_attack_names = _attack_names_from_unit_keys(paired_anchor_keys)
+        required_attack_names = [str(item) for item in profile_context.get("required_runtime_attack_names", []) if str(item)]
+        missing_required_attack_names = sorted(set(required_attack_names) - set(paired_attack_names))
         anchor_alignment_status = (
             "aligned_with_sstw_reference_anchors"
-            if sstw_units and not unpaired_reference_count and not unpaired_baseline_count
+            if sstw_units and not unpaired_reference_count and not unpaired_baseline_count and not missing_required_attack_names
             else "anchor_set_mismatch_with_sstw"
         )
         delta = paired_delta
@@ -254,6 +274,11 @@ def build_formal_baseline_difference_interval_records(
             "reference_record_count": sstw_count,
             "baseline_record_count": baseline_count,
             "paired_comparison_unit_count": paired_count,
+            "paired_comparison_anchor_keys": paired_anchor_keys,
+            "paired_attack_names": paired_attack_names,
+            "required_runtime_attack_names": required_attack_names,
+            "missing_required_runtime_attack_names": missing_required_attack_names,
+            "missing_required_runtime_attack_count": len(missing_required_attack_names),
             "reference_anchor_count": len(sstw_units),
             "baseline_anchor_count": len(baseline_units),
             "unpaired_reference_anchor_count": unpaired_reference_count,
@@ -274,7 +299,11 @@ def build_formal_baseline_difference_interval_records(
             if not profile_context["allow_effect_size_claims"]
             else "paper_profile_interval_ready_requires_claim_audit",
             "claim_support_status": claim_support_status if interval_status == "ready" else "formal_baseline_difference_interval_blocked",
-            **{key: value for key, value in profile_context.items() if key != "required_modern_external_baseline_adapter_names"},
+            **{
+                key: value
+                for key, value in profile_context.items()
+                if key not in {"required_modern_external_baseline_adapter_names", "required_runtime_attack_names"}
+            },
         }, trajectory_source_level="formal_baseline_difference_interval", claim_support_status=claim_support_status if interval_status == "ready" else "formal_baseline_difference_interval_blocked"))
     return rows
 

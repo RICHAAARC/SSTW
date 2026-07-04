@@ -781,13 +781,31 @@ explicit_dtw_temporal_alignment
 ### 12.4 必须覆盖的攻击和错配
 
 ```text
-video_compression
-temporal_crop
-frame_rate_resampling
+validation_scale_required_runtime_attack_names:
+  video_compression_runtime
+  temporal_crop_runtime
+  frame_rate_resampling_runtime
+pilot_paper_additional_runtime_attack_names:
+  frame_drop_uniform_runtime
+  spatial_resize_runtime
+  spatial_crop_resize_runtime
+  gaussian_blur_runtime
+  gaussian_noise_runtime
+full_paper_required_runtime_attack_families:
+  multi_strength_codec_compression
+  complete_temporal_disturbance
+  spatial_geometry
+  visual_degradation
+  combined_transformations
 vae_reencode_attack
 wrong_sampler_replay
 wrong_key_control
 ```
+
+`validation_scale` 的三类 runtime attack 是 paper 级前的小样本全流程打通门禁,
+不能被写成完整鲁棒性协议。`pilot_paper` 与 `full_paper` 必须通过 protocol
+config 的 `required_runtime_attack_names` 显式切换攻击集合, 不允许在 Notebook
+中手写或临时删减 attack。
 
 ### 12.5 通过标准
 

@@ -25,6 +25,7 @@ from external_baseline.official_eval_adapters.common import REPOSITORY_GENERATED
 from external_baseline.runtime_trace_io import build_comparison_unit_id, comparable_detection_records
 from external_baseline.score_semantics import official_score_formal_comparison_summary
 from external_baseline.video_tensor_io import read_video_tchw_uint8, write_video_tchw
+from main.attacks.video_runtime_attack_protocol import apply_runtime_attack_to_frames
 
 
 BASELINE_ID = "videoshield"
@@ -584,24 +585,16 @@ def _apply_runtime_attack_to_frames(
 ) -> tuple[list[Any], dict[str, Any]]:
     """对 VideoShield 自己生成的视频施加 SSTW runtime attack 锚点。"""
 
-    normalized = str(attack_name or "").strip().lower()
-    if normalized == "video_compression_runtime":
-        attacked_frames = list(frames)
-        protocol_status = "video_compression_runtime_decode_reencode"
-    elif normalized == "temporal_crop_runtime":
-        attacked_frames = frames[1:-1] if len(frames) >= 4 else list(frames)
-        protocol_status = "temporal_crop_runtime_drop_first_and_last_frame"
-    elif normalized == "frame_rate_resampling_runtime":
-        attacked_frames = frames[::2] if len(frames) >= 3 else list(frames)
-        protocol_status = "frame_rate_resampling_runtime_keep_every_second_frame"
-    else:
-        raise ValueError(f"unsupported_videoshield_runtime_attack:{attack_name}")
+    try:
+        attacked_frames, attack_metadata = apply_runtime_attack_to_frames(frames, attack_name)
+    except ValueError as exc:
+        raise ValueError(f"unsupported_videoshield_runtime_attack:{attack_name}") from exc
     video_tensor = _frames_to_tchw(attacked_frames)
     write_info = write_video_tchw(output_video_path, video_tensor, fps=float(fps))
     decoded_frames = _read_video_frames_float(output_video_path)
     return decoded_frames, {
         "attack_protocol_status": "project_runtime_attack_applied_to_videoshield_watermarked_video",
-        "attack_transform": protocol_status,
+        **attack_metadata,
         "attacked_video_path": str(output_video_path),
         "attacked_frame_count_before_decode": len(attacked_frames),
         "attacked_frame_count_after_decode": len(decoded_frames),

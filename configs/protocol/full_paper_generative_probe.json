@@ -82,5 +82,29 @@
   "target_fpr": 0.001,
   "test_time_threshold_update_blocked": true,
   "threshold_protocol": "calibration_split_to_frozen_threshold_to_heldout_test_split",
-  "threshold_source_split": "calibration"
+  "threshold_source_split": "calibration",
+  "required_runtime_attack_names": [
+    "h264_crf23_runtime",
+    "h264_crf33_runtime",
+    "h265_crf28_runtime",
+    "mpeg4_crf28_runtime",
+    "temporal_crop_runtime",
+    "frame_rate_resampling_runtime",
+    "frame_drop_uniform_runtime",
+    "frame_insert_duplicate_runtime",
+    "frame_swap_adjacent_runtime",
+    "frame_average_runtime",
+    "spatial_resize_runtime",
+    "spatial_crop_resize_runtime",
+    "rotation_runtime",
+    "perspective_runtime",
+    "gaussian_noise_runtime",
+    "gaussian_blur_runtime",
+    "median_blur_runtime",
+    "brightness_contrast_runtime",
+    "compression_crop_combined_runtime",
+    "compression_brightness_combined_runtime",
+    "compression_temporal_combined_runtime"
+  ],
+  "required_runtime_attack_protocol_note": "validation_scale 只要求三类核心 runtime attack; pilot_paper 扩展到代表性压缩、时间、空间和视觉退化攻击; full_paper 要求多类别、多强度和组合攻击, 用于顶会/顶刊级完整鲁棒性协议。"
 }

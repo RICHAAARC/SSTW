@@ -22,6 +22,7 @@ from typing import Any, Mapping
 from external_baseline.official_eval_adapters.common import REPOSITORY_GENERATED_OFFICIAL_PROVENANCE
 from external_baseline.runtime_trace_io import build_comparison_unit_id, comparable_detection_records
 from external_baseline.score_semantics import official_score_formal_comparison_summary
+from main.attacks.video_runtime_attack_protocol import apply_runtime_attack_to_frames
 
 
 BASELINE_ID = "vidsig"
@@ -627,21 +628,10 @@ def _write_video_frames(video_path: Path, frames: list[Any], *, fps: int) -> Non
 def _apply_runtime_attack_to_frames(frames: list[Any], attack_name: str) -> tuple[list[Any], dict[str, Any]]:
     """对 VidSig watermarked 视频执行与主流程同名的 runtime attack。"""
 
-    if not frames:
-        raise ValueError("vidsig_no_decodable_frames")
-    if attack_name == "video_compression_runtime":
-        return list(frames), {"attack_transform": "decode_reencode", "attack_strength": "runtime_reencode_default_quality"}
-    if attack_name == "temporal_crop_runtime":
-        return (frames[1:-1] if len(frames) >= 4 else list(frames)), {
-            "attack_transform": "drop_first_and_last_frame_when_possible",
-            "attack_strength": "crop_boundary_frames",
-        }
-    if attack_name == "frame_rate_resampling_runtime":
-        return (frames[::2] if len(frames) >= 3 else list(frames)), {
-            "attack_transform": "keep_every_second_frame_when_possible",
-            "attack_strength": "fps_downsample_by_2_proxy",
-        }
-    raise ValueError(f"unsupported_vidsig_runtime_attack:{attack_name}")
+    try:
+        return apply_runtime_attack_to_frames(frames, attack_name)
+    except ValueError as exc:
+        raise ValueError(f"unsupported_vidsig_runtime_attack:{attack_name}") from exc
 
 
 def _save_frame_array(frame_array_path: Path, frames: list[Any]) -> None:

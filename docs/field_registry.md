@@ -138,6 +138,17 @@ Notebook 与 repository module 的跨边界数据
 | runtime_attack_record_count | metric | none | true | false | false | Number of runtime attack records. |
 | runtime_attack_ready_count | metric | none | true | false | false | Number of runtime attack records that produced attacked videos. |
 | runtime_attack_count | metric | none | true | false | false | Number of distinct runtime attacks that produced attacked videos. |
+| runtime_attack_names | protocol | none | true | false | false | runtime attack runner 已成功产出 attacked videos 的 attack 名称集合。 |
+| attack_family | protocol | none | true | false | false | runtime attack 所属攻击家族, 例如 compression、temporal、spatial_geometry、visual_degradation 或 combined。 |
+| runtime_attack_implementation_level | protocol | none | true | false | false | runtime attack 当前实现层级, 用于区分仓库轻量帧级变换与 full paper 真实平台级攻击。 |
+| video_writer_codec | protocol | none | true | false | false | runtime attack 写出 attacked video 时请求的编码器名称。 |
+| video_writer_output_params | protocol | none | true | false | false | runtime attack 写出 attacked video 时请求传递给视频编码器的参数列表。 |
+| runtime_attack_observed_names | protocol | none | true | false | false | validation_scale gate 从 runtime_attack_records 观察到的 ready attack 名称集合。 |
+| runtime_attack_missing_required_names | governance | none | true | false | false | validation_scale gate 中 runtime_attack_records 缺失的 required runtime attack 名称集合。 |
+| runtime_attack_missing_required_count | metric | none | true | true | false | validation_scale gate 中 runtime_attack_records 缺失的 required runtime attack 数量。 |
+| runtime_detection_observed_names | protocol | none | true | false | false | validation_scale gate 从 runtime_detection_records 观察到的 ready attack 名称集合。 |
+| runtime_detection_missing_required_names | governance | none | true | false | false | validation_scale gate 中 runtime_detection_records 缺失的 required runtime attack 名称集合。 |
+| runtime_detection_missing_required_count | metric | none | true | true | false | validation_scale gate 中 runtime_detection_records 缺失的 required runtime attack 数量。 |
 | source_video_path | artifact | none | true | false | false | Source generated video path used by runtime attack runner. |
 | source_video_sha256 | artifact | none | true | false | false | Source generated video sha256 used by runtime attack runner. |
 | attacked_video_path | artifact | none | true | false | false | Attacked video path produced by runtime attack runner. |
@@ -1397,6 +1408,11 @@ Notebook 与 repository module 的跨边界数据
 | positive_formal_evidence_missing_count | metric | none | true | true | false | fair calibration 中带分数但缺少 official evidence、clean negative 或完整 anchor 的 formal attacked positive 记录数量。 |
 | negative_formal_evidence_missing_count | metric | none | true | true | false | fair calibration 中带 clean negative 分数但缺少 official evidence 或官方分数抽取证据的记录数量。 |
 | positive_anchor_keys | protocol | none | true | false | false | fair calibration 中 attacked positive 的规范 prompt / seed / attack anchor 键集合。 |
+| positive_attack_names | protocol | none | true | false | false | fair calibration 中 attacked positive records 实际覆盖的 runtime attack 名称集合。 |
+| required_runtime_attack_names | protocol | none | true | false | false | 当前 workflow profile 要求必须覆盖的 runtime attack 名称集合。 |
+| required_runtime_attack_protocol_note | protocol | none | true | false | false | 解释 validation_scale、pilot_paper 和 full_paper 分层 attack 协议差异的配置说明。 |
+| missing_required_runtime_attack_names | governance | none | true | false | false | 当前 record 相对 required_runtime_attack_names 缺失的 runtime attack 名称集合。 |
+| missing_required_runtime_attack_count | metric | none | true | true | false | 当前 record 相对 required_runtime_attack_names 缺失的 runtime attack 数量。 |
 | positive_detection_units_at_target_fpr | metric | none | true | false | false | target FPR 阈值下每个 prompt / seed / attack anchor 的检测结果列表。 |
 | comparison_anchor_key | protocol | none | true | false | false | 由 prompt_id、seed_id 和 attack_name 组成的公平比较锚点键。 |
 | calibrated_threshold | metric | none | true | true | false | 在方法自身 clean negative 分布上校准得到的检测阈值。 |
@@ -1414,12 +1430,16 @@ Notebook 与 repository module 的跨边界数据
 | comparison_primary_metric_value | metric | none | true | true | false | formal method baseline comparison 的主比较指标数值。 |
 | source_fair_detection_target_fpr | protocol | none | true | true | false | formal comparison 行读取的上游 fair_detection_calibration record 的 target_fpr。 |
 | comparison_anchor_count | metric | none | true | true | false | formal comparison 行中可用 prompt / seed / attack anchor 数量。 |
+| comparison_anchor_keys | protocol | none | true | false | false | formal method baseline comparison 行使用的 prompt / seed / attack anchor 键集合。 |
+| comparison_attack_names | protocol | none | true | false | false | formal method baseline comparison 行实际覆盖的 runtime attack 名称集合。 |
 | reference_anchor_count | metric | none | true | true | false | 参考方法 SSTW 的 prompt / seed / attack anchor 数量。 |
 | baseline_anchor_count | metric | none | true | true | false | baseline 方法的 prompt / seed / attack anchor 数量。 |
 | missing_reference_anchor_count | metric | none | true | true | false | baseline 缺少的 SSTW 参考 anchor 数量。 |
 | extra_anchor_count | metric | none | true | true | false | baseline 相比 SSTW 参考 anchor 多出的 anchor 数量。 |
 | unpaired_reference_anchor_count | metric | none | true | true | false | 差值区间中无法与 baseline 配对的 SSTW anchor 数量。 |
 | unpaired_baseline_anchor_count | metric | none | true | true | false | 差值区间中无法与 SSTW 配对的 baseline anchor 数量。 |
+| paired_comparison_anchor_keys | protocol | none | true | false | false | 差值区间中 SSTW 与 baseline 完全配对的 prompt / seed / attack anchor 键集合。 |
+| paired_attack_names | protocol | none | true | false | false | 差值区间中完全配对比较单元覆盖的 runtime attack 名称集合。 |
 | comparison_anchor_alignment_status | governance | none | true | true | false | 当前方法是否与 SSTW 使用同一 prompt / seed / attack anchor 集合。 |
 | reference_source_fair_detection_target_fpr | protocol | none | true | true | false | 差值区间中参考方法上游 fair_detection_calibration record 的 target_fpr。 |
 | baseline_source_fair_detection_target_fpr | protocol | none | true | true | false | 差值区间中 baseline 上游 fair_detection_calibration record 的 target_fpr。 |

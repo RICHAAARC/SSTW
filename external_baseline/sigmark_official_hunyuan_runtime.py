@@ -22,6 +22,7 @@ from typing import Any, Mapping
 from external_baseline.official_eval_adapters.common import REPOSITORY_GENERATED_OFFICIAL_PROVENANCE
 from external_baseline.runtime_trace_io import build_comparison_unit_id, comparable_detection_records
 from external_baseline.score_semantics import official_score_formal_comparison_summary
+from main.attacks.video_runtime_attack_protocol import apply_runtime_attack_to_frames
 
 
 BASELINE_ID = "sigmark"
@@ -910,28 +911,16 @@ def _write_video_frames(video_path: Path, frames: list[Any], *, fps: int) -> Non
 def _apply_runtime_attack_to_frames(frames: list[Any], attack_name: str) -> tuple[list[Any], dict[str, Any]]:
     """对 SIGMark 官方生成视频施加与 SSTW 主流程同名的轻量 runtime attack。"""
 
-    if not frames:
-        raise ValueError("sigmark_no_decodable_frames")
     normalized = str(attack_name or "").strip()
-    if normalized in {"", "clean", "none", "video_compression_runtime"}:
-        return list(frames), {
-            "attack_transform": "decode_reencode",
-            "attack_strength": "runtime_reencode_default_quality",
-            "attack_protocol_status": "project_runtime_attack_applied_to_sigmark_watermarked_video",
-        }
-    if normalized == "temporal_crop_runtime":
-        return (frames[1:-1] if len(frames) >= 4 else list(frames)), {
-            "attack_transform": "drop_first_and_last_frame_when_possible",
-            "attack_strength": "crop_boundary_frames",
-            "attack_protocol_status": "project_runtime_attack_applied_to_sigmark_watermarked_video",
-        }
-    if normalized == "frame_rate_resampling_runtime":
-        return (frames[::2] if len(frames) >= 3 else list(frames)), {
-            "attack_transform": "keep_every_second_frame_when_possible",
-            "attack_strength": "fps_downsample_by_2_proxy",
-            "attack_protocol_status": "project_runtime_attack_applied_to_sigmark_watermarked_video",
-        }
-    raise ValueError(f"unsupported_sigmark_runtime_attack:{attack_name}")
+    try:
+        attacked_frames, metadata = apply_runtime_attack_to_frames(
+            frames,
+            "video_compression_runtime" if normalized in {"", "clean", "none"} else normalized,
+        )
+    except ValueError as exc:
+        raise ValueError(f"unsupported_sigmark_runtime_attack:{attack_name}") from exc
+    metadata["attack_protocol_status"] = "project_runtime_attack_applied_to_sigmark_watermarked_video"
+    return attacked_frames, metadata
 
 
 def _video_path_for_sigmark_result_key(output_path: Path, result_key: str) -> Path:

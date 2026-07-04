@@ -262,9 +262,28 @@ def test_vidsig_bundle_writer_records_clean_negative_score(
         vae_checkpoint_path=str(tmp_path / "vae.pt"),
     )
 
-    monkeypatch.setattr(vidsig_runtime, "_read_video_frames", lambda _path: ["frame_0", "frame_1", "frame_2", "frame_3"])
+    def fake_read_video_frames(path: Path) -> list[str]:
+        """区分原始官方视频和写出后重读的视频, 验证检测帧数组来自文件级路径。"""
+
+        path = Path(path)
+        if path.name.endswith("_clean_negative.mp4"):
+            return ["decoded_clean_negative_0", "decoded_clean_negative_1"]
+        if path.name.endswith("_attacked.mp4"):
+            return ["decoded_attacked_0", "decoded_attacked_1", "decoded_attacked_2"]
+        return ["frame_0", "frame_1", "frame_2", "frame_3"]
+
+    saved_frame_arrays: dict[str, list[str]] = {}
+
+    def fake_save_frame_array(path: Path, frames: list[str]) -> None:
+        """记录传给 VidSig 官方 attack.py 的帧数组来源。"""
+
+        saved_frame_arrays[Path(path).name] = list(frames)
+        Path(path).parent.mkdir(parents=True, exist_ok=True)
+        Path(path).write_bytes(b"npy")
+
+    monkeypatch.setattr(vidsig_runtime, "_read_video_frames", fake_read_video_frames)
     monkeypatch.setattr(vidsig_runtime, "_write_video_frames", lambda path, _frames, *, fps: Path(path).parent.mkdir(parents=True, exist_ok=True) or Path(path).write_bytes(b"video"))
-    monkeypatch.setattr(vidsig_runtime, "_save_frame_array", lambda path, _frames: Path(path).parent.mkdir(parents=True, exist_ok=True) or Path(path).write_bytes(b"npy"))
+    monkeypatch.setattr(vidsig_runtime, "_save_frame_array", fake_save_frame_array)
 
     call_state = {"count": 0}
 
@@ -305,3 +324,14 @@ def test_vidsig_bundle_writer_records_clean_negative_score(
     assert payload["official_score_value_type"] == "payload_bit_accuracy_score"
     assert payload["official_score_formal_comparison_eligibility"] == "eligible"
     assert payload["official_score_formal_comparison_block_reason"] == "none"
+    assert payload["attacked_video_decoded_frame_count"] == 3
+    assert payload["clean_negative_video_decoded_frame_count"] == 2
+    assert saved_frame_arrays["sstw_attacked_video.npy"] == [
+        "decoded_attacked_0",
+        "decoded_attacked_1",
+        "decoded_attacked_2",
+    ]
+    assert saved_frame_arrays["sstw_clean_negative_video.npy"] == [
+        "decoded_clean_negative_0",
+        "decoded_clean_negative_1",
+    ]

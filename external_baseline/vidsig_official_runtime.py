@@ -751,8 +751,10 @@ def write_vidsig_official_bundle_records(
             )
             _write_video_frames(attacked_video_path, attacked_frames, fps=int(config.fps))
             _write_video_frames(clean_negative_video_path, clean_negative_frames, fps=int(config.fps))
-            _save_frame_array(frame_array_path, attacked_frames)
-            _save_frame_array(clean_frame_array_path, clean_negative_frames)
+            attacked_frames_for_detection = _read_video_frames(attacked_video_path)
+            clean_negative_frames_for_detection = _read_video_frames(clean_negative_video_path)
+            _save_frame_array(frame_array_path, attacked_frames_for_detection)
+            _save_frame_array(clean_frame_array_path, clean_negative_frames_for_detection)
             attack_output_dir = official_record_work_dir / "official_attack_output"
             attack_result = _run_vidsig_attack_py(
                 runtime_source_dir=runtime_source,
@@ -813,6 +815,8 @@ def write_vidsig_official_bundle_records(
                 "external_baseline_attacked_video_path": str(attacked_video_path),
                 "official_attacked_frame_array_path": str(frame_array_path),
                 "official_clean_negative_frame_array_path": str(clean_frame_array_path),
+                "attacked_video_decoded_frame_count": len(attacked_frames_for_detection),
+                "clean_negative_video_decoded_frame_count": len(clean_negative_frames_for_detection),
                 "official_attack_log_path": str(attack_output_dir / "log.txt"),
                 "official_clean_negative_attack_log_path": str(clean_attack_output_dir / "log.txt"),
                 "official_attack_stdout_path": attack_result["stdout_path"],

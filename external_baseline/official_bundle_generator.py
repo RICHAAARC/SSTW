@@ -86,6 +86,8 @@ def _apply_video_tensor_attack(video: Any, attack_name: str) -> Any:
     """对官方 baseline 水印视频应用与 SSTW runtime attack 对齐的轻量文件级攻击。
 
     该函数只操作 official baseline 自己生成的 watermarked video, 不读取 SSTW 检测分数。
+    调用方会把结果写为 mp4 并重新读取后再检测, 因此 `video_compression_runtime`
+    即使在这里不裁剪帧, 也会通过 decode / re-encode 路径真实参与评分。
     """
     if "temporal_crop" in attack_name and video.shape[0] >= 4:
         return video[1:-1]
@@ -228,11 +230,21 @@ def generate_videoseal_official_bundle(
             baseline_video_dir.mkdir(parents=True, exist_ok=True)
             write_video_tchw(baseline_source_video, watermarked, fps=fps)
             write_video_tchw(baseline_attacked_video, attacked, fps=fps)
+            attacked_uint8, attacked_read_info = read_video_tchw_uint8(
+                baseline_attacked_video,
+                empty_error="videoseal_attacked_video_empty_after_reencode",
+            )
+            attacked_for_detection = attacked_uint8.float().to(device) / 255.0
             clean_negative = _apply_video_tensor_attack(video, str(record.get("attack_name") or ""))
             clean_negative_video = baseline_video_dir / f"{video_stem}_clean_negative.mp4"
             write_video_tchw(clean_negative_video, clean_negative, fps=fps)
-            score_payload = _videoseal_detect_payload(model, attacked, reference_message=reference_message)
-            clean_negative_payload = _videoseal_detect_payload(model, clean_negative)
+            clean_negative_uint8, clean_negative_read_info = read_video_tchw_uint8(
+                clean_negative_video,
+                empty_error="videoseal_clean_negative_video_empty_after_reencode",
+            )
+            clean_negative_for_detection = clean_negative_uint8.float().to(device) / 255.0
+            score_payload = _videoseal_detect_payload(model, attacked_for_detection, reference_message=reference_message)
+            clean_negative_payload = _videoseal_detect_payload(model, clean_negative_for_detection)
             payload = {
                 **score_payload,
                 "external_baseline_clean_negative_score": clean_negative_payload["raw_detector_score"],
@@ -243,6 +255,8 @@ def generate_videoseal_official_bundle(
                 "official_baseline_id": "videoseal",
                 "official_source_layout_status": source_layout_audit["layout_status"],
                 "official_video_io_backend": info.get("video_io_backend"),
+                "official_attacked_video_io_backend": attacked_read_info.get("video_io_backend"),
+                "official_clean_negative_video_io_backend": clean_negative_read_info.get("video_io_backend"),
                 "external_baseline_generation_model_id": "videoseal_official_api",
                 "external_baseline_source_video_path": str(baseline_source_video),
                 "external_baseline_attacked_video_path": str(baseline_attacked_video),

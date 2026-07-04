@@ -328,3 +328,6 @@ def test_videoseal_auto_bundle_generator_writes_fair_comparison_fields() -> None
     assert "repository_generated_from_third_party_official_code" in generator_text
     assert "official_execution_manifest_path" in generator_text
     assert "official_score_formal_comparison_summary" in generator_text
+    assert "attacked_for_detection = attacked_uint8.float().to(device) / 255.0" in generator_text
+    assert "clean_negative_for_detection = clean_negative_uint8.float().to(device) / 255.0" in generator_text
+    assert "videoseal_attacked_video_empty_after_reencode" in generator_text

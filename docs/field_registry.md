@@ -1063,6 +1063,7 @@ Notebook 与 repository module 的跨边界数据
 | attacked_video_decode_failure_reason | governance | none | true | false | false | Decode failure reason for attacked video runtime detection. |
 | attacked_video_detectable | metric | none | true | false | false | Whether attacked video produced a positive runtime detection proxy. |
 | attacked_video_decoded_frame_count | metric | none | true | false | false | Number of decoded frames observed by runtime detection runner. |
+| clean_negative_video_decoded_frame_count | metric | none | true | false | false | official clean negative 视频写出后重新读取得到的帧数, 用于确认 clean negative 校准也经过文件级路径。 |
 | source_to_attack_frame_ratio | metric | none | true | false | false | Ratio between attacked frame count and source frame count. |
 | decoded_to_source_frame_ratio | metric | none | true | false | false | Ratio between decoded attacked frame count and source frame count. |
 | attack_score_delta | metric | none | true | false | false | Runtime attacked video score delta against trajectory observation proxy. |
@@ -1350,6 +1351,7 @@ Notebook 与 repository module 的跨边界数据
 | external_baseline_official_clean_negative_score_formal_comparison_eligibility | governance | none | true | true | false | external baseline clean negative 分数是否可进入 target FPR 阈值校准。 |
 | external_baseline_official_clean_negative_score_formal_comparison_block_reason | governance | none | true | true | false | external baseline clean negative 分数被校准门禁阻断的原因。 |
 | official_detection_logic | protocol | none | true | false | false | 官方 wrapper 或 official runtime 记录的 detector / extractor 分数计算逻辑。 |
+| official_attacked_video_io_backend | protocol | none | true | false | false | official attacked 视频写出后重新读取并用于检测的 I/O 后端。 |
 | official_clean_negative_video_io_backend | protocol | none | true | false | false | official clean negative 视频读取所使用的 I/O 后端。 |
 | generate_clean_negative_reference | protocol | none | true | false | false | baseline 官方运行器是否自动生成 clean negative reference 并抽取官方分数。 |
 | clean_negative_output_path | protocol | none | true | false | false | baseline 官方运行器 clean negative 输出目录配置。 |

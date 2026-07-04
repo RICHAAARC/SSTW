@@ -106,6 +106,50 @@ def test_validation_scale_gate_rejects_pilot_profile_as_validation(tmp_path: Pat
 
 
 @pytest.mark.quick
+def test_validation_scale_gate_cannot_disable_fair_comparison_hard_requirements(tmp_path: Path) -> None:
+    """validation_scale 不能通过配置关闭公平比较硬前置后进入 pilot_paper。"""
+    config_path = tmp_path / "validation_scale_config.json"
+    config_path.write_text(json.dumps({
+        "target_fpr": 0.1,
+        "paper_result_level": "validation_scale",
+        "minimum_prompt_count": 0,
+        "minimum_seed_per_prompt": 0,
+        "minimum_attack_count": 0,
+        "minimum_external_baseline_measured_adapter_count": 0,
+        "minimum_modern_external_baseline_formal_adapter_count": 0,
+        "required_modern_external_baseline_adapter_names": [],
+        "require_external_baseline_status_records": False,
+        "require_external_baseline_comparison_records": False,
+        "require_external_baseline_self_containment_decision": False,
+        "require_sstw_measured_formal_records": False,
+        "require_fair_detection_calibration": False,
+        "require_formal_method_baseline_comparison": False,
+        "require_formal_baseline_difference_interval": False,
+        "require_data_split_and_leakage_guard": False,
+        "require_motion_threshold_calibration_ready": False,
+        "require_formal_motion_claim_ready": False,
+        "require_motion_consistency_exclusion_report": False,
+        "require_internal_ablation_records": False,
+        "require_validation_scale_formal_internal_ablation": False,
+        "require_adaptive_attack_records": False,
+        "require_replay_or_sketch_records_or_claim3_downgrade": False,
+        "require_confidence_interval_report": False,
+        "require_low_fpr_formal_statistics_blocking_record": False,
+        "require_artifact_rebuild_dry_run": False,
+    }), encoding="utf-8")
+
+    audit = build_validation_scale_gate_audit(tmp_path / "run", config_path)
+
+    assert audit["validation_scale_gate_decision"] == "FAIL"
+    assert audit["claim_support_status"] == "validation_scale_blocked"
+    assert audit["validation_scale_hard_required_config_missing_count"] == 7
+    assert "require_fair_detection_calibration_must_be_true" in audit["missing_validation_requirements"]
+    assert "require_formal_method_baseline_comparison_must_be_true" in audit["missing_validation_requirements"]
+    assert "require_formal_baseline_difference_interval_must_be_true" in audit["missing_validation_requirements"]
+    assert "require_sstw_measured_formal_records_must_be_true" in audit["missing_validation_requirements"]
+
+
+@pytest.mark.quick
 def test_validation_scale_gate_passes_when_all_governed_inputs_exist(tmp_path: Path) -> None:
     """当 validation-scale 所需 records 和 decision artifacts 齐全时, gate 应允许进入 pilot_paper。"""
     run_root = tmp_path / "run"

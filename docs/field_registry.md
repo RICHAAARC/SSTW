@@ -560,6 +560,8 @@ Notebook 与 repository module 的跨边界数据
 | validation_scale_target_fpr | protocol | none | true | false | false | package manifest 中记录的 validation_scale protocol config target_fpr 摘要。 |
 | missing_validation_requirements | governance | none | true | false | false | Validation-scale requirements that are not yet satisfied. |
 | validation_missing_requirement_count | metric | none | true | false | false | Count of missing validation-scale requirements. |
+| validation_scale_hard_required_config_missing | governance | none | true | false | false | validation_scale 阶段不可通过配置关闭的公平比较硬前置缺口列表。 |
+| validation_scale_hard_required_config_missing_count | metric | none | true | false | false | validation_scale 公平比较硬前置配置缺口数量。 |
 | validation_profile_names | protocol | none | true | false | false | Runtime profile names accepted as validation-scale generation records. |
 | validation_generation_record_count | metric | none | true | false | false | Number of successful generation records produced by validation-scale profiles. |
 | validation_prompt_count | metric | none | true | false | false | Number of prompts covered by validation-scale generation records. |

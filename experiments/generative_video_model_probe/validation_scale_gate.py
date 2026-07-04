@@ -33,6 +33,15 @@ DEFAULT_REQUIRED_MODERN_EXTERNAL_BASELINE_ADAPTER_NAMES = (
 SSTW_METHOD_ID = "sstw_key_conditioned_flow_trajectory"
 DEFAULT_MINIMUM_EXTERNAL_BASELINE_MEASURED_ADAPTER_COUNT = 7
 DEFAULT_MINIMUM_MODERN_EXTERNAL_BASELINE_FORMAL_ADAPTER_COUNT = len(DEFAULT_REQUIRED_MODERN_EXTERNAL_BASELINE_ADAPTER_NAMES)
+HARD_REQUIRED_VALIDATION_SCALE_CONFIG_FLAGS = (
+    "require_external_baseline_comparison_records",
+    "require_external_baseline_self_containment_decision",
+    "require_sstw_measured_formal_records",
+    "require_fair_detection_calibration",
+    "require_formal_method_baseline_comparison",
+    "require_formal_baseline_difference_interval",
+    "require_data_split_and_leakage_guard",
+)
 
 
 def _read_json(path: Path) -> dict:
@@ -97,6 +106,20 @@ def _load_config(config_path: str | Path = DEFAULT_VALIDATION_SCALE_CONFIG) -> d
         "require_artifact_rebuild_dry_run": bool(config.get("require_artifact_rebuild_dry_run", True)),
         "require_data_split_and_leakage_guard": bool(config.get("require_data_split_and_leakage_guard", True)),
     }
+
+
+def _hard_required_config_missing(config: dict[str, Any]) -> list[str]:
+    """检查 validation_scale 公平比较硬前置是否被配置关闭。
+
+    validation_scale 通过即表示可以进入 pilot_paper, 因此 external baseline 自包含、
+    SSTW measured_formal、公平 FPR 校准、同协议比较、差值区间和数据切分防泄漏
+    不能作为可选中间态。该检查属于项目特定门禁硬化, 用于防止通过配置关闭核心证据链。
+    """
+    return [
+        f"{field_name}_must_be_true"
+        for field_name in HARD_REQUIRED_VALIDATION_SCALE_CONFIG_FLAGS
+        if config.get(field_name) is not True
+    ]
 
 
 def _unique_nonempty(records: list[dict], field: str) -> set[str]:
@@ -422,6 +445,7 @@ def build_validation_scale_gate_audit(
     run_root = Path(run_root)
     config = _load_config(config_path)
     validation_profile_names = set(config["validation_profile_names"])
+    hard_config_missing = _hard_required_config_missing(config)
 
     generation_records = _read_jsonl(run_root / "records" / "generation_records.jsonl")
     validation_generation_records = _validation_generation_records(generation_records, validation_profile_names)
@@ -508,7 +532,9 @@ def build_validation_scale_gate_audit(
         "validation_low_fpr_formal_statistics_blocking_record_ready": (not config["require_low_fpr_formal_statistics_blocking_record"]) or low_fpr_ready,
         "validation_artifact_rebuild_dry_run_ready": (not config["require_artifact_rebuild_dry_run"]) or artifact_rebuild_ready,
     }
-    missing_requirements = [name for name, passed in requirement_checks.items() if not passed]
+    missing_requirements = list(dict.fromkeys(
+        [name for name, passed in requirement_checks.items() if not passed] + hard_config_missing
+    ))
     gate_decision = "PASS" if not missing_requirements else "FAIL"
     claim_support_status = "validation_scale_ready_for_pilot_paper" if gate_decision == "PASS" else "validation_scale_blocked"
 
@@ -521,6 +547,8 @@ def build_validation_scale_gate_audit(
         "target_fpr": config["target_fpr"],
         "missing_validation_requirements": missing_requirements,
         "validation_missing_requirement_count": len(missing_requirements),
+        "validation_scale_hard_required_config_missing": hard_config_missing,
+        "validation_scale_hard_required_config_missing_count": len(hard_config_missing),
         "validation_profile_names": sorted(validation_profile_names),
         "generation_record_count": len(generation_records),
         "validation_generation_record_count": len(validation_generation_records),
@@ -612,6 +640,7 @@ def write_validation_scale_gate_audit(
         f"- paper_result_level: {audit['paper_result_level']}\n"
         f"- target_fpr: {target_fpr_text}\n"
         f"- missing_validation_requirements: {', '.join(audit['missing_validation_requirements']) if audit['missing_validation_requirements'] else 'none'}\n"
+        f"- validation_scale_hard_required_config_missing: {', '.join(audit['validation_scale_hard_required_config_missing']) if audit['validation_scale_hard_required_config_missing'] else 'none'}\n"
         f"- validation_generation_record_count: {audit['validation_generation_record_count']}\n"
         f"- validation_prompt_count: {audit['validation_prompt_count']}\n"
         f"- validation_seed_per_prompt_min: {audit['validation_seed_per_prompt_min']}\n"

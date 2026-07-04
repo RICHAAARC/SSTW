@@ -53,6 +53,22 @@ def test_notebook_command_runner_streams_subprocess_output(capsys: pytest.Captur
 
 
 @pytest.mark.quick
+def test_notebook_command_runner_exposes_repo_modules_to_script_subprocess(tmp_path: Path) -> None:
+    """直接执行 scripts 文件时, 子进程也必须能导入 main 等仓库模块。"""
+    output_root = tmp_path / "prompt_suite"
+
+    result = run_streaming_command([
+        sys.executable,
+        "scripts/prepare_generative_video_prompt_suite.py",
+        "--output-root",
+        str(output_root),
+    ])
+
+    assert result.returncode == 0
+    assert (output_root / "prompt_seed_suite.json").exists()
+
+
+@pytest.mark.quick
 def test_noisy_library_progress_defaults_are_configured(monkeypatch: pytest.MonkeyPatch) -> None:
     """Colab 子进程默认应压制第三方下载、加载和 tqdm 进度噪声。"""
     for key in [

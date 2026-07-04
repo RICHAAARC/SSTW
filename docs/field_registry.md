@@ -1185,12 +1185,20 @@ Notebook 与 repository module 的跨边界数据
 | source_clone_ready | governance | none | true | false | false | External baseline self-containment 行中表示当前 checkout 或 clone manifest 是否已经提供源码克隆证据。 |
 | repository_generated_official_bundle_ready | governance | none | true | false | false | External baseline self-containment 行中表示项目内生成的 official bundle 与 execution manifest 是否足以证明 clone/build/run 证据。 |
 | missing_repository_generated_official_bundle_modern_external_baseline_names | governance | none | true | false | false | External baseline self-containment 中缺少项目内 official bundle 执行闭环的现代 baseline 名称列表。 |
+| official_bundle_anchor_ready | governance | none | true | false | false | 单个 baseline self-containment 行中表示 official bundle payload 是否与 measured_formal record 的 prompt_id、seed_id 和 attack_name 完全一致。 |
+| official_bundle_anchor_ready_count | metric | none | true | false | false | 单个 baseline self-containment 行中通过 official bundle prompt / seed / attack anchor 一致性校验的 record 数量。 |
+| missing_official_bundle_anchor_modern_external_baseline_names | governance | none | true | false | false | External baseline self-containment 中 official bundle anchor 与 measured_formal record anchor 不一致或缺失的现代 baseline 名称列表。 |
 | official_bundle_record_count | artifact | none | true | false | false | 单个 baseline self-containment 行中绑定的 official bundle record 数量。 |
 | official_bundle_record_ok_count | artifact | none | true | false | false | 单个 baseline self-containment 行中通过 provenance 与 execution manifest 校验的 official bundle record 数量。 |
 | official_execution_manifest_count | artifact | none | true | false | false | 单个 baseline self-containment 行中绑定的 official execution manifest 数量。 |
 | official_execution_manifest_ok_count | artifact | none | true | false | false | 单个 baseline self-containment 行中通过项目内执行闭环校验的 official execution manifest 数量。 |
 | materialized_official_bundle_path_count | artifact | none | true | false | false | 单个 baseline self-containment 行中实际落盘可读取的 official bundle 路径数量。 |
 | materialized_official_execution_manifest_path_count | artifact | none | true | false | false | 单个 baseline self-containment 行中实际落盘可读取的 official execution manifest 路径数量。 |
+| runtime_attack_coverage_ready | governance | none | true | false | false | 单个 baseline self-containment 行中表示该 baseline 的 measured_formal records 是否覆盖当前 profile 要求的全部 runtime attack。 |
+| measured_runtime_attack_names | protocol | none | true | false | false | 单个 baseline self-containment 行中 measured_formal records 实际覆盖的 runtime attack 名称集合。 |
+| missing_runtime_attack_names | governance | none | true | false | false | 单个 baseline self-containment 行中相对 required_runtime_attack_names 缺失的 runtime attack 名称集合。 |
+| missing_runtime_attack_count | metric | none | true | false | false | 单个 baseline self-containment 行中相对 required_runtime_attack_names 缺失的 runtime attack 数量。 |
+| missing_runtime_attack_coverage_modern_external_baseline_names | governance | none | true | false | false | External baseline self-containment 中未覆盖当前 profile 必需 runtime attack 的现代 baseline 名称列表。 |
 
 | sstw_measured_formal_record_id | protocol | none | true | false | false | SSTW 本方法 measured_formal record 的稳定标识。 |
 | sstw_measured_formal_decision | governance | none | true | true | false | SSTW 本方法 measured_formal 转写阶段的门禁判定。 |

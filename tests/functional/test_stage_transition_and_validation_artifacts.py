@@ -243,6 +243,9 @@ def _write_self_contained_external_baseline_fixture(run_root: Path) -> None:
                 "official_adapter_baseline_id": baseline_name,
                 "official_baseline_id": baseline_name,
                 "official_execution_manifest_path": str(execution_manifest_path),
+                "prompt_id": "prompt_0",
+                "seed_id": "seed_0",
+                "attack_name": attack_name,
                 **_official_score_extraction_payload(),
             })
             evidence_paths.extend([str(output_path), str(stdout_path), str(stderr_path), str(manifest_path)])
@@ -346,6 +349,35 @@ def test_external_baseline_self_containment_requires_each_runtime_attack_per_bas
     assert row["missing_runtime_attack_names"] == ["frame_rate_resampling_runtime"]
     assert audit["missing_runtime_attack_coverage_modern_external_baseline_names"] == ["videoseal"]
     assert "all_required_modern_baselines_required_runtime_attack_coverage" in audit["missing_self_containment_requirements"]
+
+
+@pytest.mark.quick
+def test_external_baseline_self_containment_rejects_bundle_anchor_mismatch(tmp_path: Path) -> None:
+    """official bundle payload 的 prompt / seed / attack anchor 必须与 measured_formal record 一致。"""
+
+    run_root = tmp_path / "run"
+    _write_self_contained_external_baseline_fixture(run_root)
+    baseline_name = "videoseal"
+    bundle_record_path = (
+        run_root
+        / "external_baseline_official_result_bundles"
+        / "validation_scale"
+        / baseline_name
+        / "records"
+        / "prompt_0__seed_0__temporal_crop_runtime.json"
+    )
+    payload = json.loads(bundle_record_path.read_text(encoding="utf-8"))
+    payload["attack_name"] = "video_compression_runtime"
+    write_json(bundle_record_path, payload)
+
+    audit = write_external_baseline_self_containment_decision(run_root)
+    row = next(item for item in audit["baseline_self_containment_rows"] if item["baseline_name"] == baseline_name)
+
+    assert audit["external_baseline_self_containment_decision"] == "FAIL"
+    assert row["official_bundle_anchor_ready"] is False
+    assert row["official_bundle_anchor_ready_count"] == len(VALIDATION_SCALE_RUNTIME_ATTACKS) - 1
+    assert audit["missing_official_bundle_anchor_modern_external_baseline_names"] == [baseline_name]
+    assert "all_required_modern_baselines_official_bundle_prompt_seed_attack_anchors" in audit["missing_self_containment_requirements"]
 
 
 @pytest.mark.quick
@@ -460,6 +492,9 @@ def test_external_baseline_self_containment_accepts_repository_generated_officia
                 "official_adapter_baseline_id": baseline_name,
                 "official_baseline_id": baseline_name,
                 "official_execution_manifest_path": str(execution_manifest_path),
+                "prompt_id": "prompt_0",
+                "seed_id": "seed_0",
+                "attack_name": attack_name,
                 **_official_score_extraction_payload(),
             })
             evidence_paths.extend([str(output_path), str(stdout_path), str(stderr_path), str(command_manifest_path)])
@@ -647,6 +682,9 @@ def test_external_baseline_self_containment_rejects_bundle_without_clean_negativ
         "official_adapter_baseline_id": baseline_name,
         "official_baseline_id": baseline_name,
         "official_execution_manifest_path": str(execution_manifest_path),
+        "prompt_id": "prompt_0",
+        "seed_id": "seed_0",
+        "attack_name": "video_compression_runtime",
         **_official_score_extraction_payload(),
     })
     write_jsonl(run_root / "records" / "external_baseline_score_records.jsonl", [{
@@ -728,6 +766,9 @@ def test_external_baseline_self_containment_rejects_bundle_without_score_extract
         "official_adapter_baseline_id": baseline_name,
         "official_baseline_id": baseline_name,
         "official_execution_manifest_path": str(execution_manifest_path),
+        "prompt_id": "prompt_0",
+        "seed_id": "seed_0",
+        "attack_name": "video_compression_runtime",
     })
     write_jsonl(run_root / "records" / "external_baseline_score_records.jsonl", [{
         "external_baseline_name": baseline_name,

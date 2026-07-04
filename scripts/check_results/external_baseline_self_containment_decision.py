@@ -193,6 +193,28 @@ def _official_bundle_payload_ok(path_text: str | None, run_root: Path, baseline_
     return _official_execution_manifest_ok(manifest_path, run_root, baseline_name)
 
 
+def _official_bundle_anchor_ready(
+    path_text: str | None,
+    run_root: Path,
+    record: Mapping[str, Any],
+) -> bool:
+    """检查 official bundle payload 是否与 measured_formal record 的 anchor 一致。
+
+    公平比较要求每个 baseline 的分数都绑定同一 prompt / seed / attack anchor。
+    仅检查转写后的 record 不够, 因为错误转写可能把同一个 official bundle 重复标成
+    多个 attack。这里强制 official bundle JSON 自身也声明相同 anchor。
+    """
+
+    path = _resolve_existing_path(path_text, run_root)
+    if path is None:
+        return False
+    payload = _read_json(path)
+    for field_name in ("prompt_id", "seed_id", "attack_name"):
+        if str(payload.get(field_name) or "") != str(record.get(field_name) or ""):
+            return False
+    return True
+
+
 def _official_score_extraction_ready(payload: Mapping[str, Any]) -> bool:
     """检查 official bundle 是否显式记录官方分数抽取口径。
 
@@ -339,8 +361,20 @@ def _build_baseline_rows(
             if _path_exists(path, run_root)
         ]
         official_bundle_record_ok_count = sum(
-            1 for path in official_bundle_paths
-            if _official_bundle_payload_ok(path, run_root, baseline_name)
+            1 for record in measured_records
+            if _official_bundle_payload_ok(
+                str(record.get(OFFICIAL_BUNDLE_PATH_FIELDS[0]) or ""),
+                run_root,
+                baseline_name,
+            )
+        )
+        official_bundle_anchor_ready_count = sum(
+            1 for record in measured_records
+            if _official_bundle_anchor_ready(
+                str(record.get(OFFICIAL_BUNDLE_PATH_FIELDS[0]) or ""),
+                run_root,
+                record,
+            )
         )
         official_score_extraction_ready_count = 0
         for path in official_bundle_paths:
@@ -381,6 +415,7 @@ def _build_baseline_rows(
             and official_bundle_record_ok_count == len(measured_records)
             and official_execution_manifest_ok_count == len(measured_records)
         )
+        official_bundle_anchor_ready = bool(measured_records) and official_bundle_anchor_ready_count == len(measured_records)
         score_extraction_ready = bool(measured_records) and official_score_extraction_ready_count == len(measured_records)
         clone_ready = source_clone_ready or repository_generated_official_bundle_ready
         build_ready = bool(command_manifest_paths) and command_manifest_ok_count == len(command_manifest_paths)
@@ -402,6 +437,7 @@ def _build_baseline_rows(
             "clone_operation_status": clone_operation_status,
             "source_clone_ready": source_clone_ready,
             "repository_generated_official_bundle_ready": repository_generated_official_bundle_ready,
+            "official_bundle_anchor_ready": official_bundle_anchor_ready,
             "clone_ready": clone_ready,
             "build_ready": build_ready,
             "run_ready": run_ready,
@@ -427,6 +463,7 @@ def _build_baseline_rows(
             "official_command_manifest_ok_count": command_manifest_ok_count,
             "official_bundle_record_count": len(official_bundle_paths),
             "official_bundle_record_ok_count": official_bundle_record_ok_count,
+            "official_bundle_anchor_ready_count": official_bundle_anchor_ready_count,
             "official_execution_manifest_count": len(official_execution_manifest_paths),
             "official_execution_manifest_ok_count": official_execution_manifest_ok_count,
             "materialized_evidence_path_count": len(materialized_evidence_paths),
@@ -437,6 +474,7 @@ def _build_baseline_rows(
                 build_ready,
                 run_ready,
                 repository_generated_official_bundle_ready,
+                official_bundle_anchor_ready,
                 anchor_ready,
                 adapt_ready,
                 record_ready,
@@ -493,6 +531,11 @@ def build_external_baseline_self_containment_decision(
         for row in rows
         if not row.get("repository_generated_official_bundle_ready")
     ]
+    missing_official_bundle_anchor_names = [
+        row["baseline_name"]
+        for row in rows
+        if not row.get("official_bundle_anchor_ready")
+    ]
     missing_score_extraction_names = [
         row["baseline_name"]
         for row in rows
@@ -527,6 +570,8 @@ def build_external_baseline_self_containment_decision(
         missing_requirements.append("all_required_modern_baselines_clone_build_run_adapt_record")
     if missing_repository_generated_official_bundle_names:
         missing_requirements.append("all_required_modern_baselines_repository_generated_official_bundles")
+    if missing_official_bundle_anchor_names:
+        missing_requirements.append("all_required_modern_baselines_official_bundle_prompt_seed_attack_anchors")
     if missing_clean_negative_names:
         missing_requirements.append("all_required_modern_baselines_clean_negative_scores")
     if missing_score_extraction_names:
@@ -555,6 +600,7 @@ def build_external_baseline_self_containment_decision(
         "missing_clean_negative_modern_external_baseline_names": missing_clean_negative_names,
         "missing_anchor_modern_external_baseline_names": missing_anchor_names,
         "missing_repository_generated_official_bundle_modern_external_baseline_names": missing_repository_generated_official_bundle_names,
+        "missing_official_bundle_anchor_modern_external_baseline_names": missing_official_bundle_anchor_names,
         "missing_score_extraction_modern_external_baseline_names": missing_score_extraction_names,
         "missing_official_identity_modern_external_baseline_names": missing_official_identity_names,
         "missing_runtime_attack_coverage_modern_external_baseline_names": missing_runtime_attack_coverage_names,
@@ -595,6 +641,8 @@ def write_external_baseline_self_containment_decision(
         f"{', '.join(audit['missing_self_contained_modern_external_baseline_names']) if audit['missing_self_contained_modern_external_baseline_names'] else 'none'}\n"
         f"- missing_runtime_attack_coverage_modern_external_baseline_names: "
         f"{', '.join(audit['missing_runtime_attack_coverage_modern_external_baseline_names']) if audit['missing_runtime_attack_coverage_modern_external_baseline_names'] else 'none'}\n"
+        f"- missing_official_bundle_anchor_modern_external_baseline_names: "
+        f"{', '.join(audit['missing_official_bundle_anchor_modern_external_baseline_names']) if audit['missing_official_bundle_anchor_modern_external_baseline_names'] else 'none'}\n"
         f"- missing_self_containment_requirements: "
         f"{', '.join(audit['missing_self_containment_requirements']) if audit['missing_self_containment_requirements'] else 'none'}\n"
     )

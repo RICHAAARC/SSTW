@@ -15,7 +15,11 @@ import shlex
 import subprocess
 from typing import Any, Callable, Mapping, Sequence
 
-from external_baseline.score_semantics import extract_raw_detector_score, validate_official_score_extraction_payload
+from external_baseline.score_semantics import (
+    extract_raw_detector_score,
+    official_score_formal_comparison_summary,
+    validate_official_score_extraction_payload,
+)
 
 
 SCORE_FIELDS = (
@@ -357,6 +361,8 @@ def read_official_result_bundle_if_available(
         validate_official_score_extraction_payload(payload)
         return {
             **payload,
+            **official_score_formal_comparison_summary(payload),
+            **official_score_formal_comparison_summary(payload, clean_negative=True),
             "official_adapter_status": "measured_from_official_result_bundle",
             "official_adapter_baseline_id": baseline_id,
             "official_baseline_id": baseline_id,
@@ -463,6 +469,8 @@ def run_native_command_if_configured(
     )
     enriched = {
         **payload,
+        **official_score_formal_comparison_summary(payload),
+        **official_score_formal_comparison_summary(payload, clean_negative=True),
         "official_adapter_status": "measured_by_native_official_command",
         "official_adapter_baseline_id": baseline_id,
         "official_baseline_id": baseline_id,
@@ -515,6 +523,11 @@ def run_adapter_main(
         validate_score_payload(payload)
         validate_clean_negative_payload(payload)
         validate_official_score_extraction_payload(payload)
+        payload = {
+            **payload,
+            **official_score_formal_comparison_summary(payload),
+            **official_score_formal_comparison_summary(payload, clean_negative=True),
+        }
         payload = with_official_adapter_identity(
             payload,
             baseline_id=baseline_id,

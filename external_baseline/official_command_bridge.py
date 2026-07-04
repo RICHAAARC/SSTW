@@ -19,9 +19,11 @@ from external_baseline.official_eval_adapters.common import (
     validate_official_bundle_baseline_identity,
 )
 from external_baseline.score_semantics import (
+    external_clean_negative_score_formal_comparison_payload,
     extract_raw_detector_score,
     normalized_score_payload,
     official_score_extraction_policy,
+    official_score_formal_comparison_summary,
     validate_official_score_extraction_payload,
 )
 
@@ -173,8 +175,15 @@ def run_bridge(args: argparse.Namespace) -> dict[str, Any]:
     )
     score = round(_extract_score(official_payload), 6)
     score_payload = normalized_score_payload(official_payload)
+    official_score_summary = official_score_formal_comparison_summary(official_payload)
+    official_clean_negative_summary = official_score_formal_comparison_summary(
+        official_payload,
+        clean_negative=True,
+    )
     normalized = {
         **score_payload,
+        **official_score_summary,
+        **official_clean_negative_summary,
         "external_baseline_score": score,
         "external_baseline_detected": official_payload.get("external_baseline_detected", official_payload.get("detected")),
         "external_baseline_bit_accuracy": official_payload.get("external_baseline_bit_accuracy", official_payload.get("bit_accuracy")),
@@ -192,6 +201,7 @@ def run_bridge(args: argparse.Namespace) -> dict[str, Any]:
             "external_baseline_clean_negative_video_path",
             official_payload.get("clean_negative_video_path"),
         ),
+        **external_clean_negative_score_formal_comparison_payload(official_payload),
         "official_result_provenance": official_payload.get("official_result_provenance"),
         "official_result_bundle_path": official_payload.get("official_result_bundle_path"),
         "official_execution_manifest_path": official_payload.get("official_execution_manifest_path"),

@@ -1328,6 +1328,22 @@ Notebook 与 repository module 的跨边界数据
 | official_clean_negative_output_path | artifact | none | true | false | false | 自动生成 clean negative 官方产物的输出目录。 |
 | official_clean_negative_score_assignment_policy | protocol | none | true | false | false | 聚合型 official clean negative 分数如何映射到 comparison unit。 |
 | official_score_assignment_policy | protocol | none | true | false | false | 正样本 official score 如何映射到当前 prompt / seed / attack comparison unit。 |
+| official_score_granularity | protocol | none | true | false | false | official 输出中正样本分数的样本粒度, 用于区分 per_prompt_seed_attack、per_prompt_seed、aggregate 或 binary-only 口径。 |
+| official_score_value_type | protocol | none | true | false | false | official 输出中正样本分数的值类型, 如 continuous_detector_score、payload_bit_accuracy_score、fixed_fpr_detection_score 或 binary_decision。 |
+| official_score_formal_comparison_eligibility | governance | none | true | false | false | official 正样本分数是否具备进入同 FPR 公平比较的资格。 |
+| official_score_formal_comparison_block_reason | governance | none | true | false | false | official 正样本分数不能进入正式公平比较时的阻断原因。 |
+| official_clean_negative_score_granularity | protocol | none | true | false | false | official clean negative 分数的样本粒度, aggregate clean negative 不得用于 target FPR 校准。 |
+| official_clean_negative_score_value_type | protocol | none | true | false | false | official clean negative 分数的值类型, 必须与可阈值化分数口径兼容。 |
+| official_clean_negative_score_formal_comparison_eligibility | governance | none | true | false | false | official clean negative 分数是否具备进入 target FPR 校准的资格。 |
+| official_clean_negative_score_formal_comparison_block_reason | governance | none | true | false | false | official clean negative 分数不能进入 target FPR 校准时的阻断原因。 |
+| external_baseline_official_score_granularity | protocol | none | true | false | false | 写入 measured_formal record 的 external baseline 正样本官方分数粒度。 |
+| external_baseline_official_score_value_type | protocol | none | true | false | false | 写入 measured_formal record 的 external baseline 正样本官方分数值类型。 |
+| external_baseline_official_score_formal_comparison_eligibility | governance | none | true | true | false | external baseline 正样本分数是否可进入 validation_scale 同协议公平比较。 |
+| external_baseline_official_score_formal_comparison_block_reason | governance | none | true | true | false | external baseline 正样本分数被公平比较门禁阻断的原因。 |
+| external_baseline_official_clean_negative_score_granularity | protocol | none | true | false | false | 写入 measured_formal record 的 external baseline clean negative 官方分数粒度。 |
+| external_baseline_official_clean_negative_score_value_type | protocol | none | true | false | false | 写入 measured_formal record 的 external baseline clean negative 官方分数值类型。 |
+| external_baseline_official_clean_negative_score_formal_comparison_eligibility | governance | none | true | true | false | external baseline clean negative 分数是否可进入 target FPR 阈值校准。 |
+| external_baseline_official_clean_negative_score_formal_comparison_block_reason | governance | none | true | true | false | external baseline clean negative 分数被校准门禁阻断的原因。 |
 | official_detection_logic | protocol | none | true | false | false | 官方 wrapper 或 official runtime 记录的 detector / extractor 分数计算逻辑。 |
 | official_clean_negative_video_io_backend | protocol | none | true | false | false | official clean negative 视频读取所使用的 I/O 后端。 |
 | generate_clean_negative_reference | protocol | none | true | false | false | baseline 官方运行器是否自动生成 clean negative reference 并抽取官方分数。 |

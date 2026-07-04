@@ -10,6 +10,7 @@ from typing import Any, Mapping
 
 from external_baseline.registry import get_adapter
 from external_baseline.runtime_trace_io import comparable_detection_records, read_jsonl, safe_float
+from external_baseline.score_semantics import official_score_formal_comparison_summary
 from external_baseline.source_intake import build_execution_manifest, write_source_intake_artifacts
 from main.core.digest import build_stable_digest
 from main.core.progress import ProgressReporter
@@ -235,6 +236,18 @@ def _has_clean_negative_score_evidence(record: Mapping[str, Any]) -> bool:
     )
 
 
+def _has_formal_positive_score_granularity_evidence(record: Mapping[str, Any]) -> bool:
+    """检查 positive 分数是否具备逐 prompt / seed / attack 的正式比较资格。
+
+    validation_scale 的公平比较不能只看 `metric_status: measured_formal`。如果官方
+    输出来自 aggregate 均值、固定 FPR 日志值或二值 decision, 即使有数值字段,
+    也不能进入 TPR@FPR 主比较。
+    """
+
+    summary = official_score_formal_comparison_summary(record)
+    return summary["official_score_formal_comparison_eligibility"] == "eligible"
+
+
 def _has_clean_negative_score_extraction_evidence(record: Mapping[str, Any]) -> bool:
     """检查 clean negative 分数是否声明了官方抽取口径。
 
@@ -249,6 +262,8 @@ def _has_clean_negative_score_extraction_evidence(record: Mapping[str, Any]) -> 
         or record.get("external_baseline_score_semantics")
         or ""
     )
+    summary = official_score_formal_comparison_summary(record, clean_negative=True)
+    clean_negative_eligible = summary["official_clean_negative_score_formal_comparison_eligibility"] == "eligible"
     return (
         _has_clean_negative_score_evidence(record)
         and bool(score_semantics)
@@ -257,6 +272,7 @@ def _has_clean_negative_score_extraction_evidence(record: Mapping[str, Any]) -> 
         and _has_nonempty_field(record, "external_baseline_official_score_extraction_policy")
         and str(record.get("external_baseline_official_reference_protocol_anchor") or "")
         == REQUIRED_OFFICIAL_REFERENCE_PROTOCOL_ANCHOR
+        and clean_negative_eligible
     )
 
 
@@ -291,6 +307,7 @@ def formal_score_record_ready_for_claim(record: Mapping[str, Any]) -> bool:
         and _has_clean_negative_calibration_fields(record)
         and _has_official_execution_evidence(record)
         and _has_official_score_extraction_evidence(record)
+        and _has_formal_positive_score_granularity_evidence(record)
     )
 
 

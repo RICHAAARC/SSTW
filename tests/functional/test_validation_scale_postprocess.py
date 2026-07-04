@@ -42,6 +42,14 @@ def _formal_baseline_evidence_fields(
         "external_baseline_score_orientation": "higher_is_more_watermarked",
         "external_baseline_official_score_extraction_policy": "test_official_detector_confidence",
         "external_baseline_official_reference_protocol_anchor": "same_prompt_seed_attack_runtime_comparison_unit",
+        "external_baseline_official_score_granularity": "per_prompt_seed_attack",
+        "external_baseline_official_score_value_type": "continuous_detector_score",
+        "external_baseline_official_score_formal_comparison_eligibility": "eligible",
+        "external_baseline_official_score_formal_comparison_block_reason": "none",
+        "external_baseline_official_clean_negative_score_granularity": "per_clean_negative_sample",
+        "external_baseline_official_clean_negative_score_value_type": "continuous_detector_score",
+        "external_baseline_official_clean_negative_score_formal_comparison_eligibility": "eligible",
+        "external_baseline_official_clean_negative_score_formal_comparison_block_reason": "none",
     }
 
 
@@ -677,6 +685,202 @@ def test_fair_detection_calibration_rejects_external_clean_negative_without_offi
     assert baseline_record["fair_comparison_status"] == "blocked"
     assert baseline_record["negative_formal_evidence_missing_count"] == 2
     assert "clean_negative_formal_evidence_missing" in baseline_record["fair_comparison_missing_reasons"]
+
+
+@pytest.mark.quick
+def test_fair_detection_calibration_rejects_aggregate_official_score_policy(tmp_path: Path) -> None:
+    """aggregate official 分数不能伪装成逐样本 measured_formal 公平比较结果。"""
+
+    run_root = tmp_path / "run"
+    config_path = run_root / "validation_scale_config.json"
+    write_json(config_path, {
+        "paper_result_level": "validation_scale",
+        "target_fpr": 0.1,
+        "minimum_clean_negative_count": 2,
+        "required_modern_external_baseline_adapter_names": ["sigmark"],
+    })
+    write_jsonl(run_root / "records" / "sstw_measured_formal_records.jsonl", [
+        {
+            "method_id": "sstw_key_conditioned_flow_trajectory",
+            "method_role": "proposed_method",
+            "metric_status": "measured_formal",
+            "prompt_id": "prompt_a",
+            "seed_id": "seed_a",
+            "attack_name": "video_compression_runtime",
+            "sstw_score": 0.84,
+            "sstw_clean_negative_score": 0.05,
+        },
+        {
+            "method_id": "sstw_key_conditioned_flow_trajectory",
+            "method_role": "proposed_method",
+            "metric_status": "measured_formal",
+            "sample_role": "clean_negative",
+            "prompt_id": "negative_0",
+            "seed_id": "seed_a",
+            "sstw_score": 0.05,
+        },
+        {
+            "method_id": "sstw_key_conditioned_flow_trajectory",
+            "method_role": "proposed_method",
+            "metric_status": "measured_formal",
+            "sample_role": "clean_negative",
+            "prompt_id": "negative_1",
+            "seed_id": "seed_a",
+            "sstw_score": 0.06,
+        },
+    ])
+    write_jsonl(run_root / "records" / "external_baseline_score_records.jsonl", [
+        {
+            "external_baseline_name": "sigmark",
+            "external_baseline_layer": "modern_external_baseline",
+            "metric_status": "measured_formal",
+            "prompt_id": "prompt_a",
+            "seed_id": "seed_a",
+            "attack_name": "video_compression_runtime",
+            "external_baseline_raw_detector_score": 0.8,
+            "external_baseline_score": 0.8,
+            "external_baseline_score_semantics": "payload_bit_accuracy_extraction_score",
+            **_formal_baseline_evidence_fields(
+                run_root,
+                "sigmark",
+                "prompt_a",
+                "seed_a",
+                "video_compression_runtime",
+            ),
+            "external_baseline_official_score_extraction_policy": "aggregate_mean_over_sigmark_official_bit_accuracy_npz",
+            "external_baseline_official_score_granularity": "aggregate",
+            "external_baseline_official_score_value_type": "payload_bit_accuracy_score",
+            "external_baseline_official_score_formal_comparison_eligibility": "blocked",
+            "external_baseline_official_score_formal_comparison_block_reason": (
+                "aggregate_score_assignment_not_formal_comparison_eligible"
+            ),
+        },
+        _formal_baseline_clean_negative_record(
+            run_root,
+            "sigmark",
+            "negative_0",
+            "seed_a",
+            0.05,
+            external_baseline_layer="modern_external_baseline",
+        ),
+        _formal_baseline_clean_negative_record(
+            run_root,
+            "sigmark",
+            "negative_1",
+            "seed_a",
+            0.06,
+            external_baseline_layer="modern_external_baseline",
+        ),
+    ])
+
+    audit = run_fair_detection_calibration(run_root, config_path)
+    records = read_jsonl(run_root / "records" / "fair_detection_calibration_records.jsonl")
+    baseline_record = next(record for record in records if record["method_id"] == "sigmark")
+
+    assert audit["fair_detection_calibration_decision"] == "FAIL"
+    assert "sigmark" in audit["fair_detection_calibration_missing_method_ids"]
+    assert baseline_record["fair_comparison_status"] == "blocked"
+    assert baseline_record["positive_formal_evidence_missing_count"] == 1
+    assert "positive_formal_evidence_missing" in baseline_record["fair_comparison_missing_reasons"]
+
+
+@pytest.mark.quick
+def test_fair_detection_calibration_rejects_fixed_fpr_log_score(tmp_path: Path) -> None:
+    """固定 FPR 日志值不是可重新校准阈值的连续 detector score。"""
+
+    run_root = tmp_path / "run"
+    config_path = run_root / "validation_scale_config.json"
+    write_json(config_path, {
+        "paper_result_level": "validation_scale",
+        "target_fpr": 0.1,
+        "minimum_clean_negative_count": 2,
+        "required_modern_external_baseline_adapter_names": ["vidsig"],
+    })
+    write_jsonl(run_root / "records" / "sstw_measured_formal_records.jsonl", [
+        {
+            "method_id": "sstw_key_conditioned_flow_trajectory",
+            "method_role": "proposed_method",
+            "metric_status": "measured_formal",
+            "prompt_id": "prompt_a",
+            "seed_id": "seed_a",
+            "attack_name": "video_compression_runtime",
+            "sstw_score": 0.84,
+            "sstw_clean_negative_score": 0.05,
+        },
+        {
+            "method_id": "sstw_key_conditioned_flow_trajectory",
+            "method_role": "proposed_method",
+            "metric_status": "measured_formal",
+            "sample_role": "clean_negative",
+            "prompt_id": "negative_0",
+            "seed_id": "seed_a",
+            "sstw_score": 0.05,
+        },
+        {
+            "method_id": "sstw_key_conditioned_flow_trajectory",
+            "method_role": "proposed_method",
+            "metric_status": "measured_formal",
+            "sample_role": "clean_negative",
+            "prompt_id": "negative_1",
+            "seed_id": "seed_a",
+            "sstw_score": 0.06,
+        },
+    ])
+    write_jsonl(run_root / "records" / "external_baseline_score_records.jsonl", [
+        {
+            "external_baseline_name": "vidsig",
+            "external_baseline_layer": "modern_external_baseline",
+            "metric_status": "measured_formal",
+            "prompt_id": "prompt_a",
+            "seed_id": "seed_a",
+            "attack_name": "video_compression_runtime",
+            "external_baseline_raw_detector_score": 1.0,
+            "external_baseline_score": 1.0,
+            "external_baseline_score_semantics": "official_tpr_at_fixed_fpr_detection_score",
+            **_formal_baseline_evidence_fields(
+                run_root,
+                "vidsig",
+                "prompt_a",
+                "seed_a",
+                "video_compression_runtime",
+            ),
+            "external_baseline_official_score_extraction_policy": (
+                "vidsig_official_attack_log_tpr_at_fpr_1e_2_detection_score"
+            ),
+            "external_baseline_official_score_granularity": "per_prompt_seed_attack",
+            "external_baseline_official_score_value_type": "fixed_fpr_detection_score",
+            "external_baseline_official_score_formal_comparison_eligibility": "blocked",
+            "external_baseline_official_score_formal_comparison_block_reason": (
+                "score_value_type_not_formal_comparison_eligible:fixed_fpr_detection_score"
+            ),
+        },
+        _formal_baseline_clean_negative_record(
+            run_root,
+            "vidsig",
+            "negative_0",
+            "seed_a",
+            0.05,
+            external_baseline_layer="modern_external_baseline",
+        ),
+        _formal_baseline_clean_negative_record(
+            run_root,
+            "vidsig",
+            "negative_1",
+            "seed_a",
+            0.06,
+            external_baseline_layer="modern_external_baseline",
+        ),
+    ])
+
+    audit = run_fair_detection_calibration(run_root, config_path)
+    records = read_jsonl(run_root / "records" / "fair_detection_calibration_records.jsonl")
+    baseline_record = next(record for record in records if record["method_id"] == "vidsig")
+
+    assert audit["fair_detection_calibration_decision"] == "FAIL"
+    assert "vidsig" in audit["fair_detection_calibration_missing_method_ids"]
+    assert baseline_record["fair_comparison_status"] == "blocked"
+    assert baseline_record["positive_formal_evidence_missing_count"] == 1
+    assert "positive_formal_evidence_missing" in baseline_record["fair_comparison_missing_reasons"]
 
 
 @pytest.mark.quick

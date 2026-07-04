@@ -13,6 +13,7 @@ from typing import Any, Mapping
 
 from external_baseline.runtime_trace_io import build_comparison_unit_id, comparable_detection_records, safe_float
 from external_baseline.score_semantics import (
+    external_clean_negative_score_formal_comparison_payload,
     normalized_score_payload,
     official_score_extraction_policy,
     validate_official_score_extraction_payload,
@@ -183,6 +184,7 @@ def _clean_negative_score_payload(payload: Mapping[str, Any]) -> dict[str, Any]:
             "external_baseline_clean_negative_video_path",
             payload.get("clean_negative_video_path"),
         ),
+        **external_clean_negative_score_formal_comparison_payload(payload),
     }
 
 
@@ -256,6 +258,14 @@ def _unsupported_record(
         "external_baseline_score_field": None,
         "external_baseline_score_semantics": None,
         "external_baseline_score_orientation": "higher_is_more_watermarked",
+        "external_baseline_official_score_granularity": None,
+        "external_baseline_official_score_value_type": None,
+        "external_baseline_official_score_formal_comparison_eligibility": "blocked",
+        "external_baseline_official_score_formal_comparison_block_reason": reason,
+        "external_baseline_official_clean_negative_score_granularity": None,
+        "external_baseline_official_clean_negative_score_value_type": None,
+        "external_baseline_official_clean_negative_score_formal_comparison_eligibility": "blocked",
+        "external_baseline_official_clean_negative_score_formal_comparison_block_reason": reason,
         "external_baseline_detected": None,
         "external_baseline_bit_accuracy": None,
         "external_baseline_payload_bit_accuracy": None,

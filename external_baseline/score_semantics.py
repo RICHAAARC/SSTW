@@ -292,6 +292,29 @@ def official_score_formal_comparison_summary(
     }
 
 
+def validate_official_formal_comparison_eligibility(payload: Mapping[str, Any]) -> None:
+    """校验 official 输出是否可进入 validation_scale 正式公平比较。
+
+    该函数与 `validate_official_score_extraction_payload` 的区别在于: 后者只确认
+    有可解释的分数口径, 这里进一步确认该分数是逐 comparison unit、可重新用
+    clean negative 分布校准阈值的正式分数。aggregate 均值、固定 FPR 日志值和
+    二值 decision 都会被 fail closed。
+    """
+
+    positive = official_score_formal_comparison_summary(payload)
+    if positive["official_score_formal_comparison_eligibility"] != "eligible":
+        raise RuntimeError(
+            "official_score_formal_comparison_ineligible:"
+            f"{positive['official_score_formal_comparison_block_reason']}"
+        )
+    clean_negative = official_score_formal_comparison_summary(payload, clean_negative=True)
+    if clean_negative["official_clean_negative_score_formal_comparison_eligibility"] != "eligible":
+        raise RuntimeError(
+            "official_clean_negative_score_formal_comparison_ineligible:"
+            f"{clean_negative['official_clean_negative_score_formal_comparison_block_reason']}"
+        )
+
+
 def external_official_score_formal_comparison_payload(payload: Mapping[str, Any]) -> dict[str, str]:
     """构造写入 external baseline measured_formal record 的 positive 分数资格字段。"""
 

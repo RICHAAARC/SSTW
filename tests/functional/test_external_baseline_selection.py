@@ -1547,6 +1547,65 @@ def test_official_result_bundle_preflight_rejects_incomplete_bundle_identity(
 
 
 @pytest.mark.quick
+def test_official_result_bundle_preflight_rejects_formal_ineligible_score_policy(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """official bundle 即使有分数, 只要是 aggregate 口径也不能通过预检。"""
+
+    run_root = tmp_path / "generative_video_runtime"
+    _write_external_baseline_runtime_fixture(run_root)
+    bundle_root = tmp_path / "official_baseline_bundle"
+    monkeypatch.setenv("SSTW_EXTERNAL_BASELINE_OFFICIAL_RESULT_BUNDLE_ROOT", str(bundle_root))
+    monkeypatch.delenv("SSTW_SIGMARK_BIT_ACCURACY_NPZ", raising=False)
+    monkeypatch.delenv("SSTW_SIGMARK_CLEAN_NEGATIVE_BIT_ACCURACY_NPZ", raising=False)
+    monkeypatch.delenv("SSTW_SIGMARK_NATIVE_EVAL_COMMAND", raising=False)
+
+    record = read_jsonl(run_root / "records" / "runtime_detection_records.jsonl")[0]
+    baseline_id = "sigmark"
+    manifest_path = bundle_root / baseline_id / "official_reference_execution_manifest.json"
+    manifest_path.parent.mkdir(parents=True, exist_ok=True)
+    manifest_path.write_text(
+        json.dumps({
+            "manifest_kind": "test_repository_generated_official_bundle_manifest",
+            "baseline_id": baseline_id,
+        }),
+        encoding="utf-8",
+    )
+    output = bundle_root / baseline_id / "records" / f"{record['prompt_id']}__{record['seed_id']}__{record['attack_name']}.json"
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text(
+        json.dumps({
+            "external_baseline_score": 0.61,
+            "bit_accuracy": 0.93,
+            "official_result_provenance": "repository_generated_from_third_party_official_code",
+            "official_adapter_baseline_id": baseline_id,
+            "official_baseline_id": baseline_id,
+            "official_execution_manifest_path": str(manifest_path),
+            "score_semantics": "payload_bit_accuracy_extraction_score",
+            "score_orientation": "higher_is_more_watermarked",
+            "official_score_extraction_policy": "aggregate_mean_over_sigmark_official_bit_accuracy_npz",
+            "official_score_assignment_policy": "aggregate_mean_over_sigmark_official_bit_accuracy_npz",
+            "official_reference_protocol_anchor": "same_prompt_seed_attack_runtime_comparison_unit",
+            "external_baseline_clean_negative_score": 0.12,
+            "external_baseline_clean_negative_score_semantics": "payload_bit_accuracy_extraction_score",
+            "external_baseline_clean_negative_video_path": "sigmark/clean_negative.npz",
+        }),
+        encoding="utf-8",
+    )
+
+    audit = build_official_result_bundle_preflight(run_root, baseline_ids=(baseline_id,))
+    invalid_reasons = [
+        str(row.get("invalid_bundle_reason") or "")
+        for row in audit["missing_bundle_examples"]
+    ]
+
+    assert audit["official_result_bundle_preflight_decision"] == "FAIL"
+    assert audit["present_bundle_result_count"] == 0
+    assert any("official_score_formal_comparison_ineligible" in reason for reason in invalid_reasons)
+
+
+@pytest.mark.quick
 def test_repository_official_eval_adapters_are_tracked_fail_closed_entrypoints() -> None:
     """5 个主实验现代 baseline 必须有可导入的 repository official adapter 入口。"""
     import importlib
@@ -1620,8 +1679,8 @@ def test_sigmark_adapter_missing_npz_fails_closed_without_loading_current_direct
 
 
 @pytest.mark.quick
-def test_sigmark_adapter_discovers_prefixed_bit_accuracy_npz_from_output_dir(tmp_path: Path) -> None:
-    """SigMark adapter 应支持官方带前缀的 `*-bit_accuracy.npz` 输出文件。"""
+def test_sigmark_adapter_rejects_prefixed_npz_when_only_aggregate_score_available(tmp_path: Path) -> None:
+    """SigMark adapter 不能把官方 npz 全局均值作为正式逐 attack 分数。"""
 
     import numpy as np
 
@@ -1672,8 +1731,7 @@ def test_sigmark_adapter_discovers_prefixed_bit_accuracy_npz_from_output_dir(tmp
         timeout=30,
     )
 
-    assert completed.returncode == 0, completed.stderr
-    payload = json.loads(output_json.read_text(encoding="utf-8"))
-    assert payload["official_bit_accuracy_npz_path"] == str(bit_accuracy_npz)
-    assert payload["bit_accuracy"] == 0.8
-    assert payload["external_baseline_clean_negative_score"] == 0.3
+    assert completed.returncode != 0
+    assert "official_score_formal_comparison_ineligible" in completed.stderr
+    assert "aggregate_score_assignment_not_formal_comparison_eligible" in completed.stderr
+    assert not output_json.exists()

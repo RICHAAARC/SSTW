@@ -18,6 +18,7 @@ from typing import Any, Callable, Mapping, Sequence
 from external_baseline.score_semantics import (
     extract_raw_detector_score,
     official_score_formal_comparison_summary,
+    validate_official_formal_comparison_eligibility,
     validate_official_score_extraction_payload,
 )
 
@@ -359,6 +360,7 @@ def read_official_result_bundle_if_available(
         validate_complete_official_bundle_baseline_identity(payload, candidate, baseline_id=baseline_id)
         validate_clean_negative_payload(payload)
         validate_official_score_extraction_payload(payload)
+        validate_official_formal_comparison_eligibility(payload)
         return {
             **payload,
             **official_score_formal_comparison_summary(payload),
@@ -462,6 +464,7 @@ def run_native_command_if_configured(
     validate_score_payload(payload)
     validate_clean_negative_payload(payload)
     validate_official_score_extraction_payload(payload)
+    validate_official_formal_comparison_eligibility(payload)
     payload = with_official_adapter_identity(
         payload,
         baseline_id=baseline_id,
@@ -523,6 +526,7 @@ def run_adapter_main(
         validate_score_payload(payload)
         validate_clean_negative_payload(payload)
         validate_official_score_extraction_payload(payload)
+        validate_official_formal_comparison_eligibility(payload)
         payload = {
             **payload,
             **official_score_formal_comparison_summary(payload),

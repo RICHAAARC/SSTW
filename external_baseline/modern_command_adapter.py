@@ -16,6 +16,7 @@ from external_baseline.score_semantics import (
     external_clean_negative_score_formal_comparison_payload,
     normalized_score_payload,
     official_score_extraction_policy,
+    validate_official_formal_comparison_eligibility,
     validate_official_score_extraction_payload,
 )
 from external_baseline.official_eval_adapters.common import (
@@ -365,6 +366,7 @@ def build_modern_score_records(
             payload = _read_official_output(output_json_path)
             validate_clean_negative_payload(payload)
             validate_official_score_extraction_payload(payload)
+            validate_official_formal_comparison_eligibility(payload)
             score_payload = normalized_score_payload(payload)
             clean_negative_payload = _clean_negative_score_payload(payload)
             official_bundle_payload = _official_bundle_evidence_payload(payload, baseline_id=config.baseline_name)

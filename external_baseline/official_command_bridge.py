@@ -24,6 +24,7 @@ from external_baseline.score_semantics import (
     normalized_score_payload,
     official_score_extraction_policy,
     official_score_formal_comparison_summary,
+    validate_official_formal_comparison_eligibility,
     validate_official_score_extraction_payload,
 )
 
@@ -168,6 +169,7 @@ def run_bridge(args: argparse.Namespace) -> dict[str, Any]:
     official_payload = _read_json(official_output_json_path)
     validate_clean_negative_payload(official_payload)
     validate_official_score_extraction_payload(official_payload)
+    validate_official_formal_comparison_eligibility(official_payload)
     validate_official_bundle_baseline_identity(
         official_payload,
         str(official_payload.get("official_result_bundle_path") or official_output_json_path),

@@ -25,7 +25,10 @@ from external_baseline.official_eval_adapters.common import (
     validate_repository_generated_bundle,
     validate_score_payload,
 )
-from external_baseline.score_semantics import validate_official_score_extraction_payload
+from external_baseline.score_semantics import (
+    validate_official_formal_comparison_eligibility,
+    validate_official_score_extraction_payload,
+)
 from external_baseline.runtime_trace_io import comparable_detection_records
 
 
@@ -98,6 +101,7 @@ def _find_valid_bundle_path(baseline_id: str, record: dict[str, Any]) -> tuple[P
             validate_complete_official_bundle_baseline_identity(payload, candidate, baseline_id=baseline_id)
             validate_clean_negative_payload(payload)
             validate_official_score_extraction_payload(payload)
+            validate_official_formal_comparison_eligibility(payload)
         except Exception as exc:
             last_invalid_reason = f"{candidate}:{exc}"
             continue

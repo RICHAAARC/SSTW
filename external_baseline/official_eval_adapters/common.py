@@ -33,6 +33,10 @@ SCORE_FIELDS = (
     "external_baseline_detected",
 )
 REPOSITORY_GENERATED_OFFICIAL_PROVENANCE = "repository_generated_from_third_party_official_code"
+REQUIRED_COMPLETE_OFFICIAL_BASELINE_ID_FIELDS = (
+    "official_adapter_baseline_id",
+    "official_baseline_id",
+)
 
 
 def build_parser(description: str) -> argparse.ArgumentParser:
@@ -228,6 +232,66 @@ def validate_official_bundle_baseline_identity(
         )
 
 
+def validate_complete_official_bundle_baseline_identity(
+    payload: Mapping[str, Any],
+    candidate: str | Path,
+    *,
+    baseline_id: str,
+) -> None:
+    """校验 official bundle 同时声明 adapter 身份和官方 baseline 身份。
+
+    通用身份检查只要求至少存在一个可审计 baseline 字段。validation_scale 的
+    公平比较需要更强约束: 每个正式 official bundle 必须同时说明“由哪个 SSTW
+    official adapter 读取”和“该 bundle 属于哪个官方 baseline”。这样后续
+    self-containment 与 measured_formal 转写不会把旧式或半结构化 bundle 误认为
+    完整逐 baseline 官方结果。
+    """
+    validate_official_bundle_baseline_identity(payload, candidate, baseline_id=baseline_id)
+    expected_baseline_id = str(baseline_id or "").strip()
+    missing_fields = [
+        field_name
+        for field_name in REQUIRED_COMPLETE_OFFICIAL_BASELINE_ID_FIELDS
+        if str(payload.get(field_name) or "").strip() == ""
+    ]
+    if missing_fields:
+        raise RuntimeError(
+            "official_result_bundle_missing_complete_baseline_identity:"
+            f"{candidate}:expected={expected_baseline_id}:missing={missing_fields}"
+        )
+    mismatched_fields = {
+        field_name: str(payload.get(field_name) or "").strip()
+        for field_name in REQUIRED_COMPLETE_OFFICIAL_BASELINE_ID_FIELDS
+        if str(payload.get(field_name) or "").strip() != expected_baseline_id
+    }
+    if mismatched_fields:
+        raise RuntimeError(
+            "official_result_bundle_complete_baseline_identity_mismatch:"
+            f"{candidate}:expected={expected_baseline_id}:declared={mismatched_fields}"
+        )
+
+
+def with_official_adapter_identity(
+    payload: Mapping[str, Any],
+    *,
+    baseline_id: str,
+    candidate: str | Path,
+) -> dict[str, Any]:
+    """给官方 adapter 输出补齐完整 baseline 身份, 并拒绝已有矛盾声明。
+
+    该函数适用于原生命令输出和 repository adapter 输出。若输出已经声明身份,
+    先检查其不与当前 baseline 冲突; 若未声明, 则由当前 adapter 统一补齐两个
+    必备身份字段, 使后续 bridge 和 measured_formal 转写拥有一致的自描述输入。
+    """
+    declared_ids = _declared_official_baseline_ids(payload)
+    if declared_ids:
+        validate_official_bundle_baseline_identity(payload, candidate, baseline_id=baseline_id)
+    return {
+        **payload,
+        "official_adapter_baseline_id": baseline_id,
+        "official_baseline_id": baseline_id,
+    }
+
+
 def validate_repository_generated_bundle(
     payload: Mapping[str, Any],
     candidate: str | Path,
@@ -288,12 +352,14 @@ def read_official_result_bundle_if_available(
         payload = read_json(candidate)
         validate_score_payload(payload)
         validate_repository_generated_bundle(payload, candidate, baseline_id=baseline_id)
+        validate_complete_official_bundle_baseline_identity(payload, candidate, baseline_id=baseline_id)
         validate_clean_negative_payload(payload)
         validate_official_score_extraction_payload(payload)
         return {
             **payload,
             "official_adapter_status": "measured_from_official_result_bundle",
             "official_adapter_baseline_id": baseline_id,
+            "official_baseline_id": baseline_id,
             "official_source_dir": str(source_dir),
             "official_result_bundle_path": str(candidate),
             "official_output_json_path": str(output_json_path),
@@ -390,10 +456,16 @@ def run_native_command_if_configured(
     validate_score_payload(payload)
     validate_clean_negative_payload(payload)
     validate_official_score_extraction_payload(payload)
+    payload = with_official_adapter_identity(
+        payload,
+        baseline_id=baseline_id,
+        candidate=output_json_path,
+    )
     enriched = {
         **payload,
         "official_adapter_status": "measured_by_native_official_command",
         "official_adapter_baseline_id": baseline_id,
+        "official_baseline_id": baseline_id,
         "official_adapter_native_command_env_var": env_var,
         "official_adapter_stdout_tail": completed.stdout[-1000:],
         "official_adapter_stderr_tail": completed.stderr[-1000:],
@@ -443,6 +515,11 @@ def run_adapter_main(
         validate_score_payload(payload)
         validate_clean_negative_payload(payload)
         validate_official_score_extraction_payload(payload)
+        payload = with_official_adapter_identity(
+            payload,
+            baseline_id=baseline_id,
+            candidate=output_json_path,
+        )
         write_json(output_json_path, payload)
     print(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True))
 

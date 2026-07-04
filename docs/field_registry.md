@@ -297,6 +297,9 @@ Notebook 与 repository module 的跨边界数据
 | official_baseline_id | protocol | none | true | true | false | official bundle 中声明的官方 baseline 身份, 必须与当前 baseline reference runner 一致。 |
 | external_baseline_official_adapter_baseline_id | protocol | none | true | true | false | measured_formal external baseline record 中转写的 official_adapter_baseline_id, 用于审计正式记录是否来自对应 baseline。 |
 | external_baseline_official_baseline_id | protocol | none | true | true | false | measured_formal external baseline record 中转写的 official_baseline_id, 用于审计正式记录是否来自对应官方 baseline。 |
+| official_baseline_identity_ready | governance | none | true | true | false | external baseline self-containment 行中 measured_formal record 是否保留完整 official adapter 和 official baseline 身份。 |
+| official_baseline_identity_ready_count | metric | none | true | true | false | external baseline self-containment 中保留完整 official baseline 身份的 measured_formal record 数量。 |
+| missing_official_identity_modern_external_baseline_names | governance | none | true | true | false | external baseline self-containment 中缺少完整 official baseline 身份的现代 baseline 名称列表。 |
 | runtime_comparison_unit_id | protocol | none | true | true | false | prompt / seed / attack comparison unit 的稳定 ID, 用于对齐 SSTW 与 external baseline 的同锚点比较。 |
 | official_score_extraction_policy | protocol | none | true | true | false | official bundle 中记录的逐 baseline 官方分数抽取策略。 |
 | official_reference_protocol_anchor | protocol | none | true | true | false | official bundle 中记录的 prompt / seed / attack comparison unit 锚点。 |

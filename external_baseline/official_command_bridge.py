@@ -195,8 +195,8 @@ def run_bridge(args: argparse.Namespace) -> dict[str, Any]:
         "official_result_provenance": official_payload.get("official_result_provenance"),
         "official_result_bundle_path": official_payload.get("official_result_bundle_path"),
         "official_execution_manifest_path": official_payload.get("official_execution_manifest_path"),
-        "official_adapter_baseline_id": official_payload.get("official_adapter_baseline_id"),
-        "official_baseline_id": official_payload.get("official_baseline_id"),
+        "official_adapter_baseline_id": official_payload.get("official_adapter_baseline_id") or args.baseline_id,
+        "official_baseline_id": official_payload.get("official_baseline_id") or args.baseline_id,
         "external_baseline_source_video_path": official_payload.get(
             "external_baseline_source_video_path",
             official_payload.get("baseline_source_video_path"),

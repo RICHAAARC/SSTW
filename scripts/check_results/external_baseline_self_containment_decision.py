@@ -12,6 +12,7 @@ import json
 from pathlib import Path
 from typing import Any, Iterable, Mapping
 
+from external_baseline.official_eval_adapters.common import validate_complete_official_bundle_baseline_identity
 from external_baseline.score_semantics import validate_official_score_extraction_payload
 from main.protocol.flow_evidence_fields import with_flow_evidence_protocol_defaults
 from main.protocol.record_writer import write_json, write_jsonl
@@ -165,13 +166,9 @@ def _official_bundle_payload_ok(path_text: str | None, run_root: Path, baseline_
     payload = _read_json(path)
     if str(payload.get("official_result_provenance") or "") != REPOSITORY_GENERATED_OFFICIAL_PROVENANCE:
         return False
-    payload_baseline = str(
-        payload.get("official_adapter_baseline_id")
-        or payload.get("official_baseline_id")
-        or payload.get("baseline_id")
-        or ""
-    )
-    if not payload_baseline or payload_baseline != baseline_name:
+    try:
+        validate_complete_official_bundle_baseline_identity(payload, path, baseline_id=baseline_name)
+    except Exception:
         return False
     manifest_path = str(payload.get("official_execution_manifest_path") or "")
     if not manifest_path:
@@ -226,6 +223,20 @@ def _record_anchor_ready(record: Mapping[str, Any]) -> bool:
     """检查 formal baseline record 是否保留公平比较所需的 prompt / seed / attack anchor。"""
 
     return all(record.get(field_name) not in {None, ""} for field_name in ("prompt_id", "seed_id", "attack_name"))
+
+
+def _record_official_baseline_identity_ready(record: Mapping[str, Any], baseline_name: str) -> bool:
+    """检查 measured_formal record 是否保留完整 official baseline 身份。
+
+    该检查用于确认分数转写后的 record 仍能证明自己来自对应 baseline 的官方
+    bundle。只依赖 `external_baseline_name` 不够, 因为那可能是聚合阶段手写或
+    错误转写的字段。
+    """
+
+    return (
+        str(record.get("external_baseline_official_adapter_baseline_id") or "") == baseline_name
+        and str(record.get("external_baseline_official_baseline_id") or "") == baseline_name
+    )
 
 
 def _index_rows(rows: Iterable[Mapping[str, Any]], key: str) -> dict[str, dict[str, Any]]:
@@ -325,6 +336,10 @@ def _build_baseline_rows(
             if _official_execution_manifest_ok(path, run_root, baseline_name)
         )
         clean_negative_ready_count = sum(1 for record in measured_records if _record_clean_negative_ready(record))
+        official_identity_ready_count = sum(
+            1 for record in measured_records
+            if _record_official_baseline_identity_ready(record, baseline_name)
+        )
         command_manifest_paths = [
             str(record.get("external_baseline_official_command_manifest_path") or "")
             for record in measured_records
@@ -356,6 +371,7 @@ def _build_baseline_rows(
         ) if measured_records else False
         record_ready = bool(measured_records) and len(materialized_evidence_paths) >= len(command_manifest_paths)
         clean_negative_ready = bool(measured_records) and clean_negative_ready_count == len(measured_records)
+        official_baseline_identity_ready = bool(measured_records) and official_identity_ready_count == len(measured_records)
         rows.append({
             "baseline_name": baseline_name,
             "source_intake_status": intake.get("source_intake_status", "missing"),
@@ -370,11 +386,13 @@ def _build_baseline_rows(
             "adapt_ready": adapt_ready,
             "record_ready": record_ready,
             "clean_negative_ready": clean_negative_ready,
+            "official_baseline_identity_ready": official_baseline_identity_ready,
             "score_extraction_ready": score_extraction_ready,
             "measured_formal_record_count": len(measured_records),
             "formal_candidate_record_count": len(formal_candidate_records),
             "formal_anchor_missing_count": formal_anchor_missing_count,
             "clean_negative_ready_count": clean_negative_ready_count,
+            "official_baseline_identity_ready_count": official_identity_ready_count,
             "official_score_extraction_ready_count": official_score_extraction_ready_count,
             "unsupported_record_count": sum(1 for record in records if record.get("metric_status") == "unsupported"),
             "official_command_manifest_count": len(command_manifest_paths),
@@ -395,6 +413,7 @@ def _build_baseline_rows(
                 adapt_ready,
                 record_ready,
                 clean_negative_ready,
+                official_baseline_identity_ready,
                 score_extraction_ready,
             ]),
         })
@@ -448,6 +467,11 @@ def build_external_baseline_self_containment_decision(
         for row in rows
         if not row.get("score_extraction_ready")
     ]
+    missing_official_identity_names = [
+        row["baseline_name"]
+        for row in rows
+        if not row.get("official_baseline_identity_ready")
+    ]
     comparison_passed = comparison_decision.get("external_baseline_comparison_decision") == "PASS"
     execution_manifest_bound = execution_manifest.get("formal_evidence_status") == "evidence_paths_bound"
     formal_measured_names = {
@@ -471,6 +495,8 @@ def build_external_baseline_self_containment_decision(
         missing_requirements.append("all_required_modern_baselines_clean_negative_scores")
     if missing_score_extraction_names:
         missing_requirements.append("all_required_modern_baselines_official_score_extraction")
+    if missing_official_identity_names:
+        missing_requirements.append("all_required_modern_baselines_official_baseline_identity")
     if missing_anchor_names:
         missing_requirements.append("all_required_modern_baselines_prompt_seed_attack_anchors")
 
@@ -490,6 +516,7 @@ def build_external_baseline_self_containment_decision(
         "missing_anchor_modern_external_baseline_names": missing_anchor_names,
         "missing_repository_generated_official_bundle_modern_external_baseline_names": missing_repository_generated_official_bundle_names,
         "missing_score_extraction_modern_external_baseline_names": missing_score_extraction_names,
+        "missing_official_identity_modern_external_baseline_names": missing_official_identity_names,
         "missing_formal_modern_external_baseline_names": missing_formal_names,
         "missing_self_containment_requirements": missing_requirements,
         "self_containment_missing_requirement_count": len(missing_requirements),

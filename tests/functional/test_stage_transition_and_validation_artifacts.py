@@ -176,6 +176,7 @@ def _write_self_contained_external_baseline_fixture(run_root: Path) -> None:
             "external_baseline_clean_negative_score": 0.2,
             "external_baseline_clean_negative_video_path": str(bundle_record_path),
             "official_result_provenance": "repository_generated_from_third_party_official_code",
+            "official_adapter_baseline_id": baseline_name,
             "official_baseline_id": baseline_name,
             "official_execution_manifest_path": str(execution_manifest_path),
             **_official_score_extraction_payload(),
@@ -200,6 +201,8 @@ def _write_self_contained_external_baseline_fixture(run_root: Path) -> None:
             "external_baseline_official_result_provenance": "repository_generated_from_third_party_official_code",
             "external_baseline_official_result_bundle_path": str(bundle_record_path),
             "external_baseline_official_execution_manifest_path": str(execution_manifest_path),
+            "external_baseline_official_adapter_baseline_id": baseline_name,
+            "external_baseline_official_baseline_id": baseline_name,
         })
         intake_rows.append({
             "baseline_id": baseline_name,
@@ -351,6 +354,7 @@ def test_external_baseline_self_containment_accepts_repository_generated_officia
             "external_baseline_clean_negative_score": 0.2,
             "external_baseline_clean_negative_video_path": str(bundle_record_path),
             "official_result_provenance": "repository_generated_from_third_party_official_code",
+            "official_adapter_baseline_id": baseline_name,
             "official_baseline_id": baseline_name,
             "official_execution_manifest_path": str(execution_manifest_path),
             **_official_score_extraction_payload(),
@@ -375,6 +379,8 @@ def test_external_baseline_self_containment_accepts_repository_generated_officia
             "external_baseline_official_result_provenance": "repository_generated_from_third_party_official_code",
             "external_baseline_official_result_bundle_path": str(bundle_record_path),
             "external_baseline_official_execution_manifest_path": str(execution_manifest_path),
+            "external_baseline_official_adapter_baseline_id": baseline_name,
+            "external_baseline_official_baseline_id": baseline_name,
         })
         intake_rows.append({
             "baseline_id": baseline_name,
@@ -451,6 +457,63 @@ def test_external_baseline_self_containment_rejects_wrong_official_baseline_id(t
 
 
 @pytest.mark.quick
+def test_external_baseline_self_containment_requires_complete_official_baseline_identity(tmp_path: Path) -> None:
+    """official bundle 必须同时声明 adapter baseline 和 official baseline 身份。"""
+
+    run_root = tmp_path / "run"
+    _write_self_contained_external_baseline_fixture(run_root)
+    baseline_name = "videoseal"
+    bundle_record_path = (
+        run_root
+        / "external_baseline_official_result_bundles"
+        / "validation_scale"
+        / baseline_name
+        / "records"
+        / "prompt_0__seed_0__video_compression_runtime.json"
+    )
+    payload = json.loads(bundle_record_path.read_text(encoding="utf-8"))
+    payload.pop("official_adapter_baseline_id", None)
+    write_json(bundle_record_path, payload)
+
+    audit = write_external_baseline_self_containment_decision(run_root)
+    row = next(item for item in audit["baseline_self_containment_rows"] if item["baseline_name"] == baseline_name)
+
+    assert audit["external_baseline_self_containment_decision"] == "FAIL"
+    assert row["repository_generated_official_bundle_ready"] is False
+    assert row["official_baseline_identity_ready"] is True
+    assert baseline_name in audit["missing_repository_generated_official_bundle_modern_external_baseline_names"]
+    assert "all_required_modern_baselines_repository_generated_official_bundles" in audit["missing_self_containment_requirements"]
+
+
+@pytest.mark.quick
+def test_external_baseline_self_containment_requires_record_official_baseline_identity(tmp_path: Path) -> None:
+    """measured_formal record 必须保留 official bundle 转写后的完整 baseline 身份。"""
+
+    run_root = tmp_path / "run"
+    _write_self_contained_external_baseline_fixture(run_root)
+    baseline_name = "videoseal"
+    score_path = run_root / "records" / "external_baseline_score_records.jsonl"
+    score_records = [
+        json.loads(line)
+        for line in score_path.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+    for record in score_records:
+        if record.get("external_baseline_name") == baseline_name:
+            record.pop("external_baseline_official_adapter_baseline_id", None)
+    write_jsonl(score_path, score_records)
+
+    audit = write_external_baseline_self_containment_decision(run_root)
+    row = next(item for item in audit["baseline_self_containment_rows"] if item["baseline_name"] == baseline_name)
+
+    assert audit["external_baseline_self_containment_decision"] == "FAIL"
+    assert row["repository_generated_official_bundle_ready"] is True
+    assert row["official_baseline_identity_ready"] is False
+    assert baseline_name in audit["missing_official_identity_modern_external_baseline_names"]
+    assert "all_required_modern_baselines_official_baseline_identity" in audit["missing_self_containment_requirements"]
+
+
+@pytest.mark.quick
 def test_external_baseline_self_containment_rejects_bundle_without_clean_negative(tmp_path: Path) -> None:
     """旧 official bundle 若缺少 clean negative 分数, 不能作为公平比较自包含证据。"""
 
@@ -477,6 +540,7 @@ def test_external_baseline_self_containment_rejects_bundle_without_clean_negativ
     write_json(bundle_record_path, {
         "external_baseline_score": 0.7,
         "official_result_provenance": "repository_generated_from_third_party_official_code",
+        "official_adapter_baseline_id": baseline_name,
         "official_baseline_id": baseline_name,
         "official_execution_manifest_path": str(execution_manifest_path),
         **_official_score_extraction_payload(),
@@ -498,6 +562,8 @@ def test_external_baseline_self_containment_rejects_bundle_without_clean_negativ
         "external_baseline_official_result_provenance": "repository_generated_from_third_party_official_code",
         "external_baseline_official_result_bundle_path": str(bundle_record_path),
         "external_baseline_official_execution_manifest_path": str(execution_manifest_path),
+        "external_baseline_official_adapter_baseline_id": baseline_name,
+        "external_baseline_official_baseline_id": baseline_name,
     }])
     write_json(run_root / "artifacts" / "external_baseline_comparison_decision.json", {
         "external_baseline_comparison_decision": "PASS",
@@ -555,6 +621,7 @@ def test_external_baseline_self_containment_rejects_bundle_without_score_extract
         "external_baseline_clean_negative_score": 0.2,
         "external_baseline_clean_negative_video_path": str(bundle_record_path),
         "official_result_provenance": "repository_generated_from_third_party_official_code",
+        "official_adapter_baseline_id": baseline_name,
         "official_baseline_id": baseline_name,
         "official_execution_manifest_path": str(execution_manifest_path),
     })
@@ -577,6 +644,8 @@ def test_external_baseline_self_containment_rejects_bundle_without_score_extract
         "external_baseline_official_result_provenance": "repository_generated_from_third_party_official_code",
         "external_baseline_official_result_bundle_path": str(bundle_record_path),
         "external_baseline_official_execution_manifest_path": str(execution_manifest_path),
+        "external_baseline_official_adapter_baseline_id": baseline_name,
+        "external_baseline_official_baseline_id": baseline_name,
     }])
     write_json(run_root / "artifacts" / "external_baseline_comparison_decision.json", {
         "external_baseline_comparison_decision": "PASS",

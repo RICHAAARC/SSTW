@@ -21,6 +21,7 @@ from external_baseline.official_eval_adapters.common import (
     official_result_bundle_roots,
     read_json,
     validate_clean_negative_payload,
+    validate_complete_official_bundle_baseline_identity,
     validate_repository_generated_bundle,
     validate_score_payload,
 )
@@ -94,6 +95,7 @@ def _find_valid_bundle_path(baseline_id: str, record: dict[str, Any]) -> tuple[P
             payload = read_json(candidate)
             validate_score_payload(payload)
             validate_repository_generated_bundle(payload, candidate, baseline_id=baseline_id)
+            validate_complete_official_bundle_baseline_identity(payload, candidate, baseline_id=baseline_id)
             validate_clean_negative_payload(payload)
             validate_official_score_extraction_payload(payload)
         except Exception as exc:

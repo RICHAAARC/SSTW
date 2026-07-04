@@ -19,7 +19,7 @@ from external_baseline.score_semantics import (
 )
 from external_baseline.official_eval_adapters.common import (
     REPOSITORY_GENERATED_OFFICIAL_PROVENANCE,
-    validate_official_bundle_baseline_identity,
+    validate_complete_official_bundle_baseline_identity,
     validate_clean_negative_payload,
 )
 from main.core.digest import build_stable_digest
@@ -205,7 +205,7 @@ def _official_bundle_evidence_payload(payload: Mapping[str, Any], *, baseline_id
     execution_manifest_path = payload.get("official_execution_manifest_path")
     if result_bundle_path in {None, ""} or execution_manifest_path in {None, ""}:
         raise RuntimeError("official_result_bundle_evidence_missing")
-    validate_official_bundle_baseline_identity(
+    validate_complete_official_bundle_baseline_identity(
         payload,
         str(result_bundle_path or "official_command_output"),
         baseline_id=baseline_id,
@@ -214,8 +214,8 @@ def _official_bundle_evidence_payload(payload: Mapping[str, Any], *, baseline_id
         "external_baseline_official_result_provenance": provenance,
         "external_baseline_official_result_bundle_path": result_bundle_path,
         "external_baseline_official_execution_manifest_path": execution_manifest_path,
-        "external_baseline_official_adapter_baseline_id": payload.get("official_adapter_baseline_id", payload.get("baseline_id")),
-        "external_baseline_official_baseline_id": payload.get("official_baseline_id", payload.get("baseline_id")),
+        "external_baseline_official_adapter_baseline_id": payload.get("official_adapter_baseline_id"),
+        "external_baseline_official_baseline_id": payload.get("official_baseline_id"),
     }
 
 

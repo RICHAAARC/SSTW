@@ -6,6 +6,7 @@ from pathlib import Path
 import pytest
 
 from experiments.generative_video_model_probe.validation_scale_artifact_package import (
+    VALIDATION_SCALE_REQUIRED_PACKAGE_RELPATHS,
     write_validation_scale_gate_figure,
     write_validation_scale_package_manifest,
 )
@@ -24,6 +25,33 @@ MODERN_BASELINES = (
     "vidsig",
     "videoseal",
 )
+
+
+def _write_minimal_artifact_file(path: Path) -> None:
+    """按文件类型写入最小可审计内容, 用于测试 package manifest 完整性。"""
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    if path.suffix == ".jsonl":
+        path.write_text('{"status":"ready"}\n', encoding="utf-8")
+    elif path.suffix == ".json":
+        path.write_text('{"status":"ready"}\n', encoding="utf-8")
+    elif path.suffix == ".csv":
+        path.write_text("stage_id,status\nvalidation_scale,ready\n", encoding="utf-8")
+    elif path.suffix == ".md":
+        path.write_text("# Report\n\nready\n", encoding="utf-8")
+    else:
+        path.write_text("ready\n", encoding="utf-8")
+
+
+def _write_minimal_validation_scale_package_artifacts(run_root: Path) -> None:
+    """补齐 validation_scale package manifest 所需的通用最小 fixture。"""
+
+    for relpath in VALIDATION_SCALE_REQUIRED_PACKAGE_RELPATHS:
+        if relpath == "figures/validation_scale_gate_figure.json":
+            continue
+        target = run_root / relpath
+        if not target.exists():
+            _write_minimal_artifact_file(target)
 
 
 def _official_score_extraction_payload() -> dict:
@@ -773,6 +801,7 @@ def test_data_split_guard_detects_calibration_heldout_identity_leakage(tmp_path:
 def test_validation_scale_figure_and_package_manifest_are_rebuilt_from_artifacts(tmp_path: Path) -> None:
     """validation_scale 诊断图和 package manifest 必须由已落盘 artifact 派生。"""
     run_root = tmp_path / "run"
+    _write_minimal_validation_scale_package_artifacts(run_root)
     write_jsonl(run_root / "records" / "validation_scale_gate_records.jsonl", [{"stage_id": "validation_scale"}])
     (run_root / "tables").mkdir(parents=True, exist_ok=True)
     (run_root / "tables" / "validation_scale_gate_table.csv").write_text("stage_id\nvalidation_scale\n", encoding="utf-8")
@@ -826,5 +855,9 @@ def test_validation_scale_figure_and_package_manifest_are_rebuilt_from_artifacts
     assert manifest["validation_scale_formal_internal_ablation_decision"] == "PASS"
     assert manifest["low_fpr_formal_statistics_decision"] == "PASS"
     assert manifest["missing_artifact_relpaths"] == []
+    inventory_relpaths = {row["artifact_relpath"] for row in manifest["artifact_inventory"]}
+    assert "records/fair_detection_calibration_records.jsonl" in inventory_relpaths
+    assert "tables/fair_detection_calibration_table.csv" in inventory_relpaths
+    assert "reports/fair_detection_calibration_report.md" in inventory_relpaths
     assert (run_root / "figures" / "validation_scale_gate_figure.json").exists()
     assert (run_root / "manifests" / "validation_scale_package_manifest.json").exists()

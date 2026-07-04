@@ -50,6 +50,57 @@ def test_stage_package_publish_keeps_timestamp_zip_by_default(tmp_path: Path, mo
 
 
 @pytest.mark.quick
+def test_paper_gate_stage_package_includes_fair_comparison_governed_artifacts(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """paper gate 阶段包必须包含公平比较 records、tables、reports 和 decision。"""
+
+    monkeypatch.setenv("SSTW_COLAB_STAGE_IO_MODE", "local_zip")
+    drive_root = tmp_path / "drive" / "SSTW"
+    run_root = tmp_path / "workspace" / "runs" / "generative_video_model_probe" / "validation_scale"
+    write_targets = {
+        "records/fair_detection_calibration_records.jsonl": "{}\n",
+        "tables/fair_detection_calibration_table.csv": "method_id,status\nsstw,ready\n",
+        "reports/fair_detection_calibration_report.md": "# fair calibration\n",
+        "artifacts/fair_detection_calibration_decision.json": json.dumps(
+            {"fair_detection_calibration_decision": "PASS"}
+        ),
+        "records/formal_method_baseline_comparison_records.jsonl": "{}\n",
+        "tables/formal_method_baseline_comparison_table.csv": "method_id,status\nsstw,ready\n",
+        "reports/formal_method_baseline_comparison_report.md": "# formal comparison\n",
+        "artifacts/formal_method_baseline_comparison_decision.json": json.dumps(
+            {"formal_method_baseline_comparison_decision": "PASS"}
+        ),
+        "records/formal_baseline_difference_interval_records.jsonl": "{}\n",
+        "tables/formal_baseline_difference_interval_table.csv": "baseline_id,status\nvideoseal,ready\n",
+        "reports/formal_baseline_difference_interval_report.md": "# difference interval\n",
+        "artifacts/formal_baseline_difference_interval_decision.json": json.dumps(
+            {"formal_baseline_difference_interval_decision": "PASS"}
+        ),
+    }
+    for relpath, content in write_targets.items():
+        path = run_root / relpath
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(content, encoding="utf-8")
+    layout = {
+        "drive_project_root": str(drive_root),
+        "workflow_profile": "validation_scale",
+        "drive_run_root": str(run_root),
+        "local_stage_package_cache_root": str(tmp_path / "local_cache"),
+        "local_stage_workspace_root": str(tmp_path / "workspace"),
+    }
+
+    result = publish_colab_stage_package(layout, notebook_role="paper_gate_and_package", include_videos=False)
+
+    assert result["stage_package_publish_status"] == "published"
+    with zipfile.ZipFile(result["drive_stage_package_zip"]) as archive:
+        names = archive.namelist()
+    for relpath in write_targets:
+        assert any(name.endswith(relpath) for name in names)
+
+
+@pytest.mark.quick
 def test_failed_external_baseline_reference_writes_manifest_only_and_removes_stale_zip(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -220,6 +271,27 @@ def test_external_baseline_package_contains_only_current_baseline_bundle_and_res
         ),
         encoding="utf-8",
     )
+    (decision_dir / "vidsig_formal_reference_decision.json").write_text(
+        json.dumps(
+            {
+                "manifest_kind": "modern_external_baseline_formal_reference_decision",
+                "baseline_id": "vidsig",
+                "formal_reference_decision": "PASS",
+                "formal_reference_status": "official_reference_bundle_complete",
+            }
+        ),
+        encoding="utf-8",
+    )
+    (run_root / "artifacts" / "external_baseline_evidence" / "videoseal" / "unit_000").mkdir(parents=True)
+    (run_root / "artifacts" / "external_baseline_evidence" / "videoseal" / "unit_000" / "manifest.json").write_text(
+        "{}",
+        encoding="utf-8",
+    )
+    (run_root / "artifacts" / "external_baseline_evidence" / "vidsig" / "unit_000").mkdir(parents=True)
+    (run_root / "artifacts" / "external_baseline_evidence" / "vidsig" / "unit_000" / "manifest.json").write_text(
+        "{}",
+        encoding="utf-8",
+    )
     bundle_root = workspace / "external_baseline_official_result_bundles" / "validation_scale"
     (bundle_root / "videoseal" / "records").mkdir(parents=True)
     (bundle_root / "videoseal" / "records" / "sample.json").write_text("{}", encoding="utf-8")
@@ -251,7 +323,10 @@ def test_external_baseline_package_contains_only_current_baseline_bundle_and_res
         names = archive.namelist()
     assert any("videoseal/records/sample.json" in name for name in names)
     assert any("videoseal_formal_reference_decision.json" in name for name in names)
+    assert any("external_baseline_evidence/videoseal/unit_000/manifest.json" in name for name in names)
     assert not any("vidsig/records/other.json" in name for name in names)
+    assert not any("vidsig_formal_reference_decision.json" in name for name in names)
+    assert not any("external_baseline_evidence/vidsig/unit_000/manifest.json" in name for name in names)
     assert not any(name.endswith(".mp4") for name in names)
     assert not any(name.endswith("000.png") for name in names)
 

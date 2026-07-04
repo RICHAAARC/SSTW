@@ -12,26 +12,29 @@ import json
 from pathlib import Path
 from typing import Any, Iterable, Mapping
 
+from experiments.generative_video_model_probe.validation_artifact_rebuild import (
+    REQUIRED_REBUILD_INPUTS,
+    REQUIRED_REBUILD_OUTPUTS,
+)
 from main.protocol.record_writer import write_json
 
 
-VALIDATION_SCALE_REQUIRED_PACKAGE_RELPATHS = (
+VALIDATION_SCALE_GATE_PACKAGE_RELPATHS = (
     "records/validation_scale_gate_records.jsonl",
     "tables/validation_scale_gate_table.csv",
     "artifacts/validation_scale_gate_decision.json",
     "reports/validation_scale_gate_report.md",
-    "artifacts/motion_consistency_exclusion_decision.json",
     "artifacts/external_baseline_self_containment_decision.json",
-    "artifacts/sstw_measured_formal_decision.json",
-    "artifacts/fair_detection_calibration_decision.json",
-    "artifacts/formal_method_baseline_comparison_decision.json",
-    "artifacts/formal_baseline_difference_interval_decision.json",
-    "artifacts/validation_scale_formal_internal_ablation_decision.json",
-    "artifacts/low_fpr_formal_statistics_decision.json",
+    "artifacts/validation_artifact_rebuild_dry_run_decision.json",
     "artifacts/data_split_and_leakage_guard_decision.json",
     "artifacts/validation_scale_to_pilot_paper_transition_decision.json",
     "figures/validation_scale_gate_figure.json",
 )
+VALIDATION_SCALE_REQUIRED_PACKAGE_RELPATHS = tuple(dict.fromkeys((
+    *REQUIRED_REBUILD_INPUTS,
+    *REQUIRED_REBUILD_OUTPUTS,
+    *VALIDATION_SCALE_GATE_PACKAGE_RELPATHS,
+)))
 
 
 def _read_json(path: Path) -> dict[str, Any]:

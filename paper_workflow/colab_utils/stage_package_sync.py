@@ -592,21 +592,40 @@ def _iter_package_sources(
     role = sanitize_filename_token(notebook_role)
     if role == "external_baseline_formal_scoring":
         run_root = Path(str(layout.get("drive_run_root") or ""))
-        if run_root.exists():
-            artifacts_dir = run_root / "artifacts"
-            if artifacts_dir.exists():
-                sources.append((artifacts_dir, f"{_archive_root_for_layout_path(layout, 'drive_run_root')}/artifacts"))
         bundle_root = Path(str(layout.get("external_baseline_official_result_bundle_root") or ""))
         if baseline_id:
-            baseline_bundle = bundle_root / sanitize_filename_token(baseline_id)
+            baseline_token = sanitize_filename_token(baseline_id)
+            run_archive_root = _archive_root_for_layout_path(layout, "drive_run_root")
+            decision_path = (
+                run_root
+                / "artifacts"
+                / "external_baseline_formal_reference"
+                / f"{baseline_token}_formal_reference_decision.json"
+            )
+            if decision_path.exists():
+                sources.append((
+                    decision_path,
+                    f"{run_archive_root}/artifacts/external_baseline_formal_reference",
+                ))
+            evidence_dir = run_root / "artifacts" / "external_baseline_evidence" / baseline_token
+            if evidence_dir.exists():
+                sources.append((
+                    evidence_dir,
+                    f"{run_archive_root}/artifacts/external_baseline_evidence/{baseline_token}",
+                ))
+            baseline_bundle = bundle_root / baseline_token
             if baseline_bundle.exists():
                 sources.append(
                     (
                         baseline_bundle,
-                        f"{_archive_root_for_layout_path(layout, 'external_baseline_official_result_bundle_root')}/{sanitize_filename_token(baseline_id)}",
+                        f"{_archive_root_for_layout_path(layout, 'external_baseline_official_result_bundle_root')}/{baseline_token}",
                     )
                 )
         elif bundle_root.exists():
+            if run_root.exists():
+                artifacts_dir = run_root / "artifacts"
+                if artifacts_dir.exists():
+                    sources.append((artifacts_dir, f"{_archive_root_for_layout_path(layout, 'drive_run_root')}/artifacts"))
             sources.append((bundle_root, _archive_root_for_layout_path(layout, "external_baseline_official_result_bundle_root")))
         return sources
 

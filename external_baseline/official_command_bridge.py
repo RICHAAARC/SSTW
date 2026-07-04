@@ -16,7 +16,7 @@ from typing import Any, Mapping
 
 from external_baseline.official_eval_adapters.common import (
     validate_clean_negative_payload,
-    validate_official_bundle_baseline_identity,
+    validate_complete_official_bundle_baseline_identity,
 )
 from external_baseline.score_semantics import (
     external_clean_negative_score_formal_comparison_payload,
@@ -170,7 +170,7 @@ def run_bridge(args: argparse.Namespace) -> dict[str, Any]:
     validate_clean_negative_payload(official_payload)
     validate_official_score_extraction_payload(official_payload)
     validate_official_formal_comparison_eligibility(official_payload)
-    validate_official_bundle_baseline_identity(
+    validate_complete_official_bundle_baseline_identity(
         official_payload,
         str(official_payload.get("official_result_bundle_path") or official_output_json_path),
         baseline_id=args.baseline_id,
@@ -207,8 +207,8 @@ def run_bridge(args: argparse.Namespace) -> dict[str, Any]:
         "official_result_provenance": official_payload.get("official_result_provenance"),
         "official_result_bundle_path": official_payload.get("official_result_bundle_path"),
         "official_execution_manifest_path": official_payload.get("official_execution_manifest_path"),
-        "official_adapter_baseline_id": official_payload.get("official_adapter_baseline_id") or args.baseline_id,
-        "official_baseline_id": official_payload.get("official_baseline_id") or args.baseline_id,
+        "official_adapter_baseline_id": official_payload.get("official_adapter_baseline_id"),
+        "official_baseline_id": official_payload.get("official_baseline_id"),
         "external_baseline_source_video_path": official_payload.get(
             "external_baseline_source_video_path",
             official_payload.get("baseline_source_video_path"),

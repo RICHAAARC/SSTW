@@ -1204,6 +1204,90 @@ def test_modern_external_baseline_bridge_commands_require_real_official_output(t
 
 
 @pytest.mark.quick
+def test_modern_external_baseline_bridge_rejects_incomplete_official_identity(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """bridge 不能用当前 baseline_id 回填半结构化 official payload 身份字段。"""
+
+    run_root = tmp_path / "generative_video_runtime"
+    _write_external_baseline_runtime_fixture(run_root)
+    fake_official = tmp_path / "fake_official_detector_without_complete_identity.py"
+    fake_official.write_text(
+        "import argparse, json\n"
+        "parser = argparse.ArgumentParser()\n"
+        "parser.add_argument('--official-output-json', required=True)\n"
+        "parser.add_argument('--source-video')\n"
+        "parser.add_argument('--attacked-video')\n"
+        "parser.add_argument('--attack-name')\n"
+        "parser.add_argument('--baseline-id')\n"
+        "args = parser.parse_args()\n"
+        "json.dump({'score': 0.42, 'detected': True, 'baseline_id': args.baseline_id, "
+        "'score_semantics': 'watermark_presence_confidence', 'score_orientation': 'higher_is_more_watermarked', "
+        "'official_score_extraction_policy': 'test_official_detector_confidence', "
+        "'official_reference_protocol_anchor': 'same_prompt_seed_attack_runtime_comparison_unit', "
+        "'external_baseline_clean_negative_score': 0.07, "
+        "'external_baseline_clean_negative_score_semantics': 'watermark_presence_confidence', "
+        "'external_baseline_clean_negative_video_path': 'official/clean_negative.mp4', "
+        "'official_result_provenance': 'repository_generated_from_third_party_official_code', "
+        "'official_result_bundle_path': 'official/bundle_record.json', "
+        "'official_execution_manifest_path': 'official/execution_manifest.json'}, "
+        "open(args.official_output_json, 'w', encoding='utf-8'))\n",
+        encoding="utf-8",
+    )
+    official_command = (
+        f"{sys.executable} {fake_official} "
+        "--source-video {source_video_path} "
+        "--attacked-video {attacked_video_path} "
+        "--attack-name {attack_name} "
+        "--baseline-id {baseline_id} "
+        "--official-output-json {official_output_json_path}"
+    )
+    official_source_dir = tmp_path / "official_sources" / "unit_modern"
+    official_source_dir.mkdir(parents=True)
+    monkeypatch.setenv("SSTW_UNIT_MODERN_OFFICIAL_EVAL_COMMAND", official_command)
+    bridge_command = (
+        f"{sys.executable} -m external_baseline.official_command_bridge "
+        "--baseline-id unit_modern "
+        f"--official-source-dir {official_source_dir} "
+        "--source-video {source_video_path} "
+        "--attacked-video {attacked_video_path} "
+        "--attack-name {attack_name} "
+        "--output-json {output_json_path} "
+        "--run-root {run_root} "
+        "--prompt-id {prompt_id} "
+        "--seed-id {seed_id} "
+        "--trajectory-trace-id {trajectory_trace_id}"
+    )
+    monkeypatch.setenv("SSTW_UNIT_MODERN_EVAL_COMMAND", bridge_command)
+    config = ModernBaselineCommandConfig(
+        baseline_name="unit_modern",
+        baseline_family="unit_modern_video_watermark",
+        adapter_path="external_baseline/primary/unit_modern/adapter/run_sstw_eval.py",
+        env_var="SSTW_UNIT_MODERN_EVAL_COMMAND",
+        default_source_script="external_baseline/primary/unit_modern/adapter/run_sstw_eval.py",
+        score_source="official_command_adapter",
+    )
+
+    modern_records = build_modern_score_records(
+        run_root,
+        {
+            "external_baseline_name": "unit_modern",
+            "external_baseline_family": "unit_modern_video_watermark",
+            "external_baseline_layer": "modern_external_baseline",
+        },
+        config,
+    )
+
+    assert modern_records
+    assert all(record["metric_status"] == "unsupported" for record in modern_records)
+    assert any(
+        "official_result_bundle_missing_complete_baseline_identity" in record["external_baseline_score_failure_reason"]
+        for record in modern_records
+    )
+
+
+@pytest.mark.quick
 def test_official_result_bundle_preflight_requires_all_modern_baseline_units(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

@@ -109,6 +109,16 @@ def test_videoshield_official_runtime_dry_run_writes_governed_plan(tmp_path: Pat
 
 
 @pytest.mark.quick
+def test_videoshield_runtime_payload_stamps_official_adapter_identity() -> None:
+    """VideoShield 非 dry-run bundle payload 必须自带官方 adapter 身份, 便于统一分数抽取。"""
+
+    runtime_text = Path("external_baseline/videoshield_official_runtime.py").read_text(encoding="utf-8")
+
+    assert '"official_adapter_baseline_id": BASELINE_ID' in runtime_text
+    assert '"official_baseline_id": BASELINE_ID' in runtime_text
+
+
+@pytest.mark.quick
 def test_videoshield_default_config_uses_project_owned_runtime_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """默认配置必须使用 ModelScope 官方路径, 且支持通过环境变量切换 dry-run。"""
 

@@ -1012,6 +1012,7 @@ def write_videomark_official_bundle_records(
                 "detected": float(score_payload["external_baseline_score"]) >= threshold,
                 "threshold": threshold,
                 "official_result_provenance": REPOSITORY_GENERATED_OFFICIAL_PROVENANCE,
+                "official_adapter_baseline_id": BASELINE_ID,
                 "official_baseline_id": BASELINE_ID,
                 "external_baseline_generation_model_id": model_name,
                 "external_baseline_official_execution_mode": "videomark_embedding_extraction_temporal_tamper",

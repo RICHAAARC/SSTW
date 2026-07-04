@@ -244,6 +244,8 @@ def test_videomark_bundle_writer_records_project_owned_provenance(tmp_path: Path
     record_path = bundle_root / "videomark" / "records" / "prompt_a__seed_0__temporal_crop_runtime.json"
     payload = json.loads(record_path.read_text(encoding="utf-8"))
     assert payload["official_result_provenance"] == "repository_generated_from_third_party_official_code"
+    assert payload["official_adapter_baseline_id"] == "videomark"
+    assert payload["official_baseline_id"] == "videomark"
     assert payload["external_baseline_official_execution_mode"] == "videomark_embedding_extraction_temporal_tamper"
     assert payload["external_baseline_score"] == 0.875
     assert payload["external_baseline_clean_negative_score"] == 0.25
@@ -307,6 +309,8 @@ def test_videomark_bundle_writer_uses_prompt_seed_attack_specific_key(tmp_path: 
     assert result["generated_bundle_record_count"] == 1
     record_path = bundle_root / "videomark" / "records" / "prompt_a__seed_0__temporal_crop_runtime.json"
     payload = json.loads(record_path.read_text(encoding="utf-8"))
+    assert payload["official_adapter_baseline_id"] == "videomark"
+    assert payload["official_baseline_id"] == "videomark"
     assert payload["external_baseline_score"] == 0.7
     assert payload["external_baseline_clean_negative_score"] == 0.25
     assert payload["official_result_key"] == video_key

@@ -771,6 +771,7 @@ def run_videoshield_official_runtime(config: VideoShieldOfficialRuntimeConfig) -
                             "external_baseline_clean_negative_score_semantics": clean_negative_payload["score_semantics"],
                             "external_baseline_clean_negative_video_path": clean_negative_attack_info["attacked_video_path"],
                             "official_result_provenance": REPOSITORY_GENERATED_OFFICIAL_PROVENANCE,
+                            "official_adapter_baseline_id": BASELINE_ID,
                             "official_baseline_id": BASELINE_ID,
                             "official_source_dir": str(source_dir),
                             "official_runtime_source_dir": str(runtime_source_dir),

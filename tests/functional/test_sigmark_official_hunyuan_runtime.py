@@ -169,6 +169,8 @@ def test_sigmark_bundle_writer_records_project_owned_provenance(tmp_path: Path) 
     record_path = bundle_root / "sigmark" / "records" / "prompt_a__seed_0__clean.json"
     payload = json.loads(record_path.read_text(encoding="utf-8"))
     assert payload["official_result_provenance"] == "repository_generated_from_third_party_official_code"
+    assert payload["official_adapter_baseline_id"] == "sigmark"
+    assert payload["official_baseline_id"] == "sigmark"
     assert payload["external_baseline_official_execution_mode"] == "sigmark_hunyuan_gen_extract"
     assert "metric_status" not in payload
     assert payload["bit_accuracy"] == 0.875
@@ -220,6 +222,8 @@ def test_sigmark_bundle_writer_uses_prompt_seed_specific_npz_key(tmp_path: Path)
     assert result["generated_bundle_record_count"] == 1
     record_path = bundle_root / "sigmark" / "records" / "prompt_a__seed_0__clean.json"
     payload = json.loads(record_path.read_text(encoding="utf-8"))
+    assert payload["official_adapter_baseline_id"] == "sigmark"
+    assert payload["official_baseline_id"] == "sigmark"
     assert payload["external_baseline_score"] == 0.8
     assert payload["external_baseline_clean_negative_score"] == 0.2
     assert payload["official_result_key"] == result_key

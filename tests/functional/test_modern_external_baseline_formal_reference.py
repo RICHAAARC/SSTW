@@ -321,6 +321,8 @@ def test_videoseal_auto_bundle_generator_writes_fair_comparison_fields() -> None
     assert "external_baseline_clean_negative_video_path" in generator_text
     assert "official_score_extraction_policy" in generator_text
     assert "videoseal_official_detect_presence_confidence" in generator_text
+    assert "official_adapter_baseline_id" in generator_text
+    assert "official_baseline_id" in generator_text
     assert "official_reference_protocol_anchor" in generator_text
     assert "same_prompt_seed_attack_runtime_comparison_unit" in generator_text
     assert "repository_generated_from_third_party_official_code" in generator_text

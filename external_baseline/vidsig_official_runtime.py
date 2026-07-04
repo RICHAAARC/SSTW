@@ -720,6 +720,7 @@ def write_vidsig_official_bundle_records(
                 "external_baseline_clean_negative_video_path": str(clean_negative_video_path),
                 "official_vidsig_tpr_at_fpr_1e_2": round(float(detection_score), 6),
                 "official_result_provenance": REPOSITORY_GENERATED_OFFICIAL_PROVENANCE,
+                "official_adapter_baseline_id": BASELINE_ID,
                 "official_baseline_id": BASELINE_ID,
                 "external_baseline_generation_model_id": config.model_id,
                 "external_baseline_official_execution_mode": "vidsig_generate_ms_watermarked_video_project_runtime_attack_official_attack_py",

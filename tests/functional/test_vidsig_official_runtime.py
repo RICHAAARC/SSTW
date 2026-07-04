@@ -270,6 +270,8 @@ def test_vidsig_bundle_writer_records_clean_negative_score(
 
     assert result["generated_bundle_record_count"] == 1
     payload = json.loads((bundle_root / "vidsig" / "records" / "prompt_a__seed_main_a__video_compression_runtime.json").read_text(encoding="utf-8"))
+    assert payload["official_adapter_baseline_id"] == "vidsig"
+    assert payload["official_baseline_id"] == "vidsig"
     assert payload["external_baseline_score"] == 0.8
     assert payload["external_baseline_clean_negative_score"] == 0.1
     assert payload["external_baseline_clean_negative_score_semantics"] == "official_tpr_at_fixed_fpr_detection_score"

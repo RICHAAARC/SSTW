@@ -238,6 +238,7 @@ def generate_videoseal_official_bundle(
                 "external_baseline_clean_negative_score_semantics": clean_negative_payload["score_semantics"],
                 "external_baseline_clean_negative_video_path": str(clean_negative_video),
                 "official_result_provenance": "repository_generated_from_third_party_official_code",
+                "official_adapter_baseline_id": "videoseal",
                 "official_baseline_id": "videoseal",
                 "official_source_layout_status": source_layout_audit["layout_status"],
                 "official_video_io_backend": info.get("video_io_backend"),

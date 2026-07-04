@@ -432,6 +432,136 @@ def _artifact_rebuild_ready(run_root: Path) -> tuple[bool, str]:
     return ready, decision.get("claim_support_status", "missing_artifact_rebuild_dry_run_decision")
 
 
+def _string_list(value: Any) -> list[str]:
+    """把 artifact 中的列表字段规整为字符串列表。"""
+    if not isinstance(value, list):
+        return []
+    return [str(item) for item in value if str(item)]
+
+
+def _external_baseline_self_containment_ready(
+    decision: dict[str, Any],
+    required_modern_adapter_names: list[str],
+) -> tuple[bool, dict[str, Any]]:
+    """检查 external baseline self-containment 是否包含完整公平比较闭环。
+
+    validation_scale 不能只接受一个手写或旧版
+    `external_baseline_self_containment_decision: PASS`。该函数要求 5 个现代
+    baseline 均有项目内 official bundle、clean negative、分数抽取口径、完整
+    prompt / seed / attack anchor 和 official baseline 身份。
+    """
+
+    required_names = {str(name) for name in required_modern_adapter_names if str(name)}
+    rows = [
+        row
+        for row in decision.get("baseline_self_containment_rows", [])
+        if isinstance(row, dict)
+    ]
+    row_by_name = {
+        str(row.get("baseline_name") or ""): row
+        for row in rows
+        if str(row.get("baseline_name") or "")
+    }
+    missing_row_names = sorted(required_names - set(row_by_name))
+    not_self_contained_names = sorted(
+        name
+        for name in required_names
+        if row_by_name.get(name, {}).get("external_baseline_self_contained") is not True
+    )
+    missing_repository_bundle_names = sorted(set(
+        _string_list(decision.get("missing_repository_generated_official_bundle_modern_external_baseline_names"))
+        + [
+            name
+            for name in required_names
+            if row_by_name.get(name, {}).get("repository_generated_official_bundle_ready") is not True
+        ]
+    ))
+    missing_clean_negative_names = sorted(set(
+        _string_list(decision.get("missing_clean_negative_modern_external_baseline_names"))
+        + [
+            name
+            for name in required_names
+            if row_by_name.get(name, {}).get("clean_negative_ready") is not True
+        ]
+    ))
+    missing_score_extraction_names = sorted(set(
+        _string_list(decision.get("missing_score_extraction_modern_external_baseline_names"))
+        + [
+            name
+            for name in required_names
+            if row_by_name.get(name, {}).get("score_extraction_ready") is not True
+        ]
+    ))
+    missing_official_identity_names = sorted(set(
+        _string_list(decision.get("missing_official_identity_modern_external_baseline_names"))
+        + [
+            name
+            for name in required_names
+            if row_by_name.get(name, {}).get("official_baseline_identity_ready") is not True
+        ]
+    ))
+    missing_anchor_names = sorted(set(
+        _string_list(decision.get("missing_anchor_modern_external_baseline_names"))
+        + [
+            name
+            for name in required_names
+            if row_by_name.get(name, {}).get("anchor_ready") is not True
+        ]
+    ))
+    missing_formal_names = sorted(set(
+        _string_list(decision.get("missing_formal_modern_external_baseline_names"))
+        + [
+            name
+            for name in required_names
+            if int(row_by_name.get(name, {}).get("measured_formal_record_count") or 0) <= 0
+        ]
+    ))
+    missing_requirements = _string_list(decision.get("missing_self_containment_requirements"))
+    try:
+        missing_requirement_count = int(decision.get("self_containment_missing_requirement_count") or 0)
+    except (TypeError, ValueError):
+        missing_requirement_count = -1
+    ready_count = sum(
+        1
+        for name in required_names
+        if row_by_name.get(name, {}).get("external_baseline_self_contained") is True
+    )
+    summary_missing: list[str] = []
+    if decision.get("external_baseline_self_containment_decision") != "PASS":
+        summary_missing.append("external_baseline_self_containment_decision_passed")
+    if missing_requirements or missing_requirement_count != 0:
+        summary_missing.append("external_baseline_self_containment_missing_requirements_empty")
+    if missing_row_names:
+        summary_missing.append("external_baseline_self_containment_required_rows_present")
+    if not_self_contained_names or ready_count < len(required_names):
+        summary_missing.append("external_baseline_self_containment_required_baselines_ready")
+    if missing_repository_bundle_names:
+        summary_missing.append("external_baseline_self_containment_repository_generated_bundles_ready")
+    if missing_clean_negative_names:
+        summary_missing.append("external_baseline_self_containment_clean_negative_ready")
+    if missing_score_extraction_names:
+        summary_missing.append("external_baseline_self_containment_score_extraction_ready")
+    if missing_official_identity_names:
+        summary_missing.append("external_baseline_self_containment_official_identity_ready")
+    if missing_anchor_names:
+        summary_missing.append("external_baseline_self_containment_anchor_ready")
+    if missing_formal_names:
+        summary_missing.append("external_baseline_self_containment_measured_formal_ready")
+    return not summary_missing, {
+        "external_baseline_self_containment_decision": decision.get("external_baseline_self_containment_decision"),
+        "external_baseline_self_containment_ready_count": ready_count,
+        "external_baseline_self_containment_required_count": len(required_names),
+        "external_baseline_self_containment_gate_missing_requirements": summary_missing,
+        "missing_self_contained_modern_external_baseline_names": sorted(set(_string_list(decision.get("missing_self_contained_modern_external_baseline_names")) + not_self_contained_names + missing_row_names)),
+        "missing_repository_generated_official_bundle_modern_external_baseline_names": missing_repository_bundle_names,
+        "missing_clean_negative_modern_external_baseline_names": missing_clean_negative_names,
+        "missing_score_extraction_modern_external_baseline_names": missing_score_extraction_names,
+        "missing_official_identity_modern_external_baseline_names": missing_official_identity_names,
+        "missing_anchor_modern_external_baseline_names": missing_anchor_names,
+        "missing_formal_modern_external_baseline_names": missing_formal_names,
+    }
+
+
 def build_validation_scale_gate_audit(
     run_root: str | Path,
     config_path: str | Path = DEFAULT_VALIDATION_SCALE_CONFIG,
@@ -503,6 +633,10 @@ def build_validation_scale_gate_audit(
         config["required_modern_external_baseline_adapter_names"],
         config["target_fpr"],
     )
+    external_baseline_self_containment_ready, external_baseline_self_containment_summary = _external_baseline_self_containment_ready(
+        external_baseline_self_containment_decision,
+        config["required_modern_external_baseline_adapter_names"],
+    )
     artifact_rebuild_ready, artifact_rebuild_status = _artifact_rebuild_ready(run_root)
     motion_selection = select_motion_claim_generation_records(validation_generation_records, formal_metric_records)
     formal_motion_claim_ready = motion_selection.formal_motion_claim_status in FORMAL_MOTION_CLAIM_READY_STATUSES
@@ -518,7 +652,7 @@ def build_validation_scale_gate_audit(
         "validation_detection_records_ready": _decision_pass(runtime_detection_decision, "runtime_detection_decision") and runtime_detection_ready_count >= runtime_attack_ready_count > 0,
         "validation_external_baseline_status_records_ready": (not config["require_external_baseline_status_records"]) or external_baseline_audit.get("external_baseline_status_decision") == "PASS",
         "validation_external_baseline_comparison_records_ready": (not config["require_external_baseline_comparison_records"]) or external_baseline_comparison_ready,
-        "validation_external_baseline_self_containment_ready": (not config["require_external_baseline_self_containment_decision"]) or external_baseline_self_containment_decision.get("external_baseline_self_containment_decision") == "PASS",
+        "validation_external_baseline_self_containment_ready": (not config["require_external_baseline_self_containment_decision"]) or external_baseline_self_containment_ready,
         "validation_sstw_measured_formal_records_ready": (not config["require_sstw_measured_formal_records"]) or sstw_measured_formal_ready,
         "validation_fair_detection_calibration_ready": (not config["require_fair_detection_calibration"]) or fair_detection_ready,
         "validation_formal_method_baseline_comparison_ready": (not config["require_formal_method_baseline_comparison"]) or formal_method_comparison_ready,
@@ -582,7 +716,7 @@ def build_validation_scale_gate_audit(
         "required_modern_external_baseline_adapter_names": sorted(config["required_modern_external_baseline_adapter_names"]),
         "missing_modern_external_baseline_formal_adapter_names": missing_modern_external_baseline_formal_adapter_names,
         "external_baseline_comparison_status": external_baseline_comparison_status,
-        "external_baseline_self_containment_decision": external_baseline_self_containment_decision.get("external_baseline_self_containment_decision"),
+        **external_baseline_self_containment_summary,
         "sstw_measured_formal_record_count": sstw_measured_formal_record_count,
         "sstw_measured_formal_status": sstw_measured_formal_status,
         "fair_detection_calibration_ready_count": fair_detection_ready_count,
@@ -653,6 +787,8 @@ def write_validation_scale_gate_audit(
         f"- external_baseline_measured_adapter_count: {audit['external_baseline_measured_adapter_count']}\n"
         f"- modern_external_baseline_formal_measured_adapter_count: {audit['modern_external_baseline_formal_measured_adapter_count']}\n"
         f"- external_baseline_self_containment_decision: {audit['external_baseline_self_containment_decision']}\n"
+        f"- external_baseline_self_containment_ready_count: {audit['external_baseline_self_containment_ready_count']}\n"
+        f"- external_baseline_self_containment_gate_missing_requirements: {', '.join(audit['external_baseline_self_containment_gate_missing_requirements']) if audit['external_baseline_self_containment_gate_missing_requirements'] else 'none'}\n"
         f"- sstw_measured_formal_record_count: {audit['sstw_measured_formal_record_count']}\n"
         f"- sstw_measured_formal_status: {audit['sstw_measured_formal_status']}\n"
         f"- fair_detection_calibration_ready_count: {audit['fair_detection_calibration_ready_count']}\n"

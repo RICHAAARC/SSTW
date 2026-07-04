@@ -29,6 +29,40 @@ MODERN_EXTERNAL_BASELINE_NAMES = {
 }
 
 
+def _external_baseline_self_containment_pass_payload() -> dict:
+    """构造 validation-scale gate 所需的完整 self-containment PASS fixture。"""
+
+    return {
+        "external_baseline_self_containment_decision": "PASS",
+        "claim_support_status": "external_baseline_self_contained_measured_formal_ready",
+        "required_modern_external_baseline_adapter_names": sorted(MODERN_EXTERNAL_BASELINE_NAMES),
+        "required_modern_external_baseline_adapter_count": len(MODERN_EXTERNAL_BASELINE_NAMES),
+        "self_contained_modern_external_baseline_count": len(MODERN_EXTERNAL_BASELINE_NAMES),
+        "missing_self_contained_modern_external_baseline_names": [],
+        "missing_repository_generated_official_bundle_modern_external_baseline_names": [],
+        "missing_clean_negative_modern_external_baseline_names": [],
+        "missing_score_extraction_modern_external_baseline_names": [],
+        "missing_official_identity_modern_external_baseline_names": [],
+        "missing_anchor_modern_external_baseline_names": [],
+        "missing_formal_modern_external_baseline_names": [],
+        "missing_self_containment_requirements": [],
+        "self_containment_missing_requirement_count": 0,
+        "baseline_self_containment_rows": [
+            {
+                "baseline_name": name,
+                "external_baseline_self_contained": True,
+                "repository_generated_official_bundle_ready": True,
+                "clean_negative_ready": True,
+                "score_extraction_ready": True,
+                "official_baseline_identity_ready": True,
+                "anchor_ready": True,
+                "measured_formal_record_count": 1,
+            }
+            for name in sorted(MODERN_EXTERNAL_BASELINE_NAMES)
+        ],
+    }
+
+
 def _formal_external_baseline_records() -> list[dict]:
     """构造完整 baseline fixture, 使该测试只聚焦 Claim-3 降级路径。"""
     records: list[dict] = []
@@ -183,10 +217,10 @@ def test_validation_scale_gate_accepts_claim3_downgrade_path(tmp_path: Path) -> 
         "modern_external_baseline_formal_measured_adapter_names": sorted(MODERN_EXTERNAL_BASELINE_NAMES),
         "external_baseline_claim_support_status": "external_baseline_formal_and_proxy_records_written",
     })
-    write_json(run_root / "artifacts" / "external_baseline_self_containment_decision.json", {
-        "external_baseline_self_containment_decision": "PASS",
-        "claim_support_status": "external_baseline_self_contained_measured_formal_ready",
-    })
+    write_json(
+        run_root / "artifacts" / "external_baseline_self_containment_decision.json",
+        _external_baseline_self_containment_pass_payload(),
+    )
     write_json(run_root / "artifacts" / "data_split_and_leakage_guard_decision.json", {
         "data_split_and_leakage_guard_decision": "PASS",
         "claim_support_status": "data_split_and_leakage_guard_passed",

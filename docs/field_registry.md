@@ -1164,6 +1164,9 @@ Notebook 与 repository module 的跨边界数据
 | environment_updates | artifact | none | true | false | false | Environment variable updates emitted by a preflight artifact for the Notebook parent process. |
 
 | external_baseline_self_containment_decision | governance | none | true | true | false | External baseline 是否完成项目内 clone/build/run/adapt/record 闭环的阶段判定。 |
+| external_baseline_self_containment_ready_count | metric | none | true | true | false | validation_scale gate 重新审计到的 self-contained modern baseline 数量。 |
+| external_baseline_self_containment_required_count | metric | none | true | true | false | validation_scale gate 要求 self-contained 的 modern baseline 数量。 |
+| external_baseline_self_containment_gate_missing_requirements | governance | none | true | true | false | validation_scale gate 对 self-containment artifact 复查得到的缺口列表。 |
 | self_contained_modern_external_baseline_count | metric | none | true | true | false | 已完成项目内 official bundle 执行闭环的现代 external baseline 数量。 |
 | missing_self_contained_modern_external_baseline_names | governance | none | true | false | false | 尚未完成项目内 official bundle 执行闭环的现代 external baseline 名称列表。 |
 | missing_self_containment_requirements | governance | none | true | false | false | External baseline self-containment 阶段仍缺失的要求列表。 |

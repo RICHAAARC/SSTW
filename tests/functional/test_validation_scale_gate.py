@@ -29,6 +29,40 @@ MODERN_EXTERNAL_BASELINE_NAMES = {
 }
 
 
+def _external_baseline_self_containment_pass_payload() -> dict:
+    """构造 validation-scale gate 接受的完整 external baseline 自包含 PASS 摘要。"""
+
+    return {
+        "external_baseline_self_containment_decision": "PASS",
+        "claim_support_status": "external_baseline_self_contained_measured_formal_ready",
+        "required_modern_external_baseline_adapter_names": sorted(MODERN_EXTERNAL_BASELINE_NAMES),
+        "required_modern_external_baseline_adapter_count": len(MODERN_EXTERNAL_BASELINE_NAMES),
+        "self_contained_modern_external_baseline_count": len(MODERN_EXTERNAL_BASELINE_NAMES),
+        "missing_self_contained_modern_external_baseline_names": [],
+        "missing_repository_generated_official_bundle_modern_external_baseline_names": [],
+        "missing_clean_negative_modern_external_baseline_names": [],
+        "missing_score_extraction_modern_external_baseline_names": [],
+        "missing_official_identity_modern_external_baseline_names": [],
+        "missing_anchor_modern_external_baseline_names": [],
+        "missing_formal_modern_external_baseline_names": [],
+        "missing_self_containment_requirements": [],
+        "self_containment_missing_requirement_count": 0,
+        "baseline_self_containment_rows": [
+            {
+                "baseline_name": name,
+                "external_baseline_self_contained": True,
+                "repository_generated_official_bundle_ready": True,
+                "clean_negative_ready": True,
+                "score_extraction_ready": True,
+                "official_baseline_identity_ready": True,
+                "anchor_ready": True,
+                "measured_formal_record_count": 1,
+            }
+            for name in sorted(MODERN_EXTERNAL_BASELINE_NAMES)
+        ],
+    }
+
+
 def _formal_external_baseline_records() -> list[dict]:
     """构造 validation-scale 通过所需的完整 external baseline records fixture。"""
     records: list[dict] = []
@@ -150,6 +184,52 @@ def test_validation_scale_gate_cannot_disable_fair_comparison_hard_requirements(
 
 
 @pytest.mark.quick
+def test_validation_scale_gate_rejects_stale_self_containment_pass_without_rows(tmp_path: Path) -> None:
+    """旧版 self-containment 仅写 PASS 不能满足 validation_scale 公平比较门禁。"""
+    run_root = tmp_path / "run"
+    config_path = tmp_path / "validation_scale_config.json"
+    config_path.write_text(json.dumps({
+        "target_fpr": 0.1,
+        "paper_result_level": "validation_scale",
+        "minimum_prompt_count": 0,
+        "minimum_seed_per_prompt": 0,
+        "minimum_attack_count": 0,
+        "minimum_external_baseline_measured_adapter_count": 0,
+        "minimum_modern_external_baseline_formal_adapter_count": 1,
+        "required_modern_external_baseline_adapter_names": ["videoseal"],
+        "require_external_baseline_status_records": False,
+        "require_external_baseline_comparison_records": True,
+        "require_external_baseline_self_containment_decision": True,
+        "require_sstw_measured_formal_records": True,
+        "require_fair_detection_calibration": True,
+        "require_formal_method_baseline_comparison": True,
+        "require_formal_baseline_difference_interval": True,
+        "require_data_split_and_leakage_guard": True,
+        "require_motion_threshold_calibration_ready": False,
+        "require_formal_motion_claim_ready": False,
+        "require_motion_consistency_exclusion_report": False,
+        "require_internal_ablation_records": False,
+        "require_validation_scale_formal_internal_ablation": False,
+        "require_adaptive_attack_records": False,
+        "require_replay_or_sketch_records_or_claim3_downgrade": False,
+        "require_confidence_interval_report": False,
+        "require_low_fpr_formal_statistics_blocking_record": False,
+        "require_artifact_rebuild_dry_run": False,
+    }), encoding="utf-8")
+    write_json(run_root / "artifacts" / "external_baseline_self_containment_decision.json", {
+        "external_baseline_self_containment_decision": "PASS",
+        "claim_support_status": "legacy_pass_without_required_rows",
+    })
+
+    audit = build_validation_scale_gate_audit(run_root, config_path)
+
+    assert audit["validation_scale_gate_decision"] == "FAIL"
+    assert "validation_external_baseline_self_containment_ready" in audit["missing_validation_requirements"]
+    assert "external_baseline_self_containment_required_rows_present" in audit["external_baseline_self_containment_gate_missing_requirements"]
+    assert "videoseal" in audit["missing_self_contained_modern_external_baseline_names"]
+
+
+@pytest.mark.quick
 def test_validation_scale_gate_passes_when_all_governed_inputs_exist(tmp_path: Path) -> None:
     """当 validation-scale 所需 records 和 decision artifacts 齐全时, gate 应允许进入 pilot_paper。"""
     run_root = tmp_path / "run"
@@ -196,10 +276,10 @@ def test_validation_scale_gate_passes_when_all_governed_inputs_exist(tmp_path: P
         "modern_external_baseline_formal_measured_adapter_names": sorted(MODERN_EXTERNAL_BASELINE_NAMES),
         "external_baseline_claim_support_status": "external_baseline_formal_and_proxy_records_written",
     })
-    write_json(run_root / "artifacts" / "external_baseline_self_containment_decision.json", {
-        "external_baseline_self_containment_decision": "PASS",
-        "claim_support_status": "external_baseline_self_contained_measured_formal_ready",
-    })
+    write_json(
+        run_root / "artifacts" / "external_baseline_self_containment_decision.json",
+        _external_baseline_self_containment_pass_payload(),
+    )
     write_json(run_root / "artifacts" / "data_split_and_leakage_guard_decision.json", {
         "data_split_and_leakage_guard_decision": "PASS",
         "claim_support_status": "data_split_and_leakage_guard_passed",
@@ -392,6 +472,8 @@ def test_validation_scale_gate_passes_when_all_governed_inputs_exist(tmp_path: P
     assert audit["external_baseline_measured_adapter_count"] == 7
     assert audit["modern_external_baseline_formal_measured_adapter_count"] == 5
     assert audit["external_baseline_self_containment_decision"] == "PASS"
+    assert audit["external_baseline_self_containment_ready_count"] == 5
+    assert audit["external_baseline_self_containment_gate_missing_requirements"] == []
     assert audit["motion_consistency_exclusion_excluded_count"] == 0
     assert audit["motion_consistency_exclusion_status"] == "motion_consistency_exclusion_audit_record"
     assert audit["sstw_measured_formal_record_count"] == 1

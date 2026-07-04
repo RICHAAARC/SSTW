@@ -10,6 +10,7 @@ from experiments.generative_video_model_probe.validation_scale_artifact_package 
     write_validation_scale_gate_figure,
     write_validation_scale_package_manifest,
 )
+from main.attacks.video_runtime_attack_protocol import VALIDATION_SCALE_RUNTIME_ATTACKS
 from main.protocol.record_writer import write_json, write_jsonl
 from scripts.check_results.data_split_and_leakage_guard import write_data_split_and_leakage_guard
 from scripts.check_results.external_baseline_self_containment_decision import (
@@ -80,6 +81,11 @@ def _validation_scale_gate_pass_payload() -> dict:
         "modern_external_baseline_formal_measured_adapter_count": len(MODERN_BASELINES),
         "external_baseline_self_containment_decision": "PASS",
         "data_split_and_leakage_guard_decision": "PASS",
+        "runtime_attack_protocol_decision": "PASS",
+        "required_runtime_attack_names": list(VALIDATION_SCALE_RUNTIME_ATTACKS),
+        "runtime_attack_missing_required_names": [],
+        "runtime_detection_missing_required_names": [],
+        "runtime_detection_ready_count": len(VALIDATION_SCALE_RUNTIME_ATTACKS),
         "sstw_measured_formal_record_count": 24,
         "sstw_measured_formal_status": "sstw_measured_formal_validation_scale_only",
         "fair_detection_calibration_ready_count": len(MODERN_BASELINES) + 1,
@@ -127,6 +133,29 @@ def test_validation_scale_to_pilot_transition_rejects_legacy_pass_without_fair_c
     assert "validation_scale_fair_detection_calibration_ready" in audit["missing_transition_requirements"]
     assert "validation_scale_formal_method_baseline_comparison_ready" in audit["missing_transition_requirements"]
     assert "validation_scale_formal_baseline_difference_interval_ready" in audit["missing_transition_requirements"]
+
+
+@pytest.mark.quick
+def test_validation_scale_to_pilot_transition_requires_runtime_attack_coverage(tmp_path: Path) -> None:
+    """validation_scale -> pilot_paper 跳转必须显式证明三类 runtime attack 已参与检测。"""
+
+    run_root = tmp_path / "run"
+    payload = _validation_scale_gate_pass_payload()
+    payload["runtime_attack_protocol_decision"] = "FAIL"
+    payload["required_runtime_attack_names"] = ["video_compression_runtime"]
+    payload["runtime_attack_missing_required_names"] = ["temporal_crop_runtime"]
+    payload["runtime_detection_missing_required_names"] = ["frame_rate_resampling_runtime"]
+    payload["runtime_detection_ready_count"] = 1
+    write_json(run_root / "artifacts" / "validation_scale_gate_decision.json", payload)
+
+    audit = write_stage_transition_decision(run_root, "validation_scale_to_pilot_paper")
+
+    assert audit["validation_scale_to_pilot_paper_transition_decision"] == "FAIL"
+    assert "validation_scale_runtime_attack_protocol_passed" in audit["missing_transition_requirements"]
+    assert "validation_scale_required_runtime_attacks_registered" in audit["missing_transition_requirements"]
+    assert "validation_scale_runtime_attack_missing_required_names_empty" in audit["missing_transition_requirements"]
+    assert "validation_scale_runtime_detection_missing_required_names_empty" in audit["missing_transition_requirements"]
+    assert "validation_scale_runtime_detection_ready_count_covers_required_attacks" in audit["missing_transition_requirements"]
 
 
 @pytest.mark.quick

@@ -13,6 +13,7 @@ import json
 from pathlib import Path
 from typing import Any, Mapping
 
+from main.attacks.video_runtime_attack_protocol import VALIDATION_SCALE_RUNTIME_ATTACKS
 from main.protocol.flow_evidence_fields import with_flow_evidence_protocol_defaults
 from main.protocol.record_writer import write_json, write_jsonl
 from main.protocol.table_builder import write_csv
@@ -158,6 +159,29 @@ def _validation_scale_fair_gate_missing_requirements(source_payload: Mapping[str
         missing.append("validation_scale_data_split_and_leakage_guard_passed")
     if source_payload.get("full_paper_allowed") is not False:
         missing.append("validation_scale_must_not_allow_full_paper")
+
+    required_runtime_attack_names_raw = source_payload.get("required_runtime_attack_names")
+    required_runtime_attack_names = (
+        {str(item) for item in required_runtime_attack_names_raw if str(item)}
+        if isinstance(required_runtime_attack_names_raw, list)
+        else set()
+    )
+    expected_runtime_attack_names = set(VALIDATION_SCALE_RUNTIME_ATTACKS)
+    if source_payload.get("runtime_attack_protocol_decision") != "PASS":
+        missing.append("validation_scale_runtime_attack_protocol_passed")
+    if not expected_runtime_attack_names.issubset(required_runtime_attack_names):
+        missing.append("validation_scale_required_runtime_attacks_registered")
+    runtime_attack_missing_names = source_payload.get("runtime_attack_missing_required_names")
+    if not isinstance(runtime_attack_missing_names, list) or runtime_attack_missing_names:
+        missing.append("validation_scale_runtime_attack_missing_required_names_empty")
+    runtime_detection_missing_names = source_payload.get("runtime_detection_missing_required_names")
+    if not isinstance(runtime_detection_missing_names, list) or runtime_detection_missing_names:
+        missing.append("validation_scale_runtime_detection_missing_required_names_empty")
+    runtime_detection_ready_count = _safe_int(source_payload.get("runtime_detection_ready_count"))
+    if runtime_detection_ready_count is None:
+        missing.append("validation_scale_runtime_detection_ready_count_registered")
+    elif runtime_detection_ready_count < len(expected_runtime_attack_names):
+        missing.append("validation_scale_runtime_detection_ready_count_covers_required_attacks")
 
     if (_safe_int(source_payload.get("sstw_measured_formal_record_count")) or 0) <= 0:
         missing.append("validation_scale_sstw_measured_formal_records_ready")

@@ -839,11 +839,18 @@ def _score_from_videomark_temporal_entry(
     """从单个 VideoMark video key 下抽取与 runtime attack 对齐的分数。"""
 
     official_attack_key = _videomark_temporal_attack_key_for_runtime_attack(attack_name)
-    selected_payload: Any = entry
-    assignment_policy = "per_prompt_seed_mean_over_videomark_temporal_attacks"
-    if official_attack_key and isinstance(entry.get(official_attack_key), Mapping):
-        selected_payload = entry[official_attack_key]
-        assignment_policy = "per_prompt_seed_runtime_attack_mapped_to_videomark_temporal_attack"
+    if not official_attack_key:
+        raise RuntimeError(
+            "videomark_runtime_attack_not_supported_by_official_temporal_protocol:"
+            f"{attack_name}"
+        )
+    if not isinstance(entry.get(official_attack_key), Mapping):
+        raise KeyError(
+            "videomark_temporal_attack_key_missing:"
+            f"{official_attack_key}:video_key={video_key}:json={result_path}"
+        )
+    selected_payload: Any = entry[official_attack_key]
+    assignment_policy = "per_prompt_seed_runtime_attack_mapped_to_videomark_temporal_attack"
     decode_values = _collect_metric_values(selected_payload, "decode_acc")
     frame_values = _collect_metric_values(selected_payload, "frames_acc")
     if not decode_values:

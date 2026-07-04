@@ -326,3 +326,48 @@ def test_videomark_bundle_writer_uses_prompt_seed_attack_specific_key(tmp_path: 
     assert payload["official_score_formal_comparison_eligibility"] == "eligible"
     assert payload["official_clean_negative_score_granularity"] == "per_prompt_seed"
     assert payload["official_clean_negative_score_formal_comparison_eligibility"] == "eligible"
+
+
+@pytest.mark.quick
+def test_videomark_bundle_writer_rejects_unmapped_runtime_attack_without_aggregate_fallback(
+    tmp_path: Path,
+) -> None:
+    """VideoMark 不能把不支持的 runtime attack 退化为 temporal attack 均值。"""
+
+    run_root = tmp_path / "runs" / "generative_video_model_probe" / "validation_scale"
+    bundle_root = tmp_path / "bundles" / "validation_scale"
+    manifest_path = bundle_root / "videomark" / "official_reference_execution_manifest.json"
+    prompt_suite_path = tmp_path / "datasets" / "generative_video_prompt_suite" / "prompt_seed_suite.json"
+    temporal_path = tmp_path / "official_outputs" / "videomark" / "modelscope" / "512bit" / "temporal_results.json"
+    video_path = temporal_path.with_name("video_results.json")
+    clean_path = tmp_path / "official_clean_negative_outputs" / "without_watermark" / "modelscope" / "temporal_results.json"
+    _write_runtime_records(run_root)
+    records_path = run_root / "records" / "runtime_detection_records.jsonl"
+    record = json.loads(records_path.read_text(encoding="utf-8").splitlines()[0])
+    record["attack_name"] = "video_compression_runtime"
+    records_path.write_text(json.dumps(record, ensure_ascii=False) + "\n", encoding="utf-8")
+    _write_prompt_suite(prompt_suite_path)
+    _write_json(manifest_path, {"manifest_kind": "test_videomark_execution_manifest"})
+    prompt_text = "A small red toy car moves across a table with clear motion."
+    digest = hashlib.sha1(prompt_text.encode("utf-8")).hexdigest()[:12]
+    video_key = f"prompt_0000_{digest}_0"
+    _write_json(temporal_path, {video_key: {"frame drop": {"decode_acc": 0.7, "frames_acc": 0.5}}})
+    _write_json(video_path, {video_key: {"decode_acc": 0.9}})
+    _write_json(clean_path, {video_key: {"frame drop": {"decode_acc": 0.25, "frames_acc": 0.4}}})
+
+    result = write_videomark_official_bundle_records(
+        run_root=run_root,
+        bundle_root=bundle_root,
+        manifest_path=manifest_path,
+        temporal_results_json_path=temporal_path,
+        video_results_json_path=video_path,
+        model_name="modelscope",
+        clean_negative_results_json_path=clean_path,
+        prompt_suite_path=prompt_suite_path,
+    )
+
+    assert result["generated_bundle_record_count"] == 0
+    assert result["failed_bundle_record_count"] == 1
+    assert "videomark_runtime_attack_not_supported_by_official_temporal_protocol" in result["failures"][0]["failure_reason"]
+    record_path = bundle_root / "videomark" / "records" / "prompt_a__seed_0__video_compression_runtime.json"
+    assert not record_path.exists()

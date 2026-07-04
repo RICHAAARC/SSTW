@@ -31,7 +31,7 @@
   "minimum_test_seed_per_prompt": 4,
   "minimum_test_unique_video_count": 84,
   "minimum_unique_video_count": 168,
-  "paper_protocol_difference_from_full_paper": "sample_scale_only",
+  "paper_protocol_difference_from_full_paper": "sample_scale_target_fpr_and_attack_coverage",
   "paper_protocol_level": "paper_grade_protocol",
   "paper_result_level": "pilot_paper",
   "pilot_profile_names": [
@@ -88,5 +88,11 @@
     "gaussian_blur_runtime",
     "gaussian_noise_runtime"
   ],
-  "required_runtime_attack_protocol_note": "validation_scale 只要求三类核心 runtime attack; pilot_paper 扩展到代表性压缩、时间、空间和视觉退化攻击; full_paper 要求多类别、多强度和组合攻击, 用于顶会/顶刊级完整鲁棒性协议。"
+  "required_runtime_attack_protocol_note": "pilot_paper 使用代表性压缩、时间、空间和视觉退化 attack manifest, 用于以较小样本提前暴露 official baseline 适配、fixed-FPR 统计和 attack 覆盖缺口; full_paper 进一步扩展到多强度、组合攻击和非 runtime 自适应攻击协议。",
+  "runtime_attack_family_minimums": {
+    "compression": 1,
+    "temporal": 3,
+    "spatial_geometry": 2,
+    "visual_degradation": 2
+  }
 }

@@ -185,7 +185,7 @@ external_baseline_threshold 或 threshold
 {run_root}
 ```
 
-若命令未配置、项目内 clone / build / run / adapt / record 任一缺失, 或输出缺失, adapter 必须写出 unsupported / non-run record, 并使 `validation_scale`、`pilot_paper` 和 `full_paper` 相关检查失败。该设计保证 `pilot_paper` 与后续更大规模 paper 运行的差异只保留为样本规模和 FPR 评价级别, 而不是 baseline 协议缺口。
+若命令未配置、项目内 clone / build / run / adapt / record 任一缺失, 或输出缺失, adapter 必须写出 unsupported / non-run record, 并使 `validation_scale`、`pilot_paper` 和 `full_paper` 相关检查失败。该设计保证 `pilot_paper` 与后续更大规模 paper 运行的差异由 protocol config 显式记录; baseline 自包含产出规则不得存在协议缺口。
 
 ### 6. Notebook role 边界
 

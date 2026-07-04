@@ -62,7 +62,7 @@ artifact_rebuild_manifest
 
 ### 1.6 pilot_paper gate 设计
 
-full_paper 真实运行前必须先执行 pilot_paper gate。该 gate 会小规模跑完整 full_paper 协议并产出 pilot 级论文结果; 它不能直接允许 full_paper 主表, 但必须证明完整协议链路已经闭合, 包括 calibration / held-out split、external_baseline comparison、内部消融矩阵、claim audit 和 artifact rebuild 路径。
+full_paper 真实运行前必须先执行 pilot_paper gate。该 gate 会小规模跑代表性 paper 协议并产出 pilot 级论文结果; 它不能直接允许 full_paper 主表, 但必须证明完整协议链路已经闭合, 包括 calibration / held-out split、external_baseline comparison、内部消融矩阵、claim audit 和 artifact rebuild 路径。
 
 必须输入:
 

@@ -189,13 +189,17 @@ def test_pilot_paper_profile_constructs_medium_scale_low_fpr_plan(tmp_path: Path
     assert suite["pilot_paper_design"]["target_fpr"] == pilot_protocol["target_fpr"]
     assert suite["pilot_paper_design"]["blocked_target_fpr"] == pilot_protocol["blocked_target_fpr"]
     assert suite["pilot_paper_design"]["paper_result_level"] == "pilot_paper"
-    assert suite["pilot_paper_design"]["paper_protocol_difference_from_full_paper"] == "sample_scale_only"
+    assert suite["pilot_paper_design"]["paper_protocol_difference_from_full_paper"] == "sample_scale_target_fpr_and_attack_coverage"
     assert suite["pilot_paper_design"]["recommended_runtime_profile"] == "pilot_paper"
     assert suite["pilot_paper_design"]["threshold_protocol"] == "calibration_split_to_frozen_threshold_to_heldout_test_split"
     assert suite["pilot_paper_design"]["target_generation_video_count"] == 168
-    assert suite["pilot_paper_design"]["target_calibration_negative_event_count"] == 1008
-    assert suite["pilot_paper_design"]["target_heldout_test_negative_event_count"] == 1008
-    assert suite["pilot_paper_design"]["target_test_attacked_positive_event_count"] == 252
+    expected_attack_count = len(pilot_protocol["required_runtime_attack_names"])
+    expected_test_positive_count = 21 * 4 * expected_attack_count
+    assert suite["pilot_paper_design"]["target_runtime_attack_count"] == expected_attack_count
+    assert suite["pilot_paper_design"]["target_runtime_attack_names"] == pilot_protocol["required_runtime_attack_names"]
+    assert suite["pilot_paper_design"]["target_calibration_negative_event_count"] == expected_test_positive_count * 4
+    assert suite["pilot_paper_design"]["target_heldout_test_negative_event_count"] == expected_test_positive_count * 4
+    assert suite["pilot_paper_design"]["target_test_attacked_positive_event_count"] == expected_test_positive_count
     assert len(pilot_paper_prompts) == 21
     assert len(pilot_paper_seeds) == 8
     assert len(plan) == 168
@@ -1196,8 +1200,8 @@ def test_generative_video_drive_packager_creates_archive_and_manifest(tmp_path: 
         "claim_support_status": "pilot_paper_calibrated_heldout_claim_ready",
         "paper_result_level": "pilot_paper",
         "paper_protocol_level": "paper_grade_protocol",
-        "paper_protocol_difference_from_full_paper": "sample_scale_only",
-        "pilot_paper_protocol_matches_full_paper": True,
+        "paper_protocol_difference_from_full_paper": "sample_scale_target_fpr_and_attack_coverage",
+        "pilot_paper_protocol_matches_full_paper": False,
         "pilot_paper_claim_allowed": True,
         "pilot_paper_missing_requirement_count": 0,
         "threshold_protocol": "calibration_split_to_frozen_threshold_to_heldout_test_split",
@@ -1316,8 +1320,8 @@ def test_generative_video_drive_packager_creates_archive_and_manifest(tmp_path: 
     assert manifest["decision_summary"]["pilot_paper_claim_support_status"] == "pilot_paper_calibrated_heldout_claim_ready"
     assert manifest["decision_summary"]["pilot_paper_result_level"] == "pilot_paper"
     assert manifest["decision_summary"]["pilot_paper_protocol_level"] == "paper_grade_protocol"
-    assert manifest["decision_summary"]["pilot_paper_protocol_difference_from_full_paper"] == "sample_scale_only"
-    assert manifest["decision_summary"]["pilot_paper_protocol_matches_full_paper"] is True
+    assert manifest["decision_summary"]["pilot_paper_protocol_difference_from_full_paper"] == "sample_scale_target_fpr_and_attack_coverage"
+    assert manifest["decision_summary"]["pilot_paper_protocol_matches_full_paper"] is False
     assert manifest["decision_summary"]["pilot_paper_claim_allowed"] is True
     assert manifest["decision_summary"]["pilot_paper_missing_requirement_count"] == 0
     assert manifest["decision_summary"]["pilot_paper_threshold_protocol"] == "calibration_split_to_frozen_threshold_to_heldout_test_split"

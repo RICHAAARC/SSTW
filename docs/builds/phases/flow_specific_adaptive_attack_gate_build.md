@@ -195,7 +195,7 @@ artifacts/adaptive_attack_decision.json
 reports/adaptive_attack_report.md
 ```
 
-该 runner 覆盖 scheduler change、time grid jitter、wrong sampler replay、endpoint-path decoupling、path response cancellation 和 trajectory sketch replacement attempt。其作用是闭合 validation_scale 的 governed records 入口, 不是 full_paper Flow-specific adaptive robustness 证明。
+该 runner 覆盖 scheduler change、step count change、time grid jitter、wrong sampler replay、wrong prompt replay、wrong key attack、latent noise perturbation、VAE reencode attack、velocity projection suppression、endpoint-path decoupling、path response cancellation、replay signature mismatch、trajectory sketch replacement attempt 和 detector probing with public negatives。其作用是闭合 validation_scale 的 governed records 入口, 不是 full_paper Flow-specific adaptive robustness 证明。
 
 当前阶段边界更新为:
 

@@ -589,7 +589,7 @@ package
 
 ## 2026-06-24 pilot_paper FPR=0.01 工程入口
 
-当前 `generative_video_model_probe` 已新增 `pilot_paper` 语义层级, 用于在 validation_scale 通过并生成 validation_scale_to_pilot_paper_transition_decision 后执行小样本论文级结果包。该层级不是 workflow-only pilot, 而是小规模跑完整 full_paper 协议并产出 pilot 级论文结果。
+当前 `generative_video_model_probe` 已新增 `pilot_paper` 语义层级, 用于在 validation_scale 通过并生成 validation_scale_to_pilot_paper_transition_decision 后执行小样本论文级结果包。该层级不是 workflow-only pilot, 而是小规模跑代表性 paper 协议并产出 pilot 级论文结果。
 
 该阶段协议为:
 
@@ -615,7 +615,7 @@ Google Drive package manifest pilot_paper summary
 ```text
 paper_result_level: pilot_paper
 paper_protocol_level: paper_grade_protocol
-paper_protocol_difference_from_full_paper: sample_scale_only
+paper_protocol_difference_from_full_paper: sample_scale_target_fpr_and_attack_coverage
 prompt_count: 21
 seed_per_prompt: 8
 calibration_seed_per_prompt: 4
@@ -661,7 +661,7 @@ pilot_paper_internal_ablation_trace_count_min >= 84
 
 ### 2.12 现代视频水印 baseline 正式 adapter 要求
 
-`pilot_paper` 与后续更大规模 paper 运行的差异只允许是样本规模和 FPR 评价级别。因此 `validation_scale` 通过前必须完成完整现代 baseline 自包含执行链路, 并在小样本上通过项目内 clone / build / run / adapt / record 真实产出 comparison records。当前工程已接入以下正式 adapter 边界:
+`pilot_paper` 与后续更大规模 paper 运行的差异必须由 protocol config 显式记录, 不能变成 baseline 协议缺口。因此 `validation_scale` 通过前必须完成完整现代 baseline 自包含执行链路, 并在小样本上通过项目内 clone / build / run / adapt / record 真实产出 comparison records。当前工程已接入以下正式 adapter 边界:
 
 ```text
 videoshield

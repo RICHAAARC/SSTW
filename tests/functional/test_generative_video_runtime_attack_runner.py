@@ -10,6 +10,14 @@ import pytest
 
 from experiments.generative_video_model_probe.attack_runner import run_runtime_attacks
 from experiments.generative_video_model_probe.detection_runner import run_runtime_detection
+from main.attacks.video_runtime_attack_protocol import (
+    FULL_PAPER_NON_RUNTIME_ATTACK_PROTOCOLS,
+    FULL_PAPER_RUNTIME_ATTACKS,
+    PILOT_PAPER_RUNTIME_ATTACKS,
+    RUNTIME_ATTACK_FAMILY_MINIMUMS_BY_PROFILE,
+    apply_runtime_attack_to_frames,
+    audit_runtime_attack_protocol_config,
+)
 from main.protocol.record_writer import write_jsonl
 
 
@@ -107,3 +115,64 @@ def test_runtime_detection_runner_scores_attacked_videos(tmp_path: Path) -> None
     assert (run_root / "tables" / "runtime_detection_table.csv").exists()
     assert (run_root / "artifacts" / "runtime_detection_decision.json").exists()
     assert (run_root / "reports" / "runtime_detection_report.md").exists()
+
+
+@pytest.mark.quick
+def test_pilot_and_full_paper_attack_protocol_registers_top_tier_coverage() -> None:
+    """pilot/full paper 必须登记分层 attack manifest, 不能退回三类最小攻击。"""
+
+    pilot_audit = audit_runtime_attack_protocol_config(
+        {
+            "paper_result_level": "pilot_paper",
+            "required_runtime_attack_names": list(PILOT_PAPER_RUNTIME_ATTACKS),
+        }
+    )
+    full_audit = audit_runtime_attack_protocol_config(
+        {
+            "paper_result_level": "full_paper",
+            "required_runtime_attack_names": list(FULL_PAPER_RUNTIME_ATTACKS),
+            "required_non_runtime_attack_protocols": list(FULL_PAPER_NON_RUNTIME_ATTACK_PROTOCOLS),
+        }
+    )
+
+    assert pilot_audit["runtime_attack_protocol_decision"] == "PASS"
+    assert full_audit["runtime_attack_protocol_decision"] == "PASS"
+    assert set(PILOT_PAPER_RUNTIME_ATTACKS) < set(FULL_PAPER_RUNTIME_ATTACKS)
+    for family, minimum_count in RUNTIME_ATTACK_FAMILY_MINIMUMS_BY_PROFILE["full_paper"].items():
+        assert full_audit["runtime_attack_family_counts"][family] >= minimum_count
+    assert full_audit["missing_non_runtime_attack_protocols"] == []
+
+
+@pytest.mark.quick
+def test_new_top_tier_runtime_attack_transforms_are_executable_on_frames() -> None:
+    """新增顶会顶刊级轻量 attack 必须能在帧级协议入口执行。"""
+
+    import numpy as np
+
+    frames = []
+    for index in range(8):
+        frame = np.zeros((24, 24, 3), dtype=np.uint8)
+        frame[:, :, 0] = 20 + index
+        frame[4:20, 4:20, 1] = 120
+        frames.append(frame)
+
+    for attack_name in (
+        "temporal_clip_middle_runtime",
+        "frame_duplicate_runtime",
+        "spatial_corner_crop_resize_runtime",
+        "spatial_mask_runtime",
+        "salt_pepper_noise_runtime",
+        "color_jitter_runtime",
+        "jpeg_frame_compression_runtime",
+        "compression_noise_combined_runtime",
+    ):
+        attacked_frames, metadata = apply_runtime_attack_to_frames(frames, attack_name)
+        assert attacked_frames
+        assert metadata["attack_family"] in {
+            "temporal",
+            "spatial_geometry",
+            "visual_degradation",
+            "compression",
+            "combined",
+        }
+        assert metadata["runtime_attack_implementation_level"] == "repository_lightweight_runtime_transform"

@@ -33,6 +33,8 @@ def test_adaptive_attack_runner_writes_validation_proxy_records(tmp_path: Path) 
     assert audit["adaptive_robustness_claim_allowed"] is False
     assert all(record["claim_support_status"] == "validation_adaptive_attack_proxy_only" for record in records)
     assert any(record["adaptive_attack_name"] == "path_response_cancellation" for record in records)
+    assert any(record["adaptive_attack_name"] == "vae_reencode_attack" for record in records)
+    assert any(record["adaptive_attack_name"] == "detector_probing_with_public_negatives" for record in records)
     assert any(record["attack_knowledge_level"] == "white_box_oracle_limited_flow_attacker" for record in records)
     assert all(record["adaptive_negative_fpr"] is None for record in records)
     assert (run_root / "tables" / "adaptive_attack_table.csv").exists()

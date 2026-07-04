@@ -13,7 +13,10 @@ from experiments.generative_video_model_probe.formal_motion_claim_filter import 
     FORMAL_MOTION_CLAIM_READY_STATUSES,
     select_motion_claim_generation_records,
 )
-from main.attacks.video_runtime_attack_protocol import required_runtime_attack_names_from_config
+from main.attacks.video_runtime_attack_protocol import (
+    audit_runtime_attack_protocol_config,
+    required_runtime_attack_names_from_config,
+)
 from main.protocol.flow_evidence_fields import with_flow_evidence_protocol_defaults
 from main.protocol.record_writer import write_json, write_jsonl
 from main.protocol.table_builder import write_csv
@@ -85,6 +88,7 @@ def _load_config(config_path: str | Path = DEFAULT_VALIDATION_SCALE_CONFIG) -> d
         "minimum_seed_per_prompt": int(config.get("minimum_seed_per_prompt", DEFAULT_MINIMUM_SEED_PER_PROMPT)),
         "minimum_attack_count": int(config.get("minimum_attack_count", DEFAULT_MINIMUM_ATTACK_COUNT)),
         "required_runtime_attack_names": list(required_runtime_attack_names_from_config(config)),
+        "runtime_attack_protocol_audit": audit_runtime_attack_protocol_config(config),
         "minimum_clean_negative_count": int(config.get("minimum_clean_negative_count", 0)),
         "require_external_baseline_status_records": bool(config.get("require_external_baseline_status_records", True)),
         "require_external_baseline_comparison_records": bool(config.get("require_external_baseline_comparison_records", True)),
@@ -721,6 +725,7 @@ def build_validation_scale_gate_audit(
         "validation_motion_threshold_calibration_ready": (not config["require_motion_threshold_calibration_ready"]) or motion_threshold_ready,
         "validation_formal_motion_claim_ready": (not config["require_formal_motion_claim_ready"]) or formal_motion_claim_ready,
         "validation_motion_consistency_exclusion_report_ready": (not config["require_motion_consistency_exclusion_report"]) or motion_exclusion_ready,
+        "validation_runtime_attack_protocol_config_ready": config["runtime_attack_protocol_audit"]["runtime_attack_protocol_decision"] == "PASS",
         "validation_attack_records_ready": _decision_pass(runtime_attack_decision, "runtime_attack_decision")
         and attack_count >= config["minimum_attack_count"]
         and runtime_attack_required_ready,
@@ -779,6 +784,9 @@ def build_validation_scale_gate_audit(
         "motion_consistency_exclusion_excluded_count": motion_exclusion_excluded_count,
         "motion_consistency_exclusion_status": motion_exclusion_status,
         "runtime_attack_decision": runtime_attack_decision.get("runtime_attack_decision"),
+        "runtime_attack_protocol_decision": config["runtime_attack_protocol_audit"]["runtime_attack_protocol_decision"],
+        "runtime_attack_family_counts": config["runtime_attack_protocol_audit"]["runtime_attack_family_counts"],
+        "runtime_attack_missing_family_minimums": config["runtime_attack_protocol_audit"]["runtime_attack_missing_family_minimums"],
         "runtime_attack_ready_count": runtime_attack_ready_count,
         "runtime_attack_count": attack_count,
         "required_runtime_attack_names": sorted(config["required_runtime_attack_names"]),
@@ -862,6 +870,7 @@ def write_validation_scale_gate_audit(
         f"- validation_generation_record_count: {audit['validation_generation_record_count']}\n"
         f"- validation_prompt_count: {audit['validation_prompt_count']}\n"
         f"- validation_seed_per_prompt_min: {audit['validation_seed_per_prompt_min']}\n"
+        f"- runtime_attack_protocol_decision: {audit['runtime_attack_protocol_decision']}\n"
         f"- required_runtime_attack_names: {', '.join(audit['required_runtime_attack_names'])}\n"
         f"- runtime_attack_missing_required_names: {', '.join(audit['runtime_attack_missing_required_names']) if audit['runtime_attack_missing_required_names'] else 'none'}\n"
         f"- runtime_detection_missing_required_names: {', '.join(audit['runtime_detection_missing_required_names']) if audit['runtime_detection_missing_required_names'] else 'none'}\n"

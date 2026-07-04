@@ -36,6 +36,46 @@ VALIDATION_SCALE_RUNTIME_ATTACKS = (
     "frame_rate_resampling_runtime",
 )
 
+FULL_PAPER_RUNTIME_ATTACKS = (
+    "video_compression_runtime",
+    "h264_crf18_runtime",
+    "h264_crf23_runtime",
+    "h264_crf28_runtime",
+    "h264_crf33_runtime",
+    "h264_crf38_runtime",
+    "h265_crf23_runtime",
+    "h265_crf28_runtime",
+    "h265_crf33_runtime",
+    "mpeg4_crf28_runtime",
+    "mpeg4_q2_runtime",
+    "mpeg4_q8_runtime",
+    "jpeg_frame_compression_runtime",
+    "temporal_crop_runtime",
+    "temporal_clip_middle_runtime",
+    "frame_rate_resampling_runtime",
+    "frame_drop_uniform_runtime",
+    "frame_insert_duplicate_runtime",
+    "frame_duplicate_runtime",
+    "frame_swap_adjacent_runtime",
+    "frame_average_runtime",
+    "spatial_resize_runtime",
+    "spatial_crop_resize_runtime",
+    "spatial_corner_crop_resize_runtime",
+    "rotation_runtime",
+    "perspective_runtime",
+    "spatial_mask_runtime",
+    "gaussian_noise_runtime",
+    "salt_pepper_noise_runtime",
+    "gaussian_blur_runtime",
+    "median_blur_runtime",
+    "brightness_contrast_runtime",
+    "color_jitter_runtime",
+    "compression_crop_combined_runtime",
+    "compression_brightness_combined_runtime",
+    "compression_temporal_combined_runtime",
+    "compression_noise_combined_runtime",
+)
+
 PILOT_PAPER_RUNTIME_ATTACKS = (
     "video_compression_runtime",
     "temporal_crop_runtime",
@@ -47,28 +87,34 @@ PILOT_PAPER_RUNTIME_ATTACKS = (
     "gaussian_noise_runtime",
 )
 
-FULL_PAPER_RUNTIME_ATTACKS = (
-    "h264_crf23_runtime",
-    "h264_crf33_runtime",
-    "h265_crf28_runtime",
-    "mpeg4_crf28_runtime",
-    "temporal_crop_runtime",
-    "frame_rate_resampling_runtime",
-    "frame_drop_uniform_runtime",
-    "frame_insert_duplicate_runtime",
-    "frame_swap_adjacent_runtime",
-    "frame_average_runtime",
-    "spatial_resize_runtime",
-    "spatial_crop_resize_runtime",
-    "rotation_runtime",
-    "perspective_runtime",
-    "gaussian_noise_runtime",
-    "gaussian_blur_runtime",
-    "median_blur_runtime",
-    "brightness_contrast_runtime",
-    "compression_crop_combined_runtime",
-    "compression_brightness_combined_runtime",
-    "compression_temporal_combined_runtime",
+RUNTIME_ATTACK_FAMILY_MINIMUMS_BY_PROFILE: dict[str, dict[str, int]] = {
+    "validation_scale": {
+        "compression": 1,
+        "temporal": 2,
+    },
+    "pilot_paper": {
+        "compression": 1,
+        "temporal": 3,
+        "spatial_geometry": 2,
+        "visual_degradation": 2,
+    },
+    "full_paper": {
+        "compression": 8,
+        "temporal": 6,
+        "spatial_geometry": 5,
+        "visual_degradation": 6,
+        "combined": 4,
+    },
+}
+
+FULL_PAPER_NON_RUNTIME_ATTACK_PROTOCOLS = (
+    "generative_recompression_or_regeneration_attack",
+    "endpoint_preserving_path_perturbation_attack",
+    "flow_time_grid_mismatch_attack",
+    "wrong_sampler_replay_attack",
+    "wrong_prompt_replay_attack",
+    "wrong_key_attack",
+    "detector_probing_with_public_negatives",
 )
 
 
@@ -82,6 +128,15 @@ RUNTIME_ATTACK_SPECS: dict[str, RuntimeAttackSpec] = {
         video_writer_codec="libx264",
         video_writer_output_params=("-crf", "28"),
     ),
+    "h264_crf18_runtime": RuntimeAttackSpec(
+        "h264_crf18_runtime",
+        "compression",
+        "h264_reencode",
+        "crf_18",
+        "h264_light_quantization",
+        video_writer_codec="libx264",
+        video_writer_output_params=("-crf", "18"),
+    ),
     "h264_crf23_runtime": RuntimeAttackSpec(
         "h264_crf23_runtime",
         "compression",
@@ -90,6 +145,15 @@ RUNTIME_ATTACK_SPECS: dict[str, RuntimeAttackSpec] = {
         "h264_codec_quantization",
         video_writer_codec="libx264",
         video_writer_output_params=("-crf", "23"),
+    ),
+    "h264_crf28_runtime": RuntimeAttackSpec(
+        "h264_crf28_runtime",
+        "compression",
+        "h264_reencode",
+        "crf_28",
+        "h264_medium_quantization",
+        video_writer_codec="libx264",
+        video_writer_output_params=("-crf", "28"),
     ),
     "h264_crf33_runtime": RuntimeAttackSpec(
         "h264_crf33_runtime",
@@ -100,6 +164,24 @@ RUNTIME_ATTACK_SPECS: dict[str, RuntimeAttackSpec] = {
         video_writer_codec="libx264",
         video_writer_output_params=("-crf", "33"),
     ),
+    "h264_crf38_runtime": RuntimeAttackSpec(
+        "h264_crf38_runtime",
+        "compression",
+        "h264_reencode",
+        "crf_38",
+        "h264_heavy_quantization",
+        video_writer_codec="libx264",
+        video_writer_output_params=("-crf", "38"),
+    ),
+    "h265_crf23_runtime": RuntimeAttackSpec(
+        "h265_crf23_runtime",
+        "compression",
+        "h265_reencode",
+        "crf_23",
+        "h265_light_quantization",
+        video_writer_codec="libx265",
+        video_writer_output_params=("-crf", "23"),
+    ),
     "h265_crf28_runtime": RuntimeAttackSpec(
         "h265_crf28_runtime",
         "compression",
@@ -108,6 +190,15 @@ RUNTIME_ATTACK_SPECS: dict[str, RuntimeAttackSpec] = {
         "h265_codec_quantization",
         video_writer_codec="libx265",
         video_writer_output_params=("-crf", "28"),
+    ),
+    "h265_crf33_runtime": RuntimeAttackSpec(
+        "h265_crf33_runtime",
+        "compression",
+        "h265_reencode",
+        "crf_33",
+        "h265_heavy_quantization",
+        video_writer_codec="libx265",
+        video_writer_output_params=("-crf", "33"),
     ),
     "mpeg4_crf28_runtime": RuntimeAttackSpec(
         "mpeg4_crf28_runtime",
@@ -118,12 +209,44 @@ RUNTIME_ATTACK_SPECS: dict[str, RuntimeAttackSpec] = {
         video_writer_codec="mpeg4",
         video_writer_output_params=("-q:v", "5"),
     ),
+    "mpeg4_q2_runtime": RuntimeAttackSpec(
+        "mpeg4_q2_runtime",
+        "compression",
+        "mpeg4_reencode",
+        "qscale_2",
+        "mpeg4_light_quantization",
+        video_writer_codec="mpeg4",
+        video_writer_output_params=("-q:v", "2"),
+    ),
+    "mpeg4_q8_runtime": RuntimeAttackSpec(
+        "mpeg4_q8_runtime",
+        "compression",
+        "mpeg4_reencode",
+        "qscale_8",
+        "mpeg4_heavy_quantization",
+        video_writer_codec="mpeg4",
+        video_writer_output_params=("-q:v", "8"),
+    ),
+    "jpeg_frame_compression_runtime": RuntimeAttackSpec(
+        "jpeg_frame_compression_runtime",
+        "compression",
+        "per_frame_jpeg_roundtrip",
+        "jpeg_quality_55",
+        "intra_frame_quantization",
+    ),
     "temporal_crop_runtime": RuntimeAttackSpec(
         "temporal_crop_runtime",
         "temporal",
         "drop_first_and_last_frame_when_possible",
         "crop_boundary_frames",
         "temporal_boundary_shift",
+    ),
+    "temporal_clip_middle_runtime": RuntimeAttackSpec(
+        "temporal_clip_middle_runtime",
+        "temporal",
+        "remove_middle_clip_window_when_possible",
+        "middle_clip_ratio_0_20",
+        "temporal_clip_and_context_loss",
     ),
     "frame_rate_resampling_runtime": RuntimeAttackSpec(
         "frame_rate_resampling_runtime",
@@ -145,6 +268,13 @@ RUNTIME_ATTACK_SPECS: dict[str, RuntimeAttackSpec] = {
         "duplicate_middle_frame_when_possible",
         "single_frame_insert_duplicate",
         "temporal_frame_insertion",
+    ),
+    "frame_duplicate_runtime": RuntimeAttackSpec(
+        "frame_duplicate_runtime",
+        "temporal",
+        "duplicate_every_fourth_frame_when_possible",
+        "periodic_frame_duplication",
+        "temporal_hold_and_duration_shift",
     ),
     "frame_swap_adjacent_runtime": RuntimeAttackSpec(
         "frame_swap_adjacent_runtime",
@@ -174,6 +304,13 @@ RUNTIME_ATTACK_SPECS: dict[str, RuntimeAttackSpec] = {
         "center_crop_ratio_0_80",
         "spatial_crop_and_rescale",
     ),
+    "spatial_corner_crop_resize_runtime": RuntimeAttackSpec(
+        "spatial_corner_crop_resize_runtime",
+        "spatial_geometry",
+        "corner_crop_then_restore_resolution",
+        "corner_crop_ratio_0_85",
+        "off_center_spatial_crop_and_rescale",
+    ),
     "rotation_runtime": RuntimeAttackSpec(
         "rotation_runtime",
         "spatial_geometry",
@@ -188,12 +325,26 @@ RUNTIME_ATTACK_SPECS: dict[str, RuntimeAttackSpec] = {
         "horizontal_roll_2_pixels",
         "perspective_like_spatial_desynchronization",
     ),
+    "spatial_mask_runtime": RuntimeAttackSpec(
+        "spatial_mask_runtime",
+        "spatial_geometry",
+        "center_rectangle_mask",
+        "mask_ratio_0_20",
+        "spatial_occlusion_or_crop_drop_proxy",
+    ),
     "gaussian_noise_runtime": RuntimeAttackSpec(
         "gaussian_noise_runtime",
         "visual_degradation",
         "deterministic_gaussian_like_noise",
         "sigma_4_uint8",
         "pixel_value_noise",
+    ),
+    "salt_pepper_noise_runtime": RuntimeAttackSpec(
+        "salt_pepper_noise_runtime",
+        "visual_degradation",
+        "deterministic_salt_pepper_noise",
+        "probability_0_01",
+        "impulse_noise",
     ),
     "gaussian_blur_runtime": RuntimeAttackSpec(
         "gaussian_blur_runtime",
@@ -215,6 +366,13 @@ RUNTIME_ATTACK_SPECS: dict[str, RuntimeAttackSpec] = {
         "brightness_contrast_adjustment",
         "brightness_1_08_contrast_1_10",
         "global_color_value_shift",
+    ),
+    "color_jitter_runtime": RuntimeAttackSpec(
+        "color_jitter_runtime",
+        "visual_degradation",
+        "deterministic_channel_gain_and_offset",
+        "rgb_gain_1_06_0_96_1_02_offset_2",
+        "color_balance_shift",
     ),
     "compression_crop_combined_runtime": RuntimeAttackSpec(
         "compression_crop_combined_runtime",
@@ -243,6 +401,15 @@ RUNTIME_ATTACK_SPECS: dict[str, RuntimeAttackSpec] = {
         video_writer_codec="libx264",
         video_writer_output_params=("-crf", "28"),
     ),
+    "compression_noise_combined_runtime": RuntimeAttackSpec(
+        "compression_noise_combined_runtime",
+        "combined",
+        "decode_reencode_plus_gaussian_noise",
+        "h264_crf_28_and_sigma_4_noise",
+        "combined_codec_and_pixel_noise",
+        video_writer_codec="libx264",
+        video_writer_output_params=("-crf", "28"),
+    ),
 }
 
 
@@ -264,6 +431,72 @@ def required_runtime_attack_names_from_config(config: Mapping[str, Any]) -> tupl
     if isinstance(explicit, list) and explicit:
         return tuple(str(item) for item in explicit if str(item))
     return runtime_attack_names_for_profile(str(config.get("paper_result_level") or "validation_scale"))
+
+
+def audit_runtime_attack_protocol_config(config: Mapping[str, Any]) -> dict[str, Any]:
+    """审计 protocol config 中的 runtime attack 覆盖是否符合当前阶段要求。
+
+    该函数属于项目特定治理写法。普通工程只需要检查 attack 名称能否执行, 但
+    SSTW 的论文流程还需要防止 `full_paper` 或 `pilot_paper` 在配置层退化为
+    少量 easy attacks。因此这里按 profile 检查注册完整性、family 覆盖和
+    full-paper 非 runtime 自适应攻击协议登记。
+    """
+
+    profile = str(config.get("paper_result_level") or "validation_scale").strip() or "validation_scale"
+    attack_names = required_runtime_attack_names_from_config(config)
+    missing_registered_names = [name for name in attack_names if name not in RUNTIME_ATTACK_SPECS]
+    family_counts: dict[str, int] = {}
+    for name in attack_names:
+        if name not in RUNTIME_ATTACK_SPECS:
+            continue
+        family = RUNTIME_ATTACK_SPECS[name].attack_family
+        family_counts[family] = family_counts.get(family, 0) + 1
+
+    raw_family_minimums = config.get("runtime_attack_family_minimums")
+    family_minimums = (
+        {str(key): int(value) for key, value in raw_family_minimums.items()}
+        if isinstance(raw_family_minimums, Mapping)
+        else RUNTIME_ATTACK_FAMILY_MINIMUMS_BY_PROFILE.get(
+            profile,
+            RUNTIME_ATTACK_FAMILY_MINIMUMS_BY_PROFILE["validation_scale"],
+        )
+    )
+    missing_family_minimums = [
+        {
+            "attack_family": family,
+            "observed_count": int(family_counts.get(family, 0)),
+            "required_minimum_count": int(required_count),
+        }
+        for family, required_count in sorted(family_minimums.items())
+        if int(family_counts.get(family, 0)) < int(required_count)
+    ]
+
+    raw_non_runtime_required = config.get("required_non_runtime_attack_protocols", [])
+    non_runtime_required = (
+        tuple(str(item) for item in raw_non_runtime_required if str(item))
+        if isinstance(raw_non_runtime_required, list)
+        else ()
+    )
+    missing_non_runtime = []
+    if profile == "full_paper":
+        missing_non_runtime = sorted(set(FULL_PAPER_NON_RUNTIME_ATTACK_PROTOCOLS) - set(non_runtime_required))
+
+    decision = "PASS" if not missing_registered_names and not missing_family_minimums and not missing_non_runtime else "FAIL"
+    return {
+        "runtime_attack_protocol_decision": decision,
+        "paper_result_level": profile,
+        "required_runtime_attack_count": len(attack_names),
+        "required_runtime_attack_names": list(attack_names),
+        "runtime_attack_family_counts": dict(sorted(family_counts.items())),
+        "runtime_attack_family_minimums": family_minimums,
+        "runtime_attack_missing_registered_names": missing_registered_names,
+        "runtime_attack_missing_family_minimums": missing_family_minimums,
+        "required_non_runtime_attack_protocols": list(non_runtime_required),
+        "missing_non_runtime_attack_protocols": missing_non_runtime,
+        "top_tier_attack_protocol_status": "top_tier_runtime_and_adaptive_protocol_registered"
+        if decision == "PASS" and profile in {"pilot_paper", "full_paper"}
+        else "runtime_attack_protocol_needs_completion",
+    }
 
 
 def runtime_attack_spec(attack_name: str) -> RuntimeAttackSpec:
@@ -348,6 +581,36 @@ def _spatial_crop_resize(frames: list[Any], crop_ratio: float = 0.80) -> list[An
     return attacked
 
 
+def _spatial_corner_crop_resize(frames: list[Any], crop_ratio: float = 0.85) -> list[Any]:
+    """左上角裁剪后恢复分辨率, 用于覆盖 off-center crop 类攻击。"""
+
+    attacked: list[Any] = []
+    for frame in frames:
+        array = _to_numpy(frame)
+        height, width = int(array.shape[0]), int(array.shape[1])
+        crop_h = max(1, int(height * crop_ratio))
+        crop_w = max(1, int(width * crop_ratio))
+        cropped = array[:crop_h, :crop_w]
+        attacked.append(_resize_frame(cropped, (width, height)).astype(array.dtype))
+    return attacked
+
+
+def _spatial_mask(frames: list[Any]) -> list[Any]:
+    """在中心区域加入确定性遮挡, 近似 crop-and-drop / spatial mask 攻击。"""
+
+    attacked: list[Any] = []
+    for frame in frames:
+        array = _to_numpy(frame).copy()
+        height, width = int(array.shape[0]), int(array.shape[1])
+        mask_h = max(1, int(height * 0.20))
+        mask_w = max(1, int(width * 0.20))
+        top = max(0, (height - mask_h) // 2)
+        left = max(0, (width - mask_w) // 2)
+        array[top : top + mask_h, left : left + mask_w] = 0
+        attacked.append(array)
+    return attacked
+
+
 def _rotate_frames(frames: list[Any]) -> list[Any]:
     """小角度旋转帧, 用于空间同步扰动。"""
 
@@ -392,6 +655,60 @@ def _gaussian_noise(frames: list[Any]) -> list[Any]:
     return attacked
 
 
+def _salt_pepper_noise(frames: list[Any]) -> list[Any]:
+    """添加确定性 salt-and-pepper 噪声, 用于覆盖 impulse noise 攻击。"""
+
+    import numpy as np
+
+    rng = np.random.default_rng(20260704)
+    attacked: list[Any] = []
+    for frame in frames:
+        array = _to_numpy(frame).copy()
+        mask = rng.random(array.shape[:2])
+        salt = mask < 0.005
+        pepper = (mask >= 0.005) & (mask < 0.010)
+        array[salt] = 255
+        array[pepper] = 0
+        attacked.append(array.astype(_to_numpy(frame).dtype))
+    return attacked
+
+
+def _color_jitter(frames: list[Any]) -> list[Any]:
+    """执行确定性通道增益和偏移, 避免随机增强影响可复现性。"""
+
+    import numpy as np
+
+    gains = np.asarray([1.06, 0.96, 1.02], dtype=np.float32)
+    attacked: list[Any] = []
+    for frame in frames:
+        array = _to_numpy(frame).astype(np.float32)
+        if array.ndim >= 3 and array.shape[-1] >= 3:
+            array[..., :3] = array[..., :3] * gains + 2.0
+        else:
+            array = array * 1.03 + 2.0
+        attacked.append(_clip_like_uint8(array).astype(_to_numpy(frame).dtype))
+    return attacked
+
+
+def _jpeg_frame_compression(frames: list[Any], quality: int = 55) -> list[Any]:
+    """对每帧执行 JPEG 内存往返压缩, 模拟平台抽帧压缩。"""
+
+    import io
+    import numpy as np
+    from PIL import Image
+
+    attacked: list[Any] = []
+    for frame in frames:
+        array = _to_numpy(frame)
+        image = Image.fromarray(array.astype(np.uint8))
+        buffer = io.BytesIO()
+        image.save(buffer, format="JPEG", quality=quality)
+        buffer.seek(0)
+        restored = Image.open(buffer).convert(image.mode)
+        attacked.append(np.asarray(restored).astype(array.dtype))
+    return attacked
+
+
 def apply_runtime_attack_to_frames(frames: list[Any], attack_name: str) -> tuple[list[Any], dict[str, Any]]:
     """对解码帧执行指定 runtime attack。
 
@@ -407,14 +724,30 @@ def apply_runtime_attack_to_frames(frames: list[Any], attack_name: str) -> tuple
 
     if normalized in {
         "video_compression_runtime",
+        "h264_crf18_runtime",
         "h264_crf23_runtime",
+        "h264_crf28_runtime",
         "h264_crf33_runtime",
+        "h264_crf38_runtime",
+        "h265_crf23_runtime",
         "h265_crf28_runtime",
+        "h265_crf33_runtime",
         "mpeg4_crf28_runtime",
+        "mpeg4_q2_runtime",
+        "mpeg4_q8_runtime",
     }:
         attacked = list(frames)
+    elif normalized == "jpeg_frame_compression_runtime":
+        attacked = _jpeg_frame_compression(frames)
     elif normalized == "temporal_crop_runtime":
         attacked = frames[1:-1] if len(frames) >= 4 else list(frames)
+    elif normalized == "temporal_clip_middle_runtime":
+        if len(frames) >= 6:
+            clip_len = max(1, int(len(frames) * 0.20))
+            start = max(1, (len(frames) - clip_len) // 2)
+            attacked = list(frames[:start]) + list(frames[start + clip_len :])
+        else:
+            attacked = list(frames)
     elif normalized == "frame_rate_resampling_runtime":
         attacked = frames[::2] if len(frames) >= 3 else list(frames)
     elif normalized == "frame_drop_uniform_runtime":
@@ -422,6 +755,12 @@ def apply_runtime_attack_to_frames(frames: list[Any], attack_name: str) -> tuple
     elif normalized == "frame_insert_duplicate_runtime":
         midpoint = max(0, len(frames) // 2)
         attacked = list(frames[:midpoint]) + [frames[midpoint]] + list(frames[midpoint:])
+    elif normalized == "frame_duplicate_runtime":
+        attacked = []
+        for index, frame in enumerate(frames):
+            attacked.append(frame)
+            if (index + 1) % 4 == 0:
+                attacked.append(frame)
     elif normalized == "frame_swap_adjacent_runtime":
         attacked = list(frames)
         if len(attacked) >= 4:
@@ -441,24 +780,34 @@ def apply_runtime_attack_to_frames(frames: list[Any], attack_name: str) -> tuple
         attacked = _spatial_resize(frames)
     elif normalized == "spatial_crop_resize_runtime":
         attacked = _spatial_crop_resize(frames)
+    elif normalized == "spatial_corner_crop_resize_runtime":
+        attacked = _spatial_corner_crop_resize(frames)
     elif normalized == "rotation_runtime":
         attacked = _rotate_frames(frames)
     elif normalized == "perspective_runtime":
         import numpy as np
 
         attacked = [np.roll(_to_numpy(frame), shift=2, axis=1).astype(_to_numpy(frame).dtype) for frame in frames]
+    elif normalized == "spatial_mask_runtime":
+        attacked = _spatial_mask(frames)
     elif normalized == "gaussian_noise_runtime":
         attacked = _gaussian_noise(frames)
+    elif normalized == "salt_pepper_noise_runtime":
+        attacked = _salt_pepper_noise(frames)
     elif normalized in {"gaussian_blur_runtime", "median_blur_runtime"}:
         attacked = [_blur_frame(frame, normalized) for frame in frames]
     elif normalized == "brightness_contrast_runtime":
         attacked = _brightness_contrast(frames)
+    elif normalized == "color_jitter_runtime":
+        attacked = _color_jitter(frames)
     elif normalized == "compression_crop_combined_runtime":
         attacked = _spatial_crop_resize(frames)
     elif normalized == "compression_brightness_combined_runtime":
         attacked = _brightness_contrast(frames)
     elif normalized == "compression_temporal_combined_runtime":
         attacked = [frame for index, frame in enumerate(frames) if (index + 1) % 3 != 0] or list(frames)
+    elif normalized == "compression_noise_combined_runtime":
+        attacked = _gaussian_noise(frames)
     else:  # pragma: no cover - runtime_attack_spec 已经先行阻断未知名称。
         raise ValueError(f"unsupported_runtime_attack:{attack_name}")
 
@@ -487,14 +836,29 @@ def apply_runtime_attack_to_video_tensor(video: Any, attack_name: str) -> Any:
     normalized = spec.attack_name
     if normalized in {
         "video_compression_runtime",
+        "h264_crf18_runtime",
         "h264_crf23_runtime",
+        "h264_crf28_runtime",
         "h264_crf33_runtime",
+        "h264_crf38_runtime",
+        "h265_crf23_runtime",
         "h265_crf28_runtime",
+        "h265_crf33_runtime",
         "mpeg4_crf28_runtime",
+        "mpeg4_q2_runtime",
+        "mpeg4_q8_runtime",
     }:
         return video
+    if normalized == "jpeg_frame_compression_runtime":
+        return _tensor_quantize(video, levels=64)
     if normalized == "temporal_crop_runtime":
         return video[1:-1] if video.shape[0] >= 4 else video
+    if normalized == "temporal_clip_middle_runtime":
+        if video.shape[0] >= 6:
+            clip_len = max(1, int(video.shape[0] * 0.20))
+            start = max(1, (int(video.shape[0]) - clip_len) // 2)
+            return _tensor_concat([video[:start], video[start + clip_len :]])
+        return video
     if normalized in {"frame_rate_resampling_runtime", "compression_temporal_combined_runtime"}:
         return video[::2] if video.shape[0] >= 3 else video
     if normalized == "frame_drop_uniform_runtime":
@@ -503,6 +867,13 @@ def apply_runtime_attack_to_video_tensor(video: Any, attack_name: str) -> Any:
     if normalized == "frame_insert_duplicate_runtime":
         midpoint = max(0, int(video.shape[0]) // 2)
         return _tensor_concat([video[:midpoint], video[midpoint : midpoint + 1], video[midpoint:]])
+    if normalized == "frame_duplicate_runtime":
+        parts = []
+        for index in range(int(video.shape[0])):
+            parts.append(video[index : index + 1])
+            if (index + 1) % 4 == 0:
+                parts.append(video[index : index + 1])
+        return _tensor_concat(parts) if parts else video
     if normalized == "frame_swap_adjacent_runtime":
         output = video.clone() if hasattr(video, "clone") else video.copy()
         if output.shape[0] >= 4:
@@ -518,14 +889,24 @@ def apply_runtime_attack_to_video_tensor(video: Any, attack_name: str) -> Any:
         return output
     if normalized in {"spatial_resize_runtime", "spatial_crop_resize_runtime", "compression_crop_combined_runtime"}:
         return _tensor_center_crop(video, crop_ratio=0.80 if "crop" in normalized else 0.75)
+    if normalized == "spatial_corner_crop_resize_runtime":
+        return _tensor_corner_crop(video, crop_ratio=0.85)
     if normalized in {"rotation_runtime", "perspective_runtime"}:
         return _tensor_roll(video, shift=2)
+    if normalized == "spatial_mask_runtime":
+        return _tensor_spatial_mask(video)
     if normalized == "gaussian_noise_runtime":
         return _tensor_add_noise(video)
+    if normalized == "salt_pepper_noise_runtime":
+        return _tensor_salt_pepper(video)
     if normalized in {"gaussian_blur_runtime", "median_blur_runtime"}:
         return _tensor_average_blur(video)
     if normalized in {"brightness_contrast_runtime", "compression_brightness_combined_runtime"}:
         return _tensor_brightness_contrast(video)
+    if normalized == "color_jitter_runtime":
+        return _tensor_color_jitter(video)
+    if normalized == "compression_noise_combined_runtime":
+        return _tensor_add_noise(video)
     raise ValueError(f"unsupported_runtime_attack:{attack_name}")
 
 
@@ -573,6 +954,54 @@ def _tensor_center_crop(video: Any, crop_ratio: float) -> Any:
     return np.asarray(restored).astype(video.dtype)
 
 
+def _tensor_corner_crop(video: Any, crop_ratio: float) -> Any:
+    """对 T-first 张量做左上角裁剪并恢复原分辨率。"""
+
+    shape = video.shape
+    if len(shape) < 4:
+        return video
+    height_axis, width_axis = (-2, -1) if shape[1] in {1, 3, 4} else (1, 2)
+    height, width = int(shape[height_axis]), int(shape[width_axis])
+    crop_h = max(1, int(height * crop_ratio))
+    crop_w = max(1, int(width * crop_ratio))
+    if height_axis == -2:
+        cropped = video[..., :crop_h, :crop_w]
+    else:
+        cropped = video[:, :crop_h, :crop_w, ...]
+    if hasattr(video, "new_empty"):
+        import torch.nn.functional as F
+
+        channels_first = cropped if height_axis == -2 else cropped.permute(0, 3, 1, 2)
+        resized = F.interpolate(channels_first.float(), size=(height, width), mode="bilinear", align_corners=False)
+        resized = resized.to(dtype=video.dtype)
+        return resized if height_axis == -2 else resized.permute(0, 2, 3, 1)
+    import numpy as np
+
+    frames = [frame for frame in cropped]
+    restored = [_resize_frame(frame, (width, height)) for frame in frames]
+    return np.asarray(restored).astype(video.dtype)
+
+
+def _tensor_spatial_mask(video: Any) -> Any:
+    """对 T-first 张量中心区域加遮挡。"""
+
+    output = video.clone() if hasattr(video, "clone") else video.copy()
+    shape = output.shape
+    if len(shape) < 4:
+        return output
+    height_axis, width_axis = (-2, -1) if shape[1] in {1, 3, 4} else (1, 2)
+    height, width = int(shape[height_axis]), int(shape[width_axis])
+    mask_h = max(1, int(height * 0.20))
+    mask_w = max(1, int(width * 0.20))
+    top = max(0, (height - mask_h) // 2)
+    left = max(0, (width - mask_w) // 2)
+    if height_axis == -2:
+        output[..., top : top + mask_h, left : left + mask_w] = 0
+    else:
+        output[:, top : top + mask_h, left : left + mask_w, ...] = 0
+    return output
+
+
 def _tensor_roll(video: Any, shift: int) -> Any:
     """对张量做水平 roll, 作为轻量几何扰动。"""
 
@@ -599,6 +1028,29 @@ def _tensor_add_noise(video: Any) -> Any:
     return np.clip(video.astype("float32") + rng.normal(0.0, 4.0, size=video.shape), 0, 255).astype(video.dtype)
 
 
+def _tensor_salt_pepper(video: Any) -> Any:
+    """对张量添加确定性 impulse noise。"""
+
+    if hasattr(video, "new_empty"):
+        import torch
+
+        generator = torch.Generator(device=video.device)
+        generator.manual_seed(20260704)
+        mask = torch.rand(video.shape, generator=generator, device=video.device)
+        output = video.clone()
+        output = torch.where(mask < 0.005, torch.ones_like(output), output)
+        output = torch.where((mask >= 0.005) & (mask < 0.010), torch.zeros_like(output), output)
+        return output
+    import numpy as np
+
+    rng = np.random.default_rng(20260704)
+    mask = rng.random(video.shape)
+    output = video.copy()
+    output[mask < 0.005] = 255
+    output[(mask >= 0.005) & (mask < 0.010)] = 0
+    return output.astype(video.dtype)
+
+
 def _tensor_average_blur(video: Any) -> Any:
     """使用平均池化近似 blur。"""
 
@@ -621,3 +1073,43 @@ def _tensor_brightness_contrast(video: Any) -> Any:
 
     mean = video.mean()
     return np.clip(((video.astype("float32") - mean) * 1.10 + mean) * 1.08, 0, 255).astype(video.dtype)
+
+
+def _tensor_color_jitter(video: Any) -> Any:
+    """对张量执行确定性颜色扰动。"""
+
+    if hasattr(video, "new_empty"):
+        output = video.clone()
+        if output.shape[1] in {3, 4}:
+            output[:, 0] = output[:, 0] * 1.06 + 0.01
+            output[:, 1] = output[:, 1] * 0.96 + 0.01
+            output[:, 2] = output[:, 2] * 1.02 + 0.01
+        elif output.shape[-1] in {3, 4}:
+            output[..., 0] = output[..., 0] * 1.06 + 0.01
+            output[..., 1] = output[..., 1] * 0.96 + 0.01
+            output[..., 2] = output[..., 2] * 1.02 + 0.01
+        else:
+            output = output * 1.03 + 0.01
+        return output.clamp(0.0, 1.0)
+    import numpy as np
+
+    output = video.astype("float32").copy()
+    if output.shape[-1] in {3, 4}:
+        output[..., 0] = output[..., 0] * 1.06 + 2.0
+        output[..., 1] = output[..., 1] * 0.96 + 2.0
+        output[..., 2] = output[..., 2] * 1.02 + 2.0
+    else:
+        output = output * 1.03 + 2.0
+    return np.clip(output, 0, 255).astype(video.dtype)
+
+
+def _tensor_quantize(video: Any, levels: int) -> Any:
+    """使用离散量化近似 JPEG 压缩带来的像素值损失。"""
+
+    levels = max(2, int(levels))
+    if hasattr(video, "new_empty"):
+        return (video * levels).round().div(levels).clamp(0.0, 1.0)
+    import numpy as np
+
+    step = max(1, 256 // levels)
+    return (np.round(video.astype("float32") / step) * step).clip(0, 255).astype(video.dtype)

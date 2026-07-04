@@ -1,4 +1,4 @@
-﻿import json
+import json
 from pathlib import Path
 
 import pytest
@@ -7,10 +7,11 @@ from experiments.generative_video_model_probe.pilot_paper_gate import (
     build_pilot_paper_gate_audit,
     write_pilot_paper_gate_audit,
 )
+from main.attacks.video_runtime_attack_protocol import PILOT_PAPER_RUNTIME_ATTACKS
 from main.protocol.record_writer import write_json, write_jsonl
 
 
-ATTACKS = ("video_compression_runtime", "temporal_crop_runtime", "frame_rate_resampling_runtime")
+ATTACKS = PILOT_PAPER_RUNTIME_ATTACKS
 NEGATIVE_FAMILIES = ("wrong_key_control", "without_key_control", "wrong_sampler_replay", "trajectory_time_shuffle_control")
 CALIBRATION_SEEDS = tuple(f"seed_calibration_{index:02d}" for index in range(4))
 TEST_SEEDS = tuple(f"seed_test_{index:02d}" for index in range(4))
@@ -468,7 +469,7 @@ def test_pilot_paper_gate_cannot_disable_validation_scale_fairness_prerequisites
         "blocked_target_fpr": 0.001,
         "paper_result_level": "pilot_paper",
         "paper_protocol_level": "paper_grade_protocol",
-        "paper_protocol_difference_from_full_paper": "sample_scale_only",
+        "paper_protocol_difference_from_full_paper": "sample_scale_target_fpr_and_attack_coverage",
         "minimum_prompt_count": 0,
         "minimum_seed_per_prompt": 0,
         "minimum_calibration_seed_per_prompt": 0,
@@ -542,8 +543,8 @@ def test_pilot_paper_gate_passes_calibrated_heldout_fixture(tmp_path: Path) -> N
     assert audit["claim_support_status"] == "pilot_paper_calibrated_heldout_claim_ready"
     assert audit["paper_result_level"] == "pilot_paper"
     assert audit["paper_protocol_level"] == "paper_grade_protocol"
-    assert audit["paper_protocol_difference_from_full_paper"] == "sample_scale_only"
-    assert audit["pilot_paper_protocol_matches_full_paper"] is True
+    assert audit["paper_protocol_difference_from_full_paper"] == "sample_scale_target_fpr_and_attack_coverage"
+    assert audit["pilot_paper_protocol_matches_full_paper"] is False
     assert audit["pilot_paper_hard_required_config_missing_count"] == 0
     assert audit["validation_scale_gate_decision"] == "PASS"
     assert audit["validation_scale_to_pilot_paper_transition_decision"] == "PASS"
@@ -575,13 +576,14 @@ def test_pilot_paper_gate_passes_calibrated_heldout_fixture(tmp_path: Path) -> N
     assert audit["pilot_paper_test_unique_video_count"] == 84
     assert audit["pilot_paper_calibration_seed_per_prompt_min"] == 4
     assert audit["pilot_paper_test_seed_per_prompt_min"] == 4
-    assert audit["calibration_negative_event_count"] == 1008
-    assert audit["heldout_test_negative_event_count"] == 1008
-    assert audit["heldout_attacked_positive_event_count"] == 252
+    expected_attacked_positive_count = 84 * len(ATTACKS)
+    assert audit["calibration_negative_event_count"] == expected_attacked_positive_count * len(NEGATIVE_FAMILIES)
+    assert audit["heldout_test_negative_event_count"] == expected_attacked_positive_count * len(NEGATIVE_FAMILIES)
+    assert audit["heldout_attacked_positive_event_count"] == expected_attacked_positive_count
     assert audit["calibration_negative_family_count"] == 4
     assert audit["heldout_negative_family_count"] == 4
-    assert audit["calibration_negative_event_count_per_family_min"] == 252
-    assert audit["heldout_negative_event_count_per_family_min"] == 252
+    assert audit["calibration_negative_event_count_per_family_min"] == expected_attacked_positive_count
+    assert audit["heldout_negative_event_count_per_family_min"] == expected_attacked_positive_count
     assert audit["attack_event_count_per_attack_min"] == 84
     assert audit["calibration_negative_fpr_at_threshold"] <= audit["target_fpr"]
     assert audit["heldout_negative_fpr_at_threshold"] <= audit["target_fpr"]

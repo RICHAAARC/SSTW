@@ -44,7 +44,7 @@ reproducibility_evidence_sufficient
 |---|---:|---|---|---|
 | `method_mechanism_validation` | 不固定 | 最小机制样本 | 验证 SSTW 方法机制、状态空间证据、轨迹观测和基础 runner 是否可运行。 | 否 |
 | `validation_scale` | `0.10` | 小样本 | 小样本全流程打通验证, 属于 paper 级前的全流程打通层。它必须产出与论文协议同构的 records、tables、figures、reports、manifests、baseline、消融、attack、CI 和 artifact rebuild 文件, 用于提前发现 pilot_paper / full_paper 的阻断。 | 否 |
-| `pilot_paper` | `0.01` | 小规模论文协议 | 以较小成本产出 FPR=1% 级别的 paper 协议结果, 检查 full_paper 同构协议在真实模型上的可报告性。 | 仅允许 pilot 级主张 |
+| `pilot_paper` | `0.01` | 小规模论文协议 | 以较小成本产出 FPR=1% 级别的代表性 paper 协议结果, 检查真实模型、baseline、消融和 fixed-FPR 统计是否具备扩展到 full_paper 的可报告性。 | 仅允许 pilot 级主张 |
 | `full_paper` | `0.001` | 正式规模论文协议 | 产出 FPR=0.1% 级别正式论文主结果, 包含主表、主图、CI、claim audit、artifact rebuild 和 reviewer evidence index。 | 是 |
 
 `validation_scale` 是进入 `pilot_paper` 和后续 `full_paper` 流程的硬门禁。它通过只说明论文协议产物链路已经小样本跑通, 不说明 SSTW 的效果已经达到投稿主张。进入 `pilot_paper` 还必须在 `validation_scale` PASS 后生成 `validation_scale_to_pilot_paper_transition_decision`。`validation_scale` 是 `full_paper` 的必要条件但不是充分条件; `full_paper` 仍需要 `pilot_paper_gate`、`pilot_paper_to_full_paper_transition_decision`、`full_paper_result_checker`、CI、claim audit、artifact rebuild 和 submission freeze 相关检查通过。
@@ -197,8 +197,10 @@ wrong_key_attack
 当前工程协议采用三层 attack 要求:
 
 - `validation_scale`: `video_compression_runtime`、`temporal_crop_runtime`、`frame_rate_resampling_runtime`, 只用于小样本全流程打通和公平比较门禁。
-- `pilot_paper`: 增加 `frame_drop_uniform_runtime`、`spatial_resize_runtime`、`spatial_crop_resize_runtime`、`gaussian_blur_runtime`、`gaussian_noise_runtime`, 用于代表性论文协议试运行。
-- `full_paper`: 使用多强度压缩、完整时间扰动、空间几何、视觉退化和组合攻击。此层级才可支撑顶会 / 顶刊级“完整鲁棒性”讨论。
+- `pilot_paper`: 使用代表性压缩、时间、空间和视觉退化 attack manifest。其作用是以较小样本提前暴露 official baseline 适配、fixed-FPR 统计和 attack 覆盖缺口。
+- `full_paper`: 使用多强度压缩、完整时间扰动、空间几何、视觉退化、组合攻击和非 runtime 自适应攻击协议。此层级才可支撑顶会 / 顶刊级“完整鲁棒性”讨论。
+
+`pilot_paper` 和 `full_paper` 的 runtime attack manifest 都必须从 protocol config 读取, 不应由 Notebook 手工缩减。若需要临时调试, 只能使用 helper 或 dry-run profile, 其产物不得进入 paper gate。
 
 如果 flow-specific adaptive attack 未完成, 必须降级 adaptive robustness claim, 不能把普通视频攻击结果写成 Flow-specific robustness。
 

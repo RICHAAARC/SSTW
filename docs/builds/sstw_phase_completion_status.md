@@ -30,11 +30,11 @@
 | `motion_threshold_calibration` | 已完成 engineering calibration | 已有 `motion_delta_calibrated_v1` 可作 pilot guardrail。 | 不是论文级 `TPR@FPR=0.001` fixed-FPR 证据。 | full_paper 前补齐更大 held-out negative 和 CI。 | 影响 motion claim 样本资格过滤。 |
 | `small_scale_mechanism_pilot_check` | 已完成 small-scale pilot, 作为 mechanism_validation 子检查保留 | 最新 Wan2.1 pilot 原生复跑已达到 16/16 eligible、seed_per_prompt_min=2、runtime attack/detection 48/48 ready、pilot_gate_decision=PASS。 | 它只判断机制是否值得继续, 不是主干门禁, 也不是 paper 级结果包。 | 进入 validation_scale 小样本全流程打通验证, 并保留 small-scale pilot 作为工作流证据。 | 只能解除 validation_scale 的机制前置缺口, 不能直接放行 pilot_paper 或 full_paper。 |
 | `validation_scale` | paper 级前小样本全流程打通门禁已完成硬阻断实现, 真实运行待复跑 | 已重新定义为 FPR=10% 小样本全流程打通层, 必须闭合完整现代 external_baseline formal records、内部消融、adaptive attack、replay/sketch 或受治理 Claim-3 downgrade、CI、tables、figures、reports、manifests、artifact rebuild 和 claim audit。 | 真实 validation_scale 结果尚未生成; 5 个主实验现代 baseline 仍需由本项目 clone / build / run / adapt / record 产出 measured_formal, 不接受外部补交结果。 | 先配置并运行现代 baseline 自包含产出链路, 然后在 Colab 中运行 `PROFILE = validation_scale`。 | 通过并生成 validation_scale_to_pilot_paper_transition_decision 后才允许进入 pilot_paper 或继续准备 full_paper; 但 full_paper claim 仍需 pilot_paper、full_paper_result_checker 和轻量判定通过。若 baseline / ablation / replay / CI / artifact rebuild 任一缺失, 不得进入 paper 级结果运行。 |
-| `pilot_paper` | 工程入口已完成, 真实 GPU 结果待运行 | 已按 full_paper 同构协议接入 21 prompt × 8 seed、calibration split、frozen threshold artifact、held-out test split、完整现代 external_baseline 自包含 measured_formal adapter 前置检查、内部消融矩阵前置检查和 claim audit。 | 真实 Wan2.1 GPU 结果尚未生成; 5 个主实验现代 baseline 需要在 Colab / 本地通过项目内 clone / build / run / adapt / record 后才能产出 measured_formal。 | 在 validation_scale 通过并生成 validation_scale_to_pilot_paper_transition_decision 后运行 `PROFILE = pilot_paper`, 审计 `pilot_paper_calibrated_heldout_claim_ready`, 同时要求 `modern_external_baseline_formal_measured_adapter_count >= 5` 与 `pilot_paper_internal_ablation_matrix_ready`。 | 它是小规模跑完整 full_paper 协议并产出 pilot 级论文结果的阶段, 可支撑 pilot_paper 级 `TPR@FPR=0.01`, 但不支撑 `TPR@FPR=0.001` 或 full_paper 规模结论。 |
+| `pilot_paper` | 工程入口已完成, 真实 GPU 结果待运行 | 已接入 21 prompt × 8 seed、calibration split、frozen threshold artifact、held-out test split、代表性 runtime attack coverage、完整现代 external_baseline 自包含 measured_formal adapter 前置检查、内部消融矩阵前置检查和 claim audit。 | 真实 Wan2.1 GPU 结果尚未生成; 5 个主实验现代 baseline 需要在 Colab / 本地通过项目内 clone / build / run / adapt / record 后才能产出 measured_formal。 | 在 validation_scale 通过并生成 validation_scale_to_pilot_paper_transition_decision 后运行 `PROFILE = pilot_paper`, 审计 `pilot_paper_calibrated_heldout_claim_ready`, 同时要求 `modern_external_baseline_formal_measured_adapter_count >= 5` 与 `pilot_paper_internal_ablation_matrix_ready`。 | 它是小规模跑代表性 paper 协议并产出 pilot 级论文结果的阶段, 可支撑 pilot_paper 级 `TPR@FPR=0.01`, 但不支撑 `TPR@FPR=0.001`、full_paper 规模结论或顶会顶刊级完整 attack coverage 结论。 |
 | `generative_video_model_probe` | 作为实现 package 保留, validation_scale 真实运行待复跑 | 生成、attack、detection、postprocess、external_baseline source intake、项目内自包含 baseline adapter、内部消融 runner、packager 与协议字段闭包已接入。 | 现代外部 baseline measured_formal、完整内部消融、replay/sketch、CI、tables / figures / reports 和 claim audit 尚未以同一 validation run 通过。 | 按 validation_scale -> pilot_paper -> full_paper 的主干门禁顺序推进。 | 只提供实现 package; 是否允许进入 pilot_paper、full_paper 由主干门禁和轻量判定决定。 |
 | `replay_and_authenticated_sketch_gate` | 未完成 | digest、manifest、trajectory trace 基础模块存在。 | authenticated sketch、replay uncertainty、wrong prompt replay 未闭合。 | 补齐签名 sketch、replay records 和 checker。 | 影响 Claim-3 强度; 不通过则降级 Claim-3。 |
 | `flow_specific_adaptive_attack_gate` | 未完成 | phase 文档已补建, 但 runner、manifest 与 governed records 尚未完成。 | adaptive attacks、endpoint-preserving resampling、path cancellation 未形成 records。 | 补齐 runner 设计、stress protocol、attack manifest 和 checker。 | full_paper 前必须完成或明确降级。 |
-| `full_paper` | 未开始 | 仅有文档规范, 尚无 full_paper 大规模 records。 | 必须等 validation_scale、pilot_paper、现代外部 baseline、adaptive attack、replay/sketch 与 paper-level fixed-FPR 通过后才能运行。 | 使用与 pilot_paper 相同协议扩大样本规模, 产出最终论文主结果。 | 是 submission_package_freeze 前的最终结果来源。 |
+| `full_paper` | 未开始 | 仅有文档规范, 尚无 full_paper 大规模 records。 | 必须等 validation_scale、pilot_paper、现代外部 baseline、adaptive attack、replay/sketch 与 paper-level fixed-FPR 通过后才能运行。 | 使用 full_paper protocol config 中登记的顶会顶刊级 attack coverage、低 FPR 样本规模和完整 checker, 产出最终论文主结果。 | 是 submission_package_freeze 前的最终结果来源。 |
 | `submission_package_freeze` | 结构就绪, 未进入最终冻结 | submission freeze runner 和 readiness summary 已存在。 | 上游 full_paper records 不存在, 不得冻结论文结论。 | 等 full_paper 完成后重建 tables、figures、reports。 | 负责最终 claim audit 和 artifact rebuild。 |
 
 ## 3. 2026-06-18 阶段状态更新: 机制前置验证闭合
@@ -1240,7 +1240,7 @@ claim3_full_support_allowed: false
 
 ## 2026-06-24 pilot_paper FPR=0.01 工程入口
 
-当前 `generative_video_model_probe` 已新增 `pilot_paper` 语义层级, 用于在 validation_scale 之后执行小样本论文级结果包。该层级不是 workflow-only pilot, 而是小规模跑完整 full_paper 协议并产出 pilot 级论文结果。
+当前 `generative_video_model_probe` 已新增 `pilot_paper` 语义层级, 用于在 validation_scale 之后执行小样本论文级结果包。该层级不是 workflow-only pilot, 而是小规模跑代表性 paper 协议并产出 pilot 级论文结果。
 
 该阶段协议为:
 
@@ -1266,7 +1266,7 @@ Google Drive package manifest pilot_paper summary
 ```text
 paper_result_level: pilot_paper
 paper_protocol_level: paper_grade_protocol
-paper_protocol_difference_from_full_paper: sample_scale_only
+paper_protocol_difference_from_full_paper: sample_scale_target_fpr_and_attack_coverage
 prompt_count: 21
 seed_per_prompt: 8
 calibration_seed_per_prompt: 4
@@ -1527,7 +1527,7 @@ SSTW_WORKFLOW_PROFILE=validation_scale
 SSTW_WORKFLOW_PROFILE=pilot_paper
 ```
 
-当前仍不允许设置 `SSTW_WORKFLOW_PROFILE=full_paper` 进入真实 claim 运行, 因为该 profile 只登记未来同构协议入口, 尚未完成 full_paper 样本规模、FPR=0.001 统计设计和真实大规模 baseline / ablation 结果闭合。
+当前仍不允许设置 `SSTW_WORKFLOW_PROFILE=full_paper` 进入真实 claim 运行, 因为该 profile 只登记未来 full_paper 协议入口, 尚未完成 full_paper 样本规模、FPR=0.001 统计设计和真实大规模 baseline / ablation 结果闭合。
 
 ## 2026-06-25 现代 baseline 联网核验与 Colab command 配置辅助
 

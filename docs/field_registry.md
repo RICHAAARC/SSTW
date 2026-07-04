@@ -1410,6 +1410,14 @@ Notebook 与 repository module 的跨边界数据
 | positive_anchor_keys | protocol | none | true | false | false | fair calibration 中 attacked positive 的规范 prompt / seed / attack anchor 键集合。 |
 | positive_attack_names | protocol | none | true | false | false | fair calibration 中 attacked positive records 实际覆盖的 runtime attack 名称集合。 |
 | required_runtime_attack_names | protocol | none | true | false | false | 当前 workflow profile 要求必须覆盖的 runtime attack 名称集合。 |
+| required_runtime_attack_count | metric | none | true | false | false | 当前 workflow profile 要求必须覆盖的 runtime attack 数量。 |
+| runtime_attack_family_minimums | protocol | none | true | false | false | 当前 workflow profile 对 compression、temporal、spatial、visual 和 combined 等 attack family 的最低覆盖要求。 |
+| runtime_attack_family_counts | metric | none | true | false | false | 当前 protocol config 或已落盘 records 覆盖到的 runtime attack family 计数。 |
+| runtime_attack_missing_family_minimums | governance | none | true | false | false | 当前 runtime attack manifest 未满足的 family 最低覆盖要求列表。 |
+| runtime_attack_protocol_decision | governance | none | true | true | false | 当前 runtime attack manifest 是否满足 profile 分层协议要求。 |
+| required_non_runtime_attack_protocols | protocol | none | true | false | false | full_paper 还必须覆盖的非 runtime 自适应攻击或生成式重压缩协议名称集合。 |
+| missing_non_runtime_attack_protocols | governance | none | true | false | false | full_paper protocol config 尚未登记的非 runtime 攻击协议名称集合。 |
+| top_tier_attack_protocol_status | governance | none | true | false | false | protocol config 对顶会顶刊级 attack 覆盖的摘要状态。 |
 | required_runtime_attack_protocol_note | protocol | none | true | false | false | 解释 validation_scale、pilot_paper 和 full_paper 分层 attack 协议差异的配置说明。 |
 | missing_required_runtime_attack_names | governance | none | true | false | false | 当前 record 相对 required_runtime_attack_names 缺失的 runtime attack 名称集合。 |
 | missing_required_runtime_attack_count | metric | none | true | true | false | 当前 record 相对 required_runtime_attack_names 缺失的 runtime attack 数量。 |

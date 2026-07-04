@@ -5,9 +5,9 @@
 calibration split -> frozen threshold artifact -> held-out test split -> report / claim audit input。
 
 通过该 gate 可以支持当前 protocol config 指定 target_fpr 下的 `pilot_paper`
-规模论文级主张。`pilot_paper` 与 `full_paper` 使用同构协议, 差异只在样本规模、
-统计置信度和 protocol config 指定的 FPR 口径, 因此不能外推为更低 FPR 或
-full-paper 规模结论。
+规模论文级主张。`pilot_paper` 使用代表性论文协议, 但与 `full_paper` 在样本规模、
+统计置信度、protocol config 指定的 FPR 口径和 attack coverage 上仍有差异,
+因此不能外推为更低 FPR、完整 attack coverage 或 full-paper 规模结论。
 """
 
 from __future__ import annotations
@@ -27,6 +27,10 @@ from experiments.generative_video_model_probe.formal_motion_claim_filter import 
     select_motion_claim_generation_records,
 )
 from experiments.generative_video_model_probe.external_baseline_runner import formal_score_record_ready_for_claim
+from main.attacks.video_runtime_attack_protocol import (
+    audit_runtime_attack_protocol_config,
+    required_runtime_attack_names_from_config,
+)
 from main.protocol.flow_evidence_fields import with_flow_evidence_protocol_defaults
 from main.protocol.record_writer import write_json, write_jsonl
 from main.protocol.table_builder import write_csv
@@ -180,6 +184,8 @@ def _load_config(config_path: str | Path = DEFAULT_PILOT_PAPER_CONFIG) -> dict[s
         "required_external_baseline_adapter_names": raw.get("required_external_baseline_adapter_names", list(DEFAULT_REQUIRED_EXTERNAL_BASELINE_ADAPTER_NAMES)),
         "required_modern_external_baseline_adapter_names": raw.get("required_modern_external_baseline_adapter_names", list(DEFAULT_REQUIRED_MODERN_EXTERNAL_BASELINE_ADAPTER_NAMES)),
         "required_internal_ablation_variants": raw.get("required_internal_ablation_variants", list(DEFAULT_REQUIRED_INTERNAL_ABLATION_VARIANTS)),
+        "required_runtime_attack_names": list(required_runtime_attack_names_from_config(raw)),
+        "runtime_attack_protocol_audit": audit_runtime_attack_protocol_config(raw),
         "require_external_baseline_comparison_ready": bool(raw.get("require_external_baseline_comparison_ready", True)),
         "require_external_baseline_self_contained_outputs": bool(raw.get("require_external_baseline_self_contained_outputs", True)),
         "require_fair_detection_calibration": bool(raw.get("require_fair_detection_calibration", True)),
@@ -841,6 +847,9 @@ def build_pilot_paper_gate_audit(
     calibration_negative_event_count_per_family_min = min(calibration_family_counts.values(), default=0)
     heldout_negative_event_count_per_family_min = min(heldout_family_counts.values(), default=0)
     attack_event_count_per_attack_min = min(attack_counts.values(), default=0)
+    required_runtime_attack_names = {str(name) for name in config["required_runtime_attack_names"] if str(name)}
+    missing_required_runtime_attack_names = sorted(required_runtime_attack_names - set(attack_counts))
+    runtime_attack_protocol_ready = config["runtime_attack_protocol_audit"]["runtime_attack_protocol_decision"] == "PASS"
 
     test_positive_matrix_records = [
         record for record in _records_in_keys(pilot_matrix_records, test_keys)
@@ -914,7 +923,9 @@ def build_pilot_paper_gate_audit(
         and calibration_negative_event_count_per_family_min >= config["minimum_calibration_negative_event_count_per_family"],
         "heldout_negative_family_coverage_ready": len(heldout_family_counts) >= config["minimum_negative_family_count"]
         and heldout_negative_event_count_per_family_min >= config["minimum_heldout_negative_event_count_per_family"],
+        "pilot_paper_runtime_attack_protocol_config_ready": runtime_attack_protocol_ready,
         "attack_event_coverage_ready": bool(attack_counts)
+        and not missing_required_runtime_attack_names
         and attack_event_count_per_attack_min >= config["minimum_attack_event_count_per_attack"],
         "frozen_threshold_artifact_computable": threshold is not None and calibration_fpr is not None,
         "heldout_fpr_within_target": heldout_fpr is not None and heldout_fpr <= config["target_fpr"],
@@ -949,7 +960,7 @@ def build_pilot_paper_gate_audit(
         "paper_result_level": config["paper_result_level"],
         "paper_protocol_level": config["paper_protocol_level"],
         "paper_protocol_difference_from_full_paper": config["paper_protocol_difference_from_full_paper"],
-        "pilot_paper_protocol_matches_full_paper": True,
+        "pilot_paper_protocol_matches_full_paper": config["paper_protocol_difference_from_full_paper"] == "sample_scale_only",
         "pilot_paper_claim_allowed": gate_decision == "PASS",
         "missing_pilot_paper_requirements": missing,
         "pilot_paper_missing_requirement_count": len(missing),
@@ -1007,6 +1018,12 @@ def build_pilot_paper_gate_audit(
         "negative_event_count_per_family_min": heldout_negative_event_count_per_family_min,
         "attack_count": len(attack_counts),
         "attack_event_count_per_attack_min": attack_event_count_per_attack_min,
+        "required_runtime_attack_count": len(config["required_runtime_attack_names"]),
+        "required_runtime_attack_names": sorted(config["required_runtime_attack_names"]),
+        "missing_required_runtime_attack_names": missing_required_runtime_attack_names,
+        "runtime_attack_protocol_decision": config["runtime_attack_protocol_audit"]["runtime_attack_protocol_decision"],
+        "runtime_attack_family_counts": config["runtime_attack_protocol_audit"]["runtime_attack_family_counts"],
+        "runtime_attack_missing_family_minimums": config["runtime_attack_protocol_audit"]["runtime_attack_missing_family_minimums"],
         "calibration_negative_family_event_counts": dict(sorted(calibration_family_counts.items())),
         "heldout_negative_family_event_counts": dict(sorted(heldout_family_counts.items())),
         "attack_event_counts": dict(sorted(attack_counts.items())),
@@ -1078,8 +1095,9 @@ def write_pilot_paper_gate_audit(
         "再在 held-out test split 上报告 FPR 与 TPR。该报告可支持 pilot_paper 规模的 "
         f"TPR@target_fpr={target_fpr_text} 论文级结论。pilot_paper 是小规模跑完整 full_paper 协议并产出 "
         "pilot 级论文结果的阶段, 因此不再需要单独的前置预演阶段。"
-        "pilot_paper 与 full_paper 的协议同构, 差异只在样本规模和统计置信度, "
-        f"因此该报告不支持 blocked_target_fpr={blocked_target_fpr_text} 或 full-paper 规模结论。\n\n"
+        "pilot_paper 与 full_paper 的差异由 protocol config 显式记录, 包括样本规模、统计功效、target FPR "
+        "和 attack coverage; "
+        f"因此该报告不支持 blocked_target_fpr={blocked_target_fpr_text}、完整 full_paper attack coverage 或 full-paper 规模结论。\n\n"
         f"- pilot_paper_gate_decision: {audit['pilot_paper_gate_decision']}\n"
         f"- claim_support_status: {audit['claim_support_status']}\n"
         f"- paper_result_level: {audit['paper_result_level']}\n"
@@ -1107,6 +1125,9 @@ def write_pilot_paper_gate_audit(
         f"- pilot_paper_generation_record_count: {audit['pilot_paper_generation_record_count']}\n"
         f"- pilot_paper_calibration_unique_video_count: {audit['pilot_paper_calibration_unique_video_count']}\n"
         f"- pilot_paper_test_unique_video_count: {audit['pilot_paper_test_unique_video_count']}\n"
+        f"- runtime_attack_protocol_decision: {audit['runtime_attack_protocol_decision']}\n"
+        f"- required_runtime_attack_count: {audit['required_runtime_attack_count']}\n"
+        f"- missing_required_runtime_attack_names: {', '.join(audit['missing_required_runtime_attack_names']) if audit['missing_required_runtime_attack_names'] else 'none'}\n"
         f"- calibration_negative_event_count: {audit['calibration_negative_event_count']}\n"
         f"- heldout_test_negative_event_count: {audit['heldout_test_negative_event_count']}\n"
         f"- heldout_attacked_positive_event_count: {audit['heldout_attacked_positive_event_count']}\n"

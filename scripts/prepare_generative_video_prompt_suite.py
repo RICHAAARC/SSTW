@@ -7,6 +7,8 @@ import json
 from hashlib import sha256
 from pathlib import Path
 
+from main.attacks.video_runtime_attack_protocol import required_runtime_attack_names_from_config
+
 
 DEFAULT_PILOT_PAPER_CONFIG = "configs/protocol/pilot_paper_generative_probe.json"
 
@@ -426,6 +428,10 @@ def build_prompt_suite(pilot_paper_config_path: str | Path = DEFAULT_PILOT_PAPER
     pilot_paper_config = _read_json(pilot_paper_config_path)
     pilot_paper_prompt_count = len(PILOT_PAPER_PROMPT_ITEMS)
     pilot_paper_seed_count = len(PILOT_PAPER_SEED_ITEMS)
+    pilot_paper_test_seed_count = sum(1 for item in PILOT_PAPER_SEED_ITEMS if item.get("split") == "test")
+    pilot_paper_runtime_attack_names = required_runtime_attack_names_from_config(pilot_paper_config)
+    pilot_paper_runtime_attack_count = len(pilot_paper_runtime_attack_names)
+    pilot_paper_negative_family_count = 4
     suite = {
         "prompt_suite_id": "generative_video_probe_prompt_suite_motion_observability_pilot_paper",
         "dataset_construction_status": "constructed",
@@ -440,13 +446,14 @@ def build_prompt_suite(pilot_paper_config_path: str | Path = DEFAULT_PILOT_PAPER
             "prompt_count": pilot_paper_prompt_count,
             "seed_count": pilot_paper_seed_count,
             "calibration_seed_count": sum(1 for item in PILOT_PAPER_SEED_ITEMS if item.get("split") == "calibration"),
-            "test_seed_count": sum(1 for item in PILOT_PAPER_SEED_ITEMS if item.get("split") == "test"),
+            "test_seed_count": pilot_paper_test_seed_count,
             "target_generation_video_count": pilot_paper_prompt_count * pilot_paper_seed_count,
-            "target_runtime_attack_count": 3,
-            "target_test_attacked_positive_event_count": pilot_paper_prompt_count * 4 * 3,
-            "target_negative_family_count": 4,
-            "target_calibration_negative_event_count": pilot_paper_prompt_count * 4 * 3 * 4,
-            "target_heldout_test_negative_event_count": pilot_paper_prompt_count * 4 * 3 * 4,
+            "target_runtime_attack_count": pilot_paper_runtime_attack_count,
+            "target_runtime_attack_names": list(pilot_paper_runtime_attack_names),
+            "target_test_attacked_positive_event_count": pilot_paper_prompt_count * pilot_paper_test_seed_count * pilot_paper_runtime_attack_count,
+            "target_negative_family_count": pilot_paper_negative_family_count,
+            "target_calibration_negative_event_count": pilot_paper_prompt_count * pilot_paper_test_seed_count * pilot_paper_runtime_attack_count * pilot_paper_negative_family_count,
+            "target_heldout_test_negative_event_count": pilot_paper_prompt_count * pilot_paper_test_seed_count * pilot_paper_runtime_attack_count * pilot_paper_negative_family_count,
             "threshold_protocol": pilot_paper_config.get("threshold_protocol", "calibration_split_to_frozen_threshold_to_heldout_test_split"),
             "claim_support_status": "pilot_paper_dataset_constructed_not_generated",
             "split": "calibration_and_test"

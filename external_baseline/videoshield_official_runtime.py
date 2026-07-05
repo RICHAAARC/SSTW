@@ -22,10 +22,18 @@ import sys
 from typing import Any, Iterator, Mapping
 
 from external_baseline.official_eval_adapters.common import REPOSITORY_GENERATED_OFFICIAL_PROVENANCE
+from external_baseline.official_runtime_progress import emit_official_reference_plan, official_record_label
 from external_baseline.runtime_trace_io import build_comparison_unit_id, comparable_detection_records
 from external_baseline.score_semantics import official_score_formal_comparison_summary
 from external_baseline.video_tensor_io import read_video_tchw_uint8, write_video_tchw
 from main.attacks.video_runtime_attack_protocol import apply_runtime_attack_to_frames
+from main.core.progress import (
+    ProgressReporter,
+    configure_noisy_library_progress,
+    configure_pipeline_progress_bar,
+    emit_progress_event,
+    suppress_third_party_progress_output,
+)
 
 
 BASELINE_ID = "videoshield"
@@ -691,21 +699,49 @@ def run_videoshield_official_runtime(config: VideoShieldOfficialRuntimeConfig) -
     generation_rows: dict[tuple[str, str], dict[str, Any]] = {}
     execution_status = "dry_run_planned" if config.dry_run else "executed"
     positive_control_rows: list[dict[str, Any]] = []
+    emit_official_reference_plan(
+        BASELINE_ID,
+        runtime_detection_record_count=len(records),
+        generated_video_unit_count=len(units),
+        runtime_attack_count=len({str(record.get("attack_name")) for record in records if record.get("attack_name")}),
+        extra=(
+            "official_steps=model_load,unit_generation,attack_detection "
+            f"dry_run={bool(config.dry_run)}"
+        ),
+    )
 
     if not config.dry_run:
+        configure_noisy_library_progress()
         with _official_source_context(runtime_source_dir):
-            pipe, inverse_scheduler = _load_modelscope_pipeline(config)
+            emit_progress_event(f"official_reference_model_load:{BASELINE_ID}", f"start | model={config.model_path}")
+            with suppress_third_party_progress_output(f"official_reference_model_load:{BASELINE_ID}"):
+                pipe, inverse_scheduler = _load_modelscope_pipeline(config)
+            configure_pipeline_progress_bar(pipe)
+            emit_progress_event(f"official_reference_model_load:{BASELINE_ID}", "finish")
             scheduler = pipe.scheduler
-            for unit in units:
+            unit_progress = ProgressReporter(
+                f"official_reference_generation:{BASELINE_ID}",
+                len(units),
+                "prompt_seed_unit",
+            )
+            for unit_index, unit in enumerate(units, start=1):
                 try:
-                    unit_result = _generate_watermarked_unit(
-                        unit=unit,
-                        unit_root=output_root / "generated_units" / _video_id(unit),
-                        pipe=pipe,
-                        inverse_scheduler=inverse_scheduler,
-                        scheduler=scheduler,
-                        config=config,
+                    emit_progress_event(
+                        f"official_reference_generation:{BASELINE_ID}",
+                        (
+                            f"processing | {unit_index}/{len(units)} "
+                            f"| prompt={unit.get('prompt_id')} seed={unit.get('seed_id')}"
+                        ),
                     )
+                    with suppress_third_party_progress_output(f"official_reference_generation:{BASELINE_ID}"):
+                        unit_result = _generate_watermarked_unit(
+                            unit=unit,
+                            unit_root=output_root / "generated_units" / _video_id(unit),
+                            pipe=pipe,
+                            inverse_scheduler=inverse_scheduler,
+                            scheduler=scheduler,
+                            config=config,
+                        )
                     positive_control_rows.append({
                         "prompt_id": unit["prompt_id"],
                         "seed_id": unit["seed_id"],
@@ -728,11 +764,25 @@ def run_videoshield_official_runtime(config: VideoShieldOfficialRuntimeConfig) -
                         "failure_stage": "generation_or_positive_control",
                         "failure_reason": str(exc),
                     })
+                unit_progress.update(
+                    unit_index,
+                    f"generated_units={len(generation_rows)} failed={len(failures)}",
+                )
+            unit_progress.finish(f"generated_units={len(generation_rows)} failed={len(failures)}")
             if not failures:
                 video_dir = bundle_root / BASELINE_ID / "videos"
-                for record in records:
+                record_progress = ProgressReporter(
+                    f"official_bundle_record_write:{BASELINE_ID}",
+                    len(records),
+                    "runtime_record",
+                )
+                for record_index, record in enumerate(records, start=1):
                     output_json = _bundle_record_path(bundle_root, record)
                     try:
+                        emit_progress_event(
+                            f"official_bundle_record_write:{BASELINE_ID}",
+                            f"processing | {record_index}/{len(records)} | {official_record_label(record)}",
+                        )
                         key = (str(record.get("prompt_id") or ""), str(record.get("seed_id") or ""))
                         unit_result = generation_rows[key]
                         attacked_video_path = video_dir / f"{output_json.stem}_attacked.mp4"
@@ -742,13 +792,14 @@ def run_videoshield_official_runtime(config: VideoShieldOfficialRuntimeConfig) -
                             output_video_path=attacked_video_path,
                             fps=int(config.fps),
                         )
-                        score_payload = _detect_attacked_frames(
-                            frames=attacked_frames,
-                            watermark=unit_result["watermark"],
-                            pipe=pipe,
-                            inverse_scheduler=inverse_scheduler,
-                            config=config,
-                        )
+                        with suppress_third_party_progress_output(f"official_reference_detection:{BASELINE_ID}"):
+                            score_payload = _detect_attacked_frames(
+                                frames=attacked_frames,
+                                watermark=unit_result["watermark"],
+                                pipe=pipe,
+                                inverse_scheduler=inverse_scheduler,
+                                config=config,
+                            )
                         clean_negative_video_path = video_dir / f"{output_json.stem}_clean_negative.mp4"
                         clean_negative_frames, clean_negative_attack_info = _apply_runtime_attack_to_frames(
                             unit_result["clean_frames"],
@@ -756,13 +807,16 @@ def run_videoshield_official_runtime(config: VideoShieldOfficialRuntimeConfig) -
                             output_video_path=clean_negative_video_path,
                             fps=int(config.fps),
                         )
-                        clean_negative_payload = _detect_attacked_frames(
-                            frames=clean_negative_frames,
-                            watermark=unit_result["watermark"],
-                            pipe=pipe,
-                            inverse_scheduler=inverse_scheduler,
-                            config=config,
-                        )
+                        with suppress_third_party_progress_output(
+                            f"official_reference_clean_negative_detection:{BASELINE_ID}",
+                        ):
+                            clean_negative_payload = _detect_attacked_frames(
+                                frames=clean_negative_frames,
+                                watermark=unit_result["watermark"],
+                                pipe=pipe,
+                                inverse_scheduler=inverse_scheduler,
+                                config=config,
+                            )
                         payload = {
                             **score_payload,
                             "external_baseline_clean_negative_score": clean_negative_payload["raw_detector_score"],
@@ -815,6 +869,11 @@ def run_videoshield_official_runtime(config: VideoShieldOfficialRuntimeConfig) -
                             "failure_stage": "attack_or_detection_or_bundle_write",
                             "failure_reason": str(exc),
                         })
+                    record_progress.update(
+                        record_index,
+                        f"generated={generated} failed={len(failures)} | {official_record_label(record)}",
+                    )
+                record_progress.finish(f"generated={generated} failed={len(failures)}")
 
     manifest = {
         "manifest_kind": "videoshield_official_reference_execution_manifest",

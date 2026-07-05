@@ -23,9 +23,15 @@ from external_baseline.official_eval_adapters.common import (
     validate_clean_negative_payload,
     validate_score_payload,
 )
+from external_baseline.official_runtime_progress import (
+    emit_official_reference_plan,
+    official_record_label,
+    run_official_subprocess_with_heartbeat,
+)
 from external_baseline.official_runtime_closure import write_official_runtime_closure_requirements
 from external_baseline.runtime_trace_io import build_comparison_unit_id, comparable_detection_records
 from external_baseline.score_semantics import validate_official_score_extraction_payload
+from main.core.progress import ProgressReporter, emit_progress_event
 from paper_workflow.colab_utils.stage_package_sync import (
     prepare_colab_stage_layout,
     publish_colab_stage_package,
@@ -247,13 +253,12 @@ def _run_command(
     merged_env = dict(os.environ)
     if env:
         merged_env.update({str(key): str(value) for key, value in env.items()})
-    return subprocess.run(
+    return run_official_subprocess_with_heartbeat(
         command,
         cwd=str(cwd),
         env=merged_env,
-        text=True,
-        capture_output=True,
-        timeout=timeout_seconds,
+        timeout_seconds=timeout_seconds,
+        stage_id=f"official_reference_subprocess:{Path(str(cwd)).name}:{Path(str(command[-1])).stem if command else 'command'}",
     )
 
 
@@ -554,7 +559,21 @@ def _run_generic_repository_official_adapter(
     if not allow_existing_official_bundle_as_reference_input:
         env["SSTW_DISABLE_OFFICIAL_RESULT_BUNDLE_READ"] = "true"
 
+    emit_official_reference_plan(
+        baseline_id,
+        runtime_detection_record_count=len(records),
+        extra="adapter_mode=repository_official_eval_adapter",
+    )
+    progress = ProgressReporter(
+        f"official_reference_adapter_records:{baseline_id}",
+        len(records),
+        "runtime_record",
+    )
     for index, record in enumerate(records, start=1):
+        emit_progress_event(
+            f"official_reference_adapter_records:{baseline_id}",
+            f"processing | {index}/{len(records)} | {official_record_label(record)}",
+        )
         output_json_path = build_official_bundle_record_path(bundle_root, baseline_id, record)
         output_stem = output_json_path.stem
         command = build_official_adapter_command(
@@ -592,6 +611,11 @@ def _run_generic_repository_official_adapter(
                 **row,
                 "failure_reason": completed.stderr[-1000:] or "official_output_json_missing_or_command_failed",
             })
+        progress.update(
+            index,
+            f"generated={len(successes)} failed={len(failures)} | {official_record_label(record)}",
+        )
+    progress.finish(f"generated={len(successes)} failed={len(failures)}")
 
     manifest = {
         "manifest_kind": "modern_external_baseline_formal_reference_execution_manifest",
@@ -997,6 +1021,12 @@ def run_modern_external_baseline_formal_reference_plan(
             selected_record_count = min(len(records), int(config.max_records))
         else:
             selected_record_count = len(records)
+        emit_official_reference_plan(
+            config.baseline_id,
+            runtime_detection_record_count=selected_record_count,
+            runtime_attack_count=len({str(record.get("attack_name")) for record in records if record.get("attack_name")}),
+            extra="stage=official_reference_bundle_generation",
+        )
 
         runtime_closure_blocked = _runtime_closure_blocks_reference_attempt(
             runtime_closure_preflight_result,

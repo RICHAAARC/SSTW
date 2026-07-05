@@ -15,14 +15,19 @@ import os
 from pathlib import Path
 import re
 import shutil
-import subprocess
 import sys
 from typing import Any, Mapping
 
 from external_baseline.official_eval_adapters.common import REPOSITORY_GENERATED_OFFICIAL_PROVENANCE
+from external_baseline.official_runtime_progress import (
+    emit_official_reference_plan,
+    official_record_label,
+    run_official_subprocess_with_heartbeat,
+)
 from external_baseline.runtime_trace_io import build_comparison_unit_id, comparable_detection_records
 from external_baseline.score_semantics import official_score_formal_comparison_summary
 from main.attacks.video_runtime_attack_protocol import apply_runtime_attack_to_frames
+from main.core.progress import ProgressReporter, emit_progress_event
 
 
 BASELINE_ID = "sigmark"
@@ -719,12 +724,11 @@ def _run_sigmark_command(
 ) -> dict[str, Any]:
     """运行单条 SIGMark 官方命令并写出 stdout / stderr。"""
 
-    completed = subprocess.run(
+    completed = run_official_subprocess_with_heartbeat(
         command,
-        cwd=str(cwd),
-        text=True,
-        capture_output=True,
-        timeout=timeout_seconds if timeout_seconds > 0 else None,
+        cwd=cwd,
+        timeout_seconds=timeout_seconds if timeout_seconds > 0 else None,
+        stage_id=f"official_command:{BASELINE_ID}:{log_path.name}",
     )
     stdout_path = log_path.with_name(log_path.name + "_stdout.txt")
     stderr_path = log_path.with_name(log_path.name + "_stderr.txt")
@@ -1060,7 +1064,12 @@ def write_sigmark_official_bundle_records(
     generated = 0
     failures: list[dict[str, Any]] = []
     threshold = float(os.environ.get("SSTW_SIGMARK_DETECTION_THRESHOLD", str(DEFAULT_DETECTION_THRESHOLD)))
-    for record in records:
+    progress = ProgressReporter(
+        f"official_bundle_record_write:{BASELINE_ID}",
+        len(records),
+        "runtime_record",
+    )
+    for index, record in enumerate(records, start=1):
         output_json_path = _bundle_record_path(bundle, record)
         try:
             attack_name = str(record.get("attack_name") or "clean")
@@ -1150,6 +1159,11 @@ def write_sigmark_official_bundle_records(
                 "attack_name": record.get("attack_name"),
                 "failure_reason": str(exc),
             })
+        progress.update(
+            index,
+            f"generated={generated} failed={len(failures)} | {official_record_label(record)}",
+        )
+    progress.finish(f"generated={generated} failed={len(failures)}")
     return {
         "input_runtime_detection_record_count": len(records),
         "generated_bundle_record_count": generated,
@@ -1209,6 +1223,17 @@ def run_sigmark_official_hunyuan_runtime(config: SigmarkOfficialHunyuanRuntimeCo
         runtime_dimension=config.runtime_dimension,
         prompt_rows=prompt_rows,
     )
+    runtime_attack_names = tuple(sorted({str(record.get("attack_name")) for record in records if record.get("attack_name")}))
+    planned_command_count = 1
+    if config.generate_clean_negative_reference:
+        planned_command_count += 1 + 2 * len(runtime_attack_names)
+    emit_official_reference_plan(
+        BASELINE_ID,
+        runtime_detection_record_count=len(records),
+        generated_video_unit_count=len(prompt_rows),
+        runtime_attack_count=len(runtime_attack_names),
+        extra=f"official_command_count={planned_command_count}",
+    )
     execution_failure_reason = ""
     try:
         model_manifest = _ensure_model_available(config, output_root=output_root)
@@ -1252,7 +1277,25 @@ def run_sigmark_official_hunyuan_runtime(config: SigmarkOfficialHunyuanRuntimeCo
         "clean_negative_reference_state_status": "not_run",
         "reason": "dry_run_or_positive_execution_not_finished",
     }
+    command_progress = ProgressReporter(
+        f"official_reference_commands:{BASELINE_ID}",
+        planned_command_count,
+        "official_command",
+    )
+    completed_command_count = 0
+
+    def _record_command_progress(command_name: str, result: Mapping[str, Any]) -> None:
+        """记录 SIGMark 官方命令级进度。"""
+
+        nonlocal completed_command_count
+        completed_command_count += 1
+        command_progress.update(
+            completed_command_count,
+            f"{command_name} return_code={result.get('return_code')}",
+        )
+
     if not config.dry_run and not execution_failure_reason:
+        emit_progress_event(f"official_reference_commands:{BASELINE_ID}", "processing | gen")
         gen_result = _run_sigmark_command(
             gen_command,
             cwd=runtime_source_dir,
@@ -1260,11 +1303,13 @@ def run_sigmark_official_hunyuan_runtime(config: SigmarkOfficialHunyuanRuntimeCo
             timeout_seconds=float(config.timeout_seconds),
         )
         command_results.append(gen_result)
+        _record_command_progress("gen", gen_result)
         if int(gen_result["return_code"]) != 0:
             execution_failure_reason = (
                 f"sigmark_official_gen_failed:{gen_result['return_code']}:{gen_result['stderr_tail']}"
             )
         if not execution_failure_reason and config.generate_clean_negative_reference:
+            emit_progress_event(f"official_reference_commands:{BASELINE_ID}", "processing | clean_negative_gen")
             clean_gen_result = _run_sigmark_command(
                 clean_negative_gen_command,
                 cwd=runtime_source_dir,
@@ -1272,6 +1317,7 @@ def run_sigmark_official_hunyuan_runtime(config: SigmarkOfficialHunyuanRuntimeCo
                 timeout_seconds=float(config.timeout_seconds),
             )
             command_results.append(clean_gen_result)
+            _record_command_progress("clean_negative_gen", clean_gen_result)
             if int(clean_gen_result["return_code"]) != 0:
                 execution_failure_reason = (
                     "sigmark_official_clean_negative_gen_failed:"
@@ -1330,6 +1376,10 @@ def run_sigmark_official_hunyuan_runtime(config: SigmarkOfficialHunyuanRuntimeCo
                     output_path=attack_output,
                 )
                 positive_attack_extract_commands.append({"attack_name": attack_name, "command": attack_extract_command})
+                emit_progress_event(
+                    f"official_reference_commands:{BASELINE_ID}",
+                    f"processing | attack_extract | attack={attack_name}",
+                )
                 attack_extract_result = _run_sigmark_command(
                     attack_extract_command,
                     cwd=runtime_source_dir,
@@ -1337,6 +1387,7 @@ def run_sigmark_official_hunyuan_runtime(config: SigmarkOfficialHunyuanRuntimeCo
                     timeout_seconds=float(config.timeout_seconds),
                 )
                 command_results.append(attack_extract_result)
+                _record_command_progress(f"attack_extract:{attack_name}", attack_extract_result)
                 if int(attack_extract_result["return_code"]) != 0:
                     execution_failure_reason = (
                         "sigmark_official_attack_extract_failed:"
@@ -1356,6 +1407,10 @@ def run_sigmark_official_hunyuan_runtime(config: SigmarkOfficialHunyuanRuntimeCo
                     "attack_name": attack_name,
                     "command": clean_attack_extract_command,
                 })
+                emit_progress_event(
+                    f"official_reference_commands:{BASELINE_ID}",
+                    f"processing | clean_negative_attack_extract | attack={attack_name}",
+                )
                 clean_attack_extract_result = _run_sigmark_command(
                     clean_attack_extract_command,
                     cwd=runtime_source_dir,
@@ -1363,12 +1418,14 @@ def run_sigmark_official_hunyuan_runtime(config: SigmarkOfficialHunyuanRuntimeCo
                     timeout_seconds=float(config.timeout_seconds),
                 )
                 command_results.append(clean_attack_extract_result)
+                _record_command_progress(f"clean_negative_attack_extract:{attack_name}", clean_attack_extract_result)
                 if int(clean_attack_extract_result["return_code"]) != 0:
                     execution_failure_reason = (
                         "sigmark_official_clean_negative_attack_extract_failed:"
                         f"{attack_name}:{clean_attack_extract_result['return_code']}:{clean_attack_extract_result['stderr_tail']}"
                     )
                     break
+    command_progress.finish(f"completed={completed_command_count} planned={planned_command_count}")
 
     manifest_path = bundle_root / BASELINE_ID / "official_reference_execution_manifest.json"
     bit_accuracy_candidates: list[Path] = []

@@ -27,7 +27,13 @@ from external_baseline.videoseal_official_runtime import (
     videoseal_official_source_cwd,
 )
 from main.attacks.video_runtime_attack_protocol import apply_runtime_attack_to_video_tensor
-from main.core.progress import ProgressReporter
+from main.core.progress import (
+    ProgressReporter,
+    configure_noisy_library_progress,
+    emit_progress_event,
+    suppress_third_party_progress_output,
+)
+from external_baseline.official_runtime_progress import emit_official_reference_plan
 
 
 DEFAULT_RESOURCE_REQUIREMENTS = "configs/external_baselines/official_resource_requirements.json"
@@ -188,12 +194,22 @@ def generate_videoseal_official_bundle(
     records = comparable_detection_records(root)
     if max_records is not None:
         records = records[:max_records]
+    emit_official_reference_plan(
+        "videoseal",
+        runtime_detection_record_count=len(records),
+        runtime_attack_count=len({str(record.get("attack_name")) for record in records if record.get("attack_name")}),
+        extra="official_steps=model_load,embed,attack,detect",
+    )
     device = os.environ.get("SSTW_VIDEOSEAL_DEVICE") or ("cuda" if torch.cuda.is_available() else "cpu")
     model_name = os.environ.get("SSTW_VIDEOSEAL_MODEL_NAME", "videoseal")
-    with videoseal_official_source_cwd(source_path):
-        model = videoseal.load(model_name)
+    configure_noisy_library_progress()
+    emit_progress_event("official_reference_model_load:videoseal", f"start | model={model_name} device={device}")
+    with suppress_third_party_progress_output("official_reference_model_load:videoseal"):
+        with videoseal_official_source_cwd(source_path):
+            model = videoseal.load(model_name)
     model.eval()
     model.to(device)
+    emit_progress_event("official_reference_model_load:videoseal", "finish")
 
     generated = 0
     failed: list[dict[str, Any]] = []
@@ -216,8 +232,9 @@ def generate_videoseal_official_bundle(
             max_frames = int(os.environ.get("SSTW_VIDEOSEAL_BUNDLE_MAX_FRAMES", "0") or "0")
             if max_frames > 0:
                 video = video[:max_frames]
-            with torch.no_grad():
-                embed_outputs = model.embed(video, is_video=True)
+            with suppress_third_party_progress_output("official_reference_embed:videoseal"):
+                with torch.no_grad():
+                    embed_outputs = model.embed(video, is_video=True)
             watermarked = embed_outputs.get("imgs_w")
             reference_message = embed_outputs.get("msgs")
             if watermarked is None:
@@ -243,8 +260,10 @@ def generate_videoseal_official_bundle(
                 empty_error="videoseal_clean_negative_video_empty_after_reencode",
             )
             clean_negative_for_detection = clean_negative_uint8.float().to(device) / 255.0
-            score_payload = _videoseal_detect_payload(model, attacked_for_detection, reference_message=reference_message)
-            clean_negative_payload = _videoseal_detect_payload(model, clean_negative_for_detection)
+            with suppress_third_party_progress_output("official_reference_detection:videoseal"):
+                score_payload = _videoseal_detect_payload(model, attacked_for_detection, reference_message=reference_message)
+            with suppress_third_party_progress_output("official_reference_clean_negative_detection:videoseal"):
+                clean_negative_payload = _videoseal_detect_payload(model, clean_negative_for_detection)
             payload = {
                 **score_payload,
                 "external_baseline_clean_negative_score": clean_negative_payload["raw_detector_score"],

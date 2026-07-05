@@ -15,6 +15,7 @@ from main.core.progress import (
     configure_pipeline_progress_bar,
     suppress_third_party_progress_output,
 )
+from external_baseline.official_runtime_progress import run_official_subprocess_with_heartbeat
 from paper_workflow.notebook_utils.streaming_command import run_streaming_command
 
 
@@ -49,7 +50,9 @@ def test_notebook_command_runner_streams_subprocess_output(capsys: pytest.Captur
     assert result.returncode == 0
     assert result.stdout == ""
     assert result.stderr == ""
+    assert "SSTW 工作量进度 | notebook_subprocess_command | start" in captured.out
     assert "SSTW 工作量进度 | stream_test | 1/1 (100.0%)" in captured.out
+    assert "SSTW 工作量进度 | notebook_subprocess_command | finish" in captured.out
 
 
 @pytest.mark.quick
@@ -66,6 +69,27 @@ def test_notebook_command_runner_exposes_repo_modules_to_script_subprocess(tmp_p
 
     assert result.returncode == 0
     assert (output_root / "prompt_seed_suite.json").exists()
+
+
+@pytest.mark.quick
+def test_official_subprocess_runner_emits_start_and_finish_progress(capsys: pytest.CaptureFixture[str]) -> None:
+    """官方 baseline 子进程必须有低噪声 start / finish 进度, 避免 Notebook 看似卡住。"""
+
+    result = run_official_subprocess_with_heartbeat(
+        [
+            sys.executable,
+            "-c",
+            "print('official stdout payload')",
+        ],
+        cwd=Path("."),
+        stage_id="official_command:test_baseline:unit",
+    )
+
+    captured = capsys.readouterr()
+    assert result.returncode == 0
+    assert "official stdout payload" in result.stdout
+    assert "SSTW 工作量进度 | official_command:test_baseline:unit | start" in captured.out
+    assert "SSTW 工作量进度 | official_command:test_baseline:unit | finish" in captured.out
 
 
 @pytest.mark.quick
@@ -220,6 +244,19 @@ def test_runtime_runners_suppress_third_party_pipeline_noise() -> None:
             "NOISY_LIBRARY_ENV_DEFAULTS",
             'env.setdefault("SSTW_SUPPRESS_THIRD_PARTY_PROGRESS", "1")',
             'env.setdefault("SSTW_ENABLE_PIPELINE_PROGRESS_BAR", "0")',
+            "SSTW_NOTEBOOK_COMMAND_HEARTBEAT_SEC",
+            "notebook_subprocess_command",
+        ],
+        "external_baseline/videoshield_official_runtime.py": [
+            "configure_noisy_library_progress()",
+            "configure_pipeline_progress_bar(pipe)",
+            'suppress_third_party_progress_output(f"official_reference_generation:{BASELINE_ID}")',
+            'suppress_third_party_progress_output(f"official_reference_detection:{BASELINE_ID}")',
+        ],
+        "external_baseline/official_bundle_generator.py": [
+            "configure_noisy_library_progress()",
+            'suppress_third_party_progress_output("official_reference_model_load:videoseal")',
+            'suppress_third_party_progress_output("official_reference_detection:videoseal")',
         ],
     }
 
@@ -241,3 +278,47 @@ def test_notebook_workflow_helpers_do_not_capture_subprocess_output() -> None:
         source = helper_path.read_text(encoding="utf-8")
         assert "run_streaming_command(command)" in source
         assert "capture_output=True" not in source
+
+
+@pytest.mark.quick
+def test_external_baseline_notebooks_use_count_first_progress_contract() -> None:
+    """5 个 external baseline Notebook 的正式运行逻辑必须先显示样本数量再显示进度。"""
+
+    expected_patterns = {
+        "paper_workflow/colab_utils/modern_external_baseline_formal_reference.py": [
+            "emit_official_reference_plan(",
+            "official_reference_adapter_records",
+        ],
+        "external_baseline/videomark_official_runtime.py": [
+            "emit_official_reference_plan(",
+            "official_reference_commands",
+            "run_official_subprocess_with_heartbeat",
+            "official_bundle_record_write",
+        ],
+        "external_baseline/videoshield_official_runtime.py": [
+            "emit_official_reference_plan(",
+            "official_reference_generation",
+            "official_bundle_record_write",
+        ],
+        "external_baseline/sigmark_official_hunyuan_runtime.py": [
+            "emit_official_reference_plan(",
+            "official_reference_commands",
+            "run_official_subprocess_with_heartbeat",
+            "official_bundle_record_write",
+        ],
+        "external_baseline/vidsig_official_runtime.py": [
+            "emit_official_reference_plan(",
+            "official_reference_commands",
+            "run_official_subprocess_with_heartbeat",
+            "official_bundle_record_write",
+        ],
+        "external_baseline/official_bundle_generator.py": [
+            "emit_official_reference_plan(",
+            "ProgressReporter(\"official_bundle_generation:videoseal\"",
+        ],
+    }
+
+    for path_text, patterns in expected_patterns.items():
+        source = Path(path_text).read_text(encoding="utf-8")
+        for pattern in patterns:
+            assert pattern in source, path_text

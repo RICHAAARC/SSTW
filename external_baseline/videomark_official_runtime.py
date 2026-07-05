@@ -16,14 +16,19 @@ import os
 from pathlib import Path
 import re
 import shutil
-import subprocess
 import sys
 from typing import Any, Mapping
 
 from external_baseline.official_eval_adapters.common import REPOSITORY_GENERATED_OFFICIAL_PROVENANCE
+from external_baseline.official_runtime_progress import (
+    emit_official_reference_plan,
+    official_record_label,
+    run_official_subprocess_with_heartbeat,
+)
 from external_baseline.runtime_trace_io import build_comparison_unit_id, comparable_detection_records
 from external_baseline.score_semantics import official_score_formal_comparison_summary
 from main.attacks.video_runtime_attack_protocol import FULL_PAPER_RUNTIME_ATTACKS, RUNTIME_ATTACK_SPECS
+from main.core.progress import ProgressReporter, emit_progress_event
 
 
 BASELINE_ID = "videomark"
@@ -1041,32 +1046,18 @@ def _run_videomark_command(
     env["SSTW_VIDEOMARK_PROMPT_VARIANTS"] = str(int(prompt_variants))
     if runtime_attack_names:
         env["SSTW_VIDEOMARK_RUNTIME_ATTACK_NAMES"] = ",".join(runtime_attack_names)
-    timeout_expired = False
-    execution_error = ""
-    try:
-        completed = subprocess.run(
-            command,
-            cwd=str(cwd),
-            env=env,
-            text=True,
-            capture_output=True,
-            timeout=timeout_seconds if timeout_seconds > 0 else None,
-        )
-        stdout = completed.stdout
-        stderr = completed.stderr
-        return_code = completed.returncode
-    except subprocess.TimeoutExpired as exc:
-        # VideoMark 官方模型下载和生成耗时较长。若用户设置 timeout, 这里必须写出
-        # governed failure 日志, 而不是让 Notebook 直接中断导致缺少决策 artifact。
-        timeout_expired = True
-        stdout = _text_from_subprocess_payload(exc.stdout)
-        stderr = _text_from_subprocess_payload(exc.stderr) + f"\ncommand_timeout_seconds={timeout_seconds}"
-        return_code = -9
-    except OSError as exc:
-        execution_error = str(exc)
-        stdout = ""
-        stderr = f"videomark_official_command_launch_error:{execution_error}"
-        return_code = -1
+    completed = run_official_subprocess_with_heartbeat(
+        command,
+        cwd=cwd,
+        env=env,
+        timeout_seconds=timeout_seconds if timeout_seconds > 0 else None,
+        stage_id=f"official_command:{BASELINE_ID}:{log_path.name}",
+    )
+    stdout = completed.stdout
+    stderr = completed.stderr
+    return_code = completed.returncode
+    timeout_expired = return_code == -9
+    execution_error = stderr if return_code == -1 and "official_command_launch_error" in stderr else ""
     stdout_path = log_path.with_name(log_path.name + "_stdout.txt")
     stderr_path = log_path.with_name(log_path.name + "_stderr.txt")
     _write_text(stdout_path, stdout)
@@ -1082,16 +1073,6 @@ def _run_videomark_command(
         "timeout_expired": timeout_expired,
         "execution_error": execution_error,
     }
-
-
-def _text_from_subprocess_payload(value: Any) -> str:
-    """把 subprocess 异常中的 stdout / stderr 规范化为文本。"""
-
-    if value is None:
-        return ""
-    if isinstance(value, bytes):
-        return value.decode("utf-8", errors="replace")
-    return str(value)
 
 
 def _videomark_result_dir(output_path: Path, model_name: str, num_bit: int) -> Path:
@@ -1318,7 +1299,12 @@ def write_videomark_official_bundle_records(
     generated = 0
     failures: list[dict[str, Any]] = []
     threshold = float(os.environ.get("SSTW_VIDEOMARK_DETECTION_THRESHOLD", str(DEFAULT_DETECTION_THRESHOLD)))
-    for record in records:
+    progress = ProgressReporter(
+        f"official_bundle_record_write:{BASELINE_ID}",
+        len(records),
+        "runtime_record",
+    )
+    for index, record in enumerate(records, start=1):
         output_json_path = _bundle_record_path(bundle, record)
         try:
             if prompt_suite_path is not None:
@@ -1402,6 +1388,11 @@ def write_videomark_official_bundle_records(
                 "attack_name": record.get("attack_name"),
                 "failure_reason": str(exc),
             })
+        progress.update(
+            index,
+            f"generated={generated} failed={len(failures)} | {official_record_label(record)}",
+        )
+    progress.finish(f"generated={generated} failed={len(failures)}")
     return {
         "input_runtime_detection_record_count": len(records),
         "generated_bundle_record_count": generated,
@@ -1474,8 +1465,23 @@ def run_videomark_official_runtime(config: VideoMarkOfficialRuntimeConfig) -> di
     command_results: list[dict[str, Any]] = []
     execution_status = "dry_run_planned" if config.dry_run else "executed"
     execution_failure_reason = ""
+    planned_command_count = 2 + (2 if config.generate_clean_negative_reference else 0)
+    emit_official_reference_plan(
+        BASELINE_ID,
+        runtime_detection_record_count=len(records),
+        generated_video_unit_count=len(prompt_rows),
+        runtime_attack_count=len(runtime_attack_names),
+        extra=f"official_command_count={planned_command_count}",
+    )
+    command_progress = ProgressReporter(
+        f"official_reference_commands:{BASELINE_ID}",
+        planned_command_count,
+        "official_command",
+    )
+    completed_command_count = 0
 
     if not config.dry_run:
+        emit_progress_event(f"official_reference_commands:{BASELINE_ID}", "processing | embedding_and_extraction")
         embedding_result = _run_videomark_command(
             embedding_command,
             cwd=runtime_source_dir,
@@ -1484,11 +1490,17 @@ def run_videomark_official_runtime(config: VideoMarkOfficialRuntimeConfig) -> di
             prompt_variants=int(config.prompt_variants),
         )
         command_results.append(embedding_result)
+        completed_command_count += 1
+        command_progress.update(
+            completed_command_count,
+            f"embedding_and_extraction return_code={embedding_result['return_code']}",
+        )
         if int(embedding_result["return_code"]) != 0:
             execution_failure_reason = (
                 f"videomark_official_embedding_failed:{embedding_result['return_code']}:{embedding_result['stderr_tail']}"
             )
         if not execution_failure_reason:
+            emit_progress_event(f"official_reference_commands:{BASELINE_ID}", "processing | temporal_tamper")
             temporal_result = _run_videomark_command(
                 temporal_tamper_command,
                 cwd=runtime_source_dir,
@@ -1498,11 +1510,17 @@ def run_videomark_official_runtime(config: VideoMarkOfficialRuntimeConfig) -> di
                 runtime_attack_names=runtime_attack_names,
             )
             command_results.append(temporal_result)
+            completed_command_count += 1
+            command_progress.update(
+                completed_command_count,
+                f"temporal_tamper return_code={temporal_result['return_code']}",
+            )
             if int(temporal_result["return_code"]) != 0:
                 execution_failure_reason = (
                     f"videomark_official_temporal_tamper_failed:{temporal_result['return_code']}:{temporal_result['stderr_tail']}"
                 )
         if not execution_failure_reason and config.generate_clean_negative_reference:
+            emit_progress_event(f"official_reference_commands:{BASELINE_ID}", "processing | clean_negative_embedding")
             clean_embedding_result = _run_videomark_command(
                 clean_negative_embedding_command,
                 cwd=runtime_source_dir,
@@ -1511,12 +1529,18 @@ def run_videomark_official_runtime(config: VideoMarkOfficialRuntimeConfig) -> di
                 prompt_variants=int(config.prompt_variants),
             )
             command_results.append(clean_embedding_result)
+            completed_command_count += 1
+            command_progress.update(
+                completed_command_count,
+                f"clean_negative_embedding return_code={clean_embedding_result['return_code']}",
+            )
             if int(clean_embedding_result["return_code"]) != 0:
                 execution_failure_reason = (
                     "videomark_official_clean_negative_embedding_failed:"
                     f"{clean_embedding_result['return_code']}:{clean_embedding_result['stderr_tail']}"
                 )
         if not execution_failure_reason and config.generate_clean_negative_reference:
+            emit_progress_event(f"official_reference_commands:{BASELINE_ID}", "processing | clean_negative_temporal_tamper")
             clean_temporal_result = _run_videomark_command(
                 clean_negative_temporal_tamper_command,
                 cwd=runtime_source_dir,
@@ -1526,11 +1550,17 @@ def run_videomark_official_runtime(config: VideoMarkOfficialRuntimeConfig) -> di
                 runtime_attack_names=runtime_attack_names,
             )
             command_results.append(clean_temporal_result)
+            completed_command_count += 1
+            command_progress.update(
+                completed_command_count,
+                f"clean_negative_temporal_tamper return_code={clean_temporal_result['return_code']}",
+            )
             if int(clean_temporal_result["return_code"]) != 0:
                 execution_failure_reason = (
                     "videomark_official_clean_negative_temporal_tamper_failed:"
                     f"{clean_temporal_result['return_code']}:{clean_temporal_result['stderr_tail']}"
                 )
+    command_progress.finish(f"completed={completed_command_count} planned={planned_command_count}")
 
     bundle_result = {
         "input_runtime_detection_record_count": len(records),

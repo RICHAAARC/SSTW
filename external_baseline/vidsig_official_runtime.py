@@ -15,14 +15,19 @@ import os
 from pathlib import Path
 import re
 import shutil
-import subprocess
 import sys
 from typing import Any, Mapping
 
 from external_baseline.official_eval_adapters.common import REPOSITORY_GENERATED_OFFICIAL_PROVENANCE
+from external_baseline.official_runtime_progress import (
+    emit_official_reference_plan,
+    official_record_label,
+    run_official_subprocess_with_heartbeat,
+)
 from external_baseline.runtime_trace_io import build_comparison_unit_id, comparable_detection_records
 from external_baseline.score_semantics import official_score_formal_comparison_summary
 from main.attacks.video_runtime_attack_protocol import apply_runtime_attack_to_frames
+from main.core.progress import ProgressReporter, emit_progress_event
 
 
 BASELINE_ID = "vidsig"
@@ -542,12 +547,11 @@ def _write_vidsig_generation_inputs(
 def _run_command(command: list[str], *, cwd: Path, log_prefix: Path, timeout_seconds: float) -> dict[str, Any]:
     """运行一条官方命令并写出 stdout / stderr。"""
 
-    completed = subprocess.run(
+    completed = run_official_subprocess_with_heartbeat(
         command,
-        cwd=str(cwd),
-        text=True,
-        capture_output=True,
-        timeout=timeout_seconds if timeout_seconds > 0 else None,
+        cwd=cwd,
+        timeout_seconds=timeout_seconds if timeout_seconds > 0 else None,
+        stage_id=f"official_command:{BASELINE_ID}:{log_prefix.name}",
     )
     stdout_path = log_prefix.with_name(log_prefix.name + "_stdout.txt")
     stderr_path = log_prefix.with_name(log_prefix.name + "_stderr.txt")
@@ -714,7 +718,16 @@ def write_vidsig_official_bundle_records(
     watermarked_video_dir = Path(str(prompt_manifest["watermarked_video_dir"]))
     generated = 0
     failures: list[dict[str, Any]] = []
-    for record in records:
+    progress = ProgressReporter(
+        f"official_bundle_record_write:{BASELINE_ID}",
+        len(records),
+        "runtime_record",
+    )
+    for index, record in enumerate(records, start=1):
+        emit_progress_event(
+            f"official_bundle_record_write:{BASELINE_ID}",
+            f"processing | {index}/{len(records)} | {official_record_label(record)}",
+        )
         output_json_path = _bundle_record_path(bundle, record)
         try:
             unit_index = unit_index_by_prompt_seed[(str(record.get("prompt_id") or ""), str(record.get("seed_id") or ""))]
@@ -841,6 +854,11 @@ def write_vidsig_official_bundle_records(
                 "attack_name": record.get("attack_name"),
                 "failure_reason": str(exc),
             })
+        progress.update(
+            index,
+            f"generated={generated} failed={len(failures)} | {official_record_label(record)}",
+        )
+    progress.finish(f"generated={generated} failed={len(failures)}")
     return {"input_runtime_detection_record_count": len(records), "generated_bundle_record_count": generated, "failed_bundle_record_count": len(failures), "failures": failures[:20]}
 
 
@@ -883,7 +901,23 @@ def run_vidsig_official_runtime(config: VidSigOfficialRuntimeConfig) -> dict[str
     execution_failure_reason = ""
     execution_status = "dry_run_planned" if config.dry_run else "executed"
     positive_control_result: dict[str, Any] = {"positive_control_status": "dry_run_not_checked" if config.dry_run else "pending"}
+    runtime_attack_names = tuple(sorted({str(record.get("attack_name")) for record in records if record.get("attack_name")}))
+    planned_command_count = 1 + 2 * len(records)
+    emit_official_reference_plan(
+        BASELINE_ID,
+        runtime_detection_record_count=len(records),
+        generated_video_unit_count=len(prompt_rows) * len(seed_rows),
+        runtime_attack_count=len(runtime_attack_names),
+        extra=f"official_command_count={planned_command_count}",
+    )
+    command_progress = ProgressReporter(
+        f"official_reference_commands:{BASELINE_ID}",
+        planned_command_count,
+        "official_command",
+    )
+    completed_command_count = 0
     if not config.dry_run:
+        emit_progress_event(f"official_reference_commands:{BASELINE_ID}", "processing | generate_ms")
         generate_result = _run_command(
             generate_command,
             cwd=runtime_source_dir,
@@ -891,6 +925,11 @@ def run_vidsig_official_runtime(config: VidSigOfficialRuntimeConfig) -> dict[str
             timeout_seconds=float(config.timeout_seconds),
         )
         command_results.append(generate_result)
+        completed_command_count += 1
+        command_progress.update(
+            completed_command_count,
+            f"generate_ms return_code={generate_result['return_code']}",
+        )
         if int(generate_result["return_code"]) != 0:
             execution_failure_reason = f"vidsig_generate_ms_failed:{generate_result['return_code']}:{generate_result['stderr_tail']}"
         if not execution_failure_reason:
@@ -922,6 +961,11 @@ def run_vidsig_official_runtime(config: VidSigOfficialRuntimeConfig) -> dict[str
             prompt_manifest=prompt_manifest,
             config=config,
         )
+        completed_command_count += 2 * len(records)
+        command_progress.update(
+            min(completed_command_count, planned_command_count),
+            f"attack_py_pair_commands_completed_for_records={len(records)}",
+        )
     elif execution_failure_reason:
         execution_status = "failed"
         bundle_result = {
@@ -941,6 +985,7 @@ def run_vidsig_official_runtime(config: VidSigOfficialRuntimeConfig) -> dict[str
         }
     else:
         bundle_result = {"input_runtime_detection_record_count": len(records), "generated_bundle_record_count": 0, "failed_bundle_record_count": 0, "failures": []}
+    command_progress.finish(f"completed={min(completed_command_count, planned_command_count)} planned={planned_command_count}")
 
     manifest = {
         "manifest_kind": "modern_external_baseline_formal_reference_execution_manifest",

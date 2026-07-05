@@ -17,7 +17,7 @@ from pathlib import Path
 import re
 import shutil
 import sys
-from typing import Any, Mapping
+from typing import Any, Callable, Mapping
 
 from external_baseline.official_eval_adapters.common import REPOSITORY_GENERATED_OFFICIAL_PROVENANCE
 from external_baseline.official_runtime_progress import (
@@ -1039,6 +1039,7 @@ def _run_videomark_command(
     timeout_seconds: float,
     prompt_variants: int,
     runtime_attack_names: tuple[str, ...] = (),
+    progress_probe: Callable[[], Mapping[str, Any] | str | None] | None = None,
 ) -> dict[str, Any]:
     """运行单条 VideoMark 官方命令并写出 stdout / stderr。"""
 
@@ -1052,6 +1053,7 @@ def _run_videomark_command(
         env=env,
         timeout_seconds=timeout_seconds if timeout_seconds > 0 else None,
         stage_id=f"official_command:{BASELINE_ID}:{log_path.name}",
+        progress_probe=progress_probe,
     )
     stdout = completed.stdout
     stderr = completed.stderr
@@ -1073,6 +1075,113 @@ def _run_videomark_command(
         "timeout_expired": timeout_expired,
         "execution_error": execution_error,
     }
+
+
+def _json_mapping_or_empty(path: Path) -> dict[str, Any]:
+    """读取官方 JSON 字典, 文件不存在或尚未完整写出时返回空字典。"""
+
+    if not path.is_file():
+        return {}
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8", errors="ignore"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    return dict(payload) if isinstance(payload, Mapping) else {}
+
+
+def _count_video_files_with_suffix(root: Path, suffix: str) -> int:
+    """统计官方输出目录中指定后缀的视频文件数量。"""
+
+    if not root.exists():
+        return 0
+    return sum(1 for item in root.rglob(f"*{suffix}") if item.is_file())
+
+
+def _build_videomark_embedding_progress_probe(
+    *,
+    video_results_path: Path,
+    result_dir: Path,
+    expected_video_unit_count: int,
+    role: str,
+) -> Callable[[], Mapping[str, Any]]:
+    """构造 VideoMark embedding / extraction 的样本处理进度探针。
+
+    VideoMark 官方 embedding 命令把每个 prompt / seed 单元写成一个 `wm.mp4`,
+    并在反演检测完成后更新 `video_results.json`。这里同时统计已生成视频和已完成
+    extraction 的样本数, 只反映论文样本处理进度, 不跟踪模型下载或依赖安装。
+    """
+
+    expected = max(0, int(expected_video_unit_count))
+
+    def _probe() -> Mapping[str, Any]:
+        generated = min(_count_video_files_with_suffix(result_dir, "wm.mp4"), expected)
+        video_results = _json_mapping_or_empty(video_results_path)
+        extracted = min(
+            sum(1 for value in video_results.values() if isinstance(value, Mapping) and "decode_acc" in value),
+            expected,
+        )
+        percent = 100.0 if expected == 0 else 100.0 * extracted / expected
+        if extracted >= expected and expected > 0:
+            phase = "embedding_extraction_finish"
+        elif generated > extracted:
+            phase = "watermark_extraction"
+        elif generated > 0:
+            phase = "video_generation"
+        else:
+            phase = "model_load_or_first_video_generation"
+        return {
+            "role": role,
+            "phase": phase,
+            "generated_video_units": f"{generated}/{expected}",
+            "extracted_video_units": f"{extracted}/{expected}",
+            "progress_percent": f"{percent:.1f}",
+        }
+
+    return _probe
+
+
+def _count_videomark_temporal_sample_attacks(payload: Mapping[str, Any]) -> int:
+    """统计 temporal_results 中已完成 decode / frame accuracy 的 sample-attack 数。"""
+
+    completed = 0
+    for entry in payload.values():
+        if not isinstance(entry, Mapping):
+            continue
+        for attack_payload in entry.values():
+            if isinstance(attack_payload, Mapping) and "decode_acc" in attack_payload and "frames_acc" in attack_payload:
+                completed += 1
+    return completed
+
+
+def _build_videomark_temporal_progress_probe(
+    *,
+    temporal_results_path: Path,
+    expected_video_unit_count: int,
+    runtime_attack_count: int,
+    role: str,
+) -> Callable[[], Mapping[str, Any]]:
+    """构造 VideoMark temporal tamper 的样本攻击处理进度探针。"""
+
+    expected_units = max(0, int(expected_video_unit_count))
+    expected_attacks = max(0, int(runtime_attack_count))
+    expected_sample_attacks = expected_units * expected_attacks
+
+    def _probe() -> Mapping[str, Any]:
+        payload = _json_mapping_or_empty(temporal_results_path)
+        completed = min(_count_videomark_temporal_sample_attacks(payload), expected_sample_attacks)
+        completed_units = min(sum(1 for value in payload.values() if isinstance(value, Mapping) and value), expected_units)
+        percent = 100.0 if expected_sample_attacks == 0 else 100.0 * completed / expected_sample_attacks
+        phase = "temporal_attack_extract_finish" if completed >= expected_sample_attacks and expected_sample_attacks > 0 else "temporal_attack_extract"
+        return {
+            "role": role,
+            "phase": phase,
+            "completed_video_units": f"{completed_units}/{expected_units}",
+            "completed_sample_attacks": f"{completed}/{expected_sample_attacks}",
+            "runtime_attack_count": expected_attacks,
+            "progress_percent": f"{percent:.1f}",
+        }
+
+    return _probe
 
 
 def _videomark_result_dir(output_path: Path, model_name: str, num_bit: int) -> Path:
@@ -1466,10 +1575,11 @@ def run_videomark_official_runtime(config: VideoMarkOfficialRuntimeConfig) -> di
     execution_status = "dry_run_planned" if config.dry_run else "executed"
     execution_failure_reason = ""
     planned_command_count = 2 + (2 if config.generate_clean_negative_reference else 0)
+    expected_video_unit_count = len(prompt_rows) * int(config.prompt_variants)
     emit_official_reference_plan(
         BASELINE_ID,
         runtime_detection_record_count=len(records),
-        generated_video_unit_count=len(prompt_rows),
+        generated_video_unit_count=expected_video_unit_count,
         runtime_attack_count=len(runtime_attack_names),
         extra=f"official_command_count={planned_command_count}",
     )
@@ -1488,6 +1598,12 @@ def run_videomark_official_runtime(config: VideoMarkOfficialRuntimeConfig) -> di
             log_path=output_root / "logs" / "videomark_embedding_and_extraction",
             timeout_seconds=float(config.timeout_seconds),
             prompt_variants=int(config.prompt_variants),
+            progress_probe=_build_videomark_embedding_progress_probe(
+                video_results_path=video_results_path,
+                result_dir=result_dir,
+                expected_video_unit_count=expected_video_unit_count,
+                role="positive_embedding",
+            ),
         )
         command_results.append(embedding_result)
         completed_command_count += 1
@@ -1508,6 +1624,12 @@ def run_videomark_official_runtime(config: VideoMarkOfficialRuntimeConfig) -> di
                 timeout_seconds=float(config.timeout_seconds),
                 prompt_variants=int(config.prompt_variants),
                 runtime_attack_names=runtime_attack_names,
+                progress_probe=_build_videomark_temporal_progress_probe(
+                    temporal_results_path=temporal_results_path,
+                    expected_video_unit_count=expected_video_unit_count,
+                    runtime_attack_count=len(runtime_attack_names),
+                    role="positive_temporal_tamper",
+                ),
             )
             command_results.append(temporal_result)
             completed_command_count += 1
@@ -1527,6 +1649,12 @@ def run_videomark_official_runtime(config: VideoMarkOfficialRuntimeConfig) -> di
                 log_path=output_root / "logs" / "videomark_clean_negative_embedding_and_extraction",
                 timeout_seconds=float(config.timeout_seconds),
                 prompt_variants=int(config.prompt_variants),
+                progress_probe=_build_videomark_embedding_progress_probe(
+                    video_results_path=clean_negative_video_results_path,
+                    result_dir=clean_negative_result_dir,
+                    expected_video_unit_count=expected_video_unit_count,
+                    role="clean_negative_embedding",
+                ),
             )
             command_results.append(clean_embedding_result)
             completed_command_count += 1
@@ -1548,6 +1676,12 @@ def run_videomark_official_runtime(config: VideoMarkOfficialRuntimeConfig) -> di
                 timeout_seconds=float(config.timeout_seconds),
                 prompt_variants=int(config.prompt_variants),
                 runtime_attack_names=runtime_attack_names,
+                progress_probe=_build_videomark_temporal_progress_probe(
+                    temporal_results_path=clean_negative_temporal_results_path,
+                    expected_video_unit_count=expected_video_unit_count,
+                    runtime_attack_count=len(runtime_attack_names),
+                    role="clean_negative_temporal_tamper",
+                ),
             )
             command_results.append(clean_temporal_result)
             completed_command_count += 1

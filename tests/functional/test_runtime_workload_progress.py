@@ -93,6 +93,55 @@ def test_official_subprocess_runner_emits_start_and_finish_progress(capsys: pyte
 
 
 @pytest.mark.quick
+def test_official_subprocess_runner_emits_probe_progress(capsys: pytest.CaptureFixture[str]) -> None:
+    """官方长命令应支持文件级进度探针, 避免只显示 elapsed 心跳。"""
+
+    result = run_official_subprocess_with_heartbeat(
+        [
+            sys.executable,
+            "-c",
+            "print('official stdout payload')",
+        ],
+        cwd=Path("."),
+        stage_id="official_command:test_baseline:with_probe",
+        progress_probe=lambda: {
+            "generated_video_files": "3/10",
+            "progress_percent": "30.0",
+        },
+    )
+
+    captured = capsys.readouterr()
+    assert result.returncode == 0
+    assert "official stdout payload" in result.stdout
+    assert "generated_video_files=3/10" in captured.out
+    assert "progress_percent=30.0" in captured.out
+
+
+@pytest.mark.quick
+def test_official_subprocess_runner_forwards_child_governed_progress(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """官方子进程内部的 SSTW 自有进度行必须实时转发。"""
+
+    result = run_official_subprocess_with_heartbeat(
+        [
+            sys.executable,
+            "-c",
+            "print('SSTW 工作量进度 | child_stage | 1/2 (50.0%)', flush=True); print('ordinary payload')",
+        ],
+        cwd=Path("."),
+        stage_id="official_command:test_baseline:child_progress",
+    )
+
+    captured = capsys.readouterr()
+    assert result.returncode == 0
+    assert "ordinary payload" in result.stdout
+    assert "SSTW 工作量进度 | child_stage | 1/2 (50.0%)" in result.stdout
+    assert "SSTW 工作量进度 | child_stage | 1/2 (50.0%)" in captured.out
+    assert "ordinary payload" not in captured.out
+
+
+@pytest.mark.quick
 def test_noisy_library_progress_defaults_are_configured(monkeypatch: pytest.MonkeyPatch) -> None:
     """Colab 子进程默认应压制第三方下载、加载和 tqdm 进度噪声。"""
     for key in [
@@ -293,6 +342,8 @@ def test_external_baseline_notebooks_use_count_first_progress_contract() -> None
             "emit_official_reference_plan(",
             "official_reference_commands",
             "run_official_subprocess_with_heartbeat",
+            "_build_videomark_embedding_progress_probe",
+            "_build_videomark_temporal_progress_probe",
             "official_bundle_record_write",
         ],
         "external_baseline/videoshield_official_runtime.py": [
@@ -304,12 +355,15 @@ def test_external_baseline_notebooks_use_count_first_progress_contract() -> None
             "emit_official_reference_plan(",
             "official_reference_commands",
             "run_official_subprocess_with_heartbeat",
+            "_build_sigmark_generation_progress_probe",
+            "_build_sigmark_extract_progress_probe",
             "official_bundle_record_write",
         ],
         "external_baseline/vidsig_official_runtime.py": [
             "emit_official_reference_plan(",
             "official_reference_commands",
             "run_official_subprocess_with_heartbeat",
+            "_build_vidsig_generate_ms_progress_probe",
             "official_bundle_record_write",
         ],
         "external_baseline/official_bundle_generator.py": [

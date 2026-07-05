@@ -9,9 +9,12 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+import queue
 import subprocess
+import sys
+import threading
 import time
-from typing import Any, Mapping
+from typing import Any, Callable, Mapping
 
 from main.core.progress import emit_progress_event
 
@@ -72,6 +75,47 @@ def emit_official_reference_plan(
     emit_progress_event(f"official_reference_plan:{baseline_id}", " | ".join(parts))
 
 
+def _format_progress_probe_payload(payload: Mapping[str, Any] | str | None) -> str:
+    """把外部进度探针结果格式化为进度行片段。"""
+
+    if payload is None:
+        return ""
+    if isinstance(payload, str):
+        return payload.strip()
+    parts: list[str] = []
+    for key, value in payload.items():
+        parts.append(f"{key}={value}")
+    return " | ".join(parts)
+
+
+def _safe_progress_probe_payload(
+    progress_probe: Callable[[], Mapping[str, Any] | str | None] | None,
+) -> str:
+    """安全读取进度探针。
+
+    进度显示不能影响官方命令本身的执行。若探针因为目录暂未创建等原因失败,
+    这里只输出探针失败摘要, 不中断子进程。
+    """
+
+    if progress_probe is None:
+        return ""
+    try:
+        return _format_progress_probe_payload(progress_probe())
+    except Exception as exc:  # pragma: no cover - 只保护真实 Colab 文件系统竞态
+        return f"progress_probe_error={type(exc).__name__}:{exc}"
+
+
+def _forward_governed_progress_line(line: str) -> None:
+    """转发子进程中的 SSTW 自有进度行。
+
+    官方脚本或仓库子命令的普通 stdout / stderr 仍然只被捕获后落盘, 以避免第三方
+    tqdm 噪声刷屏。只有 `SSTW 工作量进度` 这种项目自有进度行会实时显示。
+    """
+
+    if line.startswith("SSTW 工作量进度 |"):
+        print(line, end="", file=sys.stdout, flush=True)
+
+
 def run_official_subprocess_with_heartbeat(
     command: list[str],
     *,
@@ -79,6 +123,7 @@ def run_official_subprocess_with_heartbeat(
     env: Mapping[str, str] | None = None,
     timeout_seconds: float | None = None,
     stage_id: str,
+    progress_probe: Callable[[], Mapping[str, Any] | str | None] | None = None,
 ) -> subprocess.CompletedProcess[str]:
     """运行官方命令, 捕获日志并定期输出低噪声心跳。
 
@@ -93,6 +138,9 @@ def run_official_subprocess_with_heartbeat(
         merged_env.update({str(key): str(value) for key, value in env.items()})
     started_at = time.time()
     emit_progress_event(stage_id, f"start | cwd={Path(cwd).as_posix()}")
+    progress_text = _safe_progress_probe_payload(progress_probe)
+    if progress_text:
+        emit_progress_event(stage_id, f"progress | {progress_text}")
     try:
         process = subprocess.Popen(
             command,
@@ -101,49 +149,79 @@ def run_official_subprocess_with_heartbeat(
             text=True,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
+            bufsize=1,
         )
     except OSError as exc:
         message = f"official_command_launch_error:{exc}"
         emit_progress_event(stage_id, f"failed_to_launch | {message}")
         return subprocess.CompletedProcess(command, -1, stdout="", stderr=message)
 
+    output_queue: queue.Queue[tuple[str, str | None]] = queue.Queue()
+
+    def _read_pipe(stream_name: str, pipe: Any) -> None:
+        """读取子进程管道, 同时保留完整输出供调用方落盘。"""
+
+        if pipe is None:
+            output_queue.put((stream_name, None))
+            return
+        try:
+            for line in pipe:
+                output_queue.put((stream_name, line))
+        finally:
+            output_queue.put((stream_name, None))
+
+    stdout_reader = threading.Thread(target=_read_pipe, args=("stdout", process.stdout), daemon=True)
+    stderr_reader = threading.Thread(target=_read_pipe, args=("stderr", process.stderr), daemon=True)
+    stdout_reader.start()
+    stderr_reader.start()
+    stdout_chunks: list[str] = []
+    stderr_chunks: list[str] = []
+    closed_streams: set[str] = set()
     heartbeat_seconds = _heartbeat_seconds_from_env()
     effective_timeout = float(timeout_seconds or 0.0)
+    last_heartbeat_at = started_at
     while True:
         elapsed_sec = time.time() - started_at
-        wait_timeout = heartbeat_seconds
-        if effective_timeout > 0:
-            remaining_timeout = effective_timeout - elapsed_sec
-            if remaining_timeout <= 0:
-                process.kill()
-                stdout, stderr = process.communicate()
-                timeout_message = f"\ncommand_timeout_seconds={effective_timeout}"
-                emit_progress_event(stage_id, f"timeout | elapsed={elapsed_sec / 60.0:.1f} min")
-                return subprocess.CompletedProcess(
-                    command,
-                    -9,
-                    stdout=stdout,
-                    stderr=(stderr or "") + timeout_message,
-                )
-            wait_timeout = min(heartbeat_seconds, remaining_timeout)
+        if effective_timeout > 0 and elapsed_sec >= effective_timeout:
+            process.kill()
+            process.wait()
+            timeout_message = f"\ncommand_timeout_seconds={effective_timeout}"
+            stderr_chunks.append(timeout_message)
+            emit_progress_event(stage_id, f"timeout | elapsed={elapsed_sec / 60.0:.1f} min")
+            return subprocess.CompletedProcess(
+                command,
+                -9,
+                stdout="".join(stdout_chunks),
+                stderr="".join(stderr_chunks),
+            )
         try:
-            stdout, stderr = process.communicate(timeout=wait_timeout)
+            stream_name, line = output_queue.get(timeout=0.2)
+            if line is None:
+                closed_streams.add(stream_name)
+            elif stream_name == "stdout":
+                stdout_chunks.append(line)
+                _forward_governed_progress_line(line)
+            else:
+                stderr_chunks.append(line)
+                _forward_governed_progress_line(line)
+        except queue.Empty:
+            pass
+        now = time.time()
+        if process.poll() is None and now - last_heartbeat_at >= heartbeat_seconds:
+            progress_text = _safe_progress_probe_payload(progress_probe)
+            suffix = f" | {progress_text}" if progress_text else ""
+            emit_progress_event(stage_id, f"running | elapsed={(now - started_at) / 60.0:.1f} min{suffix}")
+            last_heartbeat_at = now
+        if process.poll() is not None and {"stdout", "stderr"}.issubset(closed_streams):
+            stdout_reader.join(timeout=1.0)
+            stderr_reader.join(timeout=1.0)
             emit_progress_event(
                 stage_id,
                 f"finish | return_code={process.returncode} | elapsed={_elapsed_min(started_at):.1f} min",
             )
-            return subprocess.CompletedProcess(command, int(process.returncode or 0), stdout=stdout, stderr=stderr)
-        except subprocess.TimeoutExpired:
-            elapsed_sec = time.time() - started_at
-            emit_progress_event(stage_id, f"running | elapsed={elapsed_sec / 60.0:.1f} min")
-            if effective_timeout > 0 and elapsed_sec >= effective_timeout:
-                process.kill()
-                stdout, stderr = process.communicate()
-                timeout_message = f"\ncommand_timeout_seconds={effective_timeout}"
-                emit_progress_event(stage_id, f"timeout | elapsed={elapsed_sec / 60.0:.1f} min")
-                return subprocess.CompletedProcess(
-                    command,
-                    -9,
-                    stdout=stdout,
-                    stderr=(stderr or "") + timeout_message,
-                )
+            return subprocess.CompletedProcess(
+                command,
+                int(process.returncode or 0),
+                stdout="".join(stdout_chunks),
+                stderr="".join(stderr_chunks),
+            )

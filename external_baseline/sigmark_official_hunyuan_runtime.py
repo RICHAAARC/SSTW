@@ -16,7 +16,7 @@ from pathlib import Path
 import re
 import shutil
 import sys
-from typing import Any, Mapping
+from typing import Any, Callable, Mapping
 
 from external_baseline.official_eval_adapters.common import REPOSITORY_GENERATED_OFFICIAL_PROVENANCE
 from external_baseline.official_runtime_progress import (
@@ -721,6 +721,7 @@ def _run_sigmark_command(
     cwd: Path,
     log_path: Path,
     timeout_seconds: float,
+    progress_probe: Callable[[], Mapping[str, Any] | str | None] | None = None,
 ) -> dict[str, Any]:
     """运行单条 SIGMark 官方命令并写出 stdout / stderr。"""
 
@@ -729,6 +730,7 @@ def _run_sigmark_command(
         cwd=cwd,
         timeout_seconds=timeout_seconds if timeout_seconds > 0 else None,
         stage_id=f"official_command:{BASELINE_ID}:{log_path.name}",
+        progress_probe=progress_probe,
     )
     stdout_path = log_path.with_name(log_path.name + "_stdout.txt")
     stderr_path = log_path.with_name(log_path.name + "_stderr.txt")
@@ -743,6 +745,87 @@ def _run_sigmark_command(
         "stdout_tail": completed.stdout[-2000:],
         "stderr_tail": completed.stderr[-2000:],
     }
+
+
+def _count_sigmark_video_files(output_path: Path, runtime_dimension: str) -> int:
+    """统计 SIGMark 输出目录中已落盘的论文样本视频数量。"""
+
+    dimension_dir = output_path / runtime_dimension
+    if not dimension_dir.exists():
+        return 0
+    return sum(1 for path in dimension_dir.glob("*.mp4") if path.is_file())
+
+
+def _latest_sigmark_bit_accuracy_npz(output_path: Path) -> Path | None:
+    """返回 SIGMark 输出目录中最新的 bit accuracy npz。"""
+
+    candidates = _find_bit_accuracy_npz(output_path)
+    return candidates[-1] if candidates else None
+
+
+def _count_sigmark_npz_keys(npz_path: Path | None) -> int:
+    """统计 SIGMark bit accuracy npz 中已完成的样本 key 数。"""
+
+    if npz_path is None or not npz_path.is_file():
+        return 0
+    try:
+        import numpy as np
+
+        payload = np.load(npz_path, allow_pickle=True)
+        return len(payload.files)
+    except Exception:  # pragma: no cover - 保护真实 Colab 中 npz 正在写入的竞态
+        return 0
+
+
+def _build_sigmark_generation_progress_probe(
+    *,
+    output_path: Path,
+    runtime_dimension: str,
+    expected_video_unit_count: int,
+    role: str,
+) -> Callable[[], Mapping[str, Any]]:
+    """构造 SIGMark gen 命令的论文样本视频生成进度探针。"""
+
+    expected = max(0, int(expected_video_unit_count))
+
+    def _probe() -> Mapping[str, Any]:
+        generated = min(_count_sigmark_video_files(output_path, runtime_dimension), expected)
+        percent = 100.0 if expected == 0 else 100.0 * generated / expected
+        phase = "video_generation_finish" if generated >= expected and expected > 0 else "video_generation"
+        return {
+            "role": role,
+            "phase": phase,
+            "generated_video_units": f"{generated}/{expected}",
+            "progress_percent": f"{percent:.1f}",
+        }
+
+    return _probe
+
+
+def _build_sigmark_extract_progress_probe(
+    *,
+    output_path: Path,
+    expected_video_unit_count: int,
+    role: str,
+) -> Callable[[], Mapping[str, Any]]:
+    """构造 SIGMark extract 命令的论文样本检测进度探针。"""
+
+    expected = max(0, int(expected_video_unit_count))
+
+    def _probe() -> Mapping[str, Any]:
+        npz_path = _latest_sigmark_bit_accuracy_npz(output_path)
+        extracted = min(_count_sigmark_npz_keys(npz_path), expected)
+        percent = 100.0 if expected == 0 else 100.0 * extracted / expected
+        phase = "watermark_extract_finish" if extracted >= expected and expected > 0 else "watermark_extract"
+        return {
+            "role": role,
+            "phase": phase,
+            "extracted_video_units": f"{extracted}/{expected}",
+            "progress_percent": f"{percent:.1f}",
+            "bit_accuracy_npz_path": str(npz_path) if npz_path else "pending",
+        }
+
+    return _probe
 
 
 def _find_bit_accuracy_npz(output_path: Path) -> list[Path]:
@@ -1224,13 +1307,14 @@ def run_sigmark_official_hunyuan_runtime(config: SigmarkOfficialHunyuanRuntimeCo
         prompt_rows=prompt_rows,
     )
     runtime_attack_names = tuple(sorted({str(record.get("attack_name")) for record in records if record.get("attack_name")}))
+    expected_generated_video_unit_count = len(prompt_rows) * int(config.num_videos_per_prompt)
     planned_command_count = 1
     if config.generate_clean_negative_reference:
         planned_command_count += 1 + 2 * len(runtime_attack_names)
     emit_official_reference_plan(
         BASELINE_ID,
         runtime_detection_record_count=len(records),
-        generated_video_unit_count=len(prompt_rows),
+        generated_video_unit_count=expected_generated_video_unit_count,
         runtime_attack_count=len(runtime_attack_names),
         extra=f"official_command_count={planned_command_count}",
     )
@@ -1301,6 +1385,12 @@ def run_sigmark_official_hunyuan_runtime(config: SigmarkOfficialHunyuanRuntimeCo
             cwd=runtime_source_dir,
             log_path=output_root / "logs" / "sigmark_gen",
             timeout_seconds=float(config.timeout_seconds),
+            progress_probe=_build_sigmark_generation_progress_probe(
+                output_path=output_path,
+                runtime_dimension=config.runtime_dimension,
+                expected_video_unit_count=expected_generated_video_unit_count,
+                role="positive_gen",
+            ),
         )
         command_results.append(gen_result)
         _record_command_progress("gen", gen_result)
@@ -1315,6 +1405,12 @@ def run_sigmark_official_hunyuan_runtime(config: SigmarkOfficialHunyuanRuntimeCo
                 cwd=runtime_source_dir,
                 log_path=output_root / "logs" / "sigmark_clean_negative_gen",
                 timeout_seconds=float(config.timeout_seconds),
+                progress_probe=_build_sigmark_generation_progress_probe(
+                    output_path=clean_negative_output_path,
+                    runtime_dimension=config.runtime_dimension,
+                    expected_video_unit_count=expected_generated_video_unit_count,
+                    role="clean_negative_gen",
+                ),
             )
             command_results.append(clean_gen_result)
             _record_command_progress("clean_negative_gen", clean_gen_result)
@@ -1385,6 +1481,13 @@ def run_sigmark_official_hunyuan_runtime(config: SigmarkOfficialHunyuanRuntimeCo
                     cwd=runtime_source_dir,
                     log_path=output_root / "logs" / f"sigmark_extract_{_safe_token(attack_name)}",
                     timeout_seconds=float(config.timeout_seconds),
+                    progress_probe=_build_sigmark_extract_progress_probe(
+                        output_path=Path(attack_output),
+                        expected_video_unit_count=sum(
+                            1 for record in records if str(record.get("attack_name") or "clean") == str(attack_name)
+                        ),
+                        role=f"positive_extract:{attack_name}",
+                    ),
                 )
                 command_results.append(attack_extract_result)
                 _record_command_progress(f"attack_extract:{attack_name}", attack_extract_result)
@@ -1416,6 +1519,13 @@ def run_sigmark_official_hunyuan_runtime(config: SigmarkOfficialHunyuanRuntimeCo
                     cwd=runtime_source_dir,
                     log_path=output_root / "logs" / f"sigmark_clean_negative_extract_{_safe_token(attack_name)}",
                     timeout_seconds=float(config.timeout_seconds),
+                    progress_probe=_build_sigmark_extract_progress_probe(
+                        output_path=Path(attack_output),
+                        expected_video_unit_count=sum(
+                            1 for record in records if str(record.get("attack_name") or "clean") == str(attack_name)
+                        ),
+                        role=f"clean_negative_extract:{attack_name}",
+                    ),
                 )
                 command_results.append(clean_attack_extract_result)
                 _record_command_progress(f"clean_negative_attack_extract:{attack_name}", clean_attack_extract_result)

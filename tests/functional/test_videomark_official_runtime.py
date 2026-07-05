@@ -8,6 +8,7 @@ import hashlib
 
 import pytest
 
+import external_baseline.videomark_official_runtime as videomark_runtime
 from external_baseline.videomark_official_runtime import (
     VideoMarkOfficialRuntimeConfig,
     build_default_videomark_official_config_from_env,
@@ -537,3 +538,62 @@ def test_videomark_bundle_writer_rejects_unknown_runtime_attack_without_aggregat
     assert "videomark_runtime_attack_not_supported_by_official_temporal_protocol" in result["failures"][0]["failure_reason"]
     record_path = bundle_root / "videomark" / "records" / "prompt_a__seed_0__unsupported_custom_runtime_attack.json"
     assert not record_path.exists()
+
+
+@pytest.mark.quick
+def test_videomark_embedding_progress_probe_counts_paper_sample_outputs(tmp_path: Path) -> None:
+    """VideoMark embedding 进度探针必须统计论文样本视频与 extraction 完成数量。"""
+
+    result_dir = tmp_path / "official_outputs" / "videomark" / "modelscope" / "512bit"
+    (result_dir / "prompt_0000_a_0").mkdir(parents=True)
+    (result_dir / "prompt_0000_a_0" / "wm.mp4").write_bytes(b"video")
+    (result_dir / "prompt_0001_b_0").mkdir(parents=True)
+    (result_dir / "prompt_0001_b_0" / "wm.mp4").write_bytes(b"video")
+    video_results_path = result_dir / "video_results.json"
+    _write_json(video_results_path, {"prompt_0000_a_0": {"decode_acc": 0.8}})
+
+    probe = videomark_runtime._build_videomark_embedding_progress_probe(
+        video_results_path=video_results_path,
+        result_dir=result_dir,
+        expected_video_unit_count=4,
+        role="positive_embedding",
+    )
+    progress = probe()
+
+    assert progress["role"] == "positive_embedding"
+    assert progress["generated_video_units"] == "2/4"
+    assert progress["extracted_video_units"] == "1/4"
+    assert progress["progress_percent"] == "25.0"
+
+
+@pytest.mark.quick
+def test_videomark_temporal_progress_probe_counts_sample_attack_outputs(tmp_path: Path) -> None:
+    """VideoMark temporal 进度探针必须统计 prompt / seed / attack 级完成数量。"""
+
+    temporal_results_path = tmp_path / "official_outputs" / "videomark" / "modelscope" / "512bit" / "temporal_results.json"
+    _write_json(
+        temporal_results_path,
+        {
+            "prompt_0000_a_0": {
+                "video_compression_runtime": {"decode_acc": 0.7, "frames_acc": 0.9},
+                "temporal_crop_runtime": {"decode_acc": 0.6},
+            },
+            "prompt_0001_b_0": {
+                "video_compression_runtime": {"decode_acc": 0.5, "frames_acc": 0.8},
+            },
+        },
+    )
+
+    probe = videomark_runtime._build_videomark_temporal_progress_probe(
+        temporal_results_path=temporal_results_path,
+        expected_video_unit_count=2,
+        runtime_attack_count=2,
+        role="positive_temporal_tamper",
+    )
+    progress = probe()
+
+    assert progress["role"] == "positive_temporal_tamper"
+    assert progress["completed_video_units"] == "2/2"
+    assert progress["completed_sample_attacks"] == "2/4"
+    assert progress["runtime_attack_count"] == 2
+    assert progress["progress_percent"] == "50.0"

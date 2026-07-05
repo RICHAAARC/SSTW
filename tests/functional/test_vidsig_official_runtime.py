@@ -149,7 +149,9 @@ def test_vidsig_runtime_dry_run_builds_prompt_seed_yaml_and_command(tmp_path: Pa
     assert "write_attack_log_bit_accuracy_for_formal_score" in manifest["runtime_patch_audit"]["patched_steps"]
     assert manifest["generate_command"][-1] == "src/generate_ms.py"
     patched_source_text = Path(manifest["runtime_source_dir"]) / "src" / "generate_ms.py"
-    assert "sstw_prepare_vidsig_decoder_input" in patched_source_text.read_text(encoding="utf-8")
+    patched_generate_source = patched_source_text.read_text(encoding="utf-8")
+    assert "sstw_prepare_vidsig_decoder_input" in patched_generate_source
+    assert "sstw_write_vidsig_generate_progress" in patched_generate_source
     patched_attack_text = Path(manifest["runtime_source_dir"]) / "src" / "attack.py"
     assert "sstw formal bit accuracy" in patched_attack_text.read_text(encoding="utf-8")
     yaml_text = Path(manifest["prompt_manifest"]["yaml_path"]).read_text(encoding="utf-8")
@@ -157,6 +159,53 @@ def test_vidsig_runtime_dry_run_builds_prompt_seed_yaml_and_command(tmp_path: Pa
     assert str(msg_decoder_path).replace("\\", "\\\\") in yaml_text
     assert str(vae_checkpoint_path).replace("\\", "\\\\") in yaml_text
     assert "  - 101" in yaml_text
+    assert "sstw_progress_path:" in yaml_text
+    assert manifest["prompt_manifest"]["expected_generated_video_unit_count"] == 1
+    assert manifest["prompt_manifest"]["expected_generate_ms_video_file_count"] == 2
+
+
+@pytest.mark.quick
+def test_vidsig_generate_ms_progress_probe_counts_clean_and_watermarked_outputs(tmp_path: Path) -> None:
+    """VidSig generate_ms 长命令进度应来自官方输出文件数量。"""
+
+    clean_dir = tmp_path / "official_generate_ms_outputs" / "original" / "videos"
+    watermarked_dir = tmp_path / "official_generate_ms_outputs" / "video_signature" / "videos"
+    clean_dir.mkdir(parents=True)
+    watermarked_dir.mkdir(parents=True)
+    (clean_dir / "0.mp4").write_bytes(b"clean")
+    (clean_dir / "1.mp4").write_bytes(b"clean")
+    (watermarked_dir / "0.mp4").write_bytes(b"watermarked")
+    prompt_manifest = {
+        "clean_video_dir": str(clean_dir),
+        "watermarked_video_dir": str(watermarked_dir),
+        "generate_ms_progress_path": str(tmp_path / "official_generate_ms_outputs" / "logs" / "sstw_generate_ms_progress.jsonl"),
+        "prompt_rows": [{"prompt_id": "p0"}, {"prompt_id": "p1"}],
+        "seed_rows": [{"seed_id": "s0"}],
+    }
+    progress_path = Path(prompt_manifest["generate_ms_progress_path"])
+    progress_path.parent.mkdir(parents=True)
+    progress_path.write_text(
+        json.dumps({
+            "phase": "watermarked_video_generation_start",
+            "completed": 3,
+            "total": 4,
+            "current_unit": 2,
+            "unit_total": 2,
+        }, ensure_ascii=False)
+        + "\n",
+        encoding="utf-8",
+    )
+
+    probe = vidsig_runtime._build_vidsig_generate_ms_progress_probe(prompt_manifest)
+    progress = probe()
+
+    assert progress["phase"] == "watermarked_video_generation_start"
+    assert progress["generated_video_files"] == "3/4"
+    assert progress["clean_video_files"] == "2/2"
+    assert progress["watermarked_video_files"] == "1/2"
+    assert progress["progress_percent"] == "75.0"
+    assert progress["official_reported_progress"] == "3/4"
+    assert progress["current_video_unit"] == "2/2"
 
 
 @pytest.mark.quick

@@ -350,6 +350,56 @@ def test_sigmark_attack_extract_output_preparation_copies_state_and_attacks_vide
 
 
 @pytest.mark.quick
+def test_sigmark_generation_progress_probe_counts_paper_sample_videos(tmp_path: Path) -> None:
+    """SIGMark gen 进度探针必须统计论文样本视频落盘数量。"""
+
+    output_path = tmp_path / "official_outputs"
+    dimension_dir = output_path / "sstw_runtime_prompt"
+    dimension_dir.mkdir(parents=True)
+    (dimension_dir / "sample-0.mp4").write_bytes(b"video")
+    (dimension_dir / "sample-1.mp4").write_bytes(b"video")
+
+    probe = sigmark_runtime._build_sigmark_generation_progress_probe(
+        output_path=output_path,
+        runtime_dimension="sstw_runtime_prompt",
+        expected_video_unit_count=4,
+        role="positive_gen",
+    )
+    progress = probe()
+
+    assert progress["role"] == "positive_gen"
+    assert progress["generated_video_units"] == "2/4"
+    assert progress["progress_percent"] == "50.0"
+
+
+@pytest.mark.quick
+def test_sigmark_extract_progress_probe_counts_bit_accuracy_keys(tmp_path: Path) -> None:
+    """SIGMark extract 进度探针必须统计 bit accuracy npz 中的样本 key 数量。"""
+
+    output_path = tmp_path / "official_attack_output"
+    output_path.mkdir(parents=True)
+    np.savez(
+        output_path / "HunyuanVideo-community-sigmark-bit_accuracy.npz",
+        **{
+            "sstw_runtime_prompt/sample-0": np.array([0.8]),
+            "sstw_runtime_prompt/sample-1": np.array([0.7]),
+        },
+    )
+
+    probe = sigmark_runtime._build_sigmark_extract_progress_probe(
+        output_path=output_path,
+        expected_video_unit_count=4,
+        role="positive_extract:video_compression_runtime",
+    )
+    progress = probe()
+
+    assert progress["role"] == "positive_extract:video_compression_runtime"
+    assert progress["extracted_video_units"] == "2/4"
+    assert progress["progress_percent"] == "50.0"
+    assert progress["bit_accuracy_npz_path"].endswith("bit_accuracy.npz")
+
+
+@pytest.mark.quick
 def test_sigmark_hunyuan_runtime_writes_governed_failure_manifest_when_model_missing(tmp_path: Path) -> None:
     """模型缺失时运行器必须写出失败 manifest, 而不是伪造 baseline 分数。"""
 

@@ -16,7 +16,7 @@ from pathlib import Path
 import re
 import shutil
 import sys
-from typing import Any, Mapping
+from typing import Any, Callable, Mapping
 
 from external_baseline.official_eval_adapters.common import REPOSITORY_GENERATED_OFFICIAL_PROVENANCE
 from external_baseline.official_runtime_progress import (
@@ -329,11 +329,113 @@ def sstw_prepare_vidsig_decoder_input(frames, device):
         tensor = tensor[:3]
         tensors.append(normalize(tensor))
     return torch.stack(tensors).to(device)
+
+
+def sstw_write_vidsig_generate_progress(params, phase, completed, total, current_unit=None, unit_total=None):
+    progress_path = getattr(params, "sstw_progress_path", "")
+    if not progress_path:
+        return
+    payload = {
+        "phase": str(phase),
+        "completed": int(completed),
+        "total": int(total),
+        "current_unit": None if current_unit is None else int(current_unit),
+        "unit_total": None if unit_total is None else int(unit_total),
+        "time": time.time(),
+    }
+    os.makedirs(os.path.dirname(progress_path), exist_ok=True)
+    with open(progress_path, "a", encoding="utf-8") as progress_file:
+        progress_file.write(json.dumps(payload, ensure_ascii=False) + "\\n")
+        progress_file.flush()
 '''
         anchor = "normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406],  \n                                std=[0.229, 0.224, 0.225])\n"
         if anchor in text:
             text = text.replace(anchor, anchor + helper, 1)
             patched_steps.append("insert_decoder_input_helper")
+            patched_steps.append("insert_generate_ms_progress_helper")
+    progress_setup_anchor = "    with open(params.prompt_file, 'r') as f:\n        prompts = [line.strip() for line in f]\n"
+    progress_setup_replacement = (
+        "    with open(params.prompt_file, 'r') as f:\n"
+        "        prompts = [line.strip() for line in f]\n"
+        "    sstw_total_units = len(prompts) * len(params.seed)\n"
+        "    sstw_total_video_files = 2 * sstw_total_units\n"
+        "    sstw_write_vidsig_generate_progress(params, 'model_load_start', 0, sstw_total_video_files)\n"
+    )
+    if "sstw_total_video_files = 2 * sstw_total_units" not in text and progress_setup_anchor in text:
+        text = text.replace(progress_setup_anchor, progress_setup_replacement, 1)
+        patched_steps.append("write_generate_ms_model_load_start_progress")
+    model_load_anchor = "    watermarked_vae.to(torch.float16)\n"
+    model_load_replacement = (
+        "    watermarked_vae.to(torch.float16)\n"
+        "    sstw_write_vidsig_generate_progress(params, 'model_load_finish', 0, sstw_total_video_files)\n"
+    )
+    if "sstw_write_vidsig_generate_progress(params, 'model_load_finish'" not in text and model_load_anchor in text:
+        text = text.replace(model_load_anchor, model_load_replacement, 1)
+        patched_steps.append("write_generate_ms_model_load_finish_progress")
+    clean_loop_anchor = (
+        "        for j, seed in enumerate(params.seed):\n"
+        "            generator = torch.manual_seed(seed)\n"
+    )
+    clean_loop_replacement = (
+        "        for j, seed in enumerate(params.seed):\n"
+        "            sstw_unit_index = i * len(params.seed) + j\n"
+        "            sstw_write_vidsig_generate_progress(params, 'clean_video_generation_start', sstw_unit_index, sstw_total_video_files, sstw_unit_index + 1, sstw_total_units)\n"
+        "            generator = torch.manual_seed(seed)\n"
+    )
+    if "clean_video_generation_start" not in text and clean_loop_anchor in text:
+        text = text.replace(clean_loop_anchor, clean_loop_replacement, 1)
+        patched_steps.append("write_generate_ms_clean_unit_start_progress")
+    clean_finish_anchor = (
+        "            export_to_video(nw_frames, os.path.join(params.nw_saved_dir, 'videos', f\"{i * len(params.seed) + j}.mp4\"))\n"
+        "            np.save(os.path.join(params.nw_saved_dir, 'frames', f\"{i * len(params.seed) + j}.npy\"), nw_frames)\n"
+    )
+    clean_finish_replacement = (
+        "            export_to_video(nw_frames, os.path.join(params.nw_saved_dir, 'videos', f\"{i * len(params.seed) + j}.mp4\"))\n"
+        "            np.save(os.path.join(params.nw_saved_dir, 'frames', f\"{i * len(params.seed) + j}.npy\"), nw_frames)\n"
+        "            sstw_write_vidsig_generate_progress(params, 'clean_video_generation_finish', sstw_unit_index + 1, sstw_total_video_files, sstw_unit_index + 1, sstw_total_units)\n"
+    )
+    if "clean_video_generation_finish" not in text and clean_finish_anchor in text:
+        text = text.replace(clean_finish_anchor, clean_finish_replacement, 1)
+        patched_steps.append("write_generate_ms_clean_unit_finish_progress")
+    watermarked_loop_anchor = (
+        "    for i, prompt in enumerate(prompts):\n"
+        "        \n"
+        "        for j, seed in enumerate(params.seed):\n"
+        "            generator = torch.manual_seed(seed)\n"
+        "            w_frames = pipe(prompt = prompt, \n"
+    )
+    watermarked_loop_replacement = (
+        "    for i, prompt in enumerate(prompts):\n"
+        "        \n"
+        "        for j, seed in enumerate(params.seed):\n"
+        "            sstw_unit_index = i * len(params.seed) + j\n"
+        "            sstw_write_vidsig_generate_progress(params, 'watermarked_video_generation_start', sstw_total_units + sstw_unit_index, sstw_total_video_files, sstw_unit_index + 1, sstw_total_units)\n"
+        "            generator = torch.manual_seed(seed)\n"
+        "            w_frames = pipe(prompt = prompt, \n"
+    )
+    if "watermarked_video_generation_start" not in text and watermarked_loop_anchor in text:
+        text = text.replace(watermarked_loop_anchor, watermarked_loop_replacement, 1)
+        patched_steps.append("write_generate_ms_watermarked_unit_start_progress")
+    watermarked_finish_anchor = (
+        "            export_to_video(w_frames, os.path.join(params.w_saved_dir, 'videos', f\"{i * len(params.seed) + j}.mp4\"))\n"
+        "            np.save(os.path.join(params.w_saved_dir, 'frames', f\"{i * len(params.seed) + j}.npy\"), w_frames)\n"
+    )
+    watermarked_finish_replacement = (
+        "            export_to_video(w_frames, os.path.join(params.w_saved_dir, 'videos', f\"{i * len(params.seed) + j}.mp4\"))\n"
+        "            np.save(os.path.join(params.w_saved_dir, 'frames', f\"{i * len(params.seed) + j}.npy\"), w_frames)\n"
+        "            sstw_write_vidsig_generate_progress(params, 'watermarked_video_generation_finish', sstw_total_units + sstw_unit_index + 1, sstw_total_video_files, sstw_unit_index + 1, sstw_total_units)\n"
+    )
+    if "watermarked_video_generation_finish" not in text and watermarked_finish_anchor in text:
+        text = text.replace(watermarked_finish_anchor, watermarked_finish_replacement, 1)
+        patched_steps.append("write_generate_ms_watermarked_unit_finish_progress")
+    final_log_anchor = "        f.write(f'average detect time: {np.mean(detect_time)}\\n')\n"
+    final_log_replacement = (
+        "        f.write(f'average detect time: {np.mean(detect_time)}\\n')\n"
+        "    sstw_write_vidsig_generate_progress(params, 'finish', sstw_total_video_files, sstw_total_video_files)\n"
+    )
+    if "sstw_write_vidsig_generate_progress(params, 'finish'" not in text and final_log_anchor in text:
+        text = text.replace(final_log_anchor, final_log_replacement, 1)
+        patched_steps.append("write_generate_ms_finish_progress")
     if "    msg_decoder.eval()\n    msg_decoder = msg_decoder.to(device)\n" not in text:
         before = "    msg_decoder.eval()\n"
         if before in text:
@@ -505,6 +607,7 @@ def _write_vidsig_generation_inputs(
     watermarked_dir = official_output_root / "video_signature"
     log_dir = official_output_root / "logs"
     log_dir.mkdir(parents=True, exist_ok=True)
+    progress_path = log_dir / "sstw_generate_ms_progress.jsonl"
     yaml_path = runtime_source_dir / "yamls" / "generate_ms.yml"
     yaml_lines = [
         f"prompt_file: {_json_scalar(str(prompt_file))}",
@@ -519,6 +622,7 @@ def _write_vidsig_generation_inputs(
         f"nw_saved_dir: {_json_scalar(str(clean_dir))}",
         f"w_saved_dir: {_json_scalar(str(watermarked_dir))}",
         f"output_dir: {_json_scalar(str(log_dir))}",
+        f"sstw_progress_path: {_json_scalar(str(progress_path))}",
         f"key: {_json_scalar(config.key)}",
         "seed:",
         *[f"  - {int(row['seed_value'])}" for row in seed_rows],
@@ -534,8 +638,11 @@ def _write_vidsig_generation_inputs(
         "watermarked_video_dir": str(watermarked_dir / "videos"),
         "watermarked_frame_dir": str(watermarked_dir / "frames"),
         "generation_log_path": str(log_dir / "log.txt"),
+        "generate_ms_progress_path": str(progress_path),
         "prompt_count": len(prompt_rows),
         "seed_count": len(seed_rows),
+        "expected_generated_video_unit_count": len(prompt_rows) * len(seed_rows),
+        "expected_generate_ms_video_file_count": 2 * len(prompt_rows) * len(seed_rows),
         "prompt_rows": list(prompt_rows),
         "seed_rows": list(seed_rows),
         "prompt_seed_policy": "same_prompt_seed_anchor_for_vidsig_official_generate_ms_flow",
@@ -544,7 +651,14 @@ def _write_vidsig_generation_inputs(
     return manifest
 
 
-def _run_command(command: list[str], *, cwd: Path, log_prefix: Path, timeout_seconds: float) -> dict[str, Any]:
+def _run_command(
+    command: list[str],
+    *,
+    cwd: Path,
+    log_prefix: Path,
+    timeout_seconds: float,
+    progress_probe: Callable[[], Mapping[str, Any] | str | None] | None = None,
+) -> dict[str, Any]:
     """运行一条官方命令并写出 stdout / stderr。"""
 
     completed = run_official_subprocess_with_heartbeat(
@@ -552,6 +666,7 @@ def _run_command(command: list[str], *, cwd: Path, log_prefix: Path, timeout_sec
         cwd=cwd,
         timeout_seconds=timeout_seconds if timeout_seconds > 0 else None,
         stage_id=f"official_command:{BASELINE_ID}:{log_prefix.name}",
+        progress_probe=progress_probe,
     )
     stdout_path = log_prefix.with_name(log_prefix.name + "_stdout.txt")
     stderr_path = log_prefix.with_name(log_prefix.name + "_stderr.txt")
@@ -566,6 +681,89 @@ def _run_command(command: list[str], *, cwd: Path, log_prefix: Path, timeout_sec
         "stdout_tail": completed.stdout[-2000:],
         "stderr_tail": completed.stderr[-2000:],
     }
+
+
+def _count_files(path: Path, pattern: str) -> int:
+    """统计目录下匹配文件数量, 目录不存在时返回0。"""
+
+    if not path.exists():
+        return 0
+    return sum(1 for item in path.glob(pattern) if item.is_file())
+
+
+def _read_last_jsonl_record(path: Path) -> Mapping[str, Any] | None:
+    """读取 JSONL 文件最后一条有效记录。"""
+
+    if not path.exists():
+        return None
+    last_payload: Mapping[str, Any] | None = None
+    for line in path.read_text(encoding="utf-8", errors="ignore").splitlines():
+        stripped = line.strip()
+        if not stripped:
+            continue
+        try:
+            payload = json.loads(stripped)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(payload, Mapping):
+            last_payload = payload
+    return last_payload
+
+
+def _build_vidsig_generate_ms_progress_probe(
+    prompt_manifest: Mapping[str, Any],
+) -> Callable[[], Mapping[str, Any]]:
+    """构造 VidSig `generate_ms.py` 文件级进度探针。
+
+    VidSig 官方 `generate_ms.py` 是一个长时间运行的单命令流程。它内部先生成
+    clean videos, 再生成 watermarked videos。由于官方脚本不会输出逐样本进度,
+    这里从官方输出目录中统计已经落盘的 `.mp4` 文件数量, 在不修改实验语义的
+    前提下给 Colab 提供真实样本级进度。
+    """
+
+    clean_video_dir = Path(str(prompt_manifest["clean_video_dir"]))
+    watermarked_video_dir = Path(str(prompt_manifest["watermarked_video_dir"]))
+    progress_path_text = str(prompt_manifest.get("generate_ms_progress_path") or "")
+    progress_path = Path(progress_path_text) if progress_path_text else None
+    prompt_count = len(list(prompt_manifest.get("prompt_rows") or []))
+    seed_count = len(list(prompt_manifest.get("seed_rows") or []))
+    expected_unit_count = int(prompt_manifest.get("expected_generated_video_unit_count") or (prompt_count * seed_count))
+    expected_video_file_count = expected_unit_count * 2
+
+    def _probe() -> Mapping[str, Any]:
+        clean_count = min(_count_files(clean_video_dir, "*.mp4"), expected_unit_count)
+        watermarked_count = min(_count_files(watermarked_video_dir, "*.mp4"), expected_unit_count)
+        completed = clean_count + watermarked_count
+        percent = 100.0 if expected_video_file_count == 0 else 100.0 * completed / expected_video_file_count
+        progress_payload = _read_last_jsonl_record(progress_path) if progress_path is not None else None
+        if progress_payload and progress_payload.get("phase"):
+            phase = str(progress_payload["phase"])
+        elif watermarked_count > 0:
+            phase = "watermarked_video_generation"
+        elif clean_count > 0:
+            phase = "clean_video_generation"
+        else:
+            phase = "model_load_or_first_video_generation"
+        result: dict[str, Any] = {
+            "phase": phase,
+            "generated_video_files": f"{completed}/{expected_video_file_count}",
+            "clean_video_files": f"{clean_count}/{expected_unit_count}",
+            "watermarked_video_files": f"{watermarked_count}/{expected_unit_count}",
+            "progress_percent": f"{percent:.1f}",
+        }
+        if progress_payload:
+            reported_completed = int(progress_payload.get("completed") or 0)
+            reported_total = int(progress_payload.get("total") or expected_video_file_count)
+            reported_percent = 100.0 if reported_total == 0 else 100.0 * reported_completed / reported_total
+            result.update({
+                "official_reported_progress": f"{reported_completed}/{reported_total}",
+                "official_reported_percent": f"{reported_percent:.1f}",
+            })
+            if progress_payload.get("current_unit") is not None and progress_payload.get("unit_total") is not None:
+                result["current_video_unit"] = f"{progress_payload['current_unit']}/{progress_payload['unit_total']}"
+        return result
+
+    return _probe
 
 
 def _parse_generation_positive_control(log_path: Path) -> dict[str, Any]:
@@ -923,6 +1121,7 @@ def run_vidsig_official_runtime(config: VidSigOfficialRuntimeConfig) -> dict[str
             cwd=runtime_source_dir,
             log_prefix=output_root / "logs" / "vidsig_generate_ms",
             timeout_seconds=float(config.timeout_seconds),
+            progress_probe=_build_vidsig_generate_ms_progress_probe(prompt_manifest),
         )
         command_results.append(generate_result)
         completed_command_count += 1

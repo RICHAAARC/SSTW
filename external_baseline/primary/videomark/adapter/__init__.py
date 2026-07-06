@@ -1,1 +1,0 @@
-"""VideoMark adapter 包。"""

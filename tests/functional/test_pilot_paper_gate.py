@@ -20,12 +20,10 @@ EXTERNAL_BASELINE_NAMES = (
     "explicit_dtw_temporal_alignment",
     "explicit_frame_matching_temporal_registration",
     "videoshield",
-    "sigmark",
-    "videomark",
     "vidsig",
     "videoseal",
 )
-MODERN_EXTERNAL_BASELINE_NAMES = {"videoshield", "sigmark", "videomark", "vidsig", "videoseal"}
+MODERN_EXTERNAL_BASELINE_NAMES = {"videoshield", "vidsig", "videoseal"}
 INTERNAL_ABLATION_VARIANTS = (
     "sstw_full_method",
     "endpoint_only_control",
@@ -552,17 +550,17 @@ def test_pilot_paper_gate_passes_calibrated_heldout_fixture(tmp_path: Path) -> N
     assert audit["validation_scale_to_pilot_paper_transition_decision"] == "PASS"
     assert audit["external_baseline_comparison_decision"] == "PASS"
     assert audit["external_baseline_self_containment_decision"] == "PASS"
-    assert audit["external_baseline_measured_adapter_count"] == 7
-    assert audit["modern_external_baseline_formal_measured_adapter_count"] == 5
+    assert audit["external_baseline_measured_adapter_count"] == 5
+    assert audit["modern_external_baseline_formal_measured_adapter_count"] == 3
     assert audit["missing_modern_external_baseline_formal_adapter_names"] == []
     assert audit["fair_detection_calibration_decision"] == "PASS"
-    assert audit["fair_detection_calibration_ready_count"] == 6
+    assert audit["fair_detection_calibration_ready_count"] == 4
     assert audit["fair_detection_calibration_missing_method_ids"] == []
     assert audit["formal_method_baseline_comparison_decision"] == "PASS"
-    assert audit["formal_method_baseline_comparison_ready_count"] == 6
+    assert audit["formal_method_baseline_comparison_ready_count"] == 4
     assert audit["formal_method_baseline_comparison_missing_method_ids"] == []
     assert audit["formal_baseline_difference_interval_decision"] == "PASS"
-    assert audit["formal_baseline_difference_interval_ready_count"] == 5
+    assert audit["formal_baseline_difference_interval_ready_count"] == 3
     assert audit["formal_baseline_difference_interval_missing_baseline_ids"] == []
     assert audit["pilot_paper_external_baseline_trace_count"] == 84
     assert audit["pilot_paper_external_baseline_trace_count_min"] == 84
@@ -620,7 +618,7 @@ def test_pilot_paper_gate_rejects_incomplete_formal_external_baseline(tmp_path: 
     assert "pilot_paper_formal_method_baseline_comparison_ready" in audit["missing_pilot_paper_requirements"]
     assert "pilot_paper_formal_baseline_difference_interval_ready" in audit["missing_pilot_paper_requirements"]
     assert audit["external_baseline_formal_incomplete_record_count"] > 0
-    assert audit["modern_external_baseline_formal_measured_adapter_count"] == 4
+    assert audit["modern_external_baseline_formal_measured_adapter_count"] == 2
     assert audit["missing_modern_external_baseline_formal_adapter_names"] == ["videoseal"]
     assert audit["fair_detection_calibration_missing_method_ids"] == ["videoseal"]
     assert audit["formal_method_baseline_comparison_missing_method_ids"] == ["videoseal"]

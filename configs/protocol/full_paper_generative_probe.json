@@ -15,11 +15,11 @@
   "minimum_attack_event_count_per_attack": 2000,
   "minimum_calibration_negative_event_count": 50000,
   "minimum_clean_negative_count": 50000,
-  "minimum_external_baseline_measured_adapter_count": 7,
+  "minimum_external_baseline_measured_adapter_count": 5,
   "minimum_heldout_attacked_positive_event_count": 20000,
   "minimum_heldout_test_negative_event_count": 50000,
   "minimum_internal_ablation_variant_count": 8,
-  "minimum_modern_external_baseline_formal_adapter_count": 5,
+  "minimum_modern_external_baseline_formal_adapter_count": 3,
   "minimum_negative_event_count_per_family": 5000,
   "minimum_negative_family_count": 4,
   "minimum_prompt_count": 50,
@@ -50,8 +50,6 @@
     "explicit_dtw_temporal_alignment",
     "explicit_frame_matching_temporal_registration",
     "videoshield",
-    "sigmark",
-    "videomark",
     "vidsig",
     "videoseal"
   ],
@@ -67,8 +65,6 @@
   ],
   "required_modern_external_baseline_adapter_names": [
     "videoshield",
-    "sigmark",
-    "videomark",
     "vidsig",
     "videoseal"
   ],

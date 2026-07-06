@@ -39,8 +39,6 @@ from external_baseline.official_runtime_progress import emit_official_reference_
 DEFAULT_RESOURCE_REQUIREMENTS = "configs/external_baselines/official_resource_requirements.json"
 MODERN_BASELINE_IDS = (
     "videoshield",
-    "sigmark",
-    "videomark",
     "vidsig",
     "videoseal",
 )
@@ -178,7 +176,7 @@ def generate_videoseal_official_bundle(
 ) -> dict[str, Any]:
     """用 VideoSeal 官方 API 为当前 runtime comparison unit 生成 official bundle。
 
-    这是当前 5 个主实验现代 baseline 中唯一可以在普通 Colab 会话中可靠自动生成的完整
+    这是当前保留的主实验现代 baseline 中可以在普通 Colab 会话中尝试自动生成的完整
     official bundle 路径。它使用 VideoSeal 官方 `videoseal.load`、`model.embed` 和
     `model.detect`, 不使用 SSTW detection score。
     """
@@ -335,7 +333,7 @@ def build_official_bundle_generation_plan(
     *,
     resource_config_path: str | Path = DEFAULT_RESOURCE_REQUIREMENTS,
 ) -> dict[str, Any]:
-    """构建 5 个 modern baseline 的 official bundle 自动生成计划。"""
+    """构建保留的 modern baseline official bundle 自动生成计划。"""
     records = comparable_detection_records(run_root)
     rows = _load_resource_rows(resource_config_path)
     plan_rows: list[dict[str, Any]] = []
@@ -387,24 +385,6 @@ def run_official_bundle_generation(
             generation_manifests.append(generate_videoseal_official_bundle(root, bundle))
         except Exception as exc:  # pragma: no cover - 依赖 Colab GPU 和第三方模型
             failures.append({"baseline_id": "videoseal", "failure_reason": str(exc)})
-    if generate_auto_supported and "videomark" in plan["auto_supported_baselines"]:
-        try:
-            from external_baseline.videomark_official_runtime import (
-                build_default_videomark_official_config_from_env,
-                run_videomark_official_runtime,
-            )
-
-            source_dir = Path("external_baseline/primary/videomark/source")
-            config = build_default_videomark_official_config_from_env(
-                run_root=root,
-                bundle_root=bundle,
-                source_dir=source_dir,
-                repo_root=".",
-                max_records=None,
-            )
-            generation_manifests.append(run_videomark_official_runtime(config))
-        except Exception as exc:  # pragma: no cover - 依赖 Colab GPU 和第三方模型
-            failures.append({"baseline_id": "videomark", "failure_reason": str(exc)})
     if generate_auto_supported and "vidsig" in plan["auto_supported_baselines"]:
         try:
             from external_baseline.vidsig_official_runtime import (

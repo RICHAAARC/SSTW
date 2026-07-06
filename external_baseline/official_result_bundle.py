@@ -34,8 +34,6 @@ from external_baseline.runtime_trace_io import comparable_detection_records
 
 MODERN_BASELINE_IDS = (
     "videoshield",
-    "sigmark",
-    "videomark",
     "vidsig",
     "videoseal",
 )
@@ -58,14 +56,6 @@ def _baseline_runtime_resource_ready(baseline_id: str) -> tuple[bool, str]:
         return True, "native_official_command_configured"
     if baseline_id == "videoshield" and _path_env_exists("SSTW_VIDEOSHIELD_RESULT_JSON"):
         return True, "videoshield_official_result_json_configured"
-    if baseline_id == "sigmark" and _path_env_exists("SSTW_SIGMARK_BIT_ACCURACY_NPZ"):
-        if _path_env_exists("SSTW_SIGMARK_CLEAN_NEGATIVE_BIT_ACCURACY_NPZ"):
-            return True, "sigmark_official_npz_and_clean_negative_npz_configured"
-        return False, "sigmark_clean_negative_npz_required_for_fair_calibration"
-    if baseline_id == "videomark" and _path_env_exists("SSTW_VIDEOMARK_TEMPORAL_RESULTS_JSON"):
-        if _path_env_exists("SSTW_VIDEOMARK_CLEAN_NEGATIVE_RESULTS_JSON"):
-            return True, "videomark_temporal_results_and_clean_negative_results_configured"
-        return False, "videomark_clean_negative_results_required_for_fair_calibration"
     if baseline_id == "vidsig":
         return False, "vidsig_requires_project_owned_generate_ms_official_bundle_or_native_command"
     if baseline_id == "videoseal":

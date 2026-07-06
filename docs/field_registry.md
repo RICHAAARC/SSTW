@@ -1246,7 +1246,7 @@ Notebook 与 repository module 的跨边界数据
 | comparison_positive_rate | metric | none | true | true | false | 同协议 formal 比较行中 positive 检测比例。 |
 | comparison_score_mean | metric | none | true | true | false | 同协议 formal 比较行的平均分数。 |
 | comparison_missing_reason | governance | none | true | false | false | 同协议 formal 比较行缺失 measured_formal records 的原因。 |
-| require_formal_method_baseline_comparison | protocol | none | true | false | false | validation_scale gate 是否要求 SSTW 与 5 个 baseline 的同协议 measured_formal 比较表。 |
+| require_formal_method_baseline_comparison | protocol | none | true | false | false | validation_scale gate 是否要求 SSTW 与 3 个 baseline 的同协议 measured_formal 比较表。 |
 | formal_baseline_difference_interval_decision | governance | none | true | true | false | SSTW 相对现代 external baseline 的差值置信区间阶段判定。 |
 | formal_baseline_difference_interval_target_fpr | protocol | none | true | false | false | pilot_paper gate 读取到的 formal baseline difference interval decision 的 target_fpr。 |
 | formal_baseline_difference_interval_status | governance | none | true | false | false | pilot_paper gate 汇总的 formal baseline difference interval 产物状态。 |
@@ -1271,14 +1271,14 @@ Notebook 与 repository module 的跨边界数据
 | difference_interval_ready_count | metric | none | true | true | false | 已可用差值置信区间 records 数量。 |
 | difference_interval_missing_baseline_ids | governance | none | true | true | false | 缺失差值置信区间的 baseline 方法 ID 列表。 |
 | difference_interval_missing_baseline_count | metric | none | true | true | false | 缺失差值置信区间的 baseline 数量。 |
-| require_formal_baseline_difference_interval | protocol | none | true | false | false | validation_scale gate 是否要求 SSTW 相对 5 个 baseline 的差值置信区间报告。 |
+| require_formal_baseline_difference_interval | protocol | none | true | false | false | validation_scale gate 是否要求 SSTW 相对 3 个 baseline 的差值置信区间报告。 |
 | validation_scale_gate_missing_validation_requirements | governance | none | true | false | false | pilot_paper gate 读取到的 validation_scale gate 原始缺失要求列表。 |
 | validation_scale_gate_missing_requirement_count | metric | none | true | false | false | pilot_paper gate 读取到的 validation_scale gate 原始缺失要求数量。 |
 | validation_scale_gate_fairness_missing_requirements | governance | none | true | false | false | pilot_paper gate 复核 validation_scale 公平比较闭环时发现的缺失要求。 |
 | validation_scale_fair_detection_calibration_ready_count | metric | none | true | true | false | validation_scale gate 中已通过 clean negative 公平校准的方法数量。 |
 | validation_scale_formal_method_baseline_comparison_ready_count | metric | none | true | true | false | validation_scale gate 中同协议 method-baseline 比较已 ready 的方法数量。 |
 | validation_scale_formal_baseline_difference_interval_ready_count | metric | none | true | true | false | validation_scale gate 中 SSTW 相对 baseline 差值区间已 ready 的 baseline 数量。 |
-| require_validation_scale_sstw_advantage_claim_ready | protocol | none | true | false | false | validation_scale gate 是否要求 SSTW 相对 5 个现代 baseline 的 target_fpr=0.1 优势证据 ready。 |
+| require_validation_scale_sstw_advantage_claim_ready | protocol | none | true | false | false | validation_scale gate 是否要求 SSTW 相对 3 个现代 baseline 的 target_fpr=0.1 优势证据 ready。 |
 | validation_scale_sstw_advantage_claim_ready | governance | none | true | true | false | validation_scale gate 中 SSTW target_fpr=0.1 优势证据是否满足论文主张候选标准。 |
 | validation_scale_sstw_advantage_ready_baseline_count | metric | none | true | true | false | validation_scale gate 中 SSTW 优势差值和置信区间已 ready 的现代 baseline 数量。 |
 | validation_scale_sstw_advantage_missing_baseline_names | governance | none | true | false | false | validation_scale gate 中尚未满足 SSTW 优势证据标准的现代 baseline 名称集合。 |
@@ -1353,10 +1353,7 @@ Notebook 与 repository module 的跨边界数据
 | official_clean_negative_attack_stderr_path | artifact | none | true | false | false | official clean negative 检测命令 stderr 证据路径。 |
 | official_vidsig_tpr_at_fpr_1e_2 | metric | none | true | false | false | VidSig 官方固定 FPR=1e-2 日志中的 TPR 辅助值, 不作为公平比较主分数。 |
 | official_clean_negative_vidsig_tpr_at_fpr_1e_2 | metric | none | true | false | false | VidSig clean negative 官方固定 FPR=1e-2 日志辅助值, 不替代 clean negative bit accuracy 校准。 |
-| official_clean_negative_bit_accuracy_npz_path | artifact | none | true | false | false | SIGMark clean negative 官方 bit accuracy npz 路径。 |
-| official_clean_negative_results_json_path | artifact | none | true | false | false | VideoMark clean negative 官方结果 JSON 路径。 |
 | official_result_key | protocol | none | true | false | false | 官方输出文件中与当前 prompt / seed comparison unit 对应的 result key。 |
-| official_temporal_attack_key | protocol | none | true | false | false | VideoMark 官方 temporal_results 中与当前 runtime attack 对齐的攻击 key。 |
 | runtime_attack_names | protocol | none | true | false | false | 运行器或补丁 manifest 中声明的 runtime attack 名称集合, 用于审计 baseline 是否覆盖同一攻击协议。 |
 | runtime_attack_patch_statuses | governance | none | true | false | false | runtime attack 适配补丁各子步骤的状态列表, 用于定位 helper、attack list 和调用替换是否完成。 |
 | official_clean_negative_result_key | protocol | none | true | false | false | clean negative 官方输出文件中与当前 prompt / seed calibration unit 对应的 result key。 |
@@ -1384,28 +1381,6 @@ Notebook 与 repository module 的跨边界数据
 | official_clean_negative_video_io_backend | protocol | none | true | false | false | official clean negative 视频读取所使用的 I/O 后端。 |
 | generate_clean_negative_reference | protocol | none | true | false | false | baseline 官方运行器是否自动生成 clean negative reference 并抽取官方分数。 |
 | clean_negative_output_path | protocol | none | true | false | false | baseline 官方运行器 clean negative 输出目录配置。 |
-| selected_clean_negative_bit_accuracy_npz_path | artifact | none | true | false | false | SIGMark 运行器选中的 clean negative bit accuracy npz。 |
-| clean_negative_bit_accuracy_npz_candidates | artifact | none | true | false | false | SIGMark clean negative extract 阶段发现的 bit accuracy npz 候选列表。 |
-| clean_negative_reference_state_manifest | artifact | none | true | false | false | SIGMark clean negative extract 复用官方 key/message 状态的复制审计。 |
-| clean_negative_reference_state_status | governance | none | true | false | false | SIGMark clean negative reference 状态文件复制是否完成。 |
-| reference_state_copy_status | governance | none | true | false | false | SIGMark attack-specific extract 目录复用官方状态文件的复制状态。 |
-| copied_reference_state_count | metric | none | true | false | false | SIGMark clean negative reference 复制的官方状态文件数量。 |
-| copied_reference_state_files | artifact | none | true | false | false | SIGMark clean negative reference 复制的状态文件路径列表。 |
-| clean_negative_gen_command | artifact | none | true | false | false | SIGMark clean negative 官方 gen 命令。 |
-| clean_negative_extract_command | artifact | none | true | false | false | SIGMark clean negative 官方 extract 命令。 |
-| positive_attack_extract_commands | artifact | none | true | false | false | SIGMark 对每个 positive runtime attack 输出目录执行官方 extract 的命令列表。 |
-| clean_negative_attack_extract_commands | artifact | none | true | false | false | SIGMark 对每个 clean negative runtime attack 输出目录执行官方 extract 的命令列表。 |
-| attack_preparation_manifest | artifact | none | true | false | false | SIGMark attack-specific official extract 输入目录准备审计 manifest。 |
-| attack_extract_output_prepare_status | governance | none | true | false | false | SIGMark attack-specific official extract 输入目录是否准备完成。 |
-| attack_bit_accuracy_npz_paths | artifact | none | true | false | false | SIGMark 各 runtime attack 对应 positive bit accuracy npz 路径映射。 |
-| clean_negative_attack_bit_accuracy_npz_paths | artifact | none | true | false | false | SIGMark 各 runtime attack 对应 clean negative bit accuracy npz 路径映射。 |
-| prepared_video_count | metric | none | true | false | false | SIGMark attack-specific official extract 输入目录中准备的视频数量。 |
-| prepared_rows | artifact | none | true | false | false | SIGMark attack-specific official extract 输入目录的样本级准备摘要。 |
-| clean_negative_embedding_command | artifact | none | true | false | false | VideoMark clean negative 官方 embedding/extraction 命令。 |
-| clean_negative_temporal_tamper_command | artifact | none | true | false | false | VideoMark clean negative 官方 temporal tamper 命令。 |
-| clean_negative_video_results_json_path | artifact | none | true | false | false | VideoMark clean negative video_results.json 路径。 |
-| clean_negative_temporal_results_json_path | artifact | none | true | false | false | VideoMark clean negative temporal_results.json 路径。 |
-| clean_negative_temporal_results_json_exists | governance | none | true | false | false | VideoMark clean negative temporal_results.json 是否已落盘。 |
 | clean_negative_attack_transform | protocol | none | true | false | false | clean negative 视频施加的 runtime attack 变换描述。 |
 | clean_negative_attack_strength | protocol | none | true | false | false | clean negative 视频施加的 runtime attack 强度描述。 |
 | fair_comparison_protocol | protocol | none | true | false | false | 公平比较协议名称, 当前为 method-specific clean negative calibration 到统一 target FPR。 |

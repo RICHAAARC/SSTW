@@ -62,13 +62,11 @@ artifacts/validation_internal_ablation_decision.json
 explicit_dtw_temporal_alignment
 explicit_frame_matching_temporal_registration
 videoshield
-sigmark
-videomark
 vidsig
 videoseal
 ```
 
-其中显式 DTW 与 frame matching 只能写出 `measured_proxy` control records; 5 个主实验现代视频水印 baseline 必须通过项目内 clone / build / run / adapt / record 和正式 adapter 写出 `metric_status = measured_formal` records。内部消融矩阵至少需要覆盖 `sstw_full_method`、endpoint-only、trajectory-only、去 velocity constraint、去 endpoint-aware control、去 replay uncertainty weighting、去 admissibility 和 generic SSM baseline。若任何现代 baseline 或消融缺失, `pilot_paper` gate 必须失败, 不允许先报告 `TPR@FPR=0.01` 再补表。
+其中显式 DTW 与 frame matching 只能写出 `measured_proxy` control records; 3 个主实验现代视频水印 baseline 必须通过项目内 clone / build / run / adapt / record 和正式 adapter 写出 `metric_status = measured_formal` records。内部消融矩阵至少需要覆盖 `sstw_full_method`、endpoint-only、trajectory-only、去 velocity constraint、去 endpoint-aware control、去 replay uncertainty weighting、去 admissibility 和 generic SSM baseline。若任何现代 baseline 或消融缺失, `pilot_paper` gate 必须失败, 不允许先报告 `TPR@FPR=0.01` 再补表。
 
 
 ## 3. 工程入口

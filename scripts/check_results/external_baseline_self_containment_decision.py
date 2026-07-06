@@ -23,8 +23,6 @@ from main.protocol.table_builder import write_csv
 DEFAULT_PROTOCOL_CONFIG = "configs/protocol/validation_scale_generative_probe.json"
 DEFAULT_REQUIRED_MODERN_BASELINES = (
     "videoshield",
-    "sigmark",
-    "videomark",
     "vidsig",
     "videoseal",
 )

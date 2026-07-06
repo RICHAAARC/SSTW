@@ -76,52 +76,6 @@
     },
     {
       "automatic_bundle_generation_supported_by_sstw": true,
-      "baseline_id": "videomark",
-      "baseline_name": "VideoMark",
-      "colab_default_can_attempt_without_user_files": true,
-      "colab_default_measured_formal_ready_without_user_files": false,
-      "external_baseline_command_env_var": "SSTW_VIDEOMARK_EVAL_COMMAND",
-      "external_supplemental_result_bundle_allowed": false,
-      "missing_resource_action": "默认通过 external_baseline.videomark_official_runtime 在项目内运行 VideoMark 官方 embedding/extraction/temporal tamper 流程; 若运行环境不足, 记录高显存或模型下载阻断, non-run record 不能替代 measured_formal baseline。",
-      "native_command_env_var": "SSTW_VIDEOMARK_NATIVE_EVAL_COMMAND",
-      "official_baseline_command_env_var": "SSTW_VIDEOMARK_OFFICIAL_EVAL_COMMAND",
-      "official_bundle_policy": "preferred_project_owned_cache; raw temporal_results must be produced by project workflow using official VideoMark embedding/extraction/temporal tamper runner",
-      "official_repository_branch": "main",
-      "official_repository_url": "https://github.com/KYRIE-LI11/VideoMark",
-      "official_source_dir_candidates": [
-        "external_baseline/primary/videomark/source",
-        "/content/SSTW/external_baseline/primary/videomark/source"
-      ],
-      "project_owned_videomark_runner_module": "external_baseline.videomark_official_runtime",
-      "required_source_files": [
-        "embedding_and_extraction.py",
-        "temporal_tamper.py",
-        "src/prc.py"
-      ],
-      "requirements_file": "configs/external_baselines/requirements/videomark.txt",
-      "resource_env_vars": [
-        {
-          "default_resource_glob_pattern": "videomark/**/temporal_results.json",
-          "default_resource_relative_path": "videomark/official_outputs/temporal_results.json",
-          "env_var": "SSTW_VIDEOMARK_TEMPORAL_RESULTS_JSON",
-          "project_owned_resource_required": true,
-          "required_for_repository_default_adapter": true,
-          "resource_role": "project_generated_official_temporal_results_json"
-        },
-        {
-          "default_resource_glob_pattern": "videomark/**/clean_negative*results*.json",
-          "default_resource_relative_path": "videomark/official_outputs/clean_negative_results.json",
-          "env_var": "SSTW_VIDEOMARK_CLEAN_NEGATIVE_RESULTS_JSON",
-          "project_owned_resource_required": true,
-          "required_for_repository_default_adapter": true,
-          "resource_role": "project_generated_official_clean_negative_temporal_results_json"
-        }
-      ],
-      "runtime_support_mode": "project_owned_official_videomark_runtime_or_repository_generated_bundle",
-      "source_dir": "external_baseline/primary/videomark/source"
-    },
-    {
-      "automatic_bundle_generation_supported_by_sstw": true,
       "baseline_id": "videoshield",
       "baseline_name": "VideoShield",
       "colab_default_can_attempt_without_user_files": true,
@@ -148,60 +102,6 @@
       "resource_env_vars": [],
       "runtime_support_mode": "project_owned_official_videoshield_generation_inversion_runtime_or_repository_generated_bundle",
       "source_dir": "external_baseline/primary/videoshield/source"
-    },
-    {
-      "automatic_bundle_generation_supported_by_sstw": false,
-      "baseline_id": "sigmark",
-      "baseline_name": "SIGMark",
-      "colab_default_can_attempt_without_user_files": false,
-      "colab_default_measured_formal_ready_without_user_files": false,
-      "external_baseline_command_env_var": "SSTW_SIGMARK_EVAL_COMMAND",
-      "external_supplemental_result_bundle_allowed": false,
-      "missing_resource_action": "通过 external_baseline.sigmark_official_hunyuan_runtime 在项目内运行 SIGMark 官方 Hunyuan gen->extract, 或记录高显存资源阻断; non-run record 不能替代 measured_formal baseline。",
-      "native_command_env_var": "SSTW_SIGMARK_NATIVE_EVAL_COMMAND",
-      "official_baseline_command_env_var": "SSTW_SIGMARK_OFFICIAL_EVAL_COMMAND",
-      "official_bundle_policy": "preferred_project_owned_cache; bit_accuracy NPZ must be produced by project workflow from official SIGMark Hunyuan gen->extract runner",
-      "official_repository_branch": "main",
-      "official_repository_url": "https://github.com/JeremyZhao1998/SIGMark-release",
-      "official_source_dir_candidates": [
-        "external_baseline/primary/sigmark/source",
-        "/content/SSTW/external_baseline/primary/sigmark/source"
-      ],
-      "project_owned_hunyuan_runner_module": "external_baseline.sigmark_official_hunyuan_runtime",
-      "required_source_files": [
-        "main.py",
-        "watermarks/sigmark.py",
-        "apply_disturbances.py"
-      ],
-      "requirements_file": "configs/external_baselines/requirements/sigmark.txt",
-      "resource_env_vars": [
-        {
-          "default_resource_glob_pattern": "sigmark/**/*bit_accuracy*.npz",
-          "default_resource_relative_path": "sigmark/official_outputs/bit_accuracy.npz",
-          "env_var": "SSTW_SIGMARK_BIT_ACCURACY_NPZ",
-          "project_owned_resource_required": true,
-          "required_for_repository_default_adapter": true,
-          "resource_role": "project_generated_official_bit_accuracy_npz"
-        },
-        {
-          "default_resource_glob_pattern": "sigmark/**/*clean*negative*bit_accuracy*.npz",
-          "default_resource_relative_path": "sigmark/official_outputs/clean_negative_bit_accuracy.npz",
-          "env_var": "SSTW_SIGMARK_CLEAN_NEGATIVE_BIT_ACCURACY_NPZ",
-          "project_owned_resource_required": true,
-          "required_for_repository_default_adapter": true,
-          "resource_role": "project_generated_official_clean_negative_bit_accuracy_npz"
-        },
-        {
-          "default_resource_glob_pattern": "sigmark/models",
-          "default_resource_relative_path": "sigmark/models",
-          "env_var": "SSTW_SIGMARK_MODEL_BASE_PATH",
-          "project_owned_resource_required": true,
-          "required_for_repository_default_adapter": false,
-          "resource_role": "project_downloaded_or_prepopulated_hunyuan_model_base_path"
-        }
-      ],
-      "runtime_support_mode": "project_owned_hunyuan_gen_extract_runner_available_high_memory_gpu_required",
-      "source_dir": "external_baseline/primary/sigmark/source"
     }
   ],
   "claim_boundary": "该配置只定义 Colab 真实运行前的源代码、依赖、资源、runtime inputs 和 official bundle cache 要求; 不把配置存在解释为 measured_formal 结果。",
@@ -212,8 +112,8 @@
   "default_run_root_pattern": "runs/generative_video_model_probe/<workflow_profile>",
   "governed_artifact": "artifacts/external_baseline_official_runtime_closure_requirements.json",
   "notebook_enforcement": {
-    "formal_reference_notebooks": "5 个独立 *_formal_reference_colab.ipynb 在 resource bootstrap 后执行该要求预检, 用于暴露缺少的官方 source / resource / bundle。",
-    "paper_gate_notebook": "paper_gate_and_package_colab.ipynb 在恢复 5 个 official reference 阶段包后执行最终聚合、self-containment 判定和 validation / pilot gate。",
+    "formal_reference_notebooks": "3 个独立 *_formal_reference_colab.ipynb 在 resource bootstrap 后执行该要求预检, 用于暴露缺少的官方 source / resource / bundle。",
+    "paper_gate_notebook": "paper_gate_and_package_colab.ipynb 在恢复 3 个 official reference 阶段包后执行最终聚合、self-containment 判定和 validation / pilot gate。",
     "non_run_record_policy": "non-run record 只能作为阻断记录, 不能替代 measured_formal baseline。"
   },
   "runtime_input_requirements": [

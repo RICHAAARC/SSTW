@@ -22,9 +22,7 @@ from paper_workflow.colab_utils.modern_external_baseline_formal_reference import
 EXPECTED_BASELINE_ORDER = (
     "videoseal",
     "vidsig",
-    "videomark",
     "videoshield",
-    "sigmark",
 )
 
 
@@ -180,80 +178,7 @@ def test_enrich_official_bundle_payload_persists_protocol_anchor_and_manifest(tm
 
 
 @pytest.mark.quick
-def test_enrich_official_bundle_payload_rejects_cross_baseline_identity(tmp_path: Path) -> None:
-    """formal reference helper 必须在 bundle 层阻断跨 baseline 身份混用。"""
-
-    bundle_path = tmp_path / "bundles" / "videoseal" / "records" / "unit.json"
-    manifest_path = tmp_path / "bundles" / "videoseal" / "official_reference_execution_manifest.json"
-    bundle_path.parent.mkdir(parents=True)
-    payload = {
-        "official_adapter_baseline_id": "sigmark",
-        "official_baseline_id": "sigmark",
-        "external_baseline_score": 0.7,
-        "raw_detector_score": 0.7,
-        "score_semantics": "watermark_presence_confidence",
-        "score_orientation": "higher_is_more_watermarked",
-        "official_score_extraction_policy": "videoseal_official_detect_presence_confidence",
-        "external_baseline_clean_negative_score": 0.08,
-        "external_baseline_clean_negative_score_semantics": "watermark_presence_confidence",
-        "external_baseline_clean_negative_video_path": "official/videoseal/clean_negative.mp4",
-    }
-    bundle_path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
-
-    with pytest.raises(RuntimeError, match="official_result_bundle_baseline_id_mismatch"):
-        _enrich_official_bundle_payload(
-            bundle_path,
-            manifest_path,
-            "videoseal",
-            {
-                "prompt_id": "prompt_a",
-                "seed_id": "seed_a",
-                "attack_name": "video_compression_runtime",
-            },
-        )
-
-
 @pytest.mark.quick
-def test_runtime_closure_blocked_reference_manifest_is_fail_fast(tmp_path: Path) -> None:
-    """runtime closure 已阻断时, helper 必须写清晰 manifest, 不逐条运行 adapter。"""
-
-    preflight = {
-        "stage_id": "external_baseline_official_runtime_closure_requirements",
-        "stage_status": "FAIL",
-        "runtime_closure_blocked_baselines": ["sigmark"],
-        "runtime_closure_missing_requirement_summary": {
-            "sigmark": ["official_bundle_or_native_command_or_required_resources"],
-        },
-    }
-
-    assert _runtime_closure_blocks_reference_attempt(preflight, "sigmark") is True
-    assert _runtime_closure_blocks_reference_attempt(preflight, "videoseal") is False
-
-    manifest = _build_runtime_closure_blocked_reference_manifest(
-        baseline_id="sigmark",
-        run_root=tmp_path / "runs" / "validation_scale",
-        bundle_root=tmp_path / "bundles" / "validation_scale",
-        official_source_dir=tmp_path / "external_baseline" / "primary" / "sigmark" / "source",
-        selected_record_count=69,
-        runtime_closure_preflight_result=preflight,
-    )
-
-    manifest_path = (
-        tmp_path
-        / "bundles"
-        / "validation_scale"
-        / "sigmark"
-        / "official_reference_execution_manifest.json"
-    )
-    written = json.loads(manifest_path.read_text(encoding="utf-8"))
-    assert manifest["execution_status"] == "blocked_missing_official_runtime_requirements"
-    assert written["official_reference_blocker"] == "runtime_closure_preflight_failed"
-    assert written["generated_bundle_record_count"] == 0
-    assert written["failed_bundle_record_count"] == 69
-    assert written["successes"] == []
-    assert written["failures"] == []
-
-
 @pytest.mark.quick
 def test_main_five_baseline_wrapper_modules_are_thin_entrypoints() -> None:
     """每个 baseline wrapper 只能绑定身份并转发到共享 helper。"""

@@ -1,6 +1,6 @@
 """现代 external baseline 真实运行闭合要求预检。
 
-该模块的职责是把 5 个主实验现代视频水印 baseline 的真实运行条件收敛为一个
+该模块的职责是把当前保留的主实验现代视频水印 baseline 的真实运行条件收敛为一个
 可由 Colab Notebook 自动执行的 governed artifact。它不运行重型第三方模型, 也不
 生成 baseline 分数; 它只检查当前 run_root 是否已经具备 source、requirements、
 runtime videos、官方资源、项目内 official bundle cache 或可由后续 Notebook
@@ -36,9 +36,7 @@ DEFAULT_RUNTIME_CLOSURE_REQUIREMENTS = Path("configs/external_baselines/official
 MODERN_BASELINE_IDS = (
     "videoseal",
     "vidsig",
-    "videomark",
     "videoshield",
-    "sigmark",
 )
 
 
@@ -336,9 +334,8 @@ def _project_owned_reference_runner_audit(row: Mapping[str, Any]) -> dict[str, A
     """检查项目内官方参考 runner 是否可作为 formal reference 尝试路径。
 
     此处只判断“是否允许进入真实运行尝试”, 不把 runner 存在解释为已得到
-    measured_formal 结果。以 SIGMark 为例, `SSTW_SIGMARK_BIT_ACCURACY_NPZ`
-    是 Hunyuan gen->extract 完成后的输出产物, 不能在预检阶段被当作运行前
-    必备输入而阻断官方 runner。
+    measured_formal 结果。项目内 official runner 可能在后续 formal reference
+    阶段生成必要输出, 不能在预检阶段把最终输出产物当作运行前必备输入。
     """
 
     baseline_id = str(row.get("baseline_id") or "")
@@ -347,7 +344,6 @@ def _project_owned_reference_runner_audit(row: Mapping[str, Any]) -> dict[str, A
         f"project_owned_{baseline_id}_runner_module" if baseline_id else "",
         "project_owned_hunyuan_runner_module",
         "project_owned_vidsig_runner_module",
-        "project_owned_videomark_runner_module",
         "project_owned_videoshield_runner_module",
     ]
     runner_module = ""
@@ -364,11 +360,6 @@ def _project_owned_reference_runner_audit(row: Mapping[str, Any]) -> dict[str, A
     enabled = bool(runner_module)
     enable_env_var = ""
     enable_env_value = ""
-    if baseline_id == "sigmark":
-        enable_env_var = "SSTW_RUN_SIGMARK_OFFICIAL_HUNYUAN_PIPELINE"
-        enable_env_value = os.environ.get(enable_env_var, "true").strip()
-        enabled = bool(runner_module) and enable_env_value.lower() not in {"0", "false", "no", "off"}
-
     return {
         "project_owned_reference_runner_module": runner_module,
         "project_owned_reference_runner_module_key": runner_module_key,

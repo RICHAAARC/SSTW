@@ -43,14 +43,10 @@ from paper_workflow.notebook_utils import generative_video_model_probe_workflow 
 MODERN_EXTERNAL_BASELINE_BUILD_ORDER = (
     "videoseal",
     "vidsig",
-    "videomark",
     "videoshield",
-    "sigmark",
 )
 REPOSITORY_OFFICIAL_ADAPTER_BASELINES = {
     "videoshield",
-    "sigmark",
-    "videomark",
     "vidsig",
     "videoseal",
 }
@@ -694,71 +690,6 @@ def _run_videoseal_reference(
     }
 
 
-def _run_sigmark_hunyuan_reference(
-    *,
-    run_root: Path,
-    bundle_root: Path,
-    official_source_dir: Path,
-    repo_root: Path,
-    resource_root: str | Path,
-    max_records: int | None,
-) -> dict[str, Any]:
-    """运行 SIGMark 官方 Hunyuan gen->extract official bundle 生成路径。
-
-    该路径属于项目特定的 external baseline 自包含实现: Notebook 在项目内调用
-    SIGMark 官方 `main.py --mode=gen` 和 `--mode=extract`, 再把官方 bit accuracy
-    转成 official bundle。它不直接写 `measured_formal`, 后续仍由统一 runner 转写。
-    """
-
-    from external_baseline.sigmark_official_hunyuan_runtime import (
-        build_default_sigmark_official_hunyuan_config_from_env,
-        run_sigmark_official_hunyuan_runtime,
-    )
-
-    sigmark_config = build_default_sigmark_official_hunyuan_config_from_env(
-        run_root=run_root,
-        bundle_root=bundle_root,
-        source_dir=official_source_dir,
-        repo_root=repo_root,
-        resource_root=resource_root,
-        max_records=max_records,
-    )
-    return run_sigmark_official_hunyuan_runtime(sigmark_config)
-
-
-def _run_videomark_official_reference(
-    *,
-    run_root: Path,
-    bundle_root: Path,
-    official_source_dir: Path,
-    repo_root: Path,
-    resource_root: str | Path,
-    max_records: int | None,
-) -> dict[str, Any]:
-    """运行 VideoMark 官方 embedding / extraction / temporal tamper official bundle 生成路径。
-
-    该路径属于项目特定的 external baseline 自包含实现: Notebook 在项目内调用
-    VideoMark 官方 `embedding_and_extraction.py` 和 `temporal_tamper.py`, 再把官方
-    `temporal_results.json` 转成 official bundle。它不直接写 `measured_formal`,
-    后续仍由统一 runner 转写。
-    """
-
-    from external_baseline.videomark_official_runtime import (
-        build_default_videomark_official_config_from_env,
-        run_videomark_official_runtime,
-    )
-
-    videomark_config = build_default_videomark_official_config_from_env(
-        run_root=run_root,
-        bundle_root=bundle_root,
-        source_dir=official_source_dir,
-        repo_root=repo_root,
-        resource_root=resource_root,
-        max_records=max_records,
-    )
-    return run_videomark_official_runtime(videomark_config)
-
-
 def _run_videoshield_official_reference(
     *,
     run_root: Path,
@@ -833,7 +764,7 @@ def _build_unified_formal_scoring_environment(
     """构造统一 measured_formal 转写阶段需要的环境变量。
 
     各 baseline Notebook 只生成自己的 official bundle。统一转写仍复用
-    `external_baseline_runner` 和现代 command adapter, 因此这里必须为 5 个主实验现代
+    `external_baseline_runner` 和现代 command adapter, 因此这里必须为保留的主实验现代
     baseline 同时注入外层 bridge command 和内层 repository official adapter command。
     已由用户显式设置的环境变量保持最高优先级。
     """
@@ -1052,30 +983,6 @@ def run_modern_external_baseline_formal_reference_plan(
                     official_source_dir=official_source_dir,
                     max_records=config.max_records,
                     generate_auto_supported_bundle=config.generate_auto_supported_bundle,
-                )
-            if config.baseline_id == "sigmark" and os.environ.get(
-                "SSTW_RUN_SIGMARK_OFFICIAL_HUNYUAN_PIPELINE",
-                "true",
-            ).lower() == "true":
-                return _run_sigmark_hunyuan_reference(
-                    run_root=run_root,
-                    bundle_root=bundle_root,
-                    official_source_dir=official_source_dir,
-                    repo_root=repo_root,
-                    resource_root=layout["external_baseline_resource_root"],
-                    max_records=config.max_records,
-                )
-            if config.baseline_id == "videomark" and os.environ.get(
-                "SSTW_RUN_VIDEOMARK_OFFICIAL_PIPELINE",
-                "true",
-            ).lower() == "true":
-                return _run_videomark_official_reference(
-                    run_root=run_root,
-                    bundle_root=bundle_root,
-                    official_source_dir=official_source_dir,
-                    repo_root=repo_root,
-                    resource_root=layout["external_baseline_resource_root"],
-                    max_records=config.max_records,
                 )
             if config.baseline_id == "videoshield" and os.environ.get(
                 "SSTW_RUN_VIDEOSHIELD_OFFICIAL_PIPELINE",

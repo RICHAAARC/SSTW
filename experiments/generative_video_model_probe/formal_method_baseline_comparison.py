@@ -15,7 +15,7 @@ from main.protocol.table_builder import write_csv
 
 DEFAULT_PROTOCOL_CONFIG = "configs/protocol/validation_scale_generative_probe.json"
 SSTW_METHOD_ID = "sstw_key_conditioned_flow_trajectory"
-DEFAULT_REQUIRED_BASELINES = ("videoshield", "sigmark", "videomark", "vidsig", "videoseal")
+DEFAULT_REQUIRED_BASELINES = ("videoshield", "vidsig", "videoseal")
 
 
 def _read_json(path: Path) -> dict[str, Any]:

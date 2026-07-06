@@ -47,9 +47,7 @@ HELPER_PACKAGE_DIR_NAME = "helper"
 MODERN_EXTERNAL_BASELINE_IDS = (
     "videoseal",
     "vidsig",
-    "videomark",
     "videoshield",
-    "sigmark",
 )
 
 OBSOLETE_STAGE_PAYLOAD_NAME_FRAGMENTS = (

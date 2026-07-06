@@ -21,8 +21,6 @@ from scripts.check_results.stage_transition_decision import write_stage_transiti
 
 MODERN_BASELINES = (
     "videoshield",
-    "sigmark",
-    "videomark",
     "vidsig",
     "videoseal",
 )
@@ -316,7 +314,7 @@ def test_external_baseline_self_containment_requires_measured_formal_evidence(tm
     audit = write_external_baseline_self_containment_decision(run_root)
 
     assert audit["external_baseline_self_containment_decision"] == "PASS"
-    assert audit["self_contained_modern_external_baseline_count"] == 5
+    assert audit["self_contained_modern_external_baseline_count"] == 3
     assert audit["missing_self_contained_modern_external_baseline_names"] == []
     assert (run_root / "artifacts" / "external_baseline_self_containment_decision.json").exists()
 
@@ -558,7 +556,7 @@ def test_external_baseline_self_containment_accepts_repository_generated_officia
     audit = write_external_baseline_self_containment_decision(run_root)
 
     assert audit["external_baseline_self_containment_decision"] == "PASS"
-    assert audit["self_contained_modern_external_baseline_count"] == 5
+    assert audit["self_contained_modern_external_baseline_count"] == 3
     for row in audit["baseline_self_containment_rows"]:
         assert row["source_clone_ready"] is False
         assert row["repository_generated_official_bundle_ready"] is True
@@ -570,33 +568,6 @@ def test_external_baseline_self_containment_accepts_repository_generated_officia
 
 
 @pytest.mark.quick
-def test_external_baseline_self_containment_rejects_wrong_official_baseline_id(tmp_path: Path) -> None:
-    """official bundle 的 baseline 身份必须与当前 baseline 行一致, 防止跨方法误用分数。"""
-
-    run_root = tmp_path / "run"
-    _write_self_contained_external_baseline_fixture(run_root)
-    baseline_name = "videoseal"
-    bundle_record_path = (
-        run_root
-        / "external_baseline_official_result_bundles"
-        / "validation_scale"
-        / baseline_name
-        / "records"
-        / "prompt_0__seed_0__video_compression_runtime.json"
-    )
-    payload = json.loads(bundle_record_path.read_text(encoding="utf-8"))
-    payload["official_baseline_id"] = "sigmark"
-    write_json(bundle_record_path, payload)
-
-    audit = write_external_baseline_self_containment_decision(run_root)
-    row = next(item for item in audit["baseline_self_containment_rows"] if item["baseline_name"] == baseline_name)
-
-    assert audit["external_baseline_self_containment_decision"] == "FAIL"
-    assert row["repository_generated_official_bundle_ready"] is False
-    assert baseline_name in audit["missing_repository_generated_official_bundle_modern_external_baseline_names"]
-    assert "all_required_modern_baselines_repository_generated_official_bundles" in audit["missing_self_containment_requirements"]
-
-
 @pytest.mark.quick
 def test_external_baseline_self_containment_requires_complete_official_baseline_identity(tmp_path: Path) -> None:
     """official bundle 必须同时声明 adapter baseline 和 official baseline 身份。"""

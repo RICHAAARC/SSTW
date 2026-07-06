@@ -1,6 +1,6 @@
 # modern external baseline 可运行性审计
 
-本文档记录 `validation_scale` 阶段 5 个主实验现代 external baseline 的当前可运行性判断。
+本文档记录 `validation_scale` 阶段 3 个主实验现代 external baseline 的当前可运行性判断。
 
 ## 1. 审计边界
 
@@ -18,7 +18,7 @@ external_baseline_score_status: measured_formal
 
 ## 2. 源码可获取性核验
 
-已使用 `git ls-remote --heads` 核验 5 个官方仓库的配置 branch 仍可访问, 且当前 HEAD 与
+已使用 `git ls-remote --heads` 核验 3 个官方仓库的配置 branch 仍可访问, 且当前 HEAD 与
 `external_baseline/source_registry.json` 中登记 commit 一致。
 
 这只说明官方源码入口可 clone, 不等价于 baseline 已能真实跑通。真实跑通还需要官方依赖、
@@ -30,9 +30,7 @@ checkpoint、key、message、训练权重、官方中间产物和项目 adapter 
 |---|---:|---:|---|
 | VideoSeal | 有条件可以 | 否 | 需要 Colab 成功安装 VideoSeal 依赖并下载官方 checkpoint。 |
 | VidSig | 有条件可以 | 否 | 已补齐项目内 `external_baseline.vidsig_official_runtime`, 默认运行官方 `generate_ms.py` 生成 VidSig clean / watermarked videos, 再施加项目 runtime attack 并调用官方 `attack.py`; 仍需要公开 checkpoint、Hugging Face 模型下载和可完成 Text-to-Video 的 GPU。 |
-| VideoMark | 有条件可以 | 否 | 已补齐项目内运行官方 PRC key、embedding、extraction 和 temporal tamper 流程; 仍需要 Colab 成功下载模型并完成官方脚本。 |
 | VideoShield | 有条件可以 | 否 | 已补齐项目内 `external_baseline.videoshield_official_runtime`, 默认调用官方 VideoShield watermark、ModelScope 生成、latent inversion 与 temporal matching 流程; 仍需要 Colab 成功下载 Hugging Face 模型并完成 GPU 反演。 |
-| SIGMark | 有条件可以 | 否 | 已补齐项目内 `external_baseline.sigmark_official_hunyuan_runtime`, 可运行官方 Hunyuan `gen -> extract` 并转写 official bundle; 仍需要高显存 GPU 或可完成 HunyuanVideo 的 Colab 规格。 |
 
 ## 4. 当前适配器状态
 
@@ -50,9 +48,7 @@ external_baseline/official_eval_adapters/<baseline>.py
 这些 adapter 当前是 fail-closed 设计: 缺少官方源码、权重、key、message、checkpoint
 或官方输出时必须失败, 不能输出 proxy 分数。
 
-SIGMark 是一个特殊项: 其正式参考 Notebook 默认不再只读取预先存在的
 `*-bit_accuracy.npz`, 而是通过
-`external_baseline.sigmark_official_hunyuan_runtime` 在项目内复制官方源码到 runtime
 工作副本, 构造与 SSTW runtime records 对齐的 prompt set, 运行官方
 `main.py --mode=gen` 与 `main.py --mode=extract`, 再把官方 bit accuracy 输出写成
 project-owned official bundle。该 bundle 仍不是最终论文记录, 后续必须由统一
@@ -75,16 +71,13 @@ watermarked video 施加项目 runtime attack, 最后调用官方 latent inversi
 matching 逻辑写出 project-owned official bundle。该 bundle 仍不是最终论文记录, 后续
 必须由统一 external baseline runner 转写为 `metric_status: measured_formal`。
 
-VideoMark 的特殊点在于官方仓库把鲁棒性评估集中在 `temporal_tamper.py` 中。
-项目运行器会在 runtime copy 中注入 `SSTW_VIDEOMARK_RUNTIME_ATTACK_NAMES`, 使
-VideoMark 按当前 protocol config 的 attack 集合运行, 并把每个 prompt / seed /
 attack 的 `decode_acc` 转写为 project-owned official bundle。该实现必须保持
 fail-closed: 若某个 required runtime attack 在官方 `temporal_results.json` 中没有
 逐 attack 条目, 不允许退回到聚合均值。
 
 ## 5. 结论
 
-当前项目已经具备标准论文 baseline 对比的工程框架。主实验必跑 baseline 已收敛为 5 个,
+当前项目已经具备标准论文 baseline 对比的工程框架。主实验必跑 baseline 已收敛为 3 个,
 
 
 下一步应按 baseline 逐个补齐:
@@ -93,6 +86,6 @@ fail-closed: 若某个 required runtime attack 在官方 `temporal_results.json`
 2. 官方权重、key、message 或生成中间产物。
 3. `SSTW_<BASELINE>_NATIVE_EVAL_COMMAND` 或等价项目内 official bundle 生成逻辑。
 4. 覆盖全部 `validation_scale` runtime comparison units 的 score JSON。
-5. 5 个主实验 independent formal reference Notebook 先各自生成项目内 official bundle, 并默认调用统一 runner 转写当前可用的 `measured_formal` records。
-6. `paper_gate_and_package_colab.ipynb` 在恢复 5 个主实验 official reference 阶段包后执行全量统一转写、self-containment 判定和打包; 旧的通用 external baseline scoring Notebook 已删除, 不再作为诊断或正式入口保留。
+5. 3 个主实验 independent formal reference Notebook 先各自生成项目内 official bundle, 并默认调用统一 runner 转写当前可用的 `measured_formal` records。
+6. `paper_gate_and_package_colab.ipynb` 在恢复 3 个主实验 official reference 阶段包后执行全量统一转写、self-containment 判定和打包; 旧的通用 external baseline scoring Notebook 已删除, 不再作为诊断或正式入口保留。
 7. `external_baseline_self_containment_decision.json` 通过。

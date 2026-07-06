@@ -29,8 +29,8 @@
 | `sampling_time_constraint_probe` | 已完成机制前置验证 | recommended profile 显示 keyed alignment gain 与 wrong-key 分离。 | 尚不能替代 attack matrix、negative family、fixed-FPR path gain。 | 作为 small_scale_mechanism_pilot_check 前置证据。 | 证明可进入 mechanism_validation 后续检查, 不直接支撑 full_paper。 |
 | `motion_threshold_calibration` | 已完成 engineering calibration | 已有 `motion_delta_calibrated_v1` 可作 pilot guardrail。 | 不是论文级 `TPR@FPR=0.001` fixed-FPR 证据。 | full_paper 前补齐更大 held-out negative 和 CI。 | 影响 motion claim 样本资格过滤。 |
 | `small_scale_mechanism_pilot_check` | 已完成 small-scale pilot, 作为 mechanism_validation 子检查保留 | 最新 Wan2.1 pilot 原生复跑已达到 16/16 eligible、seed_per_prompt_min=2、runtime attack/detection 48/48 ready、pilot_gate_decision=PASS。 | 它只判断机制是否值得继续, 不是主干门禁, 也不是 paper 级结果包。 | 进入 validation_scale 小样本全流程打通验证, 并保留 small-scale pilot 作为工作流证据。 | 只能解除 validation_scale 的机制前置缺口, 不能直接放行 pilot_paper 或 full_paper。 |
-| `validation_scale` | paper 级前小样本全流程打通门禁已完成硬阻断实现, 真实运行待复跑 | 已重新定义为 FPR=10% 小样本全流程打通层, 必须闭合完整现代 external_baseline formal records、内部消融、adaptive attack、replay/sketch 或受治理 Claim-3 downgrade、CI、tables、figures、reports、manifests、artifact rebuild 和 claim audit。 | 真实 validation_scale 结果尚未生成; 5 个主实验现代 baseline 仍需由本项目 clone / build / run / adapt / record 产出 measured_formal, 不接受外部补交结果。 | 先配置并运行现代 baseline 自包含产出链路, 然后在 Colab 中运行 `PROFILE = validation_scale`。 | 通过并生成 validation_scale_to_pilot_paper_transition_decision 后才允许进入 pilot_paper 或继续准备 full_paper; 但 full_paper claim 仍需 pilot_paper、full_paper_result_checker 和轻量判定通过。若 baseline / ablation / replay / CI / artifact rebuild 任一缺失, 不得进入 paper 级结果运行。 |
-| `pilot_paper` | 工程入口已完成, 真实 GPU 结果待运行 | 已接入 21 prompt × 8 seed、calibration split、frozen threshold artifact、held-out test split、代表性 runtime attack coverage、完整现代 external_baseline 自包含 measured_formal adapter 前置检查、内部消融矩阵前置检查和 claim audit。 | 真实 Wan2.1 GPU 结果尚未生成; 5 个主实验现代 baseline 需要在 Colab / 本地通过项目内 clone / build / run / adapt / record 后才能产出 measured_formal。 | 在 validation_scale 通过并生成 validation_scale_to_pilot_paper_transition_decision 后运行 `PROFILE = pilot_paper`, 审计 `pilot_paper_calibrated_heldout_claim_ready`, 同时要求 `modern_external_baseline_formal_measured_adapter_count >= 5` 与 `pilot_paper_internal_ablation_matrix_ready`。 | 它是小规模跑代表性 paper 协议并产出 pilot 级论文结果的阶段, 可支撑 pilot_paper 级 `TPR@FPR=0.01`, 但不支撑 `TPR@FPR=0.001`、full_paper 规模结论或顶会顶刊级完整 attack coverage 结论。 |
+| `validation_scale` | paper 级前小样本全流程打通门禁已完成硬阻断实现, 真实运行待复跑 | 已重新定义为 FPR=10% 小样本全流程打通层, 必须闭合完整现代 external_baseline formal records、内部消融、adaptive attack、replay/sketch 或受治理 Claim-3 downgrade、CI、tables、figures、reports、manifests、artifact rebuild 和 claim audit。 | 真实 validation_scale 结果尚未生成; 3 个主实验现代 baseline 仍需由本项目 clone / build / run / adapt / record 产出 measured_formal, 不接受外部补交结果。 | 先配置并运行现代 baseline 自包含产出链路, 然后在 Colab 中运行 `PROFILE = validation_scale`。 | 通过并生成 validation_scale_to_pilot_paper_transition_decision 后才允许进入 pilot_paper 或继续准备 full_paper; 但 full_paper claim 仍需 pilot_paper、full_paper_result_checker 和轻量判定通过。若 baseline / ablation / replay / CI / artifact rebuild 任一缺失, 不得进入 paper 级结果运行。 |
+| `pilot_paper` | 工程入口已完成, 真实 GPU 结果待运行 | 已接入 21 prompt × 8 seed、calibration split、frozen threshold artifact、held-out test split、代表性 runtime attack coverage、完整现代 external_baseline 自包含 measured_formal adapter 前置检查、内部消融矩阵前置检查和 claim audit。 | 真实 Wan2.1 GPU 结果尚未生成; 3 个主实验现代 baseline 需要在 Colab / 本地通过项目内 clone / build / run / adapt / record 后才能产出 measured_formal。 | 在 validation_scale 通过并生成 validation_scale_to_pilot_paper_transition_decision 后运行 `PROFILE = pilot_paper`, 审计 `pilot_paper_calibrated_heldout_claim_ready`, 同时要求 `modern_external_baseline_formal_measured_adapter_count >= 5` 与 `pilot_paper_internal_ablation_matrix_ready`。 | 它是小规模跑代表性 paper 协议并产出 pilot 级论文结果的阶段, 可支撑 pilot_paper 级 `TPR@FPR=0.01`, 但不支撑 `TPR@FPR=0.001`、full_paper 规模结论或顶会顶刊级完整 attack coverage 结论。 |
 | `generative_video_model_probe` | 作为实现 package 保留, validation_scale 真实运行待复跑 | 生成、attack、detection、postprocess、external_baseline source intake、项目内自包含 baseline adapter、内部消融 runner、packager 与协议字段闭包已接入。 | 现代外部 baseline measured_formal、完整内部消融、replay/sketch、CI、tables / figures / reports 和 claim audit 尚未以同一 validation run 通过。 | 按 validation_scale -> pilot_paper -> full_paper 的主干门禁顺序推进。 | 只提供实现 package; 是否允许进入 pilot_paper、full_paper 由主干门禁和轻量判定决定。 |
 | `replay_and_authenticated_sketch_gate` | 未完成 | digest、manifest、trajectory trace 基础模块存在。 | authenticated sketch、replay uncertainty、wrong prompt replay 未闭合。 | 补齐签名 sketch、replay records 和 checker。 | 影响 Claim-3 强度; 不通过则降级 Claim-3。 |
 | `flow_specific_adaptive_attack_gate` | 未完成 | phase 文档已补建, 但 runner、manifest 与 governed records 尚未完成。 | adaptive attacks、endpoint-preserving resampling、path cancellation 未形成 records。 | 补齐 runner 设计、stress protocol、attack manifest 和 checker。 | full_paper 前必须完成或明确降级。 |
@@ -1106,7 +1106,6 @@ package_manifest_external_baseline_comparison_summary: implemented
 
 ### 与论文 claim 的边界
 
-当前显式 DTW 与 frame matching 是工程级同步 control proxy, 不是现代视频水印 baseline。它们可以证明“本项目已经具备 baseline 对比结果产出链路”, 但不能证明 SSTW 已经优于 VideoShield、SIGMark、VideoMark、VidSig 或 VideoSeal。
 
 ```text
 claim_support_status: external_baseline_proxy_comparison_not_claim_supporting
@@ -1120,7 +1119,7 @@ submission_freeze_allowed: false
 ```text
 validation_external_baseline_status_records_ready
 validation_external_baseline_comparison_records_ready
-minimum_external_baseline_measured_adapter_count: 7
+minimum_external_baseline_measured_adapter_count: 5
 modern_external_baseline_formal_measured_adapter_count: 5
 ```
 
@@ -1316,12 +1315,10 @@ full_scale_ablation_table: pending_full_paper_scale
 
 根据项目阶段定义, `pilot_paper` 和 `full_paper` 的区别只能是样本规模和 FPR 评价级别。因此 `pilot_paper` 不能只接入一个现代 baseline, 也不能用显式同步 control proxy 替代现代视频水印 baseline。
 
-当前工程已经把以下 5 个主实验现代 baseline 接入为正式 command adapter 边界:
+当前工程已经把以下 3 个主实验现代 baseline 接入为正式 command adapter 边界:
 
 ```text
 videoshield
-sigmark
-videomark
 vidsig
 videoseal
 ```
@@ -1397,7 +1394,7 @@ validation_scale_modern_baseline_hard_gate: implemented
 modern_external_baseline_official_source_or_command: still_required_for_real_measured_formal_results
 ```
 
-该状态表示项目已经具备正式接入现代视频水印 baseline 的工程通道。当前仍未等价于完成真实 baseline 对比, 因为 5 个主实验现代 baseline 需要在 Colab 或本地通过项目内 clone / build / run / adapt / record, 并配置官方命令或 source 入口后, 才能在同一 run_root 上产出 `measured_formal` records。
+该状态表示项目已经具备正式接入现代视频水印 baseline 的工程通道。当前仍未等价于完成真实 baseline 对比, 因为 3 个主实验现代 baseline 需要在 Colab 或本地通过项目内 clone / build / run / adapt / record, 并配置官方命令或 source 入口后, 才能在同一 run_root 上产出 `measured_formal` records。
 
 新的 validation_scale baseline 阻断条件为:
 
@@ -1501,7 +1498,7 @@ paper_workflow/colab_notebooks/paper_gate_and_package_colab.ipynb
 ```
 
 旧的通用 external baseline scoring Notebook 已删除。validation-scale 推荐主流程
-只保留 5 个 baseline 专用 official reference Notebook 与
+只保留 3 个 baseline 专用 official reference Notebook 与
 `paper_gate_and_package_colab.ipynb` 的最终聚合门禁。
 
 阶段性状态为:
@@ -1531,7 +1528,7 @@ SSTW_WORKFLOW_PROFILE=pilot_paper
 
 ## 2026-06-25 现代 baseline 联网核验与 Colab command 配置辅助
 
-本次推进对 5 个主实验现代视频水印 baseline 的公开仓库、默认 branch 和当前 HEAD commit 进行了联网核验, 并新增 Colab command 配置辅助文件:
+本次推进对 3 个主实验现代视频水印 baseline 的公开仓库、默认 branch 和当前 HEAD commit 进行了联网核验, 并新增 Colab command 配置辅助文件:
 
 ```text
 configs/external_baselines/modern_baseline_colab_commands.json
@@ -1541,8 +1538,6 @@ configs/external_baselines/modern_baseline_colab_commands.json
 
 ```text
 videoshield
-sigmark
-videomark
 vidsig
 videoseal
 ```
@@ -1566,7 +1561,7 @@ validation_scale_missing_modern_command_preflight: still_hard_block
 
 该更新解决的问题是: Colab 冷启动失败时, 用户不仅能看到缺少哪些 `SSTW_<BASELINE>_EVAL_COMMAND`, 还能在 Google Drive 中看到每个 baseline 的官方源码位置、clone 目标、官方入口候选脚本和 SSTW wrapper command 模板。
 
-该更新没有绕过 validation_scale 门禁。只有当本项目在 Colab 或等价受治理环境中完成 clone / build / run / adapt / record, 准备权重、编写真实 wrapper, 并显式设置 5 个主实验 `SSTW_<BASELINE>_EVAL_COMMAND` 后, 现代 baseline 才能产出 `measured_formal` records。仅存在 URL、clone plan 或 command 模板不能支撑 baseline comparison claim。
+该更新没有绕过 validation_scale 门禁。只有当本项目在 Colab 或等价受治理环境中完成 clone / build / run / adapt / record, 准备权重、编写真实 wrapper, 并显式设置 3 个主实验 `SSTW_<BASELINE>_EVAL_COMMAND` 后, 现代 baseline 才能产出 `measured_formal` records。仅存在 URL、clone plan 或 command 模板不能支撑 baseline comparison claim。
 
 ## 2026-06-25 现代 baseline repository bridge command 接入
 
@@ -1576,7 +1571,7 @@ validation_scale_missing_modern_command_preflight: still_hard_block
 external_baseline/official_command_bridge.py
 ```
 
-该桥接器解决的问题是: 5 个主实验现代视频水印 baseline 的官方仓库入口不同, 但 SSTW 需要统一的
+该桥接器解决的问题是: 3 个主实验现代视频水印 baseline 的官方仓库入口不同, 但 SSTW 需要统一的
 `source_video_path / attacked_video_path / attack_name / output_json_path` command adapter 契约。
 
 新的运行边界为:
@@ -1608,7 +1603,7 @@ validation_scale_split_notebook_path: runnable_after_official_inner_commands_con
 modern_external_baseline_measured_formal_results: still_pending_real_colab_official_commands
 ```
 
-该状态表示 validation_scale 的工程阻断已经从“缺 SSTW 外层 wrapper”收敛为“需要在 Colab 或等价受治理环境中为 5 个主实验官方 baseline 完成项目内 clone / build / run / adapt / record, 并配置真实官方命令和权重”。如果这些内部官方命令输出 score JSON, `external_baseline_runner` 会把结果转换为 `measured_formal` records, 并由 `external_baseline_execution_manifest.json` 绑定证据路径。
+该状态表示 validation_scale 的工程阻断已经从“缺 SSTW 外层 wrapper”收敛为“需要在 Colab 或等价受治理环境中为 3 个主实验官方 baseline 完成项目内 clone / build / run / adapt / record, 并配置真实官方命令和权重”。如果这些内部官方命令输出 score JSON, `external_baseline_runner` 会把结果转换为 `measured_formal` records, 并由 `external_baseline_execution_manifest.json` 绑定证据路径。
 
 补充约束: 显式设置的 `SSTW_<BASELINE>_EVAL_COMMAND` 优先级高于默认 bridge 模板。因此,
 validation_scale 正式门禁同时支持两条可跑通路径: `repository bridge + SSTW_<BASELINE>_OFFICIAL_EVAL_COMMAND`
@@ -1617,17 +1612,15 @@ validation_scale 正式门禁同时支持两条可跑通路径: `repository brid
 
 ## 2026-06-25 repository official eval adapters 接入
 
-为满足 `validation_scale` 严格正式门禁对 5 个主实验现代视频水印 baseline 的统一接入要求, 当前仓库新增 fail-closed 的 repository official adapter 入口:
+为满足 `validation_scale` 严格正式门禁对 3 个主实验现代视频水印 baseline 的统一接入要求, 当前仓库新增 fail-closed 的 repository official adapter 入口:
 
 ```text
 external_baseline/official_eval_adapters/videoshield.py
-external_baseline/official_eval_adapters/sigmark.py
-external_baseline/official_eval_adapters/videomark.py
 external_baseline/official_eval_adapters/vidsig.py
 external_baseline/official_eval_adapters/videoseal.py
 ```
 
-这些 adapter 解决的问题是: Notebook 可以自动配置 5 个主实验 `SSTW_<BASELINE>_OFFICIAL_EVAL_COMMAND`, 不再需要用户手写 bridge 内部命令模板。它们仍然保持严格边界:
+这些 adapter 解决的问题是: Notebook 可以自动配置 3 个主实验 `SSTW_<BASELINE>_OFFICIAL_EVAL_COMMAND`, 不再需要用户手写 bridge 内部命令模板。它们仍然保持严格边界:
 
 ```text
 repository_official_eval_adapter: implemented
@@ -1641,13 +1634,11 @@ modern_external_baseline_measured_formal_results: pending_real_colab_official_ar
 
 ```text
 VideoShield 由 external_baseline.videoshield_official_runtime 在项目内运行官方 watermark generation -> latent inversion -> temporal matching, 或由 SSTW_VIDEOSHIELD_NATIVE_EVAL_COMMAND 显式覆盖
-SSTW_SIGMARK_BIT_ACCURACY_NPZ 或 SSTW_SIGMARK_NATIVE_EVAL_COMMAND
-SSTW_VIDEOMARK_TEMPORAL_RESULTS_JSON 或 SSTW_VIDEOMARK_NATIVE_EVAL_COMMAND
 SSTW_VIDSIG_MSG_DECODER_PATH + SSTW_VIDSIG_VAE_CHECKPOINT_PATH, 并由 external_baseline.vidsig_official_runtime 运行官方 generate_ms.py -> attack.py
 VideoSeal 官方依赖和 checkpoint, 或 SSTW_VIDEOSEAL_NATIVE_EVAL_COMMAND
 ```
 
-因此, 当前阶段可以表述为: 5 个主实验现代 baseline 的 SSTW command adapter 和 repository official adapter 已经完成工程接入; 严格正式门禁仍必须通过 Colab 或等价受治理环境中的项目内 clone / build / run / adapt / record 证明这些 adapter 能基于官方源码、权重或项目生成的官方结果缓存写出 `measured_formal` records。若缺少这些官方输入, validation_scale 会失败, 且该失败是正确的 fail-closed 行为。
+因此, 当前阶段可以表述为: 3 个主实验现代 baseline 的 SSTW command adapter 和 repository official adapter 已经完成工程接入; 严格正式门禁仍必须通过 Colab 或等价受治理环境中的项目内 clone / build / run / adapt / record 证明这些 adapter 能基于官方源码、权重或项目生成的官方结果缓存写出 `measured_formal` records。若缺少这些官方输入, validation_scale 会失败, 且该失败是正确的 fail-closed 行为。
 
 ## 2026-06-25 repository-owned 官方结果缓存 preflight 与资源阻断前移
 
@@ -1716,7 +1707,6 @@ external_baseline_source_intake
 official_resource_bootstrap: implemented
 public_resource_auto_download_path: implemented_for_supported_resources
 videoseal_official_bundle_auto_generation: implemented
-videomark_official_bundle_auto_generation: implemented_if_public_resources_and_colab_runtime_succeed
 vidsig_public_checkpoint_bootstrap: implemented_as_resource_download_when_network_allowed
 vidsig_official_generate_ms_runtime: implemented_fail_closed_after_project_runtime_attack
 manual_official_resource_required_artifact: implemented_for_resource_heavy_or_unpublished_weight_baselines
@@ -1726,13 +1716,12 @@ external_baseline_formal_reference_notebook_auto_repair_path: integrated
 
 该更新的含义是: Colab 冷启动时不再只告诉用户缺少官方资源, 而是会先尝试自动安装
 公开依赖、下载公开 checkpoint, 并为可自动支持的 baseline 生成 official bundle。当前
-VideoSeal、VideoShield、VideoMark 与 VidSig 已有项目内 official bundle 生成路径; 其中
 VideoShield 与 VidSig 必须先运行各自官方生成流程得到 baseline 自己的 watermarked videos,
 不能直接检测 SSTW / Wan 视频。
 若某个
 baseline 客观需要未公开训练权重、高显存官方生成流程、PRC key 或 maintained info,
 workflow 会写出 `manual_official_resource_required`, 仍然不会把该 baseline 伪造成
-`measured_formal`。因此严格 validation_scale 通过条件没有降低: 5 个主实验现代 baseline
+`measured_formal`。因此严格 validation_scale 通过条件没有降低: 3 个主实验现代 baseline
 最终仍必须由本项目基于官方源码、官方 API、官方 checkpoint 或 repository-owned 官方结果缓存产出可审计 score records。
 
 

@@ -26,10 +26,6 @@ import zipfile
 
 DEFAULT_RESOURCE_REQUIREMENTS = "configs/external_baselines/official_resource_requirements.json"
 VIDSIG_GOOGLE_DRIVE_FILE_ID = "1XFyzeX6T0iHgcxSN_DxvjLFy1EXZye-Q"
-SIGMARK_IMAGE_PROMPT_URL = (
-    "https://raw.githubusercontent.com/JeremyZhao1998/JeremyZhao1998.github.io/"
-    "master/images/2026-SIGMark/VBench2_aug_img_prompt.zip"
-)
 DEFAULT_PRIMARY_SOURCE_ROOT = "external_baseline/primary"
 VIDEOSEAL_COLAB_LIGHTWEIGHT_DEPENDENCIES = (
     "av",
@@ -66,20 +62,6 @@ VIDSIG_COLAB_LIGHTWEIGHT_DEPENDENCIES = (
     "transformers",
     "accelerate",
     "safetensors",
-)
-VIDEOMARK_COLAB_LIGHTWEIGHT_DEPENDENCIES = (
-    "diffusers",
-    "transformers",
-    "accelerate",
-    "numpy",
-    "scipy",
-    "opencv-python",
-    "imageio",
-    "imageio-ffmpeg",
-    "galois",
-    "ldpc",
-    "python-Levenshtein",
-    "tqdm",
 )
 VIDEOSHIELD_COLAB_LIGHTWEIGHT_DEPENDENCIES = (
     "diffusers",
@@ -334,70 +316,6 @@ def bootstrap_videoseal(resource_root: Path, *, allow_network: bool, source_root
     }
 
 
-def bootstrap_sigmark(resource_root: Path, *, allow_network: bool) -> dict[str, Any]:
-    """准备 SIGMark 官方 I2V 路径的公开辅助 prompt 资源。
-
-    SIGMark 的正式 measured_formal 结果仍需要 HunyuanVideo / HunyuanVideo-I2V
-    官方生成与提取流程产出 `*-bit_accuracy.npz`。这里自动补齐的是 README
-    中公开的 `VBench2_aug_img_prompt.zip`, 它只是 I2V 官方流程的辅助输入,
-    不能替代高显存官方运行产物。
-    """
-
-    baseline_root = resource_root / "sigmark"
-    baseline_root.mkdir(parents=True, exist_ok=True)
-    image_prompt_zip = baseline_root / "VBench2_aug_img_prompt.zip"
-    download = _download_url_if_missing(SIGMARK_IMAGE_PROMPT_URL, image_prompt_zip, allow_network=allow_network)
-    image_prompt_ready = image_prompt_zip.is_file()
-    return {
-        "baseline_id": "sigmark",
-        "bootstrap_status": "manual_official_resource_required",
-        "resource_mode": "public_auxiliary_prompt_ready_but_high_memory_official_run_still_required"
-        if image_prompt_ready
-        else "not_publicly_auto_resolvable_in_colab_l4",
-        "manual_reason": (
-            "SIGMark README 的 Hunyuan pipeline 需要 >=48GB CPU 内存和高显存 GPU; "
-            "公开 image prompt 已可自动下载, 但 bit accuracy 必须由项目内官方运行生成。"
-        ),
-        "strict_gate_resolution": (
-            "在本项目 workflow 内运行 SIGMark 官方 gen/extract, 生成 *-bit_accuracy.npz "
-            "或 repository-owned official bundle; 不能用外部补交分数替代 measured_formal。"
-        ),
-        "public_auxiliary_resource_status": "ready" if image_prompt_ready else "missing",
-        "SSTW_SIGMARK_IMAGE_PROMPT_ZIP": str(image_prompt_zip) if image_prompt_ready else "",
-        "download_result": download,
-        "missing_after_bootstrap": [] if image_prompt_ready else ["VBench2_aug_img_prompt.zip"],
-    }
-
-
-def bootstrap_videomark(resource_root: Path, *, allow_network: bool, source_root: Path) -> dict[str, Any]:
-    """准备 VideoMark 官方 runtime 的公开 Python 依赖。
-
-    VideoMark 的正式 measured_formal 结果仍必须由项目内
-    `external_baseline.videomark_official_runtime` 运行官方 embedding / extraction /
-    temporal tamper 产生。这里仅安装轻量依赖并记录 runner 可尝试状态, 不生成任何
-    baseline 分数。
-    """
-
-    baseline_root = resource_root / "videomark"
-    baseline_root.mkdir(parents=True, exist_ok=True)
-    source_dir = source_root / "videomark" / "source"
-    install_results: list[dict[str, Any]] = []
-    for dependency in VIDEOMARK_COLAB_LIGHTWEIGHT_DEPENDENCIES:
-        install_results.append(_pip_install_target(dependency, allow_network=allow_network, timeout_sec=1200))
-    failed = [item for item in install_results if item.get("install_status") == "install_failed"]
-    return {
-        "baseline_id": "videomark",
-        "bootstrap_status": "ready" if not failed else "manual_official_resource_required",
-        "resource_mode": "project_owned_official_runtime_downloads_public_model_on_first_use",
-        "resource_dir": str(baseline_root),
-        "official_source_dir": str(source_dir),
-        "project_owned_runner_module": "external_baseline.videomark_official_runtime",
-        "colab_torch_stack_policy": "preserve_preinstalled_torch_and_torchvision",
-        "install_results": install_results,
-        "missing_after_bootstrap": [] if not failed else ["videomark_lightweight_python_dependencies"],
-    }
-
-
 def bootstrap_videoshield(resource_root: Path, *, allow_network: bool, source_root: Path) -> dict[str, Any]:
     """准备 VideoShield 官方 runtime 的公开 Python 依赖。
 
@@ -456,8 +374,6 @@ def bootstrap_official_resources(
     baseline_rows: list[dict[str, Any]] = []
     baseline_rows.append(bootstrap_videoseal(resolved_resource_root, allow_network=allow_network, source_root=resolved_source_root))
     baseline_rows.append(bootstrap_vidsig(resolved_resource_root, allow_network=allow_network))
-    baseline_rows.append(bootstrap_sigmark(resolved_resource_root, allow_network=allow_network))
-    baseline_rows.append(bootstrap_videomark(resolved_resource_root, allow_network=allow_network, source_root=resolved_source_root))
     baseline_rows.append(bootstrap_videoshield(resolved_resource_root, allow_network=allow_network, source_root=resolved_source_root))
     ready = [row["baseline_id"] for row in baseline_rows if row.get("bootstrap_status") == "ready"]
     manual = [row["baseline_id"] for row in baseline_rows if row.get("bootstrap_status") != "ready"]

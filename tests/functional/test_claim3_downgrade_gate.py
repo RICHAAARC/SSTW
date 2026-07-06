@@ -19,15 +19,11 @@ EXTERNAL_BASELINE_NAMES = (
     "explicit_dtw_temporal_alignment",
     "explicit_frame_matching_temporal_registration",
     "videoshield",
-    "sigmark",
-    "videomark",
     "vidsig",
     "videoseal",
 )
 MODERN_EXTERNAL_BASELINE_NAMES = {
     "videoshield",
-    "sigmark",
-    "videomark",
     "vidsig",
     "videoseal",
 }

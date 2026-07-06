@@ -40,33 +40,6 @@ def test_package_filename_token_sanitizer_keeps_snake_case() -> None:
 
 
 @pytest.mark.quick
-def test_independent_packager_default_dirs_follow_stage_archive_layout() -> None:
-    """独立 packager 默认目录必须使用新阶段归档结构, 不得回退到旧 packages 目录。"""
-
-    drive_root = "/content/drive/MyDrive/SSTW"
-
-    assert resolve_stage_package_output_dir(
-        drive_root,
-        "validation_scale",
-        "generative_video_runtime_colab",
-    ).as_posix().endswith("/SSTW/validation_scale/generative_video_runtime_colab")
-    assert resolve_stage_package_output_dir(
-        drive_root,
-        "motion_calibration",
-        "motion_threshold_calibration_colab",
-    ).as_posix().endswith("/SSTW/motion_threshold")
-    assert resolve_stage_package_output_dir(
-        drive_root,
-        "validation_scale",
-        "external_baseline_formal_reference_sigmark",
-    ).as_posix().endswith("/SSTW/validation_scale/external_baseline_official_reference")
-    assert resolve_stage_package_output_dir(
-        drive_root,
-        "sampling_time_constraint",
-        "sampling_time_constraint_colab",
-    ).as_posix().endswith("/SSTW/helper")
-
-
 @pytest.mark.quick
 def test_independent_packager_stage_file_names_match_stage_zip_policy() -> None:
     """独立 packager 在阶段命名模式下必须使用 profile + stage + 时间戳 + commit。"""

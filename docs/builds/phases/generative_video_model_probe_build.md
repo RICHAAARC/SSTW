@@ -24,9 +24,7 @@ paper_workflow/colab_notebooks/motion_threshold_calibration_colab.ipynb
 paper_workflow/colab_notebooks/generative_video_runtime_colab.ipynb
 paper_workflow/colab_notebooks/videoseal_formal_reference_colab.ipynb
 paper_workflow/colab_notebooks/vidsig_formal_reference_colab.ipynb
-paper_workflow/colab_notebooks/videomark_formal_reference_colab.ipynb
 paper_workflow/colab_notebooks/videoshield_formal_reference_colab.ipynb
-paper_workflow/colab_notebooks/sigmark_formal_reference_colab.ipynb
 paper_workflow/colab_notebooks/paper_gate_and_package_colab.ipynb
 ```
 
@@ -50,8 +48,6 @@ Wan-AI/Wan2.1-T2V-1.3B-Diffusers
 
 ```text
 VideoShield
-SIGMark
-VideoMark 与 VidSig
 VideoSeal
 explicit_dtw_temporal_alignment
 frame_matching_temporal_registration
@@ -70,8 +66,6 @@ without_replay_uncertainty_weighting
 explicit_dtw_temporal_alignment
 frame_matching_temporal_registration
 VideoShield
-SIGMark
-VideoMark_or_VidSig
 VideoSeal
 generic_ssm_baseline
 ```
@@ -211,7 +205,6 @@ experiments/generative_video_model_probe/formal_metric_runner.py
 experiments/generative_video_model_probe/generalization_runner.py
 experiments/generative_video_model_probe/postprocess_runner.py
 experiments/generative_video_model_probe/package_outputs.py
-external_baseline/sigmark_official_hunyuan_runtime.py
 scripts/check_results/generative_video_colab_result_checker.py
 scripts/package_results/generative_video_drive_packager.py
 ```
@@ -260,7 +253,7 @@ scripts/package_results/generative_video_drive_packager.py
 ```text
 motion_threshold_calibration_colab.ipynb
 -> generative_video_runtime_colab.ipynb
--> 5 个主实验 modern external baseline formal reference Notebook
+-> 3 个主实验 modern external baseline formal reference Notebook
 -> paper_gate_and_package_colab.ipynb
 ```
 
@@ -268,9 +261,7 @@ motion_threshold_calibration_colab.ipynb
 所有 Notebook 的 profile、Drive 目录和 stage plan 均由
 `configs/paper_workflow/generative_video_notebook_workflows.json` 控制。
 
-其中 `sigmark_formal_reference_colab.ipynb` 已切换为项目内 SIGMark 官方
 Hunyuan `gen -> extract` 路径: Notebook 调用
-`external_baseline.sigmark_official_hunyuan_runtime`, 在 runtime 工作副本中构造
 与 SSTW runtime records 对齐的 prompt set, 运行官方 `main.py --mode=gen` 与
 `main.py --mode=extract`, 再把官方 `*-bit_accuracy.npz` 转写为 project-owned
 official bundle。该 bundle 仍需经统一 external baseline runner 转成
@@ -340,7 +331,6 @@ strong visible displacement in every frame
 | 项目 | 当前标注 |
 |---|---|
 | 完成状态 | pilot 已通过, validation_scale 未完成 |
-| 主要差距项 | validation_scale 尚未运行; SIGMark 与 VideoSeal 已具备项目内 official bundle 生成路径, 其余现代外部 baseline 仍需继续完成官方流程适配或高显存运行闭合。 |
 | 下一步构建方向 | 构建 validation_scale 真实模型小样本全流程打通实验、现代 baseline adapter contract、内部消融和 fixed-FPR CI reporter。 |
 | full_paper 影响 | 未满足本阶段要求时, 不得把相关结果写入 full_paper supported claim。 |
 
@@ -510,7 +500,6 @@ artifacts/external_baseline_comparison_decision.json
 reports/external_baseline_comparison_report.md
 ```
 
-该实现的职责是闭合外部 baseline 对比工程链路。显式 DTW 与 frame matching 仍只是同步 control proxy; `pilot_paper` 和 `full_paper` 必须额外要求 VideoShield、SigMark、VideoMark、VidSig 与 VideoSeal 通过项目内 clone / build / run / adapt / record 和正式 adapter 产出 `measured_formal` records。
 
 
 ### external_baseline adapter comparison 运行语义
@@ -665,8 +654,6 @@ pilot_paper_internal_ablation_trace_count_min >= 84
 
 ```text
 videoshield
-sigmark
-videomark
 vidsig
 videoseal
 ```
@@ -675,8 +662,6 @@ videoseal
 
 ```text
 SSTW_VIDEOSHIELD_EVAL_COMMAND
-SSTW_SIGMARK_EVAL_COMMAND
-SSTW_VIDEOMARK_EVAL_COMMAND
 SSTW_VIDSIG_EVAL_COMMAND
 SSTW_VIDEOSEAL_EVAL_COMMAND
 ```
@@ -685,7 +670,7 @@ SSTW_VIDEOSEAL_EVAL_COMMAND
 
 ### 2.13 profile-driven Notebook 重构状态
 
-当前 Colab workflow 已从单一综合 Notebook 拆分为 runtime、5 个主实验 baseline formal reference、
+当前 Colab workflow 已从单一综合 Notebook 拆分为 runtime、3 个主实验 baseline formal reference、
 formal scoring 和 paper gate 等职责明确入口, 并由统一配置控制 profile 切换:
 
 ```text
@@ -697,12 +682,12 @@ configs/paper_workflow/generative_video_notebook_workflows.json
 ```text
 motion_threshold_calibration_colab.ipynb: 只运行 motion calibration split 并冻结 threshold artifact
 generative_video_runtime_colab.ipynb: 运行 Wan2.1 生成、formal metrics、motion threshold 复用、attack 和 detection
-5 个主实验 modern external baseline formal reference Notebook: 分别运行对应 baseline 的官方流程、生成项目内 official bundle, 并默认调用统一 runner 转写当前可用的 measured_formal records
-paper_gate_and_package_colab.ipynb: 恢复 5 个主实验 official reference 阶段包后运行全量 external baseline comparison、self-containment、internal ablation、adaptive attack、replay/sketch 或 Claim-3 downgrade、CI、gate 和 package
+3 个主实验 modern external baseline formal reference Notebook: 分别运行对应 baseline 的官方流程、生成项目内 official bundle, 并默认调用统一 runner 转写当前可用的 measured_formal records
+paper_gate_and_package_colab.ipynb: 恢复 3 个主实验 official reference 阶段包后运行全量 external baseline comparison、self-containment、internal ablation、adaptive attack、replay/sketch 或 Claim-3 downgrade、CI、gate 和 package
 ```
 
 旧的通用 external baseline scoring Notebook 已删除。validation-scale 推荐主流程
-只保留 5 个 baseline 专用 official reference Notebook 与
+只保留 3 个 baseline 专用 official reference Notebook 与
 `paper_gate_and_package_colab.ipynb` 的最终聚合门禁。
 
 切换运行层级时只应修改环境变量或配置:

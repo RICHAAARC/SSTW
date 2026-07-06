@@ -129,7 +129,7 @@ def run_official_subprocess_with_heartbeat(
 
     与 `subprocess.run(capture_output=True)` 相比, 该函数仍然把官方 stdout /
     stderr 完整保存在内存中供调用方落盘, 但运行期间会按固定间隔输出
-    `SSTW 工作量进度` 心跳。这样 VideoMark / SIGMark / VidSig 等官方脚本在
+    `SSTW 工作量进度` 心跳。这样 VidSig 等官方脚本在
     长时间生成或抽取时不会表现为 Notebook 无输出卡住。
     """
 

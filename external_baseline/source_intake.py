@@ -20,8 +20,6 @@ REPOSITORY_GENERATED_OFFICIAL_PROVENANCE = "repository_generated_from_third_part
 
 REQUIRED_MODERN_BASELINE_IDS = {
     "videoshield",
-    "sigmark",
-    "videomark",
     "vidsig",
     "videoseal",
 }

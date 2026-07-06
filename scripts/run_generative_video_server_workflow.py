@@ -115,23 +115,6 @@ def _apply_server_environment(args: argparse.Namespace) -> None:
     _set_default_env("SSTW_REQUIRE_MODERN_BASELINE_BRIDGE_OFFICIAL_COMMANDS", "true")
     _set_default_env("SSTW_USE_REPOSITORY_OFFICIAL_BASELINE_ADAPTERS", "true")
 
-    # SIGMark 的 Notebook 曾经在 cell 中写这些 Colab 默认值。服务器入口必须补齐,
-    # 否则同一 workflow profile 在命令行与 Notebook 中会出现运行语义差异。
-    _set_default_env("SSTW_RUN_SIGMARK_OFFICIAL_HUNYUAN_PIPELINE", "true")
-    _set_default_env("SSTW_SIGMARK_MODEL_NAME", "HunyuanVideo-community")
-    _set_default_env("SSTW_SIGMARK_AUTO_DOWNLOAD_HF_MODEL", "true")
-    _set_default_env("SSTW_SIGMARK_WIDTH", "512")
-    _set_default_env("SSTW_SIGMARK_HEIGHT", "512")
-    _set_default_env("SSTW_SIGMARK_NUM_FRAMES", "65")
-    _set_default_env("SSTW_SIGMARK_FPS", "8")
-    _set_default_env("SSTW_SIGMARK_CH_FACTOR", "2")
-    _set_default_env("SSTW_SIGMARK_HW_FACTOR", "8")
-    _set_default_env("SSTW_SIGMARK_FR_FACTOR", "1")
-    _set_default_env("SSTW_SIGMARK_BATCH_SIZE", "1")
-    _set_default_env("SSTW_SIGMARK_QUANT_TEXT_ENCODER", "1")
-    _set_default_env("SSTW_SIGMARK_PRECISION", "bf16")
-    _set_default_env("SSTW_SIGMARK_FORCE_REBUILD_RUNTIME_SOURCE", "true")
-
 
 def _assert_safe_reset_path(target: Path, project_root: Path) -> None:
     """校验待清理目录必须位于本次 project_root 内。"""

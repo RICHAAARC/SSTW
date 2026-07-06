@@ -131,10 +131,8 @@ trajectory_time_shuffled_control
 ```text
 mechanism_control_baseline: endpoint_only, trajectory_only, generic_ssm, key_agnostic_state_space
 explicit_synchronization_baseline: explicit_dtw_temporal_alignment, frame_matching_temporal_registration
-modern_video_watermark_baseline: VideoShield, SIGMark, VideoMark, VidSig 与 VideoSeal
 ```
 
-其中, `explicit_dtw_temporal_alignment` 与 `frame_matching_temporal_registration` 只能证明 SSTW 不是普通显式时间对齐; 它们不能作为顶刊顶会版本的唯一外部 baseline。VideoSeal、VideoShield、SIGMark、VideoMark 与 VidSig 是当前主实验现代视频水印 baseline, 必须以 governed records 方式运行或明确记录未运行原因。若某个 baseline 与并行论文或作者已有工作重叠, 仍可作为 supplementary comparison 或 related-work robustness control, 但不能替代与 SSTW 机制最接近的 in-generation video watermark baseline。
 
 ### 2.3 与服务端日志审计的边界
 
@@ -308,7 +306,7 @@ submission_package_freeze
 
 `mechanism_validation` 聚合以下机制前置与实现 phase: `synthetic_state_inference_sanity`、`real_video_latent_transfer_check`、`state_space_inference_formalization`、`trajectory_observation_core_probe`、`flow_model_adapter_preflight`、`sampling_time_constraint_probe`、`motion_threshold_calibration`、历史 small-scale 机制 pilot 记录和真实生成式视频模型实现包。`small_scale_claim_pilot_gate` 不再作为主干门禁使用, 只能作为机制层的历史小样本检查记录; `generative_video_model_probe` 不再作为独立门禁使用, 只表示真实生成式视频模型实验的实现 package。
 
-其中 `validation_scale` 重新定义为“target_fpr=0.1 小样本完整协议论文主张候选验证”, 是进入 `pilot_paper` 前的完整协议打通层。它必须使用 `configs/protocol/validation_scale_generative_probe.json` 中 `target_fpr=0.1` 指定的口径跑通与论文协议同构的全部产物链路, 并在该 FPR 设定下判断 SSTW 是否成立以及是否相对 5 个现代 external baseline 具备优势证据。`replay_and_authenticated_sketch_gate`、`flow_specific_adaptive_attack_gate`、external baseline、internal ablation、CI reporter、artifact rebuild 和 claim audit 都必须在 `validation_scale` 中形成可落盘、可检查、可失败闭环, 不得推迟到 `pilot_paper` 或 `full_paper` 后再补。`validation_scale` 必须能在小样本规模上产出 paper 相关的全部 governed artifact 类型: generation / detection records、主方法 measured_formal 结果、完整外部 baseline 对比、内部消融、46 个 runtime attack、11 个 non-runtime/adaptive 协议、replay/sketch 或受治理 Claim-3 downgrade、fixed-FPR CI、tables、figures、reports、package manifest 和 claim audit。只有 `validation_scale` 通过并生成 `validation_scale_to_pilot_paper_transition_decision` 后, 才允许进入 `pilot_paper`; `validation_scale` 不能直接允许进入 `full_paper`。`full_paper` 仍必须等待 `pilot_paper`、`pilot_paper_to_full_paper_transition_decision`、`full_paper_result_checker`、CI、claim audit、artifact rebuild 和 submission freeze 相关门禁通过。`pilot_paper` 的定位是在 `validation_scale` 通过后, 使用代表性 paper 协议执行 FPR=1% 小规模结果运行并报告 pilot 级 `TPR@FPR=0.01`; 它不应再承担补机制、补 baseline 或补消融的职责。
+其中 `validation_scale` 重新定义为“target_fpr=0.1 小样本完整协议论文主张候选验证”, 是进入 `pilot_paper` 前的完整协议打通层。它必须使用 `configs/protocol/validation_scale_generative_probe.json` 中 `target_fpr=0.1` 指定的口径跑通与论文协议同构的全部产物链路, 并在该 FPR 设定下判断 SSTW 是否成立以及是否相对 3 个现代 external baseline 具备优势证据。`replay_and_authenticated_sketch_gate`、`flow_specific_adaptive_attack_gate`、external baseline、internal ablation、CI reporter、artifact rebuild 和 claim audit 都必须在 `validation_scale` 中形成可落盘、可检查、可失败闭环, 不得推迟到 `pilot_paper` 或 `full_paper` 后再补。`validation_scale` 必须能在小样本规模上产出 paper 相关的全部 governed artifact 类型: generation / detection records、主方法 measured_formal 结果、完整外部 baseline 对比、内部消融、46 个 runtime attack、11 个 non-runtime/adaptive 协议、replay/sketch 或受治理 Claim-3 downgrade、fixed-FPR CI、tables、figures、reports、package manifest 和 claim audit。只有 `validation_scale` 通过并生成 `validation_scale_to_pilot_paper_transition_decision` 后, 才允许进入 `pilot_paper`; `validation_scale` 不能直接允许进入 `full_paper`。`full_paper` 仍必须等待 `pilot_paper`、`pilot_paper_to_full_paper_transition_decision`、`full_paper_result_checker`、CI、claim audit、artifact rebuild 和 submission freeze 相关门禁通过。`pilot_paper` 的定位是在 `validation_scale` 通过后, 使用代表性 paper 协议执行 FPR=1% 小规模结果运行并报告 pilot 级 `TPR@FPR=0.01`; 它不应再承担补机制、补 baseline 或补消融的职责。
 
 核心原则是:
 
@@ -368,12 +366,12 @@ Notebook 只能通过 `paper_workflow/notebook_utils/generative_video_model_prob
 ```text
 motion_threshold_calibration_colab.ipynb
 -> generative_video_runtime_colab.ipynb
--> 5 个主实验 modern external baseline formal reference Notebook
+-> 3 个主实验 modern external baseline formal reference Notebook
 -> paper_gate_and_package_colab.ipynb
 ```
 
 当前不保留 `validation_scale` 单 Notebook 全流程入口。严格门禁必须通过拆分 Notebook
-逐段执行, 并通过本项目完成 5 个主实验现代 baseline 的 clone / build / run / adapt / record。
+逐段执行, 并通过本项目完成 3 个主实验现代 baseline 的 clone / build / run / adapt / record。
 若某个 baseline 只能在高显存或特殊依赖环境中运行, 也必须通过本项目记录 source intake、
 构建命令、运行命令、adapter 输出和 governed non-run reason, 不接受外部补交结果。
 
@@ -382,11 +380,11 @@ motion_threshold_calibration_colab.ipynb
 1. `motion_threshold_calibration_colab.ipynb` 只负责独立 calibration split 和阈值冻结。
 2. `generative_video_runtime_colab.ipynb` 负责 Wan2.1 生成、formal metrics、阈值复用、
    runtime attack 和 detection, 并在真实 GPU 生成前执行现代 baseline command 预检。
-3. 5 个主实验 modern external baseline formal reference Notebook 分别负责对应 baseline 的 source intake、clone / build / run / adapt、official bundle 生成, 并默认调用统一 runner 将已完成 bundle 转写为 `measured_formal` records。
-4. `paper_gate_and_package_colab.ipynb` 负责恢复 5 个主实验 baseline official reference 阶段包, 重新执行全量统一转写和 self-containment 判定, 再执行内部消融、adaptive attack proxy、replay/sketch
+3. 3 个主实验 modern external baseline formal reference Notebook 分别负责对应 baseline 的 source intake、clone / build / run / adapt、official bundle 生成, 并默认调用统一 runner 将已完成 bundle 转写为 `measured_formal` records。
+4. `paper_gate_and_package_colab.ipynb` 负责恢复 3 个主实验 baseline official reference 阶段包, 重新执行全量统一转写和 self-containment 判定, 再执行内部消融、adaptive attack proxy、replay/sketch
    或 Claim-3 downgrade、CI、fixed-FPR gate、artifact rebuild 和 Drive package。
 
-旧的通用 external baseline scoring Notebook 已删除。正式主流程应以 5 个主实验
+旧的通用 external baseline scoring Notebook 已删除。正式主流程应以 3 个主实验
 baseline 专用 Notebook 产生的 official bundle 为输入, 由
 `paper_gate_and_package_colab.ipynb` 统一重建最终 `measured_formal` records,
 避免单 baseline 临时 records 互相覆盖。
@@ -880,8 +878,6 @@ frame_matching_temporal_registration
 generic_ssm_baseline
 key_agnostic_state_space_baseline
 videoshield
-sigmark
-videomark
 vidsig
 videoseal
 ```
@@ -892,8 +888,6 @@ videoseal
 
 ```text
 posthoc_neural_video_watermark: VideoSeal
-in_generation_video_diffusion_watermark: VideoShield, VideoMark, VidSig
-training_or_parameter_based_video_watermark: SIGMark
 explicit_synchronization_control: explicit_dtw_temporal_alignment, frame_matching_temporal_registration
 ```
 
@@ -902,8 +896,6 @@ explicit_synchronization_control: explicit_dtw_temporal_alignment, frame_matchin
 | baseline | 推荐角色 | 纳入原因 | governed record 要求 |
 |---|---|---|---|
 | VideoShield | primary modern video diffusion watermark baseline | 训练-free in-generation 视频扩散水印, 与生成时水印最接近 | 记录模型、视频长度、攻击、检测阈值、失败原因 |
-| SIGMark | primary blind extraction baseline | 面向视频扩散的 blind extraction 与时序鲁棒水印 | 记录是否能在本项目视频格式上运行, 不能运行时写明协议 gap |
-| VideoMark 与 VidSig | in-generation 或 latent-video baseline | 覆盖 PRC / decoder fine-tuning / latent video signature 路线 | 记录是否依赖 decoder 修改、是否需要时间匹配 |
 | VideoSeal | post-hoc robust video watermark baseline | 开源且工程成熟, 用于证明 SSTW 不是普通后处理水印 | 记录后处理开销、质量指标与攻击鲁棒性 |
 | explicit_dtw_temporal_alignment | synchronization control | 显式恢复时间路径的反事实 baseline | 只能支撑 control 结论 |
 | frame_matching_temporal_registration | synchronization control | 显式帧匹配配准 baseline | 只能支撑 control 结论 |
@@ -926,7 +918,7 @@ explicit_synchronization_control: explicit_dtw_temporal_alignment, frame_matchin
 
 ### 13.6 validation_scale 作为 paper 级前小样本全流程打通层
 
-`validation_scale` 的职责是证明 paper 级运行所需的全部机制和产物链路已经在小样本规模上闭合, 并在 `target_fpr=0.1` 的登记口径下判断 SSTW 是否成立以及是否具备相对 5 个现代 external baseline 的优势证据。它采用 validation_scale protocol config 中的 `target_fpr` 作为全流程打通口径, 目标是以最小成本提前发现 baseline、消融、attack、CI、artifact rebuild、claim audit 和 package 阻断。它与 `pilot_paper` 的区别不再是机制或攻击协议不同, 而是样本规模和 FPR 等级不同: `validation_scale` 产出 fpr=0.1 小样本完整协议论文结论候选, `pilot_paper` 在通过该门禁后产出可报告的 FPR=1% pilot 级 paper 结果。
+`validation_scale` 的职责是证明 paper 级运行所需的全部机制和产物链路已经在小样本规模上闭合, 并在 `target_fpr=0.1` 的登记口径下判断 SSTW 是否成立以及是否具备相对 3 个现代 external baseline 的优势证据。它采用 validation_scale protocol config 中的 `target_fpr` 作为全流程打通口径, 目标是以最小成本提前发现 baseline、消融、attack、CI、artifact rebuild、claim audit 和 package 阻断。它与 `pilot_paper` 的区别不再是机制或攻击协议不同, 而是样本规模和 FPR 等级不同: `validation_scale` 产出 fpr=0.1 小样本完整协议论文结论候选, `pilot_paper` 在通过该门禁后产出可报告的 FPR=1% pilot 级 paper 结果。
 
 `validation_scale` 至少必须满足:
 
@@ -1272,8 +1264,6 @@ Colab 输出应落盘到:
    后续 Notebook 误用旧 external baseline 输出。
 
 `resources/` 只保存可复用的大模型、checkpoint、官方资源包等冷资源。若资源以 zip 包保存,
-Notebook 会先复制 zip 到 Colab 本地并解压到本地资源根目录, 避免循环读取 Drive 小文件。以 SIGMark 为例,
-HunyuanVideo 这类可复用模型资源应优先作为 `resources/external_baseline/sigmark/*.zip`
 或等价资源包保存, Notebook 解包后再由官方运行器使用; 它不应随每次实验阶段重复打包。
 
 数据集构造、模型运行、结果检查和阶段打包下载应分离为不同步骤。
@@ -1524,8 +1514,6 @@ detection_overhead
 | baseline | 来源 | 工程接入备注 |
 |---|---|---|
 | VideoShield | https://github.com/hurunyi/VideoShield | 作为 2025 in-generation video diffusion watermark baseline。 |
-| SIGMark | https://github.com/JeremyZhao1998/SIGMark-release | 作为 2026 blind extraction / scalable in-generation video watermark baseline。 |
-| VideoMark | https://github.com/KYRIE-LI11/VideoMark | 作为 training-free 或 distortion-free video diffusion watermark baseline 候选。 |
 | VidSig | https://github.com/hardenyu21/Video-Signature | 作为 latent video signature baseline 候选。 |
 | VideoSeal | https://github.com/facebookresearch/videoseal | 作为开源 post-hoc neural video watermark baseline。 |
 
@@ -1569,7 +1557,6 @@ source_registry
 | adapter score records | `records/external_baseline_score_records.jsonl` | 在同一 run_root 上写出 measured_proxy 或 measured_formal records | 仅 measured_formal 可进入正式对比候选 |
 | execution manifest | `artifacts/external_baseline_execution_manifest.json` | 记录 measured / formal 数量、evidence paths、source intake 路径和执行边界 | evidence paths 缺失时不能升级为正式主表 claim |
 
-其中 `explicit_dtw_temporal_alignment` 与 `explicit_frame_matching_temporal_registration` 只能作为显式同步 control。`videoshield`、`sigmark`、`videomark`、`vidsig` 和 `videoseal` 必须通过本项目 clone / build / run / adapt / record 的自包含流程产生 `measured_formal` records。
 
 ### 23.2 validation_scale 对 baseline 的硬阻断
 
@@ -2259,7 +2246,7 @@ packager 轻量回归测试
 clone / pull SSTW 仓库
 安装 SSTW 依赖
 通过本项目 clone / build / run 流程准备现代 baseline 官方实现
-配置 5 个主实验现代 baseline 自包含 adapter 命令
+配置 3 个主实验现代 baseline 自包含 adapter 命令
 可选执行 source clone
 绑定 project-generated external baseline provenance paths
 运行 runtime detection 后执行 external_baseline_runner
@@ -2321,7 +2308,7 @@ external_baseline_score_records.metric_status == measured_formal
 
 ### 35.6 repository bridge command 规则
 
-为了减少 Colab 中为 5 个主实验现代 baseline 重复编写 SSTW 外层 I/O wrapper 的成本, 项目提供统一 bridge:
+为了减少 Colab 中为 3 个主实验现代 baseline 重复编写 SSTW 外层 I/O wrapper 的成本, 项目提供统一 bridge:
 
 ```text
 external_baseline/official_command_bridge.py
@@ -2341,8 +2328,6 @@ bridge 不是第三方 baseline 算法本体。它不能自行计算视频相似
 
 ```text
 SSTW_VIDEOSHIELD_OFFICIAL_EVAL_COMMAND
-SSTW_SIGMARK_OFFICIAL_EVAL_COMMAND
-SSTW_VIDEOMARK_OFFICIAL_EVAL_COMMAND
 SSTW_VIDSIG_OFFICIAL_EVAL_COMMAND
 SSTW_VIDEOSEAL_OFFICIAL_EVAL_COMMAND
 ```
@@ -2353,12 +2338,10 @@ SSTW_VIDEOSEAL_OFFICIAL_EVAL_COMMAND
 {official_output_json_path}
 ```
 
-当前项目提供 5 个主实验 repository official adapter:
+当前项目提供 3 个主实验 repository official adapter:
 
 ```text
 external_baseline/official_eval_adapters/videoshield.py
-external_baseline/official_eval_adapters/sigmark.py
-external_baseline/official_eval_adapters/videomark.py
 external_baseline/official_eval_adapters/vidsig.py
 external_baseline/official_eval_adapters/videoseal.py
 ```
@@ -2373,7 +2356,7 @@ bridge 再把该输出归一化写入:
 
 Notebook 默认可通过 `SSTW_USE_MODERN_BASELINE_BRIDGE_COMMANDS=true` 使用 repository bridge
 外层命令。若使用 bridge, `external_baseline_official_bridge_preflight_decision.json` 必须在
-真实生成前检查 5 个主实验 `SSTW_<BASELINE>_OFFICIAL_EVAL_COMMAND` 是否齐全。若用户希望完全自定义
+真实生成前检查 3 个主实验 `SSTW_<BASELINE>_OFFICIAL_EVAL_COMMAND` 是否齐全。若用户希望完全自定义
 外层命令, 可以设置 `SSTW_USE_MODERN_BASELINE_BRIDGE_COMMANDS=0`, 但此时仍必须保证
 `SSTW_<BASELINE>_EVAL_COMMAND` 直接写出合规 score JSON。
 
@@ -2423,7 +2406,7 @@ external_baseline_source_intake
 -> external_baseline_official_bundle_generation
 -> external_baseline_official_result_bundle_preflight
 -> external_baseline_comparison
--> paper_gate_and_package_colab 重新聚合 5 个主实验 official reference 阶段包
+-> paper_gate_and_package_colab 重新聚合 3 个主实验 official reference 阶段包
 ```
 
 其中:
@@ -2432,7 +2415,6 @@ external_baseline_source_intake
    例如 VideoSeal 官方 API 依赖、VidSig 公开 checkpoint 等。
 2. `external_baseline_official_bundle_generation` 只对当前仓库可以真实调用官方 API 或
    项目内官方流程运行器的 baseline 生成 repository-owned official bundle cache。当前可自动尝试
-   VideoSeal、VideoShield、VideoMark 与 VidSig; 其中 VideoShield 与 VidSig 必须先运行各自
    官方生成流程得到 baseline 自己的 watermarked videos, 再施加项目 runtime attack 并调用官方
    反演 / 检测逻辑, 不允许直接检测 SSTW / Wan 视频后伪造成 baseline 结果。
 3. 对需要高显存生成模型、训练得到的 extractor、PRC key、maintained info 或官方中间产物的
@@ -2445,10 +2427,10 @@ external_baseline_source_intake
    时, 才能发布完整时间戳 zip。若结果为 `FAIL` 或决策文件缺失, 只能发布
    manifest-only 阻断记录, 且不得发布可被后续门禁恢复的 zip。
 6. 单 baseline Notebook 中的 comparison records 只用于即时自检。最终论文 gate 必须在
-   `paper_gate_and_package_colab.ipynb` 恢复 5 个主实验 official reference 阶段包后重新运行
+   `paper_gate_and_package_colab.ipynb` 恢复 3 个主实验 official reference 阶段包后重新运行
    `external_baseline_comparison`, 生成全量 `measured_formal` records 和 self-containment 判定。
 
 该规则的目标是让 Colab 冷启动具备“能自动补齐的就自动补齐”的工程能力, 同时保持论文
-baseline 对比的 fail-closed 边界。严格门禁通过的前提仍然是 5 个主实验现代 baseline 最终都由本项目产出
+baseline 对比的 fail-closed 边界。严格门禁通过的前提仍然是 3 个主实验现代 baseline 最终都由本项目产出
 `measured_formal` records, 且 evidence path 可以追溯到官方源码、官方 API、官方 checkpoint
 或本项目生成的官方结果缓存。

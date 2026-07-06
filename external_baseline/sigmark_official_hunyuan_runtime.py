@@ -680,6 +680,7 @@ def _sigmark_command(
     mode: str,
     watermark_method: str = "sigmark",
     output_path: str | Path | None = None,
+    num_prompts_per_dimension: int | None = None,
 ) -> list[str]:
     """构造 SIGMark 官方 main.py 命令。"""
 
@@ -687,6 +688,7 @@ def _sigmark_command(
     if int(config.nproc_per_node) > 1:
         launcher = ["torchrun", f"--nproc_per_node={int(config.nproc_per_node)}", "main.py"]
     resolved_output_path = str(output_path or config.output_path)
+    prompt_count = max(1, int(num_prompts_per_dimension or 1))
     return [
         *launcher,
         f"--mode={mode}",
@@ -704,9 +706,10 @@ def _sigmark_command(
         f"--fps={int(config.fps)}",
         f"--guidance_scale={float(config.guidance_scale)}",
         f"--num_steps={int(config.num_inference_steps)}",
+        f"--num_prompts_per_dimension={prompt_count}",
         f"--num_videos_per_prompt={int(config.num_videos_per_prompt)}",
         f"--num_videos_per_prompt_diversity={int(config.num_videos_per_prompt_diversity)}",
-        "--num_prompts_diversity=1",
+        f"--num_prompts_diversity={prompt_count}",
         f"--small_scale_test={int(config.small_scale_test)}",
         f"--output_path={resolved_output_path}",
         f"--precision={normalize_sigmark_precision(config.precision)}",
@@ -1017,6 +1020,21 @@ def _video_path_for_sigmark_result_key(output_path: Path, result_key: str) -> Pa
     return output_path / f"{normalized}.mp4"
 
 
+def _sigmark_result_key_from_video_path(source_output_path: Path, video_path: Path) -> str:
+    """把已生成视频路径反推为 SIGMark official result key。"""
+
+    return str(video_path.relative_to(source_output_path).with_suffix("")).replace("\\", "/")
+
+
+def _sigmark_generated_video_paths(source_output_path: Path, runtime_dimension: str) -> list[Path]:
+    """列出官方 gen 已实际落盘的指定 runtime dimension 视频。"""
+
+    dimension_dir = source_output_path / runtime_dimension
+    if not dimension_dir.exists():
+        return []
+    return sorted(path for path in dimension_dir.glob("*.mp4") if path.is_file())
+
+
 def _prepare_sigmark_attack_extract_outputs(
     *,
     records: list[Mapping[str, Any]],
@@ -1042,6 +1060,8 @@ def _prepare_sigmark_attack_extract_outputs(
     rows: list[dict[str, Any]] = []
     attack_output_paths: dict[str, str] = {}
     copied_video_count = 0
+    supplemental_video_count = 0
+    prepared_by_attack: dict[str, set[str]] = {}
     failures: list[dict[str, Any]] = []
     for record in records:
         attack_name = str(record.get("attack_name") or "clean")
@@ -1065,6 +1085,7 @@ def _prepare_sigmark_attack_extract_outputs(
             frames = _read_video_frames(source_video_path)
             attacked_frames, attack_info = _apply_runtime_attack_to_frames(frames, attack_name)
             _write_video_frames(destination_video_path, attacked_frames, fps=fps)
+            prepared_by_attack.setdefault(attack_name, set()).add(result_key)
             copied_video_count += 1
             rows.append({
                 "role": role,
@@ -1084,11 +1105,47 @@ def _prepare_sigmark_attack_extract_outputs(
             })
     if failures:
         raise RuntimeError(f"sigmark_attack_extract_output_prepare_failed:{failures[:3]}")
+    generated_video_paths = _sigmark_generated_video_paths(source_output_path, runtime_dimension)
+    for attack_name, attack_dir_text in attack_output_paths.items():
+        attack_dir = Path(attack_dir_text)
+        prepared_keys = prepared_by_attack.setdefault(attack_name, set())
+        for source_video_path in generated_video_paths:
+            try:
+                result_key = _sigmark_result_key_from_video_path(source_output_path, source_video_path)
+                if result_key in prepared_keys:
+                    continue
+                destination_video_path = _video_path_for_sigmark_result_key(attack_dir, result_key)
+                frames = _read_video_frames(source_video_path)
+                attacked_frames, attack_info = _apply_runtime_attack_to_frames(frames, attack_name)
+                _write_video_frames(destination_video_path, attacked_frames, fps=fps)
+                prepared_keys.add(result_key)
+                supplemental_video_count += 1
+                rows.append({
+                    "role": role,
+                    "attack_name": attack_name,
+                    "result_key": result_key,
+                    "source_video_path": str(source_video_path),
+                    "destination_video_path": str(destination_video_path),
+                    "supplemental_official_extract_video": True,
+                    **attack_info,
+                })
+            except Exception as exc:  # noqa: BLE001 - 需要把单条补齐失败写入 governed manifest。
+                failures.append({
+                    "role": role,
+                    "attack_name": attack_name,
+                    "result_key": _sigmark_result_key_from_video_path(source_output_path, source_video_path),
+                    "failure_reason": str(exc),
+                    "supplemental_official_extract_video": True,
+                })
+    if failures:
+        raise RuntimeError(f"sigmark_attack_extract_output_prepare_failed:{failures[:3]}")
     return {
         "attack_extract_output_prepare_status": "ready",
         "role": role,
         "attack_output_paths": attack_output_paths,
         "prepared_video_count": copied_video_count,
+        "supplemental_official_extract_video_count": supplemental_video_count,
+        "prepare_policy": "runtime_record_videos_plus_generated_official_prompt_seed_grid_for_extract_completeness",
         "prepared_rows": rows[:20],
     }
 
@@ -1331,14 +1388,26 @@ def run_sigmark_official_hunyuan_runtime(config: SigmarkOfficialHunyuanRuntimeCo
         }
         execution_failure_reason = str(exc)
 
-    gen_command = _sigmark_command(config, runtime_source_dir=runtime_source_dir, mode="gen")
-    extract_command = _sigmark_command(config, runtime_source_dir=runtime_source_dir, mode="extract")
+    official_prompt_count = len(prompt_rows)
+    gen_command = _sigmark_command(
+        config,
+        runtime_source_dir=runtime_source_dir,
+        mode="gen",
+        num_prompts_per_dimension=official_prompt_count,
+    )
+    extract_command = _sigmark_command(
+        config,
+        runtime_source_dir=runtime_source_dir,
+        mode="extract",
+        num_prompts_per_dimension=official_prompt_count,
+    )
     clean_negative_gen_command = _sigmark_command(
         config,
         runtime_source_dir=runtime_source_dir,
         mode="gen",
         watermark_method="none",
         output_path=clean_negative_output_path,
+        num_prompts_per_dimension=official_prompt_count,
     )
     clean_negative_extract_command = _sigmark_command(
         config,
@@ -1346,6 +1415,7 @@ def run_sigmark_official_hunyuan_runtime(config: SigmarkOfficialHunyuanRuntimeCo
         mode="extract",
         watermark_method="sigmark",
         output_path=clean_negative_output_path,
+        num_prompts_per_dimension=official_prompt_count,
     )
     command_results: list[dict[str, Any]] = []
     positive_attack_extract_commands: list[dict[str, Any]] = []
@@ -1470,6 +1540,7 @@ def run_sigmark_official_hunyuan_runtime(config: SigmarkOfficialHunyuanRuntimeCo
                     mode="extract",
                     watermark_method="sigmark",
                     output_path=attack_output,
+                    num_prompts_per_dimension=official_prompt_count,
                 )
                 positive_attack_extract_commands.append({"attack_name": attack_name, "command": attack_extract_command})
                 emit_progress_event(
@@ -1505,6 +1576,7 @@ def run_sigmark_official_hunyuan_runtime(config: SigmarkOfficialHunyuanRuntimeCo
                     mode="extract",
                     watermark_method="sigmark",
                     output_path=attack_output,
+                    num_prompts_per_dimension=official_prompt_count,
                 )
                 clean_negative_attack_extract_commands.append({
                     "attack_name": attack_name,
@@ -1631,6 +1703,10 @@ def run_sigmark_official_hunyuan_runtime(config: SigmarkOfficialHunyuanRuntimeCo
         "geometry_manifest": geometry_manifest,
         "patch_manifest": patch_manifest,
         "prompt_manifest": prompt_manifest,
+        "official_num_prompts_per_dimension": official_prompt_count,
+        "official_prompt_subset_override_policy": (
+            "set_to_runtime_prompt_count_to_disable_sigmark_default_five_prompt_truncation"
+        ),
         "model_manifest": model_manifest,
         "gen_command": gen_command,
         "extract_command": extract_command,

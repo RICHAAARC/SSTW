@@ -45,6 +45,27 @@ def _write_runtime_records(run_root: Path) -> None:
     records_path.write_text("\n".join(json.dumps(row, ensure_ascii=False) for row in rows) + "\n", encoding="utf-8")
 
 
+def _write_runtime_records_with_prompt_count(run_root: Path, prompt_count: int) -> None:
+    """构造多个 prompt 的 runtime detection records fixture。"""
+
+    records_path = run_root / "records" / "runtime_detection_records.jsonl"
+    records_path.parent.mkdir(parents=True, exist_ok=True)
+    rows = [
+        {
+            "runtime_detection_status": "ready",
+            "generation_model_id": "wan21_runtime",
+            "prompt_id": f"prompt_{index}",
+            "seed_id": "seed_0",
+            "trajectory_trace_id": f"trace_{index}",
+            "attack_name": "clean",
+            "source_video_path": str(run_root / "videos" / f"source_{index}.mp4"),
+            "attacked_video_path": str(run_root / "videos" / f"attacked_{index}.mp4"),
+        }
+        for index in range(prompt_count)
+    ]
+    records_path.write_text("\n".join(json.dumps(row, ensure_ascii=False) for row in rows) + "\n", encoding="utf-8")
+
+
 def _write_prompt_suite(path: Path) -> None:
     """构造包含 prompt_text 的最小 prompt suite。"""
 
@@ -57,6 +78,24 @@ def _write_prompt_suite(path: Path) -> None:
                     "prompt_id": "prompt_a",
                     "prompt_text": "A small red toy car moves across a table with clear motion.",
                 }
+            ],
+        },
+    )
+
+
+def _write_prompt_suite_with_prompt_count(path: Path, prompt_count: int) -> None:
+    """构造多个 prompt_text 的 prompt suite。"""
+
+    _write_json(
+        path,
+        {
+            "prompt_suite_id": "test_prompt_suite",
+            "prompts": [
+                {
+                    "prompt_id": f"prompt_{index}",
+                    "prompt_text": f"Prompt {index} contains clear visible motion for SIGMark testing.",
+                }
+                for index in range(prompt_count)
             ],
         },
     )
@@ -128,6 +167,8 @@ def test_sigmark_hunyuan_runtime_dry_run_builds_prompt_set_and_commands(tmp_path
     assert "official_hunyuan_clean_negative_outputs" in " ".join(manifest["clean_negative_gen_command"])
     assert "--precision=bf16" in manifest["gen_command"]
     assert "--precision=bfloat16" not in manifest["gen_command"]
+    assert "--num_prompts_per_dimension=1" in manifest["gen_command"]
+    assert "--num_prompts_diversity=1" in manifest["gen_command"]
     prompt_file = Path(manifest["prompt_manifest"]["prompt_file"])
     assert "toy car moves" in prompt_file.read_text(encoding="utf-8")
     runtime_main = Path(manifest["runtime_source_dir"]) / "main.py"
@@ -140,6 +181,43 @@ def test_sigmark_hunyuan_runtime_dry_run_builds_prompt_set_and_commands(tmp_path
         "t2v_image_prompt_load_guard": "patched_runtime_copy",
         "extract_valid_index_none_guard": "patched_runtime_copy",
     }
+
+
+@pytest.mark.quick
+def test_sigmark_hunyuan_runtime_sets_official_prompt_limit_to_runtime_prompt_count(tmp_path: Path) -> None:
+    """SIGMark 命令必须覆盖官方默认 5 prompt 截断, 否则后段 prompt 会缺少视频。"""
+
+    run_root = tmp_path / "runs" / "generative_video_model_probe" / "validation_scale"
+    bundle_root = tmp_path / "bundles" / "validation_scale"
+    source_dir = tmp_path / "official_source"
+    prompt_suite_path = tmp_path / "datasets" / "generative_video_prompt_suite" / "prompt_seed_suite.json"
+    _write_runtime_records_with_prompt_count(run_root, prompt_count=8)
+    _write_prompt_suite_with_prompt_count(prompt_suite_path, prompt_count=8)
+    _write_fake_sigmark_source(source_dir)
+
+    config = SigmarkOfficialHunyuanRuntimeConfig(
+        run_root=str(run_root),
+        bundle_root=str(bundle_root),
+        source_dir=str(source_dir),
+        output_root=str(tmp_path / "sigmark_runtime"),
+        resource_root=str(tmp_path / "resources" / "external_baseline"),
+        prompt_suite_path=str(prompt_suite_path),
+        model_base_path=str(tmp_path / "resources" / "external_baseline" / "sigmark" / "models"),
+        dry_run=True,
+    )
+
+    manifest = run_sigmark_official_hunyuan_runtime(config)
+
+    assert manifest["prompt_manifest"]["prompt_count"] == 8
+    assert manifest["official_num_prompts_per_dimension"] == 8
+    for command_name in (
+        "gen_command",
+        "extract_command",
+        "clean_negative_gen_command",
+        "clean_negative_extract_command",
+    ):
+        assert "--num_prompts_per_dimension=8" in manifest[command_name]
+        assert "--num_prompts_diversity=8" in manifest[command_name]
 
 
 @pytest.mark.quick
@@ -347,6 +425,59 @@ def test_sigmark_attack_extract_output_preparation_copies_state_and_attacks_vide
     assert list(attack_dir.glob("*-maintained_info.pkl"))
     assert list(attack_dir.glob("*-gt_watermark_messages.npz"))
     assert manifest["prepared_rows"][0]["attack_transform"] == "drop_first_and_last_frame_when_possible"
+
+
+@pytest.mark.quick
+def test_sigmark_attack_extract_output_preparation_adds_supplemental_generated_videos(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """attack-specific extract 目录必须补齐官方 prompt/seed 网格中的未用视频。"""
+
+    source_output = tmp_path / "official_positive_outputs"
+    attack_output_root = tmp_path / "official_attack_outputs"
+    dimension = "sstw_runtime_prompt"
+    prompt_text = "A small red toy car moves across a table with clear motion."
+    record_video = source_output / dimension / f"{prompt_text[:180]}-0.mp4"
+    supplemental_video = source_output / dimension / f"{prompt_text[:180]}-1.mp4"
+    record_video.parent.mkdir(parents=True, exist_ok=True)
+    record_video.write_bytes(b"video0")
+    supplemental_video.write_bytes(b"video1")
+    (source_output / "HunyuanVideo-community-VBench2_aug-512x512-65frams-sigmark-1024bits-maintained_info.pkl").write_bytes(b"state")
+    (source_output / "HunyuanVideo-community-VBench2_aug-512x512-65frams-sigmark-1024bits-gt_watermark_messages.npz").write_bytes(b"gt")
+
+    monkeypatch.setattr(sigmark_runtime, "_read_video_frames", lambda _path: ["f0", "f1"])
+    monkeypatch.setattr(
+        sigmark_runtime,
+        "_write_video_frames",
+        lambda path, _frames, *, fps: Path(path).parent.mkdir(parents=True, exist_ok=True) or Path(path).write_bytes(b"attacked"),
+    )
+
+    manifest = sigmark_runtime._prepare_sigmark_attack_extract_outputs(
+        records=[
+            {
+                "prompt_id": "prompt_a",
+                "seed_id": "seed_0",
+                "attack_name": "video_compression_runtime",
+            }
+        ],
+        source_output_path=source_output,
+        attack_output_root=attack_output_root,
+        state_source_output_path=source_output,
+        prompt_text_by_id={"prompt_a": prompt_text},
+        seed_indices={"prompt_a": {"seed_0": 0}},
+        runtime_dimension=dimension,
+        allow_prompt_id_fallback=False,
+        fps=8,
+        role="positive",
+    )
+
+    attack_dir = Path(manifest["attack_output_paths"]["video_compression_runtime"])
+    assert manifest["prepared_video_count"] == 1
+    assert manifest["supplemental_official_extract_video_count"] == 1
+    assert (attack_dir / record_video.relative_to(source_output)).exists()
+    assert (attack_dir / supplemental_video.relative_to(source_output)).exists()
+    assert any(row.get("supplemental_official_extract_video") for row in manifest["prepared_rows"])
 
 
 @pytest.mark.quick

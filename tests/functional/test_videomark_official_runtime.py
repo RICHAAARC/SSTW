@@ -176,6 +176,8 @@ def test_videomark_runtime_dry_run_builds_prompt_set_and_commands(tmp_path: Path
     assert "parser.add_argument('--model_path', default=None)" in runtime_text
     assert "use_watermark.strip().lower()" in runtime_text
     assert "_encoding_key, decoding_key = pickle.load(f)" in runtime_text
+    assert "sstw_latent_dtype = next(video_pipe.unet.parameters()).dtype" in runtime_text
+    assert "device=device, dtype=sstw_latent_dtype" in runtime_text
     assert "parser.add_argument('--threshold', default=0.5, type=float)" in runtime_temporal_text
     assert "parser.add_argument('--resample_num', default=1, type=int)" in runtime_temporal_text
     assert "parser.add_argument('--video_family', default='videomark')" in runtime_temporal_text

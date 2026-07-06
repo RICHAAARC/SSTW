@@ -10,14 +10,17 @@
     "sstw_proxy_score"
   ],
   "external_baseline_result_production_contract": "project_clone_build_run_adapt_record",
-  "fixed_low_fpr_ci_report_required": true,
   "fair_comparison_protocol": "method_specific_clean_negative_calibration_to_target_fpr",
+  "fixed_low_fpr_ci_report_required": true,
   "minimum_attack_count": 46,
   "minimum_clean_negative_count": 10,
-  "minimum_external_baseline_measured_adapter_count": 5,
-  "minimum_modern_external_baseline_formal_adapter_count": 3,
+  "minimum_external_baseline_measured_adapter_count": 7,
+  "minimum_modern_external_baseline_formal_adapter_count": 5,
+  "minimum_non_runtime_attack_protocol_count": 11,
   "minimum_prompt_count": 8,
   "minimum_seed_per_prompt": 3,
+  "minimum_sstw_advantage_baseline_count": 5,
+  "minimum_sstw_tpr_at_target_fpr_difference": 0.0,
   "next_allowed_result_profiles_after_pass": [
     "pilot_paper"
   ],
@@ -34,36 +37,45 @@
   "require_artifact_rebuild_dry_run": true,
   "require_complete_result_artifact_skeleton": true,
   "require_confidence_interval_report": true,
+  "require_data_split_and_leakage_guard": true,
   "require_external_baseline_comparison_records": true,
   "require_external_baseline_self_contained_outputs": true,
   "require_external_baseline_self_containment_decision": true,
   "require_external_baseline_status_records": true,
   "require_fair_detection_calibration": true,
   "require_formal_baseline_difference_interval": true,
-  "require_formal_motion_claim_ready": true,
   "require_formal_method_baseline_comparison": true,
+  "require_formal_motion_claim_ready": true,
   "require_internal_ablation_records": true,
   "require_low_fpr_formal_statistics_blocking_record": true,
   "require_motion_consistency_exclusion_report": true,
   "require_motion_threshold_calibration_ready": true,
   "require_pilot_paper_and_full_paper_blocked_until_pass": true,
-  "require_data_split_and_leakage_guard": true,
   "require_replay_or_sketch_records_or_claim3_downgrade": true,
+  "require_sstw_advantage_ci_lower_above_zero": true,
   "require_sstw_measured_formal_records": true,
   "require_validation_scale_formal_internal_ablation": true,
+  "require_validation_scale_sstw_advantage_claim_ready": true,
   "required_modern_external_baseline_adapter_names": [
     "videoshield",
     "vidsig",
-    "videoseal"
+    "videoseal",
+    "revmark",
+    "wam_frame"
   ],
-  "stage_id": "validation_scale_generative_probe_gate",
-  "target_fpr": 0.1,
-  "transition_decision_after_pass": "validation_scale_to_pilot_paper_transition_decision",
-  "validation_profile_names": [
-    "validation_scale"
+  "required_non_runtime_attack_protocols": [
+    "generative_recompression_or_regeneration_attack",
+    "endpoint_preserving_path_perturbation_attack",
+    "flow_time_grid_mismatch_attack",
+    "wrong_sampler_replay_attack",
+    "wrong_prompt_replay_attack",
+    "wrong_key_attack",
+    "detector_probing_with_public_negatives",
+    "watermark_removal_optimization_attack",
+    "watermark_spoofing_or_copy_attack",
+    "collusion_multi_sample_attack",
+    "adversarial_detector_evasion_attack"
   ],
-  "validation_scale_definition": "small_sample_full_protocol_target_fpr_0_1_claim_validation",
-  "validation_scale_role": "target_fpr_0_1_paper_claim_support_gate_before_pilot_paper",
   "required_runtime_attack_names": [
     "video_compression_runtime",
     "h264_crf18_runtime",
@@ -113,29 +125,19 @@
     "crop_rotation_combined_runtime"
   ],
   "required_runtime_attack_protocol_note": "validation_scale 使用与 full_paper 相同的 46 个 runtime attack 和 11 个 non-runtime/adaptive 协议, 覆盖压缩、时间、空间几何、视觉退化和组合攻击; validation_scale 的区别仅是样本量较小且 target_fpr=0.1, 通过后表示在 fpr=0.1 论文设定下 SSTW 结论和优势主张具备 governed evidence, 但不能外推到 pilot_paper 的 fpr=0.01 或 full_paper 的 fpr=0.001。",
-  "require_validation_scale_sstw_advantage_claim_ready": true,
-  "minimum_sstw_advantage_baseline_count": 3,
-  "minimum_sstw_tpr_at_target_fpr_difference": 0.0,
-  "require_sstw_advantage_ci_lower_above_zero": true,
   "runtime_attack_family_minimums": {
+    "combined": 5,
     "compression": 9,
-    "temporal": 8,
     "spatial_geometry": 5,
-    "visual_degradation": 8,
-    "combined": 5
+    "temporal": 8,
+    "visual_degradation": 8
   },
-  "required_non_runtime_attack_protocols": [
-    "generative_recompression_or_regeneration_attack",
-    "endpoint_preserving_path_perturbation_attack",
-    "flow_time_grid_mismatch_attack",
-    "wrong_sampler_replay_attack",
-    "wrong_prompt_replay_attack",
-    "wrong_key_attack",
-    "detector_probing_with_public_negatives",
-    "watermark_removal_optimization_attack",
-    "watermark_spoofing_or_copy_attack",
-    "collusion_multi_sample_attack",
-    "adversarial_detector_evasion_attack"
+  "stage_id": "validation_scale_generative_probe_gate",
+  "target_fpr": 0.1,
+  "transition_decision_after_pass": "validation_scale_to_pilot_paper_transition_decision",
+  "validation_profile_names": [
+    "validation_scale"
   ],
-  "minimum_non_runtime_attack_protocol_count": 11
+  "validation_scale_definition": "small_sample_full_protocol_target_fpr_0_1_claim_validation",
+  "validation_scale_role": "target_fpr_0_1_paper_claim_support_gate_before_pilot_paper"
 }

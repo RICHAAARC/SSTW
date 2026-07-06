@@ -306,7 +306,7 @@ submission_package_freeze
 
 `mechanism_validation` 聚合以下机制前置与实现 phase: `synthetic_state_inference_sanity`、`real_video_latent_transfer_check`、`state_space_inference_formalization`、`trajectory_observation_core_probe`、`flow_model_adapter_preflight`、`sampling_time_constraint_probe`、`motion_threshold_calibration`、历史 small-scale 机制 pilot 记录和真实生成式视频模型实现包。`small_scale_claim_pilot_gate` 不再作为主干门禁使用, 只能作为机制层的历史小样本检查记录; `generative_video_model_probe` 不再作为独立门禁使用, 只表示真实生成式视频模型实验的实现 package。
 
-其中 `validation_scale` 重新定义为“target_fpr=0.1 小样本完整协议论文主张候选验证”, 是进入 `pilot_paper` 前的完整协议打通层。它必须使用 `configs/protocol/validation_scale_generative_probe.json` 中 `target_fpr=0.1` 指定的口径跑通与论文协议同构的全部产物链路, 并在该 FPR 设定下判断 SSTW 是否成立以及是否相对 3 个现代 external baseline 具备优势证据。`replay_and_authenticated_sketch_gate`、`flow_specific_adaptive_attack_gate`、external baseline、internal ablation、CI reporter、artifact rebuild 和 claim audit 都必须在 `validation_scale` 中形成可落盘、可检查、可失败闭环, 不得推迟到 `pilot_paper` 或 `full_paper` 后再补。`validation_scale` 必须能在小样本规模上产出 paper 相关的全部 governed artifact 类型: generation / detection records、主方法 measured_formal 结果、完整外部 baseline 对比、内部消融、46 个 runtime attack、11 个 non-runtime/adaptive 协议、replay/sketch 或受治理 Claim-3 downgrade、fixed-FPR CI、tables、figures、reports、package manifest 和 claim audit。只有 `validation_scale` 通过并生成 `validation_scale_to_pilot_paper_transition_decision` 后, 才允许进入 `pilot_paper`; `validation_scale` 不能直接允许进入 `full_paper`。`full_paper` 仍必须等待 `pilot_paper`、`pilot_paper_to_full_paper_transition_decision`、`full_paper_result_checker`、CI、claim audit、artifact rebuild 和 submission freeze 相关门禁通过。`pilot_paper` 的定位是在 `validation_scale` 通过后, 使用代表性 paper 协议执行 FPR=1% 小规模结果运行并报告 pilot 级 `TPR@FPR=0.01`; 它不应再承担补机制、补 baseline 或补消融的职责。
+其中 `validation_scale` 重新定义为“target_fpr=0.1 小样本完整协议论文主张候选验证”, 是进入 `pilot_paper` 前的完整协议打通层。它必须使用 `configs/protocol/validation_scale_generative_probe.json` 中 `target_fpr=0.1` 指定的口径跑通与论文协议同构的全部产物链路, 并在该 FPR 设定下判断 SSTW 是否成立以及是否相对 5 个现代 external baseline 具备优势证据。`replay_and_authenticated_sketch_gate`、`flow_specific_adaptive_attack_gate`、external baseline、internal ablation、CI reporter、artifact rebuild 和 claim audit 都必须在 `validation_scale` 中形成可落盘、可检查、可失败闭环, 不得推迟到 `pilot_paper` 或 `full_paper` 后再补。`validation_scale` 必须能在小样本规模上产出 paper 相关的全部 governed artifact 类型: generation / detection records、主方法 measured_formal 结果、完整外部 baseline 对比、内部消融、46 个 runtime attack、11 个 non-runtime/adaptive 协议、replay/sketch 或受治理 Claim-3 downgrade、fixed-FPR CI、tables、figures、reports、package manifest 和 claim audit。只有 `validation_scale` 通过并生成 `validation_scale_to_pilot_paper_transition_decision` 后, 才允许进入 `pilot_paper`; `validation_scale` 不能直接允许进入 `full_paper`。`full_paper` 仍必须等待 `pilot_paper`、`pilot_paper_to_full_paper_transition_decision`、`full_paper_result_checker`、CI、claim audit、artifact rebuild 和 submission freeze 相关门禁通过。`pilot_paper` 的定位是在 `validation_scale` 通过后, 使用代表性 paper 协议执行 FPR=1% 小规模结果运行并报告 pilot 级 `TPR@FPR=0.01`; 它不应再承担补机制、补 baseline 或补消融的职责。
 
 核心原则是:
 
@@ -366,12 +366,12 @@ Notebook 只能通过 `paper_workflow/notebook_utils/generative_video_model_prob
 ```text
 motion_threshold_calibration_colab.ipynb
 -> generative_video_runtime_colab.ipynb
--> 3 个主实验 modern external baseline formal reference Notebook
+-> 5 个主实验 modern external baseline formal reference Notebook
 -> paper_gate_and_package_colab.ipynb
 ```
 
 当前不保留 `validation_scale` 单 Notebook 全流程入口。严格门禁必须通过拆分 Notebook
-逐段执行, 并通过本项目完成 3 个主实验现代 baseline 的 clone / build / run / adapt / record。
+逐段执行, 并通过本项目完成 5 个主实验现代 baseline 的 clone / build / run / adapt / record。
 若某个 baseline 只能在高显存或特殊依赖环境中运行, 也必须通过本项目记录 source intake、
 构建命令、运行命令、adapter 输出和 governed non-run reason, 不接受外部补交结果。
 
@@ -380,11 +380,11 @@ motion_threshold_calibration_colab.ipynb
 1. `motion_threshold_calibration_colab.ipynb` 只负责独立 calibration split 和阈值冻结。
 2. `generative_video_runtime_colab.ipynb` 负责 Wan2.1 生成、formal metrics、阈值复用、
    runtime attack 和 detection, 并在真实 GPU 生成前执行现代 baseline command 预检。
-3. 3 个主实验 modern external baseline formal reference Notebook 分别负责对应 baseline 的 source intake、clone / build / run / adapt、official bundle 生成, 并默认调用统一 runner 将已完成 bundle 转写为 `measured_formal` records。
-4. `paper_gate_and_package_colab.ipynb` 负责恢复 3 个主实验 baseline official reference 阶段包, 重新执行全量统一转写和 self-containment 判定, 再执行内部消融、adaptive attack proxy、replay/sketch
+3. 5 个主实验 modern external baseline formal reference Notebook 分别负责对应 baseline 的 source intake、clone / build / run / adapt、official bundle 生成, 并默认调用统一 runner 将已完成 bundle 转写为 `measured_formal` records。
+4. `paper_gate_and_package_colab.ipynb` 负责恢复 5 个主实验 baseline official reference 阶段包, 重新执行全量统一转写和 self-containment 判定, 再执行内部消融、adaptive attack proxy、replay/sketch
    或 Claim-3 downgrade、CI、fixed-FPR gate、artifact rebuild 和 Drive package。
 
-旧的通用 external baseline scoring Notebook 已删除。正式主流程应以 3 个主实验
+旧的通用 external baseline scoring Notebook 已删除。正式主流程应以 5 个主实验
 baseline 专用 Notebook 产生的 official bundle 为输入, 由
 `paper_gate_and_package_colab.ipynb` 统一重建最终 `measured_formal` records,
 避免单 baseline 临时 records 互相覆盖。
@@ -918,7 +918,7 @@ explicit_synchronization_control: explicit_dtw_temporal_alignment, frame_matchin
 
 ### 13.6 validation_scale 作为 paper 级前小样本全流程打通层
 
-`validation_scale` 的职责是证明 paper 级运行所需的全部机制和产物链路已经在小样本规模上闭合, 并在 `target_fpr=0.1` 的登记口径下判断 SSTW 是否成立以及是否具备相对 3 个现代 external baseline 的优势证据。它采用 validation_scale protocol config 中的 `target_fpr` 作为全流程打通口径, 目标是以最小成本提前发现 baseline、消融、attack、CI、artifact rebuild、claim audit 和 package 阻断。它与 `pilot_paper` 的区别不再是机制或攻击协议不同, 而是样本规模和 FPR 等级不同: `validation_scale` 产出 fpr=0.1 小样本完整协议论文结论候选, `pilot_paper` 在通过该门禁后产出可报告的 FPR=1% pilot 级 paper 结果。
+`validation_scale` 的职责是证明 paper 级运行所需的全部机制和产物链路已经在小样本规模上闭合, 并在 `target_fpr=0.1` 的登记口径下判断 SSTW 是否成立以及是否具备相对 5 个现代 external baseline 的优势证据。它采用 validation_scale protocol config 中的 `target_fpr` 作为全流程打通口径, 目标是以最小成本提前发现 baseline、消融、attack、CI、artifact rebuild、claim audit 和 package 阻断。它与 `pilot_paper` 的区别不再是机制或攻击协议不同, 而是样本规模和 FPR 等级不同: `validation_scale` 产出 fpr=0.1 小样本完整协议论文结论候选, `pilot_paper` 在通过该门禁后产出可报告的 FPR=1% pilot 级 paper 结果。
 
 `validation_scale` 至少必须满足:
 
@@ -2246,7 +2246,7 @@ packager 轻量回归测试
 clone / pull SSTW 仓库
 安装 SSTW 依赖
 通过本项目 clone / build / run 流程准备现代 baseline 官方实现
-配置 3 个主实验现代 baseline 自包含 adapter 命令
+配置 5 个主实验现代 baseline 自包含 adapter 命令
 可选执行 source clone
 绑定 project-generated external baseline provenance paths
 运行 runtime detection 后执行 external_baseline_runner
@@ -2308,7 +2308,7 @@ external_baseline_score_records.metric_status == measured_formal
 
 ### 35.6 repository bridge command 规则
 
-为了减少 Colab 中为 3 个主实验现代 baseline 重复编写 SSTW 外层 I/O wrapper 的成本, 项目提供统一 bridge:
+为了减少 Colab 中为 5 个主实验现代 baseline 重复编写 SSTW 外层 I/O wrapper 的成本, 项目提供统一 bridge:
 
 ```text
 external_baseline/official_command_bridge.py
@@ -2338,7 +2338,7 @@ SSTW_VIDEOSEAL_OFFICIAL_EVAL_COMMAND
 {official_output_json_path}
 ```
 
-当前项目提供 3 个主实验 repository official adapter:
+当前项目提供 5 个主实验 repository official adapter:
 
 ```text
 external_baseline/official_eval_adapters/videoshield.py
@@ -2356,7 +2356,7 @@ bridge 再把该输出归一化写入:
 
 Notebook 默认可通过 `SSTW_USE_MODERN_BASELINE_BRIDGE_COMMANDS=true` 使用 repository bridge
 外层命令。若使用 bridge, `external_baseline_official_bridge_preflight_decision.json` 必须在
-真实生成前检查 3 个主实验 `SSTW_<BASELINE>_OFFICIAL_EVAL_COMMAND` 是否齐全。若用户希望完全自定义
+真实生成前检查 5 个主实验 `SSTW_<BASELINE>_OFFICIAL_EVAL_COMMAND` 是否齐全。若用户希望完全自定义
 外层命令, 可以设置 `SSTW_USE_MODERN_BASELINE_BRIDGE_COMMANDS=0`, 但此时仍必须保证
 `SSTW_<BASELINE>_EVAL_COMMAND` 直接写出合规 score JSON。
 
@@ -2406,7 +2406,7 @@ external_baseline_source_intake
 -> external_baseline_official_bundle_generation
 -> external_baseline_official_result_bundle_preflight
 -> external_baseline_comparison
--> paper_gate_and_package_colab 重新聚合 3 个主实验 official reference 阶段包
+-> paper_gate_and_package_colab 重新聚合 5 个主实验 official reference 阶段包
 ```
 
 其中:
@@ -2427,10 +2427,10 @@ external_baseline_source_intake
    时, 才能发布完整时间戳 zip。若结果为 `FAIL` 或决策文件缺失, 只能发布
    manifest-only 阻断记录, 且不得发布可被后续门禁恢复的 zip。
 6. 单 baseline Notebook 中的 comparison records 只用于即时自检。最终论文 gate 必须在
-   `paper_gate_and_package_colab.ipynb` 恢复 3 个主实验 official reference 阶段包后重新运行
+   `paper_gate_and_package_colab.ipynb` 恢复 5 个主实验 official reference 阶段包后重新运行
    `external_baseline_comparison`, 生成全量 `measured_formal` records 和 self-containment 判定。
 
 该规则的目标是让 Colab 冷启动具备“能自动补齐的就自动补齐”的工程能力, 同时保持论文
-baseline 对比的 fail-closed 边界。严格门禁通过的前提仍然是 3 个主实验现代 baseline 最终都由本项目产出
+baseline 对比的 fail-closed 边界。严格门禁通过的前提仍然是 5 个主实验现代 baseline 最终都由本项目产出
 `measured_formal` records, 且 evidence path 可以追溯到官方源码、官方 API、官方 checkpoint
 或本项目生成的官方结果缓存。

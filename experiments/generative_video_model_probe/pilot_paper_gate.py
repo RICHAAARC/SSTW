@@ -53,6 +53,8 @@ DEFAULT_REQUIRED_MODERN_EXTERNAL_BASELINE_ADAPTER_NAMES = (
     "videoshield",
     "vidsig",
     "videoseal",
+    "revmark",
+    "wam_frame",
 )
 DEFAULT_REQUIRED_EXTERNAL_BASELINE_ADAPTER_NAMES = (
     "explicit_dtw_temporal_alignment",

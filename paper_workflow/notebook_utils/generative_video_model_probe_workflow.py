@@ -1292,7 +1292,7 @@ def build_external_baseline_official_bundle_generation_command(
     """构造现代 baseline official bundle 自动生成命令。
 
     该命令只对仓库能真实调用官方 API 或项目内官方流程运行器的 baseline 生成 bundle。
-    当前可自动尝试 VideoSeal、VideoShield 与 VidSig。其它需要未公开训练 extractor、
+    当前可自动尝试 VideoSeal、VideoShield、VidSig、REVMark 与 WAM-frame。其它需要未公开训练 extractor、
     PRC key、maintained info 或超出当前 GPU 资源的 baseline 会写入计划和阻断说明,
     不会被伪造成 measured_formal。
     """

@@ -176,7 +176,7 @@ external_baseline_official_runtime_closure_requirements.json
 不会把资源文件或配置文件升级为 `metric_status: measured_formal`。正式结果仍必须由
 external baseline runner 读取 official adapter 输出后写入 `external_baseline_score_records.jsonl`。
 
-3 个主实验独立 formal reference Notebook 默认会安装对应的 requirements 文件。若在已安装环境中调试,
+5 个主实验独立 formal reference Notebook 默认会安装对应的 requirements 文件。若在已安装环境中调试,
 可以设置 `SSTW_INSTALL_BASELINE_REQUIREMENTS=false` 跳过该步骤; 正式 Colab 冷启动运行不应跳过。
 
 ## Source intake 命令
@@ -199,7 +199,7 @@ python scripts/build_external_baseline_source_intake.py --output-root external_b
 
 真实现代 baseline 运行统一放在 Colab 环境中完成。本地仓库只负责 adapter、schema、manifest、gate 和轻量测试, 不负责执行第三方视频水印模型的重型推理。
 
-Colab 中必须显式配置以下三类内容:
+Colab 中必须满足以下三类内容。默认 formal reference Notebook 会自动配置 repository official adapter command; 只有禁用仓库 adapter 或改用自定义命令时, 才需要手动覆盖现代 baseline command:
 
 1. 现代 baseline command:
 
@@ -207,6 +207,8 @@ Colab 中必须显式配置以下三类内容:
    SSTW_VIDEOSHIELD_EVAL_COMMAND
    SSTW_VIDSIG_EVAL_COMMAND
    SSTW_VIDEOSEAL_EVAL_COMMAND
+   SSTW_REVMARK_EVAL_COMMAND
+   SSTW_WAM_FRAME_EVAL_COMMAND
    ```
 
 2. 可选的官方 source clone:
@@ -247,7 +249,7 @@ official_command_manifest.json
 
 这些文件会被自动纳入 `external_baseline_execution_manifest.json` 的 `evidence_paths`。因此 Colab 断开后, 用户仍可以从 Google Drive package 中审计每条 `measured_formal` baseline score 的官方输出来源。若没有自动持久化证据且没有额外 evidence path, `measured_formal` rows 只能证明 command adapter 写出了受治理 records, 不能单独支撑论文主表 claim。
 
-当前 `validation_scale` 已重新定义为 paper 级前的 FPR=10% 小样本全流程打通层。因此在 `SSTW_WORKFLOW_PROFILE=validation_scale`、`SSTW_WORKFLOW_PROFILE=pilot_paper` 或未来 `SSTW_WORKFLOW_PROFILE=full_paper` 时, Colab notebook 会在 3 个主实验现代 baseline command 缺失时提前阻断, 避免先消耗 GPU 生成视频后才发现 baseline 主表无法闭合。旧低 FPR pilot profile 已移除, 正式 paper 级小样本入口只保留 `pilot_paper`。
+当前 `validation_scale` 已重新定义为 paper 级前的 FPR=10% 小样本全流程打通层。因此在 `SSTW_WORKFLOW_PROFILE=validation_scale`、`SSTW_WORKFLOW_PROFILE=pilot_paper` 或未来 `SSTW_WORKFLOW_PROFILE=full_paper` 时, Colab notebook 会在 5 个主实验现代 baseline command 缺失时提前阻断, 避免先消耗 GPU 生成视频后才发现 baseline 主表无法闭合。旧低 FPR pilot profile 已移除, 正式 paper 级小样本入口只保留 `pilot_paper`。
 
 Notebook 的现代 baseline command preflight 逻辑集中在:
 
@@ -265,12 +267,14 @@ artifacts/external_baseline_colab_preflight_decision.json
 
 ## 独立 baseline Notebook
 
-现代 baseline 正式运行应先逐个运行 3 个主实验 formal reference Notebook:
+现代 baseline 正式运行应先逐个运行 5 个主实验 formal reference Notebook:
 
 ```text
 paper_workflow/colab_notebooks/videoseal_formal_reference_colab.ipynb
 paper_workflow/colab_notebooks/vidsig_formal_reference_colab.ipynb
 paper_workflow/colab_notebooks/videoshield_formal_reference_colab.ipynb
+paper_workflow/colab_notebooks/revmark_formal_reference_colab.ipynb
+paper_workflow/colab_notebooks/wam_frame_formal_reference_colab.ipynb
 ```
 
 
@@ -282,19 +286,19 @@ bundle 转写为 `metric_status: measured_formal` records。若其它 baseline b
 完成, 统一 runner 会写出 governed unsupported rows; 这些 rows 只能作为阻断记录,
 不能替代正式 baseline 结果。
 
-3 个主实验 official bundle 全部完成后, 直接运行:
+5 个主实验 official bundle 全部完成后, 直接运行:
 
 ```text
 paper_workflow/colab_notebooks/paper_gate_and_package_colab.ipynb
 ```
 
-该 Notebook 会恢复 3 个 official reference 阶段包, 重新执行全量统一转写、
+该 Notebook 会恢复 5 个 official reference 阶段包, 重新执行全量统一转写、
 self-containment 判定、validation / pilot gate 和打包。旧的通用 external baseline
 scoring Notebook 已删除, 防止它与 paper gate 的聚合职责重复并造成运行顺序误读。
 这样可以把三类失败原因分离:
 
 1. `generative_video_runtime_colab.ipynb`: 主方法生成、attack 和 detection 是否成功。
-2. 3 个主实验 `*_formal_reference_colab.ipynb`: 现代视频水印 baseline official bundle 是否成功。
+2. 5 个主实验 `*_formal_reference_colab.ipynb`: 现代视频水印 baseline official bundle 是否成功。
 3. `paper_gate_and_package_colab.ipynb`: 全量统一转写、self-containment、validation-scale、pilot-paper 或 full-paper gate 是否满足论文协议。
 
 Notebook 的 profile、Drive 目录和 stage plan 均由以下配置控制:

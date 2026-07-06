@@ -64,6 +64,32 @@
       "external_baseline_selection_role": "modern_post_hoc_video_watermark_candidate",
       "external_baseline_source_url": "external_baseline/primary/videoseal/adapter/run_sstw_eval.py",
       "external_baseline_version": "formal_command_adapter_v1"
+    },
+    {
+      "external_baseline_family": "post_hoc_neural_video_watermark_baseline",
+      "external_baseline_integration_status": "repository_external_baseline_formal_adapter_ready_requires_official_command",
+      "external_baseline_name": "revmark",
+      "external_baseline_not_run_reason": "official_command_not_configured_until_colab_source_install",
+      "external_baseline_protocol_gap": "none_after_project_owned_revmark_official_bundle_generation; before configuration this baseline remains governed non-run",
+      "external_baseline_recommended_priority": 8,
+      "external_baseline_result_used_for_claim": false,
+      "external_baseline_runnable_status": "not_runnable",
+      "external_baseline_selection_role": "modern_post_hoc_video_watermark_candidate",
+      "external_baseline_source_url": "external_baseline/primary/revmark/adapter/run_sstw_eval.py",
+      "external_baseline_version": "formal_command_adapter_v1"
+    },
+    {
+      "external_baseline_family": "framewise_image_watermark_video_adapter_baseline",
+      "external_baseline_integration_status": "repository_external_baseline_formal_adapter_ready_requires_official_command",
+      "external_baseline_name": "wam_frame",
+      "external_baseline_not_run_reason": "official_command_not_configured_until_colab_source_install",
+      "external_baseline_protocol_gap": "image_watermark_method_adapted_to_video_by_framewise_embedding_and_temporal_score_aggregation; formal comparison allowed only with method-specific clean negative calibration",
+      "external_baseline_recommended_priority": 9,
+      "external_baseline_result_used_for_claim": false,
+      "external_baseline_runnable_status": "not_runnable",
+      "external_baseline_selection_role": "modern_framewise_image_watermark_video_adapter_candidate",
+      "external_baseline_source_url": "external_baseline/primary/wam_frame/adapter/run_sstw_eval.py",
+      "external_baseline_version": "formal_command_adapter_v1"
     }
   ],
   "internal_mechanism_baselines": [
@@ -81,8 +107,8 @@
     "comparison_output_rule": "baseline comparison tables must be rebuilt from external_baseline_score_records.jsonl and must not treat unsupported modern baseline rows as positive claim evidence",
     "fallback_rule": "runnable adapters without formal comparison records must remain implementation evidence and must not support positive claims",
     "formal_adapter_rule": "modern baseline adapters may call official commands or source scripts, but must write governed records and must fail closed when commands are not configured.",
-    "pilot_paper_rule": "pilot_paper 必须要求仍保留的现代视频水印 baseline 产生 measured_formal records; 显式同步 controls 不能替代现代 baseline。",
-    "primary_selection_rule": "主实验仅保留可在项目内完成 clone / build / run / adapt / record 闭环的现代视频水印 baseline; 已移出主干的重型 baseline 不再生成 non-run 门禁。",
+    "pilot_paper_rule": "pilot_paper 必须要求 5 个现代视频水印 baseline 产生 measured_formal records; 显式同步 controls 不能替代现代 baseline。",
+    "primary_selection_rule": "主实验保留 5 个可在项目内完成 clone / build / run / adapt / record 闭环的现代视频水印 baseline; WAM-frame 必须标注为图像水印逐帧适配视频方法。",
     "stage_id": "generative_video_model_probe"
   }
 }

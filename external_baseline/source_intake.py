@@ -19,9 +19,11 @@ OFFICIAL_COMMAND_EVIDENCE_RELATIVE_ROOT = Path("artifacts/external_baseline_evid
 REPOSITORY_GENERATED_OFFICIAL_PROVENANCE = "repository_generated_from_third_party_official_code"
 
 REQUIRED_MODERN_BASELINE_IDS = {
+    "revmark",
     "videoshield",
     "vidsig",
     "videoseal",
+    "wam_frame",
 }
 MODERN_BASELINE_IDS = REQUIRED_MODERN_BASELINE_IDS
 

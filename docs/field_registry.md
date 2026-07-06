@@ -1271,14 +1271,14 @@ Notebook 与 repository module 的跨边界数据
 | difference_interval_ready_count | metric | none | true | true | false | 已可用差值置信区间 records 数量。 |
 | difference_interval_missing_baseline_ids | governance | none | true | true | false | 缺失差值置信区间的 baseline 方法 ID 列表。 |
 | difference_interval_missing_baseline_count | metric | none | true | true | false | 缺失差值置信区间的 baseline 数量。 |
-| require_formal_baseline_difference_interval | protocol | none | true | false | false | validation_scale gate 是否要求 SSTW 相对 3 个 baseline 的差值置信区间报告。 |
+| require_formal_baseline_difference_interval | protocol | none | true | false | false | validation_scale gate 是否要求 SSTW 相对 5 个 baseline 的差值置信区间报告。 |
 | validation_scale_gate_missing_validation_requirements | governance | none | true | false | false | pilot_paper gate 读取到的 validation_scale gate 原始缺失要求列表。 |
 | validation_scale_gate_missing_requirement_count | metric | none | true | false | false | pilot_paper gate 读取到的 validation_scale gate 原始缺失要求数量。 |
 | validation_scale_gate_fairness_missing_requirements | governance | none | true | false | false | pilot_paper gate 复核 validation_scale 公平比较闭环时发现的缺失要求。 |
 | validation_scale_fair_detection_calibration_ready_count | metric | none | true | true | false | validation_scale gate 中已通过 clean negative 公平校准的方法数量。 |
 | validation_scale_formal_method_baseline_comparison_ready_count | metric | none | true | true | false | validation_scale gate 中同协议 method-baseline 比较已 ready 的方法数量。 |
 | validation_scale_formal_baseline_difference_interval_ready_count | metric | none | true | true | false | validation_scale gate 中 SSTW 相对 baseline 差值区间已 ready 的 baseline 数量。 |
-| require_validation_scale_sstw_advantage_claim_ready | protocol | none | true | false | false | validation_scale gate 是否要求 SSTW 相对 3 个现代 baseline 的 target_fpr=0.1 优势证据 ready。 |
+| require_validation_scale_sstw_advantage_claim_ready | protocol | none | true | false | false | validation_scale gate 是否要求 SSTW 相对 5 个现代 baseline 的 target_fpr=0.1 优势证据 ready。 |
 | validation_scale_sstw_advantage_claim_ready | governance | none | true | true | false | validation_scale gate 中 SSTW target_fpr=0.1 优势证据是否满足论文主张候选标准。 |
 | validation_scale_sstw_advantage_ready_baseline_count | metric | none | true | true | false | validation_scale gate 中 SSTW 优势差值和置信区间已 ready 的现代 baseline 数量。 |
 | validation_scale_sstw_advantage_missing_baseline_names | governance | none | true | false | false | validation_scale gate 中尚未满足 SSTW 优势证据标准的现代 baseline 名称集合。 |
@@ -1379,6 +1379,14 @@ Notebook 与 repository module 的跨边界数据
 | official_detection_logic | protocol | none | true | false | false | 官方 wrapper 或 official runtime 记录的 detector / extractor 分数计算逻辑。 |
 | official_attacked_video_io_backend | protocol | none | true | false | false | official attacked 视频写出后重新读取并用于检测的 I/O 后端。 |
 | official_clean_negative_video_io_backend | protocol | none | true | false | false | official clean negative 视频读取所使用的 I/O 后端。 |
+| official_checkpoint_path | artifact | none | true | false | false | official runtime 实际使用的公开 checkpoint 路径, 用于审计资源来源, 不单独支撑 measured_formal。 |
+| official_video_frame_count | metric | none | true | false | false | official runtime 实际纳入嵌入或检测的视频帧数量。 |
+| official_video_frame_size | protocol | none | true | false | false | official runtime 为适配官方模型而使用的帧空间尺寸。 |
+| official_frame_adapter_policy | protocol | none | true | false | false | 图像水印逐帧适配视频 baseline 的帧级嵌入和视频级聚合策略。 |
+| official_payload_message_digest | provenance | none | true | false | false | official runtime 使用的 deterministic payload message digest, 用于复现实验而不暴露原始随机消息。 |
+| external_baseline_clean_negative_confidence | metric | none | true | false | false | baseline clean negative 检测时的辅助 confidence 均值, 不替代 clean negative 主分数。 |
+| source_sstw_video_path | artifact | none | true | false | false | official bundle 记录的原始 SSTW source video 路径, 用于审计同一 prompt / seed 输入来源。 |
+| sstw_attacked_video_path | artifact | none | true | false | false | official bundle 记录的 SSTW runtime attacked video 路径, 用于审计同一 attack anchor。 |
 | generate_clean_negative_reference | protocol | none | true | false | false | baseline 官方运行器是否自动生成 clean negative reference 并抽取官方分数。 |
 | clean_negative_output_path | protocol | none | true | false | false | baseline 官方运行器 clean negative 输出目录配置。 |
 | clean_negative_attack_transform | protocol | none | true | false | false | clean negative 视频施加的 runtime attack 变换描述。 |

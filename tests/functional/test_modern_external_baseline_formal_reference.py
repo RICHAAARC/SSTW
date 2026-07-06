@@ -20,9 +20,11 @@ from paper_workflow.colab_utils.modern_external_baseline_formal_reference import
 
 
 EXPECTED_BASELINE_ORDER = (
+    "revmark",
     "videoseal",
     "vidsig",
     "videoshield",
+    "wam_frame",
 )
 
 

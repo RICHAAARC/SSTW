@@ -25,6 +25,8 @@ DEFAULT_REQUIRED_MODERN_BASELINES = (
     "videoshield",
     "vidsig",
     "videoseal",
+    "revmark",
+    "wam_frame",
 )
 EVIDENCE_PATH_FIELDS = (
     "external_baseline_official_output_path",

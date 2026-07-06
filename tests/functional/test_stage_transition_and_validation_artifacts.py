@@ -23,6 +23,8 @@ MODERN_BASELINES = (
     "videoshield",
     "vidsig",
     "videoseal",
+    "revmark",
+    "wam_frame",
 )
 
 
@@ -314,7 +316,7 @@ def test_external_baseline_self_containment_requires_measured_formal_evidence(tm
     audit = write_external_baseline_self_containment_decision(run_root)
 
     assert audit["external_baseline_self_containment_decision"] == "PASS"
-    assert audit["self_contained_modern_external_baseline_count"] == 3
+    assert audit["self_contained_modern_external_baseline_count"] == len(MODERN_BASELINES)
     assert audit["missing_self_contained_modern_external_baseline_names"] == []
     assert (run_root / "artifacts" / "external_baseline_self_containment_decision.json").exists()
 
@@ -556,7 +558,7 @@ def test_external_baseline_self_containment_accepts_repository_generated_officia
     audit = write_external_baseline_self_containment_decision(run_root)
 
     assert audit["external_baseline_self_containment_decision"] == "PASS"
-    assert audit["self_contained_modern_external_baseline_count"] == 3
+    assert audit["self_contained_modern_external_baseline_count"] == len(MODERN_BASELINES)
     for row in audit["baseline_self_containment_rows"]:
         assert row["source_clone_ready"] is False
         assert row["repository_generated_official_bundle_ready"] is True

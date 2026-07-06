@@ -2,30 +2,32 @@
   "baseline_runtime_requirements": [
     {
       "automatic_bundle_generation_supported_by_sstw": true,
-      "baseline_id": "videoseal",
-      "baseline_name": "VideoSeal",
+      "baseline_id": "videoshield",
+      "baseline_name": "VideoShield",
       "colab_default_can_attempt_without_user_files": true,
-      "colab_default_measured_formal_ready_without_user_files": "depends_on_runtime_inputs_dependency_install_and_checkpoint_download",
-      "external_baseline_command_env_var": "SSTW_VIDEOSEAL_EVAL_COMMAND",
+      "colab_default_measured_formal_ready_without_user_files": "depends_on_hf_model_download_gpu_memory_and_official_inversion_success",
+      "external_baseline_command_env_var": "SSTW_VIDEOSHIELD_EVAL_COMMAND",
       "external_supplemental_result_bundle_allowed": false,
-      "missing_resource_action": "运行 videoseal_formal_reference_colab.ipynb; 若依赖安装或 checkpoint 下载失败, 根据 stdout / stderr 修复 VideoSeal 官方依赖。",
-      "native_command_env_var": "SSTW_VIDEOSEAL_NATIVE_EVAL_COMMAND",
-      "official_baseline_command_env_var": "SSTW_VIDEOSEAL_OFFICIAL_EVAL_COMMAND",
-      "official_bundle_policy": "preferred_project_owned_cache_or_auto_generate_from_official_api",
-      "official_repository_branch": "main",
-      "official_repository_url": "https://github.com/facebookresearch/videoseal",
+      "missing_resource_action": "运行 videoshield_formal_reference_colab.ipynb, 由 external_baseline.videoshield_official_runtime 在项目内调用 VideoShield 官方生成、反演和 temporal matching 流程生成 official bundle。",
+      "native_command_env_var": "SSTW_VIDEOSHIELD_NATIVE_EVAL_COMMAND",
+      "official_baseline_command_env_var": "SSTW_VIDEOSHIELD_OFFICIAL_EVAL_COMMAND",
+      "official_bundle_policy": "preferred_project_owned_cache_or_auto_generate_from_official_generation_inversion_runtime",
+      "official_repository_branch": "master",
+      "official_repository_url": "https://github.com/hurunyi/VideoShield",
       "official_source_dir_candidates": [
-        "external_baseline/primary/videoseal/source",
-        "/content/SSTW/external_baseline/primary/videoseal/source"
+        "external_baseline/primary/videoshield/source",
+        "/content/SSTW/external_baseline/primary/videoshield/source"
       ],
+      "project_owned_videoshield_runner_module": "external_baseline.videoshield_official_runtime",
       "required_source_files": [
-        "videoseal/__init__.py",
-        "inference_streaming.py"
+        "watermark.py",
+        "watermark_embedding_and_extraction.py",
+        "temporal_tamper_localization.py"
       ],
-      "requirements_file": "configs/external_baselines/requirements/videoseal.txt",
+      "requirements_file": "configs/external_baselines/requirements/videoshield.txt",
       "resource_env_vars": [],
-      "runtime_support_mode": "auto_supported_official_api_bundle_generation",
-      "source_dir": "external_baseline/primary/videoseal/source"
+      "runtime_support_mode": "project_owned_official_videoshield_generation_inversion_runtime_or_repository_generated_bundle",
+      "source_dir": "external_baseline/primary/videoshield/source"
     },
     {
       "automatic_bundle_generation_supported_by_sstw": true,
@@ -76,45 +78,112 @@
     },
     {
       "automatic_bundle_generation_supported_by_sstw": true,
-      "baseline_id": "videoshield",
-      "baseline_name": "VideoShield",
+      "baseline_id": "videoseal",
+      "baseline_name": "VideoSeal",
       "colab_default_can_attempt_without_user_files": true,
-      "colab_default_measured_formal_ready_without_user_files": "depends_on_hf_model_download_gpu_memory_and_official_inversion_success",
-      "external_baseline_command_env_var": "SSTW_VIDEOSHIELD_EVAL_COMMAND",
+      "colab_default_measured_formal_ready_without_user_files": "depends_on_runtime_inputs_dependency_install_and_checkpoint_download",
+      "external_baseline_command_env_var": "SSTW_VIDEOSEAL_EVAL_COMMAND",
       "external_supplemental_result_bundle_allowed": false,
-      "missing_resource_action": "运行 videoshield_formal_reference_colab.ipynb, 由 external_baseline.videoshield_official_runtime 在项目内调用 VideoShield 官方生成、反演和 temporal matching 流程生成 official bundle。",
-      "native_command_env_var": "SSTW_VIDEOSHIELD_NATIVE_EVAL_COMMAND",
-      "official_baseline_command_env_var": "SSTW_VIDEOSHIELD_OFFICIAL_EVAL_COMMAND",
-      "official_bundle_policy": "preferred_project_owned_cache_or_auto_generate_from_official_generation_inversion_runtime",
-      "official_repository_branch": "master",
-      "official_repository_url": "https://github.com/hurunyi/VideoShield",
+      "missing_resource_action": "运行 videoseal_formal_reference_colab.ipynb; 若依赖安装或 checkpoint 下载失败, 根据 stdout / stderr 修复 VideoSeal 官方依赖。",
+      "native_command_env_var": "SSTW_VIDEOSEAL_NATIVE_EVAL_COMMAND",
+      "official_baseline_command_env_var": "SSTW_VIDEOSEAL_OFFICIAL_EVAL_COMMAND",
+      "official_bundle_policy": "preferred_project_owned_cache_or_auto_generate_from_official_api",
+      "official_repository_branch": "main",
+      "official_repository_url": "https://github.com/facebookresearch/videoseal",
       "official_source_dir_candidates": [
-        "external_baseline/primary/videoshield/source",
-        "/content/SSTW/external_baseline/primary/videoshield/source"
+        "external_baseline/primary/videoseal/source",
+        "/content/SSTW/external_baseline/primary/videoseal/source"
       ],
-      "project_owned_videoshield_runner_module": "external_baseline.videoshield_official_runtime",
       "required_source_files": [
-        "watermark.py",
-        "watermark_embedding_and_extraction.py",
-        "temporal_tamper_localization.py"
+        "videoseal/__init__.py",
+        "inference_streaming.py"
       ],
-      "requirements_file": "configs/external_baselines/requirements/videoshield.txt",
+      "requirements_file": "configs/external_baselines/requirements/videoseal.txt",
       "resource_env_vars": [],
-      "runtime_support_mode": "project_owned_official_videoshield_generation_inversion_runtime_or_repository_generated_bundle",
-      "source_dir": "external_baseline/primary/videoshield/source"
+      "runtime_support_mode": "auto_supported_official_api_bundle_generation",
+      "source_dir": "external_baseline/primary/videoseal/source"
+    },
+    {
+      "automatic_bundle_generation_supported_by_sstw": true,
+      "baseline_id": "revmark",
+      "baseline_name": "REVMark",
+      "colab_default_can_attempt_without_user_files": true,
+      "colab_default_measured_formal_ready_without_user_files": "depends_on_source_clone_bundled_checkpoints_dependency_install_and_video_io",
+      "external_baseline_command_env_var": "SSTW_REVMARK_EVAL_COMMAND",
+      "external_supplemental_result_bundle_allowed": false,
+      "missing_resource_action": "运行 revmark_formal_reference_colab.ipynb, 由 external_baseline.revmark_official_runtime 在项目内调用 REVMark 官方 Encoder / Decoder 生成 official bundle。",
+      "native_command_env_var": "SSTW_REVMARK_NATIVE_EVAL_COMMAND",
+      "official_baseline_command_env_var": "SSTW_REVMARK_OFFICIAL_EVAL_COMMAND",
+      "official_bundle_policy": "preferred_project_owned_cache_or_auto_generate_from_official_encoder_decoder_runtime",
+      "official_repository_branch": "main",
+      "official_repository_url": "https://github.com/yulinsysu/REVMark",
+      "official_source_dir_candidates": [
+        "external_baseline/primary/revmark/source",
+        "/content/SSTW/external_baseline/primary/revmark/source"
+      ],
+      "project_owned_revmark_runner_module": "external_baseline.revmark_official_runtime",
+      "required_source_files": [
+        "REVMark.py",
+        "test.py",
+        "checkpoints/Encoder.pth",
+        "checkpoints/Decoder.pth"
+      ],
+      "requirements_file": "configs/external_baselines/requirements/revmark.txt",
+      "resource_env_vars": [],
+      "runtime_support_mode": "project_owned_official_revmark_encoder_decoder_runtime_or_repository_generated_bundle",
+      "source_dir": "external_baseline/primary/revmark/source"
+    },
+    {
+      "automatic_bundle_generation_supported_by_sstw": true,
+      "baseline_id": "wam_frame",
+      "baseline_name": "WAM-frame",
+      "colab_default_can_attempt_without_user_files": true,
+      "colab_default_measured_formal_ready_without_user_files": "depends_on_public_checkpoint_download_dependency_install_and_video_io",
+      "external_baseline_command_env_var": "SSTW_WAM_FRAME_EVAL_COMMAND",
+      "external_supplemental_result_bundle_allowed": false,
+      "missing_resource_action": "运行 official_resource_bootstrap 下载 WAM MIT checkpoint, 然后由 wam_frame_formal_reference_colab.ipynb 调用 external_baseline.wam_frame_official_runtime 完成逐帧嵌入 / 检测 official bundle。",
+      "native_command_env_var": "SSTW_WAM_FRAME_NATIVE_EVAL_COMMAND",
+      "official_baseline_command_env_var": "SSTW_WAM_FRAME_OFFICIAL_EVAL_COMMAND",
+      "official_bundle_policy": "preferred_project_owned_cache_or_auto_generate_from_official_wam_frame_runtime",
+      "official_repository_branch": "main",
+      "official_repository_url": "https://github.com/facebookresearch/watermark-anything",
+      "official_source_dir_candidates": [
+        "external_baseline/primary/wam_frame/source",
+        "/content/SSTW/external_baseline/primary/wam_frame/source"
+      ],
+      "project_owned_wam_frame_runner_module": "external_baseline.wam_frame_official_runtime",
+      "required_source_files": [
+        "watermark_anything/models.py",
+        "notebooks/inference_utils.py",
+        "checkpoints/params.json"
+      ],
+      "requirements_file": "configs/external_baselines/requirements/wam_frame.txt",
+      "resource_env_vars": [
+        {
+          "default_resource_glob_pattern": "wam_frame/**/wam_mit.pth",
+          "default_resource_relative_path": "wam_frame/wam_mit.pth",
+          "env_var": "SSTW_WAM_FRAME_CHECKPOINT_PATH",
+          "project_owned_resource_required": true,
+          "required_for_repository_default_adapter": true,
+          "resource_purpose": "WAM 官方 MIT checkpoint, 用于逐帧嵌入和检测",
+          "resource_role": "official_wam_mit_checkpoint"
+        }
+      ],
+      "runtime_support_mode": "project_owned_official_wam_frame_embed_detect_runtime_or_repository_generated_bundle",
+      "source_dir": "external_baseline/primary/wam_frame/source"
     }
   ],
   "claim_boundary": "该配置只定义 Colab 真实运行前的源代码、依赖、资源、runtime inputs 和 official bundle cache 要求; 不把配置存在解释为 measured_formal 结果。",
   "config_kind": "modern_external_baseline_official_runtime_closure_requirements",
-  "config_version": "2026_06_26_project_self_contained_external_baseline_runtime_closure_v1",
+  "config_version": "2026_07_07_project_self_contained_external_baseline_runtime_closure_v2",
   "default_drive_project_root": "/content/drive/MyDrive/SSTW",
   "default_official_result_bundle_root_pattern": "external_baseline_official_result_bundles/<workflow_profile>",
   "default_run_root_pattern": "runs/generative_video_model_probe/<workflow_profile>",
   "governed_artifact": "artifacts/external_baseline_official_runtime_closure_requirements.json",
   "notebook_enforcement": {
-    "formal_reference_notebooks": "3 个独立 *_formal_reference_colab.ipynb 在 resource bootstrap 后执行该要求预检, 用于暴露缺少的官方 source / resource / bundle。",
-    "paper_gate_notebook": "paper_gate_and_package_colab.ipynb 在恢复 3 个 official reference 阶段包后执行最终聚合、self-containment 判定和 validation / pilot gate。",
-    "non_run_record_policy": "non-run record 只能作为阻断记录, 不能替代 measured_formal baseline。"
+    "formal_reference_notebooks": "5 个独立 *_formal_reference_colab.ipynb 在 resource bootstrap 后执行该要求预检, 用于暴露缺少的官方 source / resource / bundle。",
+    "non_run_record_policy": "non-run record 只能作为阻断记录, 不能替代 measured_formal baseline。",
+    "paper_gate_notebook": "paper_gate_and_package_colab.ipynb 在恢复 5 个 official reference 阶段包后执行最终聚合、self-containment 判定和 validation / pilot gate。"
   },
   "runtime_input_requirements": [
     {

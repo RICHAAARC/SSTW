@@ -41,14 +41,18 @@ from paper_workflow.notebook_utils import generative_video_model_probe_workflow 
 
 
 MODERN_EXTERNAL_BASELINE_BUILD_ORDER = (
+    "revmark",
     "videoseal",
     "vidsig",
     "videoshield",
+    "wam_frame",
 )
 REPOSITORY_OFFICIAL_ADAPTER_BASELINES = {
+    "revmark",
     "videoshield",
     "vidsig",
     "videoseal",
+    "wam_frame",
 }
 DEFAULT_NOTEBOOK_ROLE_FOR_LAYOUT = "external_baseline_formal_scoring"
 DEFAULT_DRIVE_PROJECT_ROOT = "/content/drive/MyDrive/SSTW"
@@ -514,6 +518,7 @@ def _enrich_official_bundle_payload(
         "official_result_provenance": repository_provenance
         if existing_provenance in {"", "third_party_official_code"}
         else existing_provenance,
+        "official_result_bundle_path": payload.get("official_result_bundle_path") or str(path),
         "official_execution_manifest_path": payload.get("official_execution_manifest_path") or str(manifest_path),
     }
     validate_score_payload(enriched)
@@ -755,6 +760,60 @@ def _run_vidsig_official_reference(
         max_records=max_records,
     )
     return run_vidsig_official_runtime(vidsig_config)
+
+
+def _run_revmark_official_reference(
+    *,
+    run_root: Path,
+    bundle_root: Path,
+    official_source_dir: Path,
+    repo_root: Path,
+    resource_root: str,
+    max_records: int | None,
+) -> dict[str, Any]:
+    """运行 REVMark 官方 Encoder / Decoder official bundle 生成路径。"""
+
+    from external_baseline.revmark_official_runtime import (
+        build_default_revmark_official_config_from_env,
+        run_revmark_official_runtime,
+    )
+
+    revmark_config = build_default_revmark_official_config_from_env(
+        run_root=run_root,
+        bundle_root=bundle_root,
+        source_dir=official_source_dir,
+        repo_root=repo_root,
+        resource_root=resource_root,
+        max_records=max_records,
+    )
+    return run_revmark_official_runtime(revmark_config)
+
+
+def _run_wam_frame_official_reference(
+    *,
+    run_root: Path,
+    bundle_root: Path,
+    official_source_dir: Path,
+    repo_root: Path,
+    resource_root: str,
+    max_records: int | None,
+) -> dict[str, Any]:
+    """运行 WAM 官方逐帧嵌入 / 检测 video adapter bundle 生成路径。"""
+
+    from external_baseline.wam_frame_official_runtime import (
+        build_default_wam_frame_official_config_from_env,
+        run_wam_frame_official_runtime,
+    )
+
+    wam_frame_config = build_default_wam_frame_official_config_from_env(
+        run_root=run_root,
+        bundle_root=bundle_root,
+        source_dir=official_source_dir,
+        repo_root=repo_root,
+        resource_root=resource_root,
+        max_records=max_records,
+    )
+    return run_wam_frame_official_runtime(wam_frame_config)
 
 
 def _build_unified_formal_scoring_environment(
@@ -1001,6 +1060,30 @@ def run_modern_external_baseline_formal_reference_plan(
                 "true",
             ).lower() == "true":
                 return _run_vidsig_official_reference(
+                    run_root=run_root,
+                    bundle_root=bundle_root,
+                    official_source_dir=official_source_dir,
+                    repo_root=repo_root,
+                    resource_root=layout["external_baseline_resource_root"],
+                    max_records=config.max_records,
+                )
+            if config.baseline_id == "revmark" and os.environ.get(
+                "SSTW_RUN_REVMARK_OFFICIAL_PIPELINE",
+                "true",
+            ).lower() == "true":
+                return _run_revmark_official_reference(
+                    run_root=run_root,
+                    bundle_root=bundle_root,
+                    official_source_dir=official_source_dir,
+                    repo_root=repo_root,
+                    resource_root=layout["external_baseline_resource_root"],
+                    max_records=config.max_records,
+                )
+            if config.baseline_id == "wam_frame" and os.environ.get(
+                "SSTW_RUN_WAM_FRAME_OFFICIAL_PIPELINE",
+                "true",
+            ).lower() == "true":
+                return _run_wam_frame_official_reference(
                     run_root=run_root,
                     bundle_root=bundle_root,
                     official_source_dir=official_source_dir,

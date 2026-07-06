@@ -84,10 +84,44 @@
       "result_status": "measured_formal_when_official_command_configured",
       "source_dir": "external_baseline/primary/videoseal/source",
       "source_status": "official_source_or_command_required"
+    },
+    {
+      "adapter_path": "external_baseline/primary/revmark/adapter/run_sstw_eval.py",
+      "adapter_status": "formal_command_adapter_ready_requires_official_command",
+      "baseline_family": "post_hoc_neural_video_watermark_baseline",
+      "baseline_id": "revmark",
+      "baseline_name": "REVMark",
+      "comparison_group": "primary",
+      "local_code_tracked": true,
+      "model_alignment_status": "wan21_runtime_video_file_protocol",
+      "official_repository_branch": "main",
+      "official_repository_commit": "3014ea3ffaae92dc0fe48b780082b7cc0da0071f",
+      "official_repository_url": "https://github.com/yulinsysu/REVMark",
+      "paper_claim_support": true,
+      "result_status": "measured_formal_when_official_command_configured",
+      "source_dir": "external_baseline/primary/revmark/source",
+      "source_status": "official_source_or_command_required"
+    },
+    {
+      "adapter_path": "external_baseline/primary/wam_frame/adapter/run_sstw_eval.py",
+      "adapter_status": "formal_command_adapter_ready_requires_official_command",
+      "baseline_family": "framewise_image_watermark_video_adapter_baseline",
+      "baseline_id": "wam_frame",
+      "baseline_name": "WAM-frame",
+      "comparison_group": "primary",
+      "local_code_tracked": true,
+      "model_alignment_status": "wan21_runtime_video_file_protocol_framewise_adapter",
+      "official_repository_branch": "main",
+      "official_repository_commit": "2c08af04d037d5667c02f6ddebbda9ff04581c3e",
+      "official_repository_url": "https://github.com/facebookresearch/watermark-anything",
+      "paper_claim_support": true,
+      "result_status": "measured_formal_when_official_command_configured",
+      "source_dir": "external_baseline/primary/wam_frame/source",
+      "source_status": "official_source_or_command_required"
     }
   ],
   "managed_by": "repository_contract",
   "registry_name": "sstw_external_baseline_source_registry",
-  "registry_status": "adapter_boundary_registered_retained_modern_formal_adapters_with_cloneable_official_sources",
+  "registry_status": "adapter_boundary_registered_five_modern_formal_adapters_with_cloneable_official_sources",
   "source_root": "external_baseline"
 }

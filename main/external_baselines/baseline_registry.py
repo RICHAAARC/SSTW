@@ -12,9 +12,11 @@ from external_baseline.registry import adapter_status as external_adapter_status
 ADAPTER_STATUS_BUILDERS = {
     "explicit_dtw_temporal_alignment": lambda: external_adapter_status("explicit_dtw_temporal_alignment"),
     "explicit_frame_matching_temporal_registration": lambda: external_adapter_status("explicit_frame_matching_temporal_registration"),
+    "revmark": lambda: external_adapter_status("revmark"),
     "videoshield": lambda: external_adapter_status("videoshield"),
     "vidsig": lambda: external_adapter_status("vidsig"),
     "videoseal": lambda: external_adapter_status("videoseal"),
+    "wam_frame": lambda: external_adapter_status("wam_frame"),
 }
 
 DEFAULT_BASELINE_STATUS_FIELDS: dict[str, Any] = {
@@ -34,6 +36,7 @@ MODERN_BASELINE_FAMILIES = {
     "parameter_or_adapter_video_watermark_baseline",
     "latent_video_signature_baseline",
     "post_hoc_neural_video_watermark_baseline",
+    "framewise_image_watermark_video_adapter_baseline",
 }
 
 

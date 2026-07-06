@@ -33,9 +33,11 @@ from external_baseline.runtime_trace_io import comparable_detection_records
 
 
 MODERN_BASELINE_IDS = (
+    "revmark",
     "videoshield",
     "vidsig",
     "videoseal",
+    "wam_frame",
 )
 
 
@@ -60,6 +62,10 @@ def _baseline_runtime_resource_ready(baseline_id: str) -> tuple[bool, str]:
         return False, "vidsig_requires_project_owned_generate_ms_official_bundle_or_native_command"
     if baseline_id == "videoseal":
         return True, "videoseal_repository_api_runtime_attempt_allowed"
+    if baseline_id == "revmark":
+        return True, "revmark_project_owned_encoder_decoder_runtime_attempt_allowed"
+    if baseline_id == "wam_frame":
+        return True, "wam_frame_project_owned_frame_adapter_runtime_attempt_allowed"
     return False, "missing_runtime_resource_or_bundle"
 
 

@@ -21,11 +21,15 @@ EXTERNAL_BASELINE_NAMES = (
     "videoshield",
     "vidsig",
     "videoseal",
+    "revmark",
+    "wam_frame",
 )
 MODERN_EXTERNAL_BASELINE_NAMES = {
     "videoshield",
     "vidsig",
     "videoseal",
+    "revmark",
+    "wam_frame",
 }
 REQUIRED_RUNTIME_ATTACK_NAMES = FULL_PAPER_RUNTIME_ATTACKS
 REQUIRED_NON_RUNTIME_ATTACK_PROTOCOLS = FULL_PAPER_NON_RUNTIME_ATTACK_PROTOCOLS

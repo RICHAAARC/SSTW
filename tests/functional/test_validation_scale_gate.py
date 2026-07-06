@@ -21,11 +21,15 @@ EXTERNAL_BASELINE_NAMES = (
     "videoshield",
     "vidsig",
     "videoseal",
+    "revmark",
+    "wam_frame",
 )
 MODERN_EXTERNAL_BASELINE_NAMES = {
     "videoshield",
     "vidsig",
     "videoseal",
+    "revmark",
+    "wam_frame",
 }
 REQUIRED_RUNTIME_ATTACK_NAMES = FULL_PAPER_RUNTIME_ATTACKS
 REQUIRED_NON_RUNTIME_ATTACK_PROTOCOLS = FULL_PAPER_NON_RUNTIME_ATTACK_PROTOCOLS
@@ -272,10 +276,10 @@ def test_validation_scale_gate_passes_when_all_governed_inputs_exist(tmp_path: P
     write_jsonl(run_root / "records" / "external_baseline_score_records.jsonl", _formal_external_baseline_records())
     write_json(run_root / "artifacts" / "external_baseline_comparison_decision.json", {
         "external_baseline_comparison_decision": "PASS",
-        "external_baseline_comparison_record_count": 5,
-        "external_baseline_comparison_ready_count": 5,
-        "external_baseline_measured_adapter_count": 5,
-        "modern_external_baseline_formal_measured_adapter_count": 3,
+        "external_baseline_comparison_record_count": len(EXTERNAL_BASELINE_NAMES),
+        "external_baseline_comparison_ready_count": len(EXTERNAL_BASELINE_NAMES),
+        "external_baseline_measured_adapter_count": len(EXTERNAL_BASELINE_NAMES),
+        "modern_external_baseline_formal_measured_adapter_count": len(MODERN_EXTERNAL_BASELINE_NAMES),
         "modern_external_baseline_formal_measured_adapter_names": sorted(MODERN_EXTERNAL_BASELINE_NAMES),
         "external_baseline_claim_support_status": "external_baseline_formal_and_proxy_records_written",
     })
@@ -344,7 +348,7 @@ def test_validation_scale_gate_passes_when_all_governed_inputs_exist(tmp_path: P
     ])
     write_json(run_root / "artifacts" / "fair_detection_calibration_decision.json", {
         "fair_detection_calibration_decision": "PASS",
-        "fair_detection_calibration_ready_count": 4,
+        "fair_detection_calibration_ready_count": len(MODERN_EXTERNAL_BASELINE_NAMES) + 1,
         "target_fpr": 0.1,
         "claim_support_status": "fair_detection_calibration_validation_scale_ready",
     })
@@ -381,7 +385,7 @@ def test_validation_scale_gate_passes_when_all_governed_inputs_exist(tmp_path: P
     ])
     write_json(run_root / "artifacts" / "formal_method_baseline_comparison_decision.json", {
         "formal_method_baseline_comparison_decision": "PASS",
-        "formal_comparison_ready_method_count": 4,
+        "formal_comparison_ready_method_count": len(MODERN_EXTERNAL_BASELINE_NAMES) + 1,
         "target_fpr": 0.1,
         "claim_support_status": "formal_method_baseline_comparison_paper_profile_claim_candidate",
     })
@@ -405,7 +409,7 @@ def test_validation_scale_gate_passes_when_all_governed_inputs_exist(tmp_path: P
     ])
     write_json(run_root / "artifacts" / "formal_baseline_difference_interval_decision.json", {
         "formal_baseline_difference_interval_decision": "PASS",
-        "difference_interval_ready_count": 3,
+        "difference_interval_ready_count": len(MODERN_EXTERNAL_BASELINE_NAMES),
         "target_fpr": 0.1,
         "claim_support_status": "formal_baseline_difference_interval_paper_profile_claim_candidate",
     })
@@ -501,23 +505,23 @@ def test_validation_scale_gate_passes_when_all_governed_inputs_exist(tmp_path: P
     assert audit["formal_motion_claim_status"] == "ready"
     assert audit["full_paper_allowed"] is False
     assert audit["full_paper_next_gate"] == "pilot_paper_generative_probe_gate"
-    assert audit["external_baseline_measured_adapter_count"] == 5
-    assert audit["modern_external_baseline_formal_measured_adapter_count"] == 3
+    assert audit["external_baseline_measured_adapter_count"] == len(EXTERNAL_BASELINE_NAMES)
+    assert audit["modern_external_baseline_formal_measured_adapter_count"] == len(MODERN_EXTERNAL_BASELINE_NAMES)
     assert audit["external_baseline_self_containment_decision"] == "PASS"
-    assert audit["external_baseline_self_containment_ready_count"] == 3
+    assert audit["external_baseline_self_containment_ready_count"] == len(MODERN_EXTERNAL_BASELINE_NAMES)
     assert audit["external_baseline_self_containment_gate_missing_requirements"] == []
     assert audit["motion_consistency_exclusion_excluded_count"] == 0
     assert audit["motion_consistency_exclusion_status"] == "motion_consistency_exclusion_audit_record"
     assert audit["sstw_measured_formal_record_count"] == len(REQUIRED_RUNTIME_ATTACK_NAMES)
     assert audit["sstw_measured_formal_status"] == "sstw_measured_formal_paper_profile_claim_candidate"
-    assert audit["fair_detection_calibration_ready_count"] == 4
+    assert audit["fair_detection_calibration_ready_count"] == len(MODERN_EXTERNAL_BASELINE_NAMES) + 1
     assert audit["fair_detection_calibration_status"] == "fair_detection_calibration_validation_scale_ready"
-    assert audit["formal_method_baseline_comparison_ready_count"] == 4
+    assert audit["formal_method_baseline_comparison_ready_count"] == len(MODERN_EXTERNAL_BASELINE_NAMES) + 1
     assert audit["formal_method_baseline_comparison_status"] == "formal_method_baseline_comparison_paper_profile_claim_candidate"
-    assert audit["formal_baseline_difference_interval_ready_count"] == 3
+    assert audit["formal_baseline_difference_interval_ready_count"] == len(MODERN_EXTERNAL_BASELINE_NAMES)
     assert audit["formal_baseline_difference_interval_status"] == "formal_baseline_difference_interval_paper_profile_claim_candidate"
     assert audit["validation_scale_sstw_advantage_claim_ready"] is True
-    assert audit["validation_scale_sstw_advantage_ready_baseline_count"] == 3
+    assert audit["validation_scale_sstw_advantage_ready_baseline_count"] == len(MODERN_EXTERNAL_BASELINE_NAMES)
     assert audit["adaptive_attack_missing_non_runtime_protocols"] == []
     assert audit["non_runtime_attack_protocol_count"] == len(REQUIRED_NON_RUNTIME_ATTACK_PROTOCOLS)
     assert audit["validation_scale_formal_internal_ablation_variant_count"] == 8

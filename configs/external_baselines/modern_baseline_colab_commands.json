@@ -223,6 +223,153 @@
         "repository_generated_official_bundle_cache"
       ],
       "verified_head_commit": "e00b98c7ca77eb1fb5b9b68260e7c6c8fc207a84"
+    },
+    {
+      "baseline_id": "revmark",
+      "colab_source_dir": "/content/SSTW/external_baseline/primary/revmark/source",
+      "display_name": "REVMark",
+      "external_baseline_command_env_var": "SSTW_REVMARK_EVAL_COMMAND",
+      "external_supplemental_result_bundle_allowed": false,
+      "formal_reference_runner_mode": "official_encoder_decoder_post_hoc_video_watermark_project_runtime_attack",
+      "official_baseline_command_env_var": "SSTW_REVMARK_OFFICIAL_EVAL_COMMAND",
+      "official_entrypoint_candidates": [
+        "test.py",
+        "REVMark.py",
+        "checkpoints/Encoder.pth",
+        "checkpoints/Decoder.pth"
+      ],
+      "official_eval_command_contract": {
+        "description": "该命令在 bridge 内部读取项目内 REVMark official bundle; bundle 由 revmark_formal_reference_colab.ipynb 调用项目内官方 Encoder / Decoder runtime 生成。",
+        "env_var": "SSTW_REVMARK_OFFICIAL_EVAL_COMMAND",
+        "fail_closed_policy": "缺少官方源码、官方权重、项目内 official bundle 或用户显式 native command 时必须失败, 不允许输出 proxy 分数。",
+        "formal_reference_notebook_runner_module": "external_baseline.revmark_official_runtime",
+        "formal_reference_notebook_runner_policy": "baseline 专用 Notebook 只生成当前 baseline official bundle, 不直接写 measured_formal records。",
+        "official_result_bundle_path_convention": [
+          "<bundle_root>/<baseline_id>/records/<prompt_id>__<seed_id>__<attack_name>.json",
+          "<bundle_root>/<baseline_id>/records/<trajectory_trace_id>__<attack_name>.json",
+          "<bundle_root>/<baseline_id>/<prompt_id>/<seed_id>/<attack_name>.json",
+          "<bundle_root>/<baseline_id>/<trajectory_trace_id>/<attack_name>.json"
+        ],
+        "official_result_bundle_supported": true,
+        "repository_official_eval_adapter_module": "external_baseline.official_eval_adapters.revmark",
+        "repository_official_eval_command_template": "python -m external_baseline.official_eval_adapters.revmark --official-source-dir /content/SSTW/external_baseline/primary/revmark/source --source-video {source_video_path} --attacked-video {attacked_video_path} --attack-name {attack_name} --official-output-json {official_output_json_path} --run-root {run_root} --prompt-id {prompt_id} --seed-id {seed_id} --trajectory-trace-id {trajectory_trace_id}",
+        "required_input_tokens": [
+          "{source_video_path}",
+          "{attacked_video_path}",
+          "{attack_name}"
+        ],
+        "required_output_token": "{official_output_json_path}"
+      },
+      "official_repository_branch": "main",
+      "official_repository_url": "https://github.com/yulinsysu/REVMark",
+      "official_result_bundle_path_convention": [
+        "<bundle_root>/<baseline_id>/records/<prompt_id>__<seed_id>__<attack_name>.json",
+        "<bundle_root>/<baseline_id>/records/<trajectory_trace_id>__<attack_name>.json",
+        "<bundle_root>/<baseline_id>/<prompt_id>/<seed_id>/<attack_name>.json",
+        "<bundle_root>/<baseline_id>/<trajectory_trace_id>/<attack_name>.json"
+      ],
+      "official_result_bundle_supported": true,
+      "project_owned_formal_reference_runner_module": "external_baseline.revmark_official_runtime",
+      "repository_generated_result_cache_allowed": true,
+      "repository_official_eval_adapter_module": "external_baseline.official_eval_adapters.revmark",
+      "repository_official_eval_command_template": "python -m external_baseline.official_eval_adapters.revmark --official-source-dir /content/SSTW/external_baseline/primary/revmark/source --source-video {source_video_path} --attacked-video {attacked_video_path} --attack-name {attack_name} --official-output-json {official_output_json_path} --run-root {run_root} --prompt-id {prompt_id} --seed-id {seed_id} --trajectory-trace-id {trajectory_trace_id}",
+      "repository_official_eval_command_template_status": "repository_official_wrapper_ready_with_project_owned_revmark_runtime_default",
+      "score_output_contract": {
+        "formal_record_policy": "only_command_outputs_are_converted_to_measured_formal_records",
+        "json_object_required": true,
+        "minimum_required_score_field_any_of": [
+          "external_baseline_score",
+          "watermark_score",
+          "detection_score",
+          "score",
+          "bit_accuracy",
+          "confidence",
+          "detected"
+        ]
+      },
+      "source_clone_command": "git clone --branch main https://github.com/yulinsysu/REVMark /content/SSTW/external_baseline/primary/revmark/source",
+      "source_verification_status": "git_ls_remote_head_verified_2026_07_07",
+      "sstw_eval_command_template": "python -m external_baseline.official_command_bridge --baseline-id revmark --official-source-dir /content/SSTW/external_baseline/primary/revmark/source --source-video {source_video_path} --attacked-video {attacked_video_path} --attack-name {attack_name} --output-json {output_json_path} --run-root {run_root} --prompt-id {prompt_id} --seed-id {seed_id} --trajectory-trace-id {trajectory_trace_id}",
+      "sstw_eval_command_template_status": "repository_bridge_ready_uses_project_owned_official_bundle_when_available",
+      "strict_gate_resource_resolution_order": [
+        "project_owned_revmark_encoder_decoder_runtime",
+        "repository_generated_official_bundle_cache",
+        "SSTW_REVMARK_NATIVE_EVAL_COMMAND"
+      ],
+      "verified_head_commit": "3014ea3ffaae92dc0fe48b780082b7cc0da0071f"
+    },
+    {
+      "baseline_id": "wam_frame",
+      "colab_source_dir": "/content/SSTW/external_baseline/primary/wam_frame/source",
+      "display_name": "WAM-frame",
+      "external_baseline_command_env_var": "SSTW_WAM_FRAME_EVAL_COMMAND",
+      "external_supplemental_result_bundle_allowed": false,
+      "formal_reference_runner_mode": "official_wam_framewise_image_watermark_video_adapter",
+      "official_baseline_command_env_var": "SSTW_WAM_FRAME_OFFICIAL_EVAL_COMMAND",
+      "official_entrypoint_candidates": [
+        "notebooks/inference_utils.py",
+        "watermark_anything/models.py",
+        "checkpoints/params.json"
+      ],
+      "official_eval_command_contract": {
+        "description": "该命令在 bridge 内部读取项目内 WAM-frame official bundle; WAM-frame 是图像水印逐帧适配视频 baseline, bundle 由 wam_frame_formal_reference_colab.ipynb 生成。",
+        "env_var": "SSTW_WAM_FRAME_OFFICIAL_EVAL_COMMAND",
+        "fail_closed_policy": "缺少官方源码、官方权重、项目内 official bundle 或用户显式 native command 时必须失败, 不允许输出 proxy 分数。",
+        "formal_reference_notebook_runner_module": "external_baseline.wam_frame_official_runtime",
+        "formal_reference_notebook_runner_policy": "baseline 专用 Notebook 只生成当前 baseline official bundle, 不直接写 measured_formal records。",
+        "official_result_bundle_path_convention": [
+          "<bundle_root>/<baseline_id>/records/<prompt_id>__<seed_id>__<attack_name>.json",
+          "<bundle_root>/<baseline_id>/records/<trajectory_trace_id>__<attack_name>.json",
+          "<bundle_root>/<baseline_id>/<prompt_id>/<seed_id>/<attack_name>.json",
+          "<bundle_root>/<baseline_id>/<trajectory_trace_id>/<attack_name>.json"
+        ],
+        "official_result_bundle_supported": true,
+        "repository_official_eval_adapter_module": "external_baseline.official_eval_adapters.wam_frame",
+        "repository_official_eval_command_template": "python -m external_baseline.official_eval_adapters.wam_frame --official-source-dir /content/SSTW/external_baseline/primary/wam_frame/source --source-video {source_video_path} --attacked-video {attacked_video_path} --attack-name {attack_name} --official-output-json {official_output_json_path} --run-root {run_root} --prompt-id {prompt_id} --seed-id {seed_id} --trajectory-trace-id {trajectory_trace_id}",
+        "required_input_tokens": [
+          "{source_video_path}",
+          "{attacked_video_path}",
+          "{attack_name}"
+        ],
+        "required_output_token": "{official_output_json_path}"
+      },
+      "official_repository_branch": "main",
+      "official_repository_url": "https://github.com/facebookresearch/watermark-anything",
+      "official_result_bundle_path_convention": [
+        "<bundle_root>/<baseline_id>/records/<prompt_id>__<seed_id>__<attack_name>.json",
+        "<bundle_root>/<baseline_id>/records/<trajectory_trace_id>__<attack_name>.json",
+        "<bundle_root>/<baseline_id>/<prompt_id>/<seed_id>/<attack_name>.json",
+        "<bundle_root>/<baseline_id>/<trajectory_trace_id>/<attack_name>.json"
+      ],
+      "official_result_bundle_supported": true,
+      "project_owned_formal_reference_runner_module": "external_baseline.wam_frame_official_runtime",
+      "repository_generated_result_cache_allowed": true,
+      "repository_official_eval_adapter_module": "external_baseline.official_eval_adapters.wam_frame",
+      "repository_official_eval_command_template": "python -m external_baseline.official_eval_adapters.wam_frame --official-source-dir /content/SSTW/external_baseline/primary/wam_frame/source --source-video {source_video_path} --attacked-video {attacked_video_path} --attack-name {attack_name} --official-output-json {official_output_json_path} --run-root {run_root} --prompt-id {prompt_id} --seed-id {seed_id} --trajectory-trace-id {trajectory_trace_id}",
+      "repository_official_eval_command_template_status": "repository_official_wrapper_ready_with_project_owned_wam_frame_runtime_default",
+      "score_output_contract": {
+        "formal_record_policy": "only_command_outputs_are_converted_to_measured_formal_records",
+        "json_object_required": true,
+        "minimum_required_score_field_any_of": [
+          "external_baseline_score",
+          "watermark_score",
+          "detection_score",
+          "score",
+          "bit_accuracy",
+          "confidence",
+          "detected"
+        ]
+      },
+      "source_clone_command": "git clone --branch main https://github.com/facebookresearch/watermark-anything /content/SSTW/external_baseline/primary/wam_frame/source",
+      "source_verification_status": "git_ls_remote_head_verified_2026_07_07",
+      "sstw_eval_command_template": "python -m external_baseline.official_command_bridge --baseline-id wam_frame --official-source-dir /content/SSTW/external_baseline/primary/wam_frame/source --source-video {source_video_path} --attacked-video {attacked_video_path} --attack-name {attack_name} --output-json {output_json_path} --run-root {run_root} --prompt-id {prompt_id} --seed-id {seed_id} --trajectory-trace-id {trajectory_trace_id}",
+      "sstw_eval_command_template_status": "repository_bridge_ready_uses_project_owned_official_bundle_when_available",
+      "strict_gate_resource_resolution_order": [
+        "project_owned_wam_frame_embed_detect_runtime",
+        "repository_generated_official_bundle_cache",
+        "SSTW_WAM_FRAME_NATIVE_EVAL_COMMAND"
+      ],
+      "verified_head_commit": "2c08af04d037d5667c02f6ddebbda9ff04581c3e"
     }
   ],
   "bridge_command_policy": {
@@ -238,7 +385,7 @@
     "template_file_auto_applied": "optional_when_SSTW_USE_MODERN_BASELINE_BRIDGE_COMMANDS_true"
   },
   "config_kind": "modern_external_baseline_colab_command_config",
-  "config_version": "project_self_contained_external_baseline_commands_2026_06_26_v4",
+  "config_version": "project_self_contained_external_baseline_commands_2026_07_07_v5",
   "external_baseline_result_production_contract": {
     "externally_supplied_result_bundle_allowed": false,
     "project_owned_output_required": true,
@@ -287,7 +434,7 @@
     "attack_name",
     "output_json_path"
   ],
-  "runnability_audit_note": "当前主实验必跑现代 external baseline 为 VideoSeal、VideoShield 与 VidSig 共 3 个。",
+  "runnability_audit_note": "当前主实验必跑现代 external baseline 为 VideoSeal、VideoShield、VidSig、REVMark 与 WAM-frame 共 5 个; WAM-frame 明确标注为图像水印逐帧适配视频 baseline。",
   "source_verification_method": "GitHub repository inspection and git ls-remote --heads for configured branch HEAD commits",
   "verified_at_utc": "2026-06-25T00:00:00Z"
 }

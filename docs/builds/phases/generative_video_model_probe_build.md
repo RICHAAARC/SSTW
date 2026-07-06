@@ -253,7 +253,7 @@ scripts/package_results/generative_video_drive_packager.py
 ```text
 motion_threshold_calibration_colab.ipynb
 -> generative_video_runtime_colab.ipynb
--> 3 个主实验 modern external baseline formal reference Notebook
+-> 5 个主实验 modern external baseline formal reference Notebook
 -> paper_gate_and_package_colab.ipynb
 ```
 
@@ -670,7 +670,7 @@ SSTW_VIDEOSEAL_EVAL_COMMAND
 
 ### 2.13 profile-driven Notebook 重构状态
 
-当前 Colab workflow 已从单一综合 Notebook 拆分为 runtime、3 个主实验 baseline formal reference、
+当前 Colab workflow 已从单一综合 Notebook 拆分为 runtime、5 个主实验 baseline formal reference、
 formal scoring 和 paper gate 等职责明确入口, 并由统一配置控制 profile 切换:
 
 ```text
@@ -682,8 +682,8 @@ configs/paper_workflow/generative_video_notebook_workflows.json
 ```text
 motion_threshold_calibration_colab.ipynb: 只运行 motion calibration split 并冻结 threshold artifact
 generative_video_runtime_colab.ipynb: 运行 Wan2.1 生成、formal metrics、motion threshold 复用、attack 和 detection
-3 个主实验 modern external baseline formal reference Notebook: 分别运行对应 baseline 的官方流程、生成项目内 official bundle, 并默认调用统一 runner 转写当前可用的 measured_formal records
-paper_gate_and_package_colab.ipynb: 恢复 3 个主实验 official reference 阶段包后运行全量 external baseline comparison、self-containment、internal ablation、adaptive attack、replay/sketch 或 Claim-3 downgrade、CI、gate 和 package
+5 个主实验 modern external baseline formal reference Notebook: 分别运行对应 baseline 的官方流程、生成项目内 official bundle, 并默认调用统一 runner 转写当前可用的 measured_formal records
+paper_gate_and_package_colab.ipynb: 恢复 5 个主实验 official reference 阶段包后运行全量 external baseline comparison、self-containment、internal ablation、adaptive attack、replay/sketch 或 Claim-3 downgrade、CI、gate 和 package
 ```
 
 旧的通用 external baseline scoring Notebook 已删除。validation-scale 推荐主流程

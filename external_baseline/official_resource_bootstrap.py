@@ -27,6 +27,7 @@ import zipfile
 DEFAULT_RESOURCE_REQUIREMENTS = "configs/external_baselines/official_resource_requirements.json"
 VIDSIG_GOOGLE_DRIVE_FILE_ID = "1XFyzeX6T0iHgcxSN_DxvjLFy1EXZye-Q"
 DEFAULT_PRIMARY_SOURCE_ROOT = "external_baseline/primary"
+WAM_MIT_CHECKPOINT_URL = "https://dl.fbaipublicfiles.com/watermark_anything/wam_mit.pth"
 VIDEOSEAL_COLAB_LIGHTWEIGHT_DEPENDENCIES = (
     "av",
     "ffmpeg-python",
@@ -74,6 +75,28 @@ VIDEOSHIELD_COLAB_LIGHTWEIGHT_DEPENDENCIES = (
     "imageio-ffmpeg",
     "pycryptodome",
     "tqdm",
+)
+REVMARK_COLAB_LIGHTWEIGHT_DEPENDENCIES = (
+    "numpy",
+    "opencv-python",
+    "imageio",
+    "imageio-ffmpeg",
+)
+WAM_FRAME_COLAB_LIGHTWEIGHT_DEPENDENCIES = (
+    "numpy",
+    "Pillow",
+    "omegaconf==2.3.0",
+    "einops==0.8.0",
+    "timm==1.0.11",
+    "pycocotools==2.0.8",
+    "opencv-python==4.10.0.84",
+    "lpips==0.1.4",
+    "scikit-image==0.24.0",
+    "scikit-learn==1.5.2",
+    "matplotlib",
+    "imageio",
+    "imageio-ffmpeg",
+    "huggingface_hub",
 )
 
 
@@ -344,6 +367,82 @@ def bootstrap_videoshield(resource_root: Path, *, allow_network: bool, source_ro
     }
 
 
+def bootstrap_revmark(resource_root: Path, *, allow_network: bool, source_root: Path) -> dict[str, Any]:
+    """准备 REVMark 官方 runtime 的轻量依赖与 checkpoint 状态。
+
+    REVMark 官方仓库自带 Encoder / Decoder checkpoint。本函数只安装公开 Python
+    依赖并检查 source clone 后 checkpoint 是否可见, 不生成 baseline 分数。
+    """
+
+    baseline_root = resource_root / "revmark"
+    baseline_root.mkdir(parents=True, exist_ok=True)
+    source_dir = source_root / "revmark" / "source"
+    install_results: list[dict[str, Any]] = []
+    for dependency in REVMARK_COLAB_LIGHTWEIGHT_DEPENDENCIES:
+        install_results.append(_pip_install_target(dependency, allow_network=allow_network, timeout_sec=900))
+    failed = [item for item in install_results if item.get("install_status") == "install_failed"]
+    encoder = source_dir / "checkpoints" / "Encoder.pth"
+    decoder = source_dir / "checkpoints" / "Decoder.pth"
+    missing = []
+    if not encoder.exists():
+        missing.append("revmark_encoder_checkpoint")
+    if not decoder.exists():
+        missing.append("revmark_decoder_checkpoint")
+    if failed:
+        missing.append("revmark_lightweight_python_dependencies")
+    ready = not missing
+    return {
+        "baseline_id": "revmark",
+        "bootstrap_status": "ready" if ready else "manual_official_resource_required",
+        "resource_mode": "official_repository_bundled_checkpoints",
+        "resource_dir": str(baseline_root),
+        "official_source_dir": str(source_dir),
+        "project_owned_runner_module": "external_baseline.revmark_official_runtime",
+        "SSTW_REVMARK_ENCODER_CHECKPOINT_PATH": str(encoder) if encoder.exists() else "",
+        "SSTW_REVMARK_DECODER_CHECKPOINT_PATH": str(decoder) if decoder.exists() else "",
+        "colab_torch_stack_policy": "preserve_preinstalled_torch_and_torchvision",
+        "install_results": install_results,
+        "missing_after_bootstrap": missing,
+    }
+
+
+def bootstrap_wam_frame(resource_root: Path, *, allow_network: bool, source_root: Path) -> dict[str, Any]:
+    """准备 WAM-frame 官方 runtime 的轻量依赖和 MIT checkpoint。"""
+
+    baseline_root = resource_root / "wam_frame"
+    baseline_root.mkdir(parents=True, exist_ok=True)
+    source_dir = source_root / "wam_frame" / "source"
+    install_results: list[dict[str, Any]] = []
+    for dependency in WAM_FRAME_COLAB_LIGHTWEIGHT_DEPENDENCIES:
+        install_results.append(_pip_install_target(dependency, allow_network=allow_network, timeout_sec=900))
+    failed = [item for item in install_results if item.get("install_status") == "install_failed"]
+    checkpoint_path = baseline_root / "wam_mit.pth"
+    download_result = _download_url_if_missing(WAM_MIT_CHECKPOINT_URL, checkpoint_path, allow_network=allow_network)
+    params_path = source_dir / "checkpoints" / "params.json"
+    missing = []
+    if not checkpoint_path.exists():
+        missing.append("wam_frame_mit_checkpoint")
+    if not params_path.exists():
+        missing.append("wam_frame_params_json")
+    if failed:
+        missing.append("wam_frame_lightweight_python_dependencies")
+    ready = not missing
+    return {
+        "baseline_id": "wam_frame",
+        "bootstrap_status": "ready" if ready else "manual_official_resource_required",
+        "resource_mode": "official_mit_checkpoint_public_download",
+        "resource_dir": str(baseline_root),
+        "official_source_dir": str(source_dir),
+        "project_owned_runner_module": "external_baseline.wam_frame_official_runtime",
+        "SSTW_WAM_FRAME_CHECKPOINT_PATH": str(checkpoint_path) if checkpoint_path.exists() else "",
+        "SSTW_WAM_FRAME_PARAMS_PATH": str(params_path) if params_path.exists() else "",
+        "download_result": download_result,
+        "colab_torch_stack_policy": "preserve_preinstalled_torch_and_torchvision",
+        "install_results": install_results,
+        "missing_after_bootstrap": missing,
+    }
+
+
 def manual_resource_row(baseline_id: str, reason: str, strict_gate_resolution: str) -> dict[str, Any]:
     """构造需要官方离线资源的 baseline 行。"""
     return {
@@ -372,9 +471,11 @@ def bootstrap_official_resources(
     resolved_source_root = Path(source_root)
 
     baseline_rows: list[dict[str, Any]] = []
+    baseline_rows.append(bootstrap_revmark(resolved_resource_root, allow_network=allow_network, source_root=resolved_source_root))
     baseline_rows.append(bootstrap_videoseal(resolved_resource_root, allow_network=allow_network, source_root=resolved_source_root))
     baseline_rows.append(bootstrap_vidsig(resolved_resource_root, allow_network=allow_network))
     baseline_rows.append(bootstrap_videoshield(resolved_resource_root, allow_network=allow_network, source_root=resolved_source_root))
+    baseline_rows.append(bootstrap_wam_frame(resolved_resource_root, allow_network=allow_network, source_root=resolved_source_root))
     ready = [row["baseline_id"] for row in baseline_rows if row.get("bootstrap_status") == "ready"]
     manual = [row["baseline_id"] for row in baseline_rows if row.get("bootstrap_status") != "ready"]
     env_updates = {

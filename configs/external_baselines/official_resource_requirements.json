@@ -1,7 +1,7 @@
 {
   "claim_boundary": "该配置只描述第三方官方资源如何在本项目流程内 clone / build / run / adapt / record; 不接受外部补交结果包替代 measured_formal records。",
   "config_kind": "modern_external_baseline_official_resource_requirements",
-  "config_version": "2026_06_26_project_self_contained_external_baseline_resources_v2",
+  "config_version": "2026_07_07_project_self_contained_external_baseline_resources_v3",
   "resource_rows": [
     {
       "additional_adapter_work_required": false,
@@ -61,7 +61,47 @@
       "self_contained_result_policy": "project_clone_build_run_adapt_record_required",
       "strict_gate_resolution": "本项目可在 workflow 内调用官方 API 生成 repository-owned official bundle cache, 再由 adapter 写出 measured_formal records",
       "validation_scale_colab_runnability_status": "runnable_if_official_dependencies_and_checkpoint_download_succeed"
+    },
+    {
+      "additional_adapter_work_required": false,
+      "automatic_bundle_generation_supported_by_sstw": true,
+      "baseline_id": "revmark",
+      "colab_l4_auto_bundle_status": "auto_bundle_supported_after_source_clone_and_checkpoint_visibility",
+      "external_supplemental_result_bundle_allowed": false,
+      "official_repository_url": "https://github.com/yulinsysu/REVMark",
+      "official_runtime_mode": "official_encoder_decoder_post_hoc_video_watermark_project_runtime_attack",
+      "project_owned_runner_module": "external_baseline.revmark_official_runtime",
+      "public_resource_status": "official_repository_public_with_bundled_encoder_decoder_checkpoints",
+      "reason_automatic_bundle_not_supported": "not_applicable",
+      "required_adapter_work_summary": "已提供项目内 REVMark official runtime: 对同一 clean video 执行官方 Encoder 嵌入, 施加项目 runtime attack, 再调用官方 Decoder 生成 per-sample score 与 clean negative score。",
+      "required_public_or_user_resources": [
+        "REVMark 官方源码 external_baseline/primary/revmark/source",
+        "REVMark 官方仓库自带 checkpoints/Encoder.pth 与 checkpoints/Decoder.pth"
+      ],
+      "self_contained_result_policy": "project_clone_build_run_adapt_record_required",
+      "strict_gate_resolution": "本项目 workflow 必须完成官方源码 clone、依赖构建、官方 Encoder / Decoder 运行、项目 runtime attack、adapter 转换和 governed record 写出。",
+      "validation_scale_colab_runnability_status": "runnable_if_source_clone_dependencies_and_video_io_succeed"
+    },
+    {
+      "additional_adapter_work_required": false,
+      "automatic_bundle_generation_supported_by_sstw": true,
+      "baseline_id": "wam_frame",
+      "colab_l4_auto_bundle_status": "auto_bundle_supported_after_public_checkpoint_download",
+      "external_supplemental_result_bundle_allowed": false,
+      "official_repository_url": "https://github.com/facebookresearch/watermark-anything",
+      "official_runtime_mode": "official_framewise_image_watermark_video_adapter_project_runtime_attack",
+      "project_owned_runner_module": "external_baseline.wam_frame_official_runtime",
+      "public_resource_status": "official_source_public_mit_checkpoint_downloadable",
+      "reason_automatic_bundle_not_supported": "not_applicable",
+      "required_adapter_work_summary": "已提供项目内 WAM-frame official runtime: 使用 WAM 官方模型逐帧嵌入与检测, 以视频级 bit accuracy 均值写出 per-sample score 与 clean negative score。",
+      "required_public_or_user_resources": [
+        "Watermark Anything 官方源码 external_baseline/primary/wam_frame/source",
+        "公开 MIT 权重 https://dl.fbaipublicfiles.com/watermark_anything/wam_mit.pth"
+      ],
+      "self_contained_result_policy": "project_clone_build_run_adapt_record_required",
+      "strict_gate_resolution": "本项目 workflow 必须完成官方源码 clone、依赖构建、WAM MIT checkpoint 下载、逐帧嵌入 / 检测、项目 runtime attack、adapter 转换和 governed record 写出。WAM-frame 只能表述为 image watermark adapted to video。",
+      "validation_scale_colab_runnability_status": "runnable_if_public_checkpoint_download_dependencies_and_video_io_succeed"
     }
   ],
-  "runnability_audit_note": "当前主实验必跑现代 external baseline 为 VideoSeal、VideoShield 与 VidSig 共 3 个; 资源要求仅覆盖仍保留在主实验门禁中的 baseline。"
+  "runnability_audit_note": "当前主实验必跑现代 external baseline 为 VideoSeal、VideoShield、VidSig、REVMark 与 WAM-frame 共 5 个; 资源要求仅覆盖主实验门禁中的 baseline。"
 }

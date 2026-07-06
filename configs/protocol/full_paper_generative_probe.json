@@ -15,11 +15,11 @@
   "minimum_attack_event_count_per_attack": 2000,
   "minimum_calibration_negative_event_count": 50000,
   "minimum_clean_negative_count": 50000,
-  "minimum_external_baseline_measured_adapter_count": 5,
+  "minimum_external_baseline_measured_adapter_count": 7,
   "minimum_heldout_attacked_positive_event_count": 20000,
   "minimum_heldout_test_negative_event_count": 50000,
   "minimum_internal_ablation_variant_count": 8,
-  "minimum_modern_external_baseline_formal_adapter_count": 3,
+  "minimum_modern_external_baseline_formal_adapter_count": 5,
   "minimum_negative_event_count_per_family": 5000,
   "minimum_negative_family_count": 4,
   "minimum_prompt_count": 50,
@@ -36,8 +36,10 @@
   "require_external_baseline_self_contained_outputs": true,
   "require_fair_detection_calibration": true,
   "require_formal_baseline_difference_interval": true,
-  "require_formal_motion_claim_ready": true,
   "require_formal_method_baseline_comparison": true,
+  "require_formal_motion_claim_ready": true,
+  "require_full_paper_to_submission_freeze_transition_decision": true,
+  "require_full_paper_to_submission_freeze_transition_decision_scope": "submission_freeze_only_not_full_paper_run_precondition",
   "require_internal_ablation_matrix_ready": true,
   "require_modern_external_baseline_formal_results": true,
   "require_motion_threshold_calibration_ready": true,
@@ -51,7 +53,9 @@
     "explicit_frame_matching_temporal_registration",
     "videoshield",
     "vidsig",
-    "videoseal"
+    "videoseal",
+    "revmark",
+    "wam_frame"
   ],
   "required_internal_ablation_variants": [
     "sstw_full_method",
@@ -66,19 +70,23 @@
   "required_modern_external_baseline_adapter_names": [
     "videoshield",
     "vidsig",
-    "videoseal"
+    "videoseal",
+    "revmark",
+    "wam_frame"
   ],
-  "reviewer_evidence_index_required": true,
-  "shard_execution_required": true,
-  "shard_resume_manifest_required": true,
-  "stage_id": "full_paper_generative_probe_protocol",
-  "require_full_paper_to_submission_freeze_transition_decision": true,
-  "require_full_paper_to_submission_freeze_transition_decision_scope": "submission_freeze_only_not_full_paper_run_precondition",
-  "submission_freeze_allowed_after_full_paper_checker_pass": true,
-  "target_fpr": 0.001,
-  "test_time_threshold_update_blocked": true,
-  "threshold_protocol": "calibration_split_to_frozen_threshold_to_heldout_test_split",
-  "threshold_source_split": "calibration",
+  "required_non_runtime_attack_protocols": [
+    "generative_recompression_or_regeneration_attack",
+    "endpoint_preserving_path_perturbation_attack",
+    "flow_time_grid_mismatch_attack",
+    "wrong_sampler_replay_attack",
+    "wrong_prompt_replay_attack",
+    "wrong_key_attack",
+    "detector_probing_with_public_negatives",
+    "watermark_removal_optimization_attack",
+    "watermark_spoofing_or_copy_attack",
+    "collusion_multi_sample_attack",
+    "adversarial_detector_evasion_attack"
+  ],
   "required_runtime_attack_names": [
     "video_compression_runtime",
     "h264_crf18_runtime",
@@ -128,24 +136,20 @@
     "crop_rotation_combined_runtime"
   ],
   "required_runtime_attack_protocol_note": "full_paper 使用顶会/顶刊级多类别、多强度 runtime attack 协议, 覆盖 codec/platform 转码、时间结构扰动、空间几何、视觉退化和组合攻击; 同时要求生成式重压缩/重生成、Flow-specific adaptive、wrong sampler、wrong prompt、wrong key、detector probing、watermark removal、spoofing、collusion 和 adversarial evasion 等非 runtime/adaptive 协议产物; 所有结果必须从当前 protocol config 读取 attack manifest, 不允许 Notebook 或手工参数缩减。",
+  "reviewer_evidence_index_required": true,
   "runtime_attack_family_minimums": {
+    "combined": 5,
     "compression": 9,
-    "temporal": 8,
     "spatial_geometry": 5,
-    "visual_degradation": 8,
-    "combined": 5
+    "temporal": 8,
+    "visual_degradation": 8
   },
-  "required_non_runtime_attack_protocols": [
-    "generative_recompression_or_regeneration_attack",
-    "endpoint_preserving_path_perturbation_attack",
-    "flow_time_grid_mismatch_attack",
-    "wrong_sampler_replay_attack",
-    "wrong_prompt_replay_attack",
-    "wrong_key_attack",
-    "detector_probing_with_public_negatives",
-    "watermark_removal_optimization_attack",
-    "watermark_spoofing_or_copy_attack",
-    "collusion_multi_sample_attack",
-    "adversarial_detector_evasion_attack"
-  ]
+  "shard_execution_required": true,
+  "shard_resume_manifest_required": true,
+  "stage_id": "full_paper_generative_probe_protocol",
+  "submission_freeze_allowed_after_full_paper_checker_pass": true,
+  "target_fpr": 0.001,
+  "test_time_threshold_update_blocked": true,
+  "threshold_protocol": "calibration_split_to_frozen_threshold_to_heldout_test_split",
+  "threshold_source_split": "calibration"
 }

@@ -148,10 +148,10 @@ claim_support_status: measured_formal_self_contained_results_required_for_valida
 
 ```text
 1. 在 Colab 或等价受治理运行环境中, 由本项目 clone / build 每个现代 baseline 的官方源码、权重和依赖。
-2. 通过 `configs/external_baselines/official_runtime_closure_requirements.json` 和 `configs/external_baselines/requirements/<baseline_id>.txt` 明确每个 baseline 的真实运行要求; 3 个主实验 formal reference Notebook 默认会安装各自的 requirements 文件。
+2. 通过 `configs/external_baselines/official_runtime_closure_requirements.json` 和 `configs/external_baselines/requirements/<baseline_id>.txt` 明确每个 baseline 的真实运行要求; 5 个主实验 formal reference Notebook 默认会安装各自的 requirements 文件。
 3. 运行 `external_baseline.official_runtime_closure`, 写出 `artifacts/external_baseline_official_runtime_closure_requirements.json`; 若 Google Drive 默认资源路径已存在, Notebook 应自动应用其中的 `environment_updates`。
-4. 默认使用 repository bridge + official inner command; 不要求用户手写 3 个主实验 `SSTW_<BASELINE>_EVAL_COMMAND`。只有在官方仓库新增更合适 CLI 时, 才通过 `SSTW_<BASELINE>_NATIVE_EVAL_COMMAND` 覆盖单个 baseline。
-6. 在 3 个主实验 official bundle 全部完成后运行 `paper_workflow/colab_notebooks/paper_gate_and_package_colab.ipynb`, 由 paper gate 恢复全部 official reference 阶段包后执行全量统一转写、self-containment 判定和打包。
+4. 默认使用 repository bridge + official inner command; 不要求用户手写 5 个主实验 `SSTW_<BASELINE>_EVAL_COMMAND`。只有在官方仓库新增更合适 CLI 时, 才通过 `SSTW_<BASELINE>_NATIVE_EVAL_COMMAND` 覆盖单个 baseline。
+6. 在 5 个主实验 official bundle 全部完成后运行 `paper_workflow/colab_notebooks/paper_gate_and_package_colab.ipynb`, 由 paper gate 恢复全部 official reference 阶段包后执行全量统一转写、self-containment 判定和打包。
 7. 写出 `artifacts/external_baseline_self_containment_decision.json`, 逐 baseline 记录 clone / build / run / adapt / record 状态。
 8. 仅当全部现代 baseline 都产生项目内自包含 governed `measured_formal` records 后, 才允许 validation_scale gate 通过; validation_scale 通过后还必须生成 validation_scale_to_pilot_paper_transition_decision 才能进入 pilot_paper, full_paper 仍需 pilot_paper gate、pilot_paper_to_full_paper_transition_decision 与 full_paper_result_checker。
 ```
@@ -190,7 +190,7 @@ external_baseline_threshold 或 threshold
 ```text
 generative_video_runtime_colab.ipynb: 在真实 GPU 生成前执行 baseline command preflight, 但不运行 baseline comparison。
 *_formal_reference_colab.ipynb: 读取同一 workflow_profile 的 run_root, 逐 baseline 执行 source intake、project clone / build / run / adapt、official bundle 生成与统一 measured_formal 转写。
-paper_gate_and_package_colab.ipynb: 读取同一 workflow_profile 的 run_root, 恢复 3 个主实验 official reference 阶段包后执行全量统一转写、self-containment 判定与最终 gate 打包。该 Notebook 只消费项目内 official bundle 和 governed manifests, 不直接调用第三方命令。旧的通用 external baseline scoring Notebook 已删除, 防止与 paper gate 聚合职责重复。
+paper_gate_and_package_colab.ipynb: 读取同一 workflow_profile 的 run_root, 恢复 5 个主实验 official reference 阶段包后执行全量统一转写、self-containment 判定与最终 gate 打包。该 Notebook 只消费项目内 official bundle 和 governed manifests, 不直接调用第三方命令。旧的通用 external baseline scoring Notebook 已删除, 防止与 paper gate 聚合职责重复。
 ```
 
 profile、Drive 目录和 stage plan 由下述配置统一控制:

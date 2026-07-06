@@ -177,7 +177,8 @@ def test_videomark_runtime_dry_run_builds_prompt_set_and_commands(tmp_path: Path
     assert "use_watermark.strip().lower()" in runtime_text
     assert "_encoding_key, decoding_key = pickle.load(f)" in runtime_text
     assert "sstw_latent_dtype = next(video_pipe.unet.parameters()).dtype" in runtime_text
-    assert "device=device, dtype=sstw_latent_dtype" in runtime_text
+    assert "1, 4, num_frames, height, width, device=device, dtype=sstw_latent_dtype" in runtime_text
+    assert "num_frames, 1, 4, height, width, device=device, dtype=sstw_latent_dtype" not in runtime_text
     assert "parser.add_argument('--threshold', default=0.5, type=float)" in runtime_temporal_text
     assert "parser.add_argument('--resample_num', default=1, type=int)" in runtime_temporal_text
     assert "parser.add_argument('--video_family', default='videomark')" in runtime_temporal_text
@@ -207,6 +208,31 @@ def test_videomark_runtime_dry_run_builds_prompt_set_and_commands(tmp_path: Path
         "temporal_output_file_skip_guard": "patched_runtime_copy",
         "temporal_runtime_attack_protocol_guard": "patched_runtime_copy",
     }
+
+
+@pytest.mark.quick
+def test_videomark_patch_repairs_clean_negative_wrong_latent_shape(tmp_path: Path) -> None:
+    """已有错误补丁副本也必须被修正为 diffusers 期望的 latent 形状。"""
+
+    source_dir = tmp_path / "official_source"
+    _write_fake_videomark_source(source_dir)
+    embedding_path = source_dir / "embedding_and_extraction.py"
+    embedding_text = embedding_path.read_text(encoding="utf-8")
+    embedding_path.write_text(
+        embedding_text.replace(
+            videomark_runtime.EMBEDDING_CLEAN_BRANCH_TARGET,
+            videomark_runtime.EMBEDDING_CLEAN_BRANCH_WRONG_SHAPE_PATCH_TARGET,
+        ),
+        encoding="utf-8",
+    )
+
+    patch_manifest = videomark_runtime._patch_videomark_runtime_source(source_dir)
+    patched_text = embedding_path.read_text(encoding="utf-8")
+    patch_rows = {row["patch_name"]: row["patch_status"] for row in patch_manifest["patch_results"]}
+
+    assert patch_rows["embedding_clean_negative_decode_key_guard"] == "patched_runtime_copy"
+    assert "1, 4, num_frames, height, width, device=device, dtype=sstw_latent_dtype" in patched_text
+    assert "num_frames, 1, 4, height, width, device=device, dtype=sstw_latent_dtype" not in patched_text
 
 
 @pytest.mark.quick

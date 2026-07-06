@@ -89,6 +89,16 @@ EMBEDDING_CLEAN_BRANCH_REPLACEMENT = (
     "                shift, message_bits = get_message_bits(message_bits_sequence)\n"
     "                sstw_latent_dtype = next(video_pipe.unet.parameters()).dtype\n"
     "                init_latents_w = torch.randn(\n"
+    "                    1, 4, num_frames, height, width, device=device, dtype=sstw_latent_dtype\n"
+    "                )"
+)
+EMBEDDING_CLEAN_BRANCH_WRONG_SHAPE_PATCH_TARGET = (
+    "            else:\n"
+    "                with open(keys_path, 'rb') as f:\n"
+    "                    _encoding_key, decoding_key = pickle.load(f)\n"
+    "                shift, message_bits = get_message_bits(message_bits_sequence)\n"
+    "                sstw_latent_dtype = next(video_pipe.unet.parameters()).dtype\n"
+    "                init_latents_w = torch.randn(\n"
     "                    num_frames, 1, 4, height, width, device=device, dtype=sstw_latent_dtype\n"
     "                )"
 )
@@ -734,8 +744,15 @@ def _patch_videomark_runtime_source(runtime_source_dir: Path) -> dict[str, Any]:
     else:
         patch_results.append({"patch_name": "embedding_use_watermark_bool_guard", "patch_status": "pattern_missing_no_change"})
 
-    if "_encoding_key, decoding_key = pickle.load(f)" in text and "sstw_latent_dtype = next(video_pipe.unet.parameters()).dtype" in text:
+    if (
+        "_encoding_key, decoding_key = pickle.load(f)" in text
+        and "sstw_latent_dtype = next(video_pipe.unet.parameters()).dtype" in text
+        and "1, 4, num_frames, height, width, device=device, dtype=sstw_latent_dtype" in text
+    ):
         patch_results.append({"patch_name": "embedding_clean_negative_decode_key_guard", "patch_status": "already_patched"})
+    elif EMBEDDING_CLEAN_BRANCH_WRONG_SHAPE_PATCH_TARGET in text:
+        text = text.replace(EMBEDDING_CLEAN_BRANCH_WRONG_SHAPE_PATCH_TARGET, EMBEDDING_CLEAN_BRANCH_REPLACEMENT, 1)
+        patch_results.append({"patch_name": "embedding_clean_negative_decode_key_guard", "patch_status": "patched_runtime_copy"})
     elif EMBEDDING_CLEAN_BRANCH_TARGET in text:
         text = text.replace(EMBEDDING_CLEAN_BRANCH_TARGET, EMBEDDING_CLEAN_BRANCH_REPLACEMENT, 1)
         patch_results.append({"patch_name": "embedding_clean_negative_decode_key_guard", "patch_status": "patched_runtime_copy"})

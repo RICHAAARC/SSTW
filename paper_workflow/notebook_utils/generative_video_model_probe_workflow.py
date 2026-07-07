@@ -17,6 +17,7 @@ from paper_workflow.colab_utils.stage_package_sync import (
 )
 from paper_workflow.colab_utils.notebook_run_timing import start_notebook_run_timer
 from paper_workflow.notebook_utils.streaming_command import run_streaming_command
+from main.core.progress import ProgressReporter, emit_progress_event
 
 
 DEFAULT_DRIVE_PROJECT_ROOT = "/content/drive/MyDrive/SSTW"
@@ -1947,9 +1948,22 @@ def run_configured_colab_stage_plan(
         enabled_stage_plan=stage_plan,
     )
     notebook_timing_manifest: dict[str, Any] = {}
+    stage_progress = ProgressReporter(
+        f"colab_stage_plan:{notebook_role}",
+        len(stage_plan),
+        "workflow_stage",
+    )
 
     try:
-        for stage_name in stage_plan:
+        for stage_index, stage_name in enumerate(stage_plan, start=1):
+            emit_progress_event(
+                f"colab_stage_plan:{notebook_role}",
+                (
+                    f"processing | {stage_index}/{len(stage_plan)}"
+                    f" | profile={resolved.get('workflow_profile')}"
+                    f" | stage={stage_name}"
+                ),
+            )
             if stage_name == "external_baseline_colab_preflight":
                 stage_results.append(
                     notebook_timer.run_stage(
@@ -1961,6 +1975,7 @@ def run_configured_colab_stage_plan(
                         ),
                     )
                 )
+                stage_progress.update(stage_index, f"stage={stage_name} status=completed")
                 continue
 
             if stage_name == "motion_threshold_reuse_check":
@@ -1982,6 +1997,7 @@ def run_configured_colab_stage_plan(
                     }
 
                 stage_results.append(notebook_timer.run_stage(stage_name, "python_helper", _motion_threshold_reuse_stage))
+                stage_progress.update(stage_index, f"stage={stage_name} status=completed")
                 continue
 
             if stage_name == "motion_threshold_calibration_or_reuse_check":
@@ -1996,6 +2012,7 @@ def run_configured_colab_stage_plan(
                             ),
                         )
                     )
+                    stage_progress.update(stage_index, "stage=motion_threshold_calibration status=completed")
                 else:
                     def _motion_threshold_validate_stage() -> dict[str, Any]:
                         payload = validate_motion_threshold_ready_for_profile(layout, workflow_profile)
@@ -2010,6 +2027,7 @@ def run_configured_colab_stage_plan(
                     stage_results.append(
                         notebook_timer.run_stage(stage_name, "python_helper", _motion_threshold_validate_stage)
                     )
+                    stage_progress.update(stage_index, f"stage={stage_name} status=completed")
                 continue
 
             if stage_name == "quick_tests_and_harness":
@@ -2033,6 +2051,7 @@ def run_configured_colab_stage_plan(
                         ),
                     )
                 )
+                stage_progress.update(stage_index, f"stage={stage_name} status=completed")
                 continue
 
             command = build_configured_colab_stage_command(
@@ -2065,9 +2084,12 @@ def run_configured_colab_stage_plan(
                     include_videos=include_videos,
                 )
                 print(json.dumps(stage_package, ensure_ascii=False, indent=2))
+            stage_progress.update(stage_index, f"stage={stage_name} status=completed")
         if not notebook_timer.finished:
             notebook_timing_manifest = notebook_timer.finish("completed")
+        stage_progress.finish("completed")
     except BaseException:
+        stage_progress.finish("failed")
         if not notebook_timer.finished:
             notebook_timing_manifest = notebook_timer.finish("failed")
         raise

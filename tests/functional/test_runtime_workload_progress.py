@@ -327,3 +327,22 @@ def test_notebook_workflow_helpers_do_not_capture_subprocess_output() -> None:
         source = helper_path.read_text(encoding="utf-8")
         assert "run_streaming_command(command)" in source
         assert "capture_output=True" not in source
+
+
+@pytest.mark.quick
+def test_formal_comparison_scoring_uses_shared_stage_plan_progress() -> None:
+    """formal comparison Notebook 的进度显示必须位于共享 helper, 不能写在 Notebook cell 中。"""
+
+    helper_source = Path("paper_workflow/notebook_utils/generative_video_model_probe_workflow.py").read_text(
+        encoding="utf-8"
+    )
+    notebook_source = Path("paper_workflow/colab_notebooks/formal_comparison_scoring_colab.ipynb").read_text(
+        encoding="utf-8"
+    )
+
+    assert 'ProgressReporter(\n        f"colab_stage_plan:{notebook_role}"' in helper_source
+    assert "emit_progress_event(" in helper_source
+    assert "processing | {stage_index}/{len(stage_plan)}" in helper_source
+    assert "stage_progress.update(stage_index" in helper_source
+    assert "stage_progress.finish(\"completed\")" in helper_source
+    assert "colab_stage_plan:" not in notebook_source

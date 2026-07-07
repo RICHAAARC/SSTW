@@ -121,6 +121,7 @@ def _load_config(config_path: str | Path = DEFAULT_VALIDATION_SCALE_CONFIG) -> d
         "require_replay_or_sketch_records_or_claim3_downgrade": bool(config.get("require_replay_or_sketch_records_or_claim3_downgrade", True)),
         "require_confidence_interval_report": bool(config.get("require_confidence_interval_report", True)),
         "require_low_fpr_formal_statistics_blocking_record": bool(config.get("require_low_fpr_formal_statistics_blocking_record", True)),
+        "require_paper_result_artifact_skeleton": bool(config.get("require_paper_result_artifact_skeleton", True)),
         "require_artifact_rebuild_dry_run": bool(config.get("require_artifact_rebuild_dry_run", True)),
         "require_data_split_and_leakage_guard": bool(config.get("require_data_split_and_leakage_guard", True)),
         "require_validation_scale_sstw_advantage_claim_ready": bool(config.get("require_validation_scale_sstw_advantage_claim_ready", True)),
@@ -299,6 +300,14 @@ def _low_fpr_formal_statistics_ready(run_root: Path) -> tuple[bool, int, str]:
     ready = bool(records) and _decision_pass(decision, "low_fpr_formal_statistics_decision")
     record_count = int(decision.get("low_fpr_formal_statistics_record_count") or len(records))
     return ready, record_count, decision.get("claim_support_status", "missing_low_fpr_formal_statistics_decision")
+
+
+def _paper_result_artifact_skeleton_ready(run_root: Path) -> tuple[bool, str]:
+    """检查论文级图表和补充实验产物骨架是否已闭合。"""
+
+    decision = _read_json(run_root / "artifacts" / "paper_result_artifact_skeleton_decision.json")
+    ready = _decision_pass(decision, "paper_result_artifact_skeleton_decision")
+    return ready, decision.get("claim_support_status", "missing_paper_result_artifact_skeleton_decision")
 
 
 def _validation_scale_sstw_advantage_claim_ready(
@@ -806,6 +815,7 @@ def build_validation_scale_gate_audit(
     replay_or_sketch_ready, replay_or_sketch_status = _replay_or_sketch_ready(run_root)
     confidence_interval_ready, confidence_interval_status = _confidence_interval_ready(run_root)
     low_fpr_ready, low_fpr_record_count, low_fpr_status = _low_fpr_formal_statistics_ready(run_root)
+    paper_skeleton_ready, paper_skeleton_status = _paper_result_artifact_skeleton_ready(run_root)
     sstw_measured_formal_ready, sstw_measured_formal_record_count, sstw_measured_formal_status = _sstw_measured_formal_ready(run_root)
     fair_detection_ready, fair_detection_ready_count, fair_detection_status = _fair_detection_calibration_ready(
         run_root,
@@ -877,6 +887,7 @@ def build_validation_scale_gate_audit(
         "validation_replay_or_sketch_records_ready": (not config["require_replay_or_sketch_records_or_claim3_downgrade"]) or replay_or_sketch_ready,
         "validation_confidence_interval_report_ready": (not config["require_confidence_interval_report"]) or confidence_interval_ready,
         "validation_low_fpr_formal_statistics_blocking_record_ready": (not config["require_low_fpr_formal_statistics_blocking_record"]) or low_fpr_ready,
+        "validation_paper_result_artifact_skeleton_ready": (not config["require_paper_result_artifact_skeleton"]) or paper_skeleton_ready,
         "validation_artifact_rebuild_dry_run_ready": (not config["require_artifact_rebuild_dry_run"]) or artifact_rebuild_ready,
     }
     missing_requirements = list(dict.fromkeys(
@@ -978,6 +989,7 @@ def build_validation_scale_gate_audit(
         "confidence_interval_status": confidence_interval_status,
         "low_fpr_formal_statistics_record_count": low_fpr_record_count,
         "low_fpr_formal_statistics_status": low_fpr_status,
+        "paper_result_artifact_skeleton_status": paper_skeleton_status,
         "artifact_rebuild_status": artifact_rebuild_status,
         "full_paper_allowed": False,
         "full_paper_next_gate": "pilot_paper_generative_probe_gate" if gate_decision == "PASS" else "complete_missing_validation_requirements",
@@ -1052,6 +1064,7 @@ def write_validation_scale_gate_audit(
         f"- validation_scale_formal_internal_ablation_status: {audit['validation_scale_formal_internal_ablation_status']}\n"
         f"- low_fpr_formal_statistics_record_count: {audit['low_fpr_formal_statistics_record_count']}\n"
         f"- low_fpr_formal_statistics_status: {audit['low_fpr_formal_statistics_status']}\n"
+        f"- paper_result_artifact_skeleton_status: {audit['paper_result_artifact_skeleton_status']}\n"
         f"- data_split_and_leakage_guard_decision: {audit['data_split_and_leakage_guard_decision']}\n"
         f"- missing_modern_external_baseline_formal_adapter_names: {', '.join(audit['missing_modern_external_baseline_formal_adapter_names']) if audit['missing_modern_external_baseline_formal_adapter_names'] else 'none'}\n"
         f"- full_paper_allowed: {str(audit['full_paper_allowed']).lower()}\n"

@@ -483,6 +483,11 @@ def test_validation_scale_gate_passes_when_all_governed_inputs_exist(tmp_path: P
         "low_fpr_formal_statistics_record_count": 2,
         "claim_support_status": "low_fpr_formal_statistics_blocking_record",
     })
+    write_json(run_root / "artifacts" / "paper_result_artifact_skeleton_decision.json", {
+        "paper_result_artifact_skeleton_decision": "PASS",
+        "target_fpr": 0.1,
+        "claim_support_status": "paper_result_artifact_skeleton_ready",
+    })
     write_json(run_root / "artifacts" / "validation_artifact_rebuild_dry_run_decision.json", {
         "validation_artifact_rebuild_dry_run_decision": "PASS",
         "claim_support_status": "validation_artifact_rebuild_ready",

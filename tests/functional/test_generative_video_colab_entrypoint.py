@@ -188,7 +188,7 @@ def test_pilot_paper_profile_constructs_medium_scale_low_fpr_plan(tmp_path: Path
     assert suite["pilot_paper_design"]["target_fpr"] == pilot_protocol["target_fpr"]
     assert suite["pilot_paper_design"]["blocked_target_fpr"] == pilot_protocol["blocked_target_fpr"]
     assert suite["pilot_paper_design"]["paper_result_level"] == "pilot_paper"
-    assert suite["pilot_paper_design"]["paper_protocol_difference_from_full_paper"] == "sample_scale_target_fpr_and_attack_coverage"
+    assert suite["pilot_paper_design"]["paper_protocol_difference_from_full_paper"] == "sample_scale_and_target_fpr_only"
     assert suite["pilot_paper_design"]["recommended_runtime_profile"] == "pilot_paper"
     assert suite["pilot_paper_design"]["threshold_protocol"] == "calibration_split_to_frozen_threshold_to_heldout_test_split"
     assert suite["pilot_paper_design"]["target_generation_video_count"] == 168
@@ -409,7 +409,7 @@ def test_colab_notebooks_are_separated_from_python_helpers() -> None:
 @pytest.mark.quick
 @pytest.mark.quick
 def test_notebook_workflow_profile_config_supports_profile_switching() -> None:
-    """统一配置层必须能区分 validation_scale、pilot_paper 和未开放的 full_paper。"""
+    """统一配置层必须能区分 validation_scale、pilot_paper 和 full_paper。"""
     assert default_workflow_profile_for_notebook_role("generative_video_runtime") == "validation_scale"
     assert default_workflow_profile_for_notebook_role("formal_comparison_scoring") == "validation_scale"
     assert default_workflow_profile_for_notebook_role("paper_evidence_postprocess") == "validation_scale"
@@ -470,13 +470,15 @@ def test_notebook_workflow_profile_config_supports_profile_switching() -> None:
     assert "validation_scale_gate" not in build_workflow_stage_plan("pilot_paper", "paper_gate_and_package")
 
     assert full["workflow_profile"] == "full_paper"
-    assert full["profile_status"] == "design_registered_not_ready"
-    assert full["enabled_for_run"] is False
+    assert full["profile_status"] == "implemented_requires_pilot_paper_gate_and_full_scale_resources"
+    assert full["enabled_for_run"] is True
     assert full["enabled_for_claim"] is False
     assert full["target_fpr"] == full_protocol["target_fpr"]
     assert full["protocol_target_fpr"] == full_protocol["target_fpr"]
-    with pytest.raises(RuntimeError):
-        resolve_notebook_workflow_profile("full_paper", "paper_gate_and_package")
+    full_gate = resolve_notebook_workflow_profile("full_paper", "paper_gate_and_package")
+    assert full_gate["workflow_profile"] == "full_paper"
+    assert "full_paper_result_checker" in build_workflow_stage_plan("full_paper", "paper_gate_and_package")
+    assert "validation_scale_gate" not in build_workflow_stage_plan("full_paper", "paper_gate_and_package")
 
 
 @pytest.mark.quick
@@ -968,7 +970,7 @@ def test_generative_video_drive_packager_creates_archive_and_manifest(tmp_path: 
         "claim_support_status": "pilot_paper_calibrated_heldout_claim_ready",
         "paper_result_level": "pilot_paper",
         "paper_protocol_level": "paper_grade_protocol",
-        "paper_protocol_difference_from_full_paper": "sample_scale_target_fpr_and_attack_coverage",
+        "paper_protocol_difference_from_full_paper": "sample_scale_and_target_fpr_only",
         "pilot_paper_protocol_matches_full_paper": False,
         "pilot_paper_claim_allowed": True,
         "pilot_paper_missing_requirement_count": 0,
@@ -1088,7 +1090,7 @@ def test_generative_video_drive_packager_creates_archive_and_manifest(tmp_path: 
     assert manifest["decision_summary"]["pilot_paper_claim_support_status"] == "pilot_paper_calibrated_heldout_claim_ready"
     assert manifest["decision_summary"]["pilot_paper_result_level"] == "pilot_paper"
     assert manifest["decision_summary"]["pilot_paper_protocol_level"] == "paper_grade_protocol"
-    assert manifest["decision_summary"]["pilot_paper_protocol_difference_from_full_paper"] == "sample_scale_target_fpr_and_attack_coverage"
+    assert manifest["decision_summary"]["pilot_paper_protocol_difference_from_full_paper"] == "sample_scale_and_target_fpr_only"
     assert manifest["decision_summary"]["pilot_paper_protocol_matches_full_paper"] is False
     assert manifest["decision_summary"]["pilot_paper_claim_allowed"] is True
     assert manifest["decision_summary"]["pilot_paper_missing_requirement_count"] == 0

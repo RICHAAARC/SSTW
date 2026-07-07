@@ -965,6 +965,9 @@ def test_validation_scale_figure_and_package_manifest_are_rebuilt_from_artifacts
     write_json(run_root / "artifacts" / "low_fpr_formal_statistics_decision.json", {
         "low_fpr_formal_statistics_decision": "PASS",
     })
+    write_json(run_root / "artifacts" / "paper_result_artifact_skeleton_decision.json", {
+        "paper_result_artifact_skeleton_decision": "PASS",
+    })
     write_json(run_root / "artifacts" / "data_split_and_leakage_guard_decision.json", {
         "data_split_and_leakage_guard_decision": "PASS",
     })
@@ -984,6 +987,7 @@ def test_validation_scale_figure_and_package_manifest_are_rebuilt_from_artifacts
     assert manifest["formal_baseline_difference_interval_decision"] == "PASS"
     assert manifest["validation_scale_formal_internal_ablation_decision"] == "PASS"
     assert manifest["low_fpr_formal_statistics_decision"] == "PASS"
+    assert manifest["paper_result_artifact_skeleton_decision"] == "PASS"
     assert manifest["missing_artifact_relpaths"] == []
     inventory_relpaths = {row["artifact_relpath"] for row in manifest["artifact_inventory"]}
     assert "records/fair_detection_calibration_records.jsonl" in inventory_relpaths

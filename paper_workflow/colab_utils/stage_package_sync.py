@@ -33,6 +33,9 @@ from paper_workflow.colab_utils.notebook_run_timing import (
     finalize_notebook_runtime_report_for_package,
     initialize_notebook_runtime_session,
 )
+from experiments.generative_video_model_probe.paper_result_artifact_builders import (
+    PAPER_RESULT_ARTIFACT_RELPATHS,
+)
 
 
 DEFAULT_LOCAL_WORKSPACE_ROOT = "/content/SSTW_stage_workspace"
@@ -98,47 +101,74 @@ PAPER_EVIDENCE_POSTPROCESS_PACKAGE_RELPATHS = (
     "artifacts/claim3_downgrade_decision.json",
     "artifacts/data_split_and_leakage_guard_decision.json",
     "artifacts/low_fpr_formal_statistics_decision.json",
+    "artifacts/low_fpr_curve_decision.json",
     "artifacts/motion_consistency_exclusion_decision.json",
     "artifacts/motion_threshold_calibration_decision.json",
     "artifacts/motion_threshold_reuse_decision.json",
     "artifacts/notebook_runtime_report.json",
     "artifacts/notebook_run_timing_manifest.json",
+    "artifacts/paper_result_artifact_skeleton_decision.json",
+    "artifacts/efficiency_metric_decision.json",
+    "artifacts/real_adaptive_attack_decision.json",
+    "artifacts/real_world_attack_decision.json",
     "artifacts/replay_and_sketch_gate_decision.json",
     "artifacts/stage_package_restore_decision.json",
     "artifacts/statistical_confidence_interval_decision.json",
     "artifacts/validation_internal_ablation_decision.json",
+    "artifacts/video_quality_metric_decision.json",
     "artifacts/validation_scale_formal_internal_ablation_decision.json",
     "records/adaptive_attack_records.jsonl",
     "records/claim3_downgrade_records.jsonl",
     "records/data_split_and_leakage_guard_records.jsonl",
     "records/low_fpr_formal_statistics_records.jsonl",
+    "records/low_fpr_curve_records.jsonl",
     "records/motion_consistency_exclusion_records.jsonl",
     "records/notebook_stage_timing_records.jsonl",
+    "records/efficiency_metric_records.jsonl",
+    "records/real_adaptive_attack_records.jsonl",
+    "records/real_world_attack_records.jsonl",
     "records/replay_uncertainty_records.jsonl",
     "records/statistical_confidence_interval_records.jsonl",
     "records/trajectory_sketch_verification_records.jsonl",
     "records/validation_internal_ablation_records.jsonl",
     "records/validation_scale_formal_internal_ablation_records.jsonl",
+    "records/video_quality_metric_records.jsonl",
     "records/wrong_prompt_replay_records.jsonl",
     "records/wrong_sampler_replay_records.jsonl",
     "reports/adaptive_attack_report.md",
     "reports/claim3_downgrade_report.md",
     "reports/data_split_and_leakage_guard_report.md",
     "reports/low_fpr_formal_statistics_report.md",
+    "reports/low_fpr_curve_report.md",
     "reports/motion_consistency_exclusion_report.md",
+    "reports/paper_result_artifact_skeleton_report.md",
+    "reports/efficiency_metric_report.md",
+    "reports/real_adaptive_attack_report.md",
+    "reports/real_world_attack_report.md",
     "reports/replay_and_sketch_gate_report.md",
     "reports/statistical_confidence_interval_report.md",
     "reports/validation_internal_ablation_report.md",
     "reports/validation_scale_formal_internal_ablation_report.md",
+    "reports/video_quality_metric_report.md",
     "tables/adaptive_attack_table.csv",
     "tables/claim3_downgrade_table.csv",
     "tables/data_split_and_leakage_guard_table.csv",
     "tables/low_fpr_formal_statistics_table.csv",
+    "tables/low_fpr_curve_table.csv",
     "tables/motion_consistency_exclusion_table.csv",
+    "tables/efficiency_metric_table.csv",
+    "tables/real_adaptive_attack_table.csv",
+    "tables/real_world_attack_table.csv",
     "tables/replay_verification_table.csv",
     "tables/statistical_confidence_interval_table.csv",
     "tables/validation_internal_ablation_table.csv",
     "tables/validation_scale_formal_internal_ablation_table.csv",
+    "tables/video_quality_metric_table.csv",
+    "figures/efficiency_comparison_figure.json",
+    "figures/low_fpr_curve_figure.json",
+    "figures/real_adaptive_attack_robustness_figure.json",
+    "figures/real_world_attack_robustness_figure.json",
+    "figures/video_quality_robustness_tradeoff_figure.json",
 )
 
 OBSOLETE_STAGE_PAYLOAD_NAME_FRAGMENTS = (
@@ -360,7 +390,13 @@ def _stage_package_source_workflow_profile(
 
     if sanitize_filename_token(stage_package_id) == "motion_threshold_calibration_colab":
         return "motion_calibration"
-    return str(layout.get("workflow_profile") or layout.get("runtime_profile") or "default")
+    workflow_profile = str(layout.get("workflow_profile") or layout.get("runtime_profile") or "default")
+    if sanitize_filename_token(stage_package_id) == "paper_gate_and_package_colab":
+        if workflow_profile == "pilot_paper":
+            return "validation_scale"
+        if workflow_profile == "full_paper":
+            return "pilot_paper"
+    return workflow_profile
 
 
 def activate_local_stage_layout(
@@ -637,6 +673,8 @@ def _default_required_stage_packages(layout: Mapping[str, str], notebook_role: s
             required.append("motion_threshold_calibration_colab")
             required.append("formal_comparison_scoring_colab")
             required.append("paper_evidence_postprocess_colab")
+            if profile in {"pilot_paper", "full_paper"}:
+                required.append("paper_gate_and_package_colab")
         return required
     if role == "generative_video_runtime" and profile != "motion_calibration":
         return ["motion_threshold_calibration_colab"]

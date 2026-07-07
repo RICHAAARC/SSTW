@@ -139,5 +139,16 @@
     "validation_scale"
   ],
   "validation_scale_definition": "small_sample_full_protocol_target_fpr_0_1_claim_validation",
-  "validation_scale_role": "target_fpr_0_1_paper_claim_support_gate_before_pilot_paper"
+  "validation_scale_role": "target_fpr_0_1_paper_claim_support_gate_before_pilot_paper",
+  "target_fpr_levels": [
+    0.1,
+    0.01,
+    0.001
+  ],
+  "require_paper_result_artifact_skeleton": true,
+  "require_video_quality_metric_records": true,
+  "require_efficiency_metric_records": true,
+  "require_low_fpr_curve_records": true,
+  "require_real_adaptive_attack_records": true,
+  "require_real_world_attack_records": true
 }

@@ -81,16 +81,7 @@ FULL_PAPER_RUNTIME_ATTACKS = (
 
 VALIDATION_SCALE_RUNTIME_ATTACKS = FULL_PAPER_RUNTIME_ATTACKS
 
-PILOT_PAPER_RUNTIME_ATTACKS = (
-    "video_compression_runtime",
-    "temporal_crop_runtime",
-    "frame_rate_resampling_runtime",
-    "frame_drop_uniform_runtime",
-    "spatial_resize_runtime",
-    "spatial_crop_resize_runtime",
-    "gaussian_blur_runtime",
-    "gaussian_noise_runtime",
-)
+PILOT_PAPER_RUNTIME_ATTACKS = FULL_PAPER_RUNTIME_ATTACKS
 
 RUNTIME_ATTACK_FAMILY_MINIMUMS_BY_PROFILE: dict[str, dict[str, int]] = {
     "validation_scale": {
@@ -101,10 +92,11 @@ RUNTIME_ATTACK_FAMILY_MINIMUMS_BY_PROFILE: dict[str, dict[str, int]] = {
         "combined": 5,
     },
     "pilot_paper": {
-        "compression": 1,
-        "temporal": 3,
-        "spatial_geometry": 2,
-        "visual_degradation": 2,
+        "compression": 9,
+        "temporal": 8,
+        "spatial_geometry": 5,
+        "visual_degradation": 8,
+        "combined": 5,
     },
     "full_paper": {
         "compression": 9,
@@ -557,7 +549,7 @@ def audit_runtime_attack_protocol_config(config: Mapping[str, Any]) -> dict[str,
         else ()
     )
     missing_non_runtime = []
-    if profile in {"validation_scale", "full_paper"}:
+    if profile in {"validation_scale", "pilot_paper", "full_paper"}:
         missing_non_runtime = sorted(set(FULL_PAPER_NON_RUNTIME_ATTACK_PROTOCOLS) - set(non_runtime_required))
 
     decision = "PASS" if not missing_registered_names and not missing_family_minimums and not missing_non_runtime else "FAIL"

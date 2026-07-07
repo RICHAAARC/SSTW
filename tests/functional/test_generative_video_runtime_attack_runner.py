@@ -138,6 +138,7 @@ def test_validation_pilot_and_full_paper_attack_protocol_registers_top_tier_cove
         {
             "paper_result_level": "pilot_paper",
             "required_runtime_attack_names": list(PILOT_PAPER_RUNTIME_ATTACKS),
+            "required_non_runtime_attack_protocols": list(FULL_PAPER_NON_RUNTIME_ATTACK_PROTOCOLS),
         }
     )
     full_audit = audit_runtime_attack_protocol_config(
@@ -153,7 +154,8 @@ def test_validation_pilot_and_full_paper_attack_protocol_registers_top_tier_cove
     assert full_audit["runtime_attack_protocol_decision"] == "PASS"
     assert validation_audit["required_runtime_attack_count"] == len(FULL_PAPER_RUNTIME_ATTACKS)
     assert validation_audit["missing_non_runtime_attack_protocols"] == []
-    assert set(PILOT_PAPER_RUNTIME_ATTACKS) < set(FULL_PAPER_RUNTIME_ATTACKS)
+    assert set(PILOT_PAPER_RUNTIME_ATTACKS) == set(FULL_PAPER_RUNTIME_ATTACKS)
+    assert pilot_audit["missing_non_runtime_attack_protocols"] == []
     assert {
         "platform_transcode_proxy_runtime",
         "irregular_frame_drop_runtime",

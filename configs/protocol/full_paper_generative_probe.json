@@ -151,5 +151,20 @@
   "target_fpr": 0.001,
   "test_time_threshold_update_blocked": true,
   "threshold_protocol": "calibration_split_to_frozen_threshold_to_heldout_test_split",
-  "threshold_source_split": "calibration"
+  "threshold_source_split": "calibration",
+  "target_fpr_levels": [
+    0.1,
+    0.01,
+    0.001
+  ],
+  "paper_protocol_difference_from_validation_scale": "sample_scale_and_target_fpr_only",
+  "paper_protocol_difference_from_pilot_paper": "sample_scale_and_target_fpr_only",
+  "minimum_attack_count": 46,
+  "minimum_non_runtime_attack_protocol_count": 11,
+  "require_paper_result_artifact_skeleton": true,
+  "require_video_quality_metric_records": true,
+  "require_efficiency_metric_records": true,
+  "require_low_fpr_curve_records": true,
+  "require_real_adaptive_attack_records": true,
+  "require_real_world_attack_records": true
 }

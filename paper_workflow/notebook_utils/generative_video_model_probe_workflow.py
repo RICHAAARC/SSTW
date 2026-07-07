@@ -27,7 +27,7 @@ DEFAULT_FULL_PAPER_CONFIG = "configs/protocol/full_paper_generative_probe.json"
 DEFAULT_NOTEBOOK_WORKFLOW_CONFIG = "configs/paper_workflow/generative_video_notebook_workflows.json"
 DEFAULT_MODERN_BASELINE_COLAB_COMMAND_CONFIG = "configs/external_baselines/modern_baseline_colab_commands.json"
 DEFAULT_NOTEBOOK_ROLE = "generative_video_runtime"
-PAPER_GATE_PROFILES = {"validation_scale", "pilot_paper"}
+PAPER_GATE_PROFILES = {"validation_scale", "pilot_paper", "full_paper"}
 EXTERNAL_BASELINE_COLAB_PREFLIGHT_DECISION = "artifacts/external_baseline_colab_preflight_decision.json"
 EXTERNAL_BASELINE_COMMAND_TEMPLATE_SUMMARY = "artifacts/external_baseline_command_template_summary.json"
 EXTERNAL_BASELINE_OFFICIAL_BRIDGE_PREFLIGHT_DECISION = "artifacts/external_baseline_official_bridge_preflight_decision.json"
@@ -1540,11 +1540,24 @@ def build_validation_scale_formal_internal_ablation_command(layout: dict[str, st
 
 
 def build_low_fpr_formal_statistics_command(layout: dict[str, str]) -> list[str]:
-    """构造 validation_scale 低 FPR 正式统计阻断记录命令。"""
+    """构造当前 profile 的低 FPR 正式统计记录命令。"""
     return [
         sys.executable,
         "-m",
         "experiments.generative_video_model_probe.low_fpr_formal_statistics",
+        "--run-root",
+        layout["drive_run_root"],
+        "--config-path",
+        layout["protocol_config_path"],
+    ]
+
+
+def build_paper_result_artifact_builders_command(layout: dict[str, str]) -> list[str]:
+    """构造论文级图表和补充实验产物构建命令。"""
+    return [
+        sys.executable,
+        "-m",
+        "experiments.generative_video_model_probe.paper_result_artifact_builders",
         "--run-root",
         layout["drive_run_root"],
         "--config-path",
@@ -1564,6 +1577,21 @@ def build_pilot_paper_gate_command(layout: dict[str, str]) -> list[str]:
         layout["protocol_config_path"],
         "--write-outputs",
     ]
+
+
+def build_full_paper_result_checker_command(layout: dict[str, str]) -> list[str]:
+    """构造 full_paper 结果充分性检查命令。"""
+    return [
+        sys.executable,
+        "-m",
+        "scripts.check_results.full_paper_result_checker",
+        "--run-root",
+        layout["drive_run_root"],
+        "--config-path",
+        layout["protocol_config_path"],
+        "--write-outputs",
+    ]
+
 
 def build_validation_artifact_rebuild_dry_run_command(layout: dict[str, str]) -> list[str]:
     """构造 validation-scale artifact rebuild dry-run 命令。"""
@@ -1867,6 +1895,7 @@ def build_configured_colab_stage_command(
         "claim3_downgrade_gate": build_claim3_downgrade_command,
         "statistical_confidence_interval": build_statistical_confidence_interval_command,
         "low_fpr_formal_statistics": build_low_fpr_formal_statistics_command,
+        "paper_result_artifact_builders": build_paper_result_artifact_builders_command,
         "sstw_measured_formal_result": build_sstw_measured_formal_result_command,
         "fair_detection_calibration": build_fair_detection_calibration_command,
         "formal_method_baseline_comparison": build_formal_method_baseline_comparison_command,
@@ -1875,6 +1904,8 @@ def build_configured_colab_stage_command(
         "data_split_and_leakage_guard": build_data_split_and_leakage_guard_command,
         "pilot_paper_gate": build_pilot_paper_gate_command,
         "pilot_paper_to_full_paper_transition_decision": build_pilot_paper_to_full_paper_transition_decision_command,
+        "full_paper_result_checker": build_full_paper_result_checker_command,
+        "full_paper_to_submission_freeze_transition_decision": build_full_paper_to_submission_freeze_transition_decision_command,
         "validation_artifact_rebuild_dry_run": build_validation_artifact_rebuild_dry_run_command,
         "validation_scale_gate": build_validation_scale_gate_command,
         "validation_scale_to_pilot_paper_transition_decision": build_validation_scale_to_pilot_paper_transition_decision_command,

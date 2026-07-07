@@ -12,7 +12,11 @@ from experiments.generative_video_model_probe.low_fpr_formal_statistics import r
 from experiments.generative_video_model_probe.motion_consistency_exclusion_report import run_motion_consistency_exclusion_report
 from experiments.generative_video_model_probe.sstw_formal_result import run_sstw_measured_formal_result
 from experiments.generative_video_model_probe.statistical_confidence_interval import run_statistical_confidence_interval_reporter
-from experiments.generative_video_model_probe.validation_artifact_rebuild import run_validation_artifact_rebuild_dry_run
+from experiments.generative_video_model_probe.validation_artifact_rebuild import (
+    REQUIRED_REBUILD_INPUTS,
+    REQUIRED_REBUILD_OUTPUTS,
+    run_validation_artifact_rebuild_dry_run,
+)
 from experiments.generative_video_model_probe.validation_internal_ablation import run_validation_internal_ablation
 from experiments.generative_video_model_probe.validation_scale_formal_internal_ablation import run_validation_scale_formal_internal_ablation
 from main.attacks.video_runtime_attack_protocol import FULL_PAPER_RUNTIME_ATTACKS
@@ -840,7 +844,8 @@ def test_low_fpr_formal_statistics_writes_blocking_record(tmp_path: Path) -> Non
     assert audit["low_fpr_formal_statistics_record_count"] >= 2
     assert {record["blocked_result_profile"] for record in records} >= {"pilot_paper", "full_paper"}
     assert all(record["formal_low_fpr_claim_allowed"] is False for record in records)
-    assert all(record["claim_support_status"] == "low_fpr_formal_statistics_blocking_record" for record in records)
+    assert any(record["claim_support_status"] == "low_fpr_formal_statistics_blocking_record" for record in records)
+    assert any(record["result_profile"] == "validation_scale" for record in records)
     assert (run_root / "tables" / "low_fpr_formal_statistics_table.csv").exists()
     assert (run_root / "artifacts" / "low_fpr_formal_statistics_decision.json").exists()
     assert (run_root / "reports" / "low_fpr_formal_statistics_report.md").exists()
@@ -910,76 +915,7 @@ def test_validation_artifact_rebuild_dry_run_reports_missing_and_pass_states(tmp
     assert failed["validation_artifact_rebuild_dry_run_decision"] == "FAIL"
     assert failed["artifact_rebuild_missing_count"] > 0
 
-    required_files = [
-        "records/generation_records.jsonl",
-        "records/trajectory_trace.jsonl",
-        "records/runtime_attack_records.jsonl",
-        "records/runtime_detection_records.jsonl",
-        "records/motion_consistency_exclusion_records.jsonl",
-        "records/sstw_measured_formal_records.jsonl",
-        "records/external_baseline_records.jsonl",
-        "records/external_baseline_score_records.jsonl",
-        "records/fair_detection_calibration_records.jsonl",
-        "records/formal_method_baseline_comparison_records.jsonl",
-        "records/formal_baseline_difference_interval_records.jsonl",
-        "records/validation_scale_formal_internal_ablation_records.jsonl",
-        "records/validation_internal_ablation_records.jsonl",
-        "records/adaptive_attack_records.jsonl",
-        "records/trajectory_sketch_verification_records.jsonl",
-        "records/replay_uncertainty_records.jsonl",
-        "records/wrong_sampler_replay_records.jsonl",
-        "records/wrong_prompt_replay_records.jsonl",
-        "records/claim3_downgrade_records.jsonl",
-        "records/statistical_confidence_interval_records.jsonl",
-        "records/low_fpr_formal_statistics_records.jsonl",
-        "artifacts/generative_video_colab_runtime_decision.json",
-        "artifacts/runtime_attack_decision.json",
-        "artifacts/runtime_detection_decision.json",
-        "artifacts/motion_consistency_exclusion_decision.json",
-        "artifacts/sstw_measured_formal_decision.json",
-        "artifacts/external_baseline_status_decision.json",
-        "artifacts/external_baseline_comparison_decision.json",
-        "artifacts/fair_detection_calibration_decision.json",
-        "artifacts/formal_method_baseline_comparison_decision.json",
-        "artifacts/formal_baseline_difference_interval_decision.json",
-        "artifacts/validation_scale_formal_internal_ablation_decision.json",
-        "artifacts/validation_internal_ablation_decision.json",
-        "artifacts/adaptive_attack_decision.json",
-        "artifacts/replay_and_sketch_gate_decision.json",
-        "artifacts/claim3_downgrade_decision.json",
-        "artifacts/statistical_confidence_interval_decision.json",
-        "artifacts/low_fpr_formal_statistics_decision.json",
-        "tables/generation_runtime_table.csv",
-        "tables/external_baseline_status_table.csv",
-        "tables/external_baseline_comparison_table.csv",
-        "tables/runtime_attack_table.csv",
-        "tables/runtime_detection_table.csv",
-        "tables/motion_consistency_exclusion_table.csv",
-        "tables/sstw_measured_formal_table.csv",
-        "tables/fair_detection_calibration_table.csv",
-        "tables/formal_method_baseline_comparison_table.csv",
-        "tables/formal_baseline_difference_interval_table.csv",
-        "tables/validation_scale_formal_internal_ablation_table.csv",
-        "tables/validation_internal_ablation_table.csv",
-        "tables/adaptive_attack_table.csv",
-        "tables/replay_verification_table.csv",
-        "tables/claim3_downgrade_table.csv",
-        "tables/statistical_confidence_interval_table.csv",
-        "tables/low_fpr_formal_statistics_table.csv",
-        "reports/external_baseline_comparison_report.md",
-        "reports/motion_consistency_exclusion_report.md",
-        "reports/sstw_measured_formal_report.md",
-        "reports/fair_detection_calibration_report.md",
-        "reports/formal_method_baseline_comparison_report.md",
-        "reports/formal_baseline_difference_interval_report.md",
-        "reports/validation_scale_formal_internal_ablation_report.md",
-        "reports/validation_internal_ablation_report.md",
-        "reports/adaptive_attack_report.md",
-        "reports/replay_and_sketch_gate_report.md",
-        "reports/claim3_downgrade_report.md",
-        "reports/statistical_confidence_interval_report.md",
-        "reports/low_fpr_formal_statistics_report.md",
-    ]
+    required_files = [*REQUIRED_REBUILD_INPUTS, *REQUIRED_REBUILD_OUTPUTS]
     for relative_path in required_files:
         path = run_root / relative_path
         path.parent.mkdir(parents=True, exist_ok=True)

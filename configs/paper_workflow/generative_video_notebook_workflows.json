@@ -1,6 +1,6 @@
 {
   "config_kind": "generative_video_notebook_workflow_config",
-  "config_version": "2026_07_07_paper_evidence_postprocess_split_v21",
+  "config_version": "2026_07_07_full_profile_artifact_skeleton_v22",
   "default_dataset_root_relative": "datasets/generative_video_prompt_suite",
   "default_drive_project_root": "/content/drive/MyDrive/SSTW",
   "default_prompt_suite_path_relative": "datasets/generative_video_prompt_suite/prompt_seed_suite.json",
@@ -73,6 +73,7 @@
         "statistical_confidence_interval",
         "low_fpr_formal_statistics",
         "validation_scale_formal_internal_ablation",
+        "paper_result_artifact_builders",
         "data_split_and_leakage_guard",
         "quick_tests_and_harness",
         "drive_packaging"
@@ -127,6 +128,8 @@
         "pilot_paper_to_full_paper_transition_decision",
         "validation_scale_gate_figure_builder",
         "validation_scale_package_manifest_builder",
+        "full_paper_result_checker",
+        "full_paper_to_submission_freeze_transition_decision",
         "quick_tests_and_harness",
         "drive_packaging"
       ]
@@ -135,25 +138,34 @@
   "workflow_profile_aliases": {},
   "workflow_profiles": {
     "full_paper": {
-      "baseline_sample_count": null,
-      "bootstrap_iteration_count": null,
-      "disabled_stage_names": [],
+      "baseline_sample_count": 1000,
+      "bootstrap_iteration_count": 10000,
+      "disabled_stage_names": [
+        "motion_threshold_calibration",
+        "validation_scale_gate",
+        "validation_scale_to_pilot_paper_transition_decision",
+        "pilot_paper_gate",
+        "pilot_paper_to_full_paper_transition_decision",
+        "validation_scale_gate_figure_builder",
+        "validation_scale_package_manifest_builder"
+      ],
       "drive_log_dir_relative": "logs/generative_video_model_probe/full_paper",
       "drive_package_dir_relative": "full_paper",
       "drive_run_root_relative": "runs/generative_video_model_probe/full_paper",
       "enabled_for_claim": false,
-      "enabled_for_run": false,
+      "enabled_for_run": true,
       "max_content_records": null,
       "max_source_records": null,
-      "method_sample_count": null,
-      "minimum_clean_negative_count": null,
+      "method_sample_count": 1000,
+      "minimum_clean_negative_count": 50000,
       "motion_threshold_artifact_run_root_relative": "runs/generative_video_model_probe/motion_calibration",
       "paper_gate_profile": true,
-      "profile_status": "design_registered_not_ready",
-      "profile_switching_note": "full_paper 只登记未来同构协议入口, 当前不得作为可运行 claim profile 使用。",
+      "profile_status": "implemented_requires_pilot_paper_gate_and_full_scale_resources",
+      "profile_switching_note": "full_paper 使用与 validation_scale 和 pilot_paper 同构的论文协议入口; 与前两层的差异只允许是样本规模、统计功效和 target_fpr=0.001。正式 claim 仍需 full_paper_result_checker 和 full_paper_to_submission_freeze_transition_decision 通过。",
       "protocol_config_path": "configs/protocol/full_paper_generative_probe.json",
       "result_tier": "full_paper",
-      "runtime_profile": "full_paper"
+      "runtime_profile": "full_paper",
+      "target_fpr": 0.001
     },
     "motion_calibration": {
       "baseline_sample_count": 0,
@@ -201,7 +213,9 @@
         "validation_scale_gate",
         "validation_scale_gate_figure_builder",
         "validation_scale_package_manifest_builder",
-        "validation_scale_to_pilot_paper_transition_decision"
+        "validation_scale_to_pilot_paper_transition_decision",
+        "full_paper_result_checker",
+        "full_paper_to_submission_freeze_transition_decision"
       ],
       "drive_log_dir_relative": "logs/generative_video_model_probe/pilot_paper",
       "drive_package_dir_relative": "pilot_paper",
@@ -215,7 +229,7 @@
       "motion_threshold_artifact_run_root_relative": "runs/generative_video_model_probe/motion_calibration",
       "paper_gate_profile": true,
       "profile_status": "implemented_requires_validation_scale_gate_and_self_contained_baselines",
-      "profile_switching_note": "pilot_paper 是小规模跑完整 full paper 协议并产出 pilot 级论文结果, 与 full_paper 的差异只允许是样本规模和评价等级。",
+      "profile_switching_note": "pilot_paper 使用与 validation_scale 和 full_paper 同构的 46 个 runtime attack 与 11 个 non-runtime/adaptive 协议; 与 full_paper 的差异只允许是样本规模、统计功效和 target_fpr=0.01。",
       "protocol_config_path": "configs/protocol/pilot_paper_generative_probe.json",
       "result_tier": "pilot_paper",
       "runtime_profile": "pilot_paper"
@@ -227,7 +241,9 @@
       "disabled_stage_names": [
         "motion_threshold_calibration",
         "pilot_paper_gate",
-        "pilot_paper_to_full_paper_transition_decision"
+        "pilot_paper_to_full_paper_transition_decision",
+        "full_paper_result_checker",
+        "full_paper_to_submission_freeze_transition_decision"
       ],
       "drive_log_dir_relative": "logs/generative_video_model_probe/validation_scale",
       "drive_package_dir_relative": "validation_scale",
@@ -249,7 +265,7 @@
       "paper_gate_preflight_layer": false,
       "paper_gate_profile": true,
       "profile_status": "implemented_small_sample_full_protocol_target_fpr_0_1_claim_gate_requires_self_contained_baselines_and_fair_calibration",
-      "profile_switching_note": "validation_scale 是 target_fpr=0.1 的小样本完整协议论文主张候选门禁, 使用 protocol_config_path 指向的 validation_scale protocol config 验证所有 records、tables、figures、reports、manifests、baseline、消融、46 个 runtime attack、11 个 non-runtime/adaptive 协议、CI、clean negative 公平校准和 artifact rebuild 能闭环; 通过后可支撑 fpr=0.1 论文设定下的 SSTW 有效性与优势结论候选, 但不能直接进入 full_paper, 也不能外推到 pilot_paper 的 fpr=0.01 或 full_paper 的 fpr=0.001。",
+      "profile_switching_note": "validation_scale 是 target_fpr=0.1 的小样本完整协议论文主张候选门禁, 使用与 pilot_paper 和 full_paper 同构的 46 个 runtime attack 与 11 个 non-runtime/adaptive 协议验证全部 records、tables、figures、reports、manifests、baseline、消融、CI、clean negative 公平校准和 artifact rebuild 能闭环; 通过后可支撑 fpr=0.1 论文设定下的 SSTW 有效性与优势结论候选, 但不能外推到 pilot_paper 的 fpr=0.01 或 full_paper 的 fpr=0.001。",
       "protocol_config_path": "configs/protocol/validation_scale_generative_probe.json",
       "result_tier": "validation_scale",
       "runtime_profile": "validation_scale"

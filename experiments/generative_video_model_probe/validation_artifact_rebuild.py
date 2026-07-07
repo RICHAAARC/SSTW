@@ -10,6 +10,9 @@ from typing import Any
 from main.protocol.flow_evidence_fields import with_flow_evidence_protocol_defaults
 from main.protocol.record_writer import write_json, write_jsonl
 from main.protocol.table_builder import write_csv
+from experiments.generative_video_model_probe.paper_result_artifact_builders import (
+    PAPER_RESULT_ARTIFACT_RELPATHS,
+)
 
 
 REQUIRED_REBUILD_INPUTS = (
@@ -84,6 +87,7 @@ REQUIRED_REBUILD_OUTPUTS = (
     "reports/claim3_downgrade_report.md",
     "reports/statistical_confidence_interval_report.md",
     "reports/low_fpr_formal_statistics_report.md",
+    *PAPER_RESULT_ARTIFACT_RELPATHS,
 )
 
 

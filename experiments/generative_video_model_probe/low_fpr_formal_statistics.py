@@ -1,4 +1,9 @@
-"""低 FPR 正式统计的 validation_scale 阻断记录。"""
+"""低 FPR 正式统计的跨 profile 治理记录。
+
+validation_scale、pilot_paper 和 full_paper 使用同一套构建逻辑。区别只来自
+protocol config 中的 `target_fpr`、样本规模和 negative event 要求。这样可以
+保证 Notebook 只切换 profile, 不承担低 FPR 统计口径的业务逻辑。
+"""
 
 from __future__ import annotations
 
@@ -34,8 +39,9 @@ def _read_jsonl(path: Path) -> list[dict[str, Any]]:
     return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
 
 
-def _negative_event_count(run_root: Path) -> int:
-    """估计当前 run_root 中可用于低 FPR 的 negative event 数量。"""
+def _generation_negative_event_count(run_root: Path) -> int:
+    """估计 generation records 中可用于低 FPR 的 negative event 数量。"""
+
     count = 0
     for record in _read_jsonl(run_root / "records" / "generation_records.jsonl"):
         role_fields = {
@@ -48,26 +54,64 @@ def _negative_event_count(run_root: Path) -> int:
     return count
 
 
-def _target_rows(validation_config: dict[str, Any], pilot_config: dict[str, Any], full_config: dict[str, Any]) -> list[dict[str, Any]]:
-    """从 pilot/full protocol 中抽取 validation_scale 不能声称的低 FPR 目标。"""
+def _fair_calibration_negative_event_count(run_root: Path) -> int:
+    """从公平校准 records 估计每个方法都具备的 clean negative 下界。"""
+
+    counts = [
+        int(record.get("clean_negative_score_count") or 0)
+        for record in _read_jsonl(run_root / "records" / "fair_detection_calibration_records.jsonl")
+        if record.get("fair_comparison_status") == "ready"
+    ]
+    return min(counts) if counts else 0
+
+
+def _negative_event_count(run_root: Path) -> int:
+    """返回低 FPR 统计可使用的 negative event 保守估计。"""
+
+    return max(_generation_negative_event_count(run_root), _fair_calibration_negative_event_count(run_root))
+
+
+def _minimum_negative_event_required(config: dict[str, Any]) -> int:
+    """读取某个 profile 的最低 negative event 要求。"""
+
+    return int(
+        config.get("minimum_heldout_test_negative_event_count")
+        or config.get("minimum_calibration_negative_event_count")
+        or config.get("minimum_clean_negative_count")
+        or 0
+    )
+
+
+def _target_rows(current_config: dict[str, Any], pilot_config: dict[str, Any], full_config: dict[str, Any]) -> list[dict[str, Any]]:
+    """从当前 profile、pilot 和 full protocol 中抽取低 FPR 目标。"""
+
     rows: list[dict[str, Any]] = []
+    current_profile = str(current_config.get("paper_result_level") or "validation_scale")
+    if "target_fpr" in current_config:
+        rows.append({
+            "result_profile": current_profile,
+            "target_fpr": float(current_config["target_fpr"]),
+            "row_role": "current_profile_target",
+            "minimum_negative_event_count_required": _minimum_negative_event_required(current_config),
+            "threshold_protocol_required": str(current_config.get("threshold_protocol") or "method_specific_clean_negative_calibration_to_target_fpr"),
+        })
     for profile_name, config in (("pilot_paper", pilot_config), ("full_paper", full_config)):
+        if profile_name == current_profile:
+            continue
         if "target_fpr" not in config:
             continue
         rows.append({
-            "blocked_result_profile": profile_name,
-            "blocked_target_fpr": float(config["target_fpr"]),
-            "minimum_negative_event_count_required": int(
-                config.get("minimum_heldout_test_negative_event_count")
-                or config.get("minimum_calibration_negative_event_count")
-                or 0
-            ),
+            "result_profile": profile_name,
+            "target_fpr": float(config["target_fpr"]),
+            "row_role": "future_profile_target",
+            "minimum_negative_event_count_required": _minimum_negative_event_required(config),
             "threshold_protocol_required": str(config.get("threshold_protocol") or "calibration_split_to_frozen_threshold_to_heldout_test_split"),
         })
-    if "blocked_target_fpr" in validation_config:
+    if "blocked_target_fpr" in current_config:
         rows.append({
-            "blocked_result_profile": "validation_config_blocked_target",
-            "blocked_target_fpr": float(validation_config["blocked_target_fpr"]),
+            "result_profile": f"{current_profile}_blocked_target",
+            "target_fpr": float(current_config["blocked_target_fpr"]),
+            "row_role": "blocked_target_declared_by_current_config",
             "minimum_negative_event_count_required": 0,
             "threshold_protocol_required": "declared_in_validation_config",
         })
@@ -80,51 +124,88 @@ def build_low_fpr_formal_statistics_records(
     pilot_config_path: str | Path = DEFAULT_PILOT_CONFIG,
     full_config_path: str | Path = DEFAULT_FULL_CONFIG,
 ) -> list[dict[str, Any]]:
-    """构建低 FPR 正式统计阻断 records。"""
+    """构建低 FPR 正式统计 records。"""
+
     run_root = Path(run_root)
-    validation_config = _read_json(Path(config_path))
-    if "target_fpr" not in validation_config:
-        raise KeyError(f"validation config 缺少 target_fpr: {config_path}")
+    current_config = _read_json(Path(config_path))
+    if "target_fpr" not in current_config:
+        raise KeyError(f"protocol config 缺少 target_fpr: {config_path}")
     pilot_config = _read_json(Path(pilot_config_path))
     full_config = _read_json(Path(full_config_path))
-    current_target_fpr = float(validation_config["target_fpr"])
+    current_profile = str(current_config.get("paper_result_level") or "validation_scale")
+    current_target_fpr = float(current_config["target_fpr"])
     observed_negative_count = _negative_event_count(run_root)
     records: list[dict[str, Any]] = []
-    for row in _target_rows(validation_config, pilot_config, full_config):
-        status = "blocked_by_validation_scale_sample_size_and_result_level"
+    for row in _target_rows(current_config, pilot_config, full_config):
+        is_current_target = row["row_role"] == "current_profile_target"
+        enough_negative = observed_negative_count >= int(row["minimum_negative_event_count_required"])
+        formal_allowed = bool(is_current_target and enough_negative)
+        if formal_allowed:
+            status = "current_profile_low_fpr_statistics_ready"
+            claim_status = f"{current_profile}_target_fpr_statistics_ready"
+            blocking_reason = "none"
+        elif is_current_target:
+            status = "blocked_by_current_profile_negative_sample_size"
+            claim_status = "low_fpr_formal_statistics_current_profile_blocking_record"
+            blocking_reason = (
+                "当前 profile 的 negative event 数量不足, 不能在当前 target_fpr 下报告正式低 FPR 主张。"
+            )
+        else:
+            status = "blocked_until_matching_future_profile_run"
+            claim_status = "low_fpr_formal_statistics_blocking_record"
+            blocking_reason = (
+                "该 FPR 等级需要切换到对应 workflow profile 后, 使用同一低 FPR 统计逻辑在更大样本上重新运行。"
+            )
         records.append(with_flow_evidence_protocol_defaults({
-            "record_version": "low_fpr_formal_statistics_blocking_v1",
-            "paper_result_level": validation_config.get("paper_result_level", "validation_scale"),
+            "record_version": "low_fpr_formal_statistics_v2",
+            "paper_result_level": current_profile,
             "current_target_fpr": current_target_fpr,
-            "blocked_result_profile": row["blocked_result_profile"],
-            "blocked_target_fpr": row["blocked_target_fpr"],
+            "result_profile": row["result_profile"],
+            "target_fpr": row["target_fpr"],
+            "blocked_result_profile": row["result_profile"],
+            "blocked_target_fpr": row["target_fpr"],
             "low_fpr_formal_statistics_status": status,
-            "formal_low_fpr_claim_allowed": False,
+            "formal_low_fpr_claim_allowed": formal_allowed,
             "observed_negative_event_count": observed_negative_count,
             "minimum_negative_event_count_required": row["minimum_negative_event_count_required"],
             "threshold_protocol_required": row["threshold_protocol_required"],
-            "low_fpr_blocking_reason": (
-                "validation_scale 只验证小样本全流程闭环, 不能替代 pilot_paper 或 full_paper "
-                "所需的 calibration split、held-out negative split 和低 FPR 统计。"
-            ),
-            "claim_support_status": "low_fpr_formal_statistics_blocking_record",
-        }, trajectory_source_level="low_fpr_formal_statistics_blocking_record", claim_support_status="low_fpr_formal_statistics_blocking_record"))
+            "low_fpr_blocking_reason": blocking_reason,
+            "claim_support_status": claim_status,
+        }, trajectory_source_level="low_fpr_formal_statistics_governed_record", claim_support_status=claim_status))
     return records
 
 
 def audit_low_fpr_formal_statistics_records(records: list[dict[str, Any]]) -> dict[str, Any]:
-    """审计低 FPR 阻断记录是否已明确落盘。"""
-    blocked_targets = sorted({float(record["blocked_target_fpr"]) for record in records if record.get("blocked_target_fpr") is not None})
-    all_claims_blocked = all(record.get("formal_low_fpr_claim_allowed") is False for record in records)
-    decision = "PASS" if records and all_claims_blocked else "FAIL"
+    """审计低 FPR records 是否已明确落盘。"""
+
+    blocked_targets = sorted({
+        float(record["target_fpr"])
+        for record in records
+        if record.get("formal_low_fpr_claim_allowed") is False and record.get("target_fpr") is not None
+    })
+    current_rows = [record for record in records if record.get("result_profile") == record.get("paper_result_level")]
+    current_allowed = any(record.get("formal_low_fpr_claim_allowed") is True for record in current_rows)
+    current_blocked = any(record.get("formal_low_fpr_claim_allowed") is False for record in current_rows)
+    decision = "PASS" if records and (current_allowed or current_blocked) else "FAIL"
+    if current_allowed:
+        claim_status = "low_fpr_formal_statistics_current_profile_ready"
+        status = "current_profile_statistics_ready"
+    elif decision == "PASS":
+        claim_status = "low_fpr_formal_statistics_blocking_record"
+        status = "blocking_record_ready"
+    else:
+        claim_status = "low_fpr_formal_statistics_blocked_record_missing"
+        status = "blocking_record_missing"
     return {
         "stage_id": "low_fpr_formal_statistics",
         "low_fpr_formal_statistics_decision": decision,
-        "claim_support_status": "low_fpr_formal_statistics_blocking_record" if decision == "PASS" else "low_fpr_formal_statistics_blocked_record_missing",
+        "claim_support_status": claim_status,
         "low_fpr_formal_statistics_record_count": len(records),
         "low_fpr_blocked_target_fprs": blocked_targets,
-        "formal_low_fpr_claim_allowed": False,
-        "low_fpr_formal_statistics_status": "blocking_record_ready" if decision == "PASS" else "blocking_record_missing",
+        "formal_low_fpr_claim_allowed": current_allowed,
+        "current_profile_low_fpr_claim_allowed": current_allowed,
+        "current_profile_low_fpr_claim_blocked": current_blocked,
+        "low_fpr_formal_statistics_status": status,
     }
 
 
@@ -132,7 +213,7 @@ def run_low_fpr_formal_statistics(
     run_root: str | Path,
     config_path: str | Path = DEFAULT_VALIDATION_CONFIG,
 ) -> dict[str, Any]:
-    """写出低 FPR 正式统计阻断 records、table、decision 和 report。"""
+    """写出低 FPR 正式统计 records、table、decision 和 report。"""
     run_root = Path(run_root)
     records = build_low_fpr_formal_statistics_records(run_root, config_path)
     audit = audit_low_fpr_formal_statistics_records(records)
@@ -140,9 +221,9 @@ def run_low_fpr_formal_statistics(
     write_csv(run_root / "tables" / "low_fpr_formal_statistics_table.csv", records)
     write_json(run_root / "artifacts" / "low_fpr_formal_statistics_decision.json", audit)
     report = (
-        "# Low FPR Formal Statistics Blocking Report\n\n"
-        "该报告明确记录 validation_scale 不能支持低 FPR 正式统计主张。低 FPR 主张必须在 "
-        "pilot_paper 或 full_paper 的 calibration / held-out negative split 上重新运行并通过门禁。\n\n"
+        "# Low FPR Formal Statistics Report\n\n"
+        "该报告按当前 protocol config 的 target_fpr 写出低 FPR 统计状态。"
+        "validation_scale、pilot_paper 和 full_paper 使用同一脚本, 只由配置决定 FPR 等级和样本规模。\n\n"
         f"- low_fpr_formal_statistics_decision: {audit['low_fpr_formal_statistics_decision']}\n"
         f"- low_fpr_blocked_target_fprs: {', '.join(str(item) for item in audit['low_fpr_blocked_target_fprs'])}\n"
         f"- formal_low_fpr_claim_allowed: {str(audit['formal_low_fpr_claim_allowed']).lower()}\n"

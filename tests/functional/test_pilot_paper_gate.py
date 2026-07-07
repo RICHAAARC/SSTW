@@ -471,7 +471,7 @@ def test_pilot_paper_gate_cannot_disable_validation_scale_fairness_prerequisites
         "blocked_target_fpr": 0.001,
         "paper_result_level": "pilot_paper",
         "paper_protocol_level": "paper_grade_protocol",
-        "paper_protocol_difference_from_full_paper": "sample_scale_target_fpr_and_attack_coverage",
+        "paper_protocol_difference_from_full_paper": "sample_scale_and_target_fpr_only",
         "minimum_prompt_count": 0,
         "minimum_seed_per_prompt": 0,
         "minimum_calibration_seed_per_prompt": 0,
@@ -545,8 +545,8 @@ def test_pilot_paper_gate_passes_calibrated_heldout_fixture(tmp_path: Path) -> N
     assert audit["claim_support_status"] == "pilot_paper_calibrated_heldout_claim_ready"
     assert audit["paper_result_level"] == "pilot_paper"
     assert audit["paper_protocol_level"] == "paper_grade_protocol"
-    assert audit["paper_protocol_difference_from_full_paper"] == "sample_scale_target_fpr_and_attack_coverage"
-    assert audit["pilot_paper_protocol_matches_full_paper"] is False
+    assert audit["paper_protocol_difference_from_full_paper"] == "sample_scale_and_target_fpr_only"
+    assert audit["pilot_paper_protocol_matches_full_paper"] is True
     assert audit["pilot_paper_hard_required_config_missing_count"] == 0
     assert audit["validation_scale_gate_decision"] == "PASS"
     assert audit["validation_scale_to_pilot_paper_transition_decision"] == "PASS"
@@ -759,7 +759,7 @@ def test_pilot_paper_gate_rejects_fair_calibration_target_fpr_mismatch(tmp_path:
 def test_pilot_paper_gate_blocks_insufficient_negative_events(tmp_path: Path) -> None:
     """negative event 数量不足时不能报告 pilot 级低 FPR 结论。"""
     run_root = tmp_path / "run"
-    _seed_pilot_paper_run(run_root, prompt_count=4, calibration_seed_count=2, test_seed_count=2)
+    _seed_pilot_paper_run(run_root, prompt_count=1, calibration_seed_count=1, test_seed_count=1)
 
     audit = build_pilot_paper_gate_audit(run_root)
 

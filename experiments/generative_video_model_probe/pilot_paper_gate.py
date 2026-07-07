@@ -964,7 +964,10 @@ def build_pilot_paper_gate_audit(
         "paper_result_level": config["paper_result_level"],
         "paper_protocol_level": config["paper_protocol_level"],
         "paper_protocol_difference_from_full_paper": config["paper_protocol_difference_from_full_paper"],
-        "pilot_paper_protocol_matches_full_paper": config["paper_protocol_difference_from_full_paper"] == "sample_scale_only",
+        "pilot_paper_protocol_matches_full_paper": config["paper_protocol_difference_from_full_paper"] in {
+            "sample_scale_only",
+            "sample_scale_and_target_fpr_only",
+        },
         "pilot_paper_claim_allowed": gate_decision == "PASS",
         "missing_pilot_paper_requirements": missing,
         "pilot_paper_missing_requirement_count": len(missing),

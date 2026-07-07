@@ -45,6 +45,8 @@ external baseline 采用分层接入方式:
 videoshield
 vidsig
 videoseal
+revmark
+wam_frame
 ```
 
 每个现代 baseline 的 adapter 会优先读取以下环境变量命令:
@@ -64,6 +66,8 @@ SSTW_VIDEOSEAL_EVAL_COMMAND
 external_baseline/official_eval_adapters/videoshield.py
 external_baseline/official_eval_adapters/vidsig.py
 external_baseline/official_eval_adapters/videoseal.py
+external_baseline/official_eval_adapters/revmark.py
+external_baseline/official_eval_adapters/wam_frame.py
 ```
 
 这些 wrapper 是 fail-closed 入口。它们只允许调用官方源码/API或读取由本项目 workflow
@@ -106,6 +110,15 @@ bundle generator 写入, 命名位置可采用以下任一形式:
 `official_execution_manifest_path` 必须指向已落盘 manifest。旧的
 `third_party_official_code`、手写 JSON、NPZ 分数文件或 SSTW proxy 分数都会被视为
 不满足正式 `measured_formal` 输入要求。
+
+新生成的 baseline official reference bundle 整包 manifest 必须使用统一状态:
+
+```text
+execution_status = "official_reference_bundle_complete"
+```
+
+旧历史 manifest 中的 `executed`、`completed`、`generated`、`ready` 仅作为
+self-containment checker 的兼容输入保留, 不应继续作为新整包完成状态输出。
 
 ```text
 official_result_provenance = "repository_generated_from_third_party_official_code"

@@ -42,6 +42,40 @@ REQUIRED_COMPLETE_OFFICIAL_BASELINE_ID_FIELDS = (
     "official_adapter_baseline_id",
     "official_baseline_id",
 )
+OFFICIAL_REFERENCE_BUNDLE_COMPLETE_STATUS = "official_reference_bundle_complete"
+OFFICIAL_REFERENCE_FAILURE_STATUS = "official_reference_failures_present"
+OFFICIAL_REFERENCE_INCOMPLETE_STATUS = "bundle_record_coverage_incomplete"
+LEGACY_OFFICIAL_EXECUTION_SUCCESS_STATUSES = (
+    "executed",
+    "completed",
+    "generated",
+    "ready",
+)
+OFFICIAL_EXECUTION_SUCCESS_STATUSES = (
+    *LEGACY_OFFICIAL_EXECUTION_SUCCESS_STATUSES,
+    OFFICIAL_REFERENCE_BUNDLE_COMPLETE_STATUS,
+)
+
+
+def build_official_reference_bundle_execution_status(
+    *,
+    generated_count: int,
+    expected_count: int,
+    failed_count: int,
+) -> str:
+    """统一生成 official reference bundle 整包状态。
+
+    该函数属于项目特定写法。新生成的 formal reference bundle 必须使用
+    `official_reference_bundle_complete` 表示整包完成; 旧的 `executed`、
+    `completed`、`generated`、`ready` 只在读取历史 manifest 时作为兼容输入,
+    不再作为新整包 manifest 的成功状态输出。
+    """
+
+    if expected_count > 0 and generated_count == expected_count and failed_count == 0:
+        return OFFICIAL_REFERENCE_BUNDLE_COMPLETE_STATUS
+    if failed_count:
+        return OFFICIAL_REFERENCE_FAILURE_STATUS
+    return OFFICIAL_REFERENCE_INCOMPLETE_STATUS
 
 
 def build_parser(description: str) -> argparse.ArgumentParser:

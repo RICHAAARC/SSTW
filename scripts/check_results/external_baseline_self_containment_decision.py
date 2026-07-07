@@ -12,7 +12,11 @@ import json
 from pathlib import Path
 from typing import Any, Iterable, Mapping
 
-from external_baseline.official_eval_adapters.common import validate_complete_official_bundle_baseline_identity
+from external_baseline.official_eval_adapters.common import (
+    OFFICIAL_EXECUTION_SUCCESS_STATUSES,
+    REPOSITORY_GENERATED_OFFICIAL_PROVENANCE,
+    validate_complete_official_bundle_baseline_identity,
+)
 from external_baseline.score_semantics import validate_official_score_extraction_payload
 from main.attacks.video_runtime_attack_protocol import VALIDATION_SCALE_RUNTIME_ATTACKS
 from main.protocol.flow_evidence_fields import with_flow_evidence_protocol_defaults
@@ -38,14 +42,6 @@ OFFICIAL_BUNDLE_PATH_FIELDS = (
     "external_baseline_official_result_bundle_path",
     "external_baseline_official_execution_manifest_path",
 )
-REPOSITORY_GENERATED_OFFICIAL_PROVENANCE = "repository_generated_from_third_party_official_code"
-OFFICIAL_EXECUTION_SUCCESS_STATUSES = {
-    "executed",
-    "completed",
-    "generated",
-    "ready",
-    "official_reference_bundle_complete",
-}
 
 
 def _read_json(path: Path) -> dict[str, Any]:

@@ -8,6 +8,14 @@ from pathlib import Path
 
 import pytest
 
+from external_baseline.official_eval_adapters.common import (
+    LEGACY_OFFICIAL_EXECUTION_SUCCESS_STATUSES,
+    OFFICIAL_EXECUTION_SUCCESS_STATUSES,
+    OFFICIAL_REFERENCE_BUNDLE_COMPLETE_STATUS,
+    OFFICIAL_REFERENCE_FAILURE_STATUS,
+    OFFICIAL_REFERENCE_INCOMPLETE_STATUS,
+    build_official_reference_bundle_execution_status,
+)
 from paper_workflow.colab_utils.modern_external_baseline_formal_reference import (
     MODERN_EXTERNAL_BASELINE_BUILD_ORDER,
     _build_runtime_closure_blocked_reference_manifest,
@@ -33,6 +41,51 @@ def test_modern_external_baseline_formal_reference_order_is_explicit() -> None:
     """5 个主实验 modern baseline 的独立参考 Notebook 必须使用稳定执行顺序。"""
 
     assert MODERN_EXTERNAL_BASELINE_BUILD_ORDER == EXPECTED_BASELINE_ORDER
+
+
+@pytest.mark.quick
+def test_official_reference_bundle_status_uses_specific_complete_state() -> None:
+    """新 official reference bundle 整包完成状态必须使用专用语义。"""
+
+    assert build_official_reference_bundle_execution_status(
+        generated_count=46,
+        expected_count=46,
+        failed_count=0,
+    ) == OFFICIAL_REFERENCE_BUNDLE_COMPLETE_STATUS
+    assert build_official_reference_bundle_execution_status(
+        generated_count=45,
+        expected_count=46,
+        failed_count=0,
+    ) == OFFICIAL_REFERENCE_INCOMPLETE_STATUS
+    assert build_official_reference_bundle_execution_status(
+        generated_count=45,
+        expected_count=46,
+        failed_count=1,
+    ) == OFFICIAL_REFERENCE_FAILURE_STATUS
+    assert OFFICIAL_REFERENCE_BUNDLE_COMPLETE_STATUS in OFFICIAL_EXECUTION_SUCCESS_STATUSES
+    for legacy_status in LEGACY_OFFICIAL_EXECUTION_SUCCESS_STATUSES:
+        assert legacy_status in OFFICIAL_EXECUTION_SUCCESS_STATUSES
+
+
+@pytest.mark.quick
+def test_official_reference_runtime_sources_do_not_emit_legacy_success_status_for_new_bundles() -> None:
+    """新生成端不得再把整包成功写成 `executed`。
+
+    该测试是轻量治理测试。它不运行重型第三方模型, 只确认 5 个主实验 baseline
+    的生成端统一调用状态规范函数, 从而避免后续 Colab 重跑继续产生旧语义。
+    """
+
+    runtime_paths = [
+        Path("external_baseline/official_bundle_generator.py"),
+        Path("external_baseline/vidsig_official_runtime.py"),
+        Path("external_baseline/videoshield_official_runtime.py"),
+        Path("external_baseline/revmark_official_runtime.py"),
+        Path("external_baseline/wam_frame_official_runtime.py"),
+    ]
+    for runtime_path in runtime_paths:
+        source = runtime_path.read_text(encoding="utf-8")
+        assert "build_official_reference_bundle_execution_status" in source
+        assert 'else "executed"' not in source
 
 
 @pytest.mark.quick

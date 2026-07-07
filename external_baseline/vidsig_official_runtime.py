@@ -18,7 +18,10 @@ import shutil
 import sys
 from typing import Any, Callable, Mapping
 
-from external_baseline.official_eval_adapters.common import REPOSITORY_GENERATED_OFFICIAL_PROVENANCE
+from external_baseline.official_eval_adapters.common import (
+    REPOSITORY_GENERATED_OFFICIAL_PROVENANCE,
+    build_official_reference_bundle_execution_status,
+)
 from external_baseline.official_runtime_progress import (
     emit_official_reference_plan,
     official_record_label,
@@ -1097,7 +1100,7 @@ def run_vidsig_official_runtime(config: VidSigOfficialRuntimeConfig) -> dict[str
     generate_command = [sys.executable, "src/generate_ms.py"]
     command_results: list[dict[str, Any]] = []
     execution_failure_reason = ""
-    execution_status = "dry_run_planned" if config.dry_run else "executed"
+    execution_status = "dry_run_planned" if config.dry_run else "official_reference_pending"
     positive_control_result: dict[str, Any] = {"positive_control_status": "dry_run_not_checked" if config.dry_run else "pending"}
     runtime_attack_names = tuple(sorted({str(record.get("attack_name")) for record in records if record.get("attack_name")}))
     planned_command_count = 1 + 2 * len(records)
@@ -1185,6 +1188,12 @@ def run_vidsig_official_runtime(config: VidSigOfficialRuntimeConfig) -> dict[str
     else:
         bundle_result = {"input_runtime_detection_record_count": len(records), "generated_bundle_record_count": 0, "failed_bundle_record_count": 0, "failures": []}
     command_progress.finish(f"completed={min(completed_command_count, planned_command_count)} planned={planned_command_count}")
+    if not config.dry_run and not execution_failure_reason:
+        execution_status = build_official_reference_bundle_execution_status(
+            generated_count=int(bundle_result["generated_bundle_record_count"]),
+            expected_count=len(records),
+            failed_count=int(bundle_result["failed_bundle_record_count"]),
+        )
 
     manifest = {
         "manifest_kind": "modern_external_baseline_formal_reference_execution_manifest",

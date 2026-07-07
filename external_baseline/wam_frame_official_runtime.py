@@ -18,6 +18,7 @@ from typing import Any, Mapping
 import urllib.error
 import urllib.request
 
+from external_baseline.official_eval_adapters.common import build_official_reference_bundle_execution_status
 from external_baseline.official_runtime_progress import emit_official_reference_plan
 from external_baseline.runtime_trace_io import build_comparison_unit_id, comparable_detection_records
 from external_baseline.score_semantics import official_score_formal_comparison_summary
@@ -437,7 +438,11 @@ def run_wam_frame_official_runtime(config: WAMFrameOfficialRuntimeConfig) -> dic
         "bundle_root": str(bundle_root),
         "official_source_dir": str(source_dir),
         "resource_root": str(resource_root),
-        "execution_status": "official_reference_bundle_complete" if generated == len(records) and not failures and records else "official_reference_failures_present",
+        "execution_status": build_official_reference_bundle_execution_status(
+            generated_count=generated,
+            expected_count=len(records),
+            failed_count=len(failures),
+        ),
         "input_runtime_detection_record_count": len(records),
         "generated_bundle_record_count": generated,
         "failed_bundle_record_count": len(failures),

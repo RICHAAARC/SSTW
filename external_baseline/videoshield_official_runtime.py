@@ -21,7 +21,10 @@ import shutil
 import sys
 from typing import Any, Iterator, Mapping
 
-from external_baseline.official_eval_adapters.common import REPOSITORY_GENERATED_OFFICIAL_PROVENANCE
+from external_baseline.official_eval_adapters.common import (
+    REPOSITORY_GENERATED_OFFICIAL_PROVENANCE,
+    build_official_reference_bundle_execution_status,
+)
 from external_baseline.official_runtime_progress import emit_official_reference_plan, official_record_label
 from external_baseline.runtime_trace_io import build_comparison_unit_id, comparable_detection_records
 from external_baseline.score_semantics import official_score_formal_comparison_summary
@@ -697,7 +700,7 @@ def run_videoshield_official_runtime(config: VideoShieldOfficialRuntimeConfig) -
     generated = 0
     failures: list[dict[str, Any]] = []
     generation_rows: dict[tuple[str, str], dict[str, Any]] = {}
-    execution_status = "dry_run_planned" if config.dry_run else "executed"
+    execution_status = "dry_run_planned" if config.dry_run else "official_reference_pending"
     positive_control_rows: list[dict[str, Any]] = []
     emit_official_reference_plan(
         BASELINE_ID,
@@ -874,6 +877,13 @@ def run_videoshield_official_runtime(config: VideoShieldOfficialRuntimeConfig) -
                         f"generated={generated} failed={len(failures)} | {official_record_label(record)}",
                     )
                 record_progress.finish(f"generated={generated} failed={len(failures)}")
+
+    if not config.dry_run:
+        execution_status = build_official_reference_bundle_execution_status(
+            generated_count=generated,
+            expected_count=len(records),
+            failed_count=len(failures),
+        )
 
     manifest = {
         "manifest_kind": "videoshield_official_reference_execution_manifest",

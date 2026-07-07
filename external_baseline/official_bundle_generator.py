@@ -19,6 +19,7 @@ import re
 import sys
 from typing import Any, Mapping
 
+from external_baseline.official_eval_adapters.common import build_official_reference_bundle_execution_status
 from external_baseline.runtime_trace_io import comparable_detection_records
 from external_baseline.score_semantics import official_score_formal_comparison_summary
 from external_baseline.video_tensor_io import read_video_tchw_uint8, write_video_tchw
@@ -319,6 +320,11 @@ def generate_videoseal_official_bundle(
         "official_video_io_backend": "imageio_v3",
         "official_model_name": model_name,
         "device": device,
+        "execution_status": build_official_reference_bundle_execution_status(
+            generated_count=generated,
+            expected_count=len(records),
+            failed_count=len(failed),
+        ),
         "input_runtime_detection_record_count": len(records),
         "generated_bundle_record_count": generated,
         "failed_bundle_record_count": len(failed),

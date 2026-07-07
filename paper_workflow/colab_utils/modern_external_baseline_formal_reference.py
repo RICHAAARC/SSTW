@@ -20,6 +20,8 @@ import sys
 from typing import Any, Mapping
 
 from external_baseline.official_eval_adapters.common import (
+    OFFICIAL_REFERENCE_BUNDLE_COMPLETE_STATUS,
+    OFFICIAL_REFERENCE_FAILURE_STATUS,
     validate_clean_negative_payload,
     validate_score_payload,
 )
@@ -1145,9 +1147,9 @@ def run_modern_external_baseline_formal_reference_plan(
         elif generated_count != selected_record_count:
             reference_status = "bundle_record_coverage_incomplete"
         elif failed_count:
-            reference_status = "official_reference_failures_present"
+            reference_status = OFFICIAL_REFERENCE_FAILURE_STATUS
         else:
-            reference_status = "official_reference_bundle_complete"
+            reference_status = OFFICIAL_REFERENCE_BUNDLE_COMPLETE_STATUS
         notebook_timing_manifest = notebook_timer.finish(
             "completed_before_stage_package_publish",
             extra={

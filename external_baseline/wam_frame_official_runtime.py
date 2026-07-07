@@ -102,13 +102,46 @@ def _deterministic_bits(record: Mapping[str, Any], bit_count: int) -> list[int]:
     return bits[:bit_count]
 
 
-def _resolve_checkpoint(source_dir: Path, resource_root: Path) -> Path:
+def _path_candidates(raw_path: str, *, repo_root: Path, source_dir: Path) -> list[Path]:
+    """把官方资源路径解析为可检查候选路径。
+
+    Colab resource bootstrap 会把部分路径写成仓库相对路径。官方 WAM 代码又要求
+    在 source 目录作为 cwd 时读取相对配置文件。因此 runtime 层必须先把环境变量中的
+    路径解析为绝对路径, 再临时切换 cwd 调用官方 loader。
+    """
+
+    raw = Path(raw_path).expanduser()
+    if raw.is_absolute():
+        return [raw]
+    return [repo_root / raw, source_dir / raw, raw]
+
+
+def _resolve_existing_file(
+    raw_path: str,
+    *,
+    repo_root: Path,
+    source_dir: Path,
+    fallback: Path,
+    missing_label: str,
+) -> Path:
+    """解析必须存在的文件路径, 并在失败时报告所有候选路径。"""
+
+    candidates = _path_candidates(raw_path, repo_root=repo_root, source_dir=source_dir) if raw_path else [fallback]
+    if fallback not in candidates:
+        candidates.append(fallback)
+    for candidate in candidates:
+        if candidate.is_file():
+            return candidate.resolve()
+    raise FileNotFoundError(f"{missing_label}:{[str(candidate) for candidate in candidates]}")
+
+
+def _resolve_checkpoint(source_dir: Path, resource_root: Path, repo_root: Path) -> Path:
     """解析 WAM checkpoint, 必要时从官方公开 URL 下载 MIT 权重。"""
 
     env_path = os.environ.get("SSTW_WAM_FRAME_CHECKPOINT_PATH", "").strip()
     candidates = []
     if env_path:
-        candidates.append(Path(env_path))
+        candidates.extend(_path_candidates(env_path, repo_root=repo_root, source_dir=source_dir))
     candidates.extend([
         resource_root / "wam_frame" / "wam_mit.pth",
         resource_root / "wam_frame" / "checkpoint.pth",
@@ -117,7 +150,7 @@ def _resolve_checkpoint(source_dir: Path, resource_root: Path) -> Path:
     ])
     for candidate in candidates:
         if candidate.is_file():
-            return candidate
+            return candidate.resolve()
     target = resource_root / "wam_frame" / "wam_mit.pth"
     if os.environ.get("SSTW_WAM_FRAME_DISABLE_CHECKPOINT_DOWNLOAD", "").strip().lower() in {"1", "true", "yes"}:
         raise FileNotFoundError(f"wam_frame_checkpoint_missing:{target}")
@@ -126,7 +159,7 @@ def _resolve_checkpoint(source_dir: Path, resource_root: Path) -> Path:
         urllib.request.urlretrieve(WAM_MIT_CHECKPOINT_URL, target)
     except (OSError, urllib.error.URLError) as exc:
         raise FileNotFoundError(f"wam_frame_checkpoint_download_failed:{target}:{exc}") from exc
-    return target
+    return target.resolve()
 
 
 def _load_wam_model(config: WAMFrameOfficialRuntimeConfig) -> tuple[Any, Any, Any, Any, str, Path]:
@@ -134,17 +167,22 @@ def _load_wam_model(config: WAMFrameOfficialRuntimeConfig) -> tuple[Any, Any, An
 
     import torch
 
-    source_dir = Path(config.source_dir)
-    resource_root = Path(config.resource_root) if config.resource_root else source_dir / "checkpoints"
+    source_dir = Path(config.source_dir).resolve()
+    repo_root = Path(config.repo_root).resolve() if config.repo_root else Path.cwd().resolve()
+    resource_root = Path(config.resource_root).resolve() if config.resource_root else source_dir / "checkpoints"
     sys.path.insert(0, str(source_dir))
     from notebooks.inference_utils import load_model_from_checkpoint  # type: ignore
     from watermark_anything.data.metrics import msg_predict_inference  # type: ignore
     from watermark_anything.data.transforms import default_transform, unnormalize_img  # type: ignore
 
-    params_path = Path(os.environ.get("SSTW_WAM_FRAME_PARAMS_PATH", "").strip() or source_dir / "checkpoints" / "params.json")
-    if not params_path.exists():
-        raise FileNotFoundError(f"wam_frame_params_missing:{params_path}")
-    checkpoint_path = _resolve_checkpoint(source_dir, resource_root)
+    params_path = _resolve_existing_file(
+        os.environ.get("SSTW_WAM_FRAME_PARAMS_PATH", "").strip(),
+        repo_root=repo_root,
+        source_dir=source_dir,
+        fallback=source_dir / "checkpoints" / "params.json",
+        missing_label="wam_frame_params_missing",
+    )
+    checkpoint_path = _resolve_checkpoint(source_dir, resource_root, repo_root)
     device = config.device or ("cuda" if torch.cuda.is_available() else "cpu")
     cwd = Path.cwd()
     try:

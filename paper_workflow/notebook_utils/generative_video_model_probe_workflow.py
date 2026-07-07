@@ -34,7 +34,7 @@ EXTERNAL_BASELINE_OFFICIAL_RESOURCE_BOOTSTRAP_DECISION = "artifacts/external_bas
 EXTERNAL_BASELINE_OFFICIAL_BUNDLE_GENERATION_DECISION = "artifacts/external_baseline_official_bundle_generation_decision.json"
 EXTERNAL_BASELINE_OFFICIAL_RUNTIME_CLOSURE_REQUIREMENTS = "artifacts/external_baseline_official_runtime_closure_requirements.json"
 EXTERNAL_BASELINE_OFFICIAL_RESULT_BUNDLE_PREFLIGHT_DECISION = "artifacts/external_baseline_official_result_bundle_preflight_decision.json"
-PAPER_GATE_EXTERNAL_BASELINE_ENVIRONMENT_DECISION = "artifacts/paper_gate_external_baseline_environment_decision.json"
+FORMAL_COMPARISON_EXTERNAL_BASELINE_ENVIRONMENT_DECISION = "artifacts/formal_comparison_external_baseline_environment_decision.json"
 
 
 def _join_drive_path(root: PurePosixPath, relative_path: str) -> str:
@@ -875,16 +875,16 @@ def _dedupe_non_empty_strings(values: list[str] | tuple[str, ...]) -> list[str]:
     return result
 
 
-def build_paper_gate_external_baseline_environment(
+def build_formal_comparison_external_baseline_environment(
     layout: Mapping[str, str],
     *,
     profile: str,
     repo_root: str | Path | None = None,
 ) -> dict[str, str]:
-    """构造 paper gate 聚合阶段所需的 modern baseline 环境变量。
+    """构造 formal comparison scoring 阶段所需的 modern baseline 环境变量。
 
     该函数是项目特定写法。baseline 专用 Notebook 只负责生成各自的
-    official bundle; `paper_gate_and_package_colab` 需要再次调用统一
+    official bundle; `formal_comparison_scoring_colab` 需要再次调用统一
     `external_baseline_runner`, 因此必须在该 Notebook 中显式注入:
 
     1. 外层 `SSTW_<BASELINE>_EVAL_COMMAND`, 用于让现代 baseline adapter
@@ -936,14 +936,14 @@ def build_paper_gate_external_baseline_environment(
     return env
 
 
-def apply_paper_gate_external_baseline_environment(
+def apply_formal_comparison_external_baseline_environment(
     layout: Mapping[str, str],
     *,
     profile: str,
     repo_root: str | Path | None = None,
     run_external_baseline_source_clone: bool = False,
 ) -> dict[str, object]:
-    """应用 paper gate 聚合阶段的 modern baseline 环境变量并写出预检 artifact。
+    """应用 formal comparison scoring 阶段的 modern baseline 环境变量并写出预检 artifact。
 
     Notebook 入口调用该函数后, 后续 `external_baseline_comparison` 子进程会继承
     同一组环境变量, 从已恢复的 official bundle 生成正式 `measured_formal`
@@ -951,7 +951,7 @@ def apply_paper_gate_external_baseline_environment(
     效果主张。
     """
 
-    env = build_paper_gate_external_baseline_environment(
+    env = build_formal_comparison_external_baseline_environment(
         layout,
         profile=profile,
         repo_root=repo_root,
@@ -989,12 +989,12 @@ def apply_paper_gate_external_baseline_environment(
         and baseline_preflight.get("external_baseline_colab_preflight_decision") == "PASS"
     ) else "FAIL"
     payload: dict[str, object] = {
-        "artifact_name": "paper_gate_external_baseline_environment_decision.json",
-        "manifest_kind": "paper_gate_external_baseline_environment_decision",
+        "artifact_name": "formal_comparison_external_baseline_environment_decision.json",
+        "manifest_kind": "formal_comparison_external_baseline_environment_decision",
         "profile": profile,
         "run_root": layout["drive_run_root"],
-        "paper_gate_external_baseline_environment_decision": decision,
-        "paper_gate_external_baseline_environment_status": (
+        "formal_comparison_external_baseline_environment_decision": decision,
+        "formal_comparison_external_baseline_environment_status": (
             "repository_official_bundle_environment_ready"
             if decision == "PASS"
             else "repository_official_bundle_environment_blocked"
@@ -1016,9 +1016,9 @@ def apply_paper_gate_external_baseline_environment(
         "external_baseline_colab_preflight_decision": baseline_preflight.get("external_baseline_colab_preflight_decision"),
         "external_baseline_official_bridge_preflight_decision": bridge_decision.get("external_baseline_official_bridge_preflight_decision"),
         "required_modern_external_baseline_adapter_names": summary.get("required_modern_external_baseline_adapter_names", []),
-        "claim_support_status": "paper_gate_environment_preflight_only_not_claim_evidence",
+        "claim_support_status": "formal_comparison_environment_preflight_only_not_claim_evidence",
     }
-    _write_json(Path(layout["drive_run_root"]) / PAPER_GATE_EXTERNAL_BASELINE_ENVIRONMENT_DECISION, payload)
+    _write_json(Path(layout["drive_run_root"]) / FORMAL_COMPARISON_EXTERNAL_BASELINE_ENVIRONMENT_DECISION, payload)
     return payload
 
 

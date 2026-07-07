@@ -367,6 +367,7 @@ Notebook 只能通过 `paper_workflow/notebook_utils/generative_video_model_prob
 motion_threshold_calibration_colab.ipynb
 -> generative_video_runtime_colab.ipynb
 -> 5 个主实验 modern external baseline formal reference Notebook
+-> formal_comparison_scoring_colab.ipynb
 -> paper_gate_and_package_colab.ipynb
 ```
 
@@ -379,14 +380,15 @@ motion_threshold_calibration_colab.ipynb
 
 1. `motion_threshold_calibration_colab.ipynb` 只负责独立 calibration split 和阈值冻结。
 2. `generative_video_runtime_colab.ipynb` 负责 Wan2.1 生成、formal metrics、阈值复用、
-   runtime attack 和 detection, 并在真实 GPU 生成前执行现代 baseline command 预检。
-3. 5 个主实验 modern external baseline formal reference Notebook 分别负责对应 baseline 的 source intake、clone / build / run / adapt、official bundle 生成, 并默认调用统一 runner 将已完成 bundle 转写为 `measured_formal` records。
-4. `paper_gate_and_package_colab.ipynb` 负责恢复 5 个主实验 baseline official reference 阶段包, 重新执行全量统一转写和 self-containment 判定, 再执行内部消融、adaptive attack proxy、replay/sketch
+   runtime attack 和 detection, 不执行现代 baseline command 预检或 baseline scoring。
+3. 5 个主实验 modern external baseline formal reference Notebook 分别负责对应 baseline 的 source intake、clone / build / run / adapt 和 official bundle 生成, 不默认调用全量 runner 转写 `measured_formal` records。
+4. `formal_comparison_scoring_colab.ipynb` 负责恢复 5 个主实验 baseline official reference 阶段包, 重新执行全量统一转写、self-containment 判定、公平校准和差值区间统计。
+5. `paper_gate_and_package_colab.ipynb` 负责恢复 formal comparison scoring 阶段包, 再执行内部消融、adaptive attack proxy、replay/sketch
    或 Claim-3 downgrade、CI、fixed-FPR gate、artifact rebuild 和 Drive package。
 
 旧的通用 external baseline scoring Notebook 已删除。正式主流程应以 5 个主实验
 baseline 专用 Notebook 产生的 official bundle 为输入, 由
-`paper_gate_and_package_colab.ipynb` 统一重建最终 `measured_formal` records,
+`formal_comparison_scoring_colab.ipynb` 统一重建最终 `measured_formal` records,
 避免单 baseline 临时 records 互相覆盖。
 
 旧综合 Notebook 已移除。正式推进只使用拆分 Notebook, 因为拆分后可以在同一 `workflow_profile` 下分阶段复跑、检查和打包,
@@ -2406,7 +2408,8 @@ external_baseline_source_intake
 -> external_baseline_official_bundle_generation
 -> external_baseline_official_result_bundle_preflight
 -> external_baseline_comparison
--> paper_gate_and_package_colab 重新聚合 5 个主实验 official reference 阶段包
+-> formal_comparison_scoring_colab 重新聚合 5 个主实验 official reference 阶段包
+-> paper_gate_and_package_colab 执行最终门禁
 ```
 
 其中:
@@ -2427,8 +2430,8 @@ external_baseline_source_intake
    时, 才能发布完整时间戳 zip。若结果为 `FAIL` 或决策文件缺失, 只能发布
    manifest-only 阻断记录, 且不得发布可被后续门禁恢复的 zip。
 6. 单 baseline Notebook 中的 comparison records 只用于即时自检。最终论文 gate 必须在
-   `paper_gate_and_package_colab.ipynb` 恢复 5 个主实验 official reference 阶段包后重新运行
-   `external_baseline_comparison`, 生成全量 `measured_formal` records 和 self-containment 判定。
+   `formal_comparison_scoring_colab.ipynb` 恢复 5 个主实验 official reference 阶段包后重新运行
+   `external_baseline_comparison`, 生成全量 `measured_formal` records、self-containment 判定、公平校准和差值区间统计。
 
 该规则的目标是让 Colab 冷启动具备“能自动补齐的就自动补齐”的工程能力, 同时保持论文
 baseline 对比的 fail-closed 边界。严格门禁通过的前提仍然是 5 个主实验现代 baseline 最终都由本项目产出

@@ -1500,3 +1500,5 @@ Notebook 与 repository module 的跨边界数据
 | notebook_runtime_baseline_id | protocol | none | true | false | false | runtime session 初始化时绑定的 external baseline 身份。 |
 | notebook_runtime_repo_root | artifact | none | true | false | false | runtime session 初始化时记录的仓库根目录。 |
 | notebook_runtime_report | artifact | none | true | false | false | Notebook 运行时间报告的内联摘要对象。 |
+| formal_comparison_external_baseline_environment_decision | governance | none | true | false | false | formal comparison scoring 阶段 external baseline 环境预检判定。 |
+| formal_comparison_external_baseline_environment_status | governance | none | true | false | false | formal comparison scoring 阶段 external baseline 环境预检状态说明。 |

@@ -15,7 +15,6 @@ from paper_workflow.notebook_utils.generative_video_model_probe_workflow import 
     build_workflow_stage_plan,
     build_mechanism_postprocess_command,
     build_modern_baseline_command_env,
-    build_paper_gate_external_baseline_environment,
     build_external_baseline_official_bundle_generation_command,
     build_external_baseline_official_resource_bootstrap_command,
     build_external_baseline_official_result_bundle_preflight_command,
@@ -315,6 +314,7 @@ def test_split_colab_notebooks_are_profile_driven() -> None:
     expected_roles = {
         "motion_threshold_calibration_colab.ipynb": "motion_threshold_calibration",
         "generative_video_runtime_colab.ipynb": "generative_video_runtime",
+        "formal_comparison_scoring_colab.ipynb": "formal_comparison_scoring",
         "paper_gate_and_package_colab.ipynb": "paper_gate_and_package",
     }
     for notebook_name, role in expected_roles.items():
@@ -352,12 +352,14 @@ def test_split_colab_notebooks_are_profile_driven() -> None:
         assert "full_paper_results" not in source
 
     runtime_source = Path("paper_workflow/colab_notebooks/generative_video_runtime_colab.ipynb").read_text(encoding="utf-8")
+    formal_source = Path("paper_workflow/colab_notebooks/formal_comparison_scoring_colab.ipynb").read_text(encoding="utf-8")
     gate_source = Path("paper_workflow/colab_notebooks/paper_gate_and_package_colab.ipynb").read_text(encoding="utf-8")
     helper_text = Path("paper_workflow/notebook_utils/generative_video_model_probe_workflow.py").read_text(encoding="utf-8")
     assert "external_baseline_colab_preflight" not in runtime_source
     assert "external_baseline_colab_preflight" in helper_text
     assert "build_external_baseline_comparison_command" not in runtime_source
-    assert "apply_paper_gate_external_baseline_environment" in gate_source
+    assert "apply_formal_comparison_external_baseline_environment" in formal_source
+    assert "apply_paper_gate_external_baseline_environment" not in gate_source
     assert "build_motion_consistency_exclusion_report_command" not in gate_source
     assert "build_external_baseline_official_result_bundle_preflight_command" not in gate_source
     assert "build_external_baseline_comparison_command" not in gate_source
@@ -405,7 +407,9 @@ def test_colab_notebooks_are_separated_from_python_helpers() -> None:
 def test_notebook_workflow_profile_config_supports_profile_switching() -> None:
     """统一配置层必须能区分 validation_scale、pilot_paper 和未开放的 full_paper。"""
     assert default_workflow_profile_for_notebook_role("generative_video_runtime") == "validation_scale"
+    assert default_workflow_profile_for_notebook_role("formal_comparison_scoring") == "validation_scale"
     external_reference_role = resolve_notebook_workflow_profile("validation_scale", "external_baseline_formal_scoring")
+    formal_scoring = resolve_notebook_workflow_profile("validation_scale", "formal_comparison_scoring")
     validation = resolve_notebook_workflow_profile("validation_scale", "paper_gate_and_package")
     pilot = resolve_notebook_workflow_profile("pilot_paper", "paper_gate_and_package")
     full = resolve_notebook_workflow_profile("full_paper", config_path="configs/paper_workflow/generative_video_notebook_workflows.json", allow_disabled=True)
@@ -421,10 +425,13 @@ def test_notebook_workflow_profile_config_supports_profile_switching() -> None:
     assert validation["protocol_target_fpr"] == validation_protocol["target_fpr"]
     assert validation["target_fpr_source_config_path"] == validation["protocol_config_path"]
     assert "motion_threshold_reuse_check" in build_workflow_stage_plan("validation_scale", "paper_gate_and_package")
-    assert "external_baseline_comparison" in build_workflow_stage_plan("validation_scale", "paper_gate_and_package")
+    assert "external_baseline_comparison" not in build_workflow_stage_plan("validation_scale", "paper_gate_and_package")
+    assert "external_baseline_comparison" in build_workflow_stage_plan("validation_scale", "formal_comparison_scoring")
+    assert "fair_detection_calibration" in build_workflow_stage_plan("validation_scale", "formal_comparison_scoring")
     assert "validation_scale_gate" in build_workflow_stage_plan("validation_scale", "paper_gate_and_package")
     assert "pilot_paper_gate" not in build_workflow_stage_plan("validation_scale", "paper_gate_and_package")
     assert validation["notebook_path"] == "paper_workflow/colab_notebooks/paper_gate_and_package_colab.ipynb"
+    assert formal_scoring["notebook_path"] == "paper_workflow/colab_notebooks/formal_comparison_scoring_colab.ipynb"
     assert external_reference_role["notebook_path"] == ""
     assert external_reference_role["entrypoint_status"] == "no_standalone_notebook_per_baseline_formal_reference_only"
     with pytest.raises(KeyError):
@@ -443,7 +450,8 @@ def test_notebook_workflow_profile_config_supports_profile_switching() -> None:
     assert pilot["target_fpr"] == pilot_protocol["target_fpr"]
     assert pilot["protocol_target_fpr"] == pilot_protocol["target_fpr"]
     assert "motion_threshold_reuse_check" in build_workflow_stage_plan("pilot_paper", "paper_gate_and_package")
-    assert "external_baseline_comparison" in build_workflow_stage_plan("pilot_paper", "paper_gate_and_package")
+    assert "external_baseline_comparison" not in build_workflow_stage_plan("pilot_paper", "paper_gate_and_package")
+    assert "external_baseline_comparison" in build_workflow_stage_plan("pilot_paper", "formal_comparison_scoring")
     assert "pilot_paper_gate" in build_workflow_stage_plan("pilot_paper", "paper_gate_and_package")
     assert "validation_scale_gate" not in build_workflow_stage_plan("pilot_paper", "paper_gate_and_package")
 
@@ -480,6 +488,26 @@ def test_profile_specific_drive_layout_prevents_result_mixing(tmp_path: Path) ->
     assert pilot_layout["motion_threshold_artifact_run_root"].endswith("/runs/generative_video_model_probe/motion_calibration")
     assert pilot_layout["runtime_profile"] == "pilot_paper"
     assert validation_layout["drive_run_root"] != pilot_layout["drive_run_root"]
+
+
+@pytest.mark.quick
+def test_split_stage_package_dependencies_match_notebook_responsibility() -> None:
+    """阶段包依赖必须体现拆分职责, paper gate 不应直接恢复 5 个 baseline 大包。"""
+
+    validation_layout = {
+        "workflow_profile": "validation_scale",
+    }
+    formal_required = _default_required_stage_packages(validation_layout, "formal_comparison_scoring")
+    gate_required = _default_required_stage_packages(validation_layout, "paper_gate_and_package")
+
+    assert formal_required[0] == "generative_video_runtime_colab"
+    assert "external_baseline_formal_reference_videoseal" in formal_required
+    assert "external_baseline_formal_reference_wam_frame" in formal_required
+    assert gate_required == [
+        "generative_video_runtime_colab",
+        "motion_threshold_calibration_colab",
+        "formal_comparison_scoring_colab",
+    ]
 
 
 @pytest.mark.quick
@@ -627,6 +655,11 @@ def test_profile_specific_commands_pass_protocol_config_path(tmp_path: Path) -> 
         workflow_profile="validation_scale",
         notebook_role="paper_gate_and_package",
     )
+    formal_layout = build_drive_layout(
+        str(tmp_path / "SSTW"),
+        workflow_profile="validation_scale",
+        notebook_role="formal_comparison_scoring",
+    )
     pilot_layout = build_drive_layout(
         str(tmp_path / "SSTW"),
         workflow_profile="pilot_paper",
@@ -638,9 +671,9 @@ def test_profile_specific_commands_pass_protocol_config_path(tmp_path: Path) -> 
         build_motion_consistency_exclusion_report_command(validation_layout),
         build_statistical_confidence_interval_command(validation_layout),
         build_low_fpr_formal_statistics_command(validation_layout),
-        build_sstw_measured_formal_result_command(validation_layout),
-        build_formal_method_baseline_comparison_command(validation_layout),
-        build_formal_baseline_difference_interval_command(validation_layout),
+        build_sstw_measured_formal_result_command(formal_layout),
+        build_formal_method_baseline_comparison_command(formal_layout),
+        build_formal_baseline_difference_interval_command(formal_layout),
         build_validation_scale_formal_internal_ablation_command(validation_layout),
         build_validation_scale_gate_command(validation_layout),
     ]
@@ -657,15 +690,20 @@ def test_profile_specific_commands_pass_protocol_config_path(tmp_path: Path) -> 
 def test_paper_gate_commands_use_module_mode_for_check_result_scripts(tmp_path: Path) -> None:
     """paper gate 中的 check_results 脚本必须用 `python -m`, 避免 Colab 直接脚本路径丢失 repo root。"""
 
-    layout = build_drive_layout(
+    gate_layout = build_drive_layout(
         str(tmp_path / "SSTW"),
         workflow_profile="validation_scale",
         notebook_role="paper_gate_and_package",
     )
+    formal_layout = build_drive_layout(
+        str(tmp_path / "SSTW"),
+        workflow_profile="validation_scale",
+        notebook_role="formal_comparison_scoring",
+    )
     commands = [
-        build_external_baseline_self_containment_decision_command(layout),
-        build_data_split_and_leakage_guard_command(layout),
-        build_validation_scale_to_pilot_paper_transition_decision_command(layout),
+        build_external_baseline_self_containment_decision_command(formal_layout),
+        build_data_split_and_leakage_guard_command(gate_layout),
+        build_validation_scale_to_pilot_paper_transition_decision_command(gate_layout),
     ]
 
     for command in commands:

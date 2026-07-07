@@ -52,6 +52,47 @@ MODERN_EXTERNAL_BASELINE_IDS = (
     "wam_frame",
 )
 
+FORMAL_COMPARISON_SCORING_PACKAGE_RELPATHS = (
+    "artifacts/external_baseline_colab_preflight_decision.json",
+    "artifacts/external_baseline_command_template_summary.json",
+    "artifacts/external_baseline_official_bridge_preflight_decision.json",
+    "artifacts/external_baseline_official_result_bundle_preflight_decision.json",
+    "artifacts/external_baseline_execution_manifest.json",
+    "artifacts/external_baseline_status_decision.json",
+    "artifacts/external_baseline_comparison_decision.json",
+    "artifacts/external_baseline_self_containment_decision.json",
+    "artifacts/fair_detection_calibration_decision.json",
+    "artifacts/formal_method_baseline_comparison_decision.json",
+    "artifacts/formal_baseline_difference_interval_decision.json",
+    "artifacts/notebook_runtime_report.json",
+    "artifacts/notebook_run_timing_manifest.json",
+    "artifacts/formal_comparison_external_baseline_environment_decision.json",
+    "artifacts/stage_package_restore_decision.json",
+    "artifacts/sstw_measured_formal_decision.json",
+    "records/external_baseline_records.jsonl",
+    "records/external_baseline_score_records.jsonl",
+    "records/external_baseline_self_containment_records.jsonl",
+    "records/fair_detection_calibration_records.jsonl",
+    "records/formal_method_baseline_comparison_records.jsonl",
+    "records/formal_baseline_difference_interval_records.jsonl",
+    "records/notebook_stage_timing_records.jsonl",
+    "records/sstw_measured_formal_records.jsonl",
+    "reports/external_baseline_status_report.md",
+    "reports/external_baseline_comparison_report.md",
+    "reports/external_baseline_self_containment_report.md",
+    "reports/fair_detection_calibration_report.md",
+    "reports/formal_method_baseline_comparison_report.md",
+    "reports/formal_baseline_difference_interval_report.md",
+    "reports/sstw_measured_formal_report.md",
+    "tables/external_baseline_status_table.csv",
+    "tables/external_baseline_comparison_table.csv",
+    "tables/external_baseline_self_containment_table.csv",
+    "tables/fair_detection_calibration_table.csv",
+    "tables/formal_method_baseline_comparison_table.csv",
+    "tables/formal_baseline_difference_interval_table.csv",
+    "tables/sstw_measured_formal_table.csv",
+)
+
 OBSOLETE_STAGE_PAYLOAD_NAME_FRAGMENTS = (
     "small_scale_claim_pilot",
 )
@@ -61,6 +102,7 @@ OBSOLETE_EXTERNAL_BASELINE_EVIDENCE_IDS = {
 }
 
 MAIN_STAGE_PACKAGE_IDS = {
+    "formal_comparison_scoring_colab",
     "generative_video_runtime_colab",
     "paper_gate_and_package_colab",
 }
@@ -97,6 +139,8 @@ def stage_package_id_for_notebook(
         return f"external_baseline_formal_reference_{sanitize_filename_token(baseline_id)}"
     if role == "generative_video_runtime":
         return "generative_video_runtime_colab"
+    if role == "formal_comparison_scoring":
+        return "formal_comparison_scoring_colab"
     if role == "motion_threshold_calibration":
         return "motion_threshold_calibration_colab"
     if role == "paper_gate_and_package":
@@ -523,14 +567,18 @@ def _default_required_stage_packages(layout: Mapping[str, str], notebook_role: s
     role = sanitize_filename_token(notebook_role)
     if role == "external_baseline_formal_scoring":
         return ["generative_video_runtime_colab"]
+    if role == "formal_comparison_scoring":
+        required = ["generative_video_runtime_colab"]
+        required.extend(
+            stage_package_id_for_notebook("external_baseline_formal_scoring", baseline_id=baseline)
+            for baseline in MODERN_EXTERNAL_BASELINE_IDS
+        )
+        return required
     if role == "paper_gate_and_package":
         required = ["generative_video_runtime_colab"]
         if profile != "motion_calibration":
             required.append("motion_threshold_calibration_colab")
-            required.extend(
-                stage_package_id_for_notebook("external_baseline_formal_scoring", baseline_id=baseline)
-                for baseline in MODERN_EXTERNAL_BASELINE_IDS
-            )
+            required.append("formal_comparison_scoring_colab")
         return required
     if role == "generative_video_runtime" and profile != "motion_calibration":
         return ["motion_threshold_calibration_colab"]
@@ -702,6 +750,17 @@ def _iter_package_sources(
             sources.append((bundle_root, _archive_root_for_layout_path(layout, "external_baseline_official_result_bundle_root")))
         return sources
 
+    if role == "formal_comparison_scoring":
+        run_root = Path(str(layout.get("drive_run_root") or ""))
+        run_archive_root = _archive_root_for_layout_path(layout, "drive_run_root")
+        _append_existing_run_relpaths(
+            sources,
+            run_root,
+            run_archive_root,
+            FORMAL_COMPARISON_SCORING_PACKAGE_RELPATHS,
+        )
+        return sources
+
     keys = ["drive_run_root"]
     if role in {"generative_video_runtime", "motion_threshold_calibration"}:
         keys.append("drive_dataset_root")
@@ -714,6 +773,28 @@ def _iter_package_sources(
             continue
         sources.append((path, _archive_root_for_layout_path(layout, key)))
     return sources
+
+
+def _append_existing_run_relpaths(
+    sources: list[tuple[Path, str]],
+    run_root: Path,
+    archive_root: str,
+    relpaths: tuple[str, ...],
+) -> None:
+    """把指定 run_root 相对文件加入阶段包源列表。
+
+    该函数用于 `formal_comparison_scoring` 阶段。该阶段会恢复 runtime 和 5 个
+    baseline 的大包, 但它自己的阶段 zip 只应保存公平比较产物, 不能把上游视频、
+    帧图或 official bundle 再次重复打包。
+    """
+
+    if not run_root.exists():
+        return
+    for relpath in relpaths:
+        source = run_root / relpath
+        if not source.exists():
+            continue
+        sources.append((source, f"{archive_root}/{PurePosixPath(relpath).parent.as_posix()}"))
 
 
 def _archive_root_for_layout_path(layout: Mapping[str, str], key: str) -> str:

@@ -73,6 +73,69 @@ def test_stage_package_publish_keeps_timestamp_zip_by_default(tmp_path: Path, mo
 
 
 @pytest.mark.quick
+def test_formal_comparison_stage_package_contains_only_scoring_artifacts(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """formal comparison 阶段包只保存公平比较产物, 不重复打包上游视频或 official bundle。"""
+
+    monkeypatch.setenv("SSTW_COLAB_STAGE_IO_MODE", "local_zip")
+    drive_root = tmp_path / "drive" / "SSTW"
+    run_root = tmp_path / "workspace" / "runs" / "generative_video_model_probe" / "validation_scale"
+    write_targets = {
+        "records/sstw_measured_formal_records.jsonl": "{}\n",
+        "artifacts/sstw_measured_formal_decision.json": json.dumps({"sstw_measured_formal_decision": "PASS"}),
+        "records/fair_detection_calibration_records.jsonl": "{}\n",
+        "tables/fair_detection_calibration_table.csv": "method_id,status\nsstw,ready\n",
+        "reports/fair_detection_calibration_report.md": "# fair calibration\n",
+        "artifacts/fair_detection_calibration_decision.json": json.dumps(
+            {"fair_detection_calibration_decision": "PASS"}
+        ),
+        "records/formal_method_baseline_comparison_records.jsonl": "{}\n",
+        "tables/formal_method_baseline_comparison_table.csv": "method_id,status\nsstw,ready\n",
+        "reports/formal_method_baseline_comparison_report.md": "# formal comparison\n",
+        "artifacts/formal_method_baseline_comparison_decision.json": json.dumps(
+            {"formal_method_baseline_comparison_decision": "PASS"}
+        ),
+        "records/formal_baseline_difference_interval_records.jsonl": "{}\n",
+        "tables/formal_baseline_difference_interval_table.csv": "baseline_id,status\nvideoseal,ready\n",
+        "reports/formal_baseline_difference_interval_report.md": "# difference interval\n",
+        "artifacts/formal_baseline_difference_interval_decision.json": json.dumps(
+            {"formal_baseline_difference_interval_decision": "PASS"}
+        ),
+    }
+    for relpath, content in write_targets.items():
+        path = run_root / relpath
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(content, encoding="utf-8")
+    (run_root / "videos").mkdir(parents=True)
+    (run_root / "videos" / "source.mp4").write_bytes(b"runtime-video")
+    (run_root / "artifacts" / "external_baseline_evidence" / "vidsig" / "unit_000").mkdir(parents=True)
+    (run_root / "artifacts" / "external_baseline_evidence" / "vidsig" / "unit_000" / "stdout.txt").write_text(
+        "large evidence",
+        encoding="utf-8",
+    )
+    layout = {
+        "drive_project_root": str(drive_root),
+        "workflow_profile": "validation_scale",
+        "drive_run_root": str(run_root),
+        "local_stage_package_cache_root": str(tmp_path / "local_cache"),
+        "local_stage_workspace_root": str(tmp_path / "workspace"),
+    }
+
+    result = publish_colab_stage_package(layout, notebook_role="formal_comparison_scoring", include_videos=True)
+
+    assert result["stage_package_publish_status"] == "published"
+    assert "validation_scale/formal_comparison_scoring_colab" in result["drive_stage_package_zip"].replace("\\", "/")
+    with zipfile.ZipFile(result["drive_stage_package_zip"]) as archive:
+        names = archive.namelist()
+    for relpath in write_targets:
+        assert any(name.endswith(relpath) for name in names)
+    assert not any(name.endswith("source.mp4") for name in names)
+    assert not any("external_baseline_evidence/vidsig" in name for name in names)
+
+
+@pytest.mark.quick
 def test_paper_gate_stage_package_includes_fair_comparison_governed_artifacts(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

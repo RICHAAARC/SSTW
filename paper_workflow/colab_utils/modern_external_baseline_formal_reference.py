@@ -2,9 +2,9 @@
 
 该模块的职责是为每个现代视频水印 baseline 提供独立 Notebook 可调用的
 clone / build / run / adapt / bundle 闭环。Notebook 只调用这里的函数, 不直接
-手写正式 records。official bundle 生成后, 仍由
-`experiments.generative_video_model_probe.external_baseline_runner` 统一转写为
-`measured_formal` records。
+手写正式 records。单 baseline Notebook 默认只生成当前 baseline 的 official bundle;
+正式 `measured_formal` records 由 `formal_comparison_scoring_colab` 或显式开启的
+后续统一 runner 生成。
 """
 
 from __future__ import annotations
@@ -67,8 +67,8 @@ class ModernExternalBaselineFormalReferenceConfig:
 
     通用工程写法是将 Colab 中可编辑的环境变量收敛到 dataclass, 由 helper
     统一解析路径、命令和产物位置。项目特定要求是 Notebook 只触发仓库 helper:
-    先生成 official bundle 与 manifest, 再调用统一 runner 转写 `measured_formal`
-    records, 不能在 Notebook cell 中手工拼接正式结果。
+    先生成 official bundle 与 manifest, 默认不在单 baseline Notebook 中执行全量
+    `measured_formal` 转写, 不能在 Notebook cell 中手工拼接正式结果。
     """
 
     baseline_id: str
@@ -179,9 +179,9 @@ def build_default_config_from_env(baseline_id: str, repo_root: str | Path = ".")
         ).lower() == "true",
         max_records=max_records,
         run_official_runtime_closure_preflight=os.environ.get("SSTW_RUN_OFFICIAL_RUNTIME_CLOSURE_PREFLIGHT", "true").lower() == "true",
-        run_official_result_bundle_preflight=os.environ.get("SSTW_RUN_OFFICIAL_RESULT_BUNDLE_PREFLIGHT_AFTER_REFERENCE", "true").lower() == "true",
-        run_external_baseline_comparison_after_reference=os.environ.get("SSTW_RUN_EXTERNAL_BASELINE_COMPARISON_AFTER_REFERENCE", "true").lower() == "true",
-        run_self_containment_after_reference=os.environ.get("SSTW_RUN_SELF_CONTAINMENT_AFTER_REFERENCE", "true").lower() == "true",
+        run_official_result_bundle_preflight=os.environ.get("SSTW_RUN_OFFICIAL_RESULT_BUNDLE_PREFLIGHT_AFTER_REFERENCE", "false").lower() == "true",
+        run_external_baseline_comparison_after_reference=os.environ.get("SSTW_RUN_EXTERNAL_BASELINE_COMPARISON_AFTER_REFERENCE", "false").lower() == "true",
+        run_self_containment_after_reference=os.environ.get("SSTW_RUN_SELF_CONTAINMENT_AFTER_REFERENCE", "false").lower() == "true",
     )
 
 
@@ -906,7 +906,12 @@ def _run_optional_followup_commands(
     layout: Mapping[str, str],
     config: ModernExternalBaselineFormalReferenceConfig,
 ) -> list[dict[str, Any]]:
-    """按需运行 official bundle preflight、comparison 和 self-containment。"""
+    """按需运行 official bundle preflight、comparison 和 self-containment。
+
+    单 baseline Notebook 的通用职责是生成当前 baseline 的 official bundle。
+    统一 measured_formal 转写和 self-containment 属于 formal comparison scoring 职责,
+    因此默认不在这里执行; 只有显式设置环境变量时才作为调试或兼容路径运行。
+    """
 
     commands: list[tuple[str, list[str]]] = []
     if config.run_official_result_bundle_preflight:
@@ -924,6 +929,16 @@ def _run_optional_followup_commands(
             "external_baseline_self_containment_decision",
             probe_workflow.build_external_baseline_self_containment_decision_command(dict(layout)),
         ))
+
+    if not commands:
+        return [
+            {
+                "stage_id": "external_baseline_optional_followup_commands",
+                "stage_status": "SKIPPED",
+                "skip_reason": "single_baseline_notebook_default_bundle_only_formal_comparison_scoring_performs_unified_scoring",
+                "claim_support_status": "optional_followup_skipped_not_claim_evidence",
+            }
+        ]
 
     rows: list[dict[str, Any]] = []
     env = _build_unified_formal_scoring_environment(layout, config)
@@ -947,9 +962,9 @@ def run_modern_external_baseline_formal_reference_plan(
     """执行单个 modern external baseline 的官方参考 bundle 生成计划。
 
     该函数按同一 prompt / seed / attack comparison unit 生成官方结果缓存和执行
-    manifest。默认会继续调用 `external_baseline_runner`, 由统一 command adapter
-    读取这些 bundle 并转写为 `measured_formal` records。若其它 baseline 的 bundle
-    尚未完成, 统一转写会为它们保留 governed unsupported rows。
+    manifest。默认只闭合当前 baseline 的 official bundle 阶段包。统一
+    `measured_formal` 转写和 self-containment 判定由 `formal_comparison_scoring_colab`
+    聚合执行; 若显式开启 follow-up 环境变量, 本函数也可作为调试兼容路径运行。
     """
 
     repo_root = Path(config.repo_root).resolve()

@@ -23,8 +23,17 @@ python scripts/run_generative_video_server_workflow.py \
 ```bash
 python scripts/run_generative_video_server_workflow.py \
   --project-root /data/SSTW \
-  --pipeline paper_gate_and_package \
+  --pipeline formal_comparison_scoring \
   --dry-run
+```
+
+只重跑 formal comparison scoring:
+
+```bash
+python scripts/run_generative_video_server_workflow.py \
+  --project-root /data/SSTW \
+  --workflow-profile validation_scale \
+  --pipeline formal_comparison_scoring
 ```
 
 只重跑 paper gate/package:

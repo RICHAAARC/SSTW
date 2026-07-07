@@ -13,10 +13,37 @@ from scripts.run_generative_video_server_workflow import PIPELINE_ROLE_ORDER
 
 
 @pytest.mark.quick
-def test_server_workflow_cli_dry_run_exposes_paper_gate_stage_plan(tmp_path: Path) -> None:
-    """服务器 CLI dry-run 必须复用统一 stage plan, 不执行 GPU-heavy 任务。"""
+def test_server_workflow_cli_dry_run_exposes_split_stage_plans(tmp_path: Path) -> None:
+    """服务器 CLI dry-run 必须区分 formal comparison scoring 与最终 paper gate。"""
 
-    command = [
+    scoring_command = [
+        sys.executable,
+        "scripts/run_generative_video_server_workflow.py",
+        "--project-root",
+        str(tmp_path / "sstw_server_run"),
+        "--pipeline",
+        "formal_comparison_scoring",
+        "--dry-run",
+        "--exclude-videos",
+    ]
+    completed = subprocess.run(scoring_command, check=True, text=True, capture_output=True)
+    scoring_payload = json.loads(completed.stdout)
+    scoring_stage_names = [
+        row["stage_name"]
+        for row in scoring_payload["pipeline_results"][0]["stage_plan"]
+    ]
+
+    assert scoring_payload["server_workflow_decision"] == "DRY_RUN"
+    assert scoring_payload["pipeline"] == "formal_comparison_scoring"
+    assert scoring_payload["include_videos"] is False
+    assert "sstw_measured_formal_result" in scoring_stage_names
+    assert "external_baseline_comparison" in scoring_stage_names
+    assert "fair_detection_calibration" in scoring_stage_names
+    assert "formal_method_baseline_comparison" in scoring_stage_names
+    assert "formal_baseline_difference_interval" in scoring_stage_names
+    assert "validation_scale_formal_internal_ablation" not in scoring_stage_names
+
+    gate_command = [
         sys.executable,
         "scripts/run_generative_video_server_workflow.py",
         "--project-root",
@@ -26,23 +53,20 @@ def test_server_workflow_cli_dry_run_exposes_paper_gate_stage_plan(tmp_path: Pat
         "--dry-run",
         "--exclude-videos",
     ]
-    completed = subprocess.run(command, check=True, text=True, capture_output=True)
-    payload = json.loads(completed.stdout)
-    stage_names = [
+    completed = subprocess.run(gate_command, check=True, text=True, capture_output=True)
+    gate_payload = json.loads(completed.stdout)
+    gate_stage_names = [
         row["stage_name"]
-        for row in payload["pipeline_results"][0]["stage_plan"]
+        for row in gate_payload["pipeline_results"][0]["stage_plan"]
     ]
 
-    assert payload["server_workflow_decision"] == "DRY_RUN"
-    assert payload["pipeline"] == "paper_gate_and_package"
-    assert payload["include_videos"] is False
-    assert "motion_consistency_exclusion_report" in stage_names
-    assert "sstw_measured_formal_result" in stage_names
-    assert "fair_detection_calibration" in stage_names
-    assert "formal_method_baseline_comparison" in stage_names
-    assert "formal_baseline_difference_interval" in stage_names
-    assert "validation_scale_formal_internal_ablation" in stage_names
-    assert "low_fpr_formal_statistics" in stage_names
+    assert gate_payload["server_workflow_decision"] == "DRY_RUN"
+    assert gate_payload["pipeline"] == "paper_gate_and_package"
+    assert "motion_consistency_exclusion_report" in gate_stage_names
+    assert "external_baseline_comparison" not in gate_stage_names
+    assert "fair_detection_calibration" not in gate_stage_names
+    assert "validation_scale_formal_internal_ablation" in gate_stage_names
+    assert "low_fpr_formal_statistics" in gate_stage_names
 
 
 @pytest.mark.quick
@@ -53,6 +77,7 @@ def test_server_workflow_complete_pipeline_order_matches_notebook_handoff_model(
         "motion_threshold_calibration",
         "generative_video_runtime",
         "external_baseline_formal_scoring",
+        "formal_comparison_scoring",
         "paper_gate_and_package",
     )
     assert PIPELINE_ROLE_ORDER["validation_scale_complete"] == PIPELINE_ROLE_ORDER["paper_protocol_complete"]

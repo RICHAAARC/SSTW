@@ -1,6 +1,6 @@
 {
   "config_kind": "generative_video_notebook_workflow_config",
-  "config_version": "2026_07_07_revmark_wam_frame_fair_baselines_v19",
+  "config_version": "2026_07_07_formal_comparison_scoring_split_v20",
   "default_dataset_root_relative": "datasets/generative_video_prompt_suite",
   "default_drive_project_root": "/content/drive/MyDrive/SSTW",
   "default_prompt_suite_path_relative": "datasets/generative_video_prompt_suite/prompt_seed_suite.json",
@@ -8,7 +8,8 @@
     "external_baseline_formal_scoring": "validation_scale",
     "generative_video_runtime": "validation_scale",
     "motion_threshold_calibration": "motion_calibration",
-    "paper_gate_and_package": "validation_scale"
+    "paper_gate_and_package": "validation_scale",
+    "formal_comparison_scoring": "validation_scale"
   },
   "notebook_roles": {
     "external_baseline_formal_scoring": {
@@ -31,9 +32,25 @@
         "external_baseline_source_intake",
         "external_baseline_official_resource_bootstrap",
         "external_baseline_official_bundle_generation",
+        "quick_tests_and_harness",
+        "drive_packaging"
+      ]
+    },
+    "formal_comparison_scoring": {
+      "allowed_workflow_profiles": [
+        "validation_scale",
+        "pilot_paper",
+        "full_paper"
+      ],
+      "notebook_path": "paper_workflow/colab_notebooks/formal_comparison_scoring_colab.ipynb",
+      "stage_plan": [
+        "sstw_measured_formal_result",
         "external_baseline_official_result_bundle_preflight",
         "external_baseline_comparison",
         "external_baseline_self_containment_decision",
+        "fair_detection_calibration",
+        "formal_method_baseline_comparison",
+        "formal_baseline_difference_interval",
         "quick_tests_and_harness",
         "drive_packaging"
       ]
@@ -47,7 +64,6 @@
       "notebook_path": "paper_workflow/colab_notebooks/generative_video_runtime_colab.ipynb",
       "stage_plan": [
         "prepare_prompt_suite",
-        "external_baseline_colab_preflight",
         "wan21_runtime_generation",
         "formal_metric_scoring",
         "motion_threshold_reuse_check",
@@ -89,13 +105,6 @@
         "claim3_downgrade_gate",
         "statistical_confidence_interval",
         "low_fpr_formal_statistics",
-        "sstw_measured_formal_result",
-        "external_baseline_official_result_bundle_preflight",
-        "external_baseline_comparison",
-        "external_baseline_self_containment_decision",
-        "fair_detection_calibration",
-        "formal_method_baseline_comparison",
-        "formal_baseline_difference_interval",
         "validation_scale_formal_internal_ablation",
         "data_split_and_leakage_guard",
         "pilot_paper_gate",

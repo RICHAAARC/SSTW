@@ -37,10 +37,13 @@ def test_modern_external_baseline_formal_reference_order_is_explicit() -> None:
 
 @pytest.mark.quick
 def test_modern_external_baseline_default_config_is_validation_scale(monkeypatch: pytest.MonkeyPatch) -> None:
-    """默认配置必须面向 validation_scale, 且未知 baseline 必须 fail closed。"""
+    """默认配置必须面向 validation_scale, 单 baseline 入口默认只闭合 official bundle。"""
 
     monkeypatch.delenv("SSTW_WORKFLOW_PROFILE", raising=False)
     monkeypatch.delenv("SSTW_EXTERNAL_BASELINE_REFERENCE_MAX_RECORDS", raising=False)
+    monkeypatch.delenv("SSTW_RUN_OFFICIAL_RESULT_BUNDLE_PREFLIGHT_AFTER_REFERENCE", raising=False)
+    monkeypatch.delenv("SSTW_RUN_EXTERNAL_BASELINE_COMPARISON_AFTER_REFERENCE", raising=False)
+    monkeypatch.delenv("SSTW_RUN_SELF_CONTAINMENT_AFTER_REFERENCE", raising=False)
 
     config = build_default_config_from_env("videoseal", repo_root=".")
 
@@ -53,12 +56,27 @@ def test_modern_external_baseline_default_config_is_validation_scale(monkeypatch
     assert config.allow_existing_official_bundle_as_reference_input is False
     assert config.max_records is None
     assert config.run_official_runtime_closure_preflight is True
-    assert config.run_official_result_bundle_preflight is True
-    assert config.run_external_baseline_comparison_after_reference is True
-    assert config.run_self_containment_after_reference is True
+    assert config.run_official_result_bundle_preflight is False
+    assert config.run_external_baseline_comparison_after_reference is False
+    assert config.run_self_containment_after_reference is False
 
     with pytest.raises(ValueError, match="未知 modern external baseline"):
         build_default_config_from_env("legacy_proxy", repo_root=".")
+
+
+@pytest.mark.quick
+def test_modern_external_baseline_followup_can_be_explicitly_enabled(monkeypatch: pytest.MonkeyPatch) -> None:
+    """调试兼容场景可以显式开启后续统一转写, 但默认正式入口不执行。"""
+
+    monkeypatch.setenv("SSTW_RUN_OFFICIAL_RESULT_BUNDLE_PREFLIGHT_AFTER_REFERENCE", "true")
+    monkeypatch.setenv("SSTW_RUN_EXTERNAL_BASELINE_COMPARISON_AFTER_REFERENCE", "true")
+    monkeypatch.setenv("SSTW_RUN_SELF_CONTAINMENT_AFTER_REFERENCE", "true")
+
+    config = build_default_config_from_env("wam_frame", repo_root=".")
+
+    assert config.run_official_result_bundle_preflight is True
+    assert config.run_external_baseline_comparison_after_reference is True
+    assert config.run_self_containment_after_reference is True
 
 
 @pytest.mark.quick
@@ -210,7 +228,7 @@ def test_main_five_baseline_formal_reference_notebooks_call_repository_helpers()
         assert f"from paper_workflow.colab_utils.{baseline_id}_formal_reference import" in source
         assert f"run_default_{baseline_id}_formal_reference_plan" in source
         assert "formal_reference_decision" in source
-        assert "measured_formal" in source
+        assert "formal_comparison_scoring_colab" in source
         assert "pytest -q" in source
         assert "tools/harness/run_all_audits.py" in source
         assert "pip install -U imageio" not in source
@@ -221,8 +239,8 @@ def test_main_five_baseline_formal_reference_notebooks_call_repository_helpers()
 
 
 @pytest.mark.quick
-def test_formal_reference_helper_runs_bundle_then_unified_measured_formal_scoring() -> None:
-    """单 baseline helper 必须先生成 official bundle, 再调用统一 runner 转写 records。"""
+def test_formal_reference_helper_defaults_to_bundle_only_with_opt_in_unified_scoring() -> None:
+    """单 baseline helper 默认只生成 official bundle, 统一转写保留为显式 opt-in。"""
 
     helper_text = Path("paper_workflow/colab_utils/modern_external_baseline_formal_reference.py").read_text(encoding="utf-8")
 
@@ -232,6 +250,7 @@ def test_formal_reference_helper_runs_bundle_then_unified_measured_formal_scorin
     assert "external_baseline_official_runtime_closure_requirements" in helper_text
     assert "write_official_runtime_closure_requirements" in helper_text
     assert "build_modern_baseline_command_env" in helper_text
+    assert "single_baseline_notebook_default_bundle_only_formal_comparison_scoring_performs_unified_scoring" in helper_text
     assert "external_baseline_unified_measured_formal_scoring" in helper_text
     assert "build_external_baseline_comparison_command" in helper_text
     assert "measured_formal" in helper_text

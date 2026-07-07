@@ -32,6 +32,7 @@ SERVER_PIPELINES = (
     "motion_threshold_calibration",
     "generative_video_runtime",
     "external_baseline_references",
+    "formal_comparison_scoring",
     "paper_gate_and_package",
     "paper_protocol_complete",
     "validation_scale_complete",
@@ -41,17 +42,20 @@ PIPELINE_ROLE_ORDER = {
     "motion_threshold_calibration": ("motion_threshold_calibration",),
     "generative_video_runtime": ("generative_video_runtime",),
     "external_baseline_references": ("external_baseline_formal_scoring",),
+    "formal_comparison_scoring": ("formal_comparison_scoring",),
     "paper_gate_and_package": ("paper_gate_and_package",),
     "paper_protocol_complete": (
         "motion_threshold_calibration",
         "generative_video_runtime",
         "external_baseline_formal_scoring",
+        "formal_comparison_scoring",
         "paper_gate_and_package",
     ),
     "validation_scale_complete": (
         "motion_threshold_calibration",
         "generative_video_runtime",
         "external_baseline_formal_scoring",
+        "formal_comparison_scoring",
         "paper_gate_and_package",
     ),
 }
@@ -225,8 +229,8 @@ def _run_role(args: argparse.Namespace, notebook_role: str) -> dict[str, Any]:
 
     layout = _build_layout_for_role(args, notebook_role, hydrate=True)
     role_profile = _workflow_profile_for_role(args, notebook_role)
-    if notebook_role == "paper_gate_and_package":
-        environment = probe_workflow.apply_paper_gate_external_baseline_environment(
+    if notebook_role == "formal_comparison_scoring":
+        environment = probe_workflow.apply_formal_comparison_external_baseline_environment(
             layout,
             profile=role_profile,
             repo_root=Path(args.repo_root).expanduser().resolve(),

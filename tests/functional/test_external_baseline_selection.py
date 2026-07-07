@@ -34,9 +34,6 @@ from external_baseline.videoseal_official_runtime import (
     inspect_videoseal_official_runtime_layout,
     videoseal_official_source_cwd,
 )
-from paper_workflow.notebook_utils.generative_video_model_probe_workflow import (
-    build_paper_gate_external_baseline_environment,
-)
 from main.protocol.record_writer import read_jsonl, write_jsonl
 from external_baseline.source_intake import build_execution_manifest, build_source_intake_manifest, write_source_intake_artifacts
 

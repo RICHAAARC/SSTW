@@ -12,11 +12,11 @@
   "full_paper_profile_names": [
     "full_paper"
   ],
-  "minimum_attack_event_count_per_attack": 2000,
+  "minimum_attack_event_count_per_attack": 1000,
   "minimum_calibration_negative_event_count": 50000,
   "minimum_clean_negative_count": 50000,
   "minimum_external_baseline_measured_adapter_count": 7,
-  "minimum_heldout_attacked_positive_event_count": 20000,
+  "minimum_heldout_attacked_positive_event_count": 46000,
   "minimum_heldout_test_negative_event_count": 50000,
   "minimum_internal_ablation_variant_count": 8,
   "minimum_modern_external_baseline_formal_adapter_count": 5,

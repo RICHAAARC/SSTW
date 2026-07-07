@@ -201,6 +201,40 @@ def test_profile_protocols_resolve_shared_attack_manifest() -> None:
 
 
 @pytest.mark.quick
+def test_paper_profile_attack_event_minimums_match_declared_sample_capacity() -> None:
+    """paper profile 的 per-attack 事件下限不能超过配置声明的样本容量。"""
+
+    validation_config = load_protocol_config_with_shared_attack_protocol(
+        "configs/protocol/validation_scale_generative_probe.json"
+    )
+    pilot_config = load_protocol_config_with_shared_attack_protocol(
+        "configs/protocol/pilot_paper_generative_probe.json"
+    )
+    full_config = load_protocol_config_with_shared_attack_protocol(
+        "configs/protocol/full_paper_generative_probe.json"
+    )
+
+    assert "minimum_attack_event_count_per_attack" not in validation_config
+
+    pilot_positive_capacity_per_attack = int(pilot_config["minimum_prompt_count"]) * int(
+        pilot_config["minimum_test_seed_per_prompt"]
+    )
+    pilot_required_attack_count = len(pilot_config["required_runtime_attack_names"])
+    assert int(pilot_config["minimum_attack_event_count_per_attack"]) <= pilot_positive_capacity_per_attack
+    assert int(pilot_config["minimum_heldout_attacked_positive_event_count"]) == (
+        int(pilot_config["minimum_attack_event_count_per_attack"]) * pilot_required_attack_count
+    )
+
+    full_positive_capacity_per_attack = int(full_config["minimum_unique_video_count"])
+    full_required_attack_count = len(full_config["required_runtime_attack_names"])
+    assert int(full_config["minimum_attack_event_count_per_attack"]) == 1000
+    assert int(full_config["minimum_attack_event_count_per_attack"]) <= full_positive_capacity_per_attack
+    assert int(full_config["minimum_heldout_attacked_positive_event_count"]) == (
+        int(full_config["minimum_attack_event_count_per_attack"]) * full_required_attack_count
+    )
+
+
+@pytest.mark.quick
 def test_new_top_tier_runtime_attack_transforms_are_executable_on_frames() -> None:
     """新增顶会顶刊级轻量 attack 必须能在帧级协议入口执行。"""
 

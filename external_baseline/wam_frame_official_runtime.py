@@ -231,7 +231,7 @@ def _detect_wam_score(model: Any, video: Any, transform: Any, msg_predict_infere
     batch = _frames_to_wam_tensor(video, transform, device=device, max_frames=max_frames)
     with torch.no_grad():
         preds = model.detect(batch)["preds"]
-    mask_preds = F.sigmoid(preds[:, 0, :, :])
+    mask_preds = F.sigmoid(preds[:, 0:1, :, :])
     bit_preds = preds[:, 1:, :, :]
     pred_message = msg_predict_inference(bit_preds, mask_preds).to(device).float()
     reference = message.reshape(1, -1).repeat(pred_message.shape[0], 1)

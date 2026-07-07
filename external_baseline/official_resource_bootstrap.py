@@ -383,11 +383,14 @@ def bootstrap_revmark(resource_root: Path, *, allow_network: bool, source_root: 
     failed = [item for item in install_results if item.get("install_status") == "install_failed"]
     encoder = source_dir / "checkpoints" / "Encoder.pth"
     decoder = source_dir / "checkpoints" / "Decoder.pth"
+    motion_estimation = source_dir / "ME_Spynet_Full.pth"
     missing = []
     if not encoder.exists():
         missing.append("revmark_encoder_checkpoint")
     if not decoder.exists():
         missing.append("revmark_decoder_checkpoint")
+    if not motion_estimation.exists():
+        missing.append("revmark_motion_estimation_checkpoint")
     if failed:
         missing.append("revmark_lightweight_python_dependencies")
     ready = not missing
@@ -400,6 +403,7 @@ def bootstrap_revmark(resource_root: Path, *, allow_network: bool, source_root: 
         "project_owned_runner_module": "external_baseline.revmark_official_runtime",
         "SSTW_REVMARK_ENCODER_CHECKPOINT_PATH": str(encoder) if encoder.exists() else "",
         "SSTW_REVMARK_DECODER_CHECKPOINT_PATH": str(decoder) if decoder.exists() else "",
+        "SSTW_REVMARK_MOTION_ESTIMATION_CHECKPOINT_PATH": str(motion_estimation) if motion_estimation.exists() else "",
         "colab_torch_stack_policy": "preserve_preinstalled_torch_and_torchvision",
         "install_results": install_results,
         "missing_after_bootstrap": missing,

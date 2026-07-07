@@ -71,15 +71,16 @@
       "official_repository_url": "https://github.com/yulinsysu/REVMark",
       "official_runtime_mode": "official_encoder_decoder_post_hoc_video_watermark_project_runtime_attack",
       "project_owned_runner_module": "external_baseline.revmark_official_runtime",
-      "public_resource_status": "official_repository_public_with_bundled_encoder_decoder_checkpoints",
+      "public_resource_status": "official_repository_public_with_bundled_encoder_decoder_and_motion_estimation_checkpoints",
       "reason_automatic_bundle_not_supported": "not_applicable",
       "required_adapter_work_summary": "已提供项目内 REVMark official runtime: 对同一 clean video 执行官方 Encoder 嵌入, 施加项目 runtime attack, 再调用官方 Decoder 生成 per-sample score 与 clean negative score。",
       "required_public_or_user_resources": [
         "REVMark 官方源码 external_baseline/primary/revmark/source",
-        "REVMark 官方仓库自带 checkpoints/Encoder.pth 与 checkpoints/Decoder.pth"
+        "REVMark 官方仓库自带 checkpoints/Encoder.pth 与 checkpoints/Decoder.pth",
+        "REVMark 官方仓库自带 ME_Spynet_Full.pth motion estimation checkpoint"
       ],
       "self_contained_result_policy": "project_clone_build_run_adapt_record_required",
-      "strict_gate_resolution": "本项目 workflow 必须完成官方源码 clone、依赖构建、官方 Encoder / Decoder 运行、项目 runtime attack、adapter 转换和 governed record 写出。",
+      "strict_gate_resolution": "本项目 workflow 必须完成官方源码 clone、依赖构建、官方 Encoder / Decoder 与 ME_Spynet_Full motion estimation checkpoint 可见性检查、项目 runtime attack、adapter 转换和 governed record 写出。",
       "validation_scale_colab_runnability_status": "runnable_if_source_clone_dependencies_and_video_io_succeed"
     },
     {

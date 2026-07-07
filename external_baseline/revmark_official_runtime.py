@@ -139,21 +139,34 @@ def _load_revmark_models(config: REVMarkOfficialRuntimeConfig) -> tuple[Any, Any
 
     import torch
 
-    source_dir = Path(config.source_dir)
+    source_dir = Path(config.source_dir).resolve()
     sys.path.insert(0, str(source_dir))
     from REVMark import Decoder, Encoder, framenorm  # type: ignore
 
     device = config.device or ("cuda" if torch.cuda.is_available() else "cpu")
-    encoder = Encoder(config.message_bits, [config.frame_count, config.frame_size, config.frame_size]).to(device).eval()
-    decoder = Decoder(config.message_bits, [config.frame_count, config.frame_size, config.frame_size]).to(device).eval()
+    motion_estimation_checkpoint = source_dir / "ME_Spynet_Full.pth"
+    if not motion_estimation_checkpoint.exists():
+        raise FileNotFoundError(f"revmark_motion_estimation_checkpoint_missing:{motion_estimation_checkpoint}")
     encoder_checkpoint = Path(os.environ.get("SSTW_REVMARK_ENCODER_CHECKPOINT_PATH", "").strip() or source_dir / "checkpoints" / "Encoder.pth")
     decoder_checkpoint = Path(os.environ.get("SSTW_REVMARK_DECODER_CHECKPOINT_PATH", "").strip() or source_dir / "checkpoints" / "Decoder.pth")
     if not encoder_checkpoint.exists():
         raise FileNotFoundError(f"revmark_encoder_checkpoint_missing:{encoder_checkpoint}")
     if not decoder_checkpoint.exists():
         raise FileNotFoundError(f"revmark_decoder_checkpoint_missing:{decoder_checkpoint}")
-    encoder.load_state_dict(torch.load(encoder_checkpoint, map_location=device))
-    decoder.load_state_dict(torch.load(decoder_checkpoint, map_location=device))
+    encoder_checkpoint = encoder_checkpoint.resolve()
+    decoder_checkpoint = decoder_checkpoint.resolve()
+    cwd = Path.cwd()
+    try:
+        # REVMark 官方 TAsBlock 在构造时以相对路径读取 ME_Spynet_Full.pth。
+        # Colab notebook 的 cwd 是仓库根目录, 因此这里临时切到官方 source
+        # 目录, 既保持第三方源码不被修改, 又保证官方相对路径语义成立。
+        os.chdir(source_dir)
+        encoder = Encoder(config.message_bits, [config.frame_count, config.frame_size, config.frame_size]).to(device).eval()
+        decoder = Decoder(config.message_bits, [config.frame_count, config.frame_size, config.frame_size]).to(device).eval()
+        encoder.load_state_dict(torch.load(encoder_checkpoint, map_location=device))
+        decoder.load_state_dict(torch.load(decoder_checkpoint, map_location=device))
+    finally:
+        os.chdir(cwd)
     if hasattr(encoder, "tasblock"):
         encoder.tasblock.enable = True
     if hasattr(decoder, "tasblock"):

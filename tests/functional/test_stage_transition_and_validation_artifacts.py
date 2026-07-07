@@ -570,6 +570,44 @@ def test_external_baseline_self_containment_accepts_repository_generated_officia
 
 
 @pytest.mark.quick
+def test_external_baseline_self_containment_accepts_complete_official_reference_manifest(
+    tmp_path: Path,
+) -> None:
+    """接受 REVMark / WAM-frame 这类完整 official reference bundle manifest。
+
+    该测试覆盖项目特定写法: 部分 baseline 的 Notebook 已经在项目内完成
+    clone / build / run / adapt / record, 但 execution manifest 使用
+    `official_reference_bundle_complete` 表示整包完成, 而不是逐命令
+    `executed`。self-containment 门禁应以整包完成状态和 record 级 provenance
+    共同判定, 不能把这类正式结果误判为外部补交结果。
+    """
+
+    run_root = tmp_path / "run"
+    _write_self_contained_external_baseline_fixture(run_root)
+    for baseline_name in ("revmark", "wam_frame"):
+        execution_manifest_path = (
+            run_root
+            / "external_baseline_official_result_bundles"
+            / "validation_scale"
+            / baseline_name
+            / "official_reference_execution_manifest.json"
+        )
+        payload = json.loads(execution_manifest_path.read_text(encoding="utf-8"))
+        payload["execution_status"] = "official_reference_bundle_complete"
+        payload["input_runtime_detection_record_count"] = len(VALIDATION_SCALE_RUNTIME_ATTACKS)
+        payload.pop("command_results", None)
+        write_json(execution_manifest_path, payload)
+
+    audit = write_external_baseline_self_containment_decision(run_root)
+
+    assert audit["external_baseline_self_containment_decision"] == "PASS"
+    for baseline_name in ("revmark", "wam_frame"):
+        row = next(item for item in audit["baseline_self_containment_rows"] if item["baseline_name"] == baseline_name)
+        assert row["repository_generated_official_bundle_ready"] is True
+        assert row["official_bundle_record_ok_count"] == len(VALIDATION_SCALE_RUNTIME_ATTACKS)
+        assert row["official_execution_manifest_ok_count"] == len(VALIDATION_SCALE_RUNTIME_ATTACKS)
+
+
 @pytest.mark.quick
 def test_external_baseline_self_containment_requires_complete_official_baseline_identity(tmp_path: Path) -> None:
     """official bundle 必须同时声明 adapter baseline 和 official baseline 身份。"""

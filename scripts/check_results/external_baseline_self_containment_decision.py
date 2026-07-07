@@ -39,6 +39,13 @@ OFFICIAL_BUNDLE_PATH_FIELDS = (
     "external_baseline_official_execution_manifest_path",
 )
 REPOSITORY_GENERATED_OFFICIAL_PROVENANCE = "repository_generated_from_third_party_official_code"
+OFFICIAL_EXECUTION_SUCCESS_STATUSES = {
+    "executed",
+    "completed",
+    "generated",
+    "ready",
+    "official_reference_bundle_complete",
+}
 
 
 def _read_json(path: Path) -> dict[str, Any]:
@@ -141,7 +148,7 @@ def _official_execution_manifest_ok(
     except (TypeError, ValueError):
         return False
     execution_status = str(payload.get("execution_status") or "").strip()
-    if execution_status and execution_status not in {"executed", "completed", "generated", "ready"}:
+    if execution_status and execution_status not in OFFICIAL_EXECUTION_SUCCESS_STATUSES:
         return False
     if execution_status:
         positive_evidence_found = True
@@ -159,6 +166,13 @@ def _official_execution_manifest_ok(
             if int(generated_count) <= 0:
                 return False
             positive_evidence_found = True
+        except (TypeError, ValueError):
+            return False
+    input_count = payload.get("input_runtime_detection_record_count")
+    if generated_count is not None and input_count is not None:
+        try:
+            if int(generated_count) != int(input_count):
+                return False
         except (TypeError, ValueError):
             return False
     return positive_evidence_found

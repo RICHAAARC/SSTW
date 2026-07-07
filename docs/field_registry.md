@@ -1410,6 +1410,10 @@ Notebook 与 repository module 的跨边界数据
 | negative_formal_evidence_missing_count | metric | none | true | true | false | fair calibration 中带 clean negative 分数但缺少 official evidence 或官方分数抽取证据的记录数量。 |
 | positive_anchor_keys | protocol | none | true | false | false | fair calibration 中 attacked positive 的规范 prompt / seed / attack anchor 键集合。 |
 | positive_attack_names | protocol | none | true | false | false | fair calibration 中 attacked positive records 实际覆盖的 runtime attack 名称集合。 |
+| shared_attack_protocol_config_path | protocol | none | true | false | false | validation_scale、pilot_paper 和 full_paper 共同引用的 runtime / non-runtime attack 协议配置路径。 |
+| shared_attack_protocol_id | protocol | none | true | false | false | 共享 attack 协议配置的稳定语义标识。 |
+| shared_attack_protocol_resolved_path | provenance | none | true | false | false | 运行时解析得到的共享 attack 协议配置实际路径。 |
+| shared_attack_protocol_resolution_status | governance | none | true | false | false | 共享 attack 协议配置是否已合并到当前 profile config 的状态。 |
 | required_runtime_attack_names | protocol | none | true | false | false | 当前 workflow profile 要求必须覆盖的 runtime attack 名称集合。 |
 | required_runtime_attack_count | metric | none | true | false | false | 当前 workflow profile 要求必须覆盖的 runtime attack 数量。 |
 | runtime_attack_family_minimums | protocol | none | true | false | false | 当前 workflow profile 对 compression、temporal、spatial、visual 和 combined 等 attack family 的最低覆盖要求。 |
@@ -1426,6 +1430,7 @@ Notebook 与 repository module 的跨边界数据
 | adaptive_attack_missing_non_runtime_protocol_count | metric | none | true | true | false | validation_scale gate 从 adaptive attack records 中发现的缺失非 runtime / adaptive 协议数量。 |
 | top_tier_attack_protocol_status | governance | none | true | false | false | protocol config 对顶会顶刊级 attack 覆盖的摘要状态。 |
 | required_runtime_attack_protocol_note | protocol | none | true | false | false | 解释 validation_scale、pilot_paper 和 full_paper 分层 attack 协议差异的配置说明。 |
+| target_fpr_levels | protocol | none | true | false | false | 同构论文协议族登记的 FPR 等级集合, 用于 validation_scale、pilot_paper 和 full_paper 切换。 |
 | missing_required_runtime_attack_names | governance | none | true | false | false | 当前 record 相对 required_runtime_attack_names 缺失的 runtime attack 名称集合。 |
 | missing_required_runtime_attack_count | metric | none | true | true | false | 当前 record 相对 required_runtime_attack_names 缺失的 runtime attack 数量。 |
 | positive_detection_units_at_target_fpr | metric | none | true | false | false | target FPR 阈值下每个 prompt / seed / attack anchor 的检测结果列表。 |

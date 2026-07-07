@@ -17,6 +17,7 @@ from main.attacks.video_runtime_attack_protocol import (
     RUNTIME_ATTACK_FAMILY_MINIMUMS_BY_PROFILE,
     apply_runtime_attack_to_frames,
     audit_runtime_attack_protocol_config,
+    load_protocol_config_with_shared_attack_protocol,
 )
 from main.protocol.record_writer import write_jsonl
 
@@ -176,6 +177,27 @@ def test_validation_pilot_and_full_paper_attack_protocol_registers_top_tier_cove
     for family, minimum_count in RUNTIME_ATTACK_FAMILY_MINIMUMS_BY_PROFILE["full_paper"].items():
         assert full_audit["runtime_attack_family_counts"][family] >= minimum_count
     assert full_audit["missing_non_runtime_attack_protocols"] == []
+
+
+@pytest.mark.quick
+def test_profile_protocols_resolve_shared_attack_manifest() -> None:
+    """三个论文 profile 必须通过共享配置解析出同一份 attack 协议清单。"""
+
+    profile_paths = (
+        "configs/protocol/validation_scale_generative_probe.json",
+        "configs/protocol/pilot_paper_generative_probe.json",
+        "configs/protocol/full_paper_generative_probe.json",
+    )
+    for config_path in profile_paths:
+        raw_config = json.loads(Path(config_path).read_text(encoding="utf-8"))
+        resolved = load_protocol_config_with_shared_attack_protocol(config_path)
+        assert "required_runtime_attack_names" not in raw_config
+        assert "required_non_runtime_attack_protocols" not in raw_config
+        assert resolved["shared_attack_protocol_id"] == "top_tier_video_watermark_attack_protocol_v1"
+        assert resolved["required_runtime_attack_names"] == list(FULL_PAPER_RUNTIME_ATTACKS)
+        assert resolved["required_non_runtime_attack_protocols"] == list(FULL_PAPER_NON_RUNTIME_ATTACK_PROTOCOLS)
+        assert resolved["minimum_attack_count"] == len(FULL_PAPER_RUNTIME_ATTACKS)
+        assert resolved["minimum_non_runtime_attack_protocol_count"] == len(FULL_PAPER_NON_RUNTIME_ATTACK_PROTOCOLS)
 
 
 @pytest.mark.quick

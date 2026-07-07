@@ -12,7 +12,10 @@ import json
 from pathlib import Path
 from typing import Any, Mapping
 
-from main.attacks.video_runtime_attack_protocol import required_runtime_attack_names_from_config
+from main.attacks.video_runtime_attack_protocol import (
+    load_protocol_config_with_shared_attack_protocol,
+    required_runtime_attack_names_from_config,
+)
 from main.protocol.flow_evidence_fields import with_flow_evidence_protocol_defaults
 from main.protocol.record_writer import write_json, write_jsonl
 from main.protocol.table_builder import write_csv
@@ -99,7 +102,7 @@ def build_full_paper_result_checker_audit(
     """构建 full_paper 结果充分性审计。"""
 
     run_root = Path(run_root)
-    config = _read_json(Path(config_path))
+    config = load_protocol_config_with_shared_attack_protocol(config_path)
     if "target_fpr" not in config:
         raise KeyError(f"full_paper protocol config 缺少 target_fpr: {config_path}")
     target_fpr = float(config["target_fpr"])

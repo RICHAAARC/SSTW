@@ -54,6 +54,7 @@ from paper_workflow.colab_utils.stage_package_sync import (
 from experiments.generative_video_model_probe.colab_runtime import _build_generation_plan
 from scripts.package_results.generative_video_drive_packager import package_generative_video_colab_run
 from scripts.prepare_generative_video_prompt_suite import write_prompt_suite
+from main.attacks.video_runtime_attack_protocol import load_protocol_config_with_shared_attack_protocol
 from main.protocol.record_writer import write_json, write_jsonl
 
 
@@ -184,7 +185,7 @@ def test_pilot_paper_profile_constructs_medium_scale_low_fpr_plan(tmp_path: Path
     pilot_paper_prompts = [item for item in suite["prompts"] if item.get("prompt_suite_role") == "pilot_paper"]
     pilot_paper_seeds = [item for item in suite["seeds"] if item.get("prompt_suite_role") == "pilot_paper"]
 
-    pilot_protocol = json.loads(Path("configs/protocol/pilot_paper_generative_probe.json").read_text(encoding="utf-8"))
+    pilot_protocol = load_protocol_config_with_shared_attack_protocol("configs/protocol/pilot_paper_generative_probe.json")
     assert suite["pilot_paper_design"]["target_fpr"] == pilot_protocol["target_fpr"]
     assert suite["pilot_paper_design"]["blocked_target_fpr"] == pilot_protocol["blocked_target_fpr"]
     assert suite["pilot_paper_design"]["paper_result_level"] == "pilot_paper"

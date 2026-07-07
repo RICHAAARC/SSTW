@@ -7,7 +7,10 @@ import json
 from hashlib import sha256
 from pathlib import Path
 
-from main.attacks.video_runtime_attack_protocol import required_runtime_attack_names_from_config
+from main.attacks.video_runtime_attack_protocol import (
+    load_protocol_config_with_shared_attack_protocol,
+    required_runtime_attack_names_from_config,
+)
 
 
 DEFAULT_PILOT_PAPER_CONFIG = "configs/protocol/pilot_paper_generative_probe.json"
@@ -18,7 +21,7 @@ def _read_json(path: str | Path) -> dict:
     input_path = Path(path)
     if not input_path.exists():
         raise FileNotFoundError(f"缺少 protocol config: {input_path}")
-    payload = json.loads(input_path.read_text(encoding="utf-8-sig"))
+    payload = load_protocol_config_with_shared_attack_protocol(input_path)
     if not isinstance(payload, dict):
         raise TypeError(f"JSON 顶层必须是对象: {input_path}")
     return payload

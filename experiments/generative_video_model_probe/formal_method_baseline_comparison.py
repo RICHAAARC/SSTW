@@ -8,6 +8,10 @@ from pathlib import Path
 from statistics import mean
 from typing import Any, Iterable
 
+from main.attacks.video_runtime_attack_protocol import (
+    load_protocol_config_with_shared_attack_protocol,
+    required_runtime_attack_names_from_config,
+)
 from main.protocol.flow_evidence_fields import with_flow_evidence_protocol_defaults
 from main.protocol.record_writer import write_json, write_jsonl
 from main.protocol.table_builder import write_csv
@@ -64,7 +68,12 @@ def _truthy_positive(value: object) -> bool | None:
 def _load_profile_context(config_path: str | Path) -> dict[str, Any]:
     """读取当前 profile 的对比统计语义。"""
     config_path = Path(config_path)
-    config = _read_json(config_path)
+    config = load_protocol_config_with_shared_attack_protocol(config_path)
+    required_runtime_attack_names = (
+        list(required_runtime_attack_names_from_config(config))
+        if "required_runtime_attack_names" in config or "shared_attack_protocol_config_path" in config
+        else []
+    )
     if "target_fpr" not in config:
         raise KeyError(f"protocol config 缺少 target_fpr: {config_path}")
     required_baselines = [
@@ -77,11 +86,7 @@ def _load_profile_context(config_path: str | Path) -> dict[str, Any]:
         "target_fpr": float(config["target_fpr"]),
         "target_fpr_source_config_path": str(config_path),
         "required_modern_external_baseline_adapter_names": required_baselines,
-        "required_runtime_attack_names": [
-            str(item)
-            for item in config.get("required_runtime_attack_names", [])
-            if str(item)
-        ],
+        "required_runtime_attack_names": required_runtime_attack_names,
         "allow_effect_size_claims": bool(config.get("allow_effect_size_claims", False)),
     }
 

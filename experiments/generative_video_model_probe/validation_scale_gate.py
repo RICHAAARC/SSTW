@@ -16,6 +16,8 @@ from experiments.generative_video_model_probe.formal_motion_claim_filter import 
 from main.attacks.video_runtime_attack_protocol import (
     FULL_PAPER_NON_RUNTIME_ATTACK_PROTOCOLS,
     audit_runtime_attack_protocol_config,
+    load_protocol_config_with_shared_attack_protocol,
+    required_non_runtime_attack_protocols_from_config,
     required_runtime_attack_names_from_config,
 )
 from main.protocol.flow_evidence_fields import with_flow_evidence_protocol_defaults
@@ -82,14 +84,9 @@ def _read_jsonl(path: Path) -> list[dict]:
 def _load_config(config_path: str | Path = DEFAULT_VALIDATION_SCALE_CONFIG) -> dict:
     """读取 validation-scale 门禁配置。"""
     path = Path(config_path)
-    config = _read_json(path)
+    config = load_protocol_config_with_shared_attack_protocol(path)
     required_runtime_attack_names = list(required_runtime_attack_names_from_config(config))
-    raw_required_non_runtime_attack_protocols = config.get("required_non_runtime_attack_protocols")
-    required_non_runtime_attack_protocols = (
-        [str(item) for item in raw_required_non_runtime_attack_protocols if str(item)]
-        if isinstance(raw_required_non_runtime_attack_protocols, list)
-        else list(FULL_PAPER_NON_RUNTIME_ATTACK_PROTOCOLS)
-    )
+    required_non_runtime_attack_protocols = list(required_non_runtime_attack_protocols_from_config(config))
     return {
         "validation_profile_names": config.get("validation_profile_names", sorted(DEFAULT_VALIDATION_PROFILE_NAMES)),
         "target_fpr": _required_float(config, "target_fpr", path),

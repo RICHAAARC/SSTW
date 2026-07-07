@@ -18,7 +18,11 @@ from external_baseline.official_eval_adapters.common import (
     validate_complete_official_bundle_baseline_identity,
 )
 from external_baseline.score_semantics import validate_official_score_extraction_payload
-from main.attacks.video_runtime_attack_protocol import VALIDATION_SCALE_RUNTIME_ATTACKS
+from main.attacks.video_runtime_attack_protocol import (
+    VALIDATION_SCALE_RUNTIME_ATTACKS,
+    load_protocol_config_with_shared_attack_protocol,
+    required_runtime_attack_names_from_config,
+)
 from main.protocol.flow_evidence_fields import with_flow_evidence_protocol_defaults
 from main.protocol.record_writer import write_json, write_jsonl
 from main.protocol.table_builder import write_csv
@@ -63,7 +67,7 @@ def _read_jsonl(path: Path) -> list[dict[str, Any]]:
 
 def _load_required_modern_baselines(config_path: str | Path) -> list[str]:
     """从 protocol config 中读取必须正式测量的现代 baseline 清单。"""
-    config = _read_json(Path(config_path))
+    config = load_protocol_config_with_shared_attack_protocol(config_path)
     names = [
         str(name)
         for name in config.get("required_modern_external_baseline_adapter_names", [])
@@ -75,12 +79,8 @@ def _load_required_modern_baselines(config_path: str | Path) -> list[str]:
 def _load_required_runtime_attack_names(config_path: str | Path) -> list[str]:
     """从 protocol config 中读取每个 baseline 必须覆盖的 runtime attack 清单。"""
 
-    config = _read_json(Path(config_path))
-    names = [
-        str(name)
-        for name in config.get("required_runtime_attack_names", [])
-        if str(name)
-    ]
+    config = load_protocol_config_with_shared_attack_protocol(config_path)
+    names = list(required_runtime_attack_names_from_config(config))
     return names or list(VALIDATION_SCALE_RUNTIME_ATTACKS)
 
 

@@ -19,6 +19,10 @@ from experiments.generative_video_model_probe.external_baseline_runner import (
     formal_score_record_ready_for_claim,
 )
 from main.core.digest import build_stable_digest
+from main.attacks.video_runtime_attack_protocol import (
+    load_protocol_config_with_shared_attack_protocol,
+    required_runtime_attack_names_from_config,
+)
 from main.protocol.flow_evidence_fields import with_flow_evidence_protocol_defaults
 from main.protocol.record_writer import write_json, write_jsonl
 from main.protocol.table_builder import write_csv
@@ -63,7 +67,12 @@ def _load_profile_context(config_path: str | Path) -> dict[str, Any]:
     """读取当前 workflow profile 的公平比较协议。"""
 
     config_path = Path(config_path)
-    config = _read_json(config_path)
+    config = load_protocol_config_with_shared_attack_protocol(config_path)
+    required_runtime_attack_names = (
+        list(required_runtime_attack_names_from_config(config))
+        if "required_runtime_attack_names" in config or "shared_attack_protocol_config_path" in config
+        else []
+    )
     if "target_fpr" not in config:
         raise KeyError(f"protocol config 缺少 target_fpr: {config_path}")
     return {
@@ -76,11 +85,7 @@ def _load_profile_context(config_path: str | Path) -> dict[str, Any]:
             for item in config.get("required_modern_external_baseline_adapter_names", DEFAULT_REQUIRED_BASELINES)
             if str(item)
         ],
-        "required_runtime_attack_names": [
-            str(item)
-            for item in config.get("required_runtime_attack_names", [])
-            if str(item)
-        ],
+        "required_runtime_attack_names": required_runtime_attack_names,
         "fair_comparison_protocol": str(
             config.get("fair_comparison_protocol")
             or "method_specific_clean_negative_calibration_to_target_fpr"

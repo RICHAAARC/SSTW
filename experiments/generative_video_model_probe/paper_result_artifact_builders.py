@@ -16,6 +16,12 @@ from pathlib import Path
 from statistics import mean
 from typing import Any, Iterable, Mapping
 
+from main.attacks.video_runtime_attack_protocol import (
+    load_protocol_config_with_shared_attack_protocol,
+    required_non_runtime_attack_protocols_from_config,
+    required_runtime_attack_names_from_config,
+    target_fpr_levels_from_config,
+)
 from main.protocol.flow_evidence_fields import with_flow_evidence_protocol_defaults
 from main.protocol.record_writer import write_json, write_jsonl
 from main.protocol.table_builder import write_csv
@@ -110,20 +116,16 @@ def _load_protocol_context(config_path: str | Path) -> dict[str, Any]:
     """读取当前论文 profile 的产物构建上下文。"""
 
     path = Path(config_path)
-    config = _read_json(path)
+    config = load_protocol_config_with_shared_attack_protocol(path)
     if "target_fpr" not in config:
         raise KeyError(f"protocol config 缺少 target_fpr: {path}")
     return {
         "paper_result_level": str(config.get("paper_result_level") or "validation_scale"),
         "target_fpr": float(config["target_fpr"]),
         "protocol_config_path": str(path),
-        "required_runtime_attack_names": [
-            str(item) for item in config.get("required_runtime_attack_names", []) if str(item)
-        ],
-        "required_non_runtime_attack_protocols": [
-            str(item) for item in config.get("required_non_runtime_attack_protocols", []) if str(item)
-        ],
-        "target_fpr_levels": [float(item) for item in config.get("target_fpr_levels", DEFAULT_TARGET_FPR_LEVELS)],
+        "required_runtime_attack_names": list(required_runtime_attack_names_from_config(config)),
+        "required_non_runtime_attack_protocols": list(required_non_runtime_attack_protocols_from_config(config)),
+        "target_fpr_levels": list(target_fpr_levels_from_config(config)),
         "claim_support_status": str(
             config.get("claim_support_status") or "paper_profile_artifact_skeleton_not_claim_evidence"
         ),

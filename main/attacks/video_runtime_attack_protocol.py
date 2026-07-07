@@ -7,7 +7,9 @@
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, Mapping
 
 
@@ -119,6 +121,18 @@ FULL_PAPER_NON_RUNTIME_ATTACK_PROTOCOLS = (
     "watermark_spoofing_or_copy_attack",
     "collusion_multi_sample_attack",
     "adversarial_detector_evasion_attack",
+)
+
+DEFAULT_TARGET_FPR_LEVELS = (0.1, 0.01, 0.001)
+DEFAULT_SHARED_ATTACK_PROTOCOL_CONFIG_PATH = "configs/protocol/shared_generative_video_attack_protocol.json"
+SHARED_ATTACK_PROTOCOL_CONFIG_PATH_FIELD = "shared_attack_protocol_config_path"
+SHARED_ATTACK_PROTOCOL_FIELDS = (
+    "required_runtime_attack_names",
+    "runtime_attack_family_minimums",
+    "required_non_runtime_attack_protocols",
+    "minimum_attack_count",
+    "minimum_non_runtime_attack_protocol_count",
+    "target_fpr_levels",
 )
 
 
@@ -484,6 +498,86 @@ RUNTIME_ATTACK_SPECS: dict[str, RuntimeAttackSpec] = {
 }
 
 
+def _read_json_object(path: Path) -> dict[str, Any]:
+    """读取 JSON 对象配置, 并兼容 Colab / Windows 常见的 UTF-8 BOM。"""
+
+    payload = json.loads(path.read_text(encoding="utf-8-sig"))
+    if not isinstance(payload, dict):
+        raise TypeError(f"JSON 顶层必须是对象: {path}")
+    return payload
+
+
+def _resolve_shared_attack_protocol_path(
+    config: Mapping[str, Any],
+    config_path: str | Path | None = None,
+) -> Path | None:
+    """解析 profile config 中登记的共享 attack 协议配置路径。
+
+    该函数属于项目特定写法。SSTW 的三个论文 profile 必须共享同一份 attack
+    manifest, 因此这里允许 profile config 只声明共享配置路径, 由运行时统一
+    还原出 `required_runtime_attack_names` 等字段。
+    """
+
+    raw_path = config.get(SHARED_ATTACK_PROTOCOL_CONFIG_PATH_FIELD)
+    if raw_path in {None, ""}:
+        return None
+    candidate = Path(str(raw_path))
+    if candidate.is_absolute():
+        return candidate
+    cwd_candidate = Path.cwd() / candidate
+    if cwd_candidate.exists():
+        return cwd_candidate
+    if config_path is not None:
+        profile_path = Path(config_path)
+        sibling_candidate = profile_path.parent / candidate
+        if sibling_candidate.exists():
+            return sibling_candidate
+        repo_relative_candidate = profile_path.parent.parent.parent / candidate
+        if repo_relative_candidate.exists():
+            return repo_relative_candidate
+    return candidate
+
+
+def merge_shared_attack_protocol_config(
+    config: Mapping[str, Any],
+    config_path: str | Path | None = None,
+) -> dict[str, Any]:
+    """把共享 attack 协议配置合并到单个 profile config 中。
+
+    通用工程写法通常会在每个配置文件中直接写完整字段。这里采用项目特定写法:
+    三个论文层级只保存样本规模、FPR 和门禁差异, runtime attack 列表、
+    non-runtime/adaptive 协议列表和 family minimums 均来自共享配置。
+    """
+
+    merged = dict(config)
+    shared_path = _resolve_shared_attack_protocol_path(merged, config_path)
+    if shared_path is None:
+        return merged
+    if not shared_path.exists():
+        raise FileNotFoundError(f"缺少共享 attack 协议配置: {shared_path}")
+    shared = _read_json_object(shared_path)
+    for field_name in SHARED_ATTACK_PROTOCOL_FIELDS:
+        current_value = merged.get(field_name)
+        if field_name not in merged or current_value is None or current_value == "" or current_value == []:
+            if field_name in shared:
+                merged[field_name] = shared[field_name]
+    if "shared_attack_protocol_id" not in merged and "shared_attack_protocol_id" in shared:
+        merged["shared_attack_protocol_id"] = shared["shared_attack_protocol_id"]
+    merged[SHARED_ATTACK_PROTOCOL_CONFIG_PATH_FIELD] = str(config.get(SHARED_ATTACK_PROTOCOL_CONFIG_PATH_FIELD))
+    merged["shared_attack_protocol_resolved_path"] = str(shared_path)
+    merged["shared_attack_protocol_resolution_status"] = "shared_attack_protocol_config_merged"
+    return merged
+
+
+def load_protocol_config_with_shared_attack_protocol(config_path: str | Path) -> dict[str, Any]:
+    """读取 protocol config, 并自动合并共享 attack 协议字段。"""
+
+    path = Path(config_path)
+    if not path.exists():
+        raise FileNotFoundError(f"缺少 protocol config: {path}")
+    return merge_shared_attack_protocol_config(_read_json_object(path), path)
+
+
 def runtime_attack_names_for_profile(profile_name: str) -> tuple[str, ...]:
     """按 workflow profile 返回默认 runtime attack 列表。"""
 
@@ -498,10 +592,50 @@ def runtime_attack_names_for_profile(profile_name: str) -> tuple[str, ...]:
 def required_runtime_attack_names_from_config(config: Mapping[str, Any]) -> tuple[str, ...]:
     """从 protocol config 读取 required runtime attack 名称集合。"""
 
+    config = merge_shared_attack_protocol_config(config)
     explicit = config.get("required_runtime_attack_names")
     if isinstance(explicit, list) and explicit:
         return tuple(str(item) for item in explicit if str(item))
     return runtime_attack_names_for_profile(str(config.get("paper_result_level") or "validation_scale"))
+
+
+def required_non_runtime_attack_protocols_from_config(config: Mapping[str, Any]) -> tuple[str, ...]:
+    """从 protocol config 读取 non-runtime / adaptive attack 协议集合。"""
+
+    config = merge_shared_attack_protocol_config(config)
+    explicit = config.get("required_non_runtime_attack_protocols")
+    if isinstance(explicit, list) and explicit:
+        return tuple(str(item) for item in explicit if str(item))
+    profile = str(config.get("paper_result_level") or "validation_scale").strip()
+    if profile in {"validation_scale", "pilot_paper", "full_paper"}:
+        return FULL_PAPER_NON_RUNTIME_ATTACK_PROTOCOLS
+    return ()
+
+
+def runtime_attack_family_minimums_from_config(config: Mapping[str, Any]) -> dict[str, int]:
+    """从 protocol config 读取 runtime attack family 最低覆盖要求。"""
+
+    config = merge_shared_attack_protocol_config(config)
+    profile = str(config.get("paper_result_level") or "validation_scale").strip() or "validation_scale"
+    raw_family_minimums = config.get("runtime_attack_family_minimums")
+    if isinstance(raw_family_minimums, Mapping):
+        return {str(key): int(value) for key, value in raw_family_minimums.items()}
+    return dict(
+        RUNTIME_ATTACK_FAMILY_MINIMUMS_BY_PROFILE.get(
+            profile,
+            RUNTIME_ATTACK_FAMILY_MINIMUMS_BY_PROFILE["validation_scale"],
+        )
+    )
+
+
+def target_fpr_levels_from_config(config: Mapping[str, Any]) -> tuple[float, ...]:
+    """读取当前协议族登记的 FPR 等级集合。"""
+
+    config = merge_shared_attack_protocol_config(config)
+    explicit = config.get("target_fpr_levels")
+    if isinstance(explicit, list) and explicit:
+        return tuple(float(item) for item in explicit)
+    return DEFAULT_TARGET_FPR_LEVELS
 
 
 def audit_runtime_attack_protocol_config(config: Mapping[str, Any]) -> dict[str, Any]:
@@ -513,6 +647,7 @@ def audit_runtime_attack_protocol_config(config: Mapping[str, Any]) -> dict[str,
     full-paper 非 runtime 自适应攻击协议登记。
     """
 
+    config = merge_shared_attack_protocol_config(config)
     profile = str(config.get("paper_result_level") or "validation_scale").strip() or "validation_scale"
     attack_names = required_runtime_attack_names_from_config(config)
     missing_registered_names = [name for name in attack_names if name not in RUNTIME_ATTACK_SPECS]
@@ -523,15 +658,7 @@ def audit_runtime_attack_protocol_config(config: Mapping[str, Any]) -> dict[str,
         family = RUNTIME_ATTACK_SPECS[name].attack_family
         family_counts[family] = family_counts.get(family, 0) + 1
 
-    raw_family_minimums = config.get("runtime_attack_family_minimums")
-    family_minimums = (
-        {str(key): int(value) for key, value in raw_family_minimums.items()}
-        if isinstance(raw_family_minimums, Mapping)
-        else RUNTIME_ATTACK_FAMILY_MINIMUMS_BY_PROFILE.get(
-            profile,
-            RUNTIME_ATTACK_FAMILY_MINIMUMS_BY_PROFILE["validation_scale"],
-        )
-    )
+    family_minimums = runtime_attack_family_minimums_from_config(config)
     missing_family_minimums = [
         {
             "attack_family": family,
@@ -542,12 +669,7 @@ def audit_runtime_attack_protocol_config(config: Mapping[str, Any]) -> dict[str,
         if int(family_counts.get(family, 0)) < int(required_count)
     ]
 
-    raw_non_runtime_required = config.get("required_non_runtime_attack_protocols", [])
-    non_runtime_required = (
-        tuple(str(item) for item in raw_non_runtime_required if str(item))
-        if isinstance(raw_non_runtime_required, list)
-        else ()
-    )
+    non_runtime_required = required_non_runtime_attack_protocols_from_config(config)
     missing_non_runtime = []
     if profile in {"validation_scale", "pilot_paper", "full_paper"}:
         missing_non_runtime = sorted(set(FULL_PAPER_NON_RUNTIME_ATTACK_PROTOCOLS) - set(non_runtime_required))

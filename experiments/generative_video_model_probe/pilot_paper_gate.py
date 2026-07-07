@@ -5,9 +5,8 @@
 calibration split -> frozen threshold artifact -> held-out test split -> report / claim audit input。
 
 通过该 gate 可以支持当前 protocol config 指定 target_fpr 下的 `pilot_paper`
-规模论文级主张。`pilot_paper` 使用代表性论文协议, 但与 `full_paper` 在样本规模、
-统计置信度、protocol config 指定的 FPR 口径和 attack coverage 上仍有差异,
-因此不能外推为更低 FPR、完整 attack coverage 或 full-paper 规模结论。
+规模论文级主张。`pilot_paper` 与 `full_paper` 共用同一份 attack 协议清单,
+差异只允许来自样本规模、统计置信度和 protocol config 指定的 FPR 口径。
 """
 
 from __future__ import annotations
@@ -29,6 +28,7 @@ from experiments.generative_video_model_probe.formal_motion_claim_filter import 
 from experiments.generative_video_model_probe.external_baseline_runner import formal_score_record_ready_for_claim
 from main.attacks.video_runtime_attack_protocol import (
     audit_runtime_attack_protocol_config,
+    load_protocol_config_with_shared_attack_protocol,
     required_runtime_attack_names_from_config,
 )
 from main.protocol.flow_evidence_fields import with_flow_evidence_protocol_defaults
@@ -152,7 +152,7 @@ def _load_config(config_path: str | Path = DEFAULT_PILOT_PAPER_CONFIG) -> dict[s
     默认值覆盖配置的问题。
     """
     path = Path(config_path)
-    raw = _read_json(path)
+    raw = load_protocol_config_with_shared_attack_protocol(path)
     return {
         "pilot_profile_names": raw.get("pilot_profile_names", sorted(DEFAULT_PILOT_PROFILE_NAMES)),
         "target_fpr": _required_float(raw, "target_fpr", path),

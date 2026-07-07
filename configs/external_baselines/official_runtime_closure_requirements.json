@@ -153,7 +153,10 @@
       ],
       "project_owned_wam_frame_runner_module": "external_baseline.wam_frame_official_runtime",
       "required_source_files": [
-        "watermark_anything/models.py",
+        "watermark_anything/models/wam.py",
+        "watermark_anything/models/__init__.py",
+        "watermark_anything/data/metrics.py",
+        "watermark_anything/data/transforms.py",
         "notebooks/inference_utils.py",
         "checkpoints/params.json"
       ],
@@ -170,12 +173,13 @@
         }
       ],
       "runtime_support_mode": "project_owned_official_wam_frame_embed_detect_runtime_or_repository_generated_bundle",
-      "source_dir": "external_baseline/primary/wam_frame/source"
+      "source_dir": "external_baseline/primary/wam_frame/source",
+      "source_layout_note": "Watermark Anything 官方仓库使用 watermark_anything/models/ 包目录, 不是 watermark_anything/models.py 单文件。"
     }
   ],
   "claim_boundary": "该配置只定义 Colab 真实运行前的源代码、依赖、资源、runtime inputs 和 official bundle cache 要求; 不把配置存在解释为 measured_formal 结果。",
   "config_kind": "modern_external_baseline_official_runtime_closure_requirements",
-  "config_version": "2026_07_07_project_self_contained_external_baseline_runtime_closure_v2",
+  "config_version": "2026_07_07_project_self_contained_external_baseline_runtime_closure_v3",
   "default_drive_project_root": "/content/drive/MyDrive/SSTW",
   "default_official_result_bundle_root_pattern": "external_baseline_official_result_bundles/<workflow_profile>",
   "default_run_root_pattern": "runs/generative_video_model_probe/<workflow_profile>",

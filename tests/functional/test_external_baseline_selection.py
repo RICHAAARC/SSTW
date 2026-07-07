@@ -154,6 +154,53 @@ def test_official_runtime_closure_preflight_binds_existing_default_drive_resourc
 
 
 @pytest.mark.quick
+def test_wam_frame_runtime_closure_accepts_official_package_layout(tmp_path: Path) -> None:
+    """WAM 官方仓库使用 models 包目录, runtime closure 不应错误要求 models.py。"""
+
+    run_root = tmp_path / "runs" / "generative_video_model_probe" / "validation_scale"
+    _write_external_baseline_runtime_fixture(run_root)
+    write_jsonl(run_root / "records" / "generation_records.jsonl", [
+        {"prompt_id": "prompt_0", "seed_id": "seed_0", "generation_status": "success"},
+    ])
+    (run_root / "attacked_videos").mkdir(parents=True, exist_ok=True)
+    repo_root = tmp_path / "repo"
+    source_root = repo_root / "external_baseline" / "primary" / "wam_frame" / "source"
+    for relative in (
+        "watermark_anything/models/wam.py",
+        "watermark_anything/models/__init__.py",
+        "watermark_anything/data/metrics.py",
+        "watermark_anything/data/transforms.py",
+        "notebooks/inference_utils.py",
+        "checkpoints/params.json",
+    ):
+        path = source_root / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("# 官方源码布局占位, 仅用于 source preflight 测试。\n", encoding="utf-8")
+    requirements_file = repo_root / "configs" / "external_baselines" / "requirements" / "wam_frame.txt"
+    requirements_file.parent.mkdir(parents=True, exist_ok=True)
+    requirements_file.write_text("numpy\n", encoding="utf-8")
+    resource_root = tmp_path / "resources" / "external_baseline"
+    checkpoint = resource_root / "wam_frame" / "wam_mit.pth"
+    checkpoint.parent.mkdir(parents=True, exist_ok=True)
+    checkpoint.write_bytes(b"wam-checkpoint")
+
+    audit = build_official_runtime_closure_requirements(
+        run_root,
+        repo_root=repo_root,
+        resource_root=resource_root,
+        official_result_bundle_root=tmp_path / "external_baseline_official_result_bundles" / "validation_scale",
+        baseline_id="wam_frame",
+    )
+
+    assert audit["official_runtime_closure_decision"] == "PASS"
+    row = audit["baseline_runtime_rows"][0]
+    assert row["baseline_id"] == "wam_frame"
+    assert row["source_requirement"]["official_source_ready"] is True
+    assert "watermark_anything/models.py" not in row["source_requirement"]["required_source_files"]
+    assert row["runtime_closure_status"] == "ready_to_attempt_formal_reference"
+
+
+@pytest.mark.quick
 def test_official_resource_bootstrap_writes_repair_artifact_without_network(tmp_path: Path) -> None:
     """bootstrap 在禁止网络时仍必须落盘可审计修复计划和环境变量更新。"""
     run_root = tmp_path / "runs" / "validation_scale"

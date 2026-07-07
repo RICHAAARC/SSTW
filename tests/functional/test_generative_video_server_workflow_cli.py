@@ -14,7 +14,7 @@ from scripts.run_generative_video_server_workflow import PIPELINE_ROLE_ORDER
 
 @pytest.mark.quick
 def test_server_workflow_cli_dry_run_exposes_split_stage_plans(tmp_path: Path) -> None:
-    """服务器 CLI dry-run 必须区分 formal comparison scoring 与最终 paper gate。"""
+    """服务器 CLI dry-run 必须区分 formal comparison、paper evidence 与最终 paper gate。"""
 
     scoring_command = [
         sys.executable,
@@ -43,6 +43,31 @@ def test_server_workflow_cli_dry_run_exposes_split_stage_plans(tmp_path: Path) -
     assert "formal_baseline_difference_interval" in scoring_stage_names
     assert "validation_scale_formal_internal_ablation" not in scoring_stage_names
 
+    evidence_command = [
+        sys.executable,
+        "scripts/run_generative_video_server_workflow.py",
+        "--project-root",
+        str(tmp_path / "sstw_server_run"),
+        "--pipeline",
+        "paper_evidence_postprocess",
+        "--dry-run",
+        "--exclude-videos",
+    ]
+    completed = subprocess.run(evidence_command, check=True, text=True, capture_output=True)
+    evidence_payload = json.loads(completed.stdout)
+    evidence_stage_names = [
+        row["stage_name"]
+        for row in evidence_payload["pipeline_results"][0]["stage_plan"]
+    ]
+
+    assert evidence_payload["server_workflow_decision"] == "DRY_RUN"
+    assert evidence_payload["pipeline"] == "paper_evidence_postprocess"
+    assert "motion_consistency_exclusion_report" in evidence_stage_names
+    assert "validation_internal_ablation" in evidence_stage_names
+    assert "validation_scale_formal_internal_ablation" in evidence_stage_names
+    assert "low_fpr_formal_statistics" in evidence_stage_names
+    assert "validation_scale_gate" not in evidence_stage_names
+
     gate_command = [
         sys.executable,
         "scripts/run_generative_video_server_workflow.py",
@@ -62,11 +87,13 @@ def test_server_workflow_cli_dry_run_exposes_split_stage_plans(tmp_path: Path) -
 
     assert gate_payload["server_workflow_decision"] == "DRY_RUN"
     assert gate_payload["pipeline"] == "paper_gate_and_package"
-    assert "motion_consistency_exclusion_report" in gate_stage_names
+    assert "motion_consistency_exclusion_report" not in gate_stage_names
     assert "external_baseline_comparison" not in gate_stage_names
     assert "fair_detection_calibration" not in gate_stage_names
-    assert "validation_scale_formal_internal_ablation" in gate_stage_names
-    assert "low_fpr_formal_statistics" in gate_stage_names
+    assert "validation_scale_formal_internal_ablation" not in gate_stage_names
+    assert "low_fpr_formal_statistics" not in gate_stage_names
+    assert "validation_scale_gate" in gate_stage_names
+    assert "validation_scale_package_manifest_builder" in gate_stage_names
 
 
 @pytest.mark.quick
@@ -78,6 +105,7 @@ def test_server_workflow_complete_pipeline_order_matches_notebook_handoff_model(
         "generative_video_runtime",
         "external_baseline_formal_scoring",
         "formal_comparison_scoring",
+        "paper_evidence_postprocess",
         "paper_gate_and_package",
     )
     assert PIPELINE_ROLE_ORDER["validation_scale_complete"] == PIPELINE_ROLE_ORDER["paper_protocol_complete"]

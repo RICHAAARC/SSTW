@@ -87,5 +87,5 @@ fail-closed: 若某个 required runtime attack 在官方 `temporal_results.json`
 3. `SSTW_<BASELINE>_NATIVE_EVAL_COMMAND` 或等价项目内 official bundle 生成逻辑。
 4. 覆盖全部 `validation_scale` runtime comparison units 的 score JSON。
 5. 5 个主实验 independent formal reference Notebook 先各自生成项目内 official bundle; `formal_comparison_scoring_colab.ipynb` 再统一转写 `measured_formal` records。
-6. `formal_comparison_scoring_colab.ipynb` 在恢复 5 个主实验 official reference 阶段包后执行全量统一转写、self-containment 判定、公平校准和差值区间统计; `paper_gate_and_package_colab.ipynb` 只恢复 formal comparison scoring 阶段包并执行最终门禁和打包。旧的通用 external baseline scoring Notebook 已删除, 不再作为诊断或正式入口保留。
+6. `formal_comparison_scoring_colab.ipynb` 在恢复 5 个主实验 official reference 阶段包后执行全量统一转写、self-containment 判定、公平校准和差值区间统计; `paper_evidence_postprocess_colab.ipynb` 恢复 formal comparison scoring 阶段包并生成辅助证据; `paper_gate_and_package_colab.ipynb` 恢复 runtime、motion threshold、formal comparison scoring 和 paper evidence postprocess 阶段包并执行最终门禁和打包。旧的通用 external baseline scoring Notebook 已删除, 不再作为诊断或正式入口保留。
 7. `external_baseline_self_containment_decision.json` 通过。

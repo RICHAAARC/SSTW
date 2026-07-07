@@ -368,6 +368,7 @@ motion_threshold_calibration_colab.ipynb
 -> generative_video_runtime_colab.ipynb
 -> 5 个主实验 modern external baseline formal reference Notebook
 -> formal_comparison_scoring_colab.ipynb
+-> paper_evidence_postprocess_colab.ipynb
 -> paper_gate_and_package_colab.ipynb
 ```
 
@@ -383,8 +384,8 @@ motion_threshold_calibration_colab.ipynb
    runtime attack 和 detection, 不执行现代 baseline command 预检或 baseline scoring。
 3. 5 个主实验 modern external baseline formal reference Notebook 分别负责对应 baseline 的 source intake、clone / build / run / adapt 和 official bundle 生成, 不默认调用全量 runner 转写 `measured_formal` records。
 4. `formal_comparison_scoring_colab.ipynb` 负责恢复 5 个主实验 baseline official reference 阶段包, 重新执行全量统一转写、self-containment 判定、公平校准和差值区间统计。
-5. `paper_gate_and_package_colab.ipynb` 负责恢复 formal comparison scoring 阶段包, 再执行内部消融、adaptive attack proxy、replay/sketch
-   或 Claim-3 downgrade、CI、fixed-FPR gate、artifact rebuild 和 Drive package。
+5. `paper_evidence_postprocess_colab.ipynb` 负责恢复 runtime、motion threshold 和 formal comparison scoring 阶段包, 再执行内部消融、adaptive attack proxy、replay/sketch 或 Claim-3 downgrade、CI、low-FPR formal statistics 和数据切分泄漏检查。
+6. `paper_gate_and_package_colab.ipynb` 负责恢复 runtime、motion threshold、formal comparison scoring 和 paper evidence postprocess 阶段包, 只执行最终 fixed-FPR gate、transition decision、artifact rebuild dry run、figure/package manifest builder 和 Drive package。
 
 旧的通用 external baseline scoring Notebook 已删除。正式主流程应以 5 个主实验
 baseline 专用 Notebook 产生的 official bundle 为输入, 由
@@ -2409,6 +2410,7 @@ external_baseline_source_intake
 -> external_baseline_official_result_bundle_preflight
 -> external_baseline_comparison
 -> formal_comparison_scoring_colab 重新聚合 5 个主实验 official reference 阶段包
+-> paper_evidence_postprocess_colab 生成最终门禁前辅助证据
 -> paper_gate_and_package_colab 执行最终门禁
 ```
 

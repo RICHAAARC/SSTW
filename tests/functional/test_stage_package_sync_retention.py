@@ -136,6 +136,66 @@ def test_formal_comparison_stage_package_contains_only_scoring_artifacts(
 
 
 @pytest.mark.quick
+def test_paper_evidence_postprocess_stage_package_contains_only_evidence_artifacts(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """paper evidence 阶段包只保存最终门禁前辅助证据, 不重复打包上游公平比较或视频。"""
+
+    monkeypatch.setenv("SSTW_COLAB_STAGE_IO_MODE", "local_zip")
+    drive_root = tmp_path / "drive" / "SSTW"
+    run_root = tmp_path / "workspace" / "runs" / "generative_video_model_probe" / "validation_scale"
+    evidence_targets = {
+        "records/validation_internal_ablation_records.jsonl": "{}\n",
+        "tables/validation_internal_ablation_table.csv": "variant,status\nfull,ready\n",
+        "reports/validation_internal_ablation_report.md": "# validation internal ablation\n",
+        "artifacts/validation_internal_ablation_decision.json": json.dumps(
+            {"validation_internal_ablation_decision": "PASS"}
+        ),
+        "records/adaptive_attack_records.jsonl": "{}\n",
+        "tables/adaptive_attack_table.csv": "attack_id,status\nflow,ready\n",
+        "reports/adaptive_attack_report.md": "# adaptive attack\n",
+        "artifacts/adaptive_attack_decision.json": json.dumps({"adaptive_attack_decision": "PASS"}),
+        "records/low_fpr_formal_statistics_records.jsonl": "{}\n",
+        "tables/low_fpr_formal_statistics_table.csv": "method_id,status\nsstw,ready\n",
+        "reports/low_fpr_formal_statistics_report.md": "# low fpr\n",
+        "artifacts/low_fpr_formal_statistics_decision.json": json.dumps(
+            {"low_fpr_formal_statistics_decision": "PASS"}
+        ),
+    }
+    upstream_targets = {
+        "records/fair_detection_calibration_records.jsonl": "{}\n",
+        "tables/fair_detection_calibration_table.csv": "method_id,status\nsstw,ready\n",
+        "artifacts/fair_detection_calibration_decision.json": "{}",
+    }
+    for relpath, content in {**evidence_targets, **upstream_targets}.items():
+        path = run_root / relpath
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(content, encoding="utf-8")
+    (run_root / "videos").mkdir(parents=True)
+    (run_root / "videos" / "source.mp4").write_bytes(b"runtime-video")
+    layout = {
+        "drive_project_root": str(drive_root),
+        "workflow_profile": "validation_scale",
+        "drive_run_root": str(run_root),
+        "local_stage_package_cache_root": str(tmp_path / "local_cache"),
+        "local_stage_workspace_root": str(tmp_path / "workspace"),
+    }
+
+    result = publish_colab_stage_package(layout, notebook_role="paper_evidence_postprocess", include_videos=True)
+
+    assert result["stage_package_publish_status"] == "published"
+    assert "validation_scale/paper_evidence_postprocess_colab" in result["drive_stage_package_zip"].replace("\\", "/")
+    with zipfile.ZipFile(result["drive_stage_package_zip"]) as archive:
+        names = archive.namelist()
+    for relpath in evidence_targets:
+        assert any(name.endswith(relpath) for name in names)
+    for relpath in upstream_targets:
+        assert not any(name.endswith(relpath) for name in names)
+    assert not any(name.endswith("source.mp4") for name in names)
+
+
+@pytest.mark.quick
 def test_paper_gate_stage_package_includes_fair_comparison_governed_artifacts(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

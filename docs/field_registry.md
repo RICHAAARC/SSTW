@@ -1246,7 +1246,7 @@ Notebook 与 repository module 的跨边界数据
 | comparison_positive_rate | metric | none | true | true | false | 同协议 formal 比较行中 positive 检测比例。 |
 | comparison_score_mean | metric | none | true | true | false | 同协议 formal 比较行的平均分数。 |
 | comparison_missing_reason | governance | none | true | false | false | 同协议 formal 比较行缺失 measured_formal records 的原因。 |
-| require_formal_method_baseline_comparison | protocol | none | true | false | false | validation_scale gate 是否要求 SSTW 与 3 个 baseline 的同协议 measured_formal 比较表。 |
+| require_formal_method_baseline_comparison | protocol | none | true | false | false | validation_scale gate 是否要求 SSTW 与 5 个主实验 baseline 的同协议 measured_formal 比较表。 |
 | formal_baseline_difference_interval_decision | governance | none | true | true | false | SSTW 相对现代 external baseline 的差值置信区间阶段判定。 |
 | formal_baseline_difference_interval_target_fpr | protocol | none | true | false | false | pilot_paper gate 读取到的 formal baseline difference interval decision 的 target_fpr。 |
 | formal_baseline_difference_interval_status | governance | none | true | false | false | pilot_paper gate 汇总的 formal baseline difference interval 产物状态。 |

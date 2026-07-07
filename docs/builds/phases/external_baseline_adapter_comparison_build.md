@@ -151,7 +151,7 @@ claim_support_status: measured_formal_self_contained_results_required_for_valida
 2. 通过 `configs/external_baselines/official_runtime_closure_requirements.json` 和 `configs/external_baselines/requirements/<baseline_id>.txt` 明确每个 baseline 的真实运行要求; 5 个主实验 formal reference Notebook 默认会安装各自的 requirements 文件。
 3. 运行 `external_baseline.official_runtime_closure`, 写出 `artifacts/external_baseline_official_runtime_closure_requirements.json`; 若 Google Drive 默认资源路径已存在, Notebook 应自动应用其中的 `environment_updates`。
 4. 默认使用 repository bridge + official inner command; 不要求用户手写 5 个主实验 `SSTW_<BASELINE>_EVAL_COMMAND`。只有在官方仓库新增更合适 CLI 时, 才通过 `SSTW_<BASELINE>_NATIVE_EVAL_COMMAND` 覆盖单个 baseline。
-6. 在 5 个主实验 official bundle 全部完成后运行 `paper_workflow/colab_notebooks/formal_comparison_scoring_colab.ipynb`, 由该阶段恢复全部 official reference 阶段包后执行全量统一转写、self-containment 判定、公平校准和差值区间统计。随后 `paper_gate_and_package_colab.ipynb` 只恢复 formal comparison scoring 阶段包并执行最终门禁与打包。
+6. 在 5 个主实验 official bundle 全部完成后运行 `paper_workflow/colab_notebooks/formal_comparison_scoring_colab.ipynb`, 由该阶段恢复全部 official reference 阶段包后执行全量统一转写、self-containment 判定、公平校准和差值区间统计。随后 `paper_evidence_postprocess_colab.ipynb` 生成辅助证据, `paper_gate_and_package_colab.ipynb` 恢复 runtime、motion threshold、formal comparison scoring 和 paper evidence postprocess 阶段包并执行最终门禁与打包。
 7. 写出 `artifacts/external_baseline_self_containment_decision.json`, 逐 baseline 记录 clone / build / run / adapt / record 状态。
 8. 仅当全部现代 baseline 都产生项目内自包含 governed `measured_formal` records 后, 才允许 validation_scale gate 通过; validation_scale 通过后还必须生成 validation_scale_to_pilot_paper_transition_decision 才能进入 pilot_paper, full_paper 仍需 pilot_paper gate、pilot_paper_to_full_paper_transition_decision 与 full_paper_result_checker。
 ```
@@ -190,7 +190,7 @@ external_baseline_threshold 或 threshold
 ```text
 generative_video_runtime_colab.ipynb: 执行真实 GPU 生成、formal metrics、runtime attack 和 detection, 不执行 baseline command preflight 或 baseline comparison。
 *_formal_reference_colab.ipynb: 读取同一 workflow_profile 的 run_root, 逐 baseline 执行 source intake、project clone / build / run / adapt 和 official bundle 生成; 不执行全量 measured_formal 转写。
-formal_comparison_scoring_colab.ipynb: 读取同一 workflow_profile 的 run_root, 恢复 5 个主实验 official reference 阶段包后执行全量统一转写、self-containment 判定、公平校准和差值区间统计。paper_gate_and_package_colab.ipynb 只恢复 formal comparison scoring 阶段包并执行最终 gate 打包。旧的通用 external baseline scoring Notebook 已删除, 防止与 paper gate 聚合职责重复。
+formal_comparison_scoring_colab.ipynb: 读取同一 workflow_profile 的 run_root, 恢复 5 个主实验 official reference 阶段包后执行全量统一转写、self-containment 判定、公平校准和差值区间统计。paper_evidence_postprocess_colab.ipynb 先恢复 formal comparison scoring 阶段包并生成辅助证据; paper_gate_and_package_colab.ipynb 再恢复 runtime、motion threshold、formal comparison scoring 和 paper evidence postprocess 阶段包并执行最终 gate 打包。旧的通用 external baseline scoring Notebook 已删除, 防止与 paper gate 聚合职责重复。
 ```
 
 profile、Drive 目录和 stage plan 由下述配置统一控制:

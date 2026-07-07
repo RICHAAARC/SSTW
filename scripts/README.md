@@ -36,6 +36,15 @@ python scripts/run_generative_video_server_workflow.py \
   --pipeline formal_comparison_scoring
 ```
 
+只重跑 paper evidence postprocess:
+
+```bash
+python scripts/run_generative_video_server_workflow.py \
+  --project-root /data/SSTW \
+  --workflow-profile validation_scale \
+  --pipeline paper_evidence_postprocess
+```
+
 只重跑 paper gate/package:
 
 ```bash

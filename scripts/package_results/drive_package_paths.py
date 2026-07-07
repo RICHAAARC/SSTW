@@ -90,6 +90,7 @@ def archive_run_root_for_stage(
     if package_id in {
         "formal_comparison_scoring_colab",
         "generative_video_runtime_colab",
+        "paper_evidence_postprocess_colab",
         "paper_gate_and_package_colab",
     }:
         return f"runs/generative_video_model_probe/{profile}"

@@ -1494,12 +1494,14 @@ workflow_stage_plan
 paper_workflow/colab_notebooks/motion_threshold_calibration_colab.ipynb
 paper_workflow/colab_notebooks/generative_video_runtime_colab.ipynb
 paper_workflow/colab_notebooks/*_formal_reference_colab.ipynb
+paper_workflow/colab_notebooks/formal_comparison_scoring_colab.ipynb
+paper_workflow/colab_notebooks/paper_evidence_postprocess_colab.ipynb
 paper_workflow/colab_notebooks/paper_gate_and_package_colab.ipynb
 ```
 
 旧的通用 external baseline scoring Notebook 已删除。validation-scale 推荐主流程
-只保留 3 个 baseline 专用 official reference Notebook 与
-`paper_gate_and_package_colab.ipynb` 的最终聚合门禁。
+保留 5 个 baseline 专用 official reference Notebook、独立 formal comparison scoring、
+paper evidence postprocess 与 `paper_gate_and_package_colab.ipynb` 的最终聚合门禁。
 
 阶段性状态为:
 

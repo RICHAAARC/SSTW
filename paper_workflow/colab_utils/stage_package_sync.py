@@ -93,6 +93,54 @@ FORMAL_COMPARISON_SCORING_PACKAGE_RELPATHS = (
     "tables/sstw_measured_formal_table.csv",
 )
 
+PAPER_EVIDENCE_POSTPROCESS_PACKAGE_RELPATHS = (
+    "artifacts/adaptive_attack_decision.json",
+    "artifacts/claim3_downgrade_decision.json",
+    "artifacts/data_split_and_leakage_guard_decision.json",
+    "artifacts/low_fpr_formal_statistics_decision.json",
+    "artifacts/motion_consistency_exclusion_decision.json",
+    "artifacts/motion_threshold_calibration_decision.json",
+    "artifacts/motion_threshold_reuse_decision.json",
+    "artifacts/notebook_runtime_report.json",
+    "artifacts/notebook_run_timing_manifest.json",
+    "artifacts/replay_and_sketch_gate_decision.json",
+    "artifacts/stage_package_restore_decision.json",
+    "artifacts/statistical_confidence_interval_decision.json",
+    "artifacts/validation_internal_ablation_decision.json",
+    "artifacts/validation_scale_formal_internal_ablation_decision.json",
+    "records/adaptive_attack_records.jsonl",
+    "records/claim3_downgrade_records.jsonl",
+    "records/data_split_and_leakage_guard_records.jsonl",
+    "records/low_fpr_formal_statistics_records.jsonl",
+    "records/motion_consistency_exclusion_records.jsonl",
+    "records/notebook_stage_timing_records.jsonl",
+    "records/replay_uncertainty_records.jsonl",
+    "records/statistical_confidence_interval_records.jsonl",
+    "records/trajectory_sketch_verification_records.jsonl",
+    "records/validation_internal_ablation_records.jsonl",
+    "records/validation_scale_formal_internal_ablation_records.jsonl",
+    "records/wrong_prompt_replay_records.jsonl",
+    "records/wrong_sampler_replay_records.jsonl",
+    "reports/adaptive_attack_report.md",
+    "reports/claim3_downgrade_report.md",
+    "reports/data_split_and_leakage_guard_report.md",
+    "reports/low_fpr_formal_statistics_report.md",
+    "reports/motion_consistency_exclusion_report.md",
+    "reports/replay_and_sketch_gate_report.md",
+    "reports/statistical_confidence_interval_report.md",
+    "reports/validation_internal_ablation_report.md",
+    "reports/validation_scale_formal_internal_ablation_report.md",
+    "tables/adaptive_attack_table.csv",
+    "tables/claim3_downgrade_table.csv",
+    "tables/data_split_and_leakage_guard_table.csv",
+    "tables/low_fpr_formal_statistics_table.csv",
+    "tables/motion_consistency_exclusion_table.csv",
+    "tables/replay_verification_table.csv",
+    "tables/statistical_confidence_interval_table.csv",
+    "tables/validation_internal_ablation_table.csv",
+    "tables/validation_scale_formal_internal_ablation_table.csv",
+)
+
 OBSOLETE_STAGE_PAYLOAD_NAME_FRAGMENTS = (
     "small_scale_claim_pilot",
 )
@@ -104,6 +152,7 @@ OBSOLETE_EXTERNAL_BASELINE_EVIDENCE_IDS = {
 MAIN_STAGE_PACKAGE_IDS = {
     "formal_comparison_scoring_colab",
     "generative_video_runtime_colab",
+    "paper_evidence_postprocess_colab",
     "paper_gate_and_package_colab",
 }
 
@@ -141,6 +190,8 @@ def stage_package_id_for_notebook(
         return "generative_video_runtime_colab"
     if role == "formal_comparison_scoring":
         return "formal_comparison_scoring_colab"
+    if role == "paper_evidence_postprocess":
+        return "paper_evidence_postprocess_colab"
     if role == "motion_threshold_calibration":
         return "motion_threshold_calibration_colab"
     if role == "paper_gate_and_package":
@@ -574,11 +625,18 @@ def _default_required_stage_packages(layout: Mapping[str, str], notebook_role: s
             for baseline in MODERN_EXTERNAL_BASELINE_IDS
         )
         return required
+    if role == "paper_evidence_postprocess":
+        required = ["generative_video_runtime_colab"]
+        if profile != "motion_calibration":
+            required.append("motion_threshold_calibration_colab")
+            required.append("formal_comparison_scoring_colab")
+        return required
     if role == "paper_gate_and_package":
         required = ["generative_video_runtime_colab"]
         if profile != "motion_calibration":
             required.append("motion_threshold_calibration_colab")
             required.append("formal_comparison_scoring_colab")
+            required.append("paper_evidence_postprocess_colab")
         return required
     if role == "generative_video_runtime" and profile != "motion_calibration":
         return ["motion_threshold_calibration_colab"]
@@ -761,6 +819,17 @@ def _iter_package_sources(
         )
         return sources
 
+    if role == "paper_evidence_postprocess":
+        run_root = Path(str(layout.get("drive_run_root") or ""))
+        run_archive_root = _archive_root_for_layout_path(layout, "drive_run_root")
+        _append_existing_run_relpaths(
+            sources,
+            run_root,
+            run_archive_root,
+            PAPER_EVIDENCE_POSTPROCESS_PACKAGE_RELPATHS,
+        )
+        return sources
+
     keys = ["drive_run_root"]
     if role in {"generative_video_runtime", "motion_threshold_calibration"}:
         keys.append("drive_dataset_root")
@@ -783,9 +852,9 @@ def _append_existing_run_relpaths(
 ) -> None:
     """把指定 run_root 相对文件加入阶段包源列表。
 
-    该函数用于 `formal_comparison_scoring` 阶段。该阶段会恢复 runtime 和 5 个
-    baseline 的大包, 但它自己的阶段 zip 只应保存公平比较产物, 不能把上游视频、
-    帧图或 official bundle 再次重复打包。
+    该函数用于轻量后处理阶段。此类阶段会恢复上游大包, 但它自己的阶段 zip
+    只应保存本阶段新生成的 governed 产物, 不能把上游视频、帧图或 official
+    bundle 再次重复打包。
     """
 
     if not run_root.exists():

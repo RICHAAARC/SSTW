@@ -33,6 +33,7 @@ SERVER_PIPELINES = (
     "generative_video_runtime",
     "external_baseline_references",
     "formal_comparison_scoring",
+    "paper_evidence_postprocess",
     "paper_gate_and_package",
     "paper_protocol_complete",
     "validation_scale_complete",
@@ -43,12 +44,14 @@ PIPELINE_ROLE_ORDER = {
     "generative_video_runtime": ("generative_video_runtime",),
     "external_baseline_references": ("external_baseline_formal_scoring",),
     "formal_comparison_scoring": ("formal_comparison_scoring",),
+    "paper_evidence_postprocess": ("paper_evidence_postprocess",),
     "paper_gate_and_package": ("paper_gate_and_package",),
     "paper_protocol_complete": (
         "motion_threshold_calibration",
         "generative_video_runtime",
         "external_baseline_formal_scoring",
         "formal_comparison_scoring",
+        "paper_evidence_postprocess",
         "paper_gate_and_package",
     ),
     "validation_scale_complete": (
@@ -56,6 +59,7 @@ PIPELINE_ROLE_ORDER = {
         "generative_video_runtime",
         "external_baseline_formal_scoring",
         "formal_comparison_scoring",
+        "paper_evidence_postprocess",
         "paper_gate_and_package",
     ),
 }

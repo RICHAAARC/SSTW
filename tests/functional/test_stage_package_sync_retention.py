@@ -47,7 +47,7 @@ def test_stage_package_publish_keeps_timestamp_zip_by_default(tmp_path: Path, mo
     run_root = tmp_path / "workspace" / "runs" / "validation_scale"
     run_root.mkdir(parents=True)
     (run_root / "artifacts").mkdir()
-    (run_root / "artifacts" / "runtime_decision.json").write_text(
+    (run_root / "artifacts" / "generative_video_colab_runtime_decision.json").write_text(
         json.dumps({"decision": "PASS"}),
         encoding="utf-8",
     )
@@ -59,17 +59,17 @@ def test_stage_package_publish_keeps_timestamp_zip_by_default(tmp_path: Path, mo
         "local_stage_workspace_root": str(tmp_path / "workspace"),
     }
 
-    result = publish_colab_stage_package(layout, notebook_role="generative_video_runtime", include_videos=True)
+    result = publish_colab_stage_package(layout, notebook_role="generative_video_generation", include_videos=True)
 
-    package_dir = drive_root / "validation_scale" / "generative_video_runtime_colab"
+    package_dir = drive_root / "validation_scale" / "generative_video_generation_colab"
     assert result["stage_package_publish_status"] == "published"
     assert not (package_dir / "stage_package_latest.zip").exists()
     assert not (package_dir / "stage_package_latest_manifest.json").exists()
-    timestamp_zips = list(package_dir.glob("validation_scale_generative_video_runtime_colab_*.zip"))
+    timestamp_zips = list(package_dir.glob("validation_scale_generative_video_generation_colab_*.zip"))
     assert len(timestamp_zips) == 1
-    assert latest_stage_package_zip(drive_root, "validation_scale", "generative_video_runtime_colab") == timestamp_zips[0]
+    assert latest_stage_package_zip(drive_root, "validation_scale", "generative_video_generation_colab") == timestamp_zips[0]
     with zipfile.ZipFile(timestamp_zips[0]) as archive:
-        assert any(name.endswith("runtime_decision.json") for name in archive.namelist())
+        assert any(name.endswith("generative_video_colab_runtime_decision.json") for name in archive.namelist())
 
 
 @pytest.mark.quick
@@ -329,7 +329,7 @@ def test_history_drive_packager_is_noop_in_stage_zip_mode() -> None:
         {
             "stage_package_handoff_mode": "local_zip",
             "drive_run_root": "/content/SSTW_stage_workspace/runs/validation_scale",
-            "drive_package_dir": "/content/drive/MyDrive/SSTW/validation_scale/generative_video_runtime_colab",
+            "drive_package_dir": "/content/drive/MyDrive/SSTW/validation_scale/generative_video_generation_colab",
         }
     )
 

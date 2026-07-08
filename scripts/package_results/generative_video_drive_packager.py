@@ -25,7 +25,7 @@ from scripts.package_results.drive_package_paths import (
 
 
 DEFAULT_WORKFLOW_PROFILE = "validation_scale"
-DEFAULT_STAGE_PACKAGE_ID = "generative_video_runtime_colab"
+DEFAULT_STAGE_PACKAGE_ID = "paper_gate_and_package_colab"
 
 
 def _write_tree_to_archive(archive: zipfile.ZipFile, run_root: Path, tree_path: Path, archive_run_root: str) -> None:

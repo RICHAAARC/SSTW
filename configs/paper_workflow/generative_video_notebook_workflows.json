@@ -1,12 +1,11 @@
 {
   "config_kind": "generative_video_notebook_workflow_config",
-  "config_version": "2026_07_08_validation_scale_split_runtime_v1",
+  "config_version": "2026_07_08_remove_legacy_runtime_role_v1",
   "default_dataset_root_relative": "datasets/generative_video_prompt_suite",
   "default_drive_project_root": "/content/drive/MyDrive/SSTW",
   "default_prompt_suite_path_relative": "datasets/generative_video_prompt_suite/prompt_seed_suite.json",
   "default_workflow_profile_by_notebook_role": {
     "external_baseline_formal_scoring": "validation_scale",
-    "generative_video_runtime": "validation_scale",
     "motion_threshold_calibration": "motion_calibration",
     "paper_gate_and_package": "validation_scale",
     "formal_comparison_scoring": "validation_scale",
@@ -151,27 +150,6 @@
         "quick_tests_and_harness",
         "drive_packaging"
       ]
-    },
-    "generative_video_runtime": {
-      "allowed_workflow_profiles": [
-        "validation_scale",
-        "pilot_paper",
-        "full_paper"
-      ],
-      "notebook_path": "paper_workflow/colab_notebooks/generative_video_runtime_colab.ipynb",
-      "stage_plan": [
-        "prepare_prompt_suite",
-        "wan21_runtime_generation",
-        "formal_metric_scoring",
-        "motion_threshold_reuse_check",
-        "mechanism_postprocess",
-        "protocol_evaluation_matrix_postprocess",
-        "runtime_attack",
-        "runtime_detection",
-        "quick_tests_and_harness",
-        "drive_packaging"
-      ],
-      "entrypoint_status": "legacy_compatibility_not_primary_split_flow"
     },
     "motion_threshold_calibration": {
       "allowed_workflow_profiles": [

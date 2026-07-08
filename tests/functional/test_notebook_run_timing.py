@@ -22,7 +22,7 @@ def test_notebook_run_timer_writes_report_manifest_and_stage_records(tmp_path: P
     layout = {"drive_run_root": str(tmp_path / "run")}
     timer = start_notebook_run_timer(
         layout,
-        notebook_role="generative_video_runtime",
+        notebook_role="generative_video_generation",
         workflow_profile="validation_scale",
         enabled_stage_plan=["prepare_prompt_suite"],
         repo_root=".",
@@ -37,7 +37,7 @@ def test_notebook_run_timer_writes_report_manifest_and_stage_records(tmp_path: P
 
     assert result["stage_status"] == "PASS"
     assert manifest["manifest_kind"] == "notebook_runtime_report"
-    assert manifest["notebook_role"] == "generative_video_runtime"
+    assert manifest["notebook_role"] == "generative_video_generation"
     assert manifest["workflow_profile"] == "validation_scale"
     assert manifest["notebook_elapsed_sec"] >= 0
     assert manifest["notebook_timing_coverage_status"] == "repository_stage_plan_only_excludes_manual_colab_setup"
@@ -67,7 +67,7 @@ def test_notebook_run_timer_can_use_shared_layout_start_time(
     monkeypatch.setenv("SSTW_NOTEBOOK_STARTED_AT_PERF_COUNTER", "0.0")
     timer = start_notebook_run_timer(
         {"drive_run_root": str(tmp_path / "run")},
-        notebook_role="generative_video_runtime",
+        notebook_role="generative_video_generation",
         workflow_profile="validation_scale",
         repo_root=".",
     )
@@ -87,7 +87,7 @@ def test_shared_layout_initializes_runtime_session_without_notebook_edits(tmp_pa
             "drive_run_root": str(tmp_path / "run"),
             "workflow_profile": "validation_scale",
         },
-        notebook_role="generative_video_runtime",
+        notebook_role="generative_video_generation",
     )
 
     assert layout["notebook_runtime_started_at_utc"]
@@ -109,12 +109,12 @@ def test_stage_package_manifest_summarizes_notebook_timing(tmp_path: Path, monke
         "drive_project_root": str(drive_root),
         "drive_run_root": str(run_root),
         "workflow_profile": "validation_scale",
-        "stage_package_id": "generative_video_runtime_colab",
+        "stage_package_id": "generative_video_generation_colab",
         "local_stage_package_cache_root": str(tmp_path / "cache"),
     }
     timer = start_notebook_run_timer(
         layout,
-        notebook_role="generative_video_runtime",
+        notebook_role="generative_video_generation",
         workflow_profile="validation_scale",
         repo_root=".",
     )
@@ -122,7 +122,7 @@ def test_stage_package_manifest_summarizes_notebook_timing(tmp_path: Path, monke
 
     package = publish_colab_stage_package(
         layout,
-        notebook_role="generative_video_runtime",
+        notebook_role="generative_video_generation",
         include_videos=False,
     )
 
@@ -156,15 +156,15 @@ def test_stage_package_creates_runtime_report_without_explicit_timer(
             "drive_project_root": str(drive_root),
             "drive_run_root": str(run_root),
             "workflow_profile": "validation_scale",
-            "stage_package_id": "generative_video_runtime_colab",
+            "stage_package_id": "generative_video_generation_colab",
             "local_stage_package_cache_root": str(tmp_path / "cache"),
         },
-        notebook_role="generative_video_runtime",
+        notebook_role="generative_video_generation",
     )
 
     package = publish_colab_stage_package(
         layout,
-        notebook_role="generative_video_runtime",
+        notebook_role="generative_video_generation",
         include_videos=False,
     )
 

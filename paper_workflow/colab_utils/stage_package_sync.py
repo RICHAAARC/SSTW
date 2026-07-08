@@ -266,12 +266,15 @@ MAIN_STAGE_PACKAGE_IDS = {
     "formal_comparison_scoring_colab",
     GEN_VIDEO_GENERATION_PACKAGE_ID,
     GEN_VIDEO_QUALITY_SCORING_PACKAGE_ID,
-    "generative_video_runtime_colab",
     RUNTIME_ATTACK_PACKAGE_ID,
     RUNTIME_DETECTION_PACKAGE_ID,
     "paper_evidence_postprocess_colab",
     "paper_gate_and_package_colab",
     SSTW_MECHANISM_POSTPROCESS_PACKAGE_ID,
+}
+
+REMOVED_NOTEBOOK_ROLES = {
+    "generative_video_runtime",
 }
 
 HELPER_WORKFLOW_PROFILES = {
@@ -302,10 +305,10 @@ def stage_package_id_for_notebook(
     """根据 Notebook role 生成稳定的阶段包 ID。"""
 
     role = sanitize_filename_token(notebook_role)
+    if role in REMOVED_NOTEBOOK_ROLES:
+        raise KeyError(f"已移除旧 Notebook role: {notebook_role}; 请使用拆分后的生成、质量、机制、攻击、检测入口。")
     if role == "external_baseline_formal_scoring" and baseline_id:
         return f"external_baseline_formal_reference_{sanitize_filename_token(baseline_id)}"
-    if role == "generative_video_runtime":
-        return "generative_video_runtime_colab"
     if role == "formal_comparison_scoring":
         return "formal_comparison_scoring_colab"
     if role == "paper_evidence_postprocess":
@@ -779,8 +782,6 @@ def _default_required_stage_packages(layout: Mapping[str, str], notebook_role: s
             if profile in {"pilot_paper", "full_paper"}:
                 required.append("paper_gate_and_package_colab")
         return required
-    if role == "generative_video_runtime" and profile != "motion_calibration":
-        return ["motion_threshold_calibration_colab"]
     return []
 
 
@@ -1032,7 +1033,7 @@ def _iter_package_sources(
         return sources
 
     keys = ["drive_run_root"]
-    if role in {"generative_video_runtime", "motion_threshold_calibration"}:
+    if role == "motion_threshold_calibration":
         keys.append("drive_dataset_root")
     for key in keys:
         path_text = str(layout.get(key) or "")

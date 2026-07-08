@@ -43,30 +43,23 @@ def test_server_workflow_cli_dry_run_exposes_split_stage_plans(tmp_path: Path) -
     assert "formal_baseline_difference_interval" in scoring_stage_names
     assert "validation_scale_formal_internal_ablation" not in scoring_stage_names
 
-    runtime_command = [
+    generation_command = [
         sys.executable,
         "scripts/run_generative_video_server_workflow.py",
         "--project-root",
         str(tmp_path / "sstw_server_run"),
         "--pipeline",
-        "generative_video_runtime",
+        "generative_video_generation",
         "--dry-run",
         "--exclude-videos",
     ]
-    completed = subprocess.run(runtime_command, check=True, text=True, capture_output=True)
-    runtime_payload = json.loads(completed.stdout)
-    runtime_roles = [row["notebook_role"] for row in runtime_payload["pipeline_results"]]
+    completed = subprocess.run(generation_command, check=True, text=True, capture_output=True)
+    generation_payload = json.loads(completed.stdout)
 
-    assert runtime_payload["server_workflow_decision"] == "DRY_RUN"
-    assert runtime_roles == [
-        "generative_video_generation",
-        "generative_video_quality_scoring",
-        "sstw_mechanism_postprocess",
-        "runtime_attack",
-        "runtime_detection",
-    ]
-    assert runtime_payload["pipeline_results"][0]["stage_plan"][0]["stage_name"] == "prepare_prompt_suite"
-    assert runtime_payload["pipeline_results"][-1]["stage_plan"][0]["stage_name"] == "runtime_detection"
+    assert generation_payload["server_workflow_decision"] == "DRY_RUN"
+    assert generation_payload["pipeline"] == "generative_video_generation"
+    assert generation_payload["pipeline_results"][0]["notebook_role"] == "generative_video_generation"
+    assert generation_payload["pipeline_results"][0]["stage_plan"][0]["stage_name"] == "prepare_prompt_suite"
 
     evidence_command = [
         sys.executable,
@@ -138,10 +131,4 @@ def test_server_workflow_complete_pipeline_order_matches_notebook_handoff_model(
         "paper_gate_and_package",
     )
     assert PIPELINE_ROLE_ORDER["validation_scale_complete"] == PIPELINE_ROLE_ORDER["paper_protocol_complete"]
-    assert PIPELINE_ROLE_ORDER["generative_video_runtime"] == (
-        "generative_video_generation",
-        "generative_video_quality_scoring",
-        "sstw_mechanism_postprocess",
-        "runtime_attack",
-        "runtime_detection",
-    )
+    assert "generative_video_runtime" not in PIPELINE_ROLE_ORDER

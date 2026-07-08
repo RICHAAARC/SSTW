@@ -356,7 +356,7 @@ full_paper_blocking_rule: unresolved_gap_blocks_full_paper_claim
 
 ## 2026-06-23 最新原生复跑状态
 
-`generative_video_runtime` 已在 Wan2.1 L4 环境完成 small-scale pilot 原生复跑。最新 package 为:
+历史合并 runtime 流程曾在 Wan2.1 L4 环境完成 small-scale pilot 原生复跑。该记录只用于追溯旧状态, 当前主流程已改为生成、质量评分、SSTW 机制后处理、runtime attack、runtime detection 五个拆分入口。历史 package 为:
 
 ```text
 generative_video_runtime_20260623_134119_839da169.zip

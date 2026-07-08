@@ -91,7 +91,6 @@ def archive_run_root_for_stage(
         "formal_comparison_scoring_colab",
         "generative_video_generation_colab",
         "generative_video_quality_scoring_colab",
-        "generative_video_runtime_colab",
         "runtime_attack_colab",
         "runtime_detection_colab",
         "paper_evidence_postprocess_colab",

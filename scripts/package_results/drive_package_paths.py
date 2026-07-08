@@ -89,9 +89,14 @@ def archive_run_root_for_stage(
     package_id = sanitize_filename_token(stage_package_id)
     if package_id in {
         "formal_comparison_scoring_colab",
+        "generative_video_generation_colab",
+        "generative_video_quality_scoring_colab",
         "generative_video_runtime_colab",
+        "runtime_attack_colab",
+        "runtime_detection_colab",
         "paper_evidence_postprocess_colab",
         "paper_gate_and_package_colab",
+        "sstw_mechanism_postprocess_colab",
     }:
         return f"runs/generative_video_model_probe/{profile}"
     if package_id == "motion_threshold_calibration_colab":

@@ -30,6 +30,11 @@ from paper_workflow.notebook_utils import generative_video_model_probe_workflow 
 
 SERVER_PIPELINES = (
     "motion_threshold_calibration",
+    "generative_video_generation",
+    "generative_video_quality_scoring",
+    "sstw_mechanism_postprocess",
+    "runtime_attack",
+    "runtime_detection",
     "generative_video_runtime",
     "external_baseline_references",
     "formal_comparison_scoring",
@@ -39,16 +44,29 @@ SERVER_PIPELINES = (
     "validation_scale_complete",
 )
 
+GENERATIVE_VIDEO_RUNTIME_SPLIT_ROLE_ORDER = (
+    "generative_video_generation",
+    "generative_video_quality_scoring",
+    "sstw_mechanism_postprocess",
+    "runtime_attack",
+    "runtime_detection",
+)
+
 PIPELINE_ROLE_ORDER = {
     "motion_threshold_calibration": ("motion_threshold_calibration",),
-    "generative_video_runtime": ("generative_video_runtime",),
+    "generative_video_generation": ("generative_video_generation",),
+    "generative_video_quality_scoring": ("generative_video_quality_scoring",),
+    "sstw_mechanism_postprocess": ("sstw_mechanism_postprocess",),
+    "runtime_attack": ("runtime_attack",),
+    "runtime_detection": ("runtime_detection",),
+    "generative_video_runtime": GENERATIVE_VIDEO_RUNTIME_SPLIT_ROLE_ORDER,
     "external_baseline_references": ("external_baseline_formal_scoring",),
     "formal_comparison_scoring": ("formal_comparison_scoring",),
     "paper_evidence_postprocess": ("paper_evidence_postprocess",),
     "paper_gate_and_package": ("paper_gate_and_package",),
     "paper_protocol_complete": (
         "motion_threshold_calibration",
-        "generative_video_runtime",
+        *GENERATIVE_VIDEO_RUNTIME_SPLIT_ROLE_ORDER,
         "external_baseline_formal_scoring",
         "formal_comparison_scoring",
         "paper_evidence_postprocess",
@@ -56,7 +74,7 @@ PIPELINE_ROLE_ORDER = {
     ),
     "validation_scale_complete": (
         "motion_threshold_calibration",
-        "generative_video_runtime",
+        *GENERATIVE_VIDEO_RUNTIME_SPLIT_ROLE_ORDER,
         "external_baseline_formal_scoring",
         "formal_comparison_scoring",
         "paper_evidence_postprocess",

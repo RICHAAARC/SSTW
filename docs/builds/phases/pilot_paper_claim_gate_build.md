@@ -76,7 +76,7 @@ configs/protocol/pilot_paper_generative_probe.json
 experiments/generative_video_model_probe/pilot_paper_gate.py
 experiments/generative_video_model_probe/colab_runtime.py PROFILE = pilot_paper
 paper_workflow/notebook_utils/generative_video_model_probe_workflow.py::build_pilot_paper_gate_command
-paper_workflow/colab_notebooks/generative_video_runtime_colab.ipynb
+paper_workflow/colab_notebooks/generative_video_generation_colab.ipynb -> paper_workflow/colab_notebooks/generative_video_quality_scoring_colab.ipynb -> paper_workflow/colab_notebooks/sstw_mechanism_postprocess_colab.ipynb -> paper_workflow/colab_notebooks/runtime_attack_colab.ipynb -> paper_workflow/colab_notebooks/runtime_detection_colab.ipynb
 scripts/package_results/generative_video_drive_packager.py
 ```
 

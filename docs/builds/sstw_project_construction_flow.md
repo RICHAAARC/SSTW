@@ -365,7 +365,11 @@ Notebook 只能通过 `paper_workflow/notebook_utils/generative_video_model_prob
 
 ```text
 motion_threshold_calibration_colab.ipynb
--> generative_video_runtime_colab.ipynb
+-> generative_video_generation_colab.ipynb
+-> generative_video_quality_scoring_colab.ipynb
+-> sstw_mechanism_postprocess_colab.ipynb
+-> runtime_attack_colab.ipynb
+-> runtime_detection_colab.ipynb
 -> 5 个主实验 modern external baseline formal reference Notebook
 -> formal_comparison_scoring_colab.ipynb
 -> paper_evidence_postprocess_colab.ipynb
@@ -380,7 +384,7 @@ motion_threshold_calibration_colab.ipynb
 其中:
 
 1. `motion_threshold_calibration_colab.ipynb` 只负责独立 calibration split 和阈值冻结。
-2. `generative_video_runtime_colab.ipynb` 负责 Wan2.1 生成、formal metrics、阈值复用、
+2. 5 个 SSTW runtime 拆分 Notebook 负责 Wan2.1 生成、formal metrics、阈值复用、
    runtime attack 和 detection, 不执行现代 baseline command 预检或 baseline scoring。
 3. 5 个主实验 modern external baseline formal reference Notebook 分别负责对应 baseline 的 source intake、clone / build / run / adapt 和 official bundle 生成, 不默认调用全量 runner 转写 `measured_formal` records。
 4. `formal_comparison_scoring_colab.ipynb` 负责恢复 5 个主实验 baseline official reference 阶段包, 重新执行全量统一转写、self-containment 判定、公平校准和差值区间统计。

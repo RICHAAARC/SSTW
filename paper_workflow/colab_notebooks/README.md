@@ -98,7 +98,11 @@ VidSig 的 message decoder / VAE checkpoint 等可复用资源应优先以资源
 
 ```text
 motion_threshold_calibration_colab.ipynb  # 仅当 motion calibration artifact 缺失时运行
--> generative_video_runtime_colab.ipynb
+-> generative_video_generation_colab.ipynb
+-> generative_video_quality_scoring_colab.ipynb
+-> sstw_mechanism_postprocess_colab.ipynb
+-> runtime_attack_colab.ipynb
+-> runtime_detection_colab.ipynb
 -> 5 个主实验 modern external baseline formal reference Notebook
 -> formal_comparison_scoring_colab.ipynb
 -> paper_evidence_postprocess_colab.ipynb
@@ -143,22 +147,25 @@ SSTW_WORKFLOW_PROFILE_VALUE = ''
 
 只有缺少 motion threshold artifact、阈值设计发生变化或需要重新校准时, 才需要重新运行该 Notebook。
 
-### 3.2 真实生成与 runtime 级 attack / detection
+### 3.2 SSTW 主方法拆分式 runtime 阶段
 
 Notebook:
 
 ```text
-paper_workflow/colab_notebooks/generative_video_runtime_colab.ipynb
+paper_workflow/colab_notebooks/generative_video_generation_colab.ipynb
+paper_workflow/colab_notebooks/generative_video_quality_scoring_colab.ipynb
+paper_workflow/colab_notebooks/sstw_mechanism_postprocess_colab.ipynb
+paper_workflow/colab_notebooks/runtime_attack_colab.ipynb
+paper_workflow/colab_notebooks/runtime_detection_colab.ipynb
 ```
 
 用途:
 
-- 构造 prompt suite。
-- 加载 Wan2.1 并生成视频。
-- 记录 latent / time grid / sampler signature / velocity proxy 或 latent displacement proxy。
-- 复用 motion threshold artifact。
-- 执行 formal metric、attack runner 和 detection runner。
-- 将当前本地 run root 打包为阶段 zip 并保存到 Google Drive。
+- `generative_video_generation_colab.ipynb`: 构造 prompt suite, 加载 Wan2.1 并生成 clean / SSTW 视频, 记录 latent / time grid / sampler signature / velocity proxy 或 latent displacement proxy。
+- `generative_video_quality_scoring_colab.ipynb`: 恢复 generation 阶段包, 执行正式视频质量、运动与语义 metric, 并复用已冻结 motion threshold artifact。
+- `sstw_mechanism_postprocess_colab.ipynb`: 恢复 generation 与 quality scoring 阶段包, 执行机制后处理和 protocol evaluation matrix 后处理。
+- `runtime_attack_colab.ipynb`: 恢复 generation 与 quality scoring 阶段包, 执行 46 个 runtime attack 并产出 attacked videos。
+- `runtime_detection_colab.ipynb`: 恢复 generation 与 runtime attack 阶段包, 执行 SSTW runtime detection, 产出后续公平比较所需本方法 detection records。
 
 当前 validation-scale 配置:
 
@@ -166,7 +173,7 @@ paper_workflow/colab_notebooks/generative_video_runtime_colab.ipynb
 SSTW_WORKFLOW_PROFILE_VALUE = 'validation_scale'
 ```
 
-该 Notebook 是 validation-scale 与 pilot-paper 两个阶段共用的真实生成入口。切换到 pilot-paper 时只改 profile, 不改运行逻辑。
+这些 Notebook 是 validation-scale、pilot-paper 与 full-paper 共用的同构主方法运行入口。切换 profile 时只改 `SSTW_WORKFLOW_PROFILE_VALUE`, 不改阶段顺序、命令映射或产物清单。
 
 现代 baseline 使用 bridge 模式时, workflow 默认会把 `SSTW_RUN_EXTERNAL_BASELINE_SOURCE_CLONE`
 视为 `true`, 以适配 Colab 冷启动环境。若已经手动挂载或克隆官方源码, 可以显式设置为 `"false"`。
@@ -537,7 +544,7 @@ paper_workflow/colab_notebooks/formal_comparison_scoring_colab.ipynb
 
 用途:
 
-- 恢复 `generative_video_runtime_colab` 阶段包。
+- 恢复 `sstw_mechanism_postprocess_colab` 与 `runtime_detection_colab` 阶段包。
 - 恢复 5 个主实验 baseline official reference 阶段包。
 - 统一执行 `sstw_measured_formal_result`、`external_baseline_comparison`、`external_baseline_self_containment_decision`、`fair_detection_calibration`、`formal_method_baseline_comparison` 和 `formal_baseline_difference_interval`。
 - 只打包公平比较 records、tables、reports 和 decision artifacts, 不重复打包上游视频或 official bundle。
@@ -554,7 +561,7 @@ paper_workflow/colab_notebooks/paper_evidence_postprocess_colab.ipynb
 
 用途:
 
-- 恢复 `generative_video_runtime_colab`、`motion_threshold_calibration_colab` 和 `formal_comparison_scoring_colab` 阶段包。
+- 恢复 5 个 SSTW runtime 拆分阶段包、`motion_threshold_calibration_colab` 和 `formal_comparison_scoring_colab` 阶段包。
 - 执行 motion consistency exclusion 说明。
 - 执行 validation internal ablation。
 - 执行 adaptive attack proxy。
@@ -576,7 +583,7 @@ paper_workflow/colab_notebooks/paper_gate_and_package_colab.ipynb
 
 用途:
 
-- 恢复 `generative_video_runtime_colab`、`motion_threshold_calibration_colab`、`formal_comparison_scoring_colab` 和 `paper_evidence_postprocess_colab` 阶段包, 但只执行最终门禁与打包相关阶段。
+- 恢复 5 个 SSTW runtime 拆分阶段包、`motion_threshold_calibration_colab`、`formal_comparison_scoring_colab` 和 `paper_evidence_postprocess_colab` 阶段包, 但只执行最终门禁与打包相关阶段。
 - 执行 validation artifact rebuild dry run。
 - 对 validation-scale 或 pilot-paper 进行最终 gate 判断。
 - 执行 validation_scale -> pilot_paper 或 pilot_paper -> full_paper 的跳转判定。
@@ -589,7 +596,7 @@ paper_workflow/colab_notebooks/paper_gate_and_package_colab.ipynb
 SSTW_WORKFLOW_PROFILE_VALUE = 'validation_scale'
 ```
 
-该 Notebook 必须在 runtime、5 个主实验 external baseline official reference Notebook、`formal_comparison_scoring_colab.ipynb` 和 `paper_evidence_postprocess_colab.ipynb` 完成后运行, 因为 gate 需要读取前序 artifacts。
+该 Notebook 必须在 5 个 SSTW runtime 拆分 Notebook、5 个主实验 external baseline official reference Notebook、`formal_comparison_scoring_colab.ipynb` 和 `paper_evidence_postprocess_colab.ipynb` 完成后运行, 因为 gate 需要读取前序 artifacts。
 执行 gate 前, 前序 evidence postprocess 阶段已经校验并复制 `motion_calibration` run root 中已冻结的
 `motion_threshold_calibration_decision.json` 到当前 `validation_scale` 或 `pilot_paper`
 run root。该步骤不重新估计阈值, 只把独立 calibration split 的阈值 artifact 固化到当前
@@ -597,7 +604,7 @@ gate 所需的 governed artifacts 中。
 
 ## 4. validation-scale 到 pilot-paper 的切换
 
-validation-scale 是进入 paper 级运行前的最后完整工程门禁。通过后, 可以把 runtime、5 个主实验 baseline official reference Notebook、formal comparison scoring Notebook、paper evidence postprocess Notebook 和 paper gate Notebook 的 profile 从 validation-scale 切到 pilot-paper:
+validation-scale 是进入 paper 级运行前的最后完整工程门禁。通过后, 可以把 5 个 SSTW runtime 拆分 Notebook、5 个主实验 baseline official reference Notebook、formal comparison scoring Notebook、paper evidence postprocess Notebook 和 paper gate Notebook 的 profile 从 validation-scale 切到 pilot-paper:
 
 ```python
 SSTW_WORKFLOW_PROFILE_VALUE = 'pilot_paper'
@@ -606,7 +613,11 @@ SSTW_WORKFLOW_PROFILE_VALUE = 'pilot_paper'
 需要切换的 Notebook:
 
 ```text
-paper_workflow/colab_notebooks/generative_video_runtime_colab.ipynb
+paper_workflow/colab_notebooks/generative_video_generation_colab.ipynb
+paper_workflow/colab_notebooks/generative_video_quality_scoring_colab.ipynb
+paper_workflow/colab_notebooks/sstw_mechanism_postprocess_colab.ipynb
+paper_workflow/colab_notebooks/runtime_attack_colab.ipynb
+paper_workflow/colab_notebooks/runtime_detection_colab.ipynb
 paper_workflow/colab_notebooks/*_formal_reference_colab.ipynb
 paper_workflow/colab_notebooks/formal_comparison_scoring_colab.ipynb
 paper_workflow/colab_notebooks/paper_evidence_postprocess_colab.ipynb
@@ -616,7 +627,11 @@ paper_workflow/colab_notebooks/paper_gate_and_package_colab.ipynb
 切换后仍按相同顺序执行:
 
 ```text
-generative_video_runtime_colab.ipynb
+generative_video_generation_colab.ipynb
+generative_video_quality_scoring_colab.ipynb
+sstw_mechanism_postprocess_colab.ipynb
+runtime_attack_colab.ipynb
+runtime_detection_colab.ipynb
 5 个主实验 *_formal_reference_colab.ipynb
 formal_comparison_scoring_colab.ipynb
 paper_evidence_postprocess_colab.ipynb

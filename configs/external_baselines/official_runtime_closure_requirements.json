@@ -191,7 +191,7 @@
   },
   "runtime_input_requirements": [
     {
-      "description": "由 generative_video_runtime_colab.ipynb 产生的 runtime detection records, 用于确定同一 prompt / seed / attack comparison unit。",
+      "description": "由 runtime_detection_colab.ipynb 产生的 runtime detection records, 用于确定同一 prompt / seed / attack comparison unit。",
       "path": "records/runtime_detection_records.jsonl",
       "required_for_formal_reference": true,
       "requirement_id": "runtime_detection_records",

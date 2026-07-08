@@ -26,7 +26,7 @@ DEFAULT_PILOT_PAPER_CONFIG = "configs/protocol/pilot_paper_generative_probe.json
 DEFAULT_FULL_PAPER_CONFIG = "configs/protocol/full_paper_generative_probe.json"
 DEFAULT_NOTEBOOK_WORKFLOW_CONFIG = "configs/paper_workflow/generative_video_notebook_workflows.json"
 DEFAULT_MODERN_BASELINE_COLAB_COMMAND_CONFIG = "configs/external_baselines/modern_baseline_colab_commands.json"
-DEFAULT_NOTEBOOK_ROLE = "generative_video_runtime"
+DEFAULT_NOTEBOOK_ROLE = "generative_video_generation"
 PAPER_GATE_PROFILES = {"validation_scale", "pilot_paper", "full_paper"}
 EXTERNAL_BASELINE_COLAB_PREFLIGHT_DECISION = "artifacts/external_baseline_colab_preflight_decision.json"
 EXTERNAL_BASELINE_COMMAND_TEMPLATE_SUMMARY = "artifacts/external_baseline_command_template_summary.json"
@@ -199,8 +199,8 @@ def build_drive_layout(
 
     run / package / log 目录由统一配置决定, 从而支持在 Colab 中安全切换
     `validation_scale`、`pilot_paper` 和未来 `full_paper`。不传 `workflow_profile`
-    时使用 `generative_video_runtime` 的默认 profile, 不再回退到旧综合 Notebook
-    的历史目录。
+    时使用拆分后的 `generative_video_generation` 默认 profile, 不再回退到旧综合
+    Notebook 的历史目录。
     """
     root = PurePosixPath(drive_project_root)
     if workflow_profile is None:

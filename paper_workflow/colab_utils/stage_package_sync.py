@@ -55,6 +55,89 @@ MODERN_EXTERNAL_BASELINE_IDS = (
     "wam_frame",
 )
 
+GEN_VIDEO_GENERATION_PACKAGE_ID = "generative_video_generation_colab"
+GEN_VIDEO_QUALITY_SCORING_PACKAGE_ID = "generative_video_quality_scoring_colab"
+SSTW_MECHANISM_POSTPROCESS_PACKAGE_ID = "sstw_mechanism_postprocess_colab"
+RUNTIME_ATTACK_PACKAGE_ID = "runtime_attack_colab"
+RUNTIME_DETECTION_PACKAGE_ID = "runtime_detection_colab"
+
+GEN_VIDEO_RUNTIME_SPLIT_STAGE_PACKAGE_IDS = (
+    GEN_VIDEO_GENERATION_PACKAGE_ID,
+    GEN_VIDEO_QUALITY_SCORING_PACKAGE_ID,
+    SSTW_MECHANISM_POSTPROCESS_PACKAGE_ID,
+    RUNTIME_ATTACK_PACKAGE_ID,
+    RUNTIME_DETECTION_PACKAGE_ID,
+)
+
+GEN_VIDEO_GENERATION_PACKAGE_RELPATHS = (
+    "artifacts/generative_video_colab_runtime_decision.json",
+    "artifacts/generation_manifest.json",
+    "artifacts/notebook_runtime_report.json",
+    "artifacts/notebook_run_timing_manifest.json",
+    "artifacts/stage_package_restore_decision.json",
+    "records/generation_records.jsonl",
+    "records/trajectory_trace.jsonl",
+    "records/quality_motion_semantic_records.jsonl",
+    "records/external_baseline_records.jsonl",
+    "records/notebook_stage_timing_records.jsonl",
+    "tables/generation_runtime_table.csv",
+    "tables/external_baseline_status_table.csv",
+    "artifacts/external_baseline_status_decision.json",
+    "videos",
+)
+
+GEN_VIDEO_QUALITY_SCORING_PACKAGE_RELPATHS = (
+    "artifacts/formal_quality_motion_semantic_decision.json",
+    "artifacts/motion_threshold_reuse_decision.json",
+    "artifacts/notebook_runtime_report.json",
+    "artifacts/notebook_run_timing_manifest.json",
+    "artifacts/stage_package_restore_decision.json",
+    "records/formal_quality_motion_semantic_records.jsonl",
+    "records/notebook_stage_timing_records.jsonl",
+    "reports/formal_quality_motion_semantic_report.md",
+    "tables/formal_quality_motion_semantic_table.csv",
+)
+
+SSTW_MECHANISM_POSTPROCESS_PACKAGE_RELPATHS = (
+    "artifacts/generative_video_mechanism_postprocess_decision.json",
+    "artifacts/notebook_runtime_report.json",
+    "artifacts/notebook_run_timing_manifest.json",
+    "artifacts/protocol_evaluation_matrix_decision.json",
+    "artifacts/stage_package_restore_decision.json",
+    "records/controlled_negative_records.jsonl",
+    "records/mechanism_score_records.jsonl",
+    "records/notebook_stage_timing_records.jsonl",
+    "records/protocol_evaluation_matrix_records.jsonl",
+    "records/quality_motion_semantic_proxy_records.jsonl",
+    "reports/generative_video_mechanism_postprocess_report.md",
+    "tables/mechanism_proxy_comparison_table.csv",
+    "tables/protocol_evaluation_matrix_table.csv",
+    "thresholds/mechanism_proxy_thresholds.json",
+)
+
+RUNTIME_ATTACK_PACKAGE_RELPATHS = (
+    "artifacts/notebook_runtime_report.json",
+    "artifacts/notebook_run_timing_manifest.json",
+    "artifacts/runtime_attack_decision.json",
+    "artifacts/stage_package_restore_decision.json",
+    "records/notebook_stage_timing_records.jsonl",
+    "records/runtime_attack_records.jsonl",
+    "reports/runtime_attack_report.md",
+    "tables/runtime_attack_table.csv",
+    "attacked_videos",
+)
+
+RUNTIME_DETECTION_PACKAGE_RELPATHS = (
+    "artifacts/notebook_runtime_report.json",
+    "artifacts/notebook_run_timing_manifest.json",
+    "artifacts/runtime_detection_decision.json",
+    "artifacts/stage_package_restore_decision.json",
+    "records/notebook_stage_timing_records.jsonl",
+    "records/runtime_detection_records.jsonl",
+    "reports/runtime_detection_report.md",
+    "tables/runtime_detection_table.csv",
+)
+
 FORMAL_COMPARISON_SCORING_PACKAGE_RELPATHS = (
     "artifacts/external_baseline_colab_preflight_decision.json",
     "artifacts/external_baseline_command_template_summary.json",
@@ -181,9 +264,14 @@ OBSOLETE_EXTERNAL_BASELINE_EVIDENCE_IDS = {
 
 MAIN_STAGE_PACKAGE_IDS = {
     "formal_comparison_scoring_colab",
+    GEN_VIDEO_GENERATION_PACKAGE_ID,
+    GEN_VIDEO_QUALITY_SCORING_PACKAGE_ID,
     "generative_video_runtime_colab",
+    RUNTIME_ATTACK_PACKAGE_ID,
+    RUNTIME_DETECTION_PACKAGE_ID,
     "paper_evidence_postprocess_colab",
     "paper_gate_and_package_colab",
+    SSTW_MECHANISM_POSTPROCESS_PACKAGE_ID,
 }
 
 HELPER_WORKFLOW_PROFILES = {
@@ -653,22 +741,37 @@ def _default_required_stage_packages(layout: Mapping[str, str], notebook_role: s
     profile = str(layout.get("workflow_profile") or "")
     role = sanitize_filename_token(notebook_role)
     if role == "external_baseline_formal_scoring":
-        return ["generative_video_runtime_colab"]
+        return [
+            GEN_VIDEO_GENERATION_PACKAGE_ID,
+            RUNTIME_ATTACK_PACKAGE_ID,
+            RUNTIME_DETECTION_PACKAGE_ID,
+        ]
+    if role == "generative_video_quality_scoring":
+        required = [GEN_VIDEO_GENERATION_PACKAGE_ID]
+        if profile != "motion_calibration":
+            required.append("motion_threshold_calibration_colab")
+        return required
+    if role == "sstw_mechanism_postprocess":
+        return [GEN_VIDEO_GENERATION_PACKAGE_ID, GEN_VIDEO_QUALITY_SCORING_PACKAGE_ID]
+    if role == "runtime_attack":
+        return [GEN_VIDEO_GENERATION_PACKAGE_ID, GEN_VIDEO_QUALITY_SCORING_PACKAGE_ID]
+    if role == "runtime_detection":
+        return [GEN_VIDEO_GENERATION_PACKAGE_ID, RUNTIME_ATTACK_PACKAGE_ID]
     if role == "formal_comparison_scoring":
-        required = ["generative_video_runtime_colab"]
+        required = [SSTW_MECHANISM_POSTPROCESS_PACKAGE_ID, RUNTIME_DETECTION_PACKAGE_ID]
         required.extend(
             stage_package_id_for_notebook("external_baseline_formal_scoring", baseline_id=baseline)
             for baseline in MODERN_EXTERNAL_BASELINE_IDS
         )
         return required
     if role == "paper_evidence_postprocess":
-        required = ["generative_video_runtime_colab"]
+        required = list(GEN_VIDEO_RUNTIME_SPLIT_STAGE_PACKAGE_IDS)
         if profile != "motion_calibration":
             required.append("motion_threshold_calibration_colab")
             required.append("formal_comparison_scoring_colab")
         return required
     if role == "paper_gate_and_package":
-        required = ["generative_video_runtime_colab"]
+        required = list(GEN_VIDEO_RUNTIME_SPLIT_STAGE_PACKAGE_IDS)
         if profile != "motion_calibration":
             required.append("motion_threshold_calibration_colab")
             required.append("formal_comparison_scoring_colab")
@@ -868,6 +971,66 @@ def _iter_package_sources(
         )
         return sources
 
+    if role == "generative_video_generation":
+        run_root = Path(str(layout.get("drive_run_root") or ""))
+        run_archive_root = _archive_root_for_layout_path(layout, "drive_run_root")
+        _append_existing_run_relpaths(
+            sources,
+            run_root,
+            run_archive_root,
+            GEN_VIDEO_GENERATION_PACKAGE_RELPATHS,
+        )
+        dataset_root_text = str(layout.get("drive_dataset_root") or "")
+        if dataset_root_text:
+            dataset_root = Path(dataset_root_text)
+            if dataset_root.exists():
+                sources.append((dataset_root, _archive_root_for_layout_path(layout, "drive_dataset_root")))
+        return sources
+
+    if role == "generative_video_quality_scoring":
+        run_root = Path(str(layout.get("drive_run_root") or ""))
+        run_archive_root = _archive_root_for_layout_path(layout, "drive_run_root")
+        _append_existing_run_relpaths(
+            sources,
+            run_root,
+            run_archive_root,
+            GEN_VIDEO_QUALITY_SCORING_PACKAGE_RELPATHS,
+        )
+        return sources
+
+    if role == "sstw_mechanism_postprocess":
+        run_root = Path(str(layout.get("drive_run_root") or ""))
+        run_archive_root = _archive_root_for_layout_path(layout, "drive_run_root")
+        _append_existing_run_relpaths(
+            sources,
+            run_root,
+            run_archive_root,
+            SSTW_MECHANISM_POSTPROCESS_PACKAGE_RELPATHS,
+        )
+        return sources
+
+    if role == "runtime_attack":
+        run_root = Path(str(layout.get("drive_run_root") or ""))
+        run_archive_root = _archive_root_for_layout_path(layout, "drive_run_root")
+        _append_existing_run_relpaths(
+            sources,
+            run_root,
+            run_archive_root,
+            RUNTIME_ATTACK_PACKAGE_RELPATHS,
+        )
+        return sources
+
+    if role == "runtime_detection":
+        run_root = Path(str(layout.get("drive_run_root") or ""))
+        run_archive_root = _archive_root_for_layout_path(layout, "drive_run_root")
+        _append_existing_run_relpaths(
+            sources,
+            run_root,
+            run_archive_root,
+            RUNTIME_DETECTION_PACKAGE_RELPATHS,
+        )
+        return sources
+
     keys = ["drive_run_root"]
     if role in {"generative_video_runtime", "motion_threshold_calibration"}:
         keys.append("drive_dataset_root")
@@ -901,7 +1064,15 @@ def _append_existing_run_relpaths(
         source = run_root / relpath
         if not source.exists():
             continue
-        sources.append((source, f"{archive_root}/{PurePosixPath(relpath).parent.as_posix()}"))
+        relpath_posix = PurePosixPath(relpath)
+        if source.is_dir():
+            archive_subroot = relpath_posix.as_posix()
+        else:
+            archive_subroot = relpath_posix.parent.as_posix()
+        if archive_subroot == ".":
+            sources.append((source, archive_root))
+        else:
+            sources.append((source, f"{archive_root}/{archive_subroot}"))
 
 
 def _archive_root_for_layout_path(layout: Mapping[str, str], key: str) -> str:

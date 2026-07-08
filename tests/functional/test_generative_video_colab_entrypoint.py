@@ -215,8 +215,8 @@ def test_pilot_paper_profile_constructs_medium_scale_low_fpr_plan(tmp_path: Path
 
 @pytest.mark.quick
 def test_generative_video_colab_notebook_calls_repository_modules() -> None:
-    """runtime Notebook 只能作为入口, 必须通过统一 workflow profile 调用仓库模块。"""
-    notebook_path = Path("paper_workflow/colab_notebooks/generative_video_runtime_colab.ipynb")
+    """generation Notebook 只能作为入口, 必须通过统一 workflow profile 调用仓库模块。"""
+    notebook_path = Path("paper_workflow/colab_notebooks/generative_video_generation_colab.ipynb")
     assert notebook_path.exists()
     notebook = json.loads(notebook_path.read_text(encoding="utf-8"))
     source = "".join("".join(cell.get("source", [])) for cell in notebook["cells"])
@@ -225,7 +225,7 @@ def test_generative_video_colab_notebook_calls_repository_modules() -> None:
     assert "/content/drive/MyDrive/SSTW" in source
     assert "drive.mount('/content/drive')" in source
     assert "SSTW_WORKFLOW_PROFILE" in source
-    assert "NOTEBOOK_ROLE = 'generative_video_runtime'" in source
+    assert "NOTEBOOK_ROLE = 'generative_video_generation'" in source
     assert "default_workflow_profile_for_notebook_role" in source
     assert "resolve_notebook_workflow_profile" in source
     assert "ensure_drive_layout(" in source
@@ -314,7 +314,11 @@ def test_split_colab_notebooks_are_profile_driven() -> None:
     """拆分后的 Colab Notebook 必须通过统一配置切换 profile, 不能维护独立路径硬编码。"""
     expected_roles = {
         "motion_threshold_calibration_colab.ipynb": "motion_threshold_calibration",
-        "generative_video_runtime_colab.ipynb": "generative_video_runtime",
+        "generative_video_generation_colab.ipynb": "generative_video_generation",
+        "generative_video_quality_scoring_colab.ipynb": "generative_video_quality_scoring",
+        "sstw_mechanism_postprocess_colab.ipynb": "sstw_mechanism_postprocess",
+        "runtime_attack_colab.ipynb": "runtime_attack",
+        "runtime_detection_colab.ipynb": "runtime_detection",
         "formal_comparison_scoring_colab.ipynb": "formal_comparison_scoring",
         "paper_evidence_postprocess_colab.ipynb": "paper_evidence_postprocess",
         "paper_gate_and_package_colab.ipynb": "paper_gate_and_package",
@@ -353,7 +357,7 @@ def test_split_colab_notebooks_are_profile_driven() -> None:
         assert "pilot_paper_results" not in source
         assert "full_paper_results" not in source
 
-    runtime_source = Path("paper_workflow/colab_notebooks/generative_video_runtime_colab.ipynb").read_text(encoding="utf-8")
+    runtime_source = Path("paper_workflow/colab_notebooks/generative_video_generation_colab.ipynb").read_text(encoding="utf-8")
     formal_source = Path("paper_workflow/colab_notebooks/formal_comparison_scoring_colab.ipynb").read_text(encoding="utf-8")
     evidence_source = Path("paper_workflow/colab_notebooks/paper_evidence_postprocess_colab.ipynb").read_text(encoding="utf-8")
     gate_source = Path("paper_workflow/colab_notebooks/paper_gate_and_package_colab.ipynb").read_text(encoding="utf-8")
@@ -411,7 +415,11 @@ def test_colab_notebooks_are_separated_from_python_helpers() -> None:
 @pytest.mark.quick
 def test_notebook_workflow_profile_config_supports_profile_switching() -> None:
     """统一配置层必须能区分 validation_scale、pilot_paper 和 full_paper。"""
-    assert default_workflow_profile_for_notebook_role("generative_video_runtime") == "validation_scale"
+    assert default_workflow_profile_for_notebook_role("generative_video_generation") == "validation_scale"
+    assert default_workflow_profile_for_notebook_role("generative_video_quality_scoring") == "validation_scale"
+    assert default_workflow_profile_for_notebook_role("sstw_mechanism_postprocess") == "validation_scale"
+    assert default_workflow_profile_for_notebook_role("runtime_attack") == "validation_scale"
+    assert default_workflow_profile_for_notebook_role("runtime_detection") == "validation_scale"
     assert default_workflow_profile_for_notebook_role("formal_comparison_scoring") == "validation_scale"
     assert default_workflow_profile_for_notebook_role("paper_evidence_postprocess") == "validation_scale"
     external_reference_role = resolve_notebook_workflow_profile("validation_scale", "external_baseline_formal_scoring")
@@ -488,20 +496,20 @@ def test_profile_specific_drive_layout_prevents_result_mixing(tmp_path: Path) ->
     validation_layout = build_drive_layout(
         str(tmp_path / "SSTW"),
         workflow_profile="validation_scale",
-        notebook_role="generative_video_runtime",
+        notebook_role="generative_video_generation",
     )
     pilot_layout = build_drive_layout(
         str(tmp_path / "SSTW"),
         workflow_profile="pilot_paper",
-        notebook_role="generative_video_runtime",
+        notebook_role="generative_video_generation",
     )
 
     assert validation_layout["drive_run_root"].endswith("/runs/generative_video_model_probe/validation_scale")
-    assert validation_layout["drive_package_dir"].replace("\\", "/").endswith("/validation_scale/generative_video_runtime_colab")
+    assert validation_layout["drive_package_dir"].replace("\\", "/").endswith("/validation_scale/generative_video_generation_colab")
     assert validation_layout["motion_threshold_artifact_run_root"].endswith("/runs/generative_video_model_probe/motion_calibration")
     assert validation_layout["runtime_profile"] == "validation_scale"
     assert pilot_layout["drive_run_root"].endswith("/runs/generative_video_model_probe/pilot_paper")
-    assert pilot_layout["drive_package_dir"].replace("\\", "/").endswith("/pilot_paper/generative_video_runtime_colab")
+    assert pilot_layout["drive_package_dir"].replace("\\", "/").endswith("/pilot_paper/generative_video_generation_colab")
     assert pilot_layout["motion_threshold_artifact_run_root"].endswith("/runs/generative_video_model_probe/motion_calibration")
     assert pilot_layout["runtime_profile"] == "pilot_paper"
     assert validation_layout["drive_run_root"] != pilot_layout["drive_run_root"]
@@ -518,16 +526,40 @@ def test_split_stage_package_dependencies_match_notebook_responsibility() -> Non
     evidence_required = _default_required_stage_packages(validation_layout, "paper_evidence_postprocess")
     gate_required = _default_required_stage_packages(validation_layout, "paper_gate_and_package")
 
-    assert formal_required[0] == "generative_video_runtime_colab"
+    assert _default_required_stage_packages(validation_layout, "generative_video_quality_scoring") == [
+        "generative_video_generation_colab",
+        "motion_threshold_calibration_colab",
+    ]
+    assert _default_required_stage_packages(validation_layout, "sstw_mechanism_postprocess") == [
+        "generative_video_generation_colab",
+        "generative_video_quality_scoring_colab",
+    ]
+    assert _default_required_stage_packages(validation_layout, "runtime_attack") == [
+        "generative_video_generation_colab",
+        "generative_video_quality_scoring_colab",
+    ]
+    assert _default_required_stage_packages(validation_layout, "runtime_detection") == [
+        "generative_video_generation_colab",
+        "runtime_attack_colab",
+    ]
+    assert formal_required[:2] == ["sstw_mechanism_postprocess_colab", "runtime_detection_colab"]
     assert "external_baseline_formal_reference_videoseal" in formal_required
     assert "external_baseline_formal_reference_wam_frame" in formal_required
     assert evidence_required == [
-        "generative_video_runtime_colab",
+        "generative_video_generation_colab",
+        "generative_video_quality_scoring_colab",
+        "sstw_mechanism_postprocess_colab",
+        "runtime_attack_colab",
+        "runtime_detection_colab",
         "motion_threshold_calibration_colab",
         "formal_comparison_scoring_colab",
     ]
     assert gate_required == [
-        "generative_video_runtime_colab",
+        "generative_video_generation_colab",
+        "generative_video_quality_scoring_colab",
+        "sstw_mechanism_postprocess_colab",
+        "runtime_attack_colab",
+        "runtime_detection_colab",
         "motion_threshold_calibration_colab",
         "formal_comparison_scoring_colab",
         "paper_evidence_postprocess_colab",
@@ -547,11 +579,11 @@ def test_stage_package_sync_round_trips_local_run_without_drive_small_file_reads
     layout = build_drive_layout(
         str(drive_root),
         workflow_profile="validation_scale",
-        notebook_role="generative_video_runtime",
+        notebook_role="generative_video_generation",
     )
     local_layout = activate_local_stage_layout(
         layout,
-        notebook_role="generative_video_runtime",
+        notebook_role="generative_video_generation",
         local_workspace_root=tmp_path / "local_workspace",
     )
     run_root = Path(local_layout["drive_run_root"])
@@ -568,7 +600,7 @@ def test_stage_package_sync_round_trips_local_run_without_drive_small_file_reads
 
     published = publish_colab_stage_package(
         local_layout,
-        notebook_role="generative_video_runtime",
+        notebook_role="generative_video_generation",
         include_videos=True,
     )
 
@@ -578,12 +610,12 @@ def test_stage_package_sync_round_trips_local_run_without_drive_small_file_reads
     stage_manifest = json.loads(Path(published["stage_package_manifest_path"]).read_text(encoding="utf-8"))
     assert stage_manifest["stage_package_publish_status"] == "published"
     assert published["stage_package_entry_count"] >= 3
-    assert published["stage_package_id"] == stage_package_id_for_notebook("generative_video_runtime")
+    assert published["stage_package_id"] == stage_package_id_for_notebook("generative_video_generation")
 
     shutil.rmtree(run_root)
     restored = hydrate_stage_package(
         local_layout,
-        "generative_video_runtime_colab",
+        "generative_video_generation_colab",
         required=True,
     )
 
@@ -642,15 +674,39 @@ def test_validation_scale_restores_motion_calibration_stage_package_from_calibra
         / "motion_threshold_calibration_colab"
     ).exists()
 
-    monkeypatch.setenv("SSTW_LOCAL_STAGE_WORKSPACE_ROOT", str(tmp_path / "validation_workspace"))
+    generation_drive_layout = build_drive_layout(
+        str(drive_root),
+        workflow_profile="validation_scale",
+        notebook_role="generative_video_generation",
+    )
+    generation_local_layout = activate_local_stage_layout(
+        generation_drive_layout,
+        notebook_role="generative_video_generation",
+        local_workspace_root=tmp_path / "generation_workspace",
+    )
+    generation_run_root = Path(generation_local_layout["drive_run_root"])
+    write_jsonl(generation_run_root / "records" / "generation_records.jsonl", [
+        {"generation_status": "success", "prompt_id": "prompt_a", "seed_id": "seed_a"},
+    ])
+    write_json(generation_run_root / "artifacts" / "generative_video_colab_runtime_decision.json", {
+        "stage_id": "generative_video_runtime",
+        "implementation_decision": "PASS",
+    })
+    publish_colab_stage_package(
+        generation_local_layout,
+        notebook_role="generative_video_generation",
+        include_videos=False,
+    )
+
+    monkeypatch.setenv("SSTW_LOCAL_STAGE_WORKSPACE_ROOT", str(tmp_path / "quality_workspace"))
     validation_drive_layout = build_drive_layout(
         str(drive_root),
         workflow_profile="validation_scale",
-        notebook_role="generative_video_runtime",
+        notebook_role="generative_video_quality_scoring",
     )
     validation_local_layout = prepare_colab_stage_layout(
         validation_drive_layout,
-        notebook_role="generative_video_runtime",
+        notebook_role="generative_video_quality_scoring",
     )
 
     restored_decision_path = (
@@ -663,11 +719,15 @@ def test_validation_scale_restores_motion_calibration_stage_package_from_calibra
 
     assert restored_decision_path.exists()
     assert restored_decision["motion_threshold_calibration_decision"] == "PASS"
-    assert restore_manifest["required_stage_package_ids"] == ["motion_threshold_calibration_colab"]
-    assert restore_manifest["stage_package_restore_rows"][0]["stage_package_source_workflow_profile"] == "motion_calibration"
-    assert restore_manifest["stage_package_restore_rows"][0]["stage_package_target_workflow_profile"] == "validation_scale"
+    assert restore_manifest["required_stage_package_ids"] == [
+        "generative_video_generation_colab",
+        "motion_threshold_calibration_colab",
+    ]
+    motion_restore_row = restore_manifest["stage_package_restore_rows"][1]
+    assert motion_restore_row["stage_package_source_workflow_profile"] == "motion_calibration"
+    assert motion_restore_row["stage_package_target_workflow_profile"] == "validation_scale"
     assert "motion_threshold/motion_calibration_motion_threshold_calibration_colab" in (
-        restore_manifest["stage_package_restore_rows"][0]["drive_stage_package_zip"].replace("\\", "/")
+        motion_restore_row["drive_stage_package_zip"].replace("\\", "/")
     )
 
 
@@ -753,7 +813,7 @@ def test_profile_specific_layout_reuses_shared_motion_threshold_artifact(tmp_pat
     layout = build_drive_layout(
         str(tmp_path / "SSTW"),
         workflow_profile="validation_scale",
-        notebook_role="generative_video_runtime",
+        notebook_role="generative_video_quality_scoring",
     )
     calibration_root = Path(layout["motion_threshold_artifact_run_root"])
     write_json(calibration_root / "artifacts" / "motion_threshold_calibration_decision.json", {
@@ -867,14 +927,14 @@ def test_generative_video_local_zip_does_not_precreate_drive_hot_dirs(
     layout = ensure_drive_layout(
         str(drive_root),
         workflow_profile="validation_scale",
-        notebook_role="generative_video_runtime",
+        notebook_role="generative_video_generation",
     )
 
     assert Path(layout["drive_project_root"]).exists()
     assert not (drive_root / "runs" / "generative_video_model_probe" / "validation_scale").exists()
     assert not (drive_root / "logs" / "generative_video_model_probe" / "validation_scale").exists()
     assert not (drive_root / "datasets" / "generative_video_prompt_suite").exists()
-    assert not (drive_root / "validation_scale" / "generative_video_runtime_colab").exists()
+    assert not (drive_root / "validation_scale" / "generative_video_generation_colab").exists()
 
 
 @pytest.mark.quick

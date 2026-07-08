@@ -118,7 +118,7 @@ attack 后 trajectory evidence 与 endpoint evidence 不发生系统性冲突
 当前 Colab 入口已经切换到 small-scale pilot 参数:
 
 ```text
-notebook: paper_workflow/colab_notebooks/generative_video_runtime_colab.ipynb
+notebook: paper_workflow/colab_notebooks/generative_video_generation_colab.ipynb -> paper_workflow/colab_notebooks/generative_video_quality_scoring_colab.ipynb -> paper_workflow/colab_notebooks/sstw_mechanism_postprocess_colab.ipynb -> paper_workflow/colab_notebooks/runtime_attack_colab.ipynb -> paper_workflow/colab_notebooks/runtime_detection_colab.ipynb
 PROFILE: pilot
 MODEL_ID: Wan-AI/Wan2.1-T2V-1.3B-Diffusers
 CROSS_MODEL_ID: empty

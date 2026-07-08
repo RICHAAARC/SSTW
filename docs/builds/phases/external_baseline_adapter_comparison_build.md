@@ -188,7 +188,7 @@ external_baseline_threshold 或 threshold
 外部 baseline 不应再作为主方法 runtime Notebook 的长尾附属步骤来维护。当前推荐边界为:
 
 ```text
-generative_video_runtime_colab.ipynb: 执行真实 GPU 生成、formal metrics、runtime attack 和 detection, 不执行 baseline command preflight 或 baseline comparison。
+5 个 SSTW runtime 拆分 Notebook: 执行真实 GPU 生成、formal metrics、机制后处理、runtime attack 和 detection, 不执行 baseline command preflight 或 baseline comparison。
 *_formal_reference_colab.ipynb: 读取同一 workflow_profile 的 run_root, 逐 baseline 执行 source intake、project clone / build / run / adapt 和 official bundle 生成; 不执行全量 measured_formal 转写。
 formal_comparison_scoring_colab.ipynb: 读取同一 workflow_profile 的 run_root, 恢复 5 个主实验 official reference 阶段包后执行全量统一转写、self-containment 判定、公平校准和差值区间统计。paper_evidence_postprocess_colab.ipynb 先恢复 formal comparison scoring 阶段包并生成辅助证据; paper_gate_and_package_colab.ipynb 再恢复 runtime、motion threshold、formal comparison scoring 和 paper evidence postprocess 阶段包并执行最终 gate 打包。旧的通用 external baseline scoring Notebook 已删除, 防止与 paper gate 聚合职责重复。
 ```

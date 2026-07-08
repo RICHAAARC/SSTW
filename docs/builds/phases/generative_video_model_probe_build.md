@@ -21,7 +21,7 @@ configs/external_baselines/external_baselines.json
 configs/paper_workflow/generative_video_notebook_workflows.json
 experiments/generative_video_model_probe/
 paper_workflow/colab_notebooks/motion_threshold_calibration_colab.ipynb
-paper_workflow/colab_notebooks/generative_video_runtime_colab.ipynb
+paper_workflow/colab_notebooks/generative_video_generation_colab.ipynb -> generative_video_quality_scoring_colab.ipynb -> sstw_mechanism_postprocess_colab.ipynb -> runtime_attack_colab.ipynb -> runtime_detection_colab.ipynb
 paper_workflow/colab_notebooks/videoseal_formal_reference_colab.ipynb
 paper_workflow/colab_notebooks/vidsig_formal_reference_colab.ipynb
 paper_workflow/colab_notebooks/videoshield_formal_reference_colab.ipynb
@@ -248,7 +248,7 @@ usage: frozen_engineering_motion_threshold_for_small_scale_pilot
 experiments/generative_video_model_probe/attack_runner.py
 experiments/generative_video_model_probe/detection_runner.py
 paper_workflow/notebook_utils/generative_video_model_probe_workflow.py
-paper_workflow/colab_notebooks/generative_video_runtime_colab.ipynb
+paper_workflow/colab_notebooks/generative_video_generation_colab.ipynb -> generative_video_quality_scoring_colab.ipynb -> sstw_mechanism_postprocess_colab.ipynb -> runtime_attack_colab.ipynb -> runtime_detection_colab.ipynb
 scripts/package_results/generative_video_drive_packager.py
 ```
 
@@ -256,7 +256,11 @@ scripts/package_results/generative_video_drive_packager.py
 
 ```text
 motion_threshold_calibration_colab.ipynb
--> generative_video_runtime_colab.ipynb
+-> generative_video_generation_colab.ipynb
+-> generative_video_quality_scoring_colab.ipynb
+-> sstw_mechanism_postprocess_colab.ipynb
+-> runtime_attack_colab.ipynb
+-> runtime_detection_colab.ipynb
 -> 5 个主实验 modern external baseline formal reference Notebook
 -> formal_comparison_scoring_colab.ipynb
 -> paper_evidence_postprocess_colab.ipynb
@@ -687,7 +691,7 @@ configs/paper_workflow/generative_video_notebook_workflows.json
 
 ```text
 motion_threshold_calibration_colab.ipynb: 只运行 motion calibration split 并冻结 threshold artifact
-generative_video_runtime_colab.ipynb: 运行 Wan2.1 生成、formal metrics、motion threshold 复用、attack 和 detection
+generative_video_generation_colab.ipynb、generative_video_quality_scoring_colab.ipynb、sstw_mechanism_postprocess_colab.ipynb、runtime_attack_colab.ipynb、runtime_detection_colab.ipynb: 按拆分阶段运行 Wan2.1 生成、formal metrics、motion threshold 复用、机制后处理、attack 和 detection
 5 个主实验 modern external baseline formal reference Notebook: 分别运行对应 baseline 的官方流程并生成项目内 official bundle, 不默认调用全量 runner 转写 measured_formal records
 formal_comparison_scoring_colab.ipynb: 恢复 5 个主实验 official reference 阶段包后运行全量 external baseline comparison、self-containment、公平校准和差值区间统计
 paper_evidence_postprocess_colab.ipynb: 恢复 runtime、motion threshold 和 formal comparison scoring 阶段包后运行 internal ablation、adaptive attack、replay/sketch 或 Claim-3 downgrade、CI、低 FPR 阻断记录和数据切分泄漏检查

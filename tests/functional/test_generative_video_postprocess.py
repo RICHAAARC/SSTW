@@ -47,7 +47,7 @@ def test_generative_video_postprocess_builds_proxy_records(tmp_path: Path) -> No
     write_jsonl(run_root / "records" / "external_baseline_records.jsonl", [{"external_baseline_runnable_status": "runnable"}])
     write_json(run_root / "artifacts" / "generation_manifest.json", {"artifact_id": "manifest"})
     write_json(run_root / "artifacts" / "generative_video_colab_runtime_decision.json", {
-        "stage_id": "generative_video_runtime",
+        "stage_id": "generative_video_generation",
         "implementation_decision": "PASS",
         "mechanism_decision": "FAIL",
         "details": {
@@ -104,7 +104,7 @@ def test_colab_checker_reports_postprocess_progress_without_formal_claim(tmp_pat
     write_jsonl(run_root / "records" / "external_baseline_records.jsonl", [{"external_baseline_runnable_status": "runnable"}])
     write_json(run_root / "artifacts" / "generation_manifest.json", {"artifact_id": "manifest"})
     write_json(run_root / "artifacts" / "generative_video_colab_runtime_decision.json", {
-        "stage_id": "generative_video_runtime",
+        "stage_id": "generative_video_generation",
         "implementation_decision": "PASS",
         "mechanism_decision": "FAIL",
         "details": {},

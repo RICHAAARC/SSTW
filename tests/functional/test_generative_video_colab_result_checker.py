@@ -42,7 +42,7 @@ def test_generative_video_colab_result_checker_distinguishes_evidence_levels(tmp
     }])
     write_json(run_root / "artifacts" / "generation_manifest.json", {"artifact_id": "manifest"})
     write_json(run_root / "artifacts" / "generative_video_colab_runtime_decision.json", {
-        "stage_id": "generative_video_runtime",
+        "stage_id": "generative_video_generation",
         "implementation_decision": "PASS",
         "mechanism_decision": "FAIL",
         "details": {

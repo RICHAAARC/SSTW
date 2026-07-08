@@ -144,6 +144,9 @@ class _BoundedProgressCapture:
     def flush(self) -> None:
         """兼容 file-like 接口。"""
 
+    def close(self) -> None:
+        """兼容 logging / absl 在解释器退出时关闭 stream 的行为。"""
+
     def tail(self) -> str:
         """返回已捕获输出的末尾片段。"""
         return self._tail.strip()

@@ -11,6 +11,7 @@ import pytest
 
 from main.core.progress import (
     ProgressReporter,
+    _BoundedProgressCapture,
     configure_noisy_library_progress,
     configure_pipeline_progress_bar,
     suppress_third_party_progress_output,
@@ -196,6 +197,17 @@ def test_third_party_progress_output_is_suppressed_by_default(
     captured = capsys.readouterr()
     assert "Fetching 19 files" not in captured.out
     assert "Loading checkpoint shards" not in captured.err
+
+
+@pytest.mark.quick
+def test_bounded_progress_capture_supports_logging_stream_close() -> None:
+    """第三方 logging / absl 退出清理时可以安全关闭被重定向的 stream。"""
+
+    capture = _BoundedProgressCapture(max_chars=32)
+    assert capture.write("third party progress") == len("third party progress")
+    capture.flush()
+    capture.close()
+    assert capture.tail() == "third party progress"
 
 
 @pytest.mark.quick

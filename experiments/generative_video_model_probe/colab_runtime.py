@@ -353,7 +353,7 @@ def run_colab_probe(output_root: str | Path, prompt_suite_path: str | Path, prof
     write_csv(output_root / "tables" / "external_baseline_status_table.csv", external_records)
     write_json(output_root / "artifacts" / "external_baseline_status_decision.json", external_baseline_audit)
     decision = {
-        "stage_id": "generative_video_runtime",
+        "stage_id": "generative_video_generation",
         "implementation_decision": "PASS" if any(record["generation_status"] == "success" for record in generation_records) else "FAIL",
         "mechanism_decision": "FAIL",
         "details": {
@@ -384,7 +384,7 @@ def run_colab_probe(output_root: str | Path, prompt_suite_path: str | Path, prof
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="在 Colab GPU 环境中运行 B5 生成式视频模型探测。")
-    parser.add_argument("--output-root", default="outputs/runs/generative_video_runtime")
+    parser.add_argument("--output-root", default="outputs/runs/generative_video_generation")
     parser.add_argument("--prompt-suite-path", default="outputs/datasets/generative_video_prompt_suite/prompt_seed_suite.json")
     parser.add_argument("--profile", choices=sorted(PROFILE_SETTINGS), default="pilot")
     parser.add_argument("--model-id", default=WAN21_PRIMARY_MODEL_ID)

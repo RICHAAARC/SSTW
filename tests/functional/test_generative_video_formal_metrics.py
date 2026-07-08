@@ -371,7 +371,7 @@ def test_checker_reports_semantic_only_block_after_formal_visual_motion_metrics(
     write_jsonl(run_root / "records" / "external_baseline_records.jsonl", [{"external_baseline_runnable_status": "runnable"}])
     write_json(run_root / "artifacts" / "generation_manifest.json", {"artifact_id": "manifest"})
     write_json(run_root / "artifacts" / "generative_video_colab_runtime_decision.json", {
-        "stage_id": "generative_video_runtime",
+        "stage_id": "generative_video_generation",
         "implementation_decision": "PASS",
         "mechanism_decision": "FAIL",
         "details": {},

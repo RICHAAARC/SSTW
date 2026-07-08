@@ -591,7 +591,7 @@ def test_stage_package_sync_round_trips_local_run_without_drive_small_file_reads
         {"generation_status": "success", "prompt_id": "prompt_a", "seed_id": "seed_a"},
     ])
     write_json(run_root / "artifacts" / "generative_video_colab_runtime_decision.json", {
-        "stage_id": "generative_video_runtime",
+        "stage_id": "generative_video_generation",
         "implementation_decision": "PASS",
     })
     video_path = run_root / "videos" / "sample.mp4"
@@ -689,7 +689,7 @@ def test_validation_scale_restores_motion_calibration_stage_package_from_calibra
         {"generation_status": "success", "prompt_id": "prompt_a", "seed_id": "seed_a"},
     ])
     write_json(generation_run_root / "artifacts" / "generative_video_colab_runtime_decision.json", {
-        "stage_id": "generative_video_runtime",
+        "stage_id": "generative_video_generation",
         "implementation_decision": "PASS",
     })
     publish_colab_stage_package(
@@ -945,7 +945,7 @@ def test_generative_video_drive_packager_creates_archive_and_manifest(tmp_path: 
     validation_protocol = json.loads(Path("configs/protocol/validation_scale_generative_probe.json").read_text(encoding="utf-8"))
     pilot_protocol = json.loads(Path("configs/protocol/pilot_paper_generative_probe.json").read_text(encoding="utf-8"))
     write_jsonl(run_root / "records" / "generation_records.jsonl", [{"generation_model_id": "model", "prompt_id": "prompt"}])
-    write_json(run_root / "artifacts" / "generative_video_colab_runtime_decision.json", {"stage_id": "generative_video_runtime", "implementation_decision": "PASS", "mechanism_decision": "FAIL"})
+    write_json(run_root / "artifacts" / "generative_video_colab_runtime_decision.json", {"stage_id": "generative_video_generation", "implementation_decision": "PASS", "mechanism_decision": "FAIL"})
     write_json(run_root / "artifacts" / "generation_manifest.json", {"artifact_id": "manifest"})
     write_json(run_root / "artifacts" / "small_scale_claim_pilot_gate_decision.json", {
         "pilot_gate_decision": "FAIL",
@@ -1196,7 +1196,7 @@ def test_generative_video_drive_packager_reports_effective_mechanism_decision(tm
     package_dir = tmp_path / "packages"
     write_jsonl(run_root / "records" / "generation_records.jsonl", [{"generation_model_id": "model", "prompt_id": "prompt"}])
     write_json(run_root / "artifacts" / "generative_video_colab_runtime_decision.json", {
-        "stage_id": "generative_video_runtime",
+        "stage_id": "generative_video_generation",
         "implementation_decision": "PASS",
         "mechanism_decision": "FAIL",
     })

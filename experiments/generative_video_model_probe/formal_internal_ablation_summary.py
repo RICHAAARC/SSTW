@@ -1,4 +1,4 @@
-"""validation_scale 级内部消融汇总层。"""
+"""paper profile 级内部消融汇总层。"""
 
 from __future__ import annotations
 
@@ -44,12 +44,12 @@ def _mean_or_none(values: list[float]) -> float | None:
     return round(mean(values), 6) if values else None
 
 
-def build_validation_scale_formal_internal_ablation_records(run_root: str | Path) -> list[dict[str, Any]]:
-    """把 SSTW formal full-method 结果和 validation proxy 消融矩阵合成 validation_scale 消融表。
+def build_formal_internal_ablation_summary_records(run_root: str | Path) -> list[dict[str, Any]]:
+    """把 SSTW formal full-method 结果和 validation proxy 消融矩阵合成 paper_profile 消融表。
 
     该函数的核心作用是消除“只有 proxy ablation, 没有与 SSTW formal 结果绑定”的文档缺口。
     `sstw_full_method` 行来自 SSTW measured_formal records; 其余 component-removal 行仍来自
-    validation_scale proxy ablation, 因此只能支持小样本全流程打通检查, 不能支持 full-paper
+    paper_profile proxy ablation, 因此只能支持小样本全流程打通检查, 不能支持 full-paper
     正式消融效果主张。
     """
     run_root = Path(run_root)
@@ -88,17 +88,17 @@ def build_validation_scale_formal_internal_ablation_records(run_root: str | Path
                 if value is not None
             ]
             metric_status = "measured_proxy" if variant_scores else "missing"
-            evidence_level = "validation_scale_proxy_component_removal"
+            evidence_level = "paper_profile_proxy_component_removal"
             source_record_family = "validation_internal_ablation_records"
         score_mean = _mean_or_none(variant_scores)
         delta = round(score_mean - full_score_mean, 6) if score_mean is not None and full_score_mean is not None else None
         claim_support_status = (
-            "validation_scale_formal_internal_ablation_ready_for_target_fpr_0_1_claim_context"
+            "formal_internal_ablation_summary_ready_for_target_fpr_0_1_claim_context"
             if metric_status != "missing"
-            else "validation_scale_formal_internal_ablation_missing_variant"
+            else "formal_internal_ablation_summary_missing_variant"
         )
         rows.append(with_flow_evidence_protocol_defaults({
-            "record_version": "validation_scale_formal_internal_ablation_v1",
+            "record_version": "formal_internal_ablation_summary_v1",
             "method_variant": variant_name,
             "ablation_family": config.get("ablation_family"),
             "ablation_removed_component": config.get("ablation_removed_component"),
@@ -110,12 +110,12 @@ def build_validation_scale_formal_internal_ablation_records(run_root: str | Path
             "formal_internal_ablation_full_method_score_mean": full_score_mean,
             "formal_internal_ablation_delta_vs_full_method": delta,
             "claim_support_status": claim_support_status,
-        }, trajectory_source_level="validation_scale_formal_internal_ablation", claim_support_status=claim_support_status))
+        }, trajectory_source_level="formal_internal_ablation_summary", claim_support_status=claim_support_status))
     return rows
 
 
-def audit_validation_scale_formal_internal_ablation_records(records: list[dict[str, Any]]) -> dict[str, Any]:
-    """审计 validation_scale 级内部消融汇总是否完整。"""
+def audit_formal_internal_ablation_summary_records(records: list[dict[str, Any]]) -> dict[str, Any]:
+    """审计 paper_profile 级内部消融汇总是否完整。"""
     expected_variants = {str(row["method_variant"]) for row in VALIDATION_ABLATION_VARIANTS}
     ready_variants = {
         str(record.get("method_variant"))
@@ -129,11 +129,11 @@ def audit_validation_scale_formal_internal_ablation_records(records: list[dict[s
     missing_variants = sorted(expected_variants - ready_variants)
     decision = "PASS" if full_formal_ready and not missing_variants else "FAIL"
     return {
-        "stage_id": "validation_scale_formal_internal_ablation",
-        "validation_scale_formal_internal_ablation_decision": decision,
-        "claim_support_status": "validation_scale_formal_internal_ablation_ready_for_target_fpr_0_1_claim_context"
+        "stage_id": "formal_internal_ablation_summary",
+        "formal_internal_ablation_summary_decision": decision,
+        "claim_support_status": "formal_internal_ablation_summary_ready_for_target_fpr_0_1_claim_context"
         if decision == "PASS"
-        else "validation_scale_formal_internal_ablation_blocked",
+        else "formal_internal_ablation_summary_blocked",
         "formal_internal_ablation_variant_count": len(ready_variants),
         "formal_internal_ablation_expected_variant_count": len(expected_variants),
         "formal_internal_ablation_full_method_formal_ready": full_formal_ready,
@@ -142,37 +142,37 @@ def audit_validation_scale_formal_internal_ablation_records(records: list[dict[s
     }
 
 
-def run_validation_scale_formal_internal_ablation(run_root: str | Path) -> dict[str, Any]:
-    """写出 validation_scale 级内部消融 records、table、decision 和 report。"""
+def run_formal_internal_ablation_summary(run_root: str | Path) -> dict[str, Any]:
+    """写出 paper_profile 级内部消融 records、table、decision 和 report。"""
     run_root = Path(run_root)
-    records = build_validation_scale_formal_internal_ablation_records(run_root)
-    audit = audit_validation_scale_formal_internal_ablation_records(records)
-    write_jsonl(run_root / "records" / "validation_scale_formal_internal_ablation_records.jsonl", records)
-    write_csv(run_root / "tables" / "validation_scale_formal_internal_ablation_table.csv", records)
-    write_json(run_root / "artifacts" / "validation_scale_formal_internal_ablation_decision.json", audit)
+    records = build_formal_internal_ablation_summary_records(run_root)
+    audit = audit_formal_internal_ablation_summary_records(records)
+    write_jsonl(run_root / "records" / "formal_internal_ablation_summary_records.jsonl", records)
+    write_csv(run_root / "tables" / "formal_internal_ablation_summary_table.csv", records)
+    write_json(run_root / "artifacts" / "formal_internal_ablation_summary_decision.json", audit)
     report = (
-        "# Validation-scale Formal Internal Ablation Report\n\n"
-        "该报告把 SSTW full-method measured_formal 结果与 validation-scale proxy component-removal "
-        "消融矩阵绑定, 用于确认内部消融产物在 validation_scale 阶段闭环。除 full-method 行外, "
+        "# Formal Internal Ablation Summary Report\n\n"
+        "该报告把 SSTW full-method measured_formal 结果与 paper profile proxy component-removal "
+        "消融矩阵绑定, 用于确认内部消融产物在 paper_profile 阶段闭环。除 full-method 行外, "
         "component-removal 行用于支撑 target_fpr=0.1 小样本机制解释, 但不能外推为 full_paper 规模正式消融结论。\n\n"
-        f"- validation_scale_formal_internal_ablation_decision: {audit['validation_scale_formal_internal_ablation_decision']}\n"
+        f"- formal_internal_ablation_summary_decision: {audit['formal_internal_ablation_summary_decision']}\n"
         f"- formal_internal_ablation_variant_count: {audit['formal_internal_ablation_variant_count']}\n"
         f"- formal_internal_ablation_full_method_formal_ready: {str(audit['formal_internal_ablation_full_method_formal_ready']).lower()}\n"
         f"- formal_internal_ablation_missing_variants: {', '.join(audit['formal_internal_ablation_missing_variants']) if audit['formal_internal_ablation_missing_variants'] else 'none'}\n"
         f"- claim_support_status: {audit['claim_support_status']}\n"
     )
-    report_path = run_root / "reports" / "validation_scale_formal_internal_ablation_report.md"
+    report_path = run_root / "reports" / "formal_internal_ablation_summary_report.md"
     report_path.parent.mkdir(parents=True, exist_ok=True)
     report_path.write_text(report, encoding="utf-8")
     return audit
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="生成 validation_scale 级内部消融汇总。")
+    parser = argparse.ArgumentParser(description="生成 paper_profile 级内部消融汇总。")
     parser.add_argument("--run-root", required=True)
     parser.add_argument("--config-path", default="", help="保留 profile config provenance, 当前阶段不读取该配置。")
     args = parser.parse_args()
-    payload = run_validation_scale_formal_internal_ablation(args.run_root)
+    payload = run_formal_internal_ablation_summary(args.run_root)
     print(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True))
 
 

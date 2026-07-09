@@ -28,7 +28,7 @@ def adapter_status() -> dict[str, Any]:
     """返回 VidSig adapter 的正式接入状态。
 
     该 adapter 是现代视频水印 baseline 的正式边界。若官方命令或 source script 未配置,
-    状态会保持 not_runnable, 使 validation_scale 与 pilot_paper gate 明确失败。
+    状态会保持 not_runnable, 使 probe_paper 与 pilot_paper gate 明确失败。
     """
     return adapter_status_for(ADAPTER_CONFIG)
 

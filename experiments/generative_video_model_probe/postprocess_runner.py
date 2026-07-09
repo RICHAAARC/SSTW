@@ -14,7 +14,7 @@ from main.protocol.record_writer import write_json, write_jsonl
 from main.protocol.table_builder import write_csv
 
 
-DEFAULT_PROTOCOL_CONFIG = "configs/protocol/validation_scale_generative_probe.json"
+DEFAULT_PROTOCOL_CONFIG = "configs/protocol/probe_paper_generative_probe.json"
 METHOD_VARIANTS = (
     "key_conditioned_state_space_with_trajectory",
     "generic_state_space_with_trajectory",
@@ -44,7 +44,7 @@ def _load_target_fpr(config_path: str | Path, target_fpr_override: float | None 
     """从 protocol config 读取当前 profile 的 target_fpr。
 
     `target_fpr_override` 仅用于显式调试或旧命令兼容。正式 Notebook 编排应传入
-    `--config-path`, 避免在脚本默认值中硬写 validation_scale / pilot_paper /
+    `--config-path`, 避免在脚本默认值中硬写 probe_paper / pilot_paper /
     full_paper 的 FPR 口径。
     """
     if target_fpr_override is not None:

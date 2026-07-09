@@ -125,12 +125,12 @@ def test_runtime_detection_runner_scores_attacked_videos(tmp_path: Path) -> None
 
 
 @pytest.mark.quick
-def test_validation_pilot_and_full_paper_attack_protocol_registers_top_tier_coverage() -> None:
-    """validation/pilot/full paper 必须登记分层 attack manifest, 不能退回三类最小攻击。"""
+def test_probe_pilot_and_full_paper_attack_protocol_registers_top_tier_coverage() -> None:
+    """probe/pilot/full paper 必须登记分层 attack manifest, 不能退回三类最小攻击。"""
 
-    validation_audit = audit_runtime_attack_protocol_config(
+    probe_audit = audit_runtime_attack_protocol_config(
         {
-            "paper_result_level": "validation_scale",
+            "paper_result_level": "probe_paper",
             "required_runtime_attack_names": list(FULL_PAPER_RUNTIME_ATTACKS),
             "required_non_runtime_attack_protocols": list(FULL_PAPER_NON_RUNTIME_ATTACK_PROTOCOLS),
         }
@@ -150,11 +150,11 @@ def test_validation_pilot_and_full_paper_attack_protocol_registers_top_tier_cove
         }
     )
 
-    assert validation_audit["runtime_attack_protocol_decision"] == "PASS"
+    assert probe_audit["runtime_attack_protocol_decision"] == "PASS"
     assert pilot_audit["runtime_attack_protocol_decision"] == "PASS"
     assert full_audit["runtime_attack_protocol_decision"] == "PASS"
-    assert validation_audit["required_runtime_attack_count"] == len(FULL_PAPER_RUNTIME_ATTACKS)
-    assert validation_audit["missing_non_runtime_attack_protocols"] == []
+    assert probe_audit["required_runtime_attack_count"] == len(FULL_PAPER_RUNTIME_ATTACKS)
+    assert probe_audit["missing_non_runtime_attack_protocols"] == []
     assert set(PILOT_PAPER_RUNTIME_ATTACKS) == set(FULL_PAPER_RUNTIME_ATTACKS)
     assert pilot_audit["missing_non_runtime_attack_protocols"] == []
     assert {
@@ -184,7 +184,7 @@ def test_profile_protocols_resolve_shared_attack_manifest() -> None:
     """三个论文 profile 必须通过共享配置解析出同一份 attack 协议清单。"""
 
     profile_paths = (
-        "configs/protocol/validation_scale_generative_probe.json",
+        "configs/protocol/probe_paper_generative_probe.json",
         "configs/protocol/pilot_paper_generative_probe.json",
         "configs/protocol/full_paper_generative_probe.json",
     )
@@ -204,9 +204,6 @@ def test_profile_protocols_resolve_shared_attack_manifest() -> None:
 def test_paper_profile_attack_event_minimums_match_declared_sample_capacity() -> None:
     """paper profile 的 per-attack 事件下限不能超过配置声明的样本容量。"""
 
-    validation_config = load_protocol_config_with_shared_attack_protocol(
-        "configs/protocol/validation_scale_generative_probe.json"
-    )
     pilot_config = load_protocol_config_with_shared_attack_protocol(
         "configs/protocol/pilot_paper_generative_probe.json"
     )
@@ -216,8 +213,6 @@ def test_paper_profile_attack_event_minimums_match_declared_sample_capacity() ->
     full_config = load_protocol_config_with_shared_attack_protocol(
         "configs/protocol/full_paper_generative_probe.json"
     )
-
-    assert "minimum_attack_event_count_per_attack" not in validation_config
 
     probe_positive_capacity_per_attack = int(probe_config["minimum_unique_video_count"])
     probe_required_attack_count = len(probe_config["required_runtime_attack_names"])

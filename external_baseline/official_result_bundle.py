@@ -3,7 +3,7 @@
 该模块属于 external_baseline 工程边界。它不生成第三方分数, 只检查
 Google Drive 或本地目录中是否已经存在由本项目 workflow 调用第三方官方代码、
 官方 API 或官方原生命令生成的结果 JSON。这样可以把“缺权重 / 缺 checkpoint /
-缺项目内 official bundle cache”的阻断提前暴露, 避免 validation-scale 正式门禁
+缺项目内 official bundle cache”的阻断提前暴露, 避免 paper profile 正式门禁
 在长时间 GPU 运行结束后才失败。
 """
 

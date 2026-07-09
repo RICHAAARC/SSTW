@@ -7,7 +7,7 @@ from experiments.generative_video_model_probe.claim3_downgrade import (
     write_claim3_downgrade_outputs,
 )
 from experiments.generative_video_model_probe.external_baseline_runner import run_external_baseline_status
-from experiments.generative_video_model_probe.validation_scale_gate import build_validation_scale_gate_audit
+from experiments.generative_video_model_probe.paper_profile_gate import build_paper_profile_gate_audit
 from main.attacks.video_runtime_attack_protocol import (
     FULL_PAPER_NON_RUNTIME_ATTACK_PROTOCOLS,
     FULL_PAPER_RUNTIME_ATTACKS,
@@ -37,7 +37,7 @@ REQUIRED_ANCHOR_KEYS = tuple(f"prompt_0::seed_0::{attack_name}" for attack_name 
 
 
 def _external_baseline_self_containment_pass_payload() -> dict:
-    """构造 validation-scale gate 所需的完整 self-containment PASS fixture。"""
+    """构造 probe-paper gate 所需的完整 self-containment PASS fixture。"""
 
     return {
         "external_baseline_self_containment_decision": "PASS",
@@ -114,7 +114,7 @@ def test_claim3_downgrade_gate_writes_explicit_downgrade_records(tmp_path: Path)
     assert audit["claim3_downgraded"] is True
     assert audit["claim3_full_support_allowed"] is False
     assert audit["replay_or_sketch_status"] == "claim3_explicitly_downgraded"
-    assert records[0]["claim_support_status"] == "claim3_downgraded_validation_scale_only"
+    assert records[0]["claim_support_status"] == "claim3_downgraded_paper_profile_only"
     assert records[0]["trajectory_source_level"] == "claim3_downgrade_governance_record"
     assert (run_root / "tables" / "claim3_downgrade_table.csv").exists()
     assert (run_root / "artifacts" / "claim3_downgrade_decision.json").exists()
@@ -158,15 +158,15 @@ def test_claim3_downgrade_keeps_downgrade_for_validation_proxy_replay_gate(tmp_p
 
 
 @pytest.mark.quick
-def test_validation_scale_gate_accepts_claim3_downgrade_path(tmp_path: Path) -> None:
-    """validation-scale gate 应接受 Claim-3 显式降级路径, 但不把它当作强 replay claim。"""
+def test_paper_profile_gate_accepts_claim3_downgrade_path(tmp_path: Path) -> None:
+    """probe-paper gate 应接受 Claim-3 显式降级路径, 但不把它当作强 replay claim。"""
     run_root = tmp_path / "run"
     generation_records = []
     for prompt_index in range(8):
         for seed_index in range(3):
             generation_records.append({
                 "generation_status": "success",
-                "colab_runtime_profile": "validation_scale",
+                "colab_runtime_profile": "probe_paper",
                 "prompt_id": f"prompt_{prompt_index}",
                 "seed_id": f"seed_{seed_index}",
             })
@@ -266,7 +266,7 @@ def test_validation_scale_gate_accepts_claim3_downgrade_path(tmp_path: Path) -> 
             "metric_status": "measured_formal",
             "target_fpr": 0.1,
             "tpr_at_target_fpr": 1.0,
-            "clean_negative_score_count": 10,
+            "clean_negative_score_count": 500,
             "positive_anchor_count": len(REQUIRED_ANCHOR_KEYS),
             "positive_anchor_keys": list(REQUIRED_ANCHOR_KEYS),
             "positive_attack_names": list(REQUIRED_RUNTIME_ATTACK_NAMES),
@@ -281,7 +281,7 @@ def test_validation_scale_gate_accepts_claim3_downgrade_path(tmp_path: Path) -> 
                 "metric_status": "measured_formal",
                 "target_fpr": 0.1,
                 "tpr_at_target_fpr": 1.0,
-                "clean_negative_score_count": 10,
+                "clean_negative_score_count": 500,
                 "positive_anchor_count": len(REQUIRED_ANCHOR_KEYS),
                 "positive_anchor_keys": list(REQUIRED_ANCHOR_KEYS),
                 "positive_attack_names": list(REQUIRED_RUNTIME_ATTACK_NAMES),
@@ -296,7 +296,7 @@ def test_validation_scale_gate_accepts_claim3_downgrade_path(tmp_path: Path) -> 
         "fair_detection_calibration_decision": "PASS",
         "fair_detection_calibration_ready_count": 6,
         "target_fpr": 0.1,
-        "claim_support_status": "fair_detection_calibration_validation_scale_ready",
+        "claim_support_status": "fair_detection_calibration_paper_profile_ready",
     })
     write_jsonl(run_root / "records" / "formal_method_baseline_comparison_records.jsonl", [
         {
@@ -360,14 +360,14 @@ def test_validation_scale_gate_accepts_claim3_downgrade_path(tmp_path: Path) -> 
         "target_fpr": 0.1,
         "claim_support_status": "formal_baseline_difference_interval_paper_profile_claim_candidate",
     })
-    write_jsonl(run_root / "records" / "validation_scale_formal_internal_ablation_records.jsonl", [
+    write_jsonl(run_root / "records" / "formal_internal_ablation_summary_records.jsonl", [
         {"method_variant": "sstw_full_method", "metric_status": "measured_formal"},
         {"method_variant": "without_velocity_constraint", "metric_status": "measured_proxy"},
     ])
-    write_json(run_root / "artifacts" / "validation_scale_formal_internal_ablation_decision.json", {
-        "validation_scale_formal_internal_ablation_decision": "PASS",
+    write_json(run_root / "artifacts" / "formal_internal_ablation_summary_decision.json", {
+        "formal_internal_ablation_summary_decision": "PASS",
         "formal_internal_ablation_variant_count": 8,
-        "claim_support_status": "validation_scale_formal_internal_ablation_ready_for_target_fpr_0_1_claim_context",
+        "claim_support_status": "formal_internal_ablation_summary_ready_for_target_fpr_0_1_claim_context",
     })
     write_json(run_root / "artifacts" / "validation_internal_ablation_decision.json", {
         "validation_internal_ablation_decision": "PASS",
@@ -401,8 +401,8 @@ def test_validation_scale_gate_accepts_claim3_downgrade_path(tmp_path: Path) -> 
     })
     write_claim3_downgrade_outputs(run_root)
 
-    audit = build_validation_scale_gate_audit(run_root)
+    audit = build_paper_profile_gate_audit(run_root)
 
-    assert audit["validation_scale_gate_decision"] == "PASS"
+    assert audit["paper_profile_gate_decision"] == "PASS"
     assert audit["replay_or_sketch_status"] == "claim3_explicitly_downgraded"
     assert "validation_replay_or_sketch_records_ready" not in audit["missing_validation_requirements"]

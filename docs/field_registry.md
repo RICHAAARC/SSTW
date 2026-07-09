@@ -143,12 +143,12 @@ Notebook 与 repository module 的跨边界数据
 | runtime_attack_implementation_level | protocol | none | true | false | false | runtime attack 当前实现层级, 用于区分仓库轻量帧级变换与 full paper 真实平台级攻击。 |
 | video_writer_codec | protocol | none | true | false | false | runtime attack 写出 attacked video 时请求的编码器名称。 |
 | video_writer_output_params | protocol | none | true | false | false | runtime attack 写出 attacked video 时请求传递给视频编码器的参数列表。 |
-| runtime_attack_observed_names | protocol | none | true | false | false | validation_scale gate 从 runtime_attack_records 观察到的 ready attack 名称集合。 |
-| runtime_attack_missing_required_names | governance | none | true | false | false | validation_scale gate 中 runtime_attack_records 缺失的 required runtime attack 名称集合。 |
-| runtime_attack_missing_required_count | metric | none | true | true | false | validation_scale gate 中 runtime_attack_records 缺失的 required runtime attack 数量。 |
-| runtime_detection_observed_names | protocol | none | true | false | false | validation_scale gate 从 runtime_detection_records 观察到的 ready attack 名称集合。 |
-| runtime_detection_missing_required_names | governance | none | true | false | false | validation_scale gate 中 runtime_detection_records 缺失的 required runtime attack 名称集合。 |
-| runtime_detection_missing_required_count | metric | none | true | true | false | validation_scale gate 中 runtime_detection_records 缺失的 required runtime attack 数量。 |
+| runtime_attack_observed_names | protocol | none | true | false | false | probe_paper gate 从 runtime_attack_records 观察到的 ready attack 名称集合。 |
+| runtime_attack_missing_required_names | governance | none | true | false | false | probe_paper gate 中 runtime_attack_records 缺失的 required runtime attack 名称集合。 |
+| runtime_attack_missing_required_count | metric | none | true | true | false | probe_paper gate 中 runtime_attack_records 缺失的 required runtime attack 数量。 |
+| runtime_detection_observed_names | protocol | none | true | false | false | probe_paper gate 从 runtime_detection_records 观察到的 ready attack 名称集合。 |
+| runtime_detection_missing_required_names | governance | none | true | false | false | probe_paper gate 中 runtime_detection_records 缺失的 required runtime attack 名称集合。 |
+| runtime_detection_missing_required_count | metric | none | true | true | false | probe_paper gate 中 runtime_detection_records 缺失的 required runtime attack 数量。 |
 | source_video_path | artifact | none | true | false | false | Source generated video path used by runtime attack runner. |
 | source_video_sha256 | artifact | none | true | false | false | Source generated video sha256 used by runtime attack runner. |
 | attacked_video_path | artifact | none | true | false | false | Attacked video path produced by runtime attack runner. |
@@ -286,7 +286,7 @@ Notebook 与 repository module 的跨边界数据
 | external_baseline_colab_preflight_required_env_var_count | metric | none | true | false | false | Colab preflight 要求配置的现代 external baseline command 环境变量数量。 |
 | external_baseline_colab_preflight_configured_env_var_count | metric | none | true | false | false | Colab preflight 已配置的现代 external baseline command 环境变量数量。 |
 | external_baseline_colab_preflight_missing_env_var_count | metric | none | true | false | false | Colab preflight 缺失的现代 external baseline command 环境变量数量。 |
-| paper_gate_profile | protocol | none | true | false | false | 当前 Colab profile 是否属于 validation_scale / probe_paper / pilot_paper 这类 paper gate profile。 |
+| paper_gate_profile | protocol | none | true | false | false | 当前 Colab profile 是否属于 probe_paper / probe_paper / pilot_paper 这类 paper gate profile。 |
 | require_modern_baseline_commands_for_paper_gate | protocol | none | true | false | false | Colab paper gate profile 是否要求现代 baseline command 在真实 GPU 运行前全部配置。 |
 | run_external_baseline_source_clone | protocol | none | true | false | false | Colab 冷启动阶段是否执行可 clone 外部 baseline 官方 source 拉取。 |
 | external_baseline_evidence_path_count | metric | none | true | false | false | Colab preflight 或 execution manifest 中登记的外部 baseline evidence path 数量。 |
@@ -347,7 +347,7 @@ Notebook 与 repository module 的跨边界数据
 | default_workflow_profile_by_notebook_role | protocol | none | false | false | false | Colab workflow 统一配置中每类 Notebook 的默认 workflow profile 映射。 |
 | workflow_profile_aliases | protocol | none | false | false | false | Colab workflow 统一配置中旧 profile 名称到规范 profile 名称的别名映射。 |
 | workflow_profiles | protocol | none | false | false | false | Colab workflow 统一配置中所有结果层级 profile 的配置映射。 |
-| workflow_profile | protocol | none | true | false | false | Colab workflow 的规范 profile 名称, 用于区分 motion_calibration、validation_scale、probe_paper、pilot_paper 和 full_paper。 |
+| workflow_profile | protocol | none | true | false | false | Colab workflow 的规范 profile 名称, 用于区分 motion_calibration、probe_paper、probe_paper、pilot_paper 和 full_paper。 |
 | requested_workflow_profile | protocol | none | true | false | false | 用户或环境变量请求的原始 workflow profile 名称。 |
 | canonical_workflow_profile | protocol | none | true | false | false | 经过 alias 解析后的规范 workflow profile 名称。 |
 | profile_alias_applied | governance | none | true | false | false | requested_workflow_profile 是否经过 alias 映射。 |
@@ -355,7 +355,7 @@ Notebook 与 repository module 的跨边界数据
 | enabled_for_run | governance | none | true | false | false | workflow profile 当前是否允许作为可运行入口。 |
 | enabled_for_claim | governance | none | true | false | false | workflow profile 当前是否允许支撑论文 claim。 |
 | runtime_profile | protocol | none | true | false | false | workflow profile 映射到 experiments runner 的 runtime profile。 |
-| result_tier | protocol | none | true | false | false | 当前结果层级, 例如 validation_scale、probe_paper、pilot_paper 或 full_paper。 |
+| result_tier | protocol | none | true | false | false | 当前结果层级, 例如 probe_paper、probe_paper、pilot_paper 或 full_paper。 |
 | notebook_role | protocol | none | true | false | false | Colab Notebook 的职责角色, 用于从统一 workflow 配置读取 stage plan。 |
 | notebook_roles | protocol | none | false | false | false | Colab workflow 统一配置中 Notebook role 到路径、允许 profile 和 stage plan 的映射。 |
 | notebook_path | artifact | none | true | false | false | Notebook role 对应的 Colab Notebook 文件路径。 |
@@ -461,8 +461,8 @@ Notebook 与 repository module 的跨边界数据
 | external_baseline_measured_adapter_names | protocol | none | true | false | false | Names of external_baseline adapters with measured proxy comparison records. |
 | external_baseline_unsupported_adapter_count | metric | none | true | false | false | Number of unsupported external baseline comparison records or rows. |
 | external_baseline_comparison_table_status | governance | none | true | false | false | Whether the external baseline comparison table was rebuilt from governed records. |
-| validation_external_baseline_comparison_records_ready | governance | none | true | false | false | Whether validation-scale gate found external_baseline comparison records and enough measured adapters. |
-| minimum_external_baseline_measured_adapter_count | protocol | none | true | false | false | Minimum measured external_baseline adapter count required by validation-scale gate. |
+| validation_external_baseline_comparison_records_ready | governance | none | true | false | false | Whether probe-paper gate found external_baseline comparison records and enough measured adapters. |
+| minimum_external_baseline_measured_adapter_count | protocol | none | true | false | false | Minimum measured external_baseline adapter count required by probe-paper gate. |
 | external_baseline_source_intake_decision | governance | none | true | false | false | Decision for external baseline source intake manifest readiness. |
 | external_baseline_source_intake_ready_count | metric | none | true | false | false | Number of external baseline sources that are local, present, or command-configured. |
 | external_baseline_source_intake_missing_count | metric | none | true | false | false | Number of external baseline sources still requiring official source or command configuration. |
@@ -569,32 +569,32 @@ Notebook 与 repository module 的跨边界数据
 | external_baseline_score_mean | metric | none | true | false | false | Mean external baseline adapter proxy score in a comparison table. |
 | external_baseline_distance_mean | metric | none | true | false | false | Mean external baseline adapter distance in a comparison table. |
 | baseline_score_margin_mean | metric | none | true | false | false | Mean score margin between SSTW runtime proxy score and external baseline adapter proxy score. |
-| validation_scale_gate_decision | governance | none | true | false | false | Decision for validation-scale generative probe gate before pilot_paper full-protocol run. |
-| validation_scale_result_level | governance | none | true | true | false | package manifest 中记录的 validation_scale 结果级别。 |
-| validation_scale_target_fpr | protocol | none | true | false | false | package manifest 中记录的 validation_scale protocol config target_fpr 摘要。 |
+| paper_profile_gate_decision | governance | none | true | false | false | Decision for probe-paper generative probe gate before pilot_paper full-protocol run. |
+| probe_paper_result_level | governance | none | true | true | false | package manifest 中记录的 probe_paper 结果级别。 |
+| probe_paper_target_fpr | protocol | none | true | false | false | package manifest 中记录的 probe_paper protocol config target_fpr 摘要。 |
 | missing_validation_requirements | governance | none | true | false | false | Validation-scale requirements that are not yet satisfied. |
-| validation_missing_requirement_count | metric | none | true | false | false | Count of missing validation-scale requirements. |
-| validation_scale_hard_required_config_missing | governance | none | true | false | false | validation_scale 阶段不可通过配置关闭的公平比较硬前置缺口列表。 |
-| validation_scale_hard_required_config_missing_count | metric | none | true | false | false | validation_scale 公平比较硬前置配置缺口数量。 |
-| validation_profile_names | protocol | none | true | false | false | Runtime profile names accepted as validation-scale generation records. |
-| validation_generation_record_count | metric | none | true | false | false | Number of successful generation records produced by validation-scale profiles. |
-| validation_prompt_count | metric | none | true | false | false | Number of prompts covered by validation-scale generation records. |
-| validation_seed_per_prompt_min | metric | none | true | false | false | Minimum seed count per prompt in validation-scale generation records. |
+| validation_missing_requirement_count | metric | none | true | false | false | Count of missing probe-paper requirements. |
+| probe_paper_hard_required_config_missing | governance | none | true | false | false | probe_paper 阶段不可通过配置关闭的公平比较硬前置缺口列表。 |
+| probe_paper_hard_required_config_missing_count | metric | none | true | false | false | probe_paper 公平比较硬前置配置缺口数量。 |
+| validation_profile_names | protocol | none | true | false | false | Runtime profile names accepted as probe-paper generation records. |
+| validation_generation_record_count | metric | none | true | false | false | Number of successful generation records produced by probe-paper profiles. |
+| validation_prompt_count | metric | none | true | false | false | Number of prompts covered by probe-paper generation records. |
+| validation_seed_per_prompt_min | metric | none | true | false | false | Minimum seed count per prompt in probe-paper generation records. |
 | minimum_prompt_count | protocol | none | true | false | false | Minimum prompt count required by a gate. |
 | minimum_seed_per_prompt | protocol | none | true | false | false | Minimum seed count per prompt required by a gate. |
 | internal_ablation_record_count | metric | none | true | false | false | Number of internal ablation records available to a validation or full-paper gate. |
 | internal_ablation_status | governance | none | true | false | false | Internal ablation readiness or claim boundary status. |
-| validation_internal_ablation_decision | governance | none | true | false | false | Decision for validation-scale internal ablation proxy runner. |
-| validation_internal_ablation_variant_count | metric | none | true | false | false | Number of method variants covered by validation-scale internal ablation records. |
-| validation_internal_ablation_attack_count | metric | none | true | false | false | Number of attacks covered by validation-scale internal ablation records. |
-| validation_internal_ablation_score_margin | metric | none | true | false | false | Mean score margin between full method and ablated proxy variants in validation-scale. |
-| validation_internal_ablation_evidence_level | governance | none | true | false | false | Evidence level for validation-scale internal ablation records. |
-| ablation_runtime_profile | protocol | none | true | false | false | Internal ablation record 对应的 runtime profile, 用于区分 validation_scale、probe_paper 与 pilot_paper 覆盖。 |
+| validation_internal_ablation_decision | governance | none | true | false | false | Decision for probe-paper internal ablation proxy runner. |
+| validation_internal_ablation_variant_count | metric | none | true | false | false | Number of method variants covered by probe-paper internal ablation records. |
+| validation_internal_ablation_attack_count | metric | none | true | false | false | Number of attacks covered by probe-paper internal ablation records. |
+| validation_internal_ablation_score_margin | metric | none | true | false | false | Mean score margin between full method and ablated proxy variants in probe-paper. |
+| validation_internal_ablation_evidence_level | governance | none | true | false | false | Evidence level for probe-paper internal ablation records. |
+| ablation_runtime_profile | protocol | none | true | false | false | Internal ablation record 对应的 runtime profile, 用于区分 probe_paper、probe_paper 与 pilot_paper 覆盖。 |
 | validation_internal_ablation_profile_counts | metric | none | true | false | false | Internal ablation records 按 runtime profile 汇总的数量映射。 |
 | pilot_paper_internal_ablation_record_count | metric | none | true | true | false | Internal ablation records 中属于 pilot_paper profile 的数量。 |
-| validation_ablation_evidence_level | governance | none | true | false | false | Per-record evidence level for validation-scale ablation proxy records. |
-| validation_ablation_source_score | metric | none | true | false | false | Source runtime detection proxy score used by a validation-scale ablation record. |
-| validation_ablation_proxy_score | metric | none | true | false | false | Derived validation-scale ablation proxy score. |
+| validation_ablation_evidence_level | governance | none | true | false | false | Per-record evidence level for probe-paper ablation proxy records. |
+| validation_ablation_source_score | metric | none | true | false | false | Source runtime detection proxy score used by a probe-paper ablation record. |
+| validation_ablation_proxy_score | metric | none | true | false | false | Derived probe-paper ablation proxy score. |
 | adaptive_attack_record_count | metric | none | true | false | false | Number of Flow-specific adaptive attack records available to a validation or full-paper gate. |
 | adaptive_attack_status | governance | none | true | false | false | Adaptive attack readiness or claim boundary status. |
 | adaptive_attack_decision | governance | none | true | false | false | Adaptive attack validation runner 决策。 |
@@ -639,7 +639,7 @@ Notebook 与 repository module 的跨边界数据
 | wrong_sampler_replay_records_ready | governance | none | true | false | false | Wrong sampler replay records 是否就绪。 |
 | wrong_prompt_replay_records_ready | governance | none | true | false | false | Wrong prompt replay records 是否就绪。 |
 | confidence_interval_status | governance | none | true | false | false | Statistical confidence interval report readiness status. |
-| statistical_confidence_interval_decision | governance | none | true | false | false | Decision for validation-scale statistical confidence interval reporter. |
+| statistical_confidence_interval_decision | governance | none | true | false | false | Decision for probe-paper statistical confidence interval reporter. |
 | statistical_confidence_interval_family | governance | none | true | false | false | Metric family covered by a statistical confidence interval record. |
 | ci_record_count | metric | none | true | false | false | Number of confidence interval records. |
 | ci_success_count | metric | none | true | false | false | Count of successful events used in a confidence interval. |
@@ -648,11 +648,11 @@ Notebook 与 repository module 的跨边界数据
 | ci_wilson_lower | metric | none | true | false | false | Wilson lower bound for a binomial confidence interval. |
 | ci_wilson_upper | metric | none | true | false | false | Wilson upper bound for a binomial confidence interval. |
 | ci_confidence_level | protocol | none | true | false | false | Confidence level used by a confidence interval record. |
-| ci_evidence_level | governance | none | true | false | false | Evidence level for a validation-scale confidence interval record. |
+| ci_evidence_level | governance | none | true | false | false | Evidence level for a probe-paper confidence interval record. |
 | cluster_by_video_interval_status | governance | none | true | false | false | Status of cluster-by-video confidence interval availability. |
 | paper_low_fpr_ci_status | governance | none | true | false | false | Status of paper-level low-FPR confidence interval availability. |
 | artifact_rebuild_status | governance | none | true | false | false | Artifact rebuild dry-run readiness status. |
-| validation_artifact_rebuild_dry_run_decision | governance | none | true | false | false | Decision for validation-scale artifact rebuild dry-run. |
+| validation_artifact_rebuild_dry_run_decision | governance | none | true | false | false | Decision for probe-paper artifact rebuild dry-run. |
 | artifact_rebuild_check_record_count | metric | none | true | false | false | Number of artifact rebuild dry-run check records. |
 | artifact_rebuild_missing_count | metric | none | true | false | false | Number of missing artifacts in a rebuild dry-run. |
 | artifact_rebuild_missing_paths | artifact | none | true | false | false | List of missing artifact paths from a rebuild dry-run. |
@@ -921,7 +921,7 @@ Notebook 与 repository module 的跨边界数据
 | pilot_paper_gate_decision | governance | none | true | false | false | pilot_paper fixed-FPR gate 的 PASS / FAIL 判定。 |
 | missing_pilot_paper_requirements | governance | none | true | false | false | 阻断 pilot_paper fixed-FPR claim 的缺失条件列表。 |
 | pilot_paper_missing_requirement_count | metric | none | true | false | false | pilot_paper fixed-FPR gate 的缺失条件数量。 |
-| pilot_paper_hard_required_config_missing | governance | none | true | false | false | pilot_paper 不可通过配置关闭的 validation_scale 与公平比较硬前置缺口列表。 |
+| pilot_paper_hard_required_config_missing | governance | none | true | false | false | pilot_paper 不可通过配置关闭的 probe_paper 与公平比较硬前置缺口列表。 |
 | pilot_paper_hard_required_config_missing_count | metric | none | true | false | false | pilot_paper 硬前置配置缺口数量。 |
 | paper_result_level | governance | none | true | true | false | 结果包的论文级别, 例如 pilot_paper 或 full_paper。 |
 | paper_protocol_level | governance | none | true | true | false | 结果包采用的协议级别, 例如 paper_grade_protocol。 |
@@ -1033,8 +1033,8 @@ Notebook 与 repository module 的跨边界数据
 | next_allowed_action | governance | none | true | false | false | 当前 gate 后允许执行的下一步动作。 |
 | next_forbidden_action | governance | none | true | false | false | 当前 gate 后明确禁止执行的动作。 |
 | pilot_paper_claim_support_status | claim | none | true | true | false | package manifest 中记录的 pilot_paper claim 支撑状态摘要。 |
-| validation_scale_claim_support_status | governance | none | true | true | false | package manifest 或下游 gate 中记录的 validation-scale handoff 状态摘要; 当前 validation_scale 不支持正式效果主张。 |
-| paper_gate_preflight_layer | protocol | none | true | false | false | 当前 workflow profile 是否只是 paper gate 前置打通层; validation_scale 在 target_fpr=0.1 小样本全流程打通语义下必须为 true。 |
+| probe_paper_claim_support_status | governance | none | true | true | false | package manifest 或下游 gate 中记录的 probe-paper handoff 状态摘要; 当前 probe_paper 不支持正式效果主张。 |
+| paper_gate_preflight_layer | protocol | none | true | false | false | 当前 workflow profile 是否只是 paper gate 前置打通层; probe_paper 在 target_fpr=0.1 小样本全流程打通语义下必须为 true。 |
 | pilot_paper_result_level | governance | none | true | true | false | package manifest 中记录的 pilot_paper 结果级别。 |
 | pilot_paper_protocol_level | governance | none | true | true | false | package manifest 中记录的 pilot_paper 协议级别。 |
 | pilot_paper_protocol_difference_from_full_paper | governance | none | true | true | false | package manifest 中记录的 pilot_paper 与 full_paper 差异。 |
@@ -1213,9 +1213,9 @@ Notebook 与 repository module 的跨边界数据
 | environment_updates | artifact | none | true | false | false | Environment variable updates emitted by a preflight artifact for the Notebook parent process. |
 
 | external_baseline_self_containment_decision | governance | none | true | true | false | External baseline 是否完成项目内 clone/build/run/adapt/record 闭环的阶段判定。 |
-| external_baseline_self_containment_ready_count | metric | none | true | true | false | validation_scale gate 重新审计到的 self-contained modern baseline 数量。 |
-| external_baseline_self_containment_required_count | metric | none | true | true | false | validation_scale gate 要求 self-contained 的 modern baseline 数量。 |
-| external_baseline_self_containment_gate_missing_requirements | governance | none | true | true | false | validation_scale gate 对 self-containment artifact 复查得到的缺口列表。 |
+| external_baseline_self_containment_ready_count | metric | none | true | true | false | probe_paper gate 重新审计到的 self-contained modern baseline 数量。 |
+| external_baseline_self_containment_required_count | metric | none | true | true | false | probe_paper gate 要求 self-contained 的 modern baseline 数量。 |
+| external_baseline_self_containment_gate_missing_requirements | governance | none | true | true | false | probe_paper gate 对 self-containment artifact 复查得到的缺口列表。 |
 | self_contained_modern_external_baseline_count | metric | none | true | true | false | 已完成项目内 official bundle 执行闭环的现代 external baseline 数量。 |
 | missing_self_contained_modern_external_baseline_names | governance | none | true | false | false | 尚未完成项目内 official bundle 执行闭环的现代 external baseline 名称列表。 |
 | missing_self_containment_requirements | governance | none | true | false | false | External baseline self-containment 阶段仍缺失的要求列表。 |
@@ -1265,7 +1265,7 @@ Notebook 与 repository module 的跨边界数据
 | sstw_measured_formal_metric_status | governance | none | true | false | false | SSTW 本方法 measured_formal 转写阶段的 metric_status 汇总。 |
 | missing_sstw_measured_formal_requirements | governance | none | true | false | false | SSTW measured_formal 转写阶段仍缺失的要求。 |
 | sstw_measured_formal_missing_requirement_count | metric | none | true | false | false | SSTW measured_formal 转写阶段缺失要求数量。 |
-| require_sstw_measured_formal_records | protocol | none | true | false | false | validation_scale gate 是否要求 SSTW 本方法 measured_formal records 已落盘。 |
+| require_sstw_measured_formal_records | protocol | none | true | false | false | probe_paper gate 是否要求 SSTW 本方法 measured_formal records 已落盘。 |
 | allow_effect_size_claims | protocol | none | true | false | false | 当前 protocol profile 是否允许效果大小 claim。 |
 | formal_method_baseline_comparison_decision | governance | none | true | true | false | SSTW 与现代 external baseline 同协议 measured_formal 比较表阶段判定。 |
 | formal_method_baseline_comparison_target_fpr | protocol | none | true | false | false | pilot_paper gate 读取到的 formal method baseline comparison decision 的 target_fpr。 |
@@ -1282,7 +1282,7 @@ Notebook 与 repository module 的跨边界数据
 | comparison_positive_rate | metric | none | true | true | false | 同协议 formal 比较行中 positive 检测比例。 |
 | comparison_score_mean | metric | none | true | true | false | 同协议 formal 比较行的平均分数。 |
 | comparison_missing_reason | governance | none | true | false | false | 同协议 formal 比较行缺失 measured_formal records 的原因。 |
-| require_formal_method_baseline_comparison | protocol | none | true | false | false | validation_scale gate 是否要求 SSTW 与 5 个主实验 baseline 的同协议 measured_formal 比较表。 |
+| require_formal_method_baseline_comparison | protocol | none | true | false | false | probe_paper gate 是否要求 SSTW 与 5 个主实验 baseline 的同协议 measured_formal 比较表。 |
 | formal_baseline_difference_interval_decision | governance | none | true | true | false | SSTW 相对现代 external baseline 的差值置信区间阶段判定。 |
 | formal_baseline_difference_interval_target_fpr | protocol | none | true | false | false | pilot_paper gate 读取到的 formal baseline difference interval decision 的 target_fpr。 |
 | formal_baseline_difference_interval_status | governance | none | true | false | false | pilot_paper gate 汇总的 formal baseline difference interval 产物状态。 |
@@ -1307,44 +1307,44 @@ Notebook 与 repository module 的跨边界数据
 | difference_interval_ready_count | metric | none | true | true | false | 已可用差值置信区间 records 数量。 |
 | difference_interval_missing_baseline_ids | governance | none | true | true | false | 缺失差值置信区间的 baseline 方法 ID 列表。 |
 | difference_interval_missing_baseline_count | metric | none | true | true | false | 缺失差值置信区间的 baseline 数量。 |
-| require_formal_baseline_difference_interval | protocol | none | true | false | false | validation_scale gate 是否要求 SSTW 相对 5 个 baseline 的差值置信区间报告。 |
-| validation_scale_gate_missing_validation_requirements | governance | none | true | false | false | pilot_paper gate 读取到的 validation_scale gate 原始缺失要求列表。 |
-| validation_scale_gate_missing_requirement_count | metric | none | true | false | false | pilot_paper gate 读取到的 validation_scale gate 原始缺失要求数量。 |
-| validation_scale_gate_fairness_missing_requirements | governance | none | true | false | false | pilot_paper gate 复核 validation_scale 公平比较闭环时发现的缺失要求。 |
-| validation_scale_fair_detection_calibration_ready_count | metric | none | true | true | false | validation_scale gate 中已通过 clean negative 公平校准的方法数量。 |
-| validation_scale_formal_method_baseline_comparison_ready_count | metric | none | true | true | false | validation_scale gate 中同协议 method-baseline 比较已 ready 的方法数量。 |
-| validation_scale_formal_baseline_difference_interval_ready_count | metric | none | true | true | false | validation_scale gate 中 SSTW 相对 baseline 差值区间已 ready 的 baseline 数量。 |
-| require_validation_scale_sstw_advantage_claim_ready | protocol | none | true | false | false | 共享 gate 是否要求 SSTW 相对 5 个现代 baseline 的 target_fpr=0.1 优势证据 ready; validation_scale 默认 false, probe_paper 必须 true。 |
-| validation_scale_sstw_advantage_claim_ready | governance | none | true | true | false | 共享 validation/probe gate 中 SSTW target_fpr=0.1 优势证据是否满足论文主张候选标准; 当前正式消费层为 probe_paper。 |
-| validation_scale_sstw_advantage_ready_baseline_count | metric | none | true | true | false | 共享 validation/probe gate 中 SSTW 优势差值和置信区间已 ready 的现代 baseline 数量。 |
-| validation_scale_sstw_advantage_missing_baseline_names | governance | none | true | false | false | 共享 validation/probe gate 中尚未满足 SSTW 优势证据标准的现代 baseline 名称集合。 |
-| validation_scale_sstw_advantage_blocking_reasons | governance | none | true | false | false | 共享 validation/probe gate 阻断 SSTW target_fpr=0.1 优势主张候选的原因列表。 |
-| validation_scale_sstw_advantage_claim_status | claim | none | true | true | false | 共享 validation/probe gate 对 SSTW target_fpr=0.1 优势主张候选的 claim 支撑状态; 当前只有 probe_paper 可以把它升级为论文闭合证据。 |
+| require_formal_baseline_difference_interval | protocol | none | true | false | false | probe_paper gate 是否要求 SSTW 相对 5 个 baseline 的差值置信区间报告。 |
+| paper_profile_gate_missing_validation_requirements | governance | none | true | false | false | pilot_paper gate 读取到的 probe_paper gate 原始缺失要求列表。 |
+| paper_profile_gate_missing_requirement_count | metric | none | true | false | false | pilot_paper gate 读取到的 probe_paper gate 原始缺失要求数量。 |
+| paper_profile_gate_fairness_missing_requirements | governance | none | true | false | false | pilot_paper gate 复核 probe_paper 公平比较闭环时发现的缺失要求。 |
+| probe_paper_fair_detection_calibration_ready_count | metric | none | true | true | false | probe_paper gate 中已通过 clean negative 公平校准的方法数量。 |
+| probe_paper_formal_method_baseline_comparison_ready_count | metric | none | true | true | false | probe_paper gate 中同协议 method-baseline 比较已 ready 的方法数量。 |
+| probe_paper_formal_baseline_difference_interval_ready_count | metric | none | true | true | false | probe_paper gate 中 SSTW 相对 baseline 差值区间已 ready 的 baseline 数量。 |
+| require_probe_paper_sstw_advantage_claim_ready | protocol | none | true | false | false | 共享 gate 是否要求 SSTW 相对 5 个现代 baseline 的 target_fpr=0.1 优势证据 ready; probe_paper 默认 false, probe_paper 必须 true。 |
+| probe_paper_sstw_advantage_claim_ready | governance | none | true | true | false | 共享 validation/probe gate 中 SSTW target_fpr=0.1 优势证据是否满足论文主张候选标准; 当前正式消费层为 probe_paper。 |
+| probe_paper_sstw_advantage_ready_baseline_count | metric | none | true | true | false | 共享 validation/probe gate 中 SSTW 优势差值和置信区间已 ready 的现代 baseline 数量。 |
+| probe_paper_sstw_advantage_missing_baseline_names | governance | none | true | false | false | 共享 validation/probe gate 中尚未满足 SSTW 优势证据标准的现代 baseline 名称集合。 |
+| probe_paper_sstw_advantage_blocking_reasons | governance | none | true | false | false | 共享 validation/probe gate 阻断 SSTW target_fpr=0.1 优势主张候选的原因列表。 |
+| probe_paper_sstw_advantage_claim_status | claim | none | true | true | false | 共享 validation/probe gate 对 SSTW target_fpr=0.1 优势主张候选的 claim 支撑状态; 当前只有 probe_paper 可以把它升级为论文闭合证据。 |
 | minimum_sstw_advantage_baseline_count | protocol | none | true | false | false | probe_paper gate 要求 SSTW 优势证据覆盖的现代 baseline 最小数量。 |
 | minimum_sstw_tpr_at_target_fpr_difference | protocol | none | true | false | false | probe_paper gate 要求 SSTW 相对 baseline 的 TPR@target FPR 差值下限。 |
 | require_sstw_advantage_ci_lower_above_zero | protocol | none | true | false | false | probe_paper gate 是否要求 SSTW 相对 baseline 的差值置信区间下界大于0。 |
-| validation_scale_transition_claim_support_status | governance | none | true | false | false | 历史兼容字段: pilot_paper gate 读取到的 validation_scale -> pilot_paper 旧跳转 claim_support_status; 当前主链改用 probe_paper_transition_* 字段。 |
-| validation_scale_transition_source_gate_passed | governance | none | true | false | false | 历史兼容字段: validation_scale -> pilot_paper 旧跳转记录中的 source gate 是否已通过。 |
-| validation_scale_transition_missing_requirements | governance | none | true | false | false | 历史兼容字段: validation_scale -> pilot_paper 旧跳转记录中的原始缺失要求列表。 |
-| validation_scale_transition_missing_requirement_count | metric | none | true | false | false | 历史兼容字段: validation_scale -> pilot_paper 旧跳转记录中的原始缺失要求数量。 |
-| validation_scale_transition_allowed_next_result_profiles | governance | none | true | false | false | validation_scale 通过后允许进入的下一结果 profile 列表。 |
-| validation_scale_transition_blocked_next_result_profiles | governance | none | true | false | false | validation_scale 通过后仍禁止跳转的后续结果 profile 列表。 |
-| validation_scale_transition_fairness_missing_requirements | governance | none | true | false | false | pilot_paper gate 复核 validation_scale 跳转判定完整性时发现的缺失要求。 |
-| validation_scale_formal_internal_ablation_decision | governance | none | true | true | false | validation_scale 级 formal-compatible 内部消融汇总判定。 |
+| probe_paper_transition_claim_support_status | governance | none | true | false | false | 历史兼容字段: pilot_paper gate 读取到的 probe_paper -> pilot_paper 旧跳转 claim_support_status; 当前主链改用 probe_paper_transition_* 字段。 |
+| probe_paper_transition_source_gate_passed | governance | none | true | false | false | 历史兼容字段: probe_paper -> pilot_paper 旧跳转记录中的 source gate 是否已通过。 |
+| probe_paper_transition_missing_requirements | governance | none | true | false | false | 历史兼容字段: probe_paper -> pilot_paper 旧跳转记录中的原始缺失要求列表。 |
+| probe_paper_transition_missing_requirement_count | metric | none | true | false | false | 历史兼容字段: probe_paper -> pilot_paper 旧跳转记录中的原始缺失要求数量。 |
+| probe_paper_transition_allowed_next_result_profiles | governance | none | true | false | false | probe_paper 通过后允许进入的下一结果 profile 列表。 |
+| probe_paper_transition_blocked_next_result_profiles | governance | none | true | false | false | probe_paper 通过后仍禁止跳转的后续结果 profile 列表。 |
+| probe_paper_transition_fairness_missing_requirements | governance | none | true | false | false | pilot_paper gate 复核 probe_paper 跳转判定完整性时发现的缺失要求。 |
+| probe_paper_formal_internal_ablation_decision | governance | none | true | true | false | probe_paper 级 formal-compatible 内部消融汇总判定。 |
 | formal_internal_ablation_evidence_level | governance | none | true | true | false | 内部消融汇总中某个变体的证据层级。 |
 | formal_internal_ablation_source_record_family | artifact | none | true | false | false | 内部消融汇总行所使用的源 records 家族。 |
 | formal_internal_ablation_record_count | metric | none | true | false | false | 内部消融汇总行聚合的源分数数量。 |
 | formal_internal_ablation_score_mean | metric | none | true | true | false | 内部消融汇总行的平均分数。 |
 | formal_internal_ablation_full_method_score_mean | metric | none | true | true | false | 内部消融汇总中 full-method measured_formal 平均分数。 |
 | formal_internal_ablation_delta_vs_full_method | metric | none | true | true | false | 内部消融变体相对 full-method 平均分数的差值。 |
-| formal_internal_ablation_variant_count | metric | none | true | true | false | validation_scale 级内部消融已覆盖变体数量。 |
-| formal_internal_ablation_expected_variant_count | metric | none | true | false | false | validation_scale 级内部消融应覆盖变体数量。 |
+| formal_internal_ablation_variant_count | metric | none | true | true | false | probe_paper 级内部消融已覆盖变体数量。 |
+| formal_internal_ablation_expected_variant_count | metric | none | true | false | false | probe_paper 级内部消融应覆盖变体数量。 |
 | formal_internal_ablation_full_method_formal_ready | governance | none | true | true | false | full-method 行是否来自 SSTW measured_formal 结果。 |
-| formal_internal_ablation_missing_variants | governance | none | true | true | false | validation_scale 级内部消融缺失的变体列表。 |
-| formal_internal_ablation_missing_variant_count | metric | none | true | true | false | validation_scale 级内部消融缺失的变体数量。 |
-| require_validation_scale_formal_internal_ablation | protocol | none | true | false | false | validation_scale gate 是否要求 formal-compatible 内部消融汇总。 |
+| formal_internal_ablation_missing_variants | governance | none | true | true | false | probe_paper 级内部消融缺失的变体列表。 |
+| formal_internal_ablation_missing_variant_count | metric | none | true | true | false | probe_paper 级内部消融缺失的变体数量。 |
+| require_probe_paper_formal_internal_ablation | protocol | none | true | false | false | probe_paper gate 是否要求 formal-compatible 内部消融汇总。 |
 | low_fpr_formal_statistics_decision | governance | none | true | true | false | 低 FPR 正式统计阻断记录阶段判定。 |
-| current_target_fpr | protocol | none | true | false | false | 当前 validation_scale profile 使用的 target_fpr。 |
+| current_target_fpr | protocol | none | true | false | false | 当前 probe_paper profile 使用的 target_fpr。 |
 | blocked_result_profile | protocol | none | true | false | false | 当前阻断记录所对应的更高层级结果 profile。 |
 | low_fpr_formal_statistics_status | governance | none | true | true | false | 低 FPR 正式统计状态或阻断状态。 |
 | formal_low_fpr_claim_allowed | governance | none | true | true | false | 当前阶段是否允许低 FPR 正式 claim。 |
@@ -1353,7 +1353,7 @@ Notebook 与 repository module 的跨边界数据
 | low_fpr_blocking_reason | governance | none | true | false | false | 低 FPR 正式统计被阻断的原因说明。 |
 | low_fpr_formal_statistics_record_count | metric | none | true | true | false | 低 FPR 正式统计阻断 records 数量。 |
 | low_fpr_blocked_target_fprs | governance | none | true | true | false | 当前阻断记录覆盖的低 FPR 目标列表。 |
-| require_low_fpr_formal_statistics_blocking_record | protocol | none | true | false | false | validation_scale gate 是否要求低 FPR 正式统计阻断记录。 |
+| require_low_fpr_formal_statistics_blocking_record | protocol | none | true | false | false | probe_paper gate 是否要求低 FPR 正式统计阻断记录。 |
 | motion_consistency_exclusion_decision | governance | none | true | true | false | motion consistency 阻断样本处理报告阶段判定。 |
 | motion_consistency_exclusion_reason | governance | none | true | false | false | 样本被纳入或排除出 motion claim 的具体原因。 |
 | excluded_from_motion_claim | governance | none | true | true | false | 样本是否被排除出 motion / trajectory claim。 |
@@ -1365,7 +1365,7 @@ Notebook 与 repository module 的跨边界数据
 | motion_consistency_excluded_count | metric | none | true | true | false | motion consistency 过滤后排除出 motion claim 的样本数量。 |
 | motion_consistency_exclusion_reasons | governance | none | true | false | false | motion consistency 处理报告中出现的原因集合。 |
 | motion_consistency_claim_filter_applied | governance | none | true | true | false | 是否已经应用 motion consistency claim 过滤。 |
-| require_motion_consistency_exclusion_report | protocol | none | true | false | false | validation_scale gate 是否要求 motion consistency 阻断样本处理报告。 |
+| require_motion_consistency_exclusion_report | protocol | none | true | false | false | probe_paper gate 是否要求 motion consistency 阻断样本处理报告。 |
 | raw_detector_score | metric | none | true | false | false | 官方 wrapper 输出的原始水印存在性检测分数, 由 bridge 归一化为 external_baseline_raw_detector_score。 |
 | payload_bit_accuracy | metric | none | true | false | false | 官方 wrapper 输出的 payload bit accuracy 辅助指标, 不作为主公平比较检测分数。 |
 | score_semantics | protocol | none | true | false | false | 官方 wrapper 对 raw score 含义的显式声明。 |
@@ -1406,7 +1406,7 @@ Notebook 与 repository module 的跨边界数据
 | official_clean_negative_score_formal_comparison_block_reason | governance | none | true | false | false | official clean negative 分数不能进入 target FPR 校准时的阻断原因。 |
 | external_baseline_official_score_granularity | protocol | none | true | false | false | 写入 measured_formal record 的 external baseline 正样本官方分数粒度。 |
 | external_baseline_official_score_value_type | protocol | none | true | false | false | 写入 measured_formal record 的 external baseline 正样本官方分数值类型。 |
-| external_baseline_official_score_formal_comparison_eligibility | governance | none | true | true | false | external baseline 正样本分数是否可进入 validation_scale 同协议公平比较。 |
+| external_baseline_official_score_formal_comparison_eligibility | governance | none | true | true | false | external baseline 正样本分数是否可进入 probe_paper 同协议公平比较。 |
 | external_baseline_official_score_formal_comparison_block_reason | governance | none | true | true | false | external baseline 正样本分数被公平比较门禁阻断的原因。 |
 | external_baseline_official_clean_negative_score_granularity | protocol | none | true | false | false | 写入 measured_formal record 的 external baseline clean negative 官方分数粒度。 |
 | external_baseline_official_clean_negative_score_value_type | protocol | none | true | false | false | 写入 measured_formal record 的 external baseline clean negative 官方分数值类型。 |
@@ -1428,7 +1428,7 @@ Notebook 与 repository module 的跨边界数据
 | clean_negative_attack_transform | protocol | none | true | false | false | clean negative 视频施加的 runtime attack 变换描述。 |
 | clean_negative_attack_strength | protocol | none | true | false | false | clean negative 视频施加的 runtime attack 强度描述。 |
 | fair_comparison_protocol | protocol | none | true | false | false | 公平比较协议名称, 当前为 method-specific clean negative calibration 到统一 target FPR。 |
-| require_fair_detection_calibration | protocol | none | true | false | false | validation_scale gate 是否要求 clean negative 公平校准通过。 |
+| require_fair_detection_calibration | protocol | none | true | false | false | probe_paper gate 是否要求 clean negative 公平校准通过。 |
 | minimum_clean_negative_count | protocol | none | true | false | false | 每个方法校准 target FPR 所需的最小 clean negative 分数数量。 |
 | fair_detection_calibration_decision | governance | none | true | true | false | clean negative calibration 公平比较阶段判定。 |
 | fair_detection_calibration_target_fpr | protocol | none | true | false | false | pilot_paper gate 读取到的 fair detection calibration decision 的 target_fpr。 |
@@ -1446,7 +1446,7 @@ Notebook 与 repository module 的跨边界数据
 | negative_formal_evidence_missing_count | metric | none | true | true | false | fair calibration 中带 clean negative 分数但缺少 official evidence 或官方分数抽取证据的记录数量。 |
 | positive_anchor_keys | protocol | none | true | false | false | fair calibration 中 attacked positive 的规范 prompt / seed / attack anchor 键集合。 |
 | positive_attack_names | protocol | none | true | false | false | fair calibration 中 attacked positive records 实际覆盖的 runtime attack 名称集合。 |
-| shared_attack_protocol_config_path | protocol | none | true | false | false | validation_scale、probe_paper、pilot_paper 和 full_paper 共同引用的 runtime / non-runtime attack 协议配置路径。 |
+| shared_attack_protocol_config_path | protocol | none | true | false | false | probe_paper、probe_paper、pilot_paper 和 full_paper 共同引用的 runtime / non-runtime attack 协议配置路径。 |
 | shared_attack_protocol_id | protocol | none | true | false | false | 共享 attack 协议配置的稳定语义标识。 |
 | shared_attack_protocol_resolved_path | provenance | none | true | false | false | 运行时解析得到的共享 attack 协议配置实际路径。 |
 | shared_attack_protocol_resolution_status | governance | none | true | false | false | 共享 attack 协议配置是否已合并到当前 profile config 的状态。 |
@@ -1457,16 +1457,16 @@ Notebook 与 repository module 的跨边界数据
 | runtime_attack_missing_family_minimums | governance | none | true | false | false | 当前 runtime attack manifest 未满足的 family 最低覆盖要求列表。 |
 | runtime_attack_protocol_decision | governance | none | true | true | false | 当前 runtime attack manifest 是否满足 profile 分层协议要求。 |
 | required_non_runtime_attack_protocols | protocol | none | true | false | false | full_paper 还必须覆盖的非 runtime 自适应攻击或生成式重压缩协议名称集合。 |
-| minimum_non_runtime_attack_protocol_count | protocol | none | true | false | false | validation_scale、probe_paper 或 full_paper gate 要求覆盖的非 runtime / adaptive 协议最小数量。 |
+| minimum_non_runtime_attack_protocol_count | protocol | none | true | false | false | probe_paper、probe_paper 或 full_paper gate 要求覆盖的非 runtime / adaptive 协议最小数量。 |
 | non_runtime_attack_protocol | protocol | none | true | false | false | 单条 adaptive attack record 映射到论文协议中的非 runtime / adaptive 攻击名称。 |
 | non_runtime_attack_protocol_count | metric | none | true | true | false | 当前 run_root 中 adaptive attack records 已覆盖的非 runtime / adaptive 协议数量。 |
 | observed_non_runtime_attack_protocols | governance | none | true | false | false | 当前 run_root 中实际观测到的非 runtime / adaptive 协议名称集合。 |
 | missing_non_runtime_attack_protocols | governance | none | true | false | false | full_paper protocol config 尚未登记的非 runtime 攻击协议名称集合。 |
-| adaptive_attack_missing_non_runtime_protocols | governance | none | true | false | false | validation_scale gate 从 adaptive attack records 中发现的缺失非 runtime / adaptive 协议集合。 |
-| adaptive_attack_missing_non_runtime_protocol_count | metric | none | true | true | false | validation_scale gate 从 adaptive attack records 中发现的缺失非 runtime / adaptive 协议数量。 |
+| adaptive_attack_missing_non_runtime_protocols | governance | none | true | false | false | probe_paper gate 从 adaptive attack records 中发现的缺失非 runtime / adaptive 协议集合。 |
+| adaptive_attack_missing_non_runtime_protocol_count | metric | none | true | true | false | probe_paper gate 从 adaptive attack records 中发现的缺失非 runtime / adaptive 协议数量。 |
 | top_tier_attack_protocol_status | governance | none | true | false | false | protocol config 对顶会顶刊级 attack 覆盖的摘要状态。 |
-| required_runtime_attack_protocol_note | protocol | none | true | false | false | 解释 validation_scale、probe_paper、pilot_paper 和 full_paper 分层 attack 协议差异的配置说明。 |
-| target_fpr_levels | protocol | none | true | false | false | 同构论文协议族登记的 FPR 等级集合, 用于 validation_scale、probe_paper、pilot_paper 和 full_paper 切换。 |
+| required_runtime_attack_protocol_note | protocol | none | true | false | false | 解释 probe_paper、probe_paper、pilot_paper 和 full_paper 分层 attack 协议差异的配置说明。 |
+| target_fpr_levels | protocol | none | true | false | false | 同构论文协议族登记的 FPR 等级集合, 用于 probe_paper、probe_paper、pilot_paper 和 full_paper 切换。 |
 | missing_required_runtime_attack_names | governance | none | true | false | false | 当前 record 相对 required_runtime_attack_names 缺失的 runtime attack 名称集合。 |
 | missing_required_runtime_attack_count | metric | none | true | true | false | 当前 record 相对 required_runtime_attack_names 缺失的 runtime attack 数量。 |
 | positive_detection_units_at_target_fpr | metric | none | true | false | false | target FPR 阈值下每个 prompt / seed / attack anchor 的检测结果列表。 |
@@ -1545,8 +1545,7 @@ Notebook 与 repository module 的跨边界数据
 | formal_comparison_external_baseline_environment_status | governance | none | true | false | false | formal comparison scoring 阶段 external baseline 环境预检状态说明。 |
 
 | probe_paper_gate_decision | governance | none | true | true | false | probe_paper 小样本 fpr=0.1 论文闭合门禁判定, PASS 后仍只能进入 probe_paper_to_pilot_paper_transition_decision。 |
-| probe_paper_to_pilot_paper_transition_decision | governance | none | true | true | false | probe_paper -> pilot_paper 的轻量跳转判定, 防止 validation_scale 直接进入 pilot_paper。 |
-| validation_scale_to_probe_paper_transition_decision | governance | none | true | true | false | validation_scale -> probe_paper 的轻量跳转判定, 通过后只允许进入 probe_paper。 |
+| probe_paper_to_pilot_paper_transition_decision | governance | none | true | true | false | probe_paper -> pilot_paper 的轻量跳转判定, 防止 probe_paper 直接进入 pilot_paper。 |
 | probe_paper_claim_support_status | claim | none | true | false | false | pilot_paper gate 读取到的 probe_paper claim 支撑状态。 |
 | probe_paper_gate_fairness_missing_requirements | governance | none | true | false | false | pilot_paper gate 复核 probe_paper gate 时发现的缺失或不合规项。 |
 | probe_paper_transition_fairness_missing_requirements | governance | none | true | false | false | pilot_paper gate 复核 probe_paper -> pilot_paper 跳转时发现的缺失或不合规项。 |

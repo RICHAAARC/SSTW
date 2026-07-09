@@ -77,7 +77,7 @@ def _write_prompt_suite(path: Path) -> None:
 def test_videoshield_official_runtime_dry_run_writes_governed_plan(tmp_path: Path) -> None:
     """dry-run 必须完成源码检查、unit plan 和执行 manifest, 且不能写伪分数。"""
 
-    run_root = tmp_path / "runs" / "generative_video_model_probe" / "validation_scale"
+    run_root = tmp_path / "runs" / "generative_video_model_probe" / "probe_paper"
     bundle_root = tmp_path / "bundles"
     output_root = tmp_path / "runtime"
     source_dir = tmp_path / "official_source" / "videoshield"
@@ -144,7 +144,7 @@ def test_videoshield_default_config_uses_project_owned_runtime_env(tmp_path: Pat
     monkeypatch.setenv("SSTW_VIDEOSHIELD_REFERENCE_MAX_RECORDS", "2")
 
     config = build_default_videoshield_official_config_from_env(
-        run_root=tmp_path / "runs" / "generative_video_model_probe" / "validation_scale",
+        run_root=tmp_path / "runs" / "generative_video_model_probe" / "probe_paper",
         bundle_root=tmp_path / "bundles",
         source_dir=tmp_path / "source",
         repo_root=tmp_path,

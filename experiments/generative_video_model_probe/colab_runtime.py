@@ -34,17 +34,6 @@ PROFILE_SETTINGS = {
     "smoke": {"prompt_limit": 1, "seed_limit": 1, "num_inference_steps": 8, "num_frames": 33, "height": 320, "width": 512, "run_cross_model": False},
     "recommended": {"prompt_limit": 2, "seed_limit": 2, "num_inference_steps": 16, "num_frames": 49, "height": 320, "width": 512, "run_cross_model": True},
     "pilot": {"prompt_limit": 8, "seed_limit": 2, "num_inference_steps": 16, "num_frames": 49, "height": 320, "width": 512, "run_cross_model": False},
-    "validation_scale": {
-        "prompt_limit": None,
-        "seed_limit": None,
-        "num_inference_steps": 16,
-        "num_frames": 49,
-        "height": 320,
-        "width": 512,
-        "run_cross_model": False,
-        "prompt_suite_roles": ["main", "heldout_prompt", "pilot_main"],
-        "seed_suite_roles": ["main", "heldout_seed"],
-    },
     "pilot_paper": {
         "prompt_limit": 25,
         "seed_limit": 4,

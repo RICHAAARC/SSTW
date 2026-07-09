@@ -86,7 +86,7 @@ artifacts/replay_and_sketch_gate_decision.json
 
 仓库中已经存在 digest、manifest、trajectory trace 和 trajectory capture 基础模块, 可作为 authenticated sketch 与 replay uncertainty 的实现基础。
 
-最新 small-scale pilot 已经写出 replay uncertainty、wrong-sampler replay control 和 runtime detection 相关记录, 可以作为 validation_scale 继续扩展的工程入口。但这些记录仍属于 pilot / proxy / runtime workflow 证据, 不能替代 authenticated trajectory sketch 或论文级 replay posterior gate。
+最新 small-scale pilot 已经写出 replay uncertainty、wrong-sampler replay control 和 runtime detection 相关记录, 可以作为 probe_paper 继续扩展的工程入口。但这些记录仍属于 pilot / proxy / runtime workflow 证据, 不能替代 authenticated trajectory sketch 或论文级 replay posterior gate。
 
 ### 2.2 当前阶段补充要求
 
@@ -99,7 +99,7 @@ artifacts/replay_and_sketch_gate_decision.json
 |---|---|
 | 完成状态 | 未完成 |
 | 主要差距项 | pilot 级 replay uncertainty 已有记录, 但 authenticated sketch、wrong prompt replay、replay/sketch checker 与 full_paper evidence level 仍未闭合。 |
-| 下一步构建方向 | 在 validation_scale 补齐 sketch 签名验证、replay uncertainty records、wrong sampler / wrong prompt replay control 和 gate decision。 |
+| 下一步构建方向 | 在 probe_paper 补齐 sketch 签名验证、replay uncertainty records、wrong sampler / wrong prompt replay control 和 gate decision。 |
 | full_paper 影响 | 未满足本阶段要求时, 不得把相关结果写入 full_paper supported claim。 |
 
 ### 3.1 快速检查清单
@@ -107,7 +107,7 @@ artifacts/replay_and_sketch_gate_decision.json
 ```text
 stage_status: 未完成
 gap_item: pilot 级 replay uncertainty 已有记录, 但 authenticated sketch、wrong prompt replay、replay/sketch checker 与 full_paper evidence level 仍未闭合。
-next_action: 在 validation_scale 补齐 sketch 签名验证、replay uncertainty records、wrong sampler / wrong prompt replay control 和 gate decision。
+next_action: 在 probe_paper 补齐 sketch 签名验证、replay uncertainty records、wrong sampler / wrong prompt replay control 和 gate decision。
 full_paper_blocking_rule: unresolved_gap_blocks_full_paper_claim
 ```
 
@@ -130,12 +130,12 @@ claim3_full_support_allowed = false
 
 ### 3.3 最终创新性要求
 
-短期可以通过 `Claim-3 downgrade gate` 保护 validation_scale 流程不被 unsupported claim 阻断, 但这只是 claim 边界收缩, 不是本阶段完成。若项目最终要把 replay posterior / authenticated sketch 作为足够强的创新性贡献, 必须实现并通过 `replay/sketch gate`。
+短期可以通过 `Claim-3 downgrade gate` 保护 probe_paper 流程不被 unsupported claim 阻断, 但这只是 claim 边界收缩, 不是本阶段完成。若项目最终要把 replay posterior / authenticated sketch 作为足够强的创新性贡献, 必须实现并通过 `replay/sketch gate`。
 
 该要求在项目构建流程中对应如下边界:
 
 ```text
-validation_scale_short_term: claim3_downgrade_gate_allowed
+probe_paper_short_term: claim3_downgrade_gate_allowed
 full_paper_strong_claim: replay/sketch gate_required
 top_tier_innovation_claim: replay/sketch gate_required
 ```
@@ -144,7 +144,7 @@ top_tier_innovation_claim: replay/sketch gate_required
 
 ## 2026-06-24 validation proxy runner 接入
 
-当前已新增 replay/sketch gate 的 validation_scale 工程入口:
+当前已新增 replay/sketch gate 的 probe_paper 工程入口:
 
 ```text
 experiments/generative_video_model_probe/replay_and_sketch_gate.py
@@ -167,4 +167,4 @@ claim_support_status: replay_and_sketch_validation_proxy_only
 claim3_full_support_allowed: false
 ```
 
-这表示 validation_scale 的 replay/sketch records、table、decision 和 report 已具备工程闭环入口, 但还不能把 Claim-3 写成 full_paper 强 supported claim。后续若要解除 Claim-3 降级, 仍需要 full_paper 级 authenticated replay、held-out negative replay split、wrong sampler / wrong prompt / wrong time-grid FPR 审计和质量约束。
+这表示 probe_paper 的 replay/sketch records、table、decision 和 report 已具备工程闭环入口, 但还不能把 Claim-3 写成 full_paper 强 supported claim。后续若要解除 Claim-3 降级, 仍需要 full_paper 级 authenticated replay、held-out negative replay split、wrong sampler / wrong prompt / wrong time-grid FPR 审计和质量约束。

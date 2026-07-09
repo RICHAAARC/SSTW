@@ -1,10 +1,10 @@
-"""validation-scale Flow-specific adaptive attack protocol runner。
+"""paper profile Flow-specific adaptive attack protocol runner。
 
 该 runner 构建 non-runtime/adaptive attack governed records, 用于闭合
-validation-scale 的完整攻击协议门禁。通用工程写法是把协议覆盖和分数执行
-拆开治理; 项目特定写法是 validation_scale 必须先证明 11 个
+paper profile 的完整攻击协议门禁。通用工程写法是把协议覆盖和分数执行
+拆开治理; 项目特定写法是 probe_paper 必须先证明 11 个
 non-runtime/adaptive 协议都有可追溯记录, 然后才能把 fpr=0.1 的论文结论
-交给 validation_scale gate 判断。
+交给 paper_profile gate 判断。
 """
 
 from __future__ import annotations
@@ -331,7 +331,7 @@ def _ready_detection_records(run_root: Path) -> list[dict]:
 def build_adaptive_attack_records(run_root: str | Path) -> list[dict[str, Any]]:
     """从 runtime detection records 构建 adaptive attack validation proxy records。
 
-    该函数属于 validation-scale 工程闭环。它的职责是固定 adaptive attack 的
+    该函数属于 paper profile 工程闭环。它的职责是固定 adaptive attack 的
     records 形状和 claim 边界, 后续 full-paper 阶段应替换为真实 adaptive attack
     分数与 negative FPR 统计。
     """
@@ -439,7 +439,7 @@ def run_adaptive_attack_validation_proxy(run_root: str | Path) -> dict[str, Any]
     write_json(run_root / "artifacts" / "adaptive_attack_decision.json", audit)
     report = (
         "# Adaptive Attack Validation Proxy Report\n\n"
-        "该报告由 runtime detection records 自动生成, 用于闭合 validation-scale 的 "
+        "该报告由 runtime detection records 自动生成, 用于闭合 paper profile 的 "
         "Flow-specific adaptive attack 工程门禁。当前结果是 validation proxy, "
         "不能作为 full-paper adaptive robustness claim。\n\n"
         f"- adaptive_attack_decision: {audit['adaptive_attack_decision']}\n"
@@ -456,7 +456,7 @@ def run_adaptive_attack_validation_proxy(run_root: str | Path) -> dict[str, Any]
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="构建 validation-scale adaptive attack proxy records。")
+    parser = argparse.ArgumentParser(description="构建 paper profile adaptive attack proxy records。")
     parser.add_argument("--run-root", required=True)
     args = parser.parse_args()
     payload = run_adaptive_attack_validation_proxy(args.run_root)

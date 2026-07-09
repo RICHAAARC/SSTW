@@ -111,8 +111,8 @@ def _write_fake_vidsig_source(source_dir: Path) -> None:
 def test_vidsig_runtime_dry_run_builds_prompt_seed_yaml_and_command(tmp_path: Path) -> None:
     """dry-run 必须只写运行计划, 不触发重型 VidSig 生成。"""
 
-    run_root = tmp_path / "runs" / "generative_video_model_probe" / "validation_scale"
-    bundle_root = tmp_path / "bundles" / "validation_scale"
+    run_root = tmp_path / "runs" / "generative_video_model_probe" / "probe_paper"
+    bundle_root = tmp_path / "bundles" / "probe_paper"
     source_dir = tmp_path / "official_source"
     prompt_suite_path = tmp_path / "datasets" / "generative_video_prompt_suite" / "prompt_seed_suite.json"
     msg_decoder_path = tmp_path / "resources" / "vidsig" / "ckpts" / "msg_decoder" / "dec_48b_whit.torchscript.pt"
@@ -229,7 +229,7 @@ def test_vidsig_default_config_prefers_modelscope_checkpoint(
     monkeypatch.delenv("SSTW_VIDSIG_MSG_DECODER_PATH", raising=False)
 
     config = build_default_vidsig_official_config_from_env(
-        run_root=tmp_path / "runs" / "generative_video_model_probe" / "validation_scale",
+        run_root=tmp_path / "runs" / "generative_video_model_probe" / "probe_paper",
         bundle_root=tmp_path / "bundles",
         source_dir=tmp_path / "source",
         resource_root=resource_root,
@@ -279,7 +279,7 @@ def test_vidsig_bundle_writer_records_clean_negative_score(
 ) -> None:
     """VidSig official bundle 必须包含 clean negative 官方检测分数。"""
 
-    run_root = tmp_path / "runs" / "generative_video_model_probe" / "validation_scale"
+    run_root = tmp_path / "runs" / "generative_video_model_probe" / "probe_paper"
     bundle_root = tmp_path / "bundles"
     output_root = tmp_path / "vidsig_runtime"
     source_dir = tmp_path / "source"

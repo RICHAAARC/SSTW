@@ -1,4 +1,4 @@
-"""validation-scale 统计置信区间报告。"""
+"""paper profile 统计置信区间报告。"""
 
 from __future__ import annotations
 
@@ -13,7 +13,7 @@ from main.protocol.record_writer import write_json, write_jsonl
 from main.protocol.table_builder import write_csv
 
 
-DEFAULT_PROTOCOL_CONFIG = "configs/protocol/validation_scale_generative_probe.json"
+DEFAULT_PROTOCOL_CONFIG = "configs/protocol/probe_paper_generative_probe.json"
 
 
 def _read_json(path: Path) -> dict[str, Any]:
@@ -40,7 +40,7 @@ def _load_profile_context(config_path: str | Path) -> dict[str, Any]:
         raise KeyError(f"protocol config 缺少 target_fpr: {config_path}")
     return {
         "target_fpr": float(config["target_fpr"]),
-        "paper_result_level": config.get("paper_result_level", "validation_scale"),
+        "paper_result_level": config.get("paper_result_level", "probe_paper"),
         "target_fpr_source_config_path": str(config_path),
     }
 
@@ -70,7 +70,7 @@ def build_statistical_confidence_interval_records(
     run_root: str | Path,
     config_path: str | Path = DEFAULT_PROTOCOL_CONFIG,
 ) -> list[dict]:
-    """从 runtime detection records 构建 validation-scale 置信区间 records。"""
+    """从 runtime detection records 构建 paper profile 置信区间 records。"""
     run_root = Path(run_root)
     profile_context = _load_profile_context(config_path)
     detection_records = [
@@ -100,7 +100,7 @@ def build_statistical_confidence_interval_records(
 
 
 def audit_statistical_confidence_interval_records(records: list[dict]) -> dict[str, Any]:
-    """审计 validation-scale CI records 是否可用于后续 gate。"""
+    """审计 paper profile CI records 是否可用于后续 gate。"""
     record = records[0] if records else {}
     total_count = int(record.get("ci_total_count") or 0)
     lower = record.get("ci_wilson_lower")
@@ -128,7 +128,7 @@ def run_statistical_confidence_interval_reporter(
     run_root: str | Path,
     config_path: str | Path = DEFAULT_PROTOCOL_CONFIG,
 ) -> dict[str, Any]:
-    """写出 validation-scale CI records、table、decision 和 report。"""
+    """写出 paper profile CI records、table、decision 和 report。"""
     run_root = Path(run_root)
     records = build_statistical_confidence_interval_records(run_root, config_path)
     audit = audit_statistical_confidence_interval_records(records)
@@ -157,7 +157,7 @@ def run_statistical_confidence_interval_reporter(
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="生成 validation-scale 统计置信区间报告。")
+    parser = argparse.ArgumentParser(description="生成 paper profile 统计置信区间报告。")
     parser.add_argument("--run-root", required=True)
     parser.add_argument("--config-path", default=DEFAULT_PROTOCOL_CONFIG)
     args = parser.parse_args()

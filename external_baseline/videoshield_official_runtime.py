@@ -520,7 +520,7 @@ def _generate_watermarked_unit(
 
     clean negative 使用同一个 prompt / seed / 生成模型, 但不注入 VideoShield
     watermark latents。后续检测仍使用同一 official watermark template, 用于在
-    validation_scale 中校准该 baseline 自身的 clean negative 分布。
+    probe_paper 中校准该 baseline 自身的 clean negative 分布。
     """
 
     import torch

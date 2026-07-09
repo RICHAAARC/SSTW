@@ -24,7 +24,7 @@ from scripts.package_results.drive_package_paths import (
 )
 
 
-DEFAULT_WORKFLOW_PROFILE = "validation_scale"
+DEFAULT_WORKFLOW_PROFILE = "probe_paper"
 DEFAULT_STAGE_PACKAGE_ID = "paper_gate_and_package_colab"
 
 
@@ -127,7 +127,7 @@ def package_generative_video_colab_run(
     formal_baseline_difference_interval_decision_path = run_root_path / "artifacts" / "formal_baseline_difference_interval_decision.json"
     external_baseline_execution_manifest_path = run_root_path / "artifacts" / "external_baseline_execution_manifest.json"
     internal_ablation_decision_path = run_root_path / "artifacts" / "validation_internal_ablation_decision.json"
-    formal_internal_ablation_decision_path = run_root_path / "artifacts" / "validation_scale_formal_internal_ablation_decision.json"
+    formal_internal_ablation_decision_path = run_root_path / "artifacts" / "formal_internal_ablation_summary_decision.json"
     adaptive_attack_decision_path = run_root_path / "artifacts" / "adaptive_attack_decision.json"
     replay_and_sketch_decision_path = run_root_path / "artifacts" / "replay_and_sketch_gate_decision.json"
     claim3_downgrade_decision_path = run_root_path / "artifacts" / "claim3_downgrade_decision.json"
@@ -135,7 +135,9 @@ def package_generative_video_colab_run(
     low_fpr_formal_statistics_decision_path = run_root_path / "artifacts" / "low_fpr_formal_statistics_decision.json"
     pilot_paper_decision_path = run_root_path / "artifacts" / "pilot_paper_gate_decision.json"
     artifact_rebuild_decision_path = run_root_path / "artifacts" / "validation_artifact_rebuild_dry_run_decision.json"
-    validation_scale_decision_path = run_root_path / "artifacts" / "validation_scale_gate_decision.json"
+    paper_profile_decision_path = run_root_path / "artifacts" / "probe_paper_gate_decision.json"
+    if not paper_profile_decision_path.exists():
+        paper_profile_decision_path = run_root_path / "artifacts" / "paper_profile_gate_decision.json"
     motion_threshold_calibration_decision_path = run_root_path / "artifacts" / "motion_threshold_calibration_decision.json"
     generation_manifest_path = run_root_path / "artifacts" / "generation_manifest.json"
 
@@ -169,7 +171,7 @@ def package_generative_video_colab_run(
     low_fpr_formal_statistics_decision = _read_json_if_exists(low_fpr_formal_statistics_decision_path)
     pilot_paper_decision = _read_json_if_exists(pilot_paper_decision_path)
     artifact_rebuild_decision = _read_json_if_exists(artifact_rebuild_decision_path)
-    validation_scale_decision = _read_json_if_exists(validation_scale_decision_path)
+    paper_profile_decision = _read_json_if_exists(paper_profile_decision_path)
     motion_threshold_calibration_decision = _read_json_if_exists(motion_threshold_calibration_decision_path)
     generation_manifest = _read_json_if_exists(generation_manifest_path)
     mechanism_summary = _effective_mechanism_decision_summary(decision, postprocess_decision, pilot_gate_decision)
@@ -244,7 +246,7 @@ def package_generative_video_colab_run(
             "formal_baseline_difference_interval_decision": formal_baseline_difference_interval_decision.get("formal_baseline_difference_interval_decision"),
             "difference_interval_ready_count": formal_baseline_difference_interval_decision.get("difference_interval_ready_count"),
             "difference_interval_missing_baseline_count": formal_baseline_difference_interval_decision.get("difference_interval_missing_baseline_count"),
-            "validation_scale_formal_internal_ablation_decision": formal_internal_ablation_decision.get("validation_scale_formal_internal_ablation_decision"),
+            "formal_internal_ablation_summary_decision": formal_internal_ablation_decision.get("formal_internal_ablation_summary_decision"),
             "formal_internal_ablation_variant_count": formal_internal_ablation_decision.get("formal_internal_ablation_variant_count"),
             "formal_internal_ablation_full_method_formal_ready": formal_internal_ablation_decision.get("formal_internal_ablation_full_method_formal_ready"),
             "validation_internal_ablation_decision": internal_ablation_decision.get("validation_internal_ablation_decision"),
@@ -304,14 +306,15 @@ def package_generative_video_colab_run(
             "pilot_paper_tpr_at_fpr_001_claim_allowed": pilot_paper_decision.get("tpr_at_fpr_001_claim_allowed"),
             "validation_artifact_rebuild_dry_run_decision": artifact_rebuild_decision.get("validation_artifact_rebuild_dry_run_decision"),
             "validation_artifact_rebuild_missing_count": artifact_rebuild_decision.get("artifact_rebuild_missing_count"),
-            "validation_scale_gate_decision": validation_scale_decision.get("validation_scale_gate_decision"),
-            "validation_scale_claim_support_status": validation_scale_decision.get("claim_support_status"),
-            "validation_scale_target_fpr": validation_scale_decision.get("target_fpr"),
-            "validation_scale_result_level": validation_scale_decision.get("paper_result_level"),
-            "validation_missing_requirement_count": validation_scale_decision.get("validation_missing_requirement_count"),
-            "validation_generation_record_count": validation_scale_decision.get("validation_generation_record_count"),
-            "validation_prompt_count": validation_scale_decision.get("validation_prompt_count"),
-            "validation_seed_per_prompt_min": validation_scale_decision.get("validation_seed_per_prompt_min"),
+            "paper_profile_gate_decision": paper_profile_decision.get("paper_profile_gate_decision"),
+            "probe_paper_gate_decision": paper_profile_decision.get("probe_paper_gate_decision"),
+            "paper_profile_claim_support_status": paper_profile_decision.get("claim_support_status"),
+            "paper_profile_target_fpr": paper_profile_decision.get("target_fpr"),
+            "paper_profile_result_level": paper_profile_decision.get("paper_result_level"),
+            "paper_profile_missing_requirement_count": paper_profile_decision.get("validation_missing_requirement_count"),
+            "paper_profile_generation_record_count": paper_profile_decision.get("validation_generation_record_count"),
+            "paper_profile_prompt_count": paper_profile_decision.get("validation_prompt_count"),
+            "paper_profile_seed_per_prompt_min": paper_profile_decision.get("validation_seed_per_prompt_min"),
             "motion_threshold_calibration_decision": motion_threshold_calibration_decision.get("motion_threshold_calibration_decision"),
             "motion_threshold_id": motion_threshold_calibration_decision.get("motion_threshold_id"),
             "motion_threshold_source_split": motion_threshold_calibration_decision.get("motion_threshold_source_split"),

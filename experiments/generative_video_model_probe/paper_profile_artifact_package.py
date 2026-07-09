@@ -1,4 +1,4 @@
-"""重建 validation_scale 诊断图与 package manifest。
+"""重建 paper_profile 诊断图与 package manifest。
 
 该模块只从 run_root 中已经存在的 governed records、tables、reports 和 decision
 artifacts 生成派生产物。它只记录已由门禁审计过的 target_fpr=0.1 结论状态,
@@ -23,24 +23,67 @@ from experiments.generative_video_model_probe.paper_result_artifact_builders imp
 from main.protocol.record_writer import write_json
 
 
-VALIDATION_SCALE_GATE_PACKAGE_RELPATHS = (
-    "records/validation_scale_gate_records.jsonl",
-    "tables/validation_scale_gate_table.csv",
-    "artifacts/validation_scale_gate_decision.json",
-    "reports/validation_scale_gate_report.md",
+PAPER_PROFILE_SHARED_PACKAGE_RELPATHS = (
     "artifacts/external_baseline_self_containment_decision.json",
     "artifacts/validation_artifact_rebuild_dry_run_decision.json",
     "artifacts/data_split_and_leakage_guard_decision.json",
-    "artifacts/validation_scale_to_probe_paper_transition_decision.json",
     "artifacts/paper_result_artifact_skeleton_decision.json",
-    "figures/validation_scale_gate_figure.json",
 )
-VALIDATION_SCALE_REQUIRED_PACKAGE_RELPATHS = tuple(dict.fromkeys((
-    *REQUIRED_REBUILD_INPUTS,
-    *REQUIRED_REBUILD_OUTPUTS,
-    *PAPER_RESULT_ARTIFACT_RELPATHS,
-    *VALIDATION_SCALE_GATE_PACKAGE_RELPATHS,
-)))
+
+
+def _paper_profile_from_decision(decision: Mapping[str, Any]) -> str:
+    """从 gate decision 中解析当前 paper profile。"""
+
+    level = str(decision.get("paper_result_level") or "").strip()
+    return level if level else "probe_paper"
+
+
+def _gate_decision_for_current_profile(run_root: Path) -> tuple[str, Path, dict[str, Any]]:
+    """读取当前主干 paper profile 的 gate decision。
+
+    主干移除 paper_profile 后, probe_paper 是默认入口。为了兼容旧结果包,
+    若不存在 profile 专属 gate, 才回退读取 paper_profile 旧文件。
+    """
+
+    for candidate in (
+        run_root / "artifacts" / "probe_paper_gate_decision.json",
+        run_root / "artifacts" / "pilot_paper_gate_decision.json",
+        run_root / "artifacts" / "full_paper_result_checker_decision.json",
+        run_root / "artifacts" / "paper_profile_gate_decision.json",
+    ):
+        payload = _read_json(candidate)
+        if payload:
+            return _paper_profile_from_decision(payload), candidate, payload
+    return "probe_paper", run_root / "artifacts" / "probe_paper_gate_decision.json", {}
+
+
+def _paper_profile_gate_package_relpaths(profile: str) -> tuple[str, ...]:
+    """构造当前 paper profile 的 package manifest 必需文件列表。"""
+
+    transition_relpaths = {
+        "probe_paper": ("artifacts/probe_paper_to_pilot_paper_transition_decision.json",),
+        "pilot_paper": ("artifacts/pilot_paper_to_full_paper_transition_decision.json",),
+        "full_paper": ("artifacts/full_paper_to_submission_freeze_transition_decision.json",),
+    }.get(profile, ())
+    gate_relpaths = (
+        f"records/{profile}_gate_records.jsonl",
+        f"tables/{profile}_gate_table.csv",
+        f"artifacts/{profile}_gate_decision.json",
+        f"reports/{profile}_gate_report.md",
+        f"figures/{profile}_gate_figure.json",
+    )
+    return tuple(dict.fromkeys((
+        *REQUIRED_REBUILD_INPUTS,
+        *REQUIRED_REBUILD_OUTPUTS,
+        *PAPER_RESULT_ARTIFACT_RELPATHS,
+        *PAPER_PROFILE_SHARED_PACKAGE_RELPATHS,
+        *gate_relpaths,
+        *transition_relpaths,
+    )))
+
+
+# 兼容旧测试与旧导入名。主干语义已经切换为 probe_paper。
+PAPER_PROFILE_REQUIRED_PACKAGE_RELPATHS = _paper_profile_gate_package_relpaths("probe_paper")
 
 
 def _read_json(path: Path) -> dict[str, Any]:
@@ -65,7 +108,7 @@ def _sha256(path: Path) -> str | None:
 
 
 def _requirement_rows(decision: Mapping[str, Any]) -> list[dict[str, Any]]:
-    """把 validation_scale gate 的 requirement 列表转成图数据行。"""
+    """把 paper_profile gate 的 requirement 列表转成图数据行。"""
     missing = {str(item) for item in decision.get("missing_validation_requirements", [])}
     known = [
         "validation_generation_records_ready",
@@ -81,8 +124,8 @@ def _requirement_rows(decision: Mapping[str, Any]) -> list[dict[str, Any]]:
         "validation_fair_detection_calibration_ready",
         "validation_formal_method_baseline_comparison_ready",
         "validation_formal_baseline_difference_interval_ready",
-        "validation_scale_sstw_advantage_claim_ready",
-        "validation_scale_formal_internal_ablation_ready",
+        "paper_profile_sstw_advantage_claim_ready",
+        "formal_internal_ablation_summary_ready",
         "validation_low_fpr_formal_statistics_blocking_record_ready",
         "validation_paper_result_artifact_skeleton_ready",
         "validation_data_split_and_leakage_guard_ready",
@@ -98,37 +141,37 @@ def _requirement_rows(decision: Mapping[str, Any]) -> list[dict[str, Any]]:
             "requirement_name": name,
             "requirement_status": (
                 "NOT_REQUIRED"
-                if name == "validation_scale_sstw_advantage_claim_ready"
-                and decision.get("paper_result_level") == "validation_scale"
+                if name == "paper_profile_sstw_advantage_claim_ready"
+                and decision.get("paper_result_level") == "paper_profile"
                 else ("FAIL" if name in missing else "PASS")
             ),
             "requirement_ready_value": (
                 0
                 if name in missing
-                else (0 if name == "validation_scale_sstw_advantage_claim_ready" and decision.get("paper_result_level") == "validation_scale" else 1)
+                else (0 if name == "paper_profile_sstw_advantage_claim_ready" and decision.get("paper_result_level") == "paper_profile" else 1)
             ),
         }
         for name in observed
     ]
 
 
-def build_validation_scale_gate_figure(run_root: str | Path) -> dict[str, Any]:
-    """构造 validation_scale gate 诊断图 manifest。"""
+def build_paper_profile_gate_figure(run_root: str | Path) -> dict[str, Any]:
+    """构造当前 paper profile gate 诊断图 manifest。"""
     run_root = Path(run_root)
-    decision_path = run_root / "artifacts" / "validation_scale_gate_decision.json"
-    decision = _read_json(decision_path)
+    profile, decision_path, decision = _gate_decision_for_current_profile(run_root)
     rows = _requirement_rows(decision)
     return {
-        "artifact_name": "validation_scale_gate_figure.json",
+        "artifact_name": f"{profile}_gate_figure.json",
         "artifact_type": "figure_manifest",
-        "figure_id": "validation_scale_gate_figure",
-        "figure_title": "validation_scale gate requirement readiness",
+        "figure_id": f"{profile}_gate_figure",
+        "figure_title": f"{profile} gate requirement readiness",
         "run_root": str(run_root),
         "source_artifact_paths": [str(decision_path)],
-        "validation_scale_gate_decision": decision.get("validation_scale_gate_decision", "missing"),
+        "paper_profile_gate_decision": decision.get("paper_profile_gate_decision", "missing"),
+        f"{profile}_gate_decision": decision.get(f"{profile}_gate_decision", decision.get("paper_profile_gate_decision", "missing")),
         "paper_result_level": decision.get("paper_result_level"),
         "target_fpr": decision.get("target_fpr"),
-        "claim_support_status": decision.get("claim_support_status", "validation_scale_diagnostic_figure_blocked"),
+        "claim_support_status": decision.get("claim_support_status", f"{profile}_diagnostic_figure_blocked"),
         "encoding": {
             "x": "requirement_name",
             "y": "requirement_ready_value",
@@ -138,11 +181,11 @@ def build_validation_scale_gate_figure(run_root: str | Path) -> dict[str, Any]:
     }
 
 
-def write_validation_scale_gate_figure(run_root: str | Path) -> dict[str, Any]:
-    """写出 validation_scale gate 诊断图 manifest。"""
+def write_paper_profile_gate_figure(run_root: str | Path) -> dict[str, Any]:
+    """写出当前 paper profile gate 诊断图 manifest。"""
     run_root = Path(run_root)
-    figure = build_validation_scale_gate_figure(run_root)
-    write_json(run_root / "figures" / "validation_scale_gate_figure.json", figure)
+    figure = build_paper_profile_gate_figure(run_root)
+    write_json(run_root / "figures" / str(figure["artifact_name"]), figure)
     return figure
 
 
@@ -160,61 +203,71 @@ def _inventory_rows(run_root: Path, relpaths: Iterable[str]) -> list[dict[str, A
     return rows
 
 
-def build_validation_scale_package_manifest(run_root: str | Path) -> dict[str, Any]:
-    """构建 validation_scale package manifest。"""
+def build_paper_profile_package_manifest(run_root: str | Path) -> dict[str, Any]:
+    """构建当前 paper profile package manifest。"""
     run_root = Path(run_root)
-    inventory = _inventory_rows(run_root, VALIDATION_SCALE_REQUIRED_PACKAGE_RELPATHS)
+    profile, gate_path, profile_gate = _gate_decision_for_current_profile(run_root)
+    inventory = _inventory_rows(run_root, _paper_profile_gate_package_relpaths(profile))
     missing = [row["artifact_relpath"] for row in inventory if not row["artifact_exists"]]
-    validation_gate = _read_json(run_root / "artifacts" / "validation_scale_gate_decision.json")
     motion_exclusion = _read_json(run_root / "artifacts" / "motion_consistency_exclusion_decision.json")
     self_containment = _read_json(run_root / "artifacts" / "external_baseline_self_containment_decision.json")
     sstw_formal = _read_json(run_root / "artifacts" / "sstw_measured_formal_decision.json")
     fair_calibration = _read_json(run_root / "artifacts" / "fair_detection_calibration_decision.json")
     formal_comparison = _read_json(run_root / "artifacts" / "formal_method_baseline_comparison_decision.json")
     difference_interval = _read_json(run_root / "artifacts" / "formal_baseline_difference_interval_decision.json")
-    formal_ablation = _read_json(run_root / "artifacts" / "validation_scale_formal_internal_ablation_decision.json")
+    formal_ablation = _read_json(run_root / "artifacts" / "formal_internal_ablation_summary_decision.json")
     low_fpr = _read_json(run_root / "artifacts" / "low_fpr_formal_statistics_decision.json")
     data_guard = _read_json(run_root / "artifacts" / "data_split_and_leakage_guard_decision.json")
     paper_skeleton = _read_json(run_root / "artifacts" / "paper_result_artifact_skeleton_decision.json")
-    transition = _read_json(run_root / "artifacts" / "validation_scale_to_probe_paper_transition_decision.json")
+    transition_field = {
+        "probe_paper": "probe_paper_to_pilot_paper_transition_decision",
+        "pilot_paper": "pilot_paper_to_full_paper_transition_decision",
+        "full_paper": "full_paper_to_submission_freeze_transition_decision",
+    }.get(profile, "")
+    transition = _read_json(run_root / "artifacts" / f"{transition_field}.json") if transition_field else {}
+    gate_field = f"{profile}_gate_decision"
+    manifest_field = f"{profile}_package_manifest_decision"
     decision_ready = (
-        validation_gate.get("validation_scale_gate_decision") == "PASS"
+        profile_gate.get(gate_field, profile_gate.get("paper_profile_gate_decision")) == "PASS"
         and motion_exclusion.get("motion_consistency_exclusion_decision") == "PASS"
         and self_containment.get("external_baseline_self_containment_decision") == "PASS"
         and sstw_formal.get("sstw_measured_formal_decision") == "PASS"
         and fair_calibration.get("fair_detection_calibration_decision") == "PASS"
         and formal_comparison.get("formal_method_baseline_comparison_decision") == "PASS"
         and difference_interval.get("formal_baseline_difference_interval_decision") == "PASS"
-        and formal_ablation.get("validation_scale_formal_internal_ablation_decision") == "PASS"
+        and formal_ablation.get("formal_internal_ablation_summary_decision") == "PASS"
         and low_fpr.get("low_fpr_formal_statistics_decision") == "PASS"
         and paper_skeleton.get("paper_result_artifact_skeleton_decision") == "PASS"
         and data_guard.get("data_split_and_leakage_guard_decision") == "PASS"
-        and transition.get("validation_scale_to_probe_paper_transition_decision") == "PASS"
+        and (not transition_field or transition.get(transition_field) == "PASS")
         and not missing
     )
     return {
-        "artifact_name": "validation_scale_package_manifest.json",
+        "artifact_name": f"{profile}_package_manifest.json",
         "artifact_type": "package_manifest",
-        "manifest_kind": "validation_scale_package_manifest",
+        "manifest_kind": f"{profile}_package_manifest",
         "run_root": str(run_root),
-        "validation_scale_package_manifest_decision": "PASS" if decision_ready else "FAIL",
-        "claim_support_status": validation_gate.get("claim_support_status", "validation_scale_package_blocked")
+        manifest_field: "PASS" if decision_ready else "FAIL",
+        "claim_support_status": profile_gate.get("claim_support_status", f"{profile}_package_blocked")
         if decision_ready
-        else "validation_scale_package_blocked",
-        "validation_scale_gate_decision": validation_gate.get("validation_scale_gate_decision"),
-        "paper_result_level": validation_gate.get("paper_result_level"),
-        "target_fpr": validation_gate.get("target_fpr"),
+        else f"{profile}_package_blocked",
+        "paper_profile": profile,
+        "paper_profile_gate_decision_path": str(gate_path),
+        "paper_profile_gate_decision": profile_gate.get("paper_profile_gate_decision"),
+        gate_field: profile_gate.get(gate_field, profile_gate.get("paper_profile_gate_decision")),
+        "paper_result_level": profile_gate.get("paper_result_level"),
+        "target_fpr": profile_gate.get("target_fpr"),
         "motion_consistency_exclusion_decision": motion_exclusion.get("motion_consistency_exclusion_decision"),
         "external_baseline_self_containment_decision": self_containment.get("external_baseline_self_containment_decision"),
         "sstw_measured_formal_decision": sstw_formal.get("sstw_measured_formal_decision"),
         "fair_detection_calibration_decision": fair_calibration.get("fair_detection_calibration_decision"),
         "formal_method_baseline_comparison_decision": formal_comparison.get("formal_method_baseline_comparison_decision"),
         "formal_baseline_difference_interval_decision": difference_interval.get("formal_baseline_difference_interval_decision"),
-        "validation_scale_formal_internal_ablation_decision": formal_ablation.get("validation_scale_formal_internal_ablation_decision"),
+        "formal_internal_ablation_summary_decision": formal_ablation.get("formal_internal_ablation_summary_decision"),
         "low_fpr_formal_statistics_decision": low_fpr.get("low_fpr_formal_statistics_decision"),
         "paper_result_artifact_skeleton_decision": paper_skeleton.get("paper_result_artifact_skeleton_decision"),
         "data_split_and_leakage_guard_decision": data_guard.get("data_split_and_leakage_guard_decision"),
-        "validation_scale_to_probe_paper_transition_decision": transition.get("validation_scale_to_probe_paper_transition_decision"),
+        transition_field: transition.get(transition_field) if transition_field else None,
         "required_artifact_count": len(inventory),
         "present_artifact_count": sum(1 for row in inventory if row["artifact_exists"]),
         "missing_artifact_count": len(missing),
@@ -223,17 +276,24 @@ def build_validation_scale_package_manifest(run_root: str | Path) -> dict[str, A
     }
 
 
-def write_validation_scale_package_manifest(run_root: str | Path) -> dict[str, Any]:
-    """写出 validation_scale package manifest 和简短报告。"""
+def write_paper_profile_package_manifest(run_root: str | Path) -> dict[str, Any]:
+    """写出当前 paper profile package manifest 和简短报告。"""
     run_root = Path(run_root)
-    manifest = build_validation_scale_package_manifest(run_root)
-    write_json(run_root / "manifests" / "validation_scale_package_manifest.json", manifest)
+    manifest = build_paper_profile_package_manifest(run_root)
+    profile = str(manifest.get("paper_profile") or "probe_paper")
+    manifest_field = f"{profile}_package_manifest_decision"
+    transition_field = {
+        "probe_paper": "probe_paper_to_pilot_paper_transition_decision",
+        "pilot_paper": "pilot_paper_to_full_paper_transition_decision",
+        "full_paper": "full_paper_to_submission_freeze_transition_decision",
+    }.get(profile, "")
+    write_json(run_root / "manifests" / str(manifest["artifact_name"]), manifest)
     report = (
-        "# Validation-scale Package Manifest Report\n\n"
-        "该报告由 validation_scale package manifest 自动派生, 用于确认门禁产物是否齐全。"
+        f"# {profile} Package Manifest Report\n\n"
+        "该报告由 paper profile package manifest 自动派生, 用于确认门禁产物是否齐全。"
         "其中 claim_support_status 只能来自已通过的 governed gate, 不能人工填写效果结论。\n\n"
-        f"- validation_scale_package_manifest_decision: {manifest['validation_scale_package_manifest_decision']}\n"
-        f"- validation_scale_gate_decision: {manifest['validation_scale_gate_decision']}\n"
+        f"- {manifest_field}: {manifest[manifest_field]}\n"
+        f"- {profile}_gate_decision: {manifest.get(f'{profile}_gate_decision')}\n"
         f"- paper_result_level: {manifest['paper_result_level']}\n"
         f"- target_fpr: {manifest['target_fpr']}\n"
         f"- motion_consistency_exclusion_decision: {manifest['motion_consistency_exclusion_decision']}\n"
@@ -242,40 +302,40 @@ def write_validation_scale_package_manifest(run_root: str | Path) -> dict[str, A
         f"- fair_detection_calibration_decision: {manifest['fair_detection_calibration_decision']}\n"
         f"- formal_method_baseline_comparison_decision: {manifest['formal_method_baseline_comparison_decision']}\n"
         f"- formal_baseline_difference_interval_decision: {manifest['formal_baseline_difference_interval_decision']}\n"
-        f"- validation_scale_formal_internal_ablation_decision: {manifest['validation_scale_formal_internal_ablation_decision']}\n"
+        f"- formal_internal_ablation_summary_decision: {manifest['formal_internal_ablation_summary_decision']}\n"
         f"- low_fpr_formal_statistics_decision: {manifest['low_fpr_formal_statistics_decision']}\n"
         f"- paper_result_artifact_skeleton_decision: {manifest['paper_result_artifact_skeleton_decision']}\n"
         f"- data_split_and_leakage_guard_decision: {manifest['data_split_and_leakage_guard_decision']}\n"
-        f"- validation_scale_to_probe_paper_transition_decision: {manifest['validation_scale_to_probe_paper_transition_decision']}\n"
-        f"- missing_artifact_relpaths: {', '.join(manifest['missing_artifact_relpaths']) if manifest['missing_artifact_relpaths'] else 'none'}\n"
+        + (f"- {transition_field}: {manifest.get(transition_field)}\n" if transition_field else "")
+        + f"- missing_artifact_relpaths: {', '.join(manifest['missing_artifact_relpaths']) if manifest['missing_artifact_relpaths'] else 'none'}\n"
     )
-    report_path = run_root / "reports" / "validation_scale_package_manifest_report.md"
+    report_path = run_root / "reports" / f"{profile}_package_manifest_report.md"
     report_path.parent.mkdir(parents=True, exist_ok=True)
     report_path.write_text(report, encoding="utf-8")
     return manifest
 
 
-def write_validation_scale_artifact_package(run_root: str | Path) -> dict[str, Any]:
-    """同时写出 validation_scale 诊断图和 package manifest。"""
-    figure = write_validation_scale_gate_figure(run_root)
-    manifest = write_validation_scale_package_manifest(run_root)
+def write_paper_profile_artifact_package(run_root: str | Path) -> dict[str, Any]:
+    """同时写出当前 paper profile 诊断图和 package manifest。"""
+    figure = write_paper_profile_gate_figure(run_root)
+    manifest = write_paper_profile_package_manifest(run_root)
     return {
-        "validation_scale_gate_figure": figure,
-        "validation_scale_package_manifest": manifest,
+        "paper_profile_gate_figure": figure,
+        "paper_profile_package_manifest": manifest,
     }
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="重建 validation_scale 诊断图与 package manifest。")
+    parser = argparse.ArgumentParser(description="重建当前 paper profile 诊断图与 package manifest。")
     parser.add_argument("--run-root", required=True)
     parser.add_argument("--mode", choices=("figure", "manifest", "all"), default="all")
     args = parser.parse_args()
     if args.mode == "figure":
-        payload = write_validation_scale_gate_figure(args.run_root)
+        payload = write_paper_profile_gate_figure(args.run_root)
     elif args.mode == "manifest":
-        payload = write_validation_scale_package_manifest(args.run_root)
+        payload = write_paper_profile_package_manifest(args.run_root)
     else:
-        payload = write_validation_scale_artifact_package(args.run_root)
+        payload = write_paper_profile_artifact_package(args.run_root)
     print(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True))
 
 

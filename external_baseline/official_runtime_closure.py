@@ -125,7 +125,7 @@ def _resolve_bundle_root(run_root: Path, official_result_bundle_root: str | Path
     env_value = os.environ.get("SSTW_EXTERNAL_BASELINE_OFFICIAL_RESULT_BUNDLE_ROOT", "").strip()
     if env_value:
         return Path(env_value)
-    profile = run_root.name or "validation_scale"
+    profile = run_root.name or "probe_paper"
     return _drive_project_root_from_run_root(run_root) / "external_baseline_official_result_bundles" / profile
 
 

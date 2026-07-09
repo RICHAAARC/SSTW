@@ -1,4 +1,4 @@
-"""validation-scale artifact rebuild dry-run 检查。"""
+"""paper profile artifact rebuild dry-run 检查。"""
 
 from __future__ import annotations
 
@@ -27,7 +27,7 @@ REQUIRED_REBUILD_INPUTS = (
     "records/fair_detection_calibration_records.jsonl",
     "records/formal_method_baseline_comparison_records.jsonl",
     "records/formal_baseline_difference_interval_records.jsonl",
-    "records/validation_scale_formal_internal_ablation_records.jsonl",
+    "records/formal_internal_ablation_summary_records.jsonl",
     "records/validation_internal_ablation_records.jsonl",
     "records/adaptive_attack_records.jsonl",
     "records/trajectory_sketch_verification_records.jsonl",
@@ -47,7 +47,7 @@ REQUIRED_REBUILD_INPUTS = (
     "artifacts/fair_detection_calibration_decision.json",
     "artifacts/formal_method_baseline_comparison_decision.json",
     "artifacts/formal_baseline_difference_interval_decision.json",
-    "artifacts/validation_scale_formal_internal_ablation_decision.json",
+    "artifacts/formal_internal_ablation_summary_decision.json",
     "artifacts/validation_internal_ablation_decision.json",
     "artifacts/adaptive_attack_decision.json",
     "artifacts/replay_and_sketch_gate_decision.json",
@@ -68,7 +68,7 @@ REQUIRED_REBUILD_OUTPUTS = (
     "tables/validation_internal_ablation_table.csv",
     "tables/formal_method_baseline_comparison_table.csv",
     "tables/formal_baseline_difference_interval_table.csv",
-    "tables/validation_scale_formal_internal_ablation_table.csv",
+    "tables/formal_internal_ablation_summary_table.csv",
     "tables/adaptive_attack_table.csv",
     "tables/replay_verification_table.csv",
     "tables/claim3_downgrade_table.csv",
@@ -80,7 +80,7 @@ REQUIRED_REBUILD_OUTPUTS = (
     "reports/fair_detection_calibration_report.md",
     "reports/formal_method_baseline_comparison_report.md",
     "reports/formal_baseline_difference_interval_report.md",
-    "reports/validation_scale_formal_internal_ablation_report.md",
+    "reports/formal_internal_ablation_summary_report.md",
     "reports/validation_internal_ablation_report.md",
     "reports/adaptive_attack_report.md",
     "reports/replay_and_sketch_gate_report.md",
@@ -106,7 +106,7 @@ def _file_status(run_root: Path, relative_paths: tuple[str, ...]) -> list[dict]:
 
 
 def build_validation_artifact_rebuild_dry_run_records(run_root: str | Path) -> list[dict]:
-    """构建 validation-scale artifact rebuild dry-run 检查 records。"""
+    """构建 paper profile artifact rebuild dry-run 检查 records。"""
     run_root = Path(run_root)
     records: list[dict] = []
     for artifact_role, rows in (
@@ -117,7 +117,7 @@ def build_validation_artifact_rebuild_dry_run_records(run_root: str | Path) -> l
             records.append(with_flow_evidence_protocol_defaults({
                 "record_version": "validation_artifact_rebuild_dry_run_v1",
                 "artifact_role": artifact_role,
-                "artifact_rebuild_check_scope": "validation_scale_generative_probe",
+                "artifact_rebuild_check_scope": "paper_profile_generative_probe",
                 "claim_support_status": "validation_artifact_rebuild_dry_run_only",
                 **row,
             }, trajectory_source_level="not_applicable", claim_support_status="validation_artifact_rebuild_dry_run_only"))
@@ -135,12 +135,12 @@ def audit_validation_artifact_rebuild_dry_run(records: list[dict]) -> dict[str, 
         "artifact_rebuild_check_record_count": len(records),
         "artifact_rebuild_missing_count": len(missing),
         "artifact_rebuild_missing_paths": missing,
-        "artifact_rebuild_scope": "validation_scale_generative_probe",
+        "artifact_rebuild_scope": "paper_profile_generative_probe",
     }
 
 
 def run_validation_artifact_rebuild_dry_run(run_root: str | Path) -> dict[str, Any]:
-    """写出 validation-scale artifact rebuild dry-run records、table、decision 和 report。"""
+    """写出 paper profile artifact rebuild dry-run records、table、decision 和 report。"""
     run_root = Path(run_root)
     records = build_validation_artifact_rebuild_dry_run_records(run_root)
     audit = audit_validation_artifact_rebuild_dry_run(records)
@@ -149,7 +149,7 @@ def run_validation_artifact_rebuild_dry_run(run_root: str | Path) -> dict[str, A
     write_json(run_root / "artifacts" / "validation_artifact_rebuild_dry_run_decision.json", audit)
     report = (
         "# Validation Artifact Rebuild Dry-run Report\n\n"
-        "该报告只检查 validation-scale 产物是否具备 records -> tables / reports 的重建入口, "
+        "该报告只检查 paper profile 产物是否具备 records -> tables / reports 的重建入口, "
         "不生成 full-paper 主表。\n\n"
         f"- validation_artifact_rebuild_dry_run_decision: {audit['validation_artifact_rebuild_dry_run_decision']}\n"
         f"- artifact_rebuild_check_record_count: {audit['artifact_rebuild_check_record_count']}\n"
@@ -163,7 +163,7 @@ def run_validation_artifact_rebuild_dry_run(run_root: str | Path) -> dict[str, A
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="执行 validation-scale artifact rebuild dry-run 检查。")
+    parser = argparse.ArgumentParser(description="执行 paper profile artifact rebuild dry-run 检查。")
     parser.add_argument("--run-root", required=True)
     args = parser.parse_args()
     payload = run_validation_artifact_rebuild_dry_run(args.run_root)

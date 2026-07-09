@@ -58,7 +58,7 @@ REPOSITORY_OFFICIAL_ADAPTER_BASELINES = {
 }
 DEFAULT_NOTEBOOK_ROLE_FOR_LAYOUT = "external_baseline_formal_scoring"
 DEFAULT_DRIVE_PROJECT_ROOT = "/content/drive/MyDrive/SSTW"
-DEFAULT_WORKFLOW_PROFILE = "validation_scale"
+DEFAULT_WORKFLOW_PROFILE = "probe_paper"
 COMMAND_CONFIG_PATH = Path("configs/external_baselines/modern_baseline_colab_commands.json")
 SOURCE_REGISTRY_PATH = Path("external_baseline/source_registry.json")
 

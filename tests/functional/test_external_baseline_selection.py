@@ -126,7 +126,7 @@ def test_official_runtime_closure_preflight_binds_existing_default_drive_resourc
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """默认 Drive 资源路径存在时, 预检应自动给 Notebook 父进程提供环境变量更新。"""
-    run_root = tmp_path / "runs" / "generative_video_model_probe" / "validation_scale"
+    run_root = tmp_path / "runs" / "generative_video_model_probe" / "probe_paper"
     _write_external_baseline_runtime_fixture(run_root)
     resource_root = tmp_path / "resources" / "external_baseline"
     decoder = resource_root / "vidsig" / "nested" / "dec_48b_whit.torchscript.pt"
@@ -139,7 +139,7 @@ def test_official_runtime_closure_preflight_binds_existing_default_drive_resourc
         run_root,
         repo_root=Path("."),
         resource_root=resource_root,
-        official_result_bundle_root=tmp_path / "external_baseline_official_result_bundles" / "validation_scale",
+        official_result_bundle_root=tmp_path / "external_baseline_official_result_bundles" / "probe_paper",
         baseline_id="vidsig",
     )
 
@@ -154,7 +154,7 @@ def test_official_runtime_closure_preflight_binds_existing_default_drive_resourc
 def test_wam_frame_runtime_closure_accepts_official_package_layout(tmp_path: Path) -> None:
     """WAM 官方仓库使用 models 包目录, runtime closure 不应错误要求 models.py。"""
 
-    run_root = tmp_path / "runs" / "generative_video_model_probe" / "validation_scale"
+    run_root = tmp_path / "runs" / "generative_video_model_probe" / "probe_paper"
     _write_external_baseline_runtime_fixture(run_root)
     write_jsonl(run_root / "records" / "generation_records.jsonl", [
         {"prompt_id": "prompt_0", "seed_id": "seed_0", "generation_status": "success"},
@@ -185,7 +185,7 @@ def test_wam_frame_runtime_closure_accepts_official_package_layout(tmp_path: Pat
         run_root,
         repo_root=repo_root,
         resource_root=resource_root,
-        official_result_bundle_root=tmp_path / "external_baseline_official_result_bundles" / "validation_scale",
+        official_result_bundle_root=tmp_path / "external_baseline_official_result_bundles" / "probe_paper",
         baseline_id="wam_frame",
     )
 
@@ -200,7 +200,7 @@ def test_wam_frame_runtime_closure_accepts_official_package_layout(tmp_path: Pat
 @pytest.mark.quick
 def test_official_resource_bootstrap_writes_repair_artifact_without_network(tmp_path: Path) -> None:
     """bootstrap 在禁止网络时仍必须落盘可审计修复计划和环境变量更新。"""
-    run_root = tmp_path / "runs" / "validation_scale"
+    run_root = tmp_path / "runs" / "probe_paper"
     decision = bootstrap_official_resources(
         run_root,
         resource_root=tmp_path / "resources" / "external_baseline",
@@ -808,7 +808,7 @@ def test_modern_external_baseline_formal_scoring_reads_official_bundle_without_l
         Path(record["attacked_video_path"]).unlink(missing_ok=True)
 
     baseline_id = "unit_modern"
-    bundle_root = tmp_path / "external_baseline_official_result_bundles" / "validation_scale"
+    bundle_root = tmp_path / "external_baseline_official_result_bundles" / "probe_paper"
     baseline_root = bundle_root / baseline_id
     records_root = baseline_root / "records"
     records_root.mkdir(parents=True)

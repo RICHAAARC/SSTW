@@ -281,7 +281,7 @@ def _checkout_pinned_source_reference(entry: Mapping[str, Any], source_dir: Path
     """在 source 仓库存在时 checkout registry 中冻结的 branch / commit。
 
     通用工程写法是先 clone 或 fetch, 再 checkout 明确版本。项目特定要求是
-    validation-scale 与 pilot_paper 的外部 baseline 必须能记录精确上游 commit,
+    paper profile 与 pilot_paper 的外部 baseline 必须能记录精确上游 commit,
     因此若 registry 提供 `official_repository_commit`, 该 commit 优先于 branch。
     """
     branch = _concrete_git_reference(entry.get("official_repository_branch"))

@@ -1,6 +1,6 @@
 """论文级结果图表与补充实验产物的统一构建器。
 
-该模块的作用是把 validation_scale、probe_paper、pilot_paper 和 full_paper 共享的论文产物
+该模块的作用是把 probe_paper、pilot_paper 和 full_paper 共享的论文产物
 结构固定下来。Notebook 与服务器 CLI 只调用本模块命令, 不在入口层手写图表、
 低 FPR 曲线、效率指标或 adaptive / real-world 攻击汇总逻辑。
 
@@ -27,7 +27,7 @@ from main.protocol.record_writer import write_json, write_jsonl
 from main.protocol.table_builder import write_csv
 
 
-DEFAULT_PROTOCOL_CONFIG = "configs/protocol/validation_scale_generative_probe.json"
+DEFAULT_PROTOCOL_CONFIG = "configs/protocol/probe_paper_generative_probe.json"
 SSTW_METHOD_ID = "sstw_key_conditioned_flow_trajectory"
 DEFAULT_TARGET_FPR_LEVELS = (0.1, 0.01, 0.001)
 REAL_WORLD_ATTACK_PROTOCOLS = (
@@ -120,7 +120,7 @@ def _load_protocol_context(config_path: str | Path) -> dict[str, Any]:
     if "target_fpr" not in config:
         raise KeyError(f"protocol config 缺少 target_fpr: {path}")
     return {
-        "paper_result_level": str(config.get("paper_result_level") or "validation_scale"),
+        "paper_result_level": str(config.get("paper_result_level") or "probe_paper"),
         "target_fpr": float(config["target_fpr"]),
         "protocol_config_path": str(path),
         "required_runtime_attack_names": list(required_runtime_attack_names_from_config(config)),

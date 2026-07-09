@@ -54,7 +54,7 @@ def build_claim3_downgrade_audit(run_root: str | Path) -> dict[str, Any]:
 
     该函数只读取已经落盘的 replay/sketch 相关 governed artifacts。若完整
     replay/sketch gate 未通过, 它会显式设置 `claim3_downgraded = true`,
-    表示后续 validation-scale 可以继续, 但 Claim-3 不能作为强 supported claim。
+    表示后续 paper profile 可以继续, 但 Claim-3 不能作为强 supported claim。
     """
     run_root = Path(run_root)
     replay_decision = _read_json(run_root / "artifacts" / "replay_and_sketch_gate_decision.json")
@@ -90,7 +90,7 @@ def build_claim3_downgrade_audit(run_root: str | Path) -> dict[str, Any]:
     claim_support_status = (
         "claim3_full_support_available"
         if not claim3_downgraded
-        else "claim3_downgraded_validation_scale_only"
+        else "claim3_downgraded_paper_profile_only"
     )
     if replay_gate_passed and replay_gate_full_support_allowed:
         replay_or_sketch_status = "replay_and_sketch_gate_passed"
@@ -137,7 +137,7 @@ def build_claim3_downgrade_audit(run_root: str | Path) -> dict[str, Any]:
 def build_claim3_downgrade_records(run_root: str | Path) -> list[dict[str, Any]]:
     """构建 Claim-3 降级 record。
 
-    该 record 是 validation-scale 的治理边界记录。它可以让 gate 继续运行,
+    该 record 是 paper profile 的治理边界记录。它可以让 gate 继续运行,
     但不会支持 robust replay verification 的正向论文 claim。
     """
     audit = build_claim3_downgrade_audit(run_root)
@@ -166,7 +166,7 @@ def write_claim3_downgrade_outputs(run_root: str | Path) -> dict[str, Any]:
     report = (
         "# Claim-3 Downgrade Gate Report\n\n"
         "该报告只声明 Claim-3 的当前证据边界。若 replay/sketch gate 未通过, "
-        "本报告允许 validation-scale 继续运行, 但不允许把 robust replay verification "
+        "本报告允许 paper profile 继续运行, 但不允许把 robust replay verification "
         "写成强 supported claim。\n\n"
         f"- claim3_downgrade_decision: {audit['claim3_downgrade_decision']}\n"
         f"- claim3_downgraded: {str(audit['claim3_downgraded']).lower()}\n"

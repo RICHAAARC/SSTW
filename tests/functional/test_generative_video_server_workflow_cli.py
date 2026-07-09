@@ -41,7 +41,7 @@ def test_server_workflow_cli_dry_run_exposes_split_stage_plans(tmp_path: Path) -
     assert "fair_detection_calibration" in scoring_stage_names
     assert "formal_method_baseline_comparison" in scoring_stage_names
     assert "formal_baseline_difference_interval" in scoring_stage_names
-    assert "validation_scale_formal_internal_ablation" not in scoring_stage_names
+    assert "formal_internal_ablation_summary" not in scoring_stage_names
 
     generation_command = [
         sys.executable,
@@ -82,9 +82,9 @@ def test_server_workflow_cli_dry_run_exposes_split_stage_plans(tmp_path: Path) -
     assert evidence_payload["pipeline"] == "paper_evidence_postprocess"
     assert "motion_consistency_exclusion_report" in evidence_stage_names
     assert "validation_internal_ablation" in evidence_stage_names
-    assert "validation_scale_formal_internal_ablation" in evidence_stage_names
+    assert "formal_internal_ablation_summary" in evidence_stage_names
     assert "low_fpr_formal_statistics" in evidence_stage_names
-    assert "validation_scale_gate" not in evidence_stage_names
+    assert "paper_profile_gate" not in evidence_stage_names
 
     gate_command = [
         sys.executable,
@@ -108,10 +108,10 @@ def test_server_workflow_cli_dry_run_exposes_split_stage_plans(tmp_path: Path) -
     assert "motion_consistency_exclusion_report" not in gate_stage_names
     assert "external_baseline_comparison" not in gate_stage_names
     assert "fair_detection_calibration" not in gate_stage_names
-    assert "validation_scale_formal_internal_ablation" not in gate_stage_names
+    assert "formal_internal_ablation_summary" not in gate_stage_names
     assert "low_fpr_formal_statistics" not in gate_stage_names
-    assert "validation_scale_gate" in gate_stage_names
-    assert "validation_scale_package_manifest_builder" in gate_stage_names
+    assert "paper_profile_gate" in gate_stage_names
+    assert "paper_profile_package_manifest_builder" in gate_stage_names
 
 
 @pytest.mark.quick
@@ -130,5 +130,5 @@ def test_server_workflow_complete_pipeline_order_matches_notebook_handoff_model(
         "paper_evidence_postprocess",
         "paper_gate_and_package",
     )
-    assert PIPELINE_ROLE_ORDER["validation_scale_complete"] == PIPELINE_ROLE_ORDER["paper_protocol_complete"]
     assert "generative_video_runtime" not in PIPELINE_ROLE_ORDER
+    assert "probe_paper_complete" not in PIPELINE_ROLE_ORDER

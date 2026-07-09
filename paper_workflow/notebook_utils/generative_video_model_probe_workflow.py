@@ -21,14 +21,13 @@ from main.core.progress import ProgressReporter, emit_progress_event
 
 
 DEFAULT_DRIVE_PROJECT_ROOT = "/content/drive/MyDrive/SSTW"
-DEFAULT_VALIDATION_SCALE_CONFIG = "configs/protocol/validation_scale_generative_probe.json"
 DEFAULT_PROBE_PAPER_CONFIG = "configs/protocol/probe_paper_generative_probe.json"
 DEFAULT_PILOT_PAPER_CONFIG = "configs/protocol/pilot_paper_generative_probe.json"
 DEFAULT_FULL_PAPER_CONFIG = "configs/protocol/full_paper_generative_probe.json"
 DEFAULT_NOTEBOOK_WORKFLOW_CONFIG = "configs/paper_workflow/generative_video_notebook_workflows.json"
 DEFAULT_MODERN_BASELINE_COLAB_COMMAND_CONFIG = "configs/external_baselines/modern_baseline_colab_commands.json"
 DEFAULT_NOTEBOOK_ROLE = "generative_video_generation"
-PAPER_GATE_PROFILES = {"validation_scale", "probe_paper", "pilot_paper", "full_paper"}
+PAPER_GATE_PROFILES = {"probe_paper", "pilot_paper", "full_paper"}
 EXTERNAL_BASELINE_COLAB_PREFLIGHT_DECISION = "artifacts/external_baseline_colab_preflight_decision.json"
 EXTERNAL_BASELINE_COMMAND_TEMPLATE_SUMMARY = "artifacts/external_baseline_command_template_summary.json"
 EXTERNAL_BASELINE_OFFICIAL_BRIDGE_PREFLIGHT_DECISION = "artifacts/external_baseline_official_bridge_preflight_decision.json"
@@ -44,7 +43,7 @@ def _join_drive_path(root: PurePosixPath, relative_path: str) -> str:
 
     该函数属于通用工程写法, 用于避免 Notebook cell 中硬写多个 Google Drive
     输出目录。项目特定约束是 profile 之间必须隔离 run / package / log 目录,
-    防止 `validation_scale`、`probe_paper`、`pilot_paper` 和 `full_paper` 产物混写。
+    防止 `probe_paper`、`pilot_paper` 和 `full_paper` 产物混写。
     """
     return (root / PurePosixPath(relative_path)).as_posix()
 
@@ -55,7 +54,7 @@ def load_notebook_workflow_config(
     """读取 Colab Notebook 统一 workflow profile 配置。
 
     Notebook 只负责入口编排。不同结果层级、Drive 路径、样本规模和默认 profile
-    均由该配置控制, 避免把 `pilot_paper` 或 `validation_scale` 写死在 Notebook
+    均由该配置控制, 避免把 `probe_paper` 或 `pilot_paper` 写死在 Notebook
     的多处 cell 中。
     """
     config = _read_json(config_path)
@@ -199,7 +198,7 @@ def build_drive_layout(
     """构造 Colab 与 Google Drive 共享的 SSTW 输出目录布局。
 
     run / package / log 目录由统一配置决定, 从而支持在 Colab 中安全切换
-    `validation_scale`、`probe_paper`、`pilot_paper` 和 `full_paper`。不传 `workflow_profile`
+    `probe_paper`、`pilot_paper` 和 `full_paper`。不传 `workflow_profile`
     时使用拆分后的 `generative_video_generation` 默认 profile, 不再回退到旧综合
     Notebook 的历史目录。
     """
@@ -288,13 +287,12 @@ def _merge_protocol_target_fpr(profile: str, profile_config: dict[str, Any]) -> 
     """把 paper gate profile 的 target_fpr 绑定到 protocol config。
 
     该函数属于项目特定治理写法。它保留 workflow profile 对 Drive 路径、样本规模和
-    阶段计划的管理职责, 但把 `validation_scale`、`probe_paper`、`pilot_paper` 和 `full_paper`
+    阶段计划的管理职责, 但把 `probe_paper`、`pilot_paper` 和 `full_paper`
     的 fixed-FPR 口径统一交给各自 protocol config。若 workflow config 与 protocol
     config 同时声明了不同的 `target_fpr`, 直接失败, 防止后续 Notebook 切换 profile
     时出现不同 fixed-FPR 语义漂移。
     """
     should_bind_protocol_fpr = bool(profile_config.get("paper_gate_profile")) or profile in {
-        "validation_scale",
         "probe_paper",
         "pilot_paper",
         "full_paper",
@@ -334,7 +332,7 @@ def _config_path_for_profile(profile: str) -> str:
         return DEFAULT_PILOT_PAPER_CONFIG
     if profile == "full_paper":
         return DEFAULT_FULL_PAPER_CONFIG
-    return DEFAULT_VALIDATION_SCALE_CONFIG
+    return DEFAULT_PROBE_PAPER_CONFIG
 
 
 def external_baseline_command_env_var_for(baseline_id: str) -> str:
@@ -362,7 +360,7 @@ def required_modern_external_baseline_command_requirements(
 ) -> list[dict[str, str]]:
     """从 protocol config 中读取现代 baseline command 要求。
 
-    Notebook 不应手写 baseline 清单。该函数把 `validation_scale` 和
+    Notebook 不应手写 baseline 清单。该函数把 `paper_profile` 和
     `pilot_paper` 的 hard gate 要求统一收敛到 helper, 防止配置已更新而
     Notebook cell 仍保留旧 baseline 列表。
     """
@@ -426,7 +424,7 @@ def build_modern_baseline_colab_command_config_summary(
     """构造现代 baseline command 配置摘要。
 
     通用工程写法是把“可查看的配置建议”和“已注入的正式命令”分开。项目特定要求是:
-    validation-scale 与 pilot-paper 必须 fail closed, 因此该摘要只能帮助用户在 Colab
+    paper profile 与 pilot-paper 必须 fail closed, 因此该摘要只能帮助用户在 Colab
     中填写 command, 不能替代 `SSTW_<BASELINE>_EVAL_COMMAND`。
     """
     config = load_modern_baseline_colab_command_config(command_config_path)
@@ -1053,7 +1051,7 @@ def write_motion_threshold_reuse_artifact_for_profile(
     """校验并复制当前 profile 复用的 motion threshold artifact。
 
     该函数属于项目特定写法。`motion_threshold_calibration_colab` 的输出目录与
-    `validation_scale` / `probe_paper` / `pilot_paper` 的运行目录相互隔离, 但 paper gate 只应读取当前
+    `probe_paper` / `pilot_paper` 的运行目录相互隔离, 但 paper gate 只应读取当前
     run_root 中的 governed artifacts。因此非 calibration profile 在复用阈值时, 必须把
     已通过的阈值决策复制到当前 run_root, 并额外写出 reuse decision 说明来源。
     """
@@ -1096,7 +1094,7 @@ def validate_motion_threshold_ready_for_profile(
 ) -> dict[str, Any]:
     """校验非 calibration profile 只能复用已冻结的 motion threshold。
 
-    该函数避免 Notebook 在 `validation_scale`、`probe_paper` 或 `pilot_paper` 中根据当前测试样本重新估计
+    该函数避免 Notebook 在 `paper_profile`、`probe_paper` 或 `pilot_paper` 中根据当前测试样本重新估计
     motion threshold。阈值必须来自独立 calibration split, 否则 fixed-FPR 协议会被污染。
     """
     if canonical_workflow_profile(profile) == "motion_calibration":
@@ -1409,7 +1407,7 @@ def build_data_split_and_leakage_guard_command(layout: dict[str, str]) -> list[s
 
 
 def build_validation_internal_ablation_command(layout: dict[str, str]) -> list[str]:
-    """构造 validation-scale 内部消融矩阵后处理命令。"""
+    """构造 paper profile 内部消融矩阵后处理命令。"""
     return [
         sys.executable,
         "-m",
@@ -1433,7 +1431,7 @@ def build_motion_consistency_exclusion_report_command(layout: dict[str, str]) ->
 
 
 def build_adaptive_attack_command(layout: dict[str, str]) -> list[str]:
-    """构造 validation-scale adaptive attack proxy 命令。"""
+    """构造 paper profile adaptive attack proxy 命令。"""
     return [
         sys.executable,
         "-m",
@@ -1530,12 +1528,12 @@ def build_formal_baseline_difference_interval_command(layout: dict[str, str]) ->
     ]
 
 
-def build_validation_scale_formal_internal_ablation_command(layout: dict[str, str]) -> list[str]:
-    """构造 validation_scale 级内部消融汇总命令。"""
+def build_formal_internal_ablation_summary_command(layout: dict[str, str]) -> list[str]:
+    """构造当前 paper profile 的内部消融汇总命令。"""
     return [
         sys.executable,
         "-m",
-        "experiments.generative_video_model_probe.validation_scale_formal_internal_ablation",
+        "experiments.generative_video_model_probe.formal_internal_ablation_summary",
         "--run-root",
         layout["drive_run_root"],
         "--config-path",
@@ -1598,7 +1596,7 @@ def build_full_paper_result_checker_command(layout: dict[str, str]) -> list[str]
 
 
 def build_validation_artifact_rebuild_dry_run_command(layout: dict[str, str]) -> list[str]:
-    """构造 validation-scale artifact rebuild dry-run 命令。"""
+    """构造 paper profile artifact rebuild dry-run 命令。"""
     return [
         sys.executable,
         "-m",
@@ -1620,12 +1618,12 @@ def build_small_scale_claim_pilot_gate_command(layout: dict[str, str]) -> list[s
     ]
 
 
-def build_validation_scale_gate_command(layout: dict[str, str]) -> list[str]:
-    """构造 validation-scale gate 命令, target_fpr 口径来自 validation protocol config。"""
+def build_paper_profile_gate_command(layout: dict[str, str]) -> list[str]:
+    """构造当前 paper profile 的 gate 命令。"""
     return [
         sys.executable,
         "-m",
-        "experiments.generative_video_model_probe.validation_scale_gate",
+        "experiments.generative_video_model_probe.paper_profile_gate",
         "--run-root",
         layout["drive_run_root"],
         "--config-path",
@@ -1647,20 +1645,6 @@ def build_stage_transition_decision_command(layout: dict[str, str], transition_i
     ]
 
 
-def build_validation_scale_to_pilot_paper_transition_decision_command(layout: dict[str, str]) -> list[str]:
-    """构造历史兼容 validation_scale -> pilot_paper 轻量跳转判定命令。
-
-    当前主链不再使用该命令。正式路径必须是
-    validation_scale -> probe_paper -> pilot_paper。
-    """
-    return build_stage_transition_decision_command(layout, "validation_scale_to_pilot_paper")
-
-
-def build_validation_scale_to_probe_paper_transition_decision_command(layout: dict[str, str]) -> list[str]:
-    """构造 validation_scale -> probe_paper 轻量跳转判定命令。"""
-    return build_stage_transition_decision_command(layout, "validation_scale_to_probe_paper")
-
-
 def build_probe_paper_to_pilot_paper_transition_decision_command(layout: dict[str, str]) -> list[str]:
     """构造 probe_paper -> pilot_paper 轻量跳转判定命令。"""
     return build_stage_transition_decision_command(layout, "probe_paper_to_pilot_paper")
@@ -1676,12 +1660,12 @@ def build_full_paper_to_submission_freeze_transition_decision_command(layout: di
     return build_stage_transition_decision_command(layout, "full_paper_to_submission_freeze")
 
 
-def build_validation_scale_gate_figure_builder_command(layout: dict[str, str]) -> list[str]:
-    """构造 validation_scale gate 诊断图 manifest 重建命令。"""
+def build_paper_profile_gate_figure_builder_command(layout: dict[str, str]) -> list[str]:
+    """构造当前 paper profile gate 诊断图 manifest 重建命令。"""
     return [
         sys.executable,
         "-m",
-        "experiments.generative_video_model_probe.validation_scale_artifact_package",
+        "experiments.generative_video_model_probe.paper_profile_artifact_package",
         "--run-root",
         layout["drive_run_root"],
         "--mode",
@@ -1689,12 +1673,12 @@ def build_validation_scale_gate_figure_builder_command(layout: dict[str, str]) -
     ]
 
 
-def build_validation_scale_package_manifest_builder_command(layout: dict[str, str]) -> list[str]:
-    """构造 validation_scale package manifest 重建命令。"""
+def build_paper_profile_package_manifest_builder_command(layout: dict[str, str]) -> list[str]:
+    """构造当前 paper profile package manifest 重建命令。"""
     return [
         sys.executable,
         "-m",
-        "experiments.generative_video_model_probe.validation_scale_artifact_package",
+        "experiments.generative_video_model_probe.paper_profile_artifact_package",
         "--run-root",
         layout["drive_run_root"],
         "--mode",
@@ -1918,19 +1902,17 @@ def build_configured_colab_stage_command(
         "fair_detection_calibration": build_fair_detection_calibration_command,
         "formal_method_baseline_comparison": build_formal_method_baseline_comparison_command,
         "formal_baseline_difference_interval": build_formal_baseline_difference_interval_command,
-        "validation_scale_formal_internal_ablation": build_validation_scale_formal_internal_ablation_command,
+        "formal_internal_ablation_summary": build_formal_internal_ablation_summary_command,
         "data_split_and_leakage_guard": build_data_split_and_leakage_guard_command,
         "pilot_paper_gate": build_pilot_paper_gate_command,
         "pilot_paper_to_full_paper_transition_decision": build_pilot_paper_to_full_paper_transition_decision_command,
         "full_paper_result_checker": build_full_paper_result_checker_command,
         "full_paper_to_submission_freeze_transition_decision": build_full_paper_to_submission_freeze_transition_decision_command,
         "validation_artifact_rebuild_dry_run": build_validation_artifact_rebuild_dry_run_command,
-        "validation_scale_gate": build_validation_scale_gate_command,
-        "validation_scale_to_probe_paper_transition_decision": build_validation_scale_to_probe_paper_transition_decision_command,
+        "paper_profile_gate": build_paper_profile_gate_command,
         "probe_paper_to_pilot_paper_transition_decision": build_probe_paper_to_pilot_paper_transition_decision_command,
-        "validation_scale_to_pilot_paper_transition_decision": build_validation_scale_to_pilot_paper_transition_decision_command,
-        "validation_scale_gate_figure_builder": build_validation_scale_gate_figure_builder_command,
-        "validation_scale_package_manifest_builder": build_validation_scale_package_manifest_builder_command,
+        "paper_profile_gate_figure_builder": build_paper_profile_gate_figure_builder_command,
+        "paper_profile_package_manifest_builder": build_paper_profile_package_manifest_builder_command,
     }
 
     if stage_name == "wan21_runtime_generation":

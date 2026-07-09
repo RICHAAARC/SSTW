@@ -11,8 +11,8 @@ from typing import Any
 
 from experiments.generative_video_model_probe.formal_motion_claim_filter import select_motion_claim_generation_records
 from main.attacks.video_runtime_attack_protocol import (
+    PAPER_PROFILE_RUNTIME_ATTACKS,
     RUNTIME_ATTACK_SPECS,
-    VALIDATION_SCALE_RUNTIME_ATTACKS,
     apply_runtime_attack_to_frames,
     required_runtime_attack_names_from_config,
 )
@@ -23,8 +23,8 @@ from main.protocol.table_builder import write_csv
 
 
 ATTACK_NAMES = tuple(RUNTIME_ATTACK_SPECS)
-RUNTIME_PILOT_ATTACKS = VALIDATION_SCALE_RUNTIME_ATTACKS
-DEFAULT_PROTOCOL_CONFIG = "configs/protocol/validation_scale_generative_probe.json"
+RUNTIME_PILOT_ATTACKS = PAPER_PROFILE_RUNTIME_ATTACKS
+DEFAULT_PROTOCOL_CONFIG = "configs/protocol/probe_paper_generative_probe.json"
 
 
 def _read_jsonl(path: Path) -> list[dict]:

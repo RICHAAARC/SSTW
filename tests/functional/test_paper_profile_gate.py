@@ -4,9 +4,9 @@ from pathlib import Path
 import pytest
 
 from experiments.generative_video_model_probe.external_baseline_runner import run_external_baseline_status
-from experiments.generative_video_model_probe.validation_scale_gate import (
-    build_validation_scale_gate_audit,
-    write_validation_scale_gate_audit,
+from experiments.generative_video_model_probe.paper_profile_gate import (
+    build_paper_profile_gate_audit,
+    write_paper_profile_gate_audit,
 )
 from main.attacks.video_runtime_attack_protocol import (
     FULL_PAPER_NON_RUNTIME_ATTACK_PROTOCOLS,
@@ -37,7 +37,7 @@ REQUIRED_ANCHOR_KEYS = tuple(f"prompt_0::seed_0::{attack_name}" for attack_name 
 
 
 def _external_baseline_self_containment_pass_payload() -> dict:
-    """构造 validation-scale gate 接受的完整 external baseline 自包含 PASS 摘要。"""
+    """构造 probe-paper gate 接受的完整 external baseline 自包含 PASS 摘要。"""
 
     return {
         "external_baseline_self_containment_decision": "PASS",
@@ -71,7 +71,7 @@ def _external_baseline_self_containment_pass_payload() -> dict:
 
 
 def _formal_external_baseline_records() -> list[dict]:
-    """构造 validation-scale 通过所需的完整 external baseline records fixture。"""
+    """构造 probe-paper 通过所需的完整 external baseline records fixture。"""
     records: list[dict] = []
     for name in EXTERNAL_BASELINE_NAMES:
         record = {
@@ -106,12 +106,12 @@ def _formal_external_baseline_records() -> list[dict]:
 
 
 @pytest.mark.quick
-def test_validation_scale_gate_blocks_empty_run(tmp_path: Path) -> None:
-    """空 run_root 必须被 validation-scale gate 阻断, 不能进入 pilot_paper。"""
-    audit = build_validation_scale_gate_audit(tmp_path / "empty_run")
+def test_paper_profile_gate_blocks_empty_run(tmp_path: Path) -> None:
+    """空 run_root 必须被 probe-paper gate 阻断, 不能进入 pilot_paper。"""
+    audit = build_paper_profile_gate_audit(tmp_path / "empty_run")
 
-    assert audit["validation_scale_gate_decision"] == "FAIL"
-    assert audit["claim_support_status"] == "validation_scale_blocked"
+    assert audit["paper_profile_gate_decision"] == "FAIL"
+    assert audit["claim_support_status"] == "probe_paper_blocked"
     assert audit["full_paper_allowed"] is False
     assert "small_scale_claim_pilot_gate_passed" not in audit["missing_validation_requirements"]
     assert "validation_generation_records_ready" in audit["missing_validation_requirements"]
@@ -120,14 +120,14 @@ def test_validation_scale_gate_blocks_empty_run(tmp_path: Path) -> None:
     assert "validation_fair_detection_calibration_ready" in audit["missing_validation_requirements"]
     assert "validation_formal_method_baseline_comparison_ready" in audit["missing_validation_requirements"]
     assert "validation_formal_baseline_difference_interval_ready" in audit["missing_validation_requirements"]
-    assert "validation_scale_formal_internal_ablation_ready" in audit["missing_validation_requirements"]
+    assert "paper_profile_formal_internal_ablation_ready" in audit["missing_validation_requirements"]
     assert "validation_low_fpr_formal_statistics_blocking_record_ready" in audit["missing_validation_requirements"]
     assert "validation_motion_consistency_exclusion_report_ready" in audit["missing_validation_requirements"]
 
 
 @pytest.mark.quick
-def test_validation_scale_gate_rejects_pilot_profile_as_validation(tmp_path: Path) -> None:
-    """pilot profile 不能冒充 validation-scale profile。"""
+def test_paper_profile_gate_rejects_pilot_profile_as_validation(tmp_path: Path) -> None:
+    """pilot profile 不能冒充 probe-paper profile。"""
     run_root = tmp_path / "run"
     generation_records = []
     for prompt_index in range(8):
@@ -139,20 +139,20 @@ def test_validation_scale_gate_rejects_pilot_profile_as_validation(tmp_path: Pat
                 "seed_id": f"seed_{seed_index}",
             })
     write_jsonl(run_root / "records" / "generation_records.jsonl", generation_records)
-    audit = build_validation_scale_gate_audit(run_root)
+    audit = build_paper_profile_gate_audit(run_root)
 
-    assert audit["validation_scale_gate_decision"] == "FAIL"
+    assert audit["paper_profile_gate_decision"] == "FAIL"
     assert audit["validation_generation_record_count"] == 0
     assert "validation_generation_records_ready" in audit["missing_validation_requirements"]
 
 
 @pytest.mark.quick
-def test_validation_scale_gate_cannot_disable_fair_comparison_hard_requirements(tmp_path: Path) -> None:
-    """validation_scale 不能通过配置关闭公平比较硬前置后进入 probe_paper。"""
-    config_path = tmp_path / "validation_scale_config.json"
+def test_paper_profile_gate_cannot_disable_fair_comparison_hard_requirements(tmp_path: Path) -> None:
+    """probe_paper 不能通过配置关闭公平比较硬前置后进入 probe_paper。"""
+    config_path = tmp_path / "probe_paper_config.json"
     config_path.write_text(json.dumps({
         "target_fpr": 0.1,
-        "paper_result_level": "validation_scale",
+        "paper_result_level": "probe_paper",
         "minimum_prompt_count": 0,
         "minimum_seed_per_prompt": 0,
         "minimum_attack_count": 0,
@@ -167,12 +167,12 @@ def test_validation_scale_gate_cannot_disable_fair_comparison_hard_requirements(
         "require_formal_method_baseline_comparison": False,
         "require_formal_baseline_difference_interval": False,
         "require_data_split_and_leakage_guard": False,
-        "require_validation_scale_sstw_advantage_claim_ready": False,
+        "require_sstw_advantage_claim_ready": False,
         "require_motion_threshold_calibration_ready": False,
         "require_formal_motion_claim_ready": False,
         "require_motion_consistency_exclusion_report": False,
         "require_internal_ablation_records": False,
-        "require_validation_scale_formal_internal_ablation": False,
+        "require_formal_internal_ablation_summary": False,
         "require_adaptive_attack_records": False,
         "require_replay_or_sketch_records_or_claim3_downgrade": False,
         "require_confidence_interval_report": False,
@@ -180,11 +180,11 @@ def test_validation_scale_gate_cannot_disable_fair_comparison_hard_requirements(
         "require_artifact_rebuild_dry_run": False,
     }), encoding="utf-8")
 
-    audit = build_validation_scale_gate_audit(tmp_path / "run", config_path)
+    audit = build_paper_profile_gate_audit(tmp_path / "run", config_path)
 
-    assert audit["validation_scale_gate_decision"] == "FAIL"
-    assert audit["claim_support_status"] == "validation_scale_blocked"
-    assert audit["validation_scale_hard_required_config_missing_count"] == 7
+    assert audit["paper_profile_gate_decision"] == "FAIL"
+    assert audit["claim_support_status"] == "probe_paper_blocked"
+    assert audit["paper_profile_hard_required_config_missing_count"] == 8
     assert "require_fair_detection_calibration_must_be_true" in audit["missing_validation_requirements"]
     assert "require_formal_method_baseline_comparison_must_be_true" in audit["missing_validation_requirements"]
     assert "require_formal_baseline_difference_interval_must_be_true" in audit["missing_validation_requirements"]
@@ -212,12 +212,12 @@ def test_probe_paper_gate_cannot_disable_advantage_claim_requirement(tmp_path: P
         "require_formal_method_baseline_comparison": False,
         "require_formal_baseline_difference_interval": False,
         "require_data_split_and_leakage_guard": False,
-        "require_validation_scale_sstw_advantage_claim_ready": False,
+        "require_sstw_advantage_claim_ready": False,
         "require_motion_threshold_calibration_ready": False,
         "require_formal_motion_claim_ready": False,
         "require_motion_consistency_exclusion_report": False,
         "require_internal_ablation_records": False,
-        "require_validation_scale_formal_internal_ablation": False,
+        "require_formal_internal_ablation_summary": False,
         "require_adaptive_attack_records": False,
         "require_replay_or_sketch_records_or_claim3_downgrade": False,
         "require_confidence_interval_report": False,
@@ -225,22 +225,22 @@ def test_probe_paper_gate_cannot_disable_advantage_claim_requirement(tmp_path: P
         "require_artifact_rebuild_dry_run": False,
     }), encoding="utf-8")
 
-    audit = build_validation_scale_gate_audit(tmp_path / "run", config_path)
+    audit = build_paper_profile_gate_audit(tmp_path / "run", config_path)
 
-    assert audit["validation_scale_gate_decision"] == "FAIL"
+    assert audit["paper_profile_gate_decision"] == "FAIL"
     assert audit["claim_support_status"] == "probe_paper_blocked"
-    assert audit["validation_scale_hard_required_config_missing_count"] == 8
-    assert "require_validation_scale_sstw_advantage_claim_ready_must_be_true" in audit["missing_validation_requirements"]
+    assert audit["paper_profile_hard_required_config_missing_count"] == 8
+    assert "require_sstw_advantage_claim_ready_must_be_true" in audit["missing_validation_requirements"]
 
 
 @pytest.mark.quick
-def test_validation_scale_gate_rejects_stale_self_containment_pass_without_rows(tmp_path: Path) -> None:
-    """旧版 self-containment 仅写 PASS 不能满足 validation_scale 公平比较门禁。"""
+def test_paper_profile_gate_rejects_stale_self_containment_pass_without_rows(tmp_path: Path) -> None:
+    """旧版 self-containment 仅写 PASS 不能满足 probe_paper 公平比较门禁。"""
     run_root = tmp_path / "run"
-    config_path = tmp_path / "validation_scale_config.json"
+    config_path = tmp_path / "probe_paper_config.json"
     config_path.write_text(json.dumps({
         "target_fpr": 0.1,
-        "paper_result_level": "validation_scale",
+        "paper_result_level": "probe_paper",
         "minimum_prompt_count": 0,
         "minimum_seed_per_prompt": 0,
         "minimum_attack_count": 0,
@@ -259,7 +259,7 @@ def test_validation_scale_gate_rejects_stale_self_containment_pass_without_rows(
         "require_formal_motion_claim_ready": False,
         "require_motion_consistency_exclusion_report": False,
         "require_internal_ablation_records": False,
-        "require_validation_scale_formal_internal_ablation": False,
+        "require_formal_internal_ablation_summary": False,
         "require_adaptive_attack_records": False,
         "require_replay_or_sketch_records_or_claim3_downgrade": False,
         "require_confidence_interval_report": False,
@@ -271,24 +271,24 @@ def test_validation_scale_gate_rejects_stale_self_containment_pass_without_rows(
         "claim_support_status": "legacy_pass_without_required_rows",
     })
 
-    audit = build_validation_scale_gate_audit(run_root, config_path)
+    audit = build_paper_profile_gate_audit(run_root, config_path)
 
-    assert audit["validation_scale_gate_decision"] == "FAIL"
+    assert audit["paper_profile_gate_decision"] == "FAIL"
     assert "validation_external_baseline_self_containment_ready" in audit["missing_validation_requirements"]
     assert "external_baseline_self_containment_required_rows_present" in audit["external_baseline_self_containment_gate_missing_requirements"]
     assert "videoseal" in audit["missing_self_contained_modern_external_baseline_names"]
 
 
 @pytest.mark.quick
-def test_validation_scale_gate_passes_when_all_governed_inputs_exist(tmp_path: Path) -> None:
-    """当 validation-scale 所需 records 和 decision artifacts 齐全时, gate 应允许进入 pilot_paper。"""
+def test_paper_profile_gate_passes_when_all_governed_inputs_exist(tmp_path: Path) -> None:
+    """当 probe-paper 所需 records 和 decision artifacts 齐全时, gate 应允许进入 pilot_paper。"""
     run_root = tmp_path / "run"
     generation_records = []
     for prompt_index in range(8):
         for seed_index in range(3):
             generation_records.append({
                 "generation_status": "success",
-                "colab_runtime_profile": "validation_scale",
+                "colab_runtime_profile": "probe_paper",
                 "prompt_id": f"prompt_{prompt_index}",
                 "seed_id": f"seed_{seed_index}",
             })
@@ -362,7 +362,7 @@ def test_validation_scale_gate_passes_when_all_governed_inputs_exist(tmp_path: P
             "fair_comparison_status": "ready",
             "metric_status": "measured_formal",
             "target_fpr": 0.1,
-            "clean_negative_score_count": 10,
+            "clean_negative_score_count": 500,
             "positive_anchor_count": len(REQUIRED_ANCHOR_KEYS),
             "positive_anchor_keys": list(REQUIRED_ANCHOR_KEYS),
             "positive_attack_names": list(REQUIRED_RUNTIME_ATTACK_NAMES),
@@ -376,7 +376,7 @@ def test_validation_scale_gate_passes_when_all_governed_inputs_exist(tmp_path: P
                 "fair_comparison_status": "ready",
                 "metric_status": "measured_formal",
                 "target_fpr": 0.1,
-                "clean_negative_score_count": 10,
+                "clean_negative_score_count": 500,
                 "positive_anchor_count": len(REQUIRED_ANCHOR_KEYS),
                 "positive_anchor_keys": list(REQUIRED_ANCHOR_KEYS),
                 "positive_attack_names": list(REQUIRED_RUNTIME_ATTACK_NAMES),
@@ -391,7 +391,7 @@ def test_validation_scale_gate_passes_when_all_governed_inputs_exist(tmp_path: P
         "fair_detection_calibration_decision": "PASS",
         "fair_detection_calibration_ready_count": len(MODERN_EXTERNAL_BASELINE_NAMES) + 1,
         "target_fpr": 0.1,
-        "claim_support_status": "fair_detection_calibration_validation_scale_ready",
+        "claim_support_status": "fair_detection_calibration_paper_profile_ready",
     })
     write_jsonl(run_root / "records" / "formal_method_baseline_comparison_records.jsonl", [
         {
@@ -454,7 +454,7 @@ def test_validation_scale_gate_passes_when_all_governed_inputs_exist(tmp_path: P
         "target_fpr": 0.1,
         "claim_support_status": "formal_baseline_difference_interval_paper_profile_claim_candidate",
     })
-    write_jsonl(run_root / "records" / "validation_scale_formal_internal_ablation_records.jsonl", [
+    write_jsonl(run_root / "records" / "formal_internal_ablation_summary_records.jsonl", [
         {"method_variant": "sstw_full_method", "metric_status": "measured_formal"},
         *[
             {"method_variant": variant, "metric_status": "measured_proxy"}
@@ -469,10 +469,10 @@ def test_validation_scale_gate_passes_when_all_governed_inputs_exist(tmp_path: P
             )
         ],
     ])
-    write_json(run_root / "artifacts" / "validation_scale_formal_internal_ablation_decision.json", {
-        "validation_scale_formal_internal_ablation_decision": "PASS",
+    write_json(run_root / "artifacts" / "formal_internal_ablation_summary_decision.json", {
+        "formal_internal_ablation_summary_decision": "PASS",
         "formal_internal_ablation_variant_count": 8,
-        "claim_support_status": "validation_scale_formal_internal_ablation_ready_for_target_fpr_0_1_claim_context",
+        "claim_support_status": "formal_internal_ablation_summary_ready_for_target_fpr_0_1_claim_context",
     })
     write_jsonl(run_root / "records" / "validation_internal_ablation_records.jsonl", [
         {"method_variant": "without_velocity_constraint", "ablation_status": "ready"},
@@ -534,12 +534,12 @@ def test_validation_scale_gate_passes_when_all_governed_inputs_exist(tmp_path: P
         "claim_support_status": "validation_artifact_rebuild_ready",
     })
 
-    audit = write_validation_scale_gate_audit(run_root)
-    protocol = json.loads(Path("configs/protocol/validation_scale_generative_probe.json").read_text(encoding="utf-8"))
+    audit = write_paper_profile_gate_audit(run_root)
+    protocol = json.loads(Path("configs/protocol/probe_paper_generative_probe.json").read_text(encoding="utf-8"))
 
-    assert audit["validation_scale_gate_decision"] == "PASS"
-    assert audit["claim_support_status"] == "validation_scale_full_protocol_handoff_ready"
-    assert audit["paper_result_level"] == "validation_scale"
+    assert audit["paper_profile_gate_decision"] == "PASS"
+    assert audit["claim_support_status"] == "probe_paper_target_fpr_0_1_paper_claim_supported"
+    assert audit["paper_result_level"] == "probe_paper"
     assert audit["target_fpr"] == protocol["target_fpr"]
     assert audit["validation_generation_record_count"] == 24
     assert audit["validation_prompt_count"] == 8
@@ -550,7 +550,7 @@ def test_validation_scale_gate_passes_when_all_governed_inputs_exist(tmp_path: P
     assert audit["motion_threshold_calibration_ready"] is True
     assert audit["formal_motion_claim_status"] == "ready"
     assert audit["full_paper_allowed"] is False
-    assert audit["full_paper_next_gate"] == "probe_paper_generative_probe_gate"
+    assert audit["full_paper_next_gate"] == "pilot_paper_generative_probe_gate"
     assert audit["external_baseline_measured_adapter_count"] == len(EXTERNAL_BASELINE_NAMES)
     assert audit["modern_external_baseline_formal_measured_adapter_count"] == len(MODERN_EXTERNAL_BASELINE_NAMES)
     assert audit["external_baseline_self_containment_decision"] == "PASS"
@@ -561,38 +561,38 @@ def test_validation_scale_gate_passes_when_all_governed_inputs_exist(tmp_path: P
     assert audit["sstw_measured_formal_record_count"] == len(REQUIRED_RUNTIME_ATTACK_NAMES)
     assert audit["sstw_measured_formal_status"] == "sstw_measured_formal_paper_profile_claim_candidate"
     assert audit["fair_detection_calibration_ready_count"] == len(MODERN_EXTERNAL_BASELINE_NAMES) + 1
-    assert audit["fair_detection_calibration_status"] == "fair_detection_calibration_validation_scale_ready"
+    assert audit["fair_detection_calibration_status"] == "fair_detection_calibration_paper_profile_ready"
     assert audit["formal_method_baseline_comparison_ready_count"] == len(MODERN_EXTERNAL_BASELINE_NAMES) + 1
     assert audit["formal_method_baseline_comparison_status"] == "formal_method_baseline_comparison_paper_profile_claim_candidate"
     assert audit["formal_baseline_difference_interval_ready_count"] == len(MODERN_EXTERNAL_BASELINE_NAMES)
     assert audit["formal_baseline_difference_interval_status"] == "formal_baseline_difference_interval_paper_profile_claim_candidate"
-    assert audit["validation_scale_sstw_advantage_claim_ready"] is True
-    assert audit["validation_scale_sstw_advantage_ready_baseline_count"] == len(MODERN_EXTERNAL_BASELINE_NAMES)
+    assert audit["paper_profile_sstw_advantage_claim_ready"] is True
+    assert audit["paper_profile_sstw_advantage_ready_baseline_count"] == len(MODERN_EXTERNAL_BASELINE_NAMES)
     assert audit["adaptive_attack_missing_non_runtime_protocols"] == []
     assert audit["non_runtime_attack_protocol_count"] == len(REQUIRED_NON_RUNTIME_ATTACK_PROTOCOLS)
-    assert audit["validation_scale_formal_internal_ablation_variant_count"] == 8
-    assert audit["validation_scale_formal_internal_ablation_status"] == "validation_scale_formal_internal_ablation_ready_for_target_fpr_0_1_claim_context"
+    assert audit["formal_internal_ablation_summary_variant_count"] == 8
+    assert audit["formal_internal_ablation_summary_status"] == "formal_internal_ablation_summary_ready_for_target_fpr_0_1_claim_context"
     assert audit["low_fpr_formal_statistics_record_count"] == 2
     assert audit["low_fpr_formal_statistics_status"] == "low_fpr_formal_statistics_blocking_record"
     assert audit["data_split_and_leakage_guard_decision"] == "PASS"
     assert audit["missing_modern_external_baseline_formal_adapter_names"] == []
-    assert (run_root / "records" / "validation_scale_gate_records.jsonl").exists()
-    assert (run_root / "tables" / "validation_scale_gate_table.csv").exists()
-    assert (run_root / "artifacts" / "validation_scale_gate_decision.json").exists()
-    assert (run_root / "reports" / "validation_scale_gate_report.md").exists()
+    assert (run_root / "records" / "paper_profile_gate_records.jsonl").exists()
+    assert (run_root / "tables" / "paper_profile_gate_table.csv").exists()
+    assert (run_root / "artifacts" / "paper_profile_gate_decision.json").exists()
+    assert (run_root / "reports" / "paper_profile_gate_report.md").exists()
 
 
 @pytest.mark.quick
-def test_validation_scale_gate_rejects_stale_fair_comparison_decision_without_required_methods(tmp_path: Path) -> None:
-    """validation-scale 不能只凭过期 PASS decision 放行缺 baseline 的公平比较中间态。"""
+def test_paper_profile_gate_rejects_stale_fair_comparison_decision_without_required_methods(tmp_path: Path) -> None:
+    """probe-paper 不能只凭过期 PASS decision 放行缺 baseline 的公平比较中间态。"""
 
     run_root = tmp_path / "run"
-    config_path = tmp_path / "validation_scale_config.json"
+    config_path = tmp_path / "probe_paper_config.json"
     config_path.write_text(
         json.dumps(
             {
                 "target_fpr": 0.1,
-                "paper_result_level": "validation_scale",
+                "paper_result_level": "probe_paper",
                 "minimum_prompt_count": 0,
                 "minimum_seed_per_prompt": 0,
                 "minimum_attack_count": 0,
@@ -608,7 +608,7 @@ def test_validation_scale_gate_rejects_stale_fair_comparison_decision_without_re
                 "require_formal_motion_claim_ready": False,
                 "require_motion_consistency_exclusion_report": False,
                 "require_internal_ablation_records": False,
-                "require_validation_scale_formal_internal_ablation": False,
+                "require_formal_internal_ablation_summary": False,
                 "require_adaptive_attack_records": False,
                 "require_replay_or_sketch_records_or_claim3_downgrade": False,
                 "require_confidence_interval_report": False,
@@ -632,7 +632,7 @@ def test_validation_scale_gate_rejects_stale_fair_comparison_decision_without_re
         "fair_detection_calibration_decision": "PASS",
         "fair_detection_calibration_ready_count": 2,
         "target_fpr": 0.1,
-        "claim_support_status": "fair_detection_calibration_validation_scale_ready",
+        "claim_support_status": "fair_detection_calibration_paper_profile_ready",
     })
     write_jsonl(run_root / "records" / "formal_method_baseline_comparison_records.jsonl", [
         {"method_id": "sstw_key_conditioned_flow_trajectory", "metric_status": "measured_formal", "target_fpr": 0.1},
@@ -641,7 +641,7 @@ def test_validation_scale_gate_rejects_stale_fair_comparison_decision_without_re
         "formal_method_baseline_comparison_decision": "PASS",
         "formal_comparison_ready_method_count": 2,
         "target_fpr": 0.1,
-        "claim_support_status": "formal_method_baseline_comparison_validation_scale_only",
+        "claim_support_status": "formal_method_baseline_comparison_probe_paper_only",
     })
     write_jsonl(run_root / "records" / "formal_baseline_difference_interval_records.jsonl", [
         {"baseline_method_id": "other_baseline", "difference_interval_status": "ready", "metric_status": "measured_formal", "target_fpr": 0.1},
@@ -650,28 +650,28 @@ def test_validation_scale_gate_rejects_stale_fair_comparison_decision_without_re
         "formal_baseline_difference_interval_decision": "PASS",
         "difference_interval_ready_count": 1,
         "target_fpr": 0.1,
-        "claim_support_status": "formal_baseline_difference_interval_validation_scale_only",
+        "claim_support_status": "formal_baseline_difference_interval_probe_paper_only",
     })
 
-    audit = build_validation_scale_gate_audit(run_root, config_path)
+    audit = build_paper_profile_gate_audit(run_root, config_path)
 
-    assert audit["validation_scale_gate_decision"] == "FAIL"
+    assert audit["paper_profile_gate_decision"] == "FAIL"
     assert "validation_fair_detection_calibration_ready" in audit["missing_validation_requirements"]
     assert "validation_formal_method_baseline_comparison_ready" in audit["missing_validation_requirements"]
     assert "validation_formal_baseline_difference_interval_ready" in audit["missing_validation_requirements"]
 
 
 @pytest.mark.quick
-def test_validation_scale_gate_recomputes_external_baseline_records_before_pass(tmp_path: Path) -> None:
-    """validation-scale 不能只凭旧 external baseline decision 放行缺 evidence 的 formal 记录。"""
+def test_paper_profile_gate_recomputes_external_baseline_records_before_pass(tmp_path: Path) -> None:
+    """probe-paper 不能只凭旧 external baseline decision 放行缺 evidence 的 formal 记录。"""
 
     run_root = tmp_path / "run"
-    config_path = tmp_path / "validation_scale_config.json"
+    config_path = tmp_path / "probe_paper_config.json"
     config_path.write_text(
         json.dumps(
             {
                 "target_fpr": 0.1,
-                "paper_result_level": "validation_scale",
+                "paper_result_level": "probe_paper",
                 "minimum_prompt_count": 0,
                 "minimum_seed_per_prompt": 0,
                 "minimum_attack_count": 0,
@@ -689,7 +689,7 @@ def test_validation_scale_gate_recomputes_external_baseline_records_before_pass(
                 "require_formal_motion_claim_ready": False,
                 "require_motion_consistency_exclusion_report": False,
                 "require_internal_ablation_records": False,
-                "require_validation_scale_formal_internal_ablation": False,
+                "require_formal_internal_ablation_summary": False,
                 "require_adaptive_attack_records": False,
                 "require_replay_or_sketch_records_or_claim3_downgrade": False,
                 "require_confidence_interval_report": False,
@@ -719,25 +719,25 @@ def test_validation_scale_gate_recomputes_external_baseline_records_before_pass(
         "external_baseline_claim_support_status": "external_baseline_formal_and_proxy_records_written",
     })
 
-    audit = build_validation_scale_gate_audit(run_root, config_path)
+    audit = build_paper_profile_gate_audit(run_root, config_path)
 
-    assert audit["validation_scale_gate_decision"] == "FAIL"
+    assert audit["paper_profile_gate_decision"] == "FAIL"
     assert "validation_external_baseline_comparison_records_ready" in audit["missing_validation_requirements"]
     assert audit["modern_external_baseline_formal_measured_adapter_count"] == 0
     assert audit["missing_modern_external_baseline_formal_adapter_names"] == ["videoseal"]
 
 
 @pytest.mark.quick
-def test_validation_scale_gate_rejects_fair_comparison_without_anchor_alignment(tmp_path: Path) -> None:
-    """validation-scale 不能只凭 measured_formal 字段放行缺少 anchor 对齐证据的公平比较。"""
+def test_paper_profile_gate_rejects_fair_comparison_without_anchor_alignment(tmp_path: Path) -> None:
+    """probe-paper 不能只凭 measured_formal 字段放行缺少 anchor 对齐证据的公平比较。"""
 
     run_root = tmp_path / "run"
-    config_path = tmp_path / "validation_scale_config.json"
+    config_path = tmp_path / "probe_paper_config.json"
     config_path.write_text(
         json.dumps(
             {
                 "target_fpr": 0.1,
-                "paper_result_level": "validation_scale",
+                "paper_result_level": "probe_paper",
                 "minimum_prompt_count": 0,
                 "minimum_seed_per_prompt": 0,
                 "minimum_attack_count": 0,
@@ -753,7 +753,7 @@ def test_validation_scale_gate_rejects_fair_comparison_without_anchor_alignment(
                 "require_formal_motion_claim_ready": False,
                 "require_motion_consistency_exclusion_report": False,
                 "require_internal_ablation_records": False,
-                "require_validation_scale_formal_internal_ablation": False,
+                "require_formal_internal_ablation_summary": False,
                 "require_adaptive_attack_records": False,
                 "require_replay_or_sketch_records_or_claim3_downgrade": False,
                 "require_confidence_interval_report": False,
@@ -783,7 +783,7 @@ def test_validation_scale_gate_rejects_fair_comparison_without_anchor_alignment(
         "fair_detection_calibration_decision": "PASS",
         "fair_detection_calibration_ready_count": 2,
         "target_fpr": 0.1,
-        "claim_support_status": "fair_detection_calibration_validation_scale_ready",
+        "claim_support_status": "fair_detection_calibration_paper_profile_ready",
     })
     write_jsonl(run_root / "records" / "formal_method_baseline_comparison_records.jsonl", [
         {
@@ -801,7 +801,7 @@ def test_validation_scale_gate_rejects_fair_comparison_without_anchor_alignment(
         "formal_method_baseline_comparison_decision": "PASS",
         "formal_comparison_ready_method_count": 2,
         "target_fpr": 0.1,
-        "claim_support_status": "formal_method_baseline_comparison_validation_scale_only",
+        "claim_support_status": "formal_method_baseline_comparison_probe_paper_only",
     })
     write_jsonl(run_root / "records" / "formal_baseline_difference_interval_records.jsonl", [
         {
@@ -815,28 +815,28 @@ def test_validation_scale_gate_rejects_fair_comparison_without_anchor_alignment(
         "formal_baseline_difference_interval_decision": "PASS",
         "difference_interval_ready_count": 1,
         "target_fpr": 0.1,
-        "claim_support_status": "formal_baseline_difference_interval_validation_scale_only",
+        "claim_support_status": "formal_baseline_difference_interval_probe_paper_only",
     })
 
-    audit = build_validation_scale_gate_audit(run_root, config_path)
+    audit = build_paper_profile_gate_audit(run_root, config_path)
 
-    assert audit["validation_scale_gate_decision"] == "FAIL"
+    assert audit["paper_profile_gate_decision"] == "FAIL"
     assert "validation_fair_detection_calibration_ready" in audit["missing_validation_requirements"]
     assert "validation_formal_method_baseline_comparison_ready" in audit["missing_validation_requirements"]
     assert "validation_formal_baseline_difference_interval_ready" in audit["missing_validation_requirements"]
 
 
 @pytest.mark.quick
-def test_validation_scale_gate_rejects_fair_comparison_with_negative_evidence_gap(tmp_path: Path) -> None:
-    """validation-scale 不能放行 clean negative official evidence 仍有缺口的公平比较。"""
+def test_paper_profile_gate_rejects_fair_comparison_with_negative_evidence_gap(tmp_path: Path) -> None:
+    """probe-paper 不能放行 clean negative official evidence 仍有缺口的公平比较。"""
 
     run_root = tmp_path / "run"
-    config_path = tmp_path / "validation_scale_config.json"
+    config_path = tmp_path / "probe_paper_config.json"
     config_path.write_text(
         json.dumps(
             {
                 "target_fpr": 0.1,
-                "paper_result_level": "validation_scale",
+                "paper_result_level": "probe_paper",
                 "minimum_prompt_count": 0,
                 "minimum_seed_per_prompt": 0,
                 "minimum_attack_count": 0,
@@ -854,7 +854,7 @@ def test_validation_scale_gate_rejects_fair_comparison_with_negative_evidence_ga
                 "require_formal_motion_claim_ready": False,
                 "require_motion_consistency_exclusion_report": False,
                 "require_internal_ablation_records": False,
-                "require_validation_scale_formal_internal_ablation": False,
+                "require_formal_internal_ablation_summary": False,
                 "require_adaptive_attack_records": False,
                 "require_replay_or_sketch_records_or_claim3_downgrade": False,
                 "require_confidence_interval_report": False,
@@ -898,27 +898,27 @@ def test_validation_scale_gate_rejects_fair_comparison_with_negative_evidence_ga
         "fair_detection_calibration_decision": "PASS",
         "fair_detection_calibration_ready_count": 2,
         "target_fpr": 0.1,
-        "claim_support_status": "fair_detection_calibration_validation_scale_ready",
+        "claim_support_status": "fair_detection_calibration_paper_profile_ready",
     })
 
-    audit = build_validation_scale_gate_audit(run_root, config_path)
+    audit = build_paper_profile_gate_audit(run_root, config_path)
 
-    assert audit["validation_scale_gate_decision"] == "FAIL"
+    assert audit["paper_profile_gate_decision"] == "FAIL"
     assert "validation_fair_detection_calibration_ready" in audit["missing_validation_requirements"]
     assert audit["fair_detection_calibration_ready_count"] == 1
 
 
 @pytest.mark.quick
-def test_validation_scale_gate_rejects_fair_comparison_with_wrong_target_fpr(tmp_path: Path) -> None:
-    """公平比较产物的 target_fpr 必须与当前 validation-scale protocol config 一致。"""
+def test_paper_profile_gate_rejects_fair_comparison_with_wrong_target_fpr(tmp_path: Path) -> None:
+    """公平比较产物的 target_fpr 必须与当前 probe-paper protocol config 一致。"""
 
     run_root = tmp_path / "run"
-    config_path = tmp_path / "validation_scale_config.json"
+    config_path = tmp_path / "probe_paper_config.json"
     config_path.write_text(
         json.dumps(
             {
                 "target_fpr": 0.1,
-                "paper_result_level": "validation_scale",
+                "paper_result_level": "probe_paper",
                 "minimum_prompt_count": 0,
                 "minimum_seed_per_prompt": 0,
                 "minimum_attack_count": 0,
@@ -934,7 +934,7 @@ def test_validation_scale_gate_rejects_fair_comparison_with_wrong_target_fpr(tmp
                 "require_formal_motion_claim_ready": False,
                 "require_motion_consistency_exclusion_report": False,
                 "require_internal_ablation_records": False,
-                "require_validation_scale_formal_internal_ablation": False,
+                "require_formal_internal_ablation_summary": False,
                 "require_adaptive_attack_records": False,
                 "require_replay_or_sketch_records_or_claim3_downgrade": False,
                 "require_confidence_interval_report": False,
@@ -968,31 +968,31 @@ def test_validation_scale_gate_rejects_fair_comparison_with_wrong_target_fpr(tmp
         "fair_detection_calibration_decision": "PASS",
         "fair_detection_calibration_ready_count": 2,
         "target_fpr": 0.01,
-        "claim_support_status": "fair_detection_calibration_validation_scale_ready",
+        "claim_support_status": "fair_detection_calibration_paper_profile_ready",
     })
 
-    audit = build_validation_scale_gate_audit(run_root, config_path)
+    audit = build_paper_profile_gate_audit(run_root, config_path)
 
-    assert audit["validation_scale_gate_decision"] == "FAIL"
+    assert audit["paper_profile_gate_decision"] == "FAIL"
     assert "validation_fair_detection_calibration_ready" in audit["missing_validation_requirements"]
 
 
 @pytest.mark.quick
-def test_validation_scale_gate_requires_reused_motion_threshold_and_formal_motion_records(tmp_path: Path) -> None:
-    """validation-scale 正式门禁必须确认 motion threshold 复用和 formal motion claim 均已闭合。"""
+def test_paper_profile_gate_requires_reused_motion_threshold_and_formal_motion_records(tmp_path: Path) -> None:
+    """probe-paper 正式门禁必须确认 motion threshold 复用和 formal motion claim 均已闭合。"""
     run_root = tmp_path / "run"
     generation_records = []
     for prompt_index in range(8):
         for seed_index in range(3):
             generation_records.append({
                 "generation_status": "success",
-                "colab_runtime_profile": "validation_scale",
+                "colab_runtime_profile": "probe_paper",
                 "prompt_id": f"prompt_{prompt_index}",
                 "seed_id": f"seed_{seed_index}",
             })
     write_jsonl(run_root / "records" / "generation_records.jsonl", generation_records)
-    audit = build_validation_scale_gate_audit(run_root)
+    audit = build_paper_profile_gate_audit(run_root)
 
-    assert audit["validation_scale_gate_decision"] == "FAIL"
+    assert audit["paper_profile_gate_decision"] == "FAIL"
     assert "validation_motion_threshold_calibration_ready" in audit["missing_validation_requirements"]
     assert "validation_formal_motion_claim_ready" in audit["missing_validation_requirements"]

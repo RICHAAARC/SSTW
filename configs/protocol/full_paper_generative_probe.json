@@ -54,7 +54,6 @@
   "require_pilot_paper_gate_passed": true,
   "require_pilot_paper_to_full_paper_transition_decision": true,
   "require_replay_or_sketch_records_or_claim3_downgrade": true,
-  "require_validation_scale_gate_passed": false,
   "required_external_baseline_adapter_names": [
     "explicit_dtw_temporal_alignment",
     "explicit_frame_matching_temporal_registration",
@@ -81,7 +80,7 @@
     "revmark",
     "wam_frame"
   ],
-  "required_runtime_attack_protocol_note": "full_paper 使用顶会/顶刊级多类别、多强度 runtime attack 协议, 覆盖 codec/platform 转码、时间结构扰动、空间几何、视觉退化和组合攻击; 同时要求生成式重压缩/重生成、Flow-specific adaptive、wrong sampler、wrong prompt、wrong key、detector probing、watermark removal、spoofing、collusion 和 adversarial evasion 等非 runtime/adaptive 协议产物; validation_scale、probe_paper、pilot_paper 和 full_paper 共用同一 attack manifest, paper 级 profile 采用 5×2 / 25×4 / 125×8 的 prompt × seed 等比例生成单元设计, 并采用 500/5000/50000 clean negative event 的等比例扩展, 只允许样本规模、统计功效和 target_fpr 不同。",
+  "required_runtime_attack_protocol_note": "full_paper 使用顶会/顶刊级多类别、多强度 runtime attack 协议, 覆盖 codec/platform 转码、时间结构扰动、空间几何、视觉退化和组合攻击; 同时要求生成式重压缩/重生成、Flow-specific adaptive、wrong sampler、wrong prompt、wrong key、detector probing、watermark removal、spoofing、collusion 和 adversarial evasion 等 non-runtime/adaptive 协议产物; probe_paper、pilot_paper 和 full_paper 共用同一 attack manifest, paper 级 profile 采用 5×2 / 25×4 / 125×8 的 prompt × seed 等比例生成单元设计, 并采用 500/5000/50000 clean negative event 的等比例扩展, 只允许样本规模、统计功效和 target_fpr 不同。",
   "reviewer_evidence_index_required": true,
   "shard_execution_required": true,
   "shard_resume_manifest_required": true,
@@ -91,7 +90,6 @@
   "test_time_threshold_update_blocked": true,
   "threshold_protocol": "calibration_split_to_frozen_threshold_to_heldout_test_split",
   "threshold_source_split": "calibration",
-  "paper_protocol_difference_from_validation_scale": "sample_scale_and_target_fpr_only",
   "paper_protocol_difference_from_pilot_paper": "sample_scale_and_target_fpr_only",
   "require_paper_result_artifact_skeleton": true,
   "require_video_quality_metric_records": true,
@@ -103,7 +101,6 @@
   "shared_attack_protocol_id": "top_tier_video_watermark_attack_protocol_v1",
   "require_probe_paper_gate_passed": true,
   "require_probe_paper_to_pilot_paper_transition_decision": true,
-  "require_validation_scale_to_probe_paper_transition_decision": true,
   "paper_protocol_difference_from_probe_paper": "sample_scale_and_target_fpr_only",
   "require_data_split_and_leakage_guard": true,
   "require_external_baseline_self_containment_decision": true,

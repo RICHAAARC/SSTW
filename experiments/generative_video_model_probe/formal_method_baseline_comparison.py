@@ -17,7 +17,7 @@ from main.protocol.record_writer import write_json, write_jsonl
 from main.protocol.table_builder import write_csv
 
 
-DEFAULT_PROTOCOL_CONFIG = "configs/protocol/validation_scale_generative_probe.json"
+DEFAULT_PROTOCOL_CONFIG = "configs/protocol/probe_paper_generative_probe.json"
 SSTW_METHOD_ID = "sstw_key_conditioned_flow_trajectory"
 DEFAULT_REQUIRED_BASELINES = ("videoshield", "vidsig", "videoseal", "revmark", "wam_frame")
 
@@ -82,7 +82,7 @@ def _load_profile_context(config_path: str | Path) -> dict[str, Any]:
         if str(item)
     ]
     return {
-        "paper_result_level": str(config.get("paper_result_level") or "validation_scale"),
+        "paper_result_level": str(config.get("paper_result_level") or "probe_paper"),
         "target_fpr": float(config["target_fpr"]),
         "target_fpr_source_config_path": str(config_path),
         "required_modern_external_baseline_adapter_names": required_baselines,
@@ -145,7 +145,7 @@ def _method_row(
     claim_support_status = (
         "formal_method_baseline_comparison_paper_profile_claim_candidate"
         if profile_context["allow_effect_size_claims"] and metric_status == "measured_formal"
-        else "formal_method_baseline_comparison_validation_scale_only"
+        else "formal_method_baseline_comparison_paper_profile_only"
         if metric_status == "measured_formal"
         else "formal_method_baseline_comparison_missing_measured_formal"
     )
@@ -249,7 +249,7 @@ def audit_formal_method_baseline_comparison_records(records: list[dict[str, Any]
     if decision == "PASS" and ready_claim_statuses == {"formal_method_baseline_comparison_paper_profile_claim_candidate"}:
         claim_support_status = "formal_method_baseline_comparison_paper_profile_claim_candidate"
     elif decision == "PASS":
-        claim_support_status = "formal_method_baseline_comparison_validation_scale_only"
+        claim_support_status = "formal_method_baseline_comparison_paper_profile_only"
     else:
         claim_support_status = "formal_method_baseline_comparison_blocked"
     return {
@@ -283,7 +283,7 @@ def run_formal_method_baseline_comparison(
         "该报告只聚合已经通过 clean negative calibration 的 fair_detection_calibration records, "
         "主指标为 `tpr_at_target_fpr`。这保证 SSTW 与 5 个现代 external baseline 处在同 FPR、"
         "同攻击锚点、同证据层级的统计表中。若 protocol config 启用 allow_effect_size_claims, "
-        "validation_scale 结果可支撑 target_fpr=0.1 的小样本论文结论候选, 但不能外推到更低 FPR。\n\n"
+        "probe_paper 结果可支撑 target_fpr=0.1 的小样本论文结论候选, 但不能外推到更低 FPR。\n\n"
         f"- formal_method_baseline_comparison_decision: {audit['formal_method_baseline_comparison_decision']}\n"
         f"- paper_result_level: {audit['paper_result_level']}\n"
         f"- target_fpr: {audit['target_fpr']}\n"

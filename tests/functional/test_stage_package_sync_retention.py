@@ -14,21 +14,21 @@ from paper_workflow.colab_utils.stage_package_sync import (
 from paper_workflow.notebook_utils.generative_video_model_probe_workflow import build_drive_packaging_command
 
 
-def _write_validation_scale_package_pass_manifest(run_root: Path) -> None:
-    """写入 validation_scale paper gate 发布所需的最小 PASS manifest。
+def _write_probe_paper_package_pass_manifest(run_root: Path) -> None:
+    """写入 probe_paper paper gate 发布所需的最小 PASS manifest。
 
     该 helper 属于测试内的通用写法, 用于表达 paper gate 阶段 zip 只有在
-    validation_scale package manifest 已证明门禁闭环通过后才允许发布。
+    probe_paper package manifest 已证明门禁闭环通过后才允许发布。
     """
 
-    manifest_path = run_root / "manifests" / "validation_scale_package_manifest.json"
+    manifest_path = run_root / "manifests" / "probe_paper_package_manifest.json"
     manifest_path.parent.mkdir(parents=True, exist_ok=True)
     manifest_path.write_text(
         json.dumps(
             {
-                "validation_scale_package_manifest_decision": "PASS",
-                "validation_scale_gate_decision": "PASS",
-                "validation_scale_to_probe_paper_transition_decision": "PASS",
+                "probe_paper_package_manifest_decision": "PASS",
+                "probe_paper_gate_decision": "PASS",
+                "probe_paper_to_pilot_paper_transition_decision": "PASS",
                 "missing_artifact_count": 0,
                 "missing_artifact_relpaths": [],
             }
@@ -44,7 +44,7 @@ def test_stage_package_publish_keeps_timestamp_zip_by_default(tmp_path: Path, mo
     monkeypatch.setenv("SSTW_COLAB_STAGE_IO_MODE", "local_zip")
     monkeypatch.delenv("SSTW_STAGE_PACKAGE_KEEP_TIMESTAMP_SNAPSHOT", raising=False)
     drive_root = tmp_path / "drive" / "SSTW"
-    run_root = tmp_path / "workspace" / "runs" / "validation_scale"
+    run_root = tmp_path / "workspace" / "runs" / "probe_paper"
     run_root.mkdir(parents=True)
     (run_root / "artifacts").mkdir()
     (run_root / "artifacts" / "generative_video_colab_runtime_decision.json").write_text(
@@ -53,7 +53,7 @@ def test_stage_package_publish_keeps_timestamp_zip_by_default(tmp_path: Path, mo
     )
     layout = {
         "drive_project_root": str(drive_root),
-        "workflow_profile": "validation_scale",
+        "workflow_profile": "probe_paper",
         "drive_run_root": str(run_root),
         "local_stage_package_cache_root": str(tmp_path / "local_cache"),
         "local_stage_workspace_root": str(tmp_path / "workspace"),
@@ -61,13 +61,13 @@ def test_stage_package_publish_keeps_timestamp_zip_by_default(tmp_path: Path, mo
 
     result = publish_colab_stage_package(layout, notebook_role="generative_video_generation", include_videos=True)
 
-    package_dir = drive_root / "validation_scale" / "generative_video_generation_colab"
+    package_dir = drive_root / "probe_paper" / "generative_video_generation_colab"
     assert result["stage_package_publish_status"] == "published"
     assert not (package_dir / "stage_package_latest.zip").exists()
     assert not (package_dir / "stage_package_latest_manifest.json").exists()
-    timestamp_zips = list(package_dir.glob("validation_scale_generative_video_generation_colab_*.zip"))
+    timestamp_zips = list(package_dir.glob("probe_paper_generative_video_generation_colab_*.zip"))
     assert len(timestamp_zips) == 1
-    assert latest_stage_package_zip(drive_root, "validation_scale", "generative_video_generation_colab") == timestamp_zips[0]
+    assert latest_stage_package_zip(drive_root, "probe_paper", "generative_video_generation_colab") == timestamp_zips[0]
     with zipfile.ZipFile(timestamp_zips[0]) as archive:
         assert any(name.endswith("generative_video_colab_runtime_decision.json") for name in archive.namelist())
 
@@ -81,7 +81,7 @@ def test_formal_comparison_stage_package_contains_only_scoring_artifacts(
 
     monkeypatch.setenv("SSTW_COLAB_STAGE_IO_MODE", "local_zip")
     drive_root = tmp_path / "drive" / "SSTW"
-    run_root = tmp_path / "workspace" / "runs" / "generative_video_model_probe" / "validation_scale"
+    run_root = tmp_path / "workspace" / "runs" / "generative_video_model_probe" / "probe_paper"
     write_targets = {
         "records/sstw_measured_formal_records.jsonl": "{}\n",
         "artifacts/sstw_measured_formal_decision.json": json.dumps({"sstw_measured_formal_decision": "PASS"}),
@@ -117,7 +117,7 @@ def test_formal_comparison_stage_package_contains_only_scoring_artifacts(
     )
     layout = {
         "drive_project_root": str(drive_root),
-        "workflow_profile": "validation_scale",
+        "workflow_profile": "probe_paper",
         "drive_run_root": str(run_root),
         "local_stage_package_cache_root": str(tmp_path / "local_cache"),
         "local_stage_workspace_root": str(tmp_path / "workspace"),
@@ -126,7 +126,7 @@ def test_formal_comparison_stage_package_contains_only_scoring_artifacts(
     result = publish_colab_stage_package(layout, notebook_role="formal_comparison_scoring", include_videos=True)
 
     assert result["stage_package_publish_status"] == "published"
-    assert "validation_scale/formal_comparison_scoring_colab" in result["drive_stage_package_zip"].replace("\\", "/")
+    assert "probe_paper/formal_comparison_scoring_colab" in result["drive_stage_package_zip"].replace("\\", "/")
     with zipfile.ZipFile(result["drive_stage_package_zip"]) as archive:
         names = archive.namelist()
     for relpath in write_targets:
@@ -144,7 +144,7 @@ def test_paper_evidence_postprocess_stage_package_contains_only_evidence_artifac
 
     monkeypatch.setenv("SSTW_COLAB_STAGE_IO_MODE", "local_zip")
     drive_root = tmp_path / "drive" / "SSTW"
-    run_root = tmp_path / "workspace" / "runs" / "generative_video_model_probe" / "validation_scale"
+    run_root = tmp_path / "workspace" / "runs" / "generative_video_model_probe" / "probe_paper"
     evidence_targets = {
         "records/validation_internal_ablation_records.jsonl": "{}\n",
         "tables/validation_internal_ablation_table.csv": "variant,status\nfull,ready\n",
@@ -176,7 +176,7 @@ def test_paper_evidence_postprocess_stage_package_contains_only_evidence_artifac
     (run_root / "videos" / "source.mp4").write_bytes(b"runtime-video")
     layout = {
         "drive_project_root": str(drive_root),
-        "workflow_profile": "validation_scale",
+        "workflow_profile": "probe_paper",
         "drive_run_root": str(run_root),
         "local_stage_package_cache_root": str(tmp_path / "local_cache"),
         "local_stage_workspace_root": str(tmp_path / "workspace"),
@@ -185,7 +185,7 @@ def test_paper_evidence_postprocess_stage_package_contains_only_evidence_artifac
     result = publish_colab_stage_package(layout, notebook_role="paper_evidence_postprocess", include_videos=True)
 
     assert result["stage_package_publish_status"] == "published"
-    assert "validation_scale/paper_evidence_postprocess_colab" in result["drive_stage_package_zip"].replace("\\", "/")
+    assert "probe_paper/paper_evidence_postprocess_colab" in result["drive_stage_package_zip"].replace("\\", "/")
     with zipfile.ZipFile(result["drive_stage_package_zip"]) as archive:
         names = archive.namelist()
     for relpath in evidence_targets:
@@ -204,7 +204,7 @@ def test_paper_gate_stage_package_includes_fair_comparison_governed_artifacts(
 
     monkeypatch.setenv("SSTW_COLAB_STAGE_IO_MODE", "local_zip")
     drive_root = tmp_path / "drive" / "SSTW"
-    run_root = tmp_path / "workspace" / "runs" / "generative_video_model_probe" / "validation_scale"
+    run_root = tmp_path / "workspace" / "runs" / "generative_video_model_probe" / "probe_paper"
     write_targets = {
         "records/fair_detection_calibration_records.jsonl": "{}\n",
         "tables/fair_detection_calibration_table.csv": "method_id,status\nsstw,ready\n",
@@ -229,10 +229,10 @@ def test_paper_gate_stage_package_includes_fair_comparison_governed_artifacts(
         path = run_root / relpath
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(content, encoding="utf-8")
-    _write_validation_scale_package_pass_manifest(run_root)
+    _write_probe_paper_package_pass_manifest(run_root)
     layout = {
         "drive_project_root": str(drive_root),
-        "workflow_profile": "validation_scale",
+        "workflow_profile": "probe_paper",
         "drive_run_root": str(run_root),
         "local_stage_package_cache_root": str(tmp_path / "local_cache"),
         "local_stage_workspace_root": str(tmp_path / "workspace"),
@@ -248,20 +248,20 @@ def test_paper_gate_stage_package_includes_fair_comparison_governed_artifacts(
 
 
 @pytest.mark.quick
-def test_validation_scale_paper_gate_package_blocks_without_package_manifest(
+def test_probe_paper_gate_package_blocks_without_package_manifest(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """validation_scale paper gate 缺少最终 package manifest 时只能写阻断 manifest。"""
+    """probe_paper paper gate 缺少最终 package manifest 时只能写阻断 manifest。"""
 
     monkeypatch.setenv("SSTW_COLAB_STAGE_IO_MODE", "local_zip")
     drive_root = tmp_path / "drive" / "SSTW"
-    run_root = tmp_path / "workspace" / "runs" / "generative_video_model_probe" / "validation_scale"
+    run_root = tmp_path / "workspace" / "runs" / "generative_video_model_probe" / "probe_paper"
     (run_root / "records").mkdir(parents=True)
     (run_root / "records" / "generation_records.jsonl").write_text("{}\n", encoding="utf-8")
     layout = {
         "drive_project_root": str(drive_root),
-        "workflow_profile": "validation_scale",
+        "workflow_profile": "probe_paper",
         "drive_run_root": str(run_root),
         "local_stage_package_cache_root": str(tmp_path / "local_cache"),
         "local_stage_workspace_root": str(tmp_path / "workspace"),
@@ -269,14 +269,14 @@ def test_validation_scale_paper_gate_package_blocks_without_package_manifest(
 
     result = publish_colab_stage_package(layout, notebook_role="paper_gate_and_package", include_videos=False)
 
-    package_dir = drive_root / "validation_scale" / "paper_gate_and_package_colab"
-    manifests = list(package_dir.glob("validation_scale_paper_gate_and_package_colab_*_manifest.json"))
-    assert result["stage_package_publish_status"] == "blocked_missing_validation_scale_package_manifest"
+    package_dir = drive_root / "probe_paper" / "paper_gate_and_package_colab"
+    manifests = list(package_dir.glob("probe_paper_paper_gate_and_package_colab_*_manifest.json"))
+    assert result["stage_package_publish_status"] == "blocked_missing_probe_paper_package_manifest"
     assert result["drive_stage_package_zip"] == ""
-    assert not list(package_dir.glob("validation_scale_paper_gate_and_package_colab_*.zip"))
+    assert not list(package_dir.glob("probe_paper_paper_gate_and_package_colab_*.zip"))
     assert len(manifests) == 1
     manifest = json.loads(manifests[0].read_text(encoding="utf-8"))
-    assert manifest["stage_package_publish_status"] == "blocked_missing_validation_scale_package_manifest"
+    assert manifest["stage_package_publish_status"] == "blocked_missing_probe_paper_package_manifest"
     assert manifest["claim_support_status"] == "stage_package_blocked_not_claim_evidence"
 
 
@@ -291,18 +291,18 @@ def test_external_baseline_role_without_baseline_id_can_publish_helper_package(
 
     monkeypatch.setenv("SSTW_COLAB_STAGE_IO_MODE", "local_zip")
     drive_root = tmp_path / "drive" / "SSTW"
-    run_root = tmp_path / "workspace" / "runs" / "validation_scale"
+    run_root = tmp_path / "workspace" / "runs" / "probe_paper"
     (run_root / "artifacts").mkdir(parents=True)
     (run_root / "artifacts" / "external_baseline_comparison_decision.json").write_text(
         json.dumps({"external_baseline_comparison_decision": "PASS"}),
         encoding="utf-8",
     )
-    bundle_root = tmp_path / "workspace" / "external_baseline_official_result_bundles" / "validation_scale"
+    bundle_root = tmp_path / "workspace" / "external_baseline_official_result_bundles" / "probe_paper"
     (bundle_root / "videoseal" / "records").mkdir(parents=True)
     (bundle_root / "videoseal" / "records" / "sample.json").write_text("{}", encoding="utf-8")
     layout = {
         "drive_project_root": str(drive_root),
-        "workflow_profile": "validation_scale",
+        "workflow_profile": "probe_paper",
         "stage_package_id": "external_baseline_aggregate_diagnostic_colab",
         "drive_run_root": str(run_root),
         "external_baseline_official_result_bundle_root": str(bundle_root),
@@ -328,8 +328,8 @@ def test_history_drive_packager_is_noop_in_stage_zip_mode() -> None:
     command = build_drive_packaging_command(
         {
             "stage_package_handoff_mode": "local_zip",
-            "drive_run_root": "/content/SSTW_stage_workspace/runs/validation_scale",
-            "drive_package_dir": "/content/drive/MyDrive/SSTW/validation_scale/generative_video_generation_colab",
+            "drive_run_root": "/content/SSTW_stage_workspace/runs/probe_paper",
+            "drive_package_dir": "/content/drive/MyDrive/SSTW/probe_paper/generative_video_generation_colab",
         }
     )
 
@@ -348,7 +348,7 @@ def test_external_baseline_package_contains_only_current_baseline_bundle_and_res
     monkeypatch.setenv("SSTW_COLAB_STAGE_IO_MODE", "local_zip")
     drive_root = tmp_path / "drive" / "SSTW"
     workspace = tmp_path / "workspace"
-    run_root = workspace / "runs" / "generative_video_model_probe" / "validation_scale"
+    run_root = workspace / "runs" / "generative_video_model_probe" / "probe_paper"
     decision_dir = run_root / "artifacts" / "external_baseline_formal_reference"
     decision_dir.mkdir(parents=True)
     (decision_dir / "videoseal_formal_reference_decision.json").write_text(
@@ -383,7 +383,7 @@ def test_external_baseline_package_contains_only_current_baseline_bundle_and_res
         "{}",
         encoding="utf-8",
     )
-    bundle_root = workspace / "external_baseline_official_result_bundles" / "validation_scale"
+    bundle_root = workspace / "external_baseline_official_result_bundles" / "probe_paper"
     (bundle_root / "videoseal" / "records").mkdir(parents=True)
     (bundle_root / "videoseal" / "records" / "sample.json").write_text("{}", encoding="utf-8")
     (bundle_root / "videoseal" / "official_outputs" / "wm" / "frames").mkdir(parents=True)
@@ -393,7 +393,7 @@ def test_external_baseline_package_contains_only_current_baseline_bundle_and_res
     (bundle_root / "vidsig" / "records" / "other.json").write_text("{}", encoding="utf-8")
     layout = {
         "drive_project_root": str(drive_root),
-        "workflow_profile": "validation_scale",
+        "workflow_profile": "probe_paper",
         "stage_package_id": "external_baseline_formal_reference_videoseal",
         "drive_run_root": str(run_root),
         "external_baseline_official_result_bundle_root": str(bundle_root),
@@ -409,7 +409,7 @@ def test_external_baseline_package_contains_only_current_baseline_bundle_and_res
     )
 
     assert result["stage_package_publish_status"] == "published"
-    assert "validation_scale/external_baseline_official_reference" in result["drive_stage_package_zip"].replace("\\", "/")
+    assert "probe_paper/external_baseline_official_reference" in result["drive_stage_package_zip"].replace("\\", "/")
     with zipfile.ZipFile(result["drive_stage_package_zip"]) as archive:
         names = archive.namelist()
     assert any("videoseal/records/sample.json" in name for name in names)
@@ -432,7 +432,7 @@ def test_stage_package_excludes_obsolete_spdmark_and_small_scale_artifacts(
 
     monkeypatch.setenv("SSTW_COLAB_STAGE_IO_MODE", "local_zip")
     drive_root = tmp_path / "drive" / "SSTW"
-    run_root = tmp_path / "workspace" / "runs" / "generative_video_model_probe" / "validation_scale"
+    run_root = tmp_path / "workspace" / "runs" / "generative_video_model_probe" / "probe_paper"
     write_targets = {
         "records/generation_records.jsonl": "{}\n",
         "artifacts/small_scale_claim_pilot_gate_decision.json": "{}",
@@ -446,10 +446,10 @@ def test_stage_package_excludes_obsolete_spdmark_and_small_scale_artifacts(
         path = run_root / relpath
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(content, encoding="utf-8")
-    _write_validation_scale_package_pass_manifest(run_root)
+    _write_probe_paper_package_pass_manifest(run_root)
     layout = {
         "drive_project_root": str(drive_root),
-        "workflow_profile": "validation_scale",
+        "workflow_profile": "probe_paper",
         "drive_run_root": str(run_root),
         "local_stage_package_cache_root": str(tmp_path / "local_cache"),
         "local_stage_workspace_root": str(tmp_path / "workspace"),

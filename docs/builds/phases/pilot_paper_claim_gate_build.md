@@ -2,7 +2,7 @@
 
 ## 1. 阶段定位
 
-`pilot_paper` 是小样本论文级结果层级, 不是仅用于 workflow progression 的工程预演。该阶段位于 `probe_paper` 与 `full_paper` 之间, 目标是在真实 Wan2.1 上产出可审计的 pilot-scale paper claim, 重点报告 `TPR@FPR=0.01`。它必须消费已经通过的 `validation_scale_to_probe_paper_transition_decision`、`probe_paper_gate_decision` 和 `probe_paper_to_pilot_paper_transition_decision`, 不能由 validation_scale 直接跳入。
+`pilot_paper` 是小样本论文级结果层级, 不是仅用于 workflow progression 的工程预演。该阶段位于 `probe_paper` 与 `full_paper` 之间, 目标是在真实 Wan2.1 上产出可审计的 pilot-scale paper claim, 重点报告 `TPR@FPR=0.01`。它必须消费已经通过的 `probe_paper_gate_decision` 和 `probe_paper_to_pilot_paper_transition_decision`, 不能由 probe_paper 直接跳入。
 
 `pilot_paper` 与 `full_paper` 的核心区别只允许是样本规模和统计置信度。二者必须共享同一类论文级协议:
 
@@ -24,7 +24,7 @@ calibration split
 PROFILE = pilot_paper
 ```
 
-`pilot_paper` 使用独立 prompt / seed 数据集。该数据集不复用 `pilot` 或 `validation_scale` prompt, 避免样本角色混淆。
+`pilot_paper` 使用独立 prompt / seed 数据集。该数据集不复用 `pilot` 或 `probe_paper` prompt, 避免样本角色混淆。
 
 ```text
 paper_result_level: pilot_paper
@@ -146,8 +146,8 @@ negative_tail_status == not_inflated
 wrong_sampler_replay_control_not_equivalent == true
 motion_threshold_calibration_ready == true
 method_mechanism_validation_decision == PASS
-validation_scale_gate_decision == PASS
-validation_scale_to_probe_paper_transition_decision == PASS
+paper_profile_gate_decision == PASS
+probe_paper_to_pilot_paper_transition_decision == PASS
 data_split_and_leakage_guard_decision == PASS
 external_baseline_comparison_decision == PASS
 external_baseline_self_containment_decision == PASS

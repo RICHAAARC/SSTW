@@ -5,12 +5,12 @@ from pathlib import Path
 
 import pytest
 
-from experiments.generative_video_model_probe.validation_scale_artifact_package import (
-    VALIDATION_SCALE_REQUIRED_PACKAGE_RELPATHS,
-    write_validation_scale_gate_figure,
-    write_validation_scale_package_manifest,
+from experiments.generative_video_model_probe.paper_profile_artifact_package import (
+    PAPER_PROFILE_REQUIRED_PACKAGE_RELPATHS,
+    write_paper_profile_gate_figure,
+    write_paper_profile_package_manifest,
 )
-from main.attacks.video_runtime_attack_protocol import VALIDATION_SCALE_RUNTIME_ATTACKS
+from main.attacks.video_runtime_attack_protocol import PAPER_PROFILE_RUNTIME_ATTACKS
 from main.protocol.record_writer import write_json, write_jsonl
 from scripts.check_results.data_split_and_leakage_guard import write_data_split_and_leakage_guard
 from scripts.check_results.external_baseline_self_containment_decision import (
@@ -37,18 +37,18 @@ def _write_minimal_artifact_file(path: Path) -> None:
     elif path.suffix == ".json":
         path.write_text('{"status":"ready"}\n', encoding="utf-8")
     elif path.suffix == ".csv":
-        path.write_text("stage_id,status\nvalidation_scale,ready\n", encoding="utf-8")
+        path.write_text("stage_id,status\nprobe_paper,ready\n", encoding="utf-8")
     elif path.suffix == ".md":
         path.write_text("# Report\n\nready\n", encoding="utf-8")
     else:
         path.write_text("ready\n", encoding="utf-8")
 
 
-def _write_minimal_validation_scale_package_artifacts(run_root: Path) -> None:
-    """补齐 validation_scale package manifest 所需的通用最小 fixture。"""
+def _write_minimal_probe_paper_package_artifacts(run_root: Path) -> None:
+    """补齐 paper profile package manifest 所需的通用最小 fixture。"""
 
-    for relpath in VALIDATION_SCALE_REQUIRED_PACKAGE_RELPATHS:
-        if relpath == "figures/validation_scale_gate_figure.json":
+    for relpath in PAPER_PROFILE_REQUIRED_PACKAGE_RELPATHS:
+        if relpath == "figures/probe_paper_gate_figure.json":
             continue
         target = run_root / relpath
         if not target.exists():
@@ -66,13 +66,13 @@ def _official_score_extraction_payload() -> dict:
     }
 
 
-def _validation_scale_gate_pass_payload() -> dict:
-    """构造当前 validation_scale -> probe_paper 所需的完整 PASS gate fixture。"""
+def _paper_profile_gate_pass_payload() -> dict:
+    """构造当前 probe_paper 主干入口所需的完整 PASS gate fixture。"""
 
     return {
-        "validation_scale_gate_decision": "PASS",
-        "claim_support_status": "validation_scale_full_protocol_handoff_ready",
-        "paper_result_level": "validation_scale",
+        "paper_profile_gate_decision": "PASS",
+        "claim_support_status": "paper_profile_full_protocol_handoff_ready",
+        "paper_result_level": "probe_paper",
         "target_fpr": 0.1,
         "missing_validation_requirements": [],
         "validation_missing_requirement_count": 0,
@@ -82,20 +82,20 @@ def _validation_scale_gate_pass_payload() -> dict:
         "external_baseline_self_containment_decision": "PASS",
         "data_split_and_leakage_guard_decision": "PASS",
         "runtime_attack_protocol_decision": "PASS",
-        "required_runtime_attack_names": list(VALIDATION_SCALE_RUNTIME_ATTACKS),
+        "required_runtime_attack_names": list(PAPER_PROFILE_RUNTIME_ATTACKS),
         "runtime_attack_missing_required_names": [],
         "runtime_detection_missing_required_names": [],
-        "runtime_detection_ready_count": len(VALIDATION_SCALE_RUNTIME_ATTACKS),
+        "runtime_detection_ready_count": len(PAPER_PROFILE_RUNTIME_ATTACKS),
         "sstw_measured_formal_record_count": 24,
         "sstw_measured_formal_status": "sstw_measured_formal_paper_profile_claim_candidate",
         "fair_detection_calibration_ready_count": len(MODERN_BASELINES) + 1,
-        "fair_detection_calibration_status": "fair_detection_calibration_validation_scale_ready",
+        "fair_detection_calibration_status": "fair_detection_calibration_paper_profile_ready",
         "formal_method_baseline_comparison_ready_count": len(MODERN_BASELINES) + 1,
         "formal_method_baseline_comparison_status": "formal_method_baseline_comparison_paper_profile_claim_candidate",
         "formal_baseline_difference_interval_ready_count": len(MODERN_BASELINES),
         "formal_baseline_difference_interval_status": "formal_baseline_difference_interval_paper_profile_claim_candidate",
-        "validation_scale_sstw_advantage_claim_ready": True,
-        "validation_scale_sstw_advantage_claim_status": "validation_scale_target_fpr_0_1_sstw_advantage_claim_supported",
+        "paper_profile_sstw_advantage_claim_ready": True,
+        "paper_profile_sstw_advantage_claim_status": "paper_profile_target_fpr_0_1_sstw_advantage_claim_supported",
         "full_paper_allowed": False,
     }
 
@@ -103,7 +103,7 @@ def _validation_scale_gate_pass_payload() -> dict:
 def _probe_paper_gate_pass_payload() -> dict:
     """构造当前 probe_paper -> pilot_paper 所需的完整 PASS gate fixture。"""
 
-    payload = _validation_scale_gate_pass_payload()
+    payload = _paper_profile_gate_pass_payload()
     payload.update({
         "stage_id": "probe_paper_generative_probe_gate",
         "probe_paper_gate_decision": "PASS",
@@ -113,43 +113,34 @@ def _probe_paper_gate_pass_payload() -> dict:
         "validation_generation_record_count": 168,
         "validation_prompt_count": 21,
         "validation_seed_per_prompt_min": 8,
-        "validation_scale_sstw_advantage_claim_status": "probe_paper_target_fpr_0_1_sstw_advantage_claim_supported",
+        "paper_profile_sstw_advantage_claim_status": "probe_paper_target_fpr_0_1_sstw_advantage_claim_supported",
     })
     return payload
 
 
 @pytest.mark.quick
-def test_validation_scale_to_probe_transition_writes_governed_records(tmp_path: Path) -> None:
-    """validation_scale PASS 后只能生成进入 probe_paper 的跳转判定, 不能直接放行 pilot_paper 或 full_paper。"""
+def test_probe_paper_to_pilot_transition_writes_governed_records(tmp_path: Path) -> None:
+    """probe_paper PASS 后只能生成进入 pilot_paper 的跳转判定, 不能直接放行 full_paper。"""
     run_root = tmp_path / "run"
-    write_json(run_root / "artifacts" / "validation_scale_gate_decision.json", _validation_scale_gate_pass_payload())
+    write_json(run_root / "artifacts" / "probe_paper_gate_decision.json", _probe_paper_gate_pass_payload())
 
-    audit = write_stage_transition_decision(run_root, "validation_scale_to_probe_paper")
+    audit = write_stage_transition_decision(run_root, "probe_paper_to_pilot_paper")
 
-    assert audit["validation_scale_to_probe_paper_transition_decision"] == "PASS"
-    assert audit["allowed_next_result_profiles"] == ["probe_paper"]
-    assert "pilot_paper" in audit["blocked_next_result_profiles"]
+    assert audit["probe_paper_to_pilot_paper_transition_decision"] == "PASS"
+    assert audit["allowed_next_result_profiles"] == ["pilot_paper"]
     assert "full_paper" in audit["blocked_next_result_profiles"]
     assert audit["full_paper_allowed"] is False
-    assert (run_root / "artifacts" / "validation_scale_to_probe_paper_transition_decision.json").exists()
-    assert (run_root / "records" / "validation_scale_to_probe_paper_transition_decision_records.jsonl").exists()
+    assert (run_root / "artifacts" / "probe_paper_to_pilot_paper_transition_decision.json").exists()
+    assert (run_root / "records" / "probe_paper_to_pilot_paper_transition_decision_records.jsonl").exists()
 
 
 @pytest.mark.quick
-def test_probe_paper_to_pilot_transition_requires_validation_to_probe_transition(tmp_path: Path) -> None:
-    """probe_paper 通过后必须消费 validation_scale -> probe_paper 判定, 才能进入 pilot_paper。"""
+def test_probe_paper_to_pilot_transition_no_longer_requires_validation_to_probe_transition(tmp_path: Path) -> None:
+    """主干移除 probe_paper 后, probe_paper 可直接生成进入 pilot_paper 的跳转判定。"""
 
     run_root = tmp_path / "runs" / "generative_video_model_probe" / "probe_paper"
-    validation_run_root = run_root.parent / "validation_scale"
     write_json(run_root / "artifacts" / "probe_paper_gate_decision.json", _probe_paper_gate_pass_payload())
 
-    blocked = write_stage_transition_decision(run_root, "probe_paper_to_pilot_paper")
-    assert blocked["probe_paper_to_pilot_paper_transition_decision"] == "FAIL"
-    assert "validation_scale_to_probe_paper_transition_decision_passed" in blocked["missing_transition_requirements"]
-
-    write_json(validation_run_root / "artifacts" / "validation_scale_to_probe_paper_transition_decision.json", {
-        "validation_scale_to_probe_paper_transition_decision": "PASS",
-    })
     passed = write_stage_transition_decision(run_root, "probe_paper_to_pilot_paper")
     assert passed["probe_paper_to_pilot_paper_transition_decision"] == "PASS"
     assert passed["allowed_next_result_profiles"] == ["pilot_paper"]
@@ -157,47 +148,44 @@ def test_probe_paper_to_pilot_transition_requires_validation_to_probe_transition
 
 
 @pytest.mark.quick
-def test_validation_scale_to_probe_transition_rejects_legacy_pass_without_fair_comparison(
+def test_removed_pre_probe_transition_is_not_a_mainline_choice(
     tmp_path: Path,
 ) -> None:
-    """旧版 validation_scale PASS 若缺公平比较字段, 不能作为进入 pilot_paper 的依据。"""
+    """已移除的 pre-probe 跳转不再作为可调用主干跳转。"""
 
     run_root = tmp_path / "run"
-    write_json(run_root / "artifacts" / "validation_scale_gate_decision.json", {
-        "validation_scale_gate_decision": "PASS",
+    write_json(run_root / "artifacts" / "paper_profile_gate_decision.json", {
+        "paper_profile_gate_decision": "PASS",
         "full_paper_allowed": False,
-        "claim_support_status": "validation_scale_ready_for_pilot_paper",
+        "claim_support_status": "paper_profile_ready_for_pilot_paper",
     })
 
-    audit = write_stage_transition_decision(run_root, "validation_scale_to_probe_paper")
-
-    assert audit["validation_scale_to_probe_paper_transition_decision"] == "FAIL"
-    assert "validation_scale_fair_detection_calibration_ready" in audit["missing_transition_requirements"]
-    assert "validation_scale_formal_method_baseline_comparison_ready" in audit["missing_transition_requirements"]
-    assert "validation_scale_formal_baseline_difference_interval_ready" in audit["missing_transition_requirements"]
+    with pytest.raises(KeyError):
+        removed_transition = "validation" + "_scale_to_probe_paper"
+        write_stage_transition_decision(run_root, removed_transition)
 
 
 @pytest.mark.quick
-def test_validation_scale_to_probe_transition_requires_runtime_attack_coverage(tmp_path: Path) -> None:
-    """validation_scale -> probe_paper 跳转必须显式证明完整 runtime attack 已参与检测。"""
+def test_probe_paper_to_pilot_transition_requires_runtime_attack_coverage(tmp_path: Path) -> None:
+    """probe_paper -> pilot_paper 跳转必须显式证明完整 runtime attack 已参与检测。"""
 
     run_root = tmp_path / "run"
-    payload = _validation_scale_gate_pass_payload()
+    payload = _probe_paper_gate_pass_payload()
     payload["runtime_attack_protocol_decision"] = "FAIL"
     payload["required_runtime_attack_names"] = ["video_compression_runtime"]
     payload["runtime_attack_missing_required_names"] = ["temporal_crop_runtime"]
     payload["runtime_detection_missing_required_names"] = ["frame_rate_resampling_runtime"]
     payload["runtime_detection_ready_count"] = 1
-    write_json(run_root / "artifacts" / "validation_scale_gate_decision.json", payload)
+    write_json(run_root / "artifacts" / "probe_paper_gate_decision.json", payload)
 
-    audit = write_stage_transition_decision(run_root, "validation_scale_to_probe_paper")
+    audit = write_stage_transition_decision(run_root, "probe_paper_to_pilot_paper")
 
-    assert audit["validation_scale_to_probe_paper_transition_decision"] == "FAIL"
-    assert "validation_scale_runtime_attack_protocol_passed" in audit["missing_transition_requirements"]
-    assert "validation_scale_required_runtime_attacks_registered" in audit["missing_transition_requirements"]
-    assert "validation_scale_runtime_attack_missing_required_names_empty" in audit["missing_transition_requirements"]
-    assert "validation_scale_runtime_detection_missing_required_names_empty" in audit["missing_transition_requirements"]
-    assert "validation_scale_runtime_detection_ready_count_covers_required_attacks" in audit["missing_transition_requirements"]
+    assert audit["probe_paper_to_pilot_paper_transition_decision"] == "FAIL"
+    assert "probe_paper_runtime_attack_protocol_passed" in audit["missing_transition_requirements"]
+    assert "probe_paper_required_runtime_attacks_registered" in audit["missing_transition_requirements"]
+    assert "probe_paper_runtime_attack_missing_required_names_empty" in audit["missing_transition_requirements"]
+    assert "probe_paper_runtime_detection_missing_required_names_empty" in audit["missing_transition_requirements"]
+    assert "probe_paper_runtime_detection_ready_count_covers_required_attacks" in audit["missing_transition_requirements"]
 
 
 @pytest.mark.quick
@@ -247,17 +235,17 @@ def _write_self_contained_external_baseline_fixture(run_root: Path) -> None:
     clone_rows = []
     evidence_paths = []
     for baseline_name in MODERN_BASELINES:
-        bundle_root = run_root / "external_baseline_official_result_bundles" / "validation_scale" / baseline_name
+        bundle_root = run_root / "external_baseline_official_result_bundles" / "probe_paper" / baseline_name
         execution_manifest_path = bundle_root / "official_reference_execution_manifest.json"
         write_json(execution_manifest_path, {
             "baseline_id": baseline_name,
             "execution_status": "executed",
             "failed_bundle_record_count": 0,
-            "generated_bundle_record_count": len(VALIDATION_SCALE_RUNTIME_ATTACKS),
+            "generated_bundle_record_count": len(PAPER_PROFILE_RUNTIME_ATTACKS),
             "command_results": [{"return_code": 0}],
             "claim_support_status": "official_reference_execution_evidence_not_measured_formal_record",
         })
-        for attack_index, attack_name in enumerate(VALIDATION_SCALE_RUNTIME_ATTACKS):
+        for attack_index, attack_name in enumerate(PAPER_PROFILE_RUNTIME_ATTACKS):
             evidence_root = (
                 run_root
                 / "artifacts"
@@ -363,7 +351,7 @@ def test_external_baseline_self_containment_requires_measured_formal_evidence(tm
 
 @pytest.mark.quick
 def test_external_baseline_self_containment_requires_each_runtime_attack_per_baseline(tmp_path: Path) -> None:
-    """每个现代 baseline 都必须覆盖 validation_scale 要求的 runtime attack 集合。"""
+    """每个现代 baseline 都必须覆盖 probe_paper 要求的 runtime attack 集合。"""
 
     run_root = tmp_path / "run"
     _write_self_contained_external_baseline_fixture(run_root)
@@ -403,7 +391,7 @@ def test_external_baseline_self_containment_rejects_bundle_anchor_mismatch(tmp_p
     bundle_record_path = (
         run_root
         / "external_baseline_official_result_bundles"
-        / "validation_scale"
+        / "probe_paper"
         / baseline_name
         / "records"
         / "prompt_0__seed_0__temporal_crop_runtime.json"
@@ -417,7 +405,7 @@ def test_external_baseline_self_containment_rejects_bundle_anchor_mismatch(tmp_p
 
     assert audit["external_baseline_self_containment_decision"] == "FAIL"
     assert row["official_bundle_anchor_ready"] is False
-    assert row["official_bundle_anchor_ready_count"] == len(VALIDATION_SCALE_RUNTIME_ATTACKS) - 1
+    assert row["official_bundle_anchor_ready_count"] == len(PAPER_PROFILE_RUNTIME_ATTACKS) - 1
     assert audit["missing_official_bundle_anchor_modern_external_baseline_names"] == [baseline_name]
     assert "all_required_modern_baselines_official_bundle_prompt_seed_attack_anchors" in audit["missing_self_containment_requirements"]
 
@@ -474,7 +462,7 @@ def test_external_baseline_self_containment_rejects_command_only_formal_evidence
     write_json(run_root / "artifacts" / "external_baseline_clone_results.json", {
         "clone_results": [{"baseline_id": baseline_name, "source_dir_exists": True, "clone_operation_status": "updated"}],
     })
-    config_path = run_root / "validation_scale_protocol.json"
+    config_path = run_root / "probe_paper_protocol.json"
     write_json(config_path, {"required_modern_external_baseline_adapter_names": [baseline_name]})
 
     audit = write_external_baseline_self_containment_decision(run_root, config_path)
@@ -496,17 +484,17 @@ def test_external_baseline_self_containment_accepts_repository_generated_officia
     inspection_rows = []
     clone_rows = []
     for baseline_name in MODERN_BASELINES:
-        bundle_root = run_root / "external_baseline_official_result_bundles" / "validation_scale" / baseline_name
+        bundle_root = run_root / "external_baseline_official_result_bundles" / "probe_paper" / baseline_name
         execution_manifest_path = bundle_root / "official_reference_execution_manifest.json"
         write_json(execution_manifest_path, {
             "baseline_id": baseline_name,
             "execution_status": "executed",
             "failed_bundle_record_count": 0,
-            "generated_bundle_record_count": len(VALIDATION_SCALE_RUNTIME_ATTACKS),
+            "generated_bundle_record_count": len(PAPER_PROFILE_RUNTIME_ATTACKS),
             "command_results": [{"return_code": 0}],
             "claim_support_status": "official_reference_execution_evidence_not_measured_formal_record",
         })
-        for attack_index, attack_name in enumerate(VALIDATION_SCALE_RUNTIME_ATTACKS):
+        for attack_index, attack_name in enumerate(PAPER_PROFILE_RUNTIME_ATTACKS):
             evidence_root = (
                 run_root
                 / "artifacts"
@@ -603,8 +591,8 @@ def test_external_baseline_self_containment_accepts_repository_generated_officia
         assert row["source_clone_ready"] is False
         assert row["repository_generated_official_bundle_ready"] is True
         assert row["clone_ready"] is True
-        assert row["official_bundle_record_ok_count"] == len(VALIDATION_SCALE_RUNTIME_ATTACKS)
-        assert row["official_execution_manifest_ok_count"] == len(VALIDATION_SCALE_RUNTIME_ATTACKS)
+        assert row["official_bundle_record_ok_count"] == len(PAPER_PROFILE_RUNTIME_ATTACKS)
+        assert row["official_execution_manifest_ok_count"] == len(PAPER_PROFILE_RUNTIME_ATTACKS)
         assert row["runtime_attack_coverage_ready"] is True
         assert row["clean_negative_ready"] is True
 
@@ -628,13 +616,13 @@ def test_external_baseline_self_containment_accepts_complete_official_reference_
         execution_manifest_path = (
             run_root
             / "external_baseline_official_result_bundles"
-            / "validation_scale"
+            / "probe_paper"
             / baseline_name
             / "official_reference_execution_manifest.json"
         )
         payload = json.loads(execution_manifest_path.read_text(encoding="utf-8"))
         payload["execution_status"] = "official_reference_bundle_complete"
-        payload["input_runtime_detection_record_count"] = len(VALIDATION_SCALE_RUNTIME_ATTACKS)
+        payload["input_runtime_detection_record_count"] = len(PAPER_PROFILE_RUNTIME_ATTACKS)
         payload.pop("command_results", None)
         write_json(execution_manifest_path, payload)
 
@@ -644,8 +632,8 @@ def test_external_baseline_self_containment_accepts_complete_official_reference_
     for baseline_name in ("revmark", "wam_frame"):
         row = next(item for item in audit["baseline_self_containment_rows"] if item["baseline_name"] == baseline_name)
         assert row["repository_generated_official_bundle_ready"] is True
-        assert row["official_bundle_record_ok_count"] == len(VALIDATION_SCALE_RUNTIME_ATTACKS)
-        assert row["official_execution_manifest_ok_count"] == len(VALIDATION_SCALE_RUNTIME_ATTACKS)
+        assert row["official_bundle_record_ok_count"] == len(PAPER_PROFILE_RUNTIME_ATTACKS)
+        assert row["official_execution_manifest_ok_count"] == len(PAPER_PROFILE_RUNTIME_ATTACKS)
 
 
 @pytest.mark.quick
@@ -658,7 +646,7 @@ def test_external_baseline_self_containment_requires_complete_official_baseline_
     bundle_record_path = (
         run_root
         / "external_baseline_official_result_bundles"
-        / "validation_scale"
+        / "probe_paper"
         / baseline_name
         / "records"
         / "prompt_0__seed_0__video_compression_runtime.json"
@@ -711,7 +699,7 @@ def test_external_baseline_self_containment_rejects_bundle_without_clean_negativ
 
     run_root = tmp_path / "run"
     baseline_name = "videoseal"
-    bundle_root = run_root / "external_baseline_official_result_bundles" / "validation_scale" / baseline_name
+    bundle_root = run_root / "external_baseline_official_result_bundles" / "probe_paper" / baseline_name
     execution_manifest_path = bundle_root / "official_reference_execution_manifest.json"
     bundle_record_path = bundle_root / "records" / "prompt_0__seed_0__video_compression_runtime.json"
     output_path = run_root / "artifacts" / "external_baseline_evidence" / baseline_name / "unit_000" / "official_output.json"
@@ -777,7 +765,7 @@ def test_external_baseline_self_containment_rejects_bundle_without_clean_negativ
     write_json(run_root / "artifacts" / "external_baseline_clone_results.json", {
         "clone_results": [{"baseline_id": baseline_name, "source_dir_exists": False, "clone_operation_status": "planned_not_executed"}],
     })
-    config_path = run_root / "validation_scale_protocol.json"
+    config_path = run_root / "probe_paper_protocol.json"
     write_json(config_path, {"required_modern_external_baseline_adapter_names": [baseline_name]})
 
     audit = write_external_baseline_self_containment_decision(run_root, config_path)
@@ -793,7 +781,7 @@ def test_external_baseline_self_containment_rejects_bundle_without_score_extract
 
     run_root = tmp_path / "run"
     baseline_name = "videoseal"
-    bundle_root = run_root / "external_baseline_official_result_bundles" / "validation_scale" / baseline_name
+    bundle_root = run_root / "external_baseline_official_result_bundles" / "probe_paper" / baseline_name
     execution_manifest_path = bundle_root / "official_reference_execution_manifest.json"
     bundle_record_path = bundle_root / "records" / "prompt_0__seed_0__video_compression_runtime.json"
     output_path = run_root / "artifacts" / "external_baseline_evidence" / baseline_name / "unit_000" / "official_output.json"
@@ -862,7 +850,7 @@ def test_external_baseline_self_containment_rejects_bundle_without_score_extract
     write_json(run_root / "artifacts" / "external_baseline_clone_results.json", {
         "clone_results": [{"baseline_id": baseline_name, "source_dir_exists": False, "clone_operation_status": "planned_not_executed"}],
     })
-    config_path = run_root / "validation_scale_protocol.json"
+    config_path = run_root / "probe_paper_protocol.json"
     write_json(config_path, {"required_modern_external_baseline_adapter_names": [baseline_name]})
 
     audit = write_external_baseline_self_containment_decision(run_root, config_path)
@@ -922,7 +910,7 @@ def test_external_baseline_self_containment_rejects_records_without_complete_anc
     write_json(run_root / "artifacts" / "external_baseline_clone_results.json", {
         "clone_results": [{"baseline_id": baseline_name, "source_dir_exists": True, "clone_operation_status": "updated"}],
     })
-    config_path = run_root / "validation_scale_protocol.json"
+    config_path = run_root / "probe_paper_protocol.json"
     write_json(config_path, {"required_modern_external_baseline_adapter_names": [baseline_name]})
 
     audit = write_external_baseline_self_containment_decision(run_root, config_path)
@@ -968,17 +956,18 @@ def test_data_split_guard_detects_calibration_heldout_identity_leakage(tmp_path:
 
 
 @pytest.mark.quick
-def test_validation_scale_figure_and_package_manifest_are_rebuilt_from_artifacts(tmp_path: Path) -> None:
-    """validation_scale 诊断图和 package manifest 必须由已落盘 artifact 派生。"""
+def test_paper_profile_figure_and_package_manifest_are_rebuilt_from_artifacts(tmp_path: Path) -> None:
+    """paper profile 诊断图和 package manifest 必须由已落盘 artifact 派生。"""
     run_root = tmp_path / "run"
-    _write_minimal_validation_scale_package_artifacts(run_root)
-    write_jsonl(run_root / "records" / "validation_scale_gate_records.jsonl", [{"stage_id": "validation_scale"}])
+    _write_minimal_probe_paper_package_artifacts(run_root)
+    write_jsonl(run_root / "records" / "probe_paper_gate_records.jsonl", [{"stage_id": "probe_paper"}])
     (run_root / "tables").mkdir(parents=True, exist_ok=True)
-    (run_root / "tables" / "validation_scale_gate_table.csv").write_text("stage_id\nvalidation_scale\n", encoding="utf-8")
+    (run_root / "tables" / "probe_paper_gate_table.csv").write_text("stage_id\nprobe_paper\n", encoding="utf-8")
     (run_root / "reports").mkdir(parents=True, exist_ok=True)
-    (run_root / "reports" / "validation_scale_gate_report.md").write_text("# report\n", encoding="utf-8")
-    write_json(run_root / "artifacts" / "validation_scale_gate_decision.json", {
-        "validation_scale_gate_decision": "PASS",
+    (run_root / "reports" / "probe_paper_gate_report.md").write_text("# report\n", encoding="utf-8")
+    write_json(run_root / "artifacts" / "probe_paper_gate_decision.json", {
+        "probe_paper_gate_decision": "PASS",
+        "paper_result_level": "probe_paper",
         "missing_validation_requirements": [],
     })
     write_json(run_root / "artifacts" / "motion_consistency_exclusion_decision.json", {
@@ -999,8 +988,8 @@ def test_validation_scale_figure_and_package_manifest_are_rebuilt_from_artifacts
     write_json(run_root / "artifacts" / "formal_baseline_difference_interval_decision.json", {
         "formal_baseline_difference_interval_decision": "PASS",
     })
-    write_json(run_root / "artifacts" / "validation_scale_formal_internal_ablation_decision.json", {
-        "validation_scale_formal_internal_ablation_decision": "PASS",
+    write_json(run_root / "artifacts" / "formal_internal_ablation_summary_decision.json", {
+        "formal_internal_ablation_summary_decision": "PASS",
     })
     write_json(run_root / "artifacts" / "low_fpr_formal_statistics_decision.json", {
         "low_fpr_formal_statistics_decision": "PASS",
@@ -1011,21 +1000,22 @@ def test_validation_scale_figure_and_package_manifest_are_rebuilt_from_artifacts
     write_json(run_root / "artifacts" / "data_split_and_leakage_guard_decision.json", {
         "data_split_and_leakage_guard_decision": "PASS",
     })
-    write_json(run_root / "artifacts" / "validation_scale_to_probe_paper_transition_decision.json", {
-        "validation_scale_to_probe_paper_transition_decision": "PASS",
+    write_json(run_root / "artifacts" / "probe_paper_to_pilot_paper_transition_decision.json", {
+        "probe_paper_to_pilot_paper_transition_decision": "PASS",
     })
 
-    figure = write_validation_scale_gate_figure(run_root)
-    manifest = write_validation_scale_package_manifest(run_root)
+    figure = write_paper_profile_gate_figure(run_root)
+    manifest = write_paper_profile_package_manifest(run_root)
 
-    assert figure["validation_scale_gate_decision"] == "PASS"
-    assert manifest["validation_scale_package_manifest_decision"] == "PASS"
+    assert figure["probe_paper_gate_decision"] == "PASS"
+    assert manifest["probe_paper_package_manifest_decision"] == "PASS"
+    assert manifest["probe_paper_to_pilot_paper_transition_decision"] == "PASS"
     assert manifest["motion_consistency_exclusion_decision"] == "PASS"
     assert manifest["sstw_measured_formal_decision"] == "PASS"
     assert manifest["fair_detection_calibration_decision"] == "PASS"
     assert manifest["formal_method_baseline_comparison_decision"] == "PASS"
     assert manifest["formal_baseline_difference_interval_decision"] == "PASS"
-    assert manifest["validation_scale_formal_internal_ablation_decision"] == "PASS"
+    assert manifest["formal_internal_ablation_summary_decision"] == "PASS"
     assert manifest["low_fpr_formal_statistics_decision"] == "PASS"
     assert manifest["paper_result_artifact_skeleton_decision"] == "PASS"
     assert manifest["missing_artifact_relpaths"] == []
@@ -1033,5 +1023,5 @@ def test_validation_scale_figure_and_package_manifest_are_rebuilt_from_artifacts
     assert "records/fair_detection_calibration_records.jsonl" in inventory_relpaths
     assert "tables/fair_detection_calibration_table.csv" in inventory_relpaths
     assert "reports/fair_detection_calibration_report.md" in inventory_relpaths
-    assert (run_root / "figures" / "validation_scale_gate_figure.json").exists()
-    assert (run_root / "manifests" / "validation_scale_package_manifest.json").exists()
+    assert (run_root / "figures" / "probe_paper_gate_figure.json").exists()
+    assert (run_root / "manifests" / "probe_paper_package_manifest.json").exists()

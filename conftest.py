@@ -1,7 +1,7 @@
 """测试兼容配置。
 
 该文件只处理测试层的历史断言兼容问题。当前 workflow 配置已经记录
-full_paper 需要 validation_scale 和 full_paper protocol, 但既有测试仍把
+full_paper 需要 probe_paper 和 full_paper protocol, 但既有测试仍把
 `design_registered_not_ready` 作为未开放 profile 的稳定状态值。
 """
 

@@ -459,7 +459,7 @@ def _patch_attack_py_for_formal_score(runtime_source_dir: Path) -> dict[str, Any
 
     官方 `attack.py` 原本只把若干固定 FPR 阈值下的 TPR 写入日志。该数值已经
     过官方固定阈值, 不能再用本项目的 clean negative 分布重新校准, 因此不适合
-    validation_scale 的公平比较。官方脚本内部已经计算 `accuracys`, 本修补只在
+    paper profile 的公平比较。官方脚本内部已经计算 `accuracys`, 本修补只在
     runtime 工作副本中把该连续 bit accuracy 写入日志, 不改变官方检测计算。
     """
 

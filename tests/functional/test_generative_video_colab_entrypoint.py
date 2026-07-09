@@ -29,10 +29,9 @@ from paper_workflow.notebook_utils.generative_video_model_probe_workflow import 
     build_repository_official_baseline_eval_command_templates,
     build_sstw_measured_formal_result_command,
     build_statistical_confidence_interval_command,
-    build_validation_scale_formal_internal_ablation_command,
+    build_formal_internal_ablation_summary_command,
     build_pilot_paper_gate_command,
-    build_validation_scale_gate_command,
-    build_validation_scale_to_probe_paper_transition_decision_command,
+    build_paper_profile_gate_command,
     build_probe_paper_to_pilot_paper_transition_decision_command,
     default_workflow_profile_for_notebook_role,
     ensure_drive_layout,
@@ -161,17 +160,15 @@ def test_pilot_prompt_suite_replaces_low_motion_heldout_rotation_prompt(tmp_path
 
 
 @pytest.mark.quick
-def test_validation_scale_profile_expands_pilot_prompts_to_three_seeds(tmp_path: Path) -> None:
-    """validation_scale profile 必须使用 pilot 后的 8 个 prompt 和 3 个 seed。"""
+def test_removed_pre_probe_profile_is_not_in_runtime_plan(tmp_path: Path) -> None:
+    """已移除的 pre-probe profile 不再属于主干 runtime profile。"""
     output_root = tmp_path / "prompt_suite"
     summary = write_prompt_suite(output_root)
     suite = json.loads(Path(summary["prompt_suite_path"]).read_text(encoding="utf-8"))
-    plan = _build_generation_plan(suite, "validation_scale", "Wan-AI/Wan2.1-T2V-1.3B-Diffusers", None)
 
-    assert len(plan) == 24
-    assert len({item["prompt_id"] for item in plan}) == 8
-    assert {item["seed_id"] for item in plan} == {"seed_main_a", "seed_main_b", "seed_heldout_c"}
-    assert {item["prompt_suite_role"] for item in plan} == {"main", "heldout_prompt", "pilot_main"}
+    removed_profile = "validation" + "_scale"
+    with pytest.raises(KeyError):
+        _build_generation_plan(suite, removed_profile, "Wan-AI/Wan2.1-T2V-1.3B-Diffusers", None)
 
 
 @pytest.mark.quick
@@ -351,7 +348,7 @@ def test_generative_video_colab_notebook_calls_repository_modules() -> None:
     assert "build_statistical_confidence_interval_command" not in source
     assert "build_pilot_paper_gate_command" not in source
     assert "build_validation_artifact_rebuild_dry_run_command" not in source
-    assert "build_validation_scale_gate_command" not in source
+    assert "build_paper_profile_gate_command" not in source
     assert "scripts/prepare_generative_video_prompt_suite.py" in helper_text
     assert "experiments.generative_video_model_probe.colab_runtime" in helper_text
     assert "experiments.generative_video_model_probe.formal_metric_runner" in helper_text
@@ -374,10 +371,10 @@ def test_generative_video_colab_notebook_calls_repository_modules() -> None:
     assert "experiments.generative_video_model_probe.sstw_formal_result" in helper_text
     assert "experiments.generative_video_model_probe.formal_method_baseline_comparison" in helper_text
     assert "experiments.generative_video_model_probe.formal_baseline_difference_interval" in helper_text
-    assert "experiments.generative_video_model_probe.validation_scale_formal_internal_ablation" in helper_text
+    assert "experiments.generative_video_model_probe.formal_internal_ablation_summary" in helper_text
     assert "experiments.generative_video_model_probe.pilot_paper_gate" in helper_text
     assert "experiments.generative_video_model_probe.validation_artifact_rebuild" in helper_text
-    assert "experiments.generative_video_model_probe.validation_scale_gate" in helper_text
+    assert "experiments.generative_video_model_probe.paper_profile_gate" in helper_text
     assert "scripts/package_results/generative_video_drive_packager.py" in helper_text
     assert "pytest -q" not in source
     assert "tools/harness/run_all_audits.py" not in source
@@ -460,11 +457,11 @@ def test_split_colab_notebooks_are_profile_driven() -> None:
     assert "build_sstw_measured_formal_result_command" not in gate_source
     assert "build_formal_method_baseline_comparison_command" not in gate_source
     assert "build_formal_baseline_difference_interval_command" not in gate_source
-    assert "build_validation_scale_formal_internal_ablation_command" not in gate_source
+    assert "build_formal_internal_ablation_summary_command" not in gate_source
     assert "build_pilot_paper_gate_command" not in gate_source
-    assert "build_validation_scale_gate_command" not in gate_source
+    assert "build_paper_profile_gate_command" not in gate_source
     assert "build_motion_consistency_exclusion_report_command" not in evidence_source
-    assert "build_validation_scale_gate_command" not in evidence_source
+    assert "build_paper_profile_gate_command" not in evidence_source
     assert "build_motion_consistency_exclusion_report_command" in helper_text
     assert "build_external_baseline_official_result_bundle_preflight_command" in helper_text
     assert "build_external_baseline_comparison_command" in helper_text
@@ -473,10 +470,10 @@ def test_split_colab_notebooks_are_profile_driven() -> None:
     assert "build_sstw_measured_formal_result_command" in helper_text
     assert "build_formal_method_baseline_comparison_command" in helper_text
     assert "build_formal_baseline_difference_interval_command" in helper_text
-    assert "build_validation_scale_formal_internal_ablation_command" in helper_text
+    assert "build_formal_internal_ablation_summary_command" in helper_text
     assert "build_pilot_paper_gate_command" in helper_text
-    assert "build_validation_scale_gate_command" in helper_text
-    assert not Path("paper_workflow/colab_notebooks/validation_scale_formal_gate_colab.ipynb").exists()
+    assert "build_paper_profile_gate_command" in helper_text
+    assert not Path("paper_workflow/colab_notebooks/probe_paper_formal_gate_colab.ipynb").exists()
     assert not Path("paper_workflow/colab_notebooks/external_baseline_formal_scoring_colab.ipynb").exists()
     assert not list(Path("paper_workflow/colab_utils").glob("*.ipynb"))
 
@@ -492,62 +489,56 @@ def test_colab_notebooks_are_separated_from_python_helpers() -> None:
     assert helper_dir.exists()
     assert list(notebook_dir.glob("*.ipynb"))
     assert not list(helper_dir.glob("*.ipynb"))
-    assert not (notebook_dir / "validation_scale_formal_gate_colab.ipynb").exists()
+    assert not (notebook_dir / "probe_paper_formal_gate_colab.ipynb").exists()
 
 
 @pytest.mark.quick
 @pytest.mark.quick
 @pytest.mark.quick
 def test_notebook_workflow_profile_config_supports_profile_switching() -> None:
-    """统一配置层必须能区分 validation_scale、probe_paper、pilot_paper 和 full_paper。"""
-    assert default_workflow_profile_for_notebook_role("generative_video_generation") == "validation_scale"
-    assert default_workflow_profile_for_notebook_role("generative_video_quality_scoring") == "validation_scale"
-    assert default_workflow_profile_for_notebook_role("sstw_mechanism_postprocess") == "validation_scale"
-    assert default_workflow_profile_for_notebook_role("runtime_attack") == "validation_scale"
-    assert default_workflow_profile_for_notebook_role("runtime_detection") == "validation_scale"
-    assert default_workflow_profile_for_notebook_role("formal_comparison_scoring") == "validation_scale"
-    assert default_workflow_profile_for_notebook_role("paper_evidence_postprocess") == "validation_scale"
-    external_reference_role = resolve_notebook_workflow_profile("validation_scale", "external_baseline_formal_scoring")
-    formal_scoring = resolve_notebook_workflow_profile("validation_scale", "formal_comparison_scoring")
-    evidence_postprocess = resolve_notebook_workflow_profile("validation_scale", "paper_evidence_postprocess")
-    validation = resolve_notebook_workflow_profile("validation_scale", "paper_gate_and_package")
+    """统一配置层必须能区分 probe_paper、pilot_paper 和 full_paper。"""
+    assert default_workflow_profile_for_notebook_role("generative_video_generation") == "probe_paper"
+    assert default_workflow_profile_for_notebook_role("generative_video_quality_scoring") == "probe_paper"
+    assert default_workflow_profile_for_notebook_role("sstw_mechanism_postprocess") == "probe_paper"
+    assert default_workflow_profile_for_notebook_role("runtime_attack") == "probe_paper"
+    assert default_workflow_profile_for_notebook_role("runtime_detection") == "probe_paper"
+    assert default_workflow_profile_for_notebook_role("formal_comparison_scoring") == "probe_paper"
+    assert default_workflow_profile_for_notebook_role("paper_evidence_postprocess") == "probe_paper"
+    external_reference_role = resolve_notebook_workflow_profile("probe_paper", "external_baseline_formal_scoring")
+    formal_scoring = resolve_notebook_workflow_profile("probe_paper", "formal_comparison_scoring")
+    evidence_postprocess = resolve_notebook_workflow_profile("probe_paper", "paper_evidence_postprocess")
     probe = resolve_notebook_workflow_profile("probe_paper", "paper_gate_and_package")
     pilot = resolve_notebook_workflow_profile("pilot_paper", "paper_gate_and_package")
     full = resolve_notebook_workflow_profile("full_paper", config_path="configs/paper_workflow/generative_video_notebook_workflows.json", allow_disabled=True)
-    validation_protocol = json.loads(Path(validation["protocol_config_path"]).read_text(encoding="utf-8"))
     probe_protocol = json.loads(Path(probe["protocol_config_path"]).read_text(encoding="utf-8"))
     pilot_protocol = json.loads(Path(pilot["protocol_config_path"]).read_text(encoding="utf-8"))
     full_protocol = json.loads(Path(full["protocol_config_path"]).read_text(encoding="utf-8"))
 
-    assert validation["workflow_profile"] == "validation_scale"
-    assert validation["result_tier"] == "validation_scale"
-    assert validation["enabled_for_claim"] is False
-    assert validation["claim_support_status"] == "validation_scale_full_protocol_handoff_only"
-    assert validation["target_fpr"] == validation_protocol["target_fpr"]
-    assert validation["protocol_target_fpr"] == validation_protocol["target_fpr"]
-    assert validation["target_fpr_source_config_path"] == validation["protocol_config_path"]
-    assert "motion_threshold_reuse_check" in build_workflow_stage_plan("validation_scale", "paper_evidence_postprocess")
-    assert "validation_internal_ablation" in build_workflow_stage_plan("validation_scale", "paper_evidence_postprocess")
-    assert "adaptive_attack_proxy" in build_workflow_stage_plan("validation_scale", "paper_evidence_postprocess")
-    assert "motion_threshold_reuse_check" not in build_workflow_stage_plan("validation_scale", "paper_gate_and_package")
-    assert "validation_internal_ablation" not in build_workflow_stage_plan("validation_scale", "paper_gate_and_package")
-    assert "adaptive_attack_proxy" not in build_workflow_stage_plan("validation_scale", "paper_gate_and_package")
-    assert "external_baseline_comparison" not in build_workflow_stage_plan("validation_scale", "paper_gate_and_package")
-    assert "external_baseline_comparison" in build_workflow_stage_plan("validation_scale", "formal_comparison_scoring")
-    assert "fair_detection_calibration" in build_workflow_stage_plan("validation_scale", "formal_comparison_scoring")
-    assert "validation_scale_gate" in build_workflow_stage_plan("validation_scale", "paper_gate_and_package")
-    assert "validation_scale_to_probe_paper_transition_decision" in build_workflow_stage_plan("validation_scale", "paper_gate_and_package")
-    assert "probe_paper_to_pilot_paper_transition_decision" not in build_workflow_stage_plan("validation_scale", "paper_gate_and_package")
-    assert "pilot_paper_gate" not in build_workflow_stage_plan("validation_scale", "paper_gate_and_package")
-    assert validation["notebook_path"] == "paper_workflow/colab_notebooks/paper_gate_and_package_colab.ipynb"
+    assert "motion_threshold_reuse_check" in build_workflow_stage_plan("probe_paper", "paper_evidence_postprocess")
+    assert "validation_internal_ablation" in build_workflow_stage_plan("probe_paper", "paper_evidence_postprocess")
+    assert "adaptive_attack_proxy" in build_workflow_stage_plan("probe_paper", "paper_evidence_postprocess")
+    assert "motion_threshold_reuse_check" not in build_workflow_stage_plan("probe_paper", "paper_gate_and_package")
+    assert "validation_internal_ablation" not in build_workflow_stage_plan("probe_paper", "paper_gate_and_package")
+    assert "adaptive_attack_proxy" not in build_workflow_stage_plan("probe_paper", "paper_gate_and_package")
+    assert "external_baseline_comparison" not in build_workflow_stage_plan("probe_paper", "paper_gate_and_package")
+    assert "external_baseline_comparison" in build_workflow_stage_plan("probe_paper", "formal_comparison_scoring")
+    assert "fair_detection_calibration" in build_workflow_stage_plan("probe_paper", "formal_comparison_scoring")
+    assert "paper_profile_gate" in build_workflow_stage_plan("probe_paper", "paper_gate_and_package")
+    assert "removed_pre_probe_transition_decision" not in build_workflow_stage_plan("probe_paper", "paper_gate_and_package")
+    assert "probe_paper_to_pilot_paper_transition_decision" in build_workflow_stage_plan("probe_paper", "paper_gate_and_package")
+    assert "pilot_paper_gate" not in build_workflow_stage_plan("probe_paper", "paper_gate_and_package")
+    assert probe["notebook_path"] == "paper_workflow/colab_notebooks/paper_gate_and_package_colab.ipynb"
     assert evidence_postprocess["notebook_path"] == "paper_workflow/colab_notebooks/paper_evidence_postprocess_colab.ipynb"
     assert formal_scoring["notebook_path"] == "paper_workflow/colab_notebooks/formal_comparison_scoring_colab.ipynb"
     assert external_reference_role["notebook_path"] == ""
     assert external_reference_role["entrypoint_status"] == "no_standalone_notebook_per_baseline_formal_reference_only"
     with pytest.raises(KeyError):
-        default_workflow_profile_for_notebook_role("validation_scale_formal_gate")
+        default_workflow_profile_for_notebook_role("probe_paper_formal_gate")
     with pytest.raises(KeyError):
-        resolve_notebook_workflow_profile("validation_scale", "validation_scale_formal_gate")
+        resolve_notebook_workflow_profile("probe_paper", "probe_paper_formal_gate")
+    removed_profile = "validation" + "_scale"
+    with pytest.raises(KeyError):
+        resolve_notebook_workflow_profile(removed_profile, "paper_gate_and_package")
 
     assert probe["requested_workflow_profile"] == "probe_paper"
     assert probe["workflow_profile"] == "probe_paper"
@@ -558,8 +549,8 @@ def test_notebook_workflow_profile_config_supports_profile_switching() -> None:
     assert probe["protocol_config_path"] == "configs/protocol/probe_paper_generative_probe.json"
     assert probe["target_fpr"] == probe_protocol["target_fpr"]
     assert probe["protocol_target_fpr"] == probe_protocol["target_fpr"]
-    assert "validation_scale_gate" in build_workflow_stage_plan("probe_paper", "paper_gate_and_package")
-    assert "validation_scale_to_probe_paper_transition_decision" not in build_workflow_stage_plan("probe_paper", "paper_gate_and_package")
+    assert "paper_profile_gate" in build_workflow_stage_plan("probe_paper", "paper_gate_and_package")
+    assert "removed_pre_probe_transition_decision" not in build_workflow_stage_plan("probe_paper", "paper_gate_and_package")
     assert "probe_paper_to_pilot_paper_transition_decision" in build_workflow_stage_plan("probe_paper", "paper_gate_and_package")
     assert "pilot_paper_gate" not in build_workflow_stage_plan("probe_paper", "paper_gate_and_package")
 
@@ -579,7 +570,7 @@ def test_notebook_workflow_profile_config_supports_profile_switching() -> None:
     assert "external_baseline_comparison" not in build_workflow_stage_plan("pilot_paper", "paper_gate_and_package")
     assert "external_baseline_comparison" in build_workflow_stage_plan("pilot_paper", "formal_comparison_scoring")
     assert "pilot_paper_gate" in build_workflow_stage_plan("pilot_paper", "paper_gate_and_package")
-    assert "validation_scale_gate" not in build_workflow_stage_plan("pilot_paper", "paper_gate_and_package")
+    assert "paper_profile_gate" not in build_workflow_stage_plan("pilot_paper", "paper_gate_and_package")
     assert "probe_paper_to_pilot_paper_transition_decision" not in build_workflow_stage_plan("pilot_paper", "paper_gate_and_package")
 
     assert full["workflow_profile"] == "full_paper"
@@ -591,7 +582,7 @@ def test_notebook_workflow_profile_config_supports_profile_switching() -> None:
     full_gate = resolve_notebook_workflow_profile("full_paper", "paper_gate_and_package")
     assert full_gate["workflow_profile"] == "full_paper"
     assert "full_paper_result_checker" in build_workflow_stage_plan("full_paper", "paper_gate_and_package")
-    assert "validation_scale_gate" not in build_workflow_stage_plan("full_paper", "paper_gate_and_package")
+    assert "paper_profile_gate" not in build_workflow_stage_plan("full_paper", "paper_gate_and_package")
 
 
 @pytest.mark.quick
@@ -599,7 +590,7 @@ def test_profile_specific_drive_layout_prevents_result_mixing(tmp_path: Path) ->
     """带 workflow profile 的 Drive layout 必须按结果层级隔离 run 和 package 目录。"""
     validation_layout = build_drive_layout(
         str(tmp_path / "SSTW"),
-        workflow_profile="validation_scale",
+        workflow_profile="probe_paper",
         notebook_role="generative_video_generation",
     )
     pilot_layout = build_drive_layout(
@@ -608,10 +599,10 @@ def test_profile_specific_drive_layout_prevents_result_mixing(tmp_path: Path) ->
         notebook_role="generative_video_generation",
     )
 
-    assert validation_layout["drive_run_root"].endswith("/runs/generative_video_model_probe/validation_scale")
-    assert validation_layout["drive_package_dir"].replace("\\", "/").endswith("/validation_scale/generative_video_generation_colab")
+    assert validation_layout["drive_run_root"].endswith("/runs/generative_video_model_probe/probe_paper")
+    assert validation_layout["drive_package_dir"].replace("\\", "/").endswith("/probe_paper/generative_video_generation_colab")
     assert validation_layout["motion_threshold_artifact_run_root"].endswith("/runs/generative_video_model_probe/motion_calibration")
-    assert validation_layout["runtime_profile"] == "validation_scale"
+    assert validation_layout["runtime_profile"] == "probe_paper"
     assert pilot_layout["drive_run_root"].endswith("/runs/generative_video_model_probe/pilot_paper")
     assert pilot_layout["drive_package_dir"].replace("\\", "/").endswith("/pilot_paper/generative_video_generation_colab")
     assert pilot_layout["motion_threshold_artifact_run_root"].endswith("/runs/generative_video_model_probe/motion_calibration")
@@ -624,7 +615,7 @@ def test_split_stage_package_dependencies_match_notebook_responsibility() -> Non
     """阶段包依赖必须体现拆分职责, paper gate 不应直接恢复 5 个 baseline 大包。"""
 
     validation_layout = {
-        "workflow_profile": "validation_scale",
+        "workflow_profile": "probe_paper",
     }
     formal_required = _default_required_stage_packages(validation_layout, "formal_comparison_scoring")
     evidence_required = _default_required_stage_packages(validation_layout, "paper_evidence_postprocess")
@@ -682,7 +673,7 @@ def test_stage_package_sync_round_trips_local_run_without_drive_small_file_reads
     drive_root = tmp_path / "drive" / "SSTW"
     layout = build_drive_layout(
         str(drive_root),
-        workflow_profile="validation_scale",
+        workflow_profile="probe_paper",
         notebook_role="generative_video_generation",
     )
     local_layout = activate_local_stage_layout(
@@ -729,11 +720,11 @@ def test_stage_package_sync_round_trips_local_run_without_drive_small_file_reads
 
 
 @pytest.mark.quick
-def test_validation_scale_restores_motion_calibration_stage_package_from_calibration_profile(
+def test_probe_paper_restores_motion_calibration_stage_package_from_calibration_profile(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """validation_scale 应从 motion_calibration profile 恢复冻结阈值阶段包。
+    """probe_paper 应从 motion_calibration profile 恢复冻结阈值阶段包。
 
     该测试覆盖项目特定规则: motion threshold 是独立 calibration split 的产物,
     后续 evaluation profile 只能复用该冻结包, 不能在当前 profile 下查找同名阶段包。
@@ -774,13 +765,13 @@ def test_validation_scale_restores_motion_calibration_stage_package_from_calibra
     assert Path(published["drive_stage_package_zip"]).exists()
     assert not (
         drive_root
-        / "validation_scale"
+        / "probe_paper"
         / "motion_threshold_calibration_colab"
     ).exists()
 
     generation_drive_layout = build_drive_layout(
         str(drive_root),
-        workflow_profile="validation_scale",
+        workflow_profile="probe_paper",
         notebook_role="generative_video_generation",
     )
     generation_local_layout = activate_local_stage_layout(
@@ -805,7 +796,7 @@ def test_validation_scale_restores_motion_calibration_stage_package_from_calibra
     monkeypatch.setenv("SSTW_LOCAL_STAGE_WORKSPACE_ROOT", str(tmp_path / "quality_workspace"))
     validation_drive_layout = build_drive_layout(
         str(drive_root),
-        workflow_profile="validation_scale",
+        workflow_profile="probe_paper",
         notebook_role="generative_video_quality_scoring",
     )
     validation_local_layout = prepare_colab_stage_layout(
@@ -829,7 +820,7 @@ def test_validation_scale_restores_motion_calibration_stage_package_from_calibra
     ]
     motion_restore_row = restore_manifest["stage_package_restore_rows"][1]
     assert motion_restore_row["stage_package_source_workflow_profile"] == "motion_calibration"
-    assert motion_restore_row["stage_package_target_workflow_profile"] == "validation_scale"
+    assert motion_restore_row["stage_package_target_workflow_profile"] == "probe_paper"
     assert "motion_threshold/motion_calibration_motion_threshold_calibration_colab" in (
         motion_restore_row["drive_stage_package_zip"].replace("\\", "/")
     )
@@ -840,17 +831,17 @@ def test_profile_specific_commands_pass_protocol_config_path(tmp_path: Path) -> 
     """Notebook helper 构造的 gate/postprocess 命令必须显式携带当前 profile 的 protocol config。"""
     validation_layout = build_drive_layout(
         str(tmp_path / "SSTW"),
-        workflow_profile="validation_scale",
+        workflow_profile="probe_paper",
         notebook_role="paper_gate_and_package",
     )
     evidence_layout = build_drive_layout(
         str(tmp_path / "SSTW"),
-        workflow_profile="validation_scale",
+        workflow_profile="probe_paper",
         notebook_role="paper_evidence_postprocess",
     )
     formal_layout = build_drive_layout(
         str(tmp_path / "SSTW"),
-        workflow_profile="validation_scale",
+        workflow_profile="probe_paper",
         notebook_role="formal_comparison_scoring",
     )
     pilot_layout = build_drive_layout(
@@ -872,15 +863,15 @@ def test_profile_specific_commands_pass_protocol_config_path(tmp_path: Path) -> 
         build_sstw_measured_formal_result_command(formal_layout),
         build_formal_method_baseline_comparison_command(formal_layout),
         build_formal_baseline_difference_interval_command(formal_layout),
-        build_validation_scale_formal_internal_ablation_command(evidence_layout),
-        build_validation_scale_gate_command(validation_layout),
+        build_formal_internal_ablation_summary_command(evidence_layout),
+        build_paper_profile_gate_command(validation_layout),
     ]
     pilot_command = build_pilot_paper_gate_command(pilot_layout)
-    probe_gate_command = build_validation_scale_gate_command(probe_layout)
+    probe_gate_command = build_paper_profile_gate_command(probe_layout)
 
     for command in validation_commands:
         assert "--config-path" in command
-        assert command[command.index("--config-path") + 1] == "configs/protocol/validation_scale_generative_probe.json"
+        assert command[command.index("--config-path") + 1] == "configs/protocol/probe_paper_generative_probe.json"
     assert "--config-path" in pilot_command
     assert pilot_command[pilot_command.index("--config-path") + 1] == "configs/protocol/pilot_paper_generative_probe.json"
     assert "--config-path" in probe_gate_command
@@ -893,23 +884,22 @@ def test_paper_gate_commands_use_module_mode_for_check_result_scripts(tmp_path: 
 
     gate_layout = build_drive_layout(
         str(tmp_path / "SSTW"),
-        workflow_profile="validation_scale",
+        workflow_profile="probe_paper",
         notebook_role="paper_gate_and_package",
     )
     evidence_layout = build_drive_layout(
         str(tmp_path / "SSTW"),
-        workflow_profile="validation_scale",
+        workflow_profile="probe_paper",
         notebook_role="paper_evidence_postprocess",
     )
     formal_layout = build_drive_layout(
         str(tmp_path / "SSTW"),
-        workflow_profile="validation_scale",
+        workflow_profile="probe_paper",
         notebook_role="formal_comparison_scoring",
     )
     commands = [
         build_external_baseline_self_containment_decision_command(formal_layout),
         build_data_split_and_leakage_guard_command(evidence_layout),
-        build_validation_scale_to_probe_paper_transition_decision_command(gate_layout),
         build_probe_paper_to_pilot_paper_transition_decision_command(gate_layout),
     ]
 
@@ -925,7 +915,7 @@ def test_profile_specific_layout_reuses_shared_motion_threshold_artifact(tmp_pat
     """profile-specific run_root 隔离后, evaluation profile 仍必须能读取独立 calibration artifact。"""
     layout = build_drive_layout(
         str(tmp_path / "SSTW"),
-        workflow_profile="validation_scale",
+        workflow_profile="probe_paper",
         notebook_role="generative_video_quality_scoring",
     )
     calibration_root = Path(layout["motion_threshold_artifact_run_root"])
@@ -938,13 +928,13 @@ def test_profile_specific_layout_reuses_shared_motion_threshold_artifact(tmp_pat
         "claim_support_status": "motion_threshold_calibration_ready",
     })
 
-    decision = validate_motion_threshold_ready_for_profile(layout, "validation_scale")
+    decision = validate_motion_threshold_ready_for_profile(layout, "probe_paper")
 
     assert decision["motion_threshold_reuse_required"] is True
     assert decision["motion_threshold_reuse_status"] == "ready"
     assert decision["motion_threshold_id"] == "motion_delta_calibrated_v1"
 
-    persisted = write_motion_threshold_reuse_artifact_for_profile(layout, "validation_scale")
+    persisted = write_motion_threshold_reuse_artifact_for_profile(layout, "probe_paper")
     target_artifact = Path(layout["drive_run_root"]) / "artifacts" / "motion_threshold_calibration_decision.json"
     reuse_artifact = Path(layout["drive_run_root"]) / "artifacts" / "motion_threshold_reuse_decision.json"
     copied_decision = json.loads(target_artifact.read_text(encoding="utf-8"))
@@ -953,7 +943,7 @@ def test_profile_specific_layout_reuses_shared_motion_threshold_artifact(tmp_pat
     assert target_artifact.exists()
     assert reuse_artifact.exists()
     assert copied_decision["motion_threshold_id"] == "motion_delta_calibrated_v1"
-    assert copied_decision["motion_threshold_reused_by_profile"] == "validation_scale"
+    assert copied_decision["motion_threshold_reused_by_profile"] == "probe_paper"
 
 
 @pytest.mark.quick
@@ -965,7 +955,7 @@ def test_profile_specific_layout_reuses_shared_motion_threshold_artifact(tmp_pat
 @pytest.mark.quick
 def test_external_baseline_official_result_bundle_preflight_command_is_profile_driven(tmp_path: Path) -> None:
     """官方结果包 preflight 命令必须由 workflow layout 生成, 不能在 Notebook 中硬写路径。"""
-    layout = build_drive_layout(str(tmp_path / "SSTW"), workflow_profile="validation_scale")
+    layout = build_drive_layout(str(tmp_path / "SSTW"), workflow_profile="probe_paper")
     bootstrap_command = build_external_baseline_official_resource_bootstrap_command(layout)
     generation_command = build_external_baseline_official_bundle_generation_command(layout)
     command = build_external_baseline_official_result_bundle_preflight_command(layout)
@@ -985,13 +975,13 @@ def test_external_baseline_official_result_bundle_preflight_command_is_profile_d
 
 
 @pytest.mark.quick
-def test_validation_scale_run_through_test_keeps_preflight_fail_but_does_not_raise(tmp_path: Path) -> None:
+def test_probe_paper_run_through_test_keeps_preflight_fail_but_does_not_raise(tmp_path: Path) -> None:
     """run-through test 只能放行 Notebook 工程链路, 不能把 FAIL preflight 改成 PASS。"""
     layout = build_drive_layout(str(tmp_path / "SSTW"))
-    bridge_templates = build_modern_baseline_official_bridge_command_templates("validation_scale")
+    bridge_templates = build_modern_baseline_official_bridge_command_templates("probe_paper")
     bridge_decision = build_modern_baseline_official_bridge_preflight_decision(
         layout,
-        profile="validation_scale",
+        profile="probe_paper",
         command_env=bridge_templates,
         use_bridge_commands=True,
         require_bridge_official_commands=True,
@@ -1004,7 +994,7 @@ def test_validation_scale_run_through_test_keeps_preflight_fail_but_does_not_rai
 
     external_decision = write_external_baseline_colab_preflight_decision(
         layout,
-        profile="validation_scale",
+        profile="probe_paper",
         command_env={},
         require_modern_baseline_commands_for_paper_gate=True,
         run_external_baseline_source_clone=True,
@@ -1023,7 +1013,7 @@ def test_generative_video_drive_layout_uses_sstw_drive_root() -> None:
     assert layout["drive_project_root"] == "/content/drive/MyDrive/SSTW"
     assert layout["drive_dataset_root"].startswith("/content/drive/MyDrive/SSTW/datasets/")
     assert layout["drive_run_root"].startswith("/content/drive/MyDrive/SSTW/runs/")
-    assert layout["drive_package_dir"].startswith("/content/drive/MyDrive/SSTW/validation_scale/")
+    assert layout["drive_package_dir"].startswith("/content/drive/MyDrive/SSTW/probe_paper/")
     assert layout["drive_log_dir"].startswith("/content/drive/MyDrive/SSTW/logs/")
 
 
@@ -1039,15 +1029,15 @@ def test_generative_video_local_zip_does_not_precreate_drive_hot_dirs(
 
     layout = ensure_drive_layout(
         str(drive_root),
-        workflow_profile="validation_scale",
+        workflow_profile="probe_paper",
         notebook_role="generative_video_generation",
     )
 
     assert Path(layout["drive_project_root"]).exists()
-    assert not (drive_root / "runs" / "generative_video_model_probe" / "validation_scale").exists()
-    assert not (drive_root / "logs" / "generative_video_model_probe" / "validation_scale").exists()
+    assert not (drive_root / "runs" / "generative_video_model_probe" / "probe_paper").exists()
+    assert not (drive_root / "logs" / "generative_video_model_probe" / "probe_paper").exists()
     assert not (drive_root / "datasets" / "generative_video_prompt_suite").exists()
-    assert not (drive_root / "validation_scale" / "generative_video_generation_colab").exists()
+    assert not (drive_root / "probe_paper" / "generative_video_generation_colab").exists()
 
 
 @pytest.mark.quick
@@ -1055,7 +1045,7 @@ def test_generative_video_drive_packager_creates_archive_and_manifest(tmp_path: 
     """Drive packager 必须从已有 run outputs 生成 zip 和 package manifest。"""
     run_root = tmp_path / "runs" / "generative_video_runtime"
     package_dir = tmp_path / "packages"
-    validation_protocol = json.loads(Path("configs/protocol/validation_scale_generative_probe.json").read_text(encoding="utf-8"))
+    validation_protocol = json.loads(Path("configs/protocol/probe_paper_generative_probe.json").read_text(encoding="utf-8"))
     pilot_protocol = json.loads(Path("configs/protocol/pilot_paper_generative_probe.json").read_text(encoding="utf-8"))
     write_jsonl(run_root / "records" / "generation_records.jsonl", [{"generation_model_id": "model", "prompt_id": "prompt"}])
     write_json(run_root / "artifacts" / "generative_video_colab_runtime_decision.json", {"stage_id": "generative_video_generation", "implementation_decision": "PASS", "mechanism_decision": "FAIL"})
@@ -1096,10 +1086,10 @@ def test_generative_video_drive_packager_creates_archive_and_manifest(tmp_path: 
         "motion_threshold_source_split": "heuristic_precalibration",
         "motion_threshold_calibration_required": True,
     })
-    write_json(run_root / "artifacts" / "validation_scale_gate_decision.json", {
-        "validation_scale_gate_decision": "FAIL",
-        "claim_support_status": "validation_scale_blocked",
-        "paper_result_level": "validation_scale",
+    write_json(run_root / "artifacts" / "paper_profile_gate_decision.json", {
+        "paper_profile_gate_decision": "FAIL",
+        "claim_support_status": "paper_profile_blocked",
+        "paper_result_level": "probe_paper",
         "target_fpr": validation_protocol["target_fpr"],
         "validation_missing_requirement_count": 5,
         "validation_generation_record_count": 0,
@@ -1191,8 +1181,8 @@ def test_generative_video_drive_packager_creates_archive_and_manifest(tmp_path: 
         "difference_interval_ready_count": 5,
         "difference_interval_missing_baseline_count": 0,
     })
-    write_json(run_root / "artifacts" / "validation_scale_formal_internal_ablation_decision.json", {
-        "validation_scale_formal_internal_ablation_decision": "PASS",
+    write_json(run_root / "artifacts" / "formal_internal_ablation_summary_decision.json", {
+        "formal_internal_ablation_summary_decision": "PASS",
         "formal_internal_ablation_variant_count": 8,
         "formal_internal_ablation_full_method_formal_ready": True,
     })
@@ -1222,11 +1212,11 @@ def test_generative_video_drive_packager_creates_archive_and_manifest(tmp_path: 
     assert manifest["decision_summary"]["sstw_measured_formal_record_count"] == 48
     assert manifest["decision_summary"]["sstw_measured_formal_score_mean"] == 0.82
     assert manifest["decision_summary"]["sstw_measured_formal_detectable_rate"] == 1.0
-    assert manifest["decision_summary"]["validation_scale_gate_decision"] == "FAIL"
-    assert manifest["decision_summary"]["validation_scale_claim_support_status"] == "validation_scale_blocked"
-    assert manifest["decision_summary"]["validation_scale_result_level"] == "validation_scale"
-    assert manifest["decision_summary"]["validation_scale_target_fpr"] == validation_protocol["target_fpr"]
-    assert manifest["decision_summary"]["validation_missing_requirement_count"] == 5
+    assert manifest["decision_summary"]["paper_profile_gate_decision"] == "FAIL"
+    assert manifest["decision_summary"]["paper_profile_claim_support_status"] == "paper_profile_blocked"
+    assert manifest["decision_summary"]["paper_profile_result_level"] == "probe_paper"
+    assert manifest["decision_summary"]["paper_profile_target_fpr"] == validation_protocol["target_fpr"]
+    assert manifest["decision_summary"]["paper_profile_missing_requirement_count"] == 5
     assert manifest["decision_summary"]["external_baseline_comparison_decision"] == "PASS"
     assert manifest["decision_summary"]["external_baseline_comparison_record_count"] == 96
     assert manifest["decision_summary"]["external_baseline_comparison_ready_count"] == 48
@@ -1239,7 +1229,7 @@ def test_generative_video_drive_packager_creates_archive_and_manifest(tmp_path: 
     assert manifest["decision_summary"]["formal_baseline_difference_interval_decision"] == "PASS"
     assert manifest["decision_summary"]["difference_interval_ready_count"] == 5
     assert manifest["decision_summary"]["difference_interval_missing_baseline_count"] == 0
-    assert manifest["decision_summary"]["validation_scale_formal_internal_ablation_decision"] == "PASS"
+    assert manifest["decision_summary"]["formal_internal_ablation_summary_decision"] == "PASS"
     assert manifest["decision_summary"]["formal_internal_ablation_variant_count"] == 8
     assert manifest["decision_summary"]["formal_internal_ablation_full_method_formal_ready"] is True
     assert manifest["decision_summary"]["validation_internal_ablation_decision"] == "PASS"
@@ -1348,8 +1338,8 @@ def test_generative_video_colab_runtime_uses_optional_hf_token_without_recording
     assert "provided" in runtime_text
     assert "not_provided" in runtime_text
     assert '"pilot": {"prompt_limit": 8, "seed_limit": 2' in runtime_text
-    assert '"validation_scale": {' in runtime_text
-    assert '"seed_suite_roles": ["main", "heldout_seed"]' in runtime_text
+    assert '"probe_paper": {' in runtime_text
+    assert '"seed_suite_roles": ["probe_paper"]' in runtime_text
     assert 'default="pilot"' in runtime_text
     assert 'default=WAN21_PRIMARY_MODEL_ID' in runtime_text
 

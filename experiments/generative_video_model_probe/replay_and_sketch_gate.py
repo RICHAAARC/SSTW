@@ -1,4 +1,4 @@
-"""replay/sketch gate 的 validation-scale 工程 runner。
+"""replay/sketch gate 的 paper profile 工程 runner。
 
 该模块把已经落盘的 generation records 与 trajectory trace 转换为四类可审计 records:
 1. authenticated trajectory sketch verification;
@@ -6,7 +6,7 @@
 3. wrong sampler replay control;
 4. wrong prompt replay control。
 
-该实现属于 validation-scale 工程闭环。它可以证明 replay/sketch 协议入口、records、table、report 和 gate
+该实现属于 paper profile 工程闭环。它可以证明 replay/sketch 协议入口、records、table、report 和 gate
 能够由 governed records 自动重建, 但不会把 validation proxy 伪装成 full-paper 强 Claim-3。
 """
 
@@ -89,7 +89,7 @@ def _float_values(records: list[dict], field_name: str) -> list[float]:
 def _replay_uncertainty(trace_records: list[dict]) -> float:
     """根据 latent norm 的相对变化估计 replay uncertainty proxy。
 
-    这是 validation-scale proxy 写法。它只使用 trajectory trace 中的路径统计, 不读取 `S_final`
+    这是 paper profile proxy 写法。它只使用 trajectory trace 中的路径统计, 不读取 `S_final`
     或最终检测判定分数, 因此不会把最终检测结果反向用于污染过滤。
     """
     norms = _float_values(trace_records, "latent_norm")
@@ -285,7 +285,7 @@ def _table_rows(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 
 def audit_replay_and_sketch_records(record_groups: dict[str, list[dict[str, Any]]]) -> dict[str, Any]:
-    """审计 replay/sketch gate 是否具备 validation-scale 工程闭环。"""
+    """审计 replay/sketch gate 是否具备 paper profile 工程闭环。"""
     sketch_records = record_groups["trajectory_sketch_verification_records"]
     uncertainty_records = record_groups["replay_uncertainty_records"]
     wrong_sampler_records = record_groups["wrong_sampler_replay_records"]
@@ -344,7 +344,7 @@ def run_replay_and_sketch_gate(run_root: str | Path) -> dict[str, Any]:
     write_json(run_root / "artifacts" / "replay_and_sketch_gate_decision.json", audit)
     report = (
         "# Replay and Authenticated Sketch Gate Report\n\n"
-        "该报告由 generation records 与 trajectory trace 自动生成, 用于闭合 validation-scale 的 replay/sketch 工程入口。"
+        "该报告由 generation records 与 trajectory trace 自动生成, 用于闭合 paper profile 的 replay/sketch 工程入口。"
         "当前 evidence level 是 validation proxy, 不允许直接声明 full-paper 强 Claim-3。\n\n"
         f"- replay_and_sketch_gate_decision: {audit['replay_and_sketch_gate_decision']}\n"
         f"- replay_and_sketch_evidence_level: {audit['replay_and_sketch_evidence_level']}\n"

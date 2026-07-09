@@ -169,7 +169,7 @@ def infer_official_score_granularity(payload: Mapping[str, Any], *, clean_negati
     """推断官方分数的样本粒度。
 
     通用工程写法是把“分数数值”和“分数来自哪个 comparison unit”拆开记录。
-    项目特定要求是: validation_scale 的正式 positive 比较只能使用同一
+    项目特定要求是: paper profile 的正式 positive 比较只能使用同一
     prompt / seed / attack anchor 上的分数, 不能把官方 aggregate 均值伪装成
     单条样本分数。
     """
@@ -293,7 +293,7 @@ def official_score_formal_comparison_summary(
 
 
 def validate_official_formal_comparison_eligibility(payload: Mapping[str, Any]) -> None:
-    """校验 official 输出是否可进入 validation_scale 正式公平比较。
+    """校验 official 输出是否可进入 paper profile 正式公平比较。
 
     该函数与 `validate_official_score_extraction_payload` 的区别在于: 后者只确认
     有可解释的分数口径, 这里进一步确认该分数是逐 comparison unit、可重新用
@@ -354,7 +354,7 @@ def external_clean_negative_score_formal_comparison_payload(payload: Mapping[str
 def validate_official_score_extraction_payload(payload: Mapping[str, Any]) -> None:
     """校验 official 输出是否足以进入公平检测校准。
 
-    validation_scale 的公平比较要求每个 baseline 明确说明分数从哪个官方检测口径
+    paper profile 的公平比较要求每个 baseline 明确说明分数从哪个官方检测口径
     抽取、分数方向是什么, 并绑定同一 prompt / seed / attack comparison unit。
     该函数只检查口径证据, 不替代 clean negative 和 official bundle provenance 检查。
     """

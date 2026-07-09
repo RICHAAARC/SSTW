@@ -9,12 +9,12 @@ Notebook 等价的 workflow。Notebook 只作为 Colab 入口; 该脚本复用
 `configs/paper_workflow/generative_video_notebook_workflows.json` 中的 stage plan
 和 `paper_workflow/notebook_utils/generative_video_model_probe_workflow.py` 中的命令构造逻辑。
 
-典型 validation_scale 全流程:
+典型 probe_paper 全流程:
 
 ```bash
 python scripts/run_generative_video_server_workflow.py \
   --project-root /data/SSTW \
-  --workflow-profile validation_scale \
+  --workflow-profile probe_paper \
   --pipeline paper_protocol_complete
 ```
 
@@ -32,7 +32,7 @@ python scripts/run_generative_video_server_workflow.py \
 ```bash
 python scripts/run_generative_video_server_workflow.py \
   --project-root /data/SSTW \
-  --workflow-profile validation_scale \
+  --workflow-profile probe_paper \
   --pipeline formal_comparison_scoring
 ```
 
@@ -41,7 +41,7 @@ python scripts/run_generative_video_server_workflow.py \
 ```bash
 python scripts/run_generative_video_server_workflow.py \
   --project-root /data/SSTW \
-  --workflow-profile validation_scale \
+  --workflow-profile probe_paper \
   --pipeline paper_evidence_postprocess
 ```
 
@@ -50,7 +50,7 @@ python scripts/run_generative_video_server_workflow.py \
 ```bash
 python scripts/run_generative_video_server_workflow.py \
   --project-root /data/SSTW \
-  --workflow-profile validation_scale \
+  --workflow-profile probe_paper \
   --pipeline paper_gate_and_package
 ```
 

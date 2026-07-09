@@ -19,7 +19,7 @@ from external_baseline.official_eval_adapters.common import (
 )
 from external_baseline.score_semantics import validate_official_score_extraction_payload
 from main.attacks.video_runtime_attack_protocol import (
-    VALIDATION_SCALE_RUNTIME_ATTACKS,
+    PAPER_PROFILE_RUNTIME_ATTACKS,
     load_protocol_config_with_shared_attack_protocol,
     required_runtime_attack_names_from_config,
 )
@@ -28,7 +28,7 @@ from main.protocol.record_writer import write_json, write_jsonl
 from main.protocol.table_builder import write_csv
 
 
-DEFAULT_PROTOCOL_CONFIG = "configs/protocol/validation_scale_generative_probe.json"
+DEFAULT_PROTOCOL_CONFIG = "configs/protocol/probe_paper_generative_probe.json"
 DEFAULT_REQUIRED_MODERN_BASELINES = (
     "videoshield",
     "vidsig",
@@ -81,7 +81,7 @@ def _load_required_runtime_attack_names(config_path: str | Path) -> list[str]:
 
     config = load_protocol_config_with_shared_attack_protocol(config_path)
     names = list(required_runtime_attack_names_from_config(config))
-    return names or list(VALIDATION_SCALE_RUNTIME_ATTACKS)
+    return names or list(PAPER_PROFILE_RUNTIME_ATTACKS)
 
 
 def _path_exists(path_text: str | None, run_root: Path) -> bool:
@@ -243,7 +243,7 @@ def _official_score_extraction_ready(payload: Mapping[str, Any]) -> bool:
 def _record_clean_negative_ready(record: Mapping[str, Any]) -> bool:
     """检查 measured_formal baseline record 是否携带公平校准所需 clean negative 分数。
 
-    validation_scale 的 self-containment 不应只证明 positive score 来自项目内官方流程,
+    paper profile 的 self-containment 不应只证明 positive score 来自项目内官方流程,
     还必须证明同一 official bundle 已经提供 baseline 自身 clean negative 分布的
     分数来源。否则该 baseline 后续无法参与 `TPR@target FPR` 公平比较。
     """

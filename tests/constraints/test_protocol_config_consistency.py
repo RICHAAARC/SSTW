@@ -11,7 +11,7 @@ from main.attacks.video_runtime_attack_protocol import load_protocol_config_with
 
 
 PAPER_PROFILE_PROTOCOL_CONFIGS = (
-    Path("configs/protocol/validation_scale_generative_probe.json"),
+    Path("configs/protocol/probe_paper_generative_probe.json"),
     Path("configs/protocol/probe_paper_generative_probe.json"),
     Path("configs/protocol/pilot_paper_generative_probe.json"),
     Path("configs/protocol/full_paper_generative_probe.json"),
@@ -42,7 +42,7 @@ PAPER_PROFILE_ARTIFACT_REQUIREMENT_FIELDS = (
 
 @pytest.mark.constraint
 def test_external_baseline_minimum_count_matches_required_modern_baselines() -> None:
-    """主实验 baseline 数量不能保留旧配置导致 validation_scale 被错误阻断。"""
+    """主实验 baseline 数量不能保留旧配置导致 probe_paper 被错误阻断。"""
 
     mismatches: list[dict[str, object]] = []
     for config_path in PAPER_PROFILE_PROTOCOL_CONFIGS:

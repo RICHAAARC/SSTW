@@ -89,8 +89,8 @@ def test_official_reference_runtime_sources_do_not_emit_legacy_success_status_fo
 
 
 @pytest.mark.quick
-def test_modern_external_baseline_default_config_is_validation_scale(monkeypatch: pytest.MonkeyPatch) -> None:
-    """默认配置必须面向 validation_scale, 单 baseline 入口默认只闭合 official bundle。"""
+def test_modern_external_baseline_default_config_is_probe_paper(monkeypatch: pytest.MonkeyPatch) -> None:
+    """默认配置必须面向 probe_paper, 单 baseline 入口默认只闭合 official bundle。"""
 
     monkeypatch.delenv("SSTW_WORKFLOW_PROFILE", raising=False)
     monkeypatch.delenv("SSTW_EXTERNAL_BASELINE_REFERENCE_MAX_RECORDS", raising=False)
@@ -101,7 +101,7 @@ def test_modern_external_baseline_default_config_is_validation_scale(monkeypatch
     config = build_default_config_from_env("videoseal", repo_root=".")
 
     assert config.baseline_id == "videoseal"
-    assert config.workflow_profile == "validation_scale"
+    assert config.workflow_profile == "probe_paper"
     assert config.execute_source_clone is True
     assert config.run_source_intake is True
     assert config.run_official_resource_bootstrap is True
@@ -160,12 +160,12 @@ def test_build_official_adapter_command_uses_repository_adapter_module() -> None
             "source_video_path": "/tmp/source.mp4",
             "attacked_video_path": "/tmp/attacked.mp4",
             "attack_name": "h264",
-            "run_root": "/content/drive/MyDrive/SSTW/runs/generative_video_model_probe/validation_scale",
+            "run_root": "/content/drive/MyDrive/SSTW/runs/generative_video_model_probe/probe_paper",
             "prompt_id": "prompt_a",
             "seed_id": "seed_b",
             "trajectory_trace_id": "trace_c",
         },
-        output_json_path="/content/drive/MyDrive/SSTW/external_baseline_official_result_bundles/validation_scale/vidsig/records/unit.json",
+        output_json_path="/content/drive/MyDrive/SSTW/external_baseline_official_result_bundles/probe_paper/vidsig/records/unit.json",
     )
     command_text = " ".join(command)
 
@@ -173,7 +173,7 @@ def test_build_official_adapter_command_uses_repository_adapter_module() -> None
     assert "--official-source-dir /content/SSTW/external_baseline/primary/vidsig/source" in command_text
     assert "--source-video /tmp/source.mp4" in command_text
     assert "--attacked-video /tmp/attacked.mp4" in command_text
-    assert "--official-output-json /content/drive/MyDrive/SSTW/external_baseline_official_result_bundles/validation_scale/vidsig/records/unit.json" in command_text
+    assert "--official-output-json /content/drive/MyDrive/SSTW/external_baseline_official_result_bundles/probe_paper/vidsig/records/unit.json" in command_text
     assert "--trajectory-trace-id trace_c" in command_text
 
 

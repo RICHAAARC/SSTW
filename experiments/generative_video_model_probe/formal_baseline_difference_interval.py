@@ -18,7 +18,7 @@ from main.protocol.record_writer import write_json, write_jsonl
 from main.protocol.table_builder import write_csv
 
 
-DEFAULT_PROTOCOL_CONFIG = "configs/protocol/validation_scale_generative_probe.json"
+DEFAULT_PROTOCOL_CONFIG = "configs/protocol/probe_paper_generative_probe.json"
 SSTW_METHOD_ID = "sstw_key_conditioned_flow_trajectory"
 DEFAULT_REQUIRED_BASELINES = ("videoshield", "vidsig", "videoseal", "revmark", "wam_frame")
 
@@ -62,7 +62,7 @@ def _load_profile_context(config_path: str | Path) -> dict[str, Any]:
     if "target_fpr" not in config:
         raise KeyError(f"protocol config 缺少 target_fpr: {config_path}")
     return {
-        "paper_result_level": str(config.get("paper_result_level") or "validation_scale"),
+        "paper_result_level": str(config.get("paper_result_level") or "probe_paper"),
         "target_fpr": float(config["target_fpr"]),
         "target_fpr_source_config_path": str(config_path),
         "required_modern_external_baseline_adapter_names": [
@@ -232,7 +232,7 @@ def build_formal_baseline_difference_interval_records(
     claim_support_status = (
         "formal_baseline_difference_interval_paper_profile_claim_candidate"
         if profile_context["allow_effect_size_claims"]
-        else "formal_baseline_difference_interval_validation_scale_only"
+        else "formal_baseline_difference_interval_paper_profile_only"
     )
     for baseline_id in profile_context["required_modern_external_baseline_adapter_names"]:
         raw_baseline_record = fair_by_method.get(baseline_id, {})
@@ -300,7 +300,7 @@ def build_formal_baseline_difference_interval_records(
             "difference_ci_upper": ci_upper,
             "difference_interval_method": interval_method,
             "difference_interval_status": interval_status,
-            "significance_claim_status": "validation_scale_interval_not_significance_claim"
+            "significance_claim_status": "paper_profile_interval_not_significance_claim"
             if not profile_context["allow_effect_size_claims"]
             else "paper_profile_interval_ready_requires_claim_audit",
             "claim_support_status": claim_support_status if interval_status == "ready" else "formal_baseline_difference_interval_blocked",
@@ -327,8 +327,8 @@ def audit_formal_baseline_difference_interval_records(records: list[dict[str, An
         claim_support_status = "formal_baseline_difference_interval_paper_profile_claim_candidate"
         significance_claim_status = "paper_profile_interval_ready_requires_claim_audit"
     elif decision == "PASS":
-        claim_support_status = "formal_baseline_difference_interval_validation_scale_only"
-        significance_claim_status = "validation_scale_interval_not_significance_claim"
+        claim_support_status = "formal_baseline_difference_interval_paper_profile_only"
+        significance_claim_status = "paper_profile_interval_not_significance_claim"
     else:
         claim_support_status = "formal_baseline_difference_interval_blocked"
         significance_claim_status = "formal_baseline_difference_interval_blocked"
@@ -360,7 +360,7 @@ def run_formal_baseline_difference_interval(
     report = (
         "# Formal Baseline Difference Interval Report\n\n"
         "该报告计算 SSTW 相对 5 个现代 external baseline 的 TPR@target FPR 差值及 95% 置信区间。"
-        "当 protocol config 启用 allow_effect_size_claims 时, validation_scale 差值区间用于支撑 target_fpr=0.1 "
+        "当 protocol config 启用 allow_effect_size_claims 时, probe_paper 差值区间用于支撑 target_fpr=0.1 "
         "的小样本优势结论候选, 且仍需由 claim audit 限定其不能外推到更低 FPR 或更大样本结论。\n\n"
         f"- formal_baseline_difference_interval_decision: {audit['formal_baseline_difference_interval_decision']}\n"
         f"- paper_result_level: {audit['paper_result_level']}\n"

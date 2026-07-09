@@ -21,7 +21,7 @@
       ],
       "self_contained_result_policy": "project_clone_build_run_adapt_record_required",
       "strict_gate_resolution": "必须在本项目 workflow 内完成官方源码 clone、依赖构建、官方命令运行、adapter 转换和 governed record 写出; 无法运行时记录 non_runnable_with_governed_reason, 不接受外部补交结果包",
-      "validation_scale_colab_runnability_status": "runnable_if_hf_model_download_and_colab_gpu_succeed"
+      "probe_paper_colab_runnability_status": "runnable_if_hf_model_download_and_colab_gpu_succeed"
     },
     {
       "additional_adapter_work_required": false,
@@ -41,7 +41,7 @@
       ],
       "self_contained_result_policy": "project_clone_build_run_adapt_record_required",
       "strict_gate_resolution": "本项目 workflow 必须完成官方源码 clone、依赖构建、官方 generate_ms.py 运行、项目 runtime attack、官方 attack.py 检测、adapter 转换和 governed record 写出; non-run record 不能替代 measured_formal baseline。",
-      "validation_scale_colab_runnability_status": "runnable_if_public_checkpoint_model_download_and_colab_gpu_succeed"
+      "probe_paper_colab_runnability_status": "runnable_if_public_checkpoint_model_download_and_colab_gpu_succeed"
     },
     {
       "additional_adapter_work_required": false,
@@ -60,7 +60,7 @@
       ],
       "self_contained_result_policy": "project_clone_build_run_adapt_record_required",
       "strict_gate_resolution": "本项目可在 workflow 内调用官方 API 生成 repository-owned official bundle cache, 再由 adapter 写出 measured_formal records",
-      "validation_scale_colab_runnability_status": "runnable_if_official_dependencies_and_checkpoint_download_succeed"
+      "probe_paper_colab_runnability_status": "runnable_if_official_dependencies_and_checkpoint_download_succeed"
     },
     {
       "additional_adapter_work_required": false,
@@ -81,7 +81,7 @@
       ],
       "self_contained_result_policy": "project_clone_build_run_adapt_record_required",
       "strict_gate_resolution": "本项目 workflow 必须完成官方源码 clone、依赖构建、官方 Encoder / Decoder 与 ME_Spynet_Full motion estimation checkpoint 可见性检查、项目 runtime attack、adapter 转换和 governed record 写出。",
-      "validation_scale_colab_runnability_status": "runnable_if_source_clone_dependencies_and_video_io_succeed"
+      "probe_paper_colab_runnability_status": "runnable_if_source_clone_dependencies_and_video_io_succeed"
     },
     {
       "additional_adapter_work_required": false,
@@ -101,7 +101,7 @@
       ],
       "self_contained_result_policy": "project_clone_build_run_adapt_record_required",
       "strict_gate_resolution": "本项目 workflow 必须完成官方源码 clone、依赖构建、WAM MIT checkpoint 下载、逐帧嵌入 / 检测、项目 runtime attack、adapter 转换和 governed record 写出。WAM-frame 只能表述为 image watermark adapted to video。",
-      "validation_scale_colab_runnability_status": "runnable_if_public_checkpoint_download_dependencies_and_video_io_succeed"
+      "probe_paper_colab_runnability_status": "runnable_if_public_checkpoint_download_dependencies_and_video_io_succeed"
     }
   ],
   "runnability_audit_note": "当前主实验必跑现代 external baseline 为 VideoSeal、VideoShield、VidSig、REVMark 与 WAM-frame 共 5 个; 资源要求仅覆盖主实验门禁中的 baseline。"

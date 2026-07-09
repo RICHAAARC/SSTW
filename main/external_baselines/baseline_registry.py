@@ -113,7 +113,7 @@ def build_external_baseline_records(path: str | Path) -> list[dict]:
 
 
 def audit_external_baseline_records(records: list[dict]) -> dict:
-    """汇总外部 baseline 状态, 供 validation-scale 与 full-paper gate 使用。"""
+    """汇总外部 baseline 状态, 供 paper profile 与 full-paper gate 使用。"""
     modern_records = [record for record in records if record.get("external_baseline_layer") == "modern_external_baseline"]
     main_ready_records = [record for record in records if record.get("external_baseline_main_comparison_ready") is True]
     non_run_records = [record for record in records if record.get("external_baseline_runnable_status") != "runnable"]

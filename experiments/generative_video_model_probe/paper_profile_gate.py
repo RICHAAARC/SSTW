@@ -1,4 +1,4 @@
-"""validation-scale generative video probe 的自动门禁审计。"""
+"""paper profile generative video probe 的自动门禁审计。"""
 
 from __future__ import annotations
 
@@ -25,8 +25,8 @@ from main.protocol.record_writer import write_json, write_jsonl
 from main.protocol.table_builder import write_csv
 
 
-DEFAULT_VALIDATION_SCALE_CONFIG = "configs/protocol/validation_scale_generative_probe.json"
-DEFAULT_VALIDATION_PROFILE_NAMES = {"validation_scale"}
+DEFAULT_PAPER_PROFILE_CONFIG = "configs/protocol/probe_paper_generative_probe.json"
+DEFAULT_PAPER_PROFILE_NAMES = {"probe_paper"}
 DEFAULT_MINIMUM_PROMPT_COUNT = 8
 DEFAULT_MINIMUM_SEED_PER_PROMPT = 3
 DEFAULT_MINIMUM_ATTACK_COUNT = 3
@@ -41,7 +41,7 @@ DEFAULT_REQUIRED_MODERN_EXTERNAL_BASELINE_ADAPTER_NAMES = (
 SSTW_METHOD_ID = "sstw_key_conditioned_flow_trajectory"
 DEFAULT_MINIMUM_EXTERNAL_BASELINE_MEASURED_ADAPTER_COUNT = 7
 DEFAULT_MINIMUM_MODERN_EXTERNAL_BASELINE_FORMAL_ADAPTER_COUNT = len(DEFAULT_REQUIRED_MODERN_EXTERNAL_BASELINE_ADAPTER_NAMES)
-HARD_REQUIRED_VALIDATION_SCALE_CONFIG_FLAGS = (
+HARD_REQUIRED_PAPER_PROFILE_CONFIG_FLAGS = (
     "require_external_baseline_comparison_records",
     "require_external_baseline_self_containment_decision",
     "require_sstw_measured_formal_records",
@@ -51,8 +51,8 @@ HARD_REQUIRED_VALIDATION_SCALE_CONFIG_FLAGS = (
     "require_data_split_and_leakage_guard",
 )
 HARD_REQUIRED_PROBE_PAPER_CONFIG_FLAGS = (
-    *HARD_REQUIRED_VALIDATION_SCALE_CONFIG_FLAGS,
-    "require_validation_scale_sstw_advantage_claim_ready",
+    *HARD_REQUIRED_PAPER_PROFILE_CONFIG_FLAGS,
+    "require_sstw_advantage_claim_ready",
 )
 
 
@@ -64,9 +64,9 @@ def _read_json(path: Path) -> dict:
 
 
 def _required_float(raw: dict, field_name: str, config_path: Path) -> float:
-    """从 validation-scale protocol config 读取必填 float 字段。"""
+    """从 paper profile protocol config 读取必填 float 字段。"""
     if field_name not in raw:
-        raise KeyError(f"validation-scale protocol config 缺少必填字段 {field_name}: {config_path}")
+        raise KeyError(f"paper profile protocol config 缺少必填字段 {field_name}: {config_path}")
     return float(raw[field_name])
 
 
@@ -84,17 +84,21 @@ def _read_jsonl(path: Path) -> list[dict]:
     return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
 
 
-def _load_config(config_path: str | Path = DEFAULT_VALIDATION_SCALE_CONFIG) -> dict:
-    """读取 validation-scale 门禁配置。"""
+def _load_config(config_path: str | Path = DEFAULT_PAPER_PROFILE_CONFIG) -> dict:
+    """读取 paper profile 门禁配置。"""
     path = Path(config_path)
     config = load_protocol_config_with_shared_attack_protocol(path)
+    paper_result_level = str(config.get("paper_result_level", "probe_paper"))
     required_runtime_attack_names = list(required_runtime_attack_names_from_config(config))
     required_non_runtime_attack_protocols = list(required_non_runtime_attack_protocols_from_config(config))
     return {
-        "validation_profile_names": config.get("validation_profile_names", sorted(DEFAULT_VALIDATION_PROFILE_NAMES)),
+        "paper_profile_names": config.get(
+            "paper_profile_names",
+            config.get("probe_profile_names", [paper_result_level]),
+        ),
         "target_fpr": _required_float(config, "target_fpr", path),
-        "paper_result_level": config.get("paper_result_level", "validation_scale"),
-        "stage_id": config.get("stage_id", "validation_scale_generative_probe_gate"),
+        "paper_result_level": paper_result_level,
+        "stage_id": config.get("stage_id", "paper_profile_generative_probe_gate"),
         "minimum_prompt_count": int(config.get("minimum_prompt_count", DEFAULT_MINIMUM_PROMPT_COUNT)),
         "minimum_seed_per_prompt": int(config.get("minimum_seed_per_prompt", DEFAULT_MINIMUM_SEED_PER_PROMPT)),
         "minimum_attack_count": int(config.get("minimum_attack_count", max(DEFAULT_MINIMUM_ATTACK_COUNT, len(required_runtime_attack_names)))),
@@ -117,7 +121,7 @@ def _load_config(config_path: str | Path = DEFAULT_VALIDATION_SCALE_CONFIG) -> d
         "require_formal_motion_claim_ready": bool(config.get("require_formal_motion_claim_ready", True)),
         "require_motion_consistency_exclusion_report": bool(config.get("require_motion_consistency_exclusion_report", True)),
         "require_internal_ablation_records": bool(config.get("require_internal_ablation_records", True)),
-        "require_validation_scale_formal_internal_ablation": bool(config.get("require_validation_scale_formal_internal_ablation", True)),
+        "require_formal_internal_ablation_summary": bool(config.get("require_formal_internal_ablation_summary", True)),
         "require_adaptive_attack_records": bool(config.get("require_adaptive_attack_records", True)),
         "require_replay_or_sketch_records_or_claim3_downgrade": bool(config.get("require_replay_or_sketch_records_or_claim3_downgrade", True)),
         "require_confidence_interval_report": bool(config.get("require_confidence_interval_report", True)),
@@ -125,7 +129,7 @@ def _load_config(config_path: str | Path = DEFAULT_VALIDATION_SCALE_CONFIG) -> d
         "require_paper_result_artifact_skeleton": bool(config.get("require_paper_result_artifact_skeleton", True)),
         "require_artifact_rebuild_dry_run": bool(config.get("require_artifact_rebuild_dry_run", True)),
         "require_data_split_and_leakage_guard": bool(config.get("require_data_split_and_leakage_guard", True)),
-        "require_validation_scale_sstw_advantage_claim_ready": bool(config.get("require_validation_scale_sstw_advantage_claim_ready", True)),
+        "require_sstw_advantage_claim_ready": bool(config.get("require_sstw_advantage_claim_ready", True)),
         "minimum_sstw_advantage_baseline_count": int(config.get("minimum_sstw_advantage_baseline_count", DEFAULT_MINIMUM_MODERN_EXTERNAL_BASELINE_FORMAL_ADAPTER_COUNT)),
         "minimum_sstw_tpr_at_target_fpr_difference": float(config.get("minimum_sstw_tpr_at_target_fpr_difference", 0.0)),
         "require_sstw_advantage_ci_lower_above_zero": bool(config.get("require_sstw_advantage_ci_lower_above_zero", True)),
@@ -135,7 +139,7 @@ def _load_config(config_path: str | Path = DEFAULT_VALIDATION_SCALE_CONFIG) -> d
 def _hard_required_config_missing(config: dict[str, Any]) -> list[str]:
     """检查当前 profile 的公平比较硬前置是否被配置关闭。
 
-    validation_scale 只负责小样本全流程打通, 因此必须要求 self-contained
+    paper_profile 只负责小样本全流程打通, 因此必须要求 self-contained
     baseline、SSTW measured_formal、公平 FPR 校准、同协议比较、差值区间和数据切分
     防泄漏都能生成, 但不要求在该小样本层证明 SSTW 优势。probe_paper 才是
     target_fpr=0.1 的小样本论文闭合层, 因此在 probe_paper 中额外要求
@@ -144,7 +148,7 @@ def _hard_required_config_missing(config: dict[str, Any]) -> list[str]:
     required_flags = (
         HARD_REQUIRED_PROBE_PAPER_CONFIG_FLAGS
         if str(config.get("paper_result_level")) == "probe_paper"
-        else HARD_REQUIRED_VALIDATION_SCALE_CONFIG_FLAGS
+        else HARD_REQUIRED_PAPER_PROFILE_CONFIG_FLAGS
     )
     return [
         f"{field_name}_must_be_true"
@@ -174,12 +178,12 @@ def _decision_pass(decision: dict, *field_names: str) -> bool:
     return any(decision.get(field_name) == "PASS" for field_name in field_names)
 
 
-def _validation_generation_records(generation_records: list[dict], validation_profile_names: set[str]) -> list[dict]:
-    """筛选 validation-scale profile 产生的成功生成记录。"""
+def _paper_profile_generation_records(generation_records: list[dict], paper_profile_names: set[str]) -> list[dict]:
+    """筛选当前 paper profile 产生的成功生成记录。"""
     return [
         record for record in generation_records
         if record.get("generation_status") == "success"
-        and record.get("colab_runtime_profile") in validation_profile_names
+        and record.get("colab_runtime_profile") in paper_profile_names
     ]
 
 
@@ -223,7 +227,7 @@ def _external_baseline_comparison_ready(
     )
 
 def _internal_ablation_ready(run_root: Path) -> tuple[bool, int, str]:
-    """检查 validation-scale 是否已有内部消融记录。"""
+    """检查 paper profile 是否已有内部消融记录。"""
     records = _read_jsonl(run_root / "records" / "validation_internal_ablation_records.jsonl")
     if not records:
         records = _read_jsonl(run_root / "records" / "ablation_scores.jsonl")
@@ -243,13 +247,13 @@ def _motion_consistency_exclusion_ready(run_root: Path) -> tuple[bool, int, str]
     return ready, excluded_count, decision.get("claim_support_status", "missing_motion_consistency_exclusion_decision")
 
 
-def _validation_scale_formal_internal_ablation_ready(run_root: Path) -> tuple[bool, int, str]:
-    """检查 validation_scale 级 formal-compatible 内部消融汇总是否已通过。"""
-    records = _read_jsonl(run_root / "records" / "validation_scale_formal_internal_ablation_records.jsonl")
-    decision = _read_json(run_root / "artifacts" / "validation_scale_formal_internal_ablation_decision.json")
-    ready = bool(records) and _decision_pass(decision, "validation_scale_formal_internal_ablation_decision")
+def _formal_internal_ablation_summary_ready(run_root: Path) -> tuple[bool, int, str]:
+    """检查 paper_profile 级 formal-compatible 内部消融汇总是否已通过。"""
+    records = _read_jsonl(run_root / "records" / "formal_internal_ablation_summary_records.jsonl")
+    decision = _read_json(run_root / "artifacts" / "formal_internal_ablation_summary_decision.json")
+    ready = bool(records) and _decision_pass(decision, "formal_internal_ablation_summary_decision")
     ready_count = int(decision.get("formal_internal_ablation_variant_count") or 0)
-    return ready, ready_count, decision.get("claim_support_status", "missing_validation_scale_formal_internal_ablation_decision")
+    return ready, ready_count, decision.get("claim_support_status", "missing_formal_internal_ablation_summary_decision")
 
 
 def _adaptive_attack_ready(
@@ -257,7 +261,7 @@ def _adaptive_attack_ready(
     required_non_runtime_attack_protocols: list[str],
     minimum_non_runtime_attack_protocol_count: int,
 ) -> tuple[bool, int, int, list[str], list[str], str]:
-    """检查 validation-scale 是否已有完整 non-runtime/adaptive attack 协议记录。"""
+    """检查 paper profile 是否已有完整 non-runtime/adaptive attack 协议记录。"""
     records = _read_jsonl(run_root / "records" / "adaptive_attack_records.jsonl")
     decision = _read_json(run_root / "artifacts" / "adaptive_attack_decision.json")
     observed_protocols = {
@@ -318,7 +322,7 @@ def _paper_result_artifact_skeleton_ready(run_root: Path) -> tuple[bool, str]:
     return ready, decision.get("claim_support_status", "missing_paper_result_artifact_skeleton_decision")
 
 
-def _validation_scale_sstw_advantage_claim_ready(
+def _paper_profile_sstw_advantage_claim_ready(
     run_root: Path,
     *,
     required_modern_adapter_names: list[str],
@@ -327,7 +331,7 @@ def _validation_scale_sstw_advantage_claim_ready(
     minimum_difference: float,
     require_ci_lower_above_zero: bool,
 ) -> tuple[bool, int, list[str], list[str], str]:
-    """检查 validation_scale 是否足以支持 SSTW 在 target FPR 下优于 5 个 baseline。
+    """检查 paper_profile 是否足以支持 SSTW 在 target FPR 下优于 5 个 baseline。
 
     该函数属于项目特定论文 claim 门禁。它不重新计算指标, 只读取
     `formal_baseline_difference_interval_records.jsonl` 中由公平比较链路生成的
@@ -377,9 +381,9 @@ def _validation_scale_sstw_advantage_claim_ready(
         and not blocked_reasons
     )
     status = (
-        "validation_scale_target_fpr_0_1_sstw_advantage_claim_supported"
+        "paper_profile_target_fpr_0_1_sstw_advantage_claim_supported"
         if ready
-        else "validation_scale_sstw_advantage_claim_blocked"
+        else "paper_profile_sstw_advantage_claim_blocked"
     )
     return ready, len(ready_baselines), missing_baselines, blocked_reasons, status
 
@@ -608,7 +612,7 @@ def _formal_baseline_difference_interval_ready(
 
 
 def _artifact_rebuild_ready(run_root: Path) -> tuple[bool, str]:
-    """检查 validation-scale artifact rebuild dry-run 是否通过。"""
+    """检查 paper profile artifact rebuild dry-run 是否通过。"""
     decision = _read_json(run_root / "artifacts" / "validation_artifact_rebuild_dry_run_decision.json")
     if not decision:
         decision = _read_json(run_root / "artifacts" / "artifact_rebuild_dry_run_decision.json")
@@ -629,7 +633,7 @@ def _external_baseline_self_containment_ready(
 ) -> tuple[bool, dict[str, Any]]:
     """检查 external baseline self-containment 是否包含完整公平比较闭环。
 
-    validation_scale 不能只接受一个手写或旧版
+    paper_profile 不能只接受一个手写或旧版
     `external_baseline_self_containment_decision: PASS`。该函数要求 5 个现代
     baseline 均有项目内 official bundle、clean negative、分数抽取口径、完整
     prompt / seed / attack anchor 和 official baseline 身份。
@@ -746,11 +750,11 @@ def _external_baseline_self_containment_ready(
     }
 
 
-def build_validation_scale_gate_audit(
+def build_paper_profile_gate_audit(
     run_root: str | Path,
-    config_path: str | Path = DEFAULT_VALIDATION_SCALE_CONFIG,
+    config_path: str | Path = DEFAULT_PAPER_PROFILE_CONFIG,
 ) -> dict[str, Any]:
-    """构建 validation-scale generative probe 门禁审计结果。
+    """构建 paper profile generative probe 门禁审计结果。
 
     该函数属于项目特定写法。它只读取 run_root 中已经落盘的 governed records、decision artifacts
     和 reports, 不运行 GPU, 不补造 baseline、消融、adaptive attack 或 replay 结果。若某类证据缺失,
@@ -758,11 +762,11 @@ def build_validation_scale_gate_audit(
     """
     run_root = Path(run_root)
     config = _load_config(config_path)
-    validation_profile_names = set(config["validation_profile_names"])
+    paper_profile_names = set(config["paper_profile_names"])
     hard_config_missing = _hard_required_config_missing(config)
 
     generation_records = _read_jsonl(run_root / "records" / "generation_records.jsonl")
-    validation_generation_records = _validation_generation_records(generation_records, validation_profile_names)
+    validation_generation_records = _paper_profile_generation_records(generation_records, paper_profile_names)
     runtime_attack_records = _read_jsonl(run_root / "records" / "runtime_attack_records.jsonl")
     runtime_detection_records = _read_jsonl(run_root / "records" / "runtime_detection_records.jsonl")
     external_baseline_records = _read_jsonl(run_root / "records" / "external_baseline_records.jsonl")
@@ -807,7 +811,7 @@ def build_validation_scale_gate_audit(
         config["required_modern_external_baseline_adapter_names"],
     )
     internal_ablation_ready, internal_ablation_record_count, internal_ablation_status = _internal_ablation_ready(run_root)
-    formal_internal_ablation_ready, formal_internal_ablation_variant_count, formal_internal_ablation_status = _validation_scale_formal_internal_ablation_ready(run_root)
+    formal_internal_ablation_ready, formal_internal_ablation_variant_count, formal_internal_ablation_status = _formal_internal_ablation_summary_ready(run_root)
     (
         adaptive_attack_ready,
         adaptive_attack_record_count,
@@ -850,7 +854,7 @@ def build_validation_scale_gate_audit(
         sstw_advantage_missing_baseline_names,
         sstw_advantage_blocking_reasons,
         sstw_advantage_claim_status,
-    ) = _validation_scale_sstw_advantage_claim_ready(
+    ) = _paper_profile_sstw_advantage_claim_ready(
         run_root,
         required_modern_adapter_names=config["required_modern_external_baseline_adapter_names"],
         target_fpr=config["target_fpr"],
@@ -887,10 +891,10 @@ def build_validation_scale_gate_audit(
         "validation_fair_detection_calibration_ready": (not config["require_fair_detection_calibration"]) or fair_detection_ready,
         "validation_formal_method_baseline_comparison_ready": (not config["require_formal_method_baseline_comparison"]) or formal_method_comparison_ready,
         "validation_formal_baseline_difference_interval_ready": (not config["require_formal_baseline_difference_interval"]) or formal_difference_interval_ready,
-        "validation_scale_sstw_advantage_claim_ready": (not config["require_validation_scale_sstw_advantage_claim_ready"]) or sstw_advantage_claim_ready,
+        "paper_profile_sstw_advantage_claim_ready": (not config["require_sstw_advantage_claim_ready"]) or sstw_advantage_claim_ready,
         "validation_data_split_and_leakage_guard_ready": (not config["require_data_split_and_leakage_guard"]) or data_split_decision.get("data_split_and_leakage_guard_decision") == "PASS",
         "validation_internal_ablation_records_ready": (not config["require_internal_ablation_records"]) or internal_ablation_ready,
-        "validation_scale_formal_internal_ablation_ready": (not config["require_validation_scale_formal_internal_ablation"]) or formal_internal_ablation_ready,
+        "paper_profile_formal_internal_ablation_ready": (not config["require_formal_internal_ablation_summary"]) or formal_internal_ablation_ready,
         "validation_adaptive_attack_records_ready": (not config["require_adaptive_attack_records"]) or adaptive_attack_ready,
         "validation_replay_or_sketch_records_ready": (not config["require_replay_or_sketch_records_or_claim3_downgrade"]) or replay_or_sketch_ready,
         "validation_confidence_interval_report_ready": (not config["require_confidence_interval_report"]) or confidence_interval_ready,
@@ -906,7 +910,7 @@ def build_validation_scale_gate_audit(
     if gate_decision == "PASS" and paper_result_level == "probe_paper":
         claim_support_status = "probe_paper_target_fpr_0_1_paper_claim_supported"
     elif gate_decision == "PASS":
-        claim_support_status = "validation_scale_full_protocol_handoff_ready"
+        claim_support_status = "paper_profile_full_protocol_handoff_ready"
     else:
         claim_support_status = f"{paper_result_level}_blocked"
     profile_gate_field = f"{paper_result_level}_gate_decision"
@@ -914,16 +918,16 @@ def build_validation_scale_gate_audit(
     return {
         "stage_id": config["stage_id"],
         "run_root": str(run_root),
-        "validation_scale_gate_decision": gate_decision,
+        "paper_profile_gate_decision": gate_decision,
         profile_gate_field: gate_decision,
         "claim_support_status": claim_support_status,
         "paper_result_level": config["paper_result_level"],
         "target_fpr": config["target_fpr"],
         "missing_validation_requirements": missing_requirements,
         "validation_missing_requirement_count": len(missing_requirements),
-        "validation_scale_hard_required_config_missing": hard_config_missing,
-        "validation_scale_hard_required_config_missing_count": len(hard_config_missing),
-        "validation_profile_names": sorted(validation_profile_names),
+        "paper_profile_hard_required_config_missing": hard_config_missing,
+        "paper_profile_hard_required_config_missing_count": len(hard_config_missing),
+        "paper_profile_names": sorted(paper_profile_names),
         "generation_record_count": len(generation_records),
         "validation_generation_record_count": len(validation_generation_records),
         "validation_prompt_count": prompt_count,
@@ -977,11 +981,11 @@ def build_validation_scale_gate_audit(
         "formal_method_baseline_comparison_status": formal_method_comparison_status,
         "formal_baseline_difference_interval_ready_count": formal_difference_interval_ready_count,
         "formal_baseline_difference_interval_status": formal_difference_interval_status,
-        "validation_scale_sstw_advantage_claim_ready": sstw_advantage_claim_ready,
-        "validation_scale_sstw_advantage_ready_baseline_count": sstw_advantage_ready_baseline_count,
-        "validation_scale_sstw_advantage_missing_baseline_names": sstw_advantage_missing_baseline_names,
-        "validation_scale_sstw_advantage_blocking_reasons": sstw_advantage_blocking_reasons,
-        "validation_scale_sstw_advantage_claim_status": sstw_advantage_claim_status,
+        "paper_profile_sstw_advantage_claim_ready": sstw_advantage_claim_ready,
+        "paper_profile_sstw_advantage_ready_baseline_count": sstw_advantage_ready_baseline_count,
+        "paper_profile_sstw_advantage_missing_baseline_names": sstw_advantage_missing_baseline_names,
+        "paper_profile_sstw_advantage_blocking_reasons": sstw_advantage_blocking_reasons,
+        "paper_profile_sstw_advantage_claim_status": sstw_advantage_claim_status,
         "minimum_sstw_advantage_baseline_count": config["minimum_sstw_advantage_baseline_count"],
         "minimum_sstw_tpr_at_target_fpr_difference": config["minimum_sstw_tpr_at_target_fpr_difference"],
         "require_sstw_advantage_ci_lower_above_zero": config["require_sstw_advantage_ci_lower_above_zero"],
@@ -989,8 +993,8 @@ def build_validation_scale_gate_audit(
         "minimum_external_baseline_measured_adapter_count": config["minimum_external_baseline_measured_adapter_count"],
         "internal_ablation_record_count": internal_ablation_record_count,
         "internal_ablation_status": internal_ablation_status,
-        "validation_scale_formal_internal_ablation_variant_count": formal_internal_ablation_variant_count,
-        "validation_scale_formal_internal_ablation_status": formal_internal_ablation_status,
+        "formal_internal_ablation_summary_variant_count": formal_internal_ablation_variant_count,
+        "formal_internal_ablation_summary_status": formal_internal_ablation_status,
         "adaptive_attack_record_count": adaptive_attack_record_count,
         "adaptive_attack_status": adaptive_attack_status,
         "non_runtime_attack_protocol_count": non_runtime_attack_protocol_count,
@@ -1012,22 +1016,22 @@ def build_validation_scale_gate_audit(
     }
 
 
-def write_validation_scale_gate_audit(
+def write_paper_profile_gate_audit(
     run_root: str | Path,
-    config_path: str | Path = DEFAULT_VALIDATION_SCALE_CONFIG,
+    config_path: str | Path = DEFAULT_PAPER_PROFILE_CONFIG,
 ) -> dict[str, Any]:
-    """写出 validation-scale gate records、table、decision 和 report。"""
+    """写出 paper profile gate records、table、decision 和 report。"""
     run_root = Path(run_root)
-    audit = build_validation_scale_gate_audit(run_root, config_path)
+    audit = build_paper_profile_gate_audit(run_root, config_path)
     record = with_flow_evidence_protocol_defaults(
-        {"record_version": "validation_scale_generative_probe_gate_v1", **audit},
-        trajectory_source_level="validation_scale_gate_aggregated_records",
-        flow_state_admissibility_status="validation_scale_ready" if audit["validation_scale_gate_decision"] == "PASS" else "validation_scale_blocked",
+        {"record_version": "paper_profile_generative_probe_gate_v1", **audit},
+        trajectory_source_level="paper_profile_gate_aggregated_records",
+        flow_state_admissibility_status="paper_profile_ready" if audit["paper_profile_gate_decision"] == "PASS" else "paper_profile_blocked",
         claim_support_status=audit["claim_support_status"],
     )
-    write_jsonl(run_root / "records" / "validation_scale_gate_records.jsonl", [record])
-    write_csv(run_root / "tables" / "validation_scale_gate_table.csv", [record])
-    write_json(run_root / "artifacts" / "validation_scale_gate_decision.json", audit)
+    write_jsonl(run_root / "records" / "paper_profile_gate_records.jsonl", [record])
+    write_csv(run_root / "tables" / "paper_profile_gate_table.csv", [record])
+    write_json(run_root / "artifacts" / "paper_profile_gate_decision.json", audit)
     target_fpr_text = _format_fpr(audit.get("target_fpr"))
     if audit.get("paper_result_level") == "probe_paper":
         report_scope = (
@@ -1041,23 +1045,23 @@ def write_validation_scale_gate_audit(
         )
     else:
         report_scope = (
-            "该报告由已落盘的 governed records 与 decision artifacts 自动生成。它只判断 validation_scale "
+            "该报告由已落盘的 governed records 与 decision artifacts 自动生成。它只判断 paper_profile "
             "是否已经作为 target_fpr=0.1 的小样本全流程打通门禁完成闭环。该层级使用当前 protocol config "
             f"指定的 target_fpr={target_fpr_text} "
             "验证 records、tables、figures、reports、manifests、baseline、clean negative 公平校准、消融、46 个 runtime attack、"
             "11 个 non-runtime/adaptive 协议、CI 和 artifact rebuild 是否能够完整产出。"
-            "通过后只允许进入 probe_paper; validation_scale 本身不支持正式效果主张, "
+            "通过后只允许进入 probe_paper; paper_profile 本身不支持正式效果主张, "
             "也不能外推到 pilot_paper 的 FPR=0.01 或 full_paper 的 FPR=0.001。\n\n"
         )
     report = (
-        "# Validation-scale Generative Probe Gate Report\n\n"
+        "# Paper Profile Generative Probe Gate Report\n\n"
         + report_scope
-        + f"- validation_scale_gate_decision: {audit['validation_scale_gate_decision']}\n"
+        + f"- paper_profile_gate_decision: {audit['paper_profile_gate_decision']}\n"
         f"- claim_support_status: {audit['claim_support_status']}\n"
         f"- paper_result_level: {audit['paper_result_level']}\n"
         f"- target_fpr: {target_fpr_text}\n"
         f"- missing_validation_requirements: {', '.join(audit['missing_validation_requirements']) if audit['missing_validation_requirements'] else 'none'}\n"
-        f"- validation_scale_hard_required_config_missing: {', '.join(audit['validation_scale_hard_required_config_missing']) if audit['validation_scale_hard_required_config_missing'] else 'none'}\n"
+        f"- paper_profile_hard_required_config_missing: {', '.join(audit['paper_profile_hard_required_config_missing']) if audit['paper_profile_hard_required_config_missing'] else 'none'}\n"
         f"- validation_generation_record_count: {audit['validation_generation_record_count']}\n"
         f"- validation_prompt_count: {audit['validation_prompt_count']}\n"
         f"- validation_seed_per_prompt_min: {audit['validation_seed_per_prompt_min']}\n"
@@ -1086,12 +1090,12 @@ def write_validation_scale_gate_audit(
         f"- formal_method_baseline_comparison_status: {audit['formal_method_baseline_comparison_status']}\n"
         f"- formal_baseline_difference_interval_ready_count: {audit['formal_baseline_difference_interval_ready_count']}\n"
         f"- formal_baseline_difference_interval_status: {audit['formal_baseline_difference_interval_status']}\n"
-        f"- validation_scale_sstw_advantage_claim_ready: {str(audit['validation_scale_sstw_advantage_claim_ready']).lower()}\n"
-        f"- validation_scale_sstw_advantage_ready_baseline_count: {audit['validation_scale_sstw_advantage_ready_baseline_count']}\n"
-        f"- validation_scale_sstw_advantage_missing_baseline_names: {', '.join(audit['validation_scale_sstw_advantage_missing_baseline_names']) if audit['validation_scale_sstw_advantage_missing_baseline_names'] else 'none'}\n"
-        f"- validation_scale_sstw_advantage_blocking_reasons: {', '.join(audit['validation_scale_sstw_advantage_blocking_reasons']) if audit['validation_scale_sstw_advantage_blocking_reasons'] else 'none'}\n"
-        f"- validation_scale_formal_internal_ablation_variant_count: {audit['validation_scale_formal_internal_ablation_variant_count']}\n"
-        f"- validation_scale_formal_internal_ablation_status: {audit['validation_scale_formal_internal_ablation_status']}\n"
+        f"- paper_profile_sstw_advantage_claim_ready: {str(audit['paper_profile_sstw_advantage_claim_ready']).lower()}\n"
+        f"- paper_profile_sstw_advantage_ready_baseline_count: {audit['paper_profile_sstw_advantage_ready_baseline_count']}\n"
+        f"- paper_profile_sstw_advantage_missing_baseline_names: {', '.join(audit['paper_profile_sstw_advantage_missing_baseline_names']) if audit['paper_profile_sstw_advantage_missing_baseline_names'] else 'none'}\n"
+        f"- paper_profile_sstw_advantage_blocking_reasons: {', '.join(audit['paper_profile_sstw_advantage_blocking_reasons']) if audit['paper_profile_sstw_advantage_blocking_reasons'] else 'none'}\n"
+        f"- formal_internal_ablation_summary_variant_count: {audit['formal_internal_ablation_summary_variant_count']}\n"
+        f"- formal_internal_ablation_summary_status: {audit['formal_internal_ablation_summary_status']}\n"
         f"- low_fpr_formal_statistics_record_count: {audit['low_fpr_formal_statistics_record_count']}\n"
         f"- low_fpr_formal_statistics_status: {audit['low_fpr_formal_statistics_status']}\n"
         f"- paper_result_artifact_skeleton_status: {audit['paper_result_artifact_skeleton_status']}\n"
@@ -1099,11 +1103,11 @@ def write_validation_scale_gate_audit(
         f"- missing_modern_external_baseline_formal_adapter_names: {', '.join(audit['missing_modern_external_baseline_formal_adapter_names']) if audit['missing_modern_external_baseline_formal_adapter_names'] else 'none'}\n"
         f"- full_paper_allowed: {str(audit['full_paper_allowed']).lower()}\n"
     )
-    report_path = run_root / "reports" / "validation_scale_gate_report.md"
+    report_path = run_root / "reports" / "paper_profile_gate_report.md"
     report_path.parent.mkdir(parents=True, exist_ok=True)
     report_path.write_text(report, encoding="utf-8")
-    paper_result_level = str(audit.get("paper_result_level") or "validation_scale")
-    if paper_result_level != "validation_scale":
+    paper_result_level = str(audit.get("paper_result_level") or "paper_profile")
+    if paper_result_level != "paper_profile":
         profile_gate_field = f"{paper_result_level}_gate_decision"
         profile_record = {
             **record,
@@ -1113,7 +1117,7 @@ def write_validation_scale_gate_audit(
         write_csv(run_root / "tables" / f"{paper_result_level}_gate_table.csv", [profile_record])
         write_json(run_root / "artifacts" / f"{paper_result_level}_gate_decision.json", audit)
         profile_report = report.replace(
-            "Validation-scale Generative Probe Gate Report",
+            "Paper Profile Generative Probe Gate Report",
             f"{paper_result_level} Generative Probe Gate Report",
         )
         profile_report += f"\n- {profile_gate_field}: {audit.get(profile_gate_field)}\n"
@@ -1125,12 +1129,12 @@ def write_validation_scale_gate_audit(
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="审计 validation-scale generative video probe gate。")
+    parser = argparse.ArgumentParser(description="审计 paper profile generative video probe gate。")
     parser.add_argument("--run-root", required=True)
-    parser.add_argument("--config-path", default=DEFAULT_VALIDATION_SCALE_CONFIG)
+    parser.add_argument("--config-path", default=DEFAULT_PAPER_PROFILE_CONFIG)
     parser.add_argument("--write-outputs", action="store_true")
     args = parser.parse_args()
-    payload = write_validation_scale_gate_audit(args.run_root, args.config_path) if args.write_outputs else build_validation_scale_gate_audit(args.run_root, args.config_path)
+    payload = write_paper_profile_gate_audit(args.run_root, args.config_path) if args.write_outputs else build_paper_profile_gate_audit(args.run_root, args.config_path)
     print(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True))
 
 

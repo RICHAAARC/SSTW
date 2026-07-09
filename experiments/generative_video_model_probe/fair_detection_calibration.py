@@ -1,6 +1,6 @@
 """基于方法自身 clean negative 分布的公平检测校准。
 
-该模块实现 validation_scale 必须闭合的公平比较机制: 每个方法先在自己的
+该模块实现 probe_paper 必须闭合的公平比较机制: 每个方法先在自己的
 clean negative 分布上校准到同一个 target FPR, 再在同一 prompt / seed / attack
 锚点下比较 attacked positive 的 TPR。Notebook 只调用本模块命令, 不在 cell 中
 手写阈值、TPR 或论文表格。
@@ -28,7 +28,7 @@ from main.protocol.record_writer import write_json, write_jsonl
 from main.protocol.table_builder import write_csv
 
 
-DEFAULT_PROTOCOL_CONFIG = "configs/protocol/validation_scale_generative_probe.json"
+DEFAULT_PROTOCOL_CONFIG = "configs/protocol/probe_paper_generative_probe.json"
 SSTW_METHOD_ID = "sstw_key_conditioned_flow_trajectory"
 DEFAULT_REQUIRED_BASELINES = ("videoshield", "vidsig", "videoseal", "revmark", "wam_frame")
 
@@ -76,7 +76,7 @@ def _load_profile_context(config_path: str | Path) -> dict[str, Any]:
     if "target_fpr" not in config:
         raise KeyError(f"protocol config 缺少 target_fpr: {config_path}")
     return {
-        "paper_result_level": str(config.get("paper_result_level") or "validation_scale"),
+        "paper_result_level": str(config.get("paper_result_level") or "probe_paper"),
         "target_fpr": float(config["target_fpr"]),
         "target_fpr_source_config_path": str(config_path),
         "minimum_clean_negative_count": int(config.get("minimum_clean_negative_count") or 0),
@@ -479,7 +479,7 @@ def _calibrated_method_record(
         "tpr_ci_upper": ci_upper,
         "prompt_count": len({str(row["prompt_id"]) for row in positive_rows if row.get("prompt_id")}),
         "attack_count": len({str(row["attack_name"]) for row in positive_rows if row.get("attack_name")}),
-        "claim_support_status": "fair_detection_calibration_validation_scale_ready"
+        "claim_support_status": "fair_detection_calibration_paper_profile_ready"
         if calibration_status == "ready"
         else "fair_detection_calibration_blocked",
         **{
@@ -552,7 +552,7 @@ def audit_fair_detection_calibration_records(records: list[dict[str, Any]]) -> d
     return {
         "stage_id": "fair_detection_calibration",
         "fair_detection_calibration_decision": decision,
-        "claim_support_status": "fair_detection_calibration_validation_scale_ready" if decision == "PASS" else "fair_detection_calibration_blocked",
+        "claim_support_status": "fair_detection_calibration_paper_profile_ready" if decision == "PASS" else "fair_detection_calibration_blocked",
         "paper_result_level": records[0].get("paper_result_level") if records else None,
         "target_fpr": records[0].get("target_fpr") if records else None,
         "fair_comparison_protocol": records[0].get("fair_comparison_protocol") if records else None,
@@ -578,7 +578,7 @@ def run_fair_detection_calibration(
     report = (
         "# Fair Detection Calibration Report\n\n"
         "该报告在每个方法自身 clean negative 分布上校准到相同 target FPR, 再统计 attacked positive "
-        "TPR。validation_scale 必须通过该门禁后才允许进入 pilot_paper, 但 validation_scale "
+        "TPR。probe_paper 必须通过该门禁后才允许进入 pilot_paper, 但 paper_profile "
         "本身仍不支持最终效果大小主张。\n\n"
         f"- fair_detection_calibration_decision: {audit['fair_detection_calibration_decision']}\n"
         f"- target_fpr: {audit['target_fpr']}\n"

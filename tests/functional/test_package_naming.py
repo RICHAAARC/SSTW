@@ -48,18 +48,18 @@ def test_independent_packager_stage_file_names_match_stage_zip_policy() -> None:
         "generative_video_generation",
         "20260701_030405",
         "abc123ef",
-        workflow_profile="validation_scale",
+        workflow_profile="probe_paper",
         stage_package_id="generative_video_generation_colab",
     )
 
-    assert stem == "validation_scale_generative_video_generation_colab_20260701_030405_abc123ef"
+    assert stem == "probe_paper_generative_video_generation_colab_20260701_030405_abc123ef"
     assert packager_manifest_filename(stem, stage_package_naming=True).endswith("_manifest.json")
     assert packager_manifest_filename(stem, stage_package_naming=False).endswith("_package_manifest.json")
     assert archive_run_root_for_stage(
-        "validation_scale",
-        workflow_profile="validation_scale",
+        "probe_paper",
+        workflow_profile="probe_paper",
         stage_package_id="generative_video_generation_colab",
-    ) == "runs/generative_video_model_probe/validation_scale"
+    ) == "runs/generative_video_model_probe/probe_paper"
     assert archive_run_root_for_stage(
         "sampling_time_constraint_colab",
         workflow_profile="sampling_time_constraint",

@@ -3,7 +3,7 @@
 历史入口仍保留 `small_scale_claim_pilot` 文件名, 用于复现早期
 mechanism_validation 子检查。当前主干 Notebook 使用
 `protocol_evaluation_matrix` 输出, 避免把历史 gate 名称继续写入
-validation_scale / pilot_paper 的正式阶段包。
+probe_paper / pilot_paper 的正式阶段包。
 """
 
 from __future__ import annotations
@@ -299,7 +299,7 @@ def write_protocol_evaluation_matrix_postprocess(run_root: str | Path) -> dict:
     report = (
         "# Protocol Evaluation Matrix Postprocess Report\n\n"
         "该报告由现有 generation 与 trajectory records 后处理生成。当前记录是 proxy_postprocess 证据, "
-        "用于在 validation_scale / pilot_paper 中预演 attack、negative family、method variant "
+        "用于在 probe_paper / pilot_paper 中预演 attack、negative family、method variant "
         "和 replay 控制矩阵, 不能替代 full-paper 正式效果 claim。\n\n"
         f"- protocol_evaluation_matrix_decision: {audit['protocol_evaluation_matrix_decision']}\n"
         f"- protocol_evaluation_matrix_record_count: {audit['protocol_evaluation_matrix_record_count']}\n"

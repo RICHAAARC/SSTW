@@ -18,7 +18,7 @@ def test_replay_and_sketch_gate_writes_validation_proxy_records(tmp_path: Path) 
             trace_id = f"trace_{prompt_index}_{seed_index}"
             generation_records.append({
                 "generation_status": "success",
-                "colab_runtime_profile": "validation_scale",
+                "colab_runtime_profile": "probe_paper",
                 "generation_model_id": "model",
                 "prompt_id": f"prompt_{prompt_index}",
                 "seed_id": f"seed_{seed_index}",
@@ -74,7 +74,7 @@ def test_replay_and_sketch_gate_blocks_missing_trace_records(tmp_path: Path) -> 
     run_root = tmp_path / "run"
     write_jsonl(run_root / "records" / "generation_records.jsonl", [{
         "generation_status": "success",
-        "colab_runtime_profile": "validation_scale",
+        "colab_runtime_profile": "probe_paper",
         "generation_model_id": "model",
         "prompt_id": "prompt_a",
         "seed_id": "seed_a",

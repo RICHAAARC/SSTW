@@ -12,8 +12,7 @@
 
 ```text
 mechanism_validation_passed = true
-validation_scale_gate_passed = true
-validation_scale_to_probe_paper_transition_decision_passed = true
+paper_profile_gate_passed = true
 probe_paper_gate_passed = true
 probe_paper_to_pilot_paper_transition_decision_passed = true
 pilot_paper_gate_passed = true
@@ -218,7 +217,7 @@ stage_status: checker 工程入口已实现, full_paper 真实结果仍等待前
 ```text
 历史 small-scale 机制 pilot 已在 workflow progression 级别 PASS, 但不再作为主干门禁
 probe_paper / pilot_paper 真实 GPU 结果必须先闭合, 不能替代 full_paper 规模结果
-validation_scale_gate_passed 尚未成立
+paper_profile_gate_passed 尚未成立
 external baseline comparison 链路已接入 pilot_paper gate, 但现代 baseline 项目内自包含 measured_formal 主表 adapter 仍未闭合
 internal ablation 已接入 pilot_paper gate, full-scale records 尚未完成
 flow_specific_adaptive_attack_gate 尚未完成
@@ -232,18 +231,18 @@ pilot_paper_gate 与 full_paper_result_checker 工程入口已实现, 但 full_p
 | 项目 | 当前标注 |
 |---|---|
 | 完成状态 | checker 工程入口已实现, full_paper 真实结果仍等待前置门禁与大规模运行 |
-| 主要差距项 | 历史 small-scale 机制 pilot 已解除, pilot_paper gate 已要求 baseline comparison 与内部消融覆盖同批 trace, 但 probe_paper、pilot_paper 真实结果、validation_scale、现代外部 baseline 正式主表对比、full-scale 内部消融、adaptive attack、replay/sketch、FPR=0.001 和 full_paper_result_checker 仍未闭合。 |
-| 下一步构建方向 | 先完成 validation_scale 小样本全流程打通验证, 同步推进现代外部 baseline adapter、内部消融、adaptive attack、replay/sketch 和 CI reporter。 |
+| 主要差距项 | 历史 small-scale 机制 pilot 已解除, pilot_paper gate 已要求 baseline comparison 与内部消融覆盖同批 trace, 但 probe_paper、pilot_paper 真实结果、probe_paper、现代外部 baseline 正式主表对比、full-scale 内部消融、adaptive attack、replay/sketch、FPR=0.001 和 full_paper_result_checker 仍未闭合。 |
+| 下一步构建方向 | 先完成 probe_paper 小样本全流程打通验证, 同步推进现代外部 baseline adapter、内部消融、adaptive attack、replay/sketch 和 CI reporter。 |
 | full_paper 影响 | 本阶段未通过时, 禁止生成 full_paper 论文结果包。 |
 
 ### 3.1 2026-06-23 最新阶段边界
 
-最新 Wan2.1 small-scale pilot 复跑已经通过, 因此本阶段的阻塞原因不再是 pilot 未完成。当前阻塞点已经前移到 validation_scale 和论文级证据充分性:
+最新 Wan2.1 small-scale pilot 复跑已经通过, 因此本阶段的阻塞原因不再是 pilot 未完成。当前阻塞点已经前移到 probe_paper 和论文级证据充分性:
 
 ```text
 mechanism_validation_passed = true
 pilot_paper_result_completed = false
-validation_scale_full_pipeline_completed = false
+probe_paper_full_pipeline_completed = false
 modern_external_baseline_status_records_ready = true
 external_baseline_self_containment_decision_ready = false
 modern_external_baseline_measured_formal_ready_count = 0

@@ -279,7 +279,7 @@ def validate_complete_official_bundle_baseline_identity(
 ) -> None:
     """校验 official bundle 同时声明 adapter 身份和官方 baseline 身份。
 
-    通用身份检查只要求至少存在一个可审计 baseline 字段。validation_scale 的
+    通用身份检查只要求至少存在一个可审计 baseline 字段。paper profile 的
     公平比较需要更强约束: 每个正式 official bundle 必须同时说明“由哪个 SSTW
     official adapter 读取”和“该 bundle 属于哪个官方 baseline”。这样后续
     self-containment 与 measured_formal 转写不会把旧式或半结构化 bundle 误认为
@@ -431,7 +431,7 @@ def validate_score_payload(payload: Mapping[str, Any]) -> None:
 def validate_clean_negative_payload(payload: Mapping[str, Any]) -> None:
     """确认 official bundle 包含同方法 clean negative 校准分数。
 
-    validation_scale 的公平比较不再允许只给 attacked positive 分数。每个
+    paper profile 的公平比较不再允许只给 attacked positive 分数。每个
     external baseline 的 official bundle 必须同时携带该 baseline 自己的
     clean negative detector score, 后续才能在相同 target FPR 下校准阈值。
     """

@@ -23,7 +23,7 @@ def test_notebook_run_timer_writes_report_manifest_and_stage_records(tmp_path: P
     timer = start_notebook_run_timer(
         layout,
         notebook_role="generative_video_generation",
-        workflow_profile="validation_scale",
+        workflow_profile="probe_paper",
         enabled_stage_plan=["prepare_prompt_suite"],
         repo_root=".",
     )
@@ -38,7 +38,7 @@ def test_notebook_run_timer_writes_report_manifest_and_stage_records(tmp_path: P
     assert result["stage_status"] == "PASS"
     assert manifest["manifest_kind"] == "notebook_runtime_report"
     assert manifest["notebook_role"] == "generative_video_generation"
-    assert manifest["workflow_profile"] == "validation_scale"
+    assert manifest["workflow_profile"] == "probe_paper"
     assert manifest["notebook_elapsed_sec"] >= 0
     assert manifest["notebook_timing_coverage_status"] == "repository_stage_plan_only_excludes_manual_colab_setup"
     assert manifest["claim_support_status"] == "notebook_runtime_estimation_only_not_claim_evidence"
@@ -68,7 +68,7 @@ def test_notebook_run_timer_can_use_shared_layout_start_time(
     timer = start_notebook_run_timer(
         {"drive_run_root": str(tmp_path / "run")},
         notebook_role="generative_video_generation",
-        workflow_profile="validation_scale",
+        workflow_profile="probe_paper",
         repo_root=".",
     )
     manifest = timer.finish("completed")
@@ -85,7 +85,7 @@ def test_shared_layout_initializes_runtime_session_without_notebook_edits(tmp_pa
     layout = initialize_notebook_runtime_session(
         {
             "drive_run_root": str(tmp_path / "run"),
-            "workflow_profile": "validation_scale",
+            "workflow_profile": "probe_paper",
         },
         notebook_role="generative_video_generation",
     )
@@ -101,21 +101,21 @@ def test_stage_package_manifest_summarizes_notebook_timing(tmp_path: Path, monke
 
     monkeypatch.setenv("SSTW_COLAB_STAGE_IO_MODE", "local_zip")
     drive_root = tmp_path / "drive" / "SSTW"
-    run_root = tmp_path / "workspace" / "validation_scale" / "run"
+    run_root = tmp_path / "workspace" / "probe_paper" / "run"
     run_root.mkdir(parents=True)
     (run_root / "records" / "dummy.jsonl").parent.mkdir(parents=True)
     (run_root / "records" / "dummy.jsonl").write_text("{}\n", encoding="utf-8")
     layout = {
         "drive_project_root": str(drive_root),
         "drive_run_root": str(run_root),
-        "workflow_profile": "validation_scale",
+        "workflow_profile": "probe_paper",
         "stage_package_id": "generative_video_generation_colab",
         "local_stage_package_cache_root": str(tmp_path / "cache"),
     }
     timer = start_notebook_run_timer(
         layout,
         notebook_role="generative_video_generation",
-        workflow_profile="validation_scale",
+        workflow_profile="probe_paper",
         repo_root=".",
     )
     timer.finish("completed_before_stage_package_publish")
@@ -149,13 +149,13 @@ def test_stage_package_creates_runtime_report_without_explicit_timer(
 
     monkeypatch.setenv("SSTW_COLAB_STAGE_IO_MODE", "local_zip")
     drive_root = tmp_path / "drive" / "SSTW"
-    run_root = tmp_path / "workspace" / "validation_scale" / "run"
+    run_root = tmp_path / "workspace" / "probe_paper" / "run"
     run_root.mkdir(parents=True)
     layout = initialize_notebook_runtime_session(
         {
             "drive_project_root": str(drive_root),
             "drive_run_root": str(run_root),
-            "workflow_profile": "validation_scale",
+            "workflow_profile": "probe_paper",
             "stage_package_id": "generative_video_generation_colab",
             "local_stage_package_cache_root": str(tmp_path / "cache"),
         },

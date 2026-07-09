@@ -239,7 +239,7 @@ def _has_clean_negative_score_evidence(record: Mapping[str, Any]) -> bool:
 def _has_formal_positive_score_granularity_evidence(record: Mapping[str, Any]) -> bool:
     """检查 positive 分数是否具备逐 prompt / seed / attack 的正式比较资格。
 
-    validation_scale 的公平比较不能只看 `metric_status: measured_formal`。如果官方
+    paper profile 的公平比较不能只看 `metric_status: measured_formal`。如果官方
     输出来自 aggregate 均值、固定 FPR 日志值或二值 decision, 即使有数值字段,
     也不能进入 TPR@FPR 主比较。
     """
@@ -296,7 +296,7 @@ def formal_score_record_ready_for_claim(record: Mapping[str, Any]) -> bool:
     """检查 measured_formal baseline row 是否达到公平比较入口要求。
 
     该函数是项目特定门禁: 单纯写入 `metric_status: measured_formal` 不足以支撑
-    validation_scale 公平比较。每条现代 baseline 结果还必须保留完整 runtime anchor、
+    paper profile 公平比较。每条现代 baseline 结果还必须保留完整 runtime anchor、
     自身 clean negative 校准分数、项目内 official bundle / execution manifest 证据,
     以及官方分数抽取口径证据。
     """

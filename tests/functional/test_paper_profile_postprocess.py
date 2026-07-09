@@ -18,7 +18,7 @@ from experiments.generative_video_model_probe.validation_artifact_rebuild import
     run_validation_artifact_rebuild_dry_run,
 )
 from experiments.generative_video_model_probe.validation_internal_ablation import run_validation_internal_ablation
-from experiments.generative_video_model_probe.validation_scale_formal_internal_ablation import run_validation_scale_formal_internal_ablation
+from experiments.generative_video_model_probe.formal_internal_ablation_summary import run_formal_internal_ablation_summary
 from main.attacks.video_runtime_attack_protocol import FULL_PAPER_RUNTIME_ATTACKS
 from main.protocol.record_writer import read_jsonl, write_json, write_jsonl
 
@@ -105,7 +105,7 @@ def test_validation_internal_ablation_writes_proxy_records(tmp_path: Path) -> No
     write_jsonl(run_root / "records" / "generation_records.jsonl", [
         {
             "generation_status": "success",
-            "colab_runtime_profile": "validation_scale",
+            "colab_runtime_profile": "probe_paper",
             "trajectory_trace_id": "trace_a",
             "prompt_id": "prompt_a",
             "seed_id": "seed_a",
@@ -132,7 +132,7 @@ def test_validation_internal_ablation_writes_proxy_records(tmp_path: Path) -> No
     assert audit["internal_ablation_record_count"] == len(records)
     assert any(record["method_variant"] == "without_velocity_constraint" for record in records)
     assert all(record["claim_support_status"] == "validation_internal_ablation_proxy_only" for record in records)
-    assert all(record["ablation_runtime_profile"] == "validation_scale" for record in records)
+    assert all(record["ablation_runtime_profile"] == "probe_paper" for record in records)
     assert (run_root / "tables" / "validation_internal_ablation_table.csv").exists()
     assert (run_root / "reports" / "validation_internal_ablation_report.md").exists()
 
@@ -183,10 +183,10 @@ def test_statistical_confidence_interval_reporter_writes_wilson_interval(tmp_pat
 
     audit = run_statistical_confidence_interval_reporter(run_root)
     records = read_jsonl(run_root / "records" / "statistical_confidence_interval_records.jsonl")
-    protocol = json.loads(Path("configs/protocol/validation_scale_generative_probe.json").read_text(encoding="utf-8"))
+    protocol = json.loads(Path("configs/protocol/probe_paper_generative_probe.json").read_text(encoding="utf-8"))
 
     assert audit["statistical_confidence_interval_decision"] == "PASS"
-    assert audit["paper_result_level"] == "validation_scale"
+    assert audit["paper_result_level"] == "probe_paper"
     assert audit["target_fpr"] == protocol["target_fpr"]
     assert records[0]["target_fpr"] == protocol["target_fpr"]
     assert audit["ci_total_count"] == 3
@@ -234,24 +234,24 @@ def test_sstw_measured_formal_result_writes_project_method_records(tmp_path: Pat
             "trajectory_trace_id": f"negative_trace_{index}",
             "S_final": 0.05 + index * 0.001,
         }
-        for index in range(10)
+        for index in range(500)
     ])
 
     audit = run_sstw_measured_formal_result(run_root)
     records = read_jsonl(run_root / "records" / "sstw_measured_formal_records.jsonl")
-    protocol = json.loads(Path("configs/protocol/validation_scale_generative_probe.json").read_text(encoding="utf-8"))
+    protocol = json.loads(Path("configs/protocol/probe_paper_generative_probe.json").read_text(encoding="utf-8"))
 
     assert audit["sstw_measured_formal_decision"] == "PASS"
-    assert audit["sstw_measured_formal_record_count"] == 11
+    assert audit["sstw_measured_formal_record_count"] == 501
     assert audit["sstw_measured_formal_positive_record_count"] == 1
-    assert audit["sstw_measured_formal_clean_negative_score_count"] == 10
+    assert audit["sstw_measured_formal_clean_negative_score_count"] == 500
     assert audit["sstw_measured_formal_score_mean"] == 0.8
     assert audit["target_fpr"] == protocol["target_fpr"]
     assert records[0]["metric_status"] == "measured_formal"
     assert records[0]["method_id"] == "sstw_key_conditioned_flow_trajectory"
     assert records[0]["method_role"] == "proposed_method"
     assert records[0]["comparison_scope"] == "paper_protocol_formal_adapter"
-    assert records[0]["claim_support_status"] == "sstw_measured_formal_validation_scale_only"
+    assert records[0]["claim_support_status"] == "sstw_measured_formal_paper_profile_claim_candidate"
     assert records[0]["sstw_detection_score_field"] == "S_final_conservative"
     assert any(record.get("sample_role") == "clean_negative" for record in records)
     assert (run_root / "tables" / "sstw_measured_formal_table.csv").exists()
@@ -264,9 +264,9 @@ def test_sstw_measured_formal_result_writes_project_method_records(tmp_path: Pat
 def test_formal_comparison_rejects_fair_calibration_target_fpr_mismatch(tmp_path: Path) -> None:
     """正式比较不能把旧 target_fpr 的 fair calibration 结果改标成当前配置结果。"""
     run_root = tmp_path / "run"
-    config_path = run_root / "validation_scale_config.json"
+    config_path = run_root / "probe_paper_config.json"
     write_json(config_path, {
-        "paper_result_level": "validation_scale",
+        "paper_result_level": "probe_paper",
         "target_fpr": 0.1,
         "required_modern_external_baseline_adapter_names": ["videoseal"],
     })
@@ -334,9 +334,9 @@ def test_formal_comparison_rejects_fair_calibration_target_fpr_mismatch(tmp_path
 def test_fair_detection_calibration_rejects_positive_records_without_complete_anchor(tmp_path: Path) -> None:
     """公平校准不能把缺失 prompt / seed / attack 的 positive 记录伪装成可比较 anchor。"""
     run_root = tmp_path / "run"
-    config_path = run_root / "validation_scale_config.json"
+    config_path = run_root / "probe_paper_config.json"
     write_json(config_path, {
-        "paper_result_level": "validation_scale",
+        "paper_result_level": "probe_paper",
         "target_fpr": 0.1,
         "minimum_clean_negative_count": 2,
         "required_modern_external_baseline_adapter_names": ["videoseal"],
@@ -421,9 +421,9 @@ def test_fair_detection_calibration_rejects_positive_records_without_complete_an
 def test_fair_detection_calibration_rejects_external_positive_without_official_evidence(tmp_path: Path) -> None:
     """现代 baseline 缺少项目内 official evidence 时不能进入同 FPR 公平比较。"""
     run_root = tmp_path / "run"
-    config_path = run_root / "validation_scale_config.json"
+    config_path = run_root / "probe_paper_config.json"
     write_json(config_path, {
-        "paper_result_level": "validation_scale",
+        "paper_result_level": "probe_paper",
         "target_fpr": 0.1,
         "minimum_clean_negative_count": 2,
         "required_modern_external_baseline_adapter_names": ["videoseal"],
@@ -508,9 +508,9 @@ def test_fair_detection_calibration_rejects_external_positive_without_official_e
 def test_fair_detection_calibration_rejects_external_clean_negative_without_official_evidence(tmp_path: Path) -> None:
     """现代 baseline 的 clean negative 校准分数也必须来自 official evidence。"""
     run_root = tmp_path / "run"
-    config_path = run_root / "validation_scale_config.json"
+    config_path = run_root / "probe_paper_config.json"
     write_json(config_path, {
-        "paper_result_level": "validation_scale",
+        "paper_result_level": "probe_paper",
         "target_fpr": 0.1,
         "minimum_clean_negative_count": 2,
         "required_modern_external_baseline_adapter_names": ["videoshield"],
@@ -604,9 +604,9 @@ def test_fair_detection_calibration_rejects_fixed_fpr_log_score(tmp_path: Path) 
     """固定 FPR 日志值不是可重新校准阈值的连续 detector score。"""
 
     run_root = tmp_path / "run"
-    config_path = run_root / "validation_scale_config.json"
+    config_path = run_root / "probe_paper_config.json"
     write_json(config_path, {
-        "paper_result_level": "validation_scale",
+        "paper_result_level": "probe_paper",
         "target_fpr": 0.1,
         "minimum_clean_negative_count": 2,
         "required_modern_external_baseline_adapter_names": ["vidsig"],
@@ -702,9 +702,9 @@ def test_fair_detection_calibration_rejects_fixed_fpr_log_score(tmp_path: Path) 
 def test_formal_method_baseline_comparison_rejects_unaligned_prompt_seed_attack_anchors(tmp_path: Path) -> None:
     """baseline 缺少 SSTW 的 prompt / seed / attack anchor 时不能通过公平比较。"""
     run_root = tmp_path / "run"
-    config_path = run_root / "validation_scale_config.json"
+    config_path = run_root / "probe_paper_config.json"
     write_json(config_path, {
-        "paper_result_level": "validation_scale",
+        "paper_result_level": "probe_paper",
         "target_fpr": 0.1,
         "minimum_clean_negative_count": 10,
         "required_modern_external_baseline_adapter_names": ["videoshield"],
@@ -788,8 +788,8 @@ def test_formal_method_baseline_comparison_rejects_unaligned_prompt_seed_attack_
 
 @pytest.mark.quick
 @pytest.mark.quick
-def test_validation_scale_formal_internal_ablation_binds_full_method_formal_result(tmp_path: Path) -> None:
-    """validation_scale 内部消融汇总必须把 full-method 行绑定到 SSTW measured_formal。"""
+def test_formal_internal_ablation_summary_binds_full_method_formal_result(tmp_path: Path) -> None:
+    """probe_paper 内部消融汇总必须把 full-method 行绑定到 SSTW measured_formal。"""
     run_root = tmp_path / "run"
     write_jsonl(run_root / "records" / "sstw_measured_formal_records.jsonl", [
         {"metric_status": "measured_formal", "sstw_score": 0.8},
@@ -812,24 +812,24 @@ def test_validation_scale_formal_internal_ablation_binds_full_method_formal_resu
         })
     write_jsonl(run_root / "records" / "validation_internal_ablation_records.jsonl", proxy_records)
 
-    audit = run_validation_scale_formal_internal_ablation(run_root)
-    records = read_jsonl(run_root / "records" / "validation_scale_formal_internal_ablation_records.jsonl")
+    audit = run_formal_internal_ablation_summary(run_root)
+    records = read_jsonl(run_root / "records" / "formal_internal_ablation_summary_records.jsonl")
 
-    assert audit["validation_scale_formal_internal_ablation_decision"] == "PASS"
+    assert audit["formal_internal_ablation_summary_decision"] == "PASS"
     assert audit["formal_internal_ablation_variant_count"] == 8
     full_row = next(record for record in records if record["method_variant"] == "sstw_full_method")
     assert full_row["metric_status"] == "measured_formal"
     assert full_row["formal_internal_ablation_score_mean"] == 0.81
     assert full_row["formal_internal_ablation_evidence_level"] == "sstw_measured_formal_full_method"
     assert any(record["metric_status"] == "measured_proxy" for record in records if record["method_variant"] != "sstw_full_method")
-    assert (run_root / "tables" / "validation_scale_formal_internal_ablation_table.csv").exists()
-    assert (run_root / "artifacts" / "validation_scale_formal_internal_ablation_decision.json").exists()
-    assert (run_root / "reports" / "validation_scale_formal_internal_ablation_report.md").exists()
+    assert (run_root / "tables" / "formal_internal_ablation_summary_table.csv").exists()
+    assert (run_root / "artifacts" / "formal_internal_ablation_summary_decision.json").exists()
+    assert (run_root / "reports" / "formal_internal_ablation_summary_report.md").exists()
 
 
 @pytest.mark.quick
 def test_low_fpr_formal_statistics_writes_blocking_record(tmp_path: Path) -> None:
-    """validation_scale 必须显式写出低 FPR 正式统计阻断记录。"""
+    """probe_paper 必须显式写出低 FPR 正式统计阻断记录。"""
     run_root = tmp_path / "run"
     write_jsonl(run_root / "records" / "generation_records.jsonl", [
         {"prompt_id": "negative_prompt", "negative_family": "clean_negative"},
@@ -845,7 +845,7 @@ def test_low_fpr_formal_statistics_writes_blocking_record(tmp_path: Path) -> Non
     assert {record["blocked_result_profile"] for record in records} >= {"pilot_paper", "full_paper"}
     assert all(record["formal_low_fpr_claim_allowed"] is False for record in records)
     assert any(record["claim_support_status"] == "low_fpr_formal_statistics_blocking_record" for record in records)
-    assert any(record["result_profile"] == "validation_scale" for record in records)
+    assert any(record["result_profile"] == "probe_paper" for record in records)
     assert (run_root / "tables" / "low_fpr_formal_statistics_table.csv").exists()
     assert (run_root / "artifacts" / "low_fpr_formal_statistics_decision.json").exists()
     assert (run_root / "reports" / "low_fpr_formal_statistics_report.md").exists()

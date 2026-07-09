@@ -199,7 +199,7 @@ PAPER_EVIDENCE_POSTPROCESS_PACKAGE_RELPATHS = (
     "artifacts/statistical_confidence_interval_decision.json",
     "artifacts/validation_internal_ablation_decision.json",
     "artifacts/video_quality_metric_decision.json",
-    "artifacts/validation_scale_formal_internal_ablation_decision.json",
+    "artifacts/formal_internal_ablation_summary_decision.json",
     "records/adaptive_attack_records.jsonl",
     "records/claim3_downgrade_records.jsonl",
     "records/data_split_and_leakage_guard_records.jsonl",
@@ -214,7 +214,7 @@ PAPER_EVIDENCE_POSTPROCESS_PACKAGE_RELPATHS = (
     "records/statistical_confidence_interval_records.jsonl",
     "records/trajectory_sketch_verification_records.jsonl",
     "records/validation_internal_ablation_records.jsonl",
-    "records/validation_scale_formal_internal_ablation_records.jsonl",
+    "records/formal_internal_ablation_summary_records.jsonl",
     "records/video_quality_metric_records.jsonl",
     "records/wrong_prompt_replay_records.jsonl",
     "records/wrong_sampler_replay_records.jsonl",
@@ -231,7 +231,7 @@ PAPER_EVIDENCE_POSTPROCESS_PACKAGE_RELPATHS = (
     "reports/replay_and_sketch_gate_report.md",
     "reports/statistical_confidence_interval_report.md",
     "reports/validation_internal_ablation_report.md",
-    "reports/validation_scale_formal_internal_ablation_report.md",
+    "reports/formal_internal_ablation_summary_report.md",
     "reports/video_quality_metric_report.md",
     "tables/adaptive_attack_table.csv",
     "tables/claim3_downgrade_table.csv",
@@ -245,7 +245,7 @@ PAPER_EVIDENCE_POSTPROCESS_PACKAGE_RELPATHS = (
     "tables/replay_verification_table.csv",
     "tables/statistical_confidence_interval_table.csv",
     "tables/validation_internal_ablation_table.csv",
-    "tables/validation_scale_formal_internal_ablation_table.csv",
+    "tables/formal_internal_ablation_summary_table.csv",
     "tables/video_quality_metric_table.csv",
     "figures/efficiency_comparison_figure.json",
     "figures/low_fpr_curve_figure.json",
@@ -483,8 +483,6 @@ def _stage_package_source_workflow_profile(
         return "motion_calibration"
     workflow_profile = str(layout.get("workflow_profile") or layout.get("runtime_profile") or "default")
     if sanitize_filename_token(stage_package_id) == "paper_gate_and_package_colab":
-        if workflow_profile == "probe_paper":
-            return "validation_scale"
         if workflow_profile == "pilot_paper":
             return "probe_paper"
         if workflow_profile == "full_paper":
@@ -781,7 +779,7 @@ def _default_required_stage_packages(layout: Mapping[str, str], notebook_role: s
             required.append("motion_threshold_calibration_colab")
             required.append("formal_comparison_scoring_colab")
             required.append("paper_evidence_postprocess_colab")
-            if profile in {"probe_paper", "pilot_paper", "full_paper"}:
+            if profile in {"pilot_paper", "full_paper"}:
                 required.append("paper_gate_and_package_colab")
         return required
     return []
@@ -1221,74 +1219,73 @@ def _external_baseline_publish_blocker(
     return None
 
 
-def _validation_scale_paper_gate_publish_blocker(
+def _paper_profile_gate_publish_blocker(
     layout: Mapping[str, str],
     *,
     stage_package_id: str,
     notebook_role: str,
     workflow_profile: str,
 ) -> dict[str, Any] | None:
-    """判断 validation_scale paper gate 包是否允许发布完整 zip。
+    """判断 paper profile gate 包是否允许发布完整 zip。
 
     该门禁属于项目特定写法。普通阶段 zip 只是文件交接容器, 但
-    validation_scale 的 paper gate zip 同时承担“进入 probe_paper 前最终证据包”
-    的职责。若 package manifest 缺失或失败, 说明公平比较、artifact rebuild、
-    stage transition 等闭环没有被当前运行证明, 因此只能写阻断 manifest, 不能
-    发布可被误用的完整 zip。
+    probe_paper 的 paper gate zip 同时承担“进入 pilot_paper 前最终证据包”的职责。
+    若 package manifest 缺失或失败, 说明公平比较、artifact rebuild、stage transition
+    等闭环没有被当前运行证明, 因此只能写阻断 manifest, 不能发布可被误用的完整 zip。
     """
 
     role = sanitize_filename_token(notebook_role)
     profile = sanitize_filename_token(workflow_profile)
     package_id = sanitize_filename_token(stage_package_id)
-    if role != "paper_gate_and_package" or profile != "validation_scale" or package_id != "paper_gate_and_package_colab":
+    if role != "paper_gate_and_package" or profile != "probe_paper" or package_id != "paper_gate_and_package_colab":
         return None
 
     run_root = Path(str(layout.get("drive_run_root") or ""))
-    manifest_path = run_root / "manifests" / "validation_scale_package_manifest.json"
+    manifest_path = run_root / "manifests" / "probe_paper_package_manifest.json"
     if not manifest_path.exists():
         return {
-            "stage_package_publish_status": "blocked_missing_validation_scale_package_manifest",
-            "validation_scale_package_manifest_path": str(manifest_path),
-            "validation_scale_package_manifest_decision": "MISSING",
-            "validation_scale_gate_decision": "UNKNOWN",
-            "validation_scale_to_probe_paper_transition_decision": "UNKNOWN",
-            "stage_package_publish_block_reason": "missing_validation_scale_package_manifest",
+            "stage_package_publish_status": "blocked_missing_probe_paper_package_manifest",
+            "probe_paper_package_manifest_path": str(manifest_path),
+            "probe_paper_package_manifest_decision": "MISSING",
+            "probe_paper_gate_decision": "UNKNOWN",
+            "probe_paper_to_pilot_paper_transition_decision": "UNKNOWN",
+            "stage_package_publish_block_reason": "missing_probe_paper_package_manifest",
         }
     try:
         manifest = json.loads(manifest_path.read_text(encoding="utf-8-sig"))
     except json.JSONDecodeError as exc:
         return {
-            "stage_package_publish_status": "blocked_invalid_validation_scale_package_manifest",
-            "validation_scale_package_manifest_path": str(manifest_path),
-            "validation_scale_package_manifest_decision": "INVALID",
-            "validation_scale_gate_decision": "UNKNOWN",
-            "validation_scale_to_probe_paper_transition_decision": "UNKNOWN",
-            "stage_package_publish_block_reason": f"invalid_validation_scale_package_manifest_json:{exc}",
+            "stage_package_publish_status": "blocked_invalid_probe_paper_package_manifest",
+            "probe_paper_package_manifest_path": str(manifest_path),
+            "probe_paper_package_manifest_decision": "INVALID",
+            "probe_paper_gate_decision": "UNKNOWN",
+            "probe_paper_to_pilot_paper_transition_decision": "UNKNOWN",
+            "stage_package_publish_block_reason": f"invalid_probe_paper_package_manifest_json:{exc}",
         }
     if not isinstance(manifest, dict):
         return {
-            "stage_package_publish_status": "blocked_invalid_validation_scale_package_manifest",
-            "validation_scale_package_manifest_path": str(manifest_path),
-            "validation_scale_package_manifest_decision": "INVALID",
-            "validation_scale_gate_decision": "UNKNOWN",
-            "validation_scale_to_probe_paper_transition_decision": "UNKNOWN",
-            "stage_package_publish_block_reason": "validation_scale_package_manifest_top_level_not_object",
+            "stage_package_publish_status": "blocked_invalid_probe_paper_package_manifest",
+            "probe_paper_package_manifest_path": str(manifest_path),
+            "probe_paper_package_manifest_decision": "INVALID",
+            "probe_paper_gate_decision": "UNKNOWN",
+            "probe_paper_to_pilot_paper_transition_decision": "UNKNOWN",
+            "stage_package_publish_block_reason": "probe_paper_package_manifest_top_level_not_object",
         }
 
-    decision = str(manifest.get("validation_scale_package_manifest_decision") or "UNKNOWN")
-    gate_decision = str(manifest.get("validation_scale_gate_decision") or "UNKNOWN")
-    transition_decision = str(manifest.get("validation_scale_to_probe_paper_transition_decision") or "UNKNOWN")
+    decision = str(manifest.get("probe_paper_package_manifest_decision") or "UNKNOWN")
+    gate_decision = str(manifest.get("probe_paper_gate_decision") or "UNKNOWN")
+    transition_decision = str(manifest.get("probe_paper_to_pilot_paper_transition_decision") or "UNKNOWN")
     if decision == "PASS" and gate_decision == "PASS" and transition_decision == "PASS":
         return None
     return {
-        "stage_package_publish_status": "blocked_failed_validation_scale_package_manifest",
-        "validation_scale_package_manifest_path": str(manifest_path),
-        "validation_scale_package_manifest_decision": decision,
-        "validation_scale_gate_decision": gate_decision,
-        "validation_scale_to_probe_paper_transition_decision": transition_decision,
+        "stage_package_publish_status": "blocked_failed_probe_paper_package_manifest",
+        "probe_paper_package_manifest_path": str(manifest_path),
+        "probe_paper_package_manifest_decision": decision,
+        "probe_paper_gate_decision": gate_decision,
+        "probe_paper_to_pilot_paper_transition_decision": transition_decision,
         "missing_artifact_count": manifest.get("missing_artifact_count", 0),
         "missing_artifact_relpaths": manifest.get("missing_artifact_relpaths", []),
-        "stage_package_publish_block_reason": "validation_scale_package_manifest_not_pass",
+        "stage_package_publish_block_reason": "probe_paper_package_manifest_not_pass",
     }
 
 
@@ -1448,7 +1445,7 @@ def publish_colab_stage_package(
             remote_manifest=remote_manifest,
             manifest={**base_manifest, **blocker},
         )
-    blocker = _validation_scale_paper_gate_publish_blocker(
+    blocker = _paper_profile_gate_publish_blocker(
         layout,
         stage_package_id=stage_package_id,
         notebook_role=notebook_role,

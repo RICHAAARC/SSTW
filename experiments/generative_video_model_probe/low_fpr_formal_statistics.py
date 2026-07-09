@@ -1,6 +1,6 @@
 """低 FPR 正式统计的跨 profile 治理记录。
 
-validation_scale、probe_paper、pilot_paper 和 full_paper 使用同一套构建逻辑。区别只来自
+probe_paper、pilot_paper 和 full_paper 使用同一套构建逻辑。区别只来自
 protocol config 中的 `target_fpr`、样本规模和 negative event 要求。这样可以
 保证 Notebook 只切换 profile, 不承担低 FPR 统计口径的业务逻辑。
 """
@@ -17,7 +17,7 @@ from main.protocol.record_writer import write_json, write_jsonl
 from main.protocol.table_builder import write_csv
 
 
-DEFAULT_VALIDATION_CONFIG = "configs/protocol/validation_scale_generative_probe.json"
+DEFAULT_VALIDATION_CONFIG = "configs/protocol/probe_paper_generative_probe.json"
 DEFAULT_PROBE_CONFIG = "configs/protocol/probe_paper_generative_probe.json"
 DEFAULT_PILOT_CONFIG = "configs/protocol/pilot_paper_generative_probe.json"
 DEFAULT_FULL_CONFIG = "configs/protocol/full_paper_generative_probe.json"
@@ -92,7 +92,7 @@ def _target_rows(
     """从当前 profile、probe、pilot 和 full protocol 中抽取低 FPR 目标。"""
 
     rows: list[dict[str, Any]] = []
-    current_profile = str(current_config.get("paper_result_level") or "validation_scale")
+    current_profile = str(current_config.get("paper_result_level") or "probe_paper")
     if "target_fpr" in current_config:
         rows.append({
             "result_profile": current_profile,
@@ -144,7 +144,7 @@ def build_low_fpr_formal_statistics_records(
     probe_config = _read_json(Path(probe_config_path))
     pilot_config = _read_json(Path(pilot_config_path))
     full_config = _read_json(Path(full_config_path))
-    current_profile = str(current_config.get("paper_result_level") or "validation_scale")
+    current_profile = str(current_config.get("paper_result_level") or "probe_paper")
     current_target_fpr = float(current_config["target_fpr"])
     observed_negative_count = _negative_event_count(run_root)
     records: list[dict[str, Any]] = []
@@ -236,7 +236,7 @@ def run_low_fpr_formal_statistics(
     report = (
         "# Low FPR Formal Statistics Report\n\n"
         "该报告按当前 protocol config 的 target_fpr 写出低 FPR 统计状态。"
-        "validation_scale、probe_paper、pilot_paper 和 full_paper 使用同一脚本, 只由配置决定 FPR 等级和样本规模。\n\n"
+        "probe_paper、pilot_paper 和 full_paper 使用同一脚本, 只由配置决定 FPR 等级和样本规模。\n\n"
         f"- low_fpr_formal_statistics_decision: {audit['low_fpr_formal_statistics_decision']}\n"
         f"- low_fpr_blocked_target_fprs: {', '.join(str(item) for item in audit['low_fpr_blocked_target_fprs'])}\n"
         f"- formal_low_fpr_claim_allowed: {str(audit['formal_low_fpr_claim_allowed']).lower()}\n"

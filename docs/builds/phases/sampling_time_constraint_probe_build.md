@@ -18,7 +18,7 @@ trajectory_constraint_without_key_condition
 trajectory_constraint_wrong_key_control
 ```
 
-后续 small_scale_mechanism_pilot_check、validation_scale 和 full_paper 还需要扩展到更多 method variant, 例如 endpoint-only、trajectory-only、without-velocity、without-replay-uncertainty 与 external baseline。
+后续 small_scale_mechanism_pilot_check、probe_paper 和 full_paper 还需要扩展到更多 method variant, 例如 endpoint-only、trajectory-only、without-velocity、without-replay-uncertainty 与 external baseline。
 
 ### 1.3 必须记录字段
 

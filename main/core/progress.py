@@ -228,7 +228,7 @@ class ProgressReporter:
         """输出一次进度更新。
 
         `completed` 使用 1-based 已完成数量。总数来自调用方运行时构造的真实任务列表,
-        因此可以自动适配 `validation_scale`、`probe_paper`、`pilot_paper` 和 `full_paper`。
+        因此可以自动适配 `probe_paper`、`pilot_paper` 和 `full_paper`。
         """
         completed = max(0, min(int(completed), self.total if self.total else int(completed)))
         percent = 100.0 if self.total == 0 else 100.0 * completed / self.total

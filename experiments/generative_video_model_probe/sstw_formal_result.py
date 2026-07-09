@@ -14,7 +14,7 @@ from main.protocol.record_writer import write_json, write_jsonl
 from main.protocol.table_builder import write_csv
 
 
-DEFAULT_PROTOCOL_CONFIG = "configs/protocol/validation_scale_generative_probe.json"
+DEFAULT_PROTOCOL_CONFIG = "configs/protocol/probe_paper_generative_probe.json"
 SSTW_METHOD_ID = "sstw_key_conditioned_flow_trajectory"
 
 
@@ -42,7 +42,7 @@ def _load_profile_context(config_path: str | Path) -> dict[str, Any]:
     if "target_fpr" not in config:
         raise KeyError(f"protocol config 缺少 target_fpr: {config_path}")
     return {
-        "paper_result_level": str(config.get("paper_result_level") or "validation_scale"),
+        "paper_result_level": str(config.get("paper_result_level") or "probe_paper"),
         "target_fpr": float(config["target_fpr"]),
         "target_fpr_source_config_path": str(config_path),
         "minimum_clean_negative_count": int(config.get("minimum_clean_negative_count") or 0),
@@ -73,7 +73,7 @@ def _score_from_control_record(record: dict[str, Any]) -> tuple[float | None, st
     """从 SSTW 受控负样本 record 中选择 clean negative 校准分数。
 
     通用工程写法是让下游公平校准只消费一种稳定的 `sstw_clean_negative_score`
-    字段。项目特定写法是当前 validation_scale 的 SSTW clean negative 来自
+    字段。项目特定写法是当前 paper profile 的 SSTW clean negative 来自
     `controlled_negative_records.jsonl`, 它们由同一条 latent trajectory 的方向破坏
     控制构造, 用于在 paper 级前验证阈值校准闭环。
     """
@@ -94,7 +94,7 @@ def build_sstw_measured_formal_records(
     该函数属于项目特定转写层。它不重新运行 GPU, 只把本项目已经完成的
     generation -> attack -> detection 链路转成与 external baseline 对齐的
     `metric_status: measured_formal` 记录形状。当 protocol config 启用
-    `allow_effect_size_claims` 且 target_fpr 为0.1 时, validation_scale 产物用于支撑
+    `allow_effect_size_claims` 且 target_fpr 为0.1 时, probe_paper 产物用于支撑
     fpr=0.1 论文设定下的小样本结论候选, 但不能外推到 pilot_paper 或 full_paper 的更低 FPR。
     """
     run_root = Path(run_root)
@@ -105,7 +105,7 @@ def build_sstw_measured_formal_records(
     claim_support_status = (
         "sstw_measured_formal_paper_profile_claim_candidate"
         if profile_context["allow_effect_size_claims"]
-        else "sstw_measured_formal_validation_scale_only"
+        else "sstw_measured_formal_paper_profile_only"
     )
     for index, detection_record in enumerate(detection_records):
         if detection_record.get("runtime_detection_status") != "ready":
@@ -264,7 +264,7 @@ def run_sstw_measured_formal_result(
     report = (
         "# SSTW Measured Formal Result Report\n\n"
         "该报告把本项目 SSTW generation -> attack -> detection 链路转写为与 external baseline "
-        "同层级的 measured_formal 记录。validation_scale 在 target_fpr=0.1 配置下用于支撑 "
+        "同层级的 measured_formal 记录。paper_profile 在 target_fpr=0.1 配置下用于支撑 "
         "fpr=0.1 论文设定的小样本结论候选, 但不能外推到 pilot_paper 或 full_paper 的更低 FPR。\n\n"
         f"- sstw_measured_formal_decision: {audit['sstw_measured_formal_decision']}\n"
         f"- paper_result_level: {audit['paper_result_level']}\n"

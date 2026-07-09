@@ -1,6 +1,6 @@
 # modern external baseline 可运行性审计
 
-本文档记录 `validation_scale` 阶段 5 个主实验现代 external baseline 的当前可运行性判断。
+本文档记录 `probe_paper` 阶段 5 个主实验现代 external baseline 的当前可运行性判断。
 
 ## 1. 审计边界
 
@@ -58,7 +58,7 @@ VidSig 也是特殊项: 它是生成过程中嵌入签名的方法, 因此 adapt
 正式结果不得来自“把 SSTW / Wan 视频直接送入 VidSig detector”。`vidsig_formal_reference_colab.ipynb`
 默认调用 `external_baseline.vidsig_official_runtime`, 先运行官方 `generate_ms.py` 生成
 VidSig 自己的 clean / watermarked videos, 再对 VidSig watermarked videos 应用同名
-runtime attack。`validation_scale` 默认只要求 `video_compression_runtime`、
+runtime attack。`probe_paper` 默认只要求 `video_compression_runtime`、
 `temporal_crop_runtime`、`frame_rate_resampling_runtime`; `pilot_paper` 和
 `full_paper` 必须从 protocol config 的 `required_runtime_attack_names` 读取扩展
 attack 集合,
@@ -85,7 +85,7 @@ fail-closed: 若某个 required runtime attack 在官方 `temporal_results.json`
 1. 官方依赖安装和构建命令。
 2. 官方权重、key、message 或生成中间产物。
 3. `SSTW_<BASELINE>_NATIVE_EVAL_COMMAND` 或等价项目内 official bundle 生成逻辑。
-4. 覆盖全部 `validation_scale` runtime comparison units 的 score JSON。
+4. 覆盖全部 `probe_paper` runtime comparison units 的 score JSON。
 5. 5 个主实验 independent formal reference Notebook 先各自生成项目内 official bundle; `formal_comparison_scoring_colab.ipynb` 再统一转写 `measured_formal` records。
 6. `formal_comparison_scoring_colab.ipynb` 在恢复 5 个主实验 official reference 阶段包后执行全量统一转写、self-containment 判定、公平校准和差值区间统计; `paper_evidence_postprocess_colab.ipynb` 恢复 formal comparison scoring 阶段包并生成辅助证据; `paper_gate_and_package_colab.ipynb` 恢复 runtime、motion threshold、formal comparison scoring 和 paper evidence postprocess 阶段包并执行最终门禁和打包。旧的通用 external baseline scoring Notebook 已删除, 不再作为诊断或正式入口保留。
 7. `external_baseline_self_containment_decision.json` 通过。

@@ -38,13 +38,13 @@ INTERNAL_ABLATION_VARIANTS = (
 )
 
 
-def _validation_scale_gate_pass_payload() -> dict:
-    """构造 pilot_paper gate 可接受的完整 validation_scale PASS 摘要。"""
+def _paper_profile_gate_pass_payload() -> dict:
+    """构造 pilot_paper gate 可接受的完整 probe_paper PASS 摘要。"""
 
     return {
-        "validation_scale_gate_decision": "PASS",
-        "claim_support_status": "validation_scale_full_protocol_handoff_ready",
-        "paper_result_level": "validation_scale",
+        "paper_profile_gate_decision": "PASS",
+        "claim_support_status": "paper_profile_full_protocol_handoff_ready",
+        "paper_result_level": "probe_paper",
         "target_fpr": 0.1,
         "missing_validation_requirements": [],
         "validation_missing_requirement_count": 0,
@@ -56,41 +56,21 @@ def _validation_scale_gate_pass_payload() -> dict:
         "sstw_measured_formal_record_count": 24,
         "sstw_measured_formal_status": "sstw_measured_formal_paper_profile_claim_candidate",
         "fair_detection_calibration_ready_count": len(MODERN_EXTERNAL_BASELINE_NAMES) + 1,
-        "fair_detection_calibration_status": "fair_detection_calibration_validation_scale_ready",
+        "fair_detection_calibration_status": "fair_detection_calibration_paper_profile_ready",
         "formal_method_baseline_comparison_ready_count": len(MODERN_EXTERNAL_BASELINE_NAMES) + 1,
         "formal_method_baseline_comparison_status": "formal_method_baseline_comparison_paper_profile_claim_candidate",
         "formal_baseline_difference_interval_ready_count": len(MODERN_EXTERNAL_BASELINE_NAMES),
         "formal_baseline_difference_interval_status": "formal_baseline_difference_interval_paper_profile_claim_candidate",
-        "validation_scale_sstw_advantage_claim_ready": True,
-        "validation_scale_sstw_advantage_claim_status": "validation_scale_target_fpr_0_1_sstw_advantage_claim_supported",
+        "paper_profile_sstw_advantage_claim_ready": True,
+        "paper_profile_sstw_advantage_claim_status": "paper_profile_target_fpr_0_1_sstw_advantage_claim_supported",
         "full_paper_allowed": False,
-    }
-
-
-def _validation_scale_to_probe_transition_pass_payload() -> dict:
-    """构造由 stage_transition_decision 写出的 validation_scale -> probe_paper PASS 摘要。"""
-
-    return {
-        "stage_id": "stage_transition_decision",
-        "transition_id": "validation_scale_to_probe_paper",
-        "validation_scale_to_probe_paper_transition_decision": "PASS",
-        "source_stage": "validation_scale",
-        "target_stage": "probe_paper",
-        "source_gate_passed": True,
-        "source_gate_decisions": {"validation_scale_gate_decision": "PASS"},
-        "missing_transition_requirements": [],
-        "transition_missing_requirement_count": 0,
-        "allowed_next_result_profiles": ["probe_paper"],
-        "blocked_next_result_profiles": ["pilot_paper", "full_paper", "submission_freeze"],
-        "full_paper_allowed": False,
-        "claim_support_status": "validation_scale_ready_to_enter_probe_paper",
     }
 
 
 def _probe_paper_gate_pass_payload() -> dict:
     """构造 pilot_paper gate 可接受的完整 probe_paper PASS 摘要。"""
 
-    payload = _validation_scale_gate_pass_payload()
+    payload = _paper_profile_gate_pass_payload()
     payload.update({
         "stage_id": "probe_paper_generative_probe_gate",
         "probe_paper_gate_decision": "PASS",
@@ -100,7 +80,7 @@ def _probe_paper_gate_pass_payload() -> dict:
         "validation_generation_record_count": 10,
         "validation_prompt_count": 5,
         "validation_seed_per_prompt_min": 2,
-        "validation_scale_sstw_advantage_claim_status": "probe_paper_target_fpr_0_1_sstw_advantage_claim_supported",
+        "paper_profile_sstw_advantage_claim_status": "probe_paper_target_fpr_0_1_sstw_advantage_claim_supported",
     })
     return payload
 
@@ -281,7 +261,7 @@ def _seed_pilot_paper_run(
     prompt_count: int = 25,
     calibration_seed_count: int = 2,
     test_seed_count: int = 2,
-    validation_scale_gate_decision: str | None = "PASS",
+    paper_profile_gate_decision: str | None = "PASS",
     write_external_baseline: bool = True,
     write_internal_ablation: bool = True,
     incomplete_modern_external_baseline_names: set[str] | None = None,
@@ -469,17 +449,13 @@ def _seed_pilot_paper_run(
         "motion_threshold_id": "motion_delta_calibrated_v1",
         "motion_threshold_source_split": "calibration",
     })
-    if validation_scale_gate_decision is not None:
-        validation_payload = _validation_scale_gate_pass_payload() if validation_scale_gate_decision == "PASS" else {
-            "validation_scale_gate_decision": validation_scale_gate_decision,
-            "claim_support_status": "validation_scale_blocked",
+    if paper_profile_gate_decision is not None:
+        validation_payload = _paper_profile_gate_pass_payload() if paper_profile_gate_decision == "PASS" else {
+            "paper_profile_gate_decision": paper_profile_gate_decision,
+            "claim_support_status": "paper_profile_blocked",
         }
-        write_json(run_root / "artifacts" / "validation_scale_gate_decision.json", validation_payload)
-        if validation_scale_gate_decision == "PASS":
-            write_json(
-                run_root / "artifacts" / "validation_scale_to_probe_paper_transition_decision.json",
-                _validation_scale_to_probe_transition_pass_payload(),
-            )
+        write_json(run_root / "artifacts" / "paper_profile_gate_decision.json", validation_payload)
+        if paper_profile_gate_decision == "PASS":
             write_json(
                 run_root / "artifacts" / "probe_paper_gate_decision.json",
                 _probe_paper_gate_pass_payload(),
@@ -509,8 +485,8 @@ def test_pilot_paper_gate_blocks_empty_run(tmp_path: Path) -> None:
 
 
 @pytest.mark.quick
-def test_pilot_paper_gate_cannot_disable_validation_scale_fairness_prerequisites(tmp_path: Path) -> None:
-    """pilot_paper 不能通过配置关闭 validation_scale 与公平比较硬前置。"""
+def test_pilot_paper_gate_cannot_disable_probe_paper_fairness_prerequisites(tmp_path: Path) -> None:
+    """pilot_paper 不能通过配置关闭 probe_paper 与公平比较硬前置。"""
     config_path = tmp_path / "pilot_paper_config.json"
     config_path.write_text(json.dumps({
         "target_fpr": 0.01,
@@ -543,7 +519,7 @@ def test_pilot_paper_gate_cannot_disable_validation_scale_fairness_prerequisites
         "required_internal_ablation_variants": [],
         "require_probe_paper_gate_passed": False,
         "require_probe_paper_to_pilot_paper_transition_decision": False,
-        "require_validation_scale_gate_passed": False,
+        "require_paper_profile_gate_passed": False,
         "require_external_baseline_comparison_ready": False,
         "require_external_baseline_self_contained_outputs": False,
         "require_modern_external_baseline_formal_results": False,
@@ -568,10 +544,10 @@ def test_pilot_paper_gate_cannot_disable_validation_scale_fairness_prerequisites
 
 
 @pytest.mark.quick
-def test_pilot_paper_gate_rejects_validation_scale_profile(tmp_path: Path) -> None:
-    """validation_scale profile 不能冒充 pilot_paper profile。"""
+def test_pilot_paper_gate_rejects_probe_paper_profile(tmp_path: Path) -> None:
+    """probe_paper profile 不能冒充 pilot_paper profile。"""
     run_root = tmp_path / "run"
-    _seed_pilot_paper_run(run_root, profile="validation_scale")
+    _seed_pilot_paper_run(run_root, profile="probe_paper")
 
     audit = build_pilot_paper_gate_audit(run_root)
 
@@ -679,7 +655,7 @@ def test_pilot_paper_gate_rejects_incomplete_formal_external_baseline(tmp_path: 
 def test_pilot_paper_gate_requires_probe_paper_gate(tmp_path: Path) -> None:
     """pilot_paper 是 full_paper 协议的小规模预演, 因此必须先通过 probe_paper。"""
     run_root = tmp_path / "run"
-    _seed_pilot_paper_run(run_root, validation_scale_gate_decision=None)
+    _seed_pilot_paper_run(run_root, paper_profile_gate_decision=None)
 
     audit = build_pilot_paper_gate_audit(run_root)
 

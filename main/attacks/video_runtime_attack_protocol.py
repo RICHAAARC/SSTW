@@ -81,18 +81,11 @@ FULL_PAPER_RUNTIME_ATTACKS = (
     "crop_rotation_combined_runtime",
 )
 
-VALIDATION_SCALE_RUNTIME_ATTACKS = FULL_PAPER_RUNTIME_ATTACKS
+PAPER_PROFILE_RUNTIME_ATTACKS = FULL_PAPER_RUNTIME_ATTACKS
 
 PILOT_PAPER_RUNTIME_ATTACKS = FULL_PAPER_RUNTIME_ATTACKS
 
 RUNTIME_ATTACK_FAMILY_MINIMUMS_BY_PROFILE: dict[str, dict[str, int]] = {
-    "validation_scale": {
-        "compression": 9,
-        "temporal": 8,
-        "spatial_geometry": 5,
-        "visual_degradation": 8,
-        "combined": 5,
-    },
     "probe_paper": {
         "compression": 9,
         "temporal": 8,
@@ -589,11 +582,11 @@ def runtime_attack_names_for_profile(profile_name: str) -> tuple[str, ...]:
     """按 workflow profile 返回默认 runtime attack 列表。"""
 
     normalized = str(profile_name or "").strip().lower()
-    if normalized in {"validation_scale", "probe_paper", "full_paper"}:
+    if normalized in {"probe_paper", "full_paper"}:
         return FULL_PAPER_RUNTIME_ATTACKS
     if normalized == "pilot_paper":
         return PILOT_PAPER_RUNTIME_ATTACKS
-    return VALIDATION_SCALE_RUNTIME_ATTACKS
+    return PAPER_PROFILE_RUNTIME_ATTACKS
 
 
 def required_runtime_attack_names_from_config(config: Mapping[str, Any]) -> tuple[str, ...]:
@@ -603,7 +596,7 @@ def required_runtime_attack_names_from_config(config: Mapping[str, Any]) -> tupl
     explicit = config.get("required_runtime_attack_names")
     if isinstance(explicit, list) and explicit:
         return tuple(str(item) for item in explicit if str(item))
-    return runtime_attack_names_for_profile(str(config.get("paper_result_level") or "validation_scale"))
+    return runtime_attack_names_for_profile(str(config.get("paper_result_level") or "probe_paper"))
 
 
 def required_non_runtime_attack_protocols_from_config(config: Mapping[str, Any]) -> tuple[str, ...]:
@@ -613,8 +606,8 @@ def required_non_runtime_attack_protocols_from_config(config: Mapping[str, Any])
     explicit = config.get("required_non_runtime_attack_protocols")
     if isinstance(explicit, list) and explicit:
         return tuple(str(item) for item in explicit if str(item))
-    profile = str(config.get("paper_result_level") or "validation_scale").strip()
-    if profile in {"validation_scale", "probe_paper", "pilot_paper", "full_paper"}:
+    profile = str(config.get("paper_result_level") or "probe_paper").strip()
+    if profile in {"probe_paper", "pilot_paper", "full_paper"}:
         return FULL_PAPER_NON_RUNTIME_ATTACK_PROTOCOLS
     return ()
 
@@ -623,14 +616,14 @@ def runtime_attack_family_minimums_from_config(config: Mapping[str, Any]) -> dic
     """从 protocol config 读取 runtime attack family 最低覆盖要求。"""
 
     config = merge_shared_attack_protocol_config(config)
-    profile = str(config.get("paper_result_level") or "validation_scale").strip() or "validation_scale"
+    profile = str(config.get("paper_result_level") or "probe_paper").strip() or "probe_paper"
     raw_family_minimums = config.get("runtime_attack_family_minimums")
     if isinstance(raw_family_minimums, Mapping):
         return {str(key): int(value) for key, value in raw_family_minimums.items()}
     return dict(
         RUNTIME_ATTACK_FAMILY_MINIMUMS_BY_PROFILE.get(
             profile,
-            RUNTIME_ATTACK_FAMILY_MINIMUMS_BY_PROFILE["validation_scale"],
+            RUNTIME_ATTACK_FAMILY_MINIMUMS_BY_PROFILE["probe_paper"],
         )
     )
 
@@ -655,7 +648,7 @@ def audit_runtime_attack_protocol_config(config: Mapping[str, Any]) -> dict[str,
     """
 
     config = merge_shared_attack_protocol_config(config)
-    profile = str(config.get("paper_result_level") or "validation_scale").strip() or "validation_scale"
+    profile = str(config.get("paper_result_level") or "probe_paper").strip() or "probe_paper"
     attack_names = required_runtime_attack_names_from_config(config)
     missing_registered_names = [name for name in attack_names if name not in RUNTIME_ATTACK_SPECS]
     family_counts: dict[str, int] = {}
@@ -678,7 +671,7 @@ def audit_runtime_attack_protocol_config(config: Mapping[str, Any]) -> dict[str,
 
     non_runtime_required = required_non_runtime_attack_protocols_from_config(config)
     missing_non_runtime = []
-    if profile in {"validation_scale", "probe_paper", "pilot_paper", "full_paper"}:
+    if profile in {"probe_paper", "pilot_paper", "full_paper"}:
         missing_non_runtime = sorted(set(FULL_PAPER_NON_RUNTIME_ATTACK_PROTOCOLS) - set(non_runtime_required))
 
     decision = "PASS" if not missing_registered_names and not missing_family_minimums and not missing_non_runtime else "FAIL"
@@ -694,7 +687,7 @@ def audit_runtime_attack_protocol_config(config: Mapping[str, Any]) -> dict[str,
         "required_non_runtime_attack_protocols": list(non_runtime_required),
         "missing_non_runtime_attack_protocols": missing_non_runtime,
         "top_tier_attack_protocol_status": "top_tier_runtime_and_adaptive_protocol_registered"
-        if decision == "PASS" and profile in {"validation_scale", "probe_paper", "pilot_paper", "full_paper"}
+        if decision == "PASS" and profile in {"probe_paper", "pilot_paper", "full_paper"}
         else "runtime_attack_protocol_needs_completion",
     }
 

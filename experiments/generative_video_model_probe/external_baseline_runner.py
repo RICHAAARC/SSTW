@@ -138,6 +138,15 @@ def build_external_baseline_comparison_records(
             f"baseline={baseline_name} comparable_runtime_video_count={len(comparable_records)}",
         )
         adapter = get_adapter(baseline_name)
+        if baseline_record.get("external_baseline_layer") == "explicit_synchronization_control":
+            records.append(_non_run_score_record(
+                {
+                    **baseline_record,
+                    "external_baseline_not_run_reason": "explicit_control_not_part_of_formal_paper_baseline_set",
+                },
+                len(comparable_records),
+            ))
+            continue
         if adapter is None or baseline_record.get("external_baseline_runnable_status") != "runnable":
             records.append(_non_run_score_record(baseline_record, len(comparable_records)))
             continue

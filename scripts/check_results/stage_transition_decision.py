@@ -15,6 +15,7 @@ from typing import Any, Mapping
 
 from main.attacks.video_runtime_attack_protocol import PAPER_PROFILE_RUNTIME_ATTACKS
 from main.protocol.flow_evidence_fields import with_flow_evidence_protocol_defaults
+from main.protocol.paper_result_formality_guard import paper_claim_id_for_level
 from main.protocol.record_writer import write_json, write_jsonl
 from main.protocol.table_builder import write_csv
 
@@ -319,6 +320,12 @@ def build_stage_transition_decision(
     for predicate in spec.get("extra_pass_predicates", ()):
         if source_payload.get(str(predicate)) is not True:
             missing_requirements.append(f"{predicate}_true")
+
+    expected_claim_id = paper_claim_id_for_level(str(spec["source_stage"]))
+    if source_payload.get("paper_claim_id") != expected_claim_id:
+        missing_requirements.append(f"{spec['source_stage']}_paper_claim_id_{expected_claim_id}")
+    if source_payload.get("paper_result_formality_guard_decision") != "PASS":
+        missing_requirements.append(f"{spec['source_stage']}_paper_result_formality_guard_passed")
 
     if transition_id == "probe_paper_to_pilot_paper":
         missing_requirements.extend(_probe_paper_fair_gate_missing_requirements(source_payload))

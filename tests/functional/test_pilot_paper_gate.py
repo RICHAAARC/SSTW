@@ -44,6 +44,11 @@ def _paper_profile_gate_pass_payload() -> dict:
     return {
         "paper_profile_gate_decision": "PASS",
         "claim_support_status": "paper_profile_full_protocol_handoff_ready",
+        "paper_claim_id": "probe_claim",
+        "paper_claim_level": "probe_paper",
+        "paper_claim_support_status": "probe_claim_supported",
+        "paper_result_formality_guard_decision": "PASS",
+        "paper_result_formality_guard_violation_count": 0,
         "paper_result_level": "probe_paper",
         "target_fpr": 0.1,
         "missing_validation_requirements": [],
@@ -364,8 +369,8 @@ def _seed_pilot_paper_run(
                         "trajectory_trace_used_for_score": False,
                     })
                 if split_name == "test":
-                    for baseline_name in EXTERNAL_BASELINE_NAMES:
-                        metric_status = "measured_formal" if baseline_name in MODERN_EXTERNAL_BASELINE_NAMES else "measured_proxy"
+                    for baseline_name in sorted(MODERN_EXTERNAL_BASELINE_NAMES):
+                        metric_status = "measured_formal"
                         external_baseline_record = {
                             **base,
                             "attack_name": attack_name,
@@ -375,7 +380,7 @@ def _seed_pilot_paper_run(
                             "external_baseline_score": 0.35,
                             "external_baseline_distance": 1.85,
                             "baseline_score_margin": 0.45,
-                            "claim_support_status": "modern_external_baseline_formal_measured" if baseline_name in MODERN_EXTERNAL_BASELINE_NAMES else "external_baseline_proxy_comparison_not_claim_supporting",
+                            "claim_support_status": "modern_external_baseline_formal_measured",
                         }
                         if (
                             baseline_name in MODERN_EXTERNAL_BASELINE_NAMES
@@ -578,6 +583,10 @@ def test_pilot_paper_gate_passes_calibrated_heldout_fixture(tmp_path: Path) -> N
 
     assert audit["pilot_paper_gate_decision"] == "PASS"
     assert audit["claim_support_status"] == "pilot_paper_calibrated_heldout_claim_ready"
+    assert audit["paper_claim_id"] == "pilot_claim"
+    assert audit["paper_claim_support_status"] == "pilot_claim_supported"
+    assert audit["paper_result_formality_guard_decision"] == "PASS"
+    assert audit["paper_result_formality_guard_violation_count"] == 0
     assert audit["paper_result_level"] == "pilot_paper"
     assert audit["paper_protocol_level"] == "paper_grade_protocol"
     assert audit["paper_protocol_difference_from_full_paper"] == "sample_scale_and_target_fpr_only"

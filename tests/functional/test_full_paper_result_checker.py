@@ -104,9 +104,40 @@ def test_full_paper_result_checker_validates_split_and_per_attack_coverage(tmp_p
     audit = build_full_paper_result_checker_audit(run_root, config_path)
 
     assert audit["full_paper_result_checker_decision"] == "PASS"
+    assert audit["paper_claim_id"] == "full_claim"
+    assert audit["paper_claim_support_status"] == "full_claim_supported"
+    assert audit["paper_result_formality_guard_decision"] == "PASS"
+    assert audit["paper_result_formality_guard_violation_count"] == 0
     assert audit["full_paper_prompt_count"] == 2
     assert audit["full_paper_seed_per_prompt_min"] == 2
     assert audit["full_paper_calibration_unique_video_count"] == 2
     assert audit["full_paper_test_unique_video_count"] == 2
     assert audit["full_paper_runtime_attack_event_count_per_attack_min"] == 4
     assert audit["full_paper_runtime_detection_event_count_per_attack_min"] == 4
+
+
+@pytest.mark.quick
+def test_full_paper_result_checker_rejects_proxy_result_records(tmp_path: Path) -> None:
+    """full_paper checker 必须统一调用正式性门禁, 阻断 proxy 结果进入 full_claim。"""
+
+    run_root = tmp_path / "run"
+    config_path = tmp_path / "full_paper_config.json"
+    config_path.write_text(json.dumps({
+        "paper_result_level": "full_paper",
+        "target_fpr": 0.001,
+        "required_runtime_attack_names": [],
+    }, ensure_ascii=False), encoding="utf-8")
+    write_jsonl(run_root / "records" / "formal_method_baseline_comparison_records.jsonl", [
+        {
+            "method_id": "explicit_control",
+            "metric_status": "measured_proxy",
+        }
+    ])
+
+    audit = build_full_paper_result_checker_audit(run_root, config_path)
+
+    assert audit["full_paper_result_checker_decision"] == "FAIL"
+    assert audit["paper_claim_id"] == "full_claim"
+    assert audit["paper_claim_support_status"] == "full_claim_blocked"
+    assert audit["paper_result_formality_guard_decision"] == "FAIL"
+    assert "paper_result_formality_guard_passed" in audit["missing_full_paper_requirements"]

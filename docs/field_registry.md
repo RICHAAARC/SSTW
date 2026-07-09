@@ -896,6 +896,20 @@ Notebook 与 repository module 的跨边界数据
 | pilot_paper_hard_required_config_missing | governance | none | true | false | false | pilot_paper 不可通过配置关闭的 probe_paper 与公平比较硬前置缺口列表。 |
 | pilot_paper_hard_required_config_missing_count | metric | none | true | false | false | pilot_paper 硬前置配置缺口数量。 |
 | paper_result_level | governance | none | true | true | false | 结果包的论文级别, 例如 pilot_paper 或 full_paper。 |
+| paper_claim_id | governance | none | true | true | false | 三层正式论文结果包的 claim 标识, 只能使用 probe_claim、pilot_claim 或 full_claim。 |
+| paper_claim_level | governance | none | true | true | false | 当前正式 claim 所属的结果层级, 与 paper_result_level 保持一致。 |
+| paper_claim_support_status | governance | none | true | true | false | 当前三层正式 claim 的支持状态, 由 paper_result_formality_guard 与对应 gate/checker 联合给出。 |
+| paper_result_formality_guard_decision | governance | none | true | false | false | 三层正式结果包是否拒绝 proxy、placeholder 和 fallback 证据的 PASS / FAIL 判定。 |
+| paper_result_formality_guard_status | governance | none | true | false | false | 三层正式结果包正式性门禁的可读状态。 |
+| paper_result_formality_guard_violation_count | metric | none | true | false | false | 三层正式结果包中被正式性门禁发现的弱证据标记数量。 |
+| paper_result_formality_guard_scanned_file_count | metric | none | true | false | false | 三层正式结果包正式性门禁扫描的结构化文件数量。 |
+| paper_result_formality_guard_blocking_terms | governance | none | true | false | false | 三层正式结果包正式性门禁发现的阻断标记类别。 |
+| paper_result_formality_guard_violations | governance | none | true | false | false | 三层正式结果包正式性门禁发现的具体阻断位置列表。 |
+| field_path | governance | none | true | false | false | 结构化 artifact 内部的字段路径, 用于定位正式性门禁发现的问题字段。 |
+| violation_kind | governance | none | true | false | false | 正式性门禁发现的违规类型。 |
+| observed_value_preview | governance | none | true | false | false | 正式性门禁记录的短值预览, 用于定位问题但不作为论文指标。 |
+| paper_result_target_fpr_matches_profile | governance | none | true | false | false | 当前 target_fpr 是否匹配 probe_paper、pilot_paper 或 full_paper 的正式 FPR 配置。 |
+| expected_formal_target_fpr | protocol | none | true | false | false | 当前 paper_result_level 对应的正式 target_fpr。 |
 | paper_protocol_level | governance | none | true | true | false | 结果包采用的协议级别, 例如 paper_grade_protocol。 |
 | paper_protocol_difference_from_full_paper | governance | none | true | true | false | 当前结果级别与 full_paper 的协议差异说明。 |
 | pilot_paper_protocol_matches_full_paper | governance | none | true | true | false | pilot_paper 是否与 full_paper 使用同构协议。 |

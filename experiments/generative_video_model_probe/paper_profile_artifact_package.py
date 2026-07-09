@@ -251,6 +251,11 @@ def build_paper_profile_package_manifest(run_root: str | Path) -> dict[str, Any]
         "claim_support_status": profile_gate.get("claim_support_status", f"{profile}_package_blocked")
         if decision_ready
         else f"{profile}_package_blocked",
+        "paper_claim_id": profile_gate.get("paper_claim_id"),
+        "paper_claim_level": profile_gate.get("paper_claim_level"),
+        "paper_claim_support_status": profile_gate.get("paper_claim_support_status"),
+        "paper_result_formality_guard_decision": profile_gate.get("paper_result_formality_guard_decision"),
+        "paper_result_formality_guard_violation_count": profile_gate.get("paper_result_formality_guard_violation_count"),
         "paper_profile": profile,
         "paper_profile_gate_decision_path": str(gate_path),
         "paper_profile_gate_decision": profile_gate.get("paper_profile_gate_decision"),

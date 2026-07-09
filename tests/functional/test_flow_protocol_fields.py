@@ -16,7 +16,6 @@ from main.protocol.flow_evidence_fields import (
 
 REQUIRED_FLOW_FIELDS = {
     "negative_family",
-    "sampler_signature_placeholder",
     "trajectory_source_level",
     "S_path_inv",
     "S_velocity",
@@ -33,7 +32,7 @@ def test_flow_evidence_defaults_cover_protocol_fields() -> None:
     """默认字段集合必须覆盖后续真实 GPU records 需要承接的协议字段。"""
     record = flow_evidence_protocol_defaults()
     assert REQUIRED_FLOW_FIELDS <= set(record)
-    assert record["sampler_signature_placeholder"] is None
+    assert "sampler_signature_placeholder" not in record
     assert record["claim_support_status"].startswith("not_supported")
 
 
@@ -59,6 +58,7 @@ def test_flow_evidence_defaults_do_not_overwrite_real_fields() -> None:
         compute_conservative_score=True,
     )
     assert REQUIRED_FLOW_FIELDS <= set(record)
+    assert "sampler_signature_placeholder" not in record
     assert record["claim_support_status"] == "runtime_detection_evidence_only"
     assert record["trajectory_source_level"] == "callback_latent_trace_proxy"
     assert record["S_final_conservative"] == 0.5

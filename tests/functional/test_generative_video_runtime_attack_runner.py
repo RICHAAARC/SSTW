@@ -70,7 +70,7 @@ def test_runtime_attack_runner_writes_attacked_videos_and_records(tmp_path: Path
     assert len(records) == 3
     assert all(record["attack_runtime_status"] == "ready" for record in records)
     assert all(record["attack_matrix_evidence_level"] == "runtime_video_file" for record in records)
-    assert all("sampler_signature_placeholder" in record for record in records)
+    assert all("sampler_signature_placeholder" not in record for record in records)
     assert all(record["trajectory_source_level"] == "runtime_video_file_attack" for record in records)
     assert all(record["flow_state_admissibility_status"] == "not_evaluated" for record in records)
     assert all(Path(record["attacked_video_path"]).exists() for record in records)

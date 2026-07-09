@@ -72,6 +72,11 @@ def _paper_profile_gate_pass_payload() -> dict:
     return {
         "paper_profile_gate_decision": "PASS",
         "claim_support_status": "paper_profile_full_protocol_handoff_ready",
+        "paper_claim_id": "probe_claim",
+        "paper_claim_level": "probe_paper",
+        "paper_claim_support_status": "probe_claim_supported",
+        "paper_result_formality_guard_decision": "PASS",
+        "paper_result_formality_guard_violation_count": 0,
         "paper_result_level": "probe_paper",
         "target_fpr": 0.1,
         "missing_validation_requirements": [],
@@ -195,6 +200,10 @@ def test_pilot_to_full_transition_requires_previous_transition(tmp_path: Path) -
     write_json(run_root / "artifacts" / "pilot_paper_gate_decision.json", {
         "pilot_paper_gate_decision": "PASS",
         "pilot_paper_claim_allowed": True,
+        "paper_claim_id": "pilot_claim",
+        "paper_claim_level": "pilot_paper",
+        "paper_claim_support_status": "pilot_claim_supported",
+        "paper_result_formality_guard_decision": "PASS",
     })
 
     blocked = write_stage_transition_decision(run_root, "pilot_paper_to_full_paper")
@@ -217,6 +226,10 @@ def test_pilot_to_full_transition_can_consume_sibling_probe_paper_run_root(tmp_p
     pilot_run_root = project_run_root / "pilot_paper"
     write_json(pilot_run_root / "artifacts" / "pilot_paper_gate_decision.json", {
         "pilot_paper_gate_decision": "PASS",
+        "paper_claim_id": "pilot_claim",
+        "paper_claim_level": "pilot_paper",
+        "paper_claim_support_status": "pilot_claim_supported",
+        "paper_result_formality_guard_decision": "PASS",
     })
     write_json(probe_run_root / "artifacts" / "probe_paper_to_pilot_paper_transition_decision.json", {
         "probe_paper_to_pilot_paper_transition_decision": "PASS",

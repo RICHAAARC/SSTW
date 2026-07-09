@@ -18,6 +18,7 @@ from main.attacks.video_runtime_attack_protocol import (
     required_runtime_attack_names_from_config,
 )
 from main.protocol.flow_evidence_fields import with_flow_evidence_protocol_defaults
+from main.protocol.paper_result_formality_guard import build_paper_result_formality_guard
 from main.protocol.record_writer import write_json, write_jsonl
 from main.protocol.table_builder import write_csv
 
@@ -224,8 +225,14 @@ def build_full_paper_result_checker_audit(
         (runtime_detection_event_counts.get(name, 0) for name in required_attack_set),
         default=0,
     )
+    formality_guard = build_paper_result_formality_guard(
+        run_root,
+        paper_result_level=str(config.get("paper_result_level") or "full_paper"),
+        target_fpr=target_fpr,
+    )
 
     checks = {
+        "paper_result_formality_guard_passed": formality_guard["paper_result_formality_guard_decision"] == "PASS",
         "paper_result_level_is_full_paper": config.get("paper_result_level") == "full_paper",
         "pilot_paper_to_full_paper_transition_passed": pilot_transition.get("pilot_paper_to_full_paper_transition_decision") == "PASS",
         "full_paper_generation_sample_count_ready": len(generation_records) >= _safe_int(config.get("minimum_unique_video_count")),
@@ -265,6 +272,19 @@ def build_full_paper_result_checker_audit(
         "full_paper_result_decision": decision,
         "paper_result_level": config.get("paper_result_level"),
         "target_fpr": target_fpr,
+        "paper_claim_id": formality_guard["paper_claim_id"],
+        "paper_claim_level": formality_guard["paper_claim_level"],
+        "paper_claim_support_status": (
+            formality_guard["paper_claim_support_status"]
+            if decision == "PASS"
+            else f"{formality_guard['paper_claim_id']}_blocked"
+        ),
+        "paper_result_formality_guard_decision": formality_guard["paper_result_formality_guard_decision"],
+        "paper_result_formality_guard_status": formality_guard["paper_result_formality_guard_status"],
+        "paper_result_formality_guard_violation_count": formality_guard["paper_result_formality_guard_violation_count"],
+        "paper_result_formality_guard_scanned_file_count": formality_guard["paper_result_formality_guard_scanned_file_count"],
+        "paper_result_formality_guard_blocking_terms": formality_guard["paper_result_formality_guard_blocking_terms"],
+        "paper_result_formality_guard_violations": formality_guard["paper_result_formality_guard_violations"],
         "full_paper_claim_allowed": decision == "PASS",
         "submission_freeze_allowed": False,
         "missing_full_paper_requirements": missing,
@@ -328,6 +348,10 @@ def write_full_paper_result_checker_audit(
         "通过后才允许进入 full_paper -> submission_freeze 跳转判定。\n\n"
         f"- full_paper_result_checker_decision: {audit['full_paper_result_checker_decision']}\n"
         f"- target_fpr: {audit['target_fpr']}\n"
+        f"- paper_claim_id: {audit['paper_claim_id']}\n"
+        f"- paper_claim_support_status: {audit['paper_claim_support_status']}\n"
+        f"- paper_result_formality_guard_decision: {audit['paper_result_formality_guard_decision']}\n"
+        f"- paper_result_formality_guard_violation_count: {audit['paper_result_formality_guard_violation_count']}\n"
         f"- full_paper_claim_allowed: {str(audit['full_paper_claim_allowed']).lower()}\n"
         f"- missing_full_paper_requirements: {', '.join(audit['missing_full_paper_requirements']) if audit['missing_full_paper_requirements'] else 'none'}\n"
         f"- full_paper_prompt_count: {audit['full_paper_prompt_count']}\n"

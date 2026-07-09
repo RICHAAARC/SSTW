@@ -26,6 +26,7 @@ from main.attacks.video_runtime_attack_protocol import (
     required_runtime_attack_names_from_config,
 )
 from main.protocol.flow_evidence_fields import with_flow_evidence_protocol_defaults
+from main.protocol.paper_result_formality_guard import build_paper_result_formality_guard
 from main.protocol.record_writer import write_json, write_jsonl
 from main.protocol.table_builder import write_csv
 
@@ -44,7 +45,7 @@ DEFAULT_REQUIRED_MODERN_EXTERNAL_BASELINE_ADAPTER_NAMES = (
     "wam_frame",
 )
 SSTW_METHOD_ID = "sstw_key_conditioned_flow_trajectory"
-DEFAULT_MINIMUM_EXTERNAL_BASELINE_MEASURED_ADAPTER_COUNT = 7
+DEFAULT_MINIMUM_EXTERNAL_BASELINE_MEASURED_ADAPTER_COUNT = len(DEFAULT_REQUIRED_MODERN_EXTERNAL_BASELINE_ADAPTER_NAMES)
 DEFAULT_MINIMUM_MODERN_EXTERNAL_BASELINE_FORMAL_ADAPTER_COUNT = len(DEFAULT_REQUIRED_MODERN_EXTERNAL_BASELINE_ADAPTER_NAMES)
 HARD_REQUIRED_PAPER_PROFILE_CONFIG_FLAGS = (
     "require_external_baseline_comparison_records",
@@ -960,8 +961,14 @@ def build_paper_profile_gate_audit(
     formal_motion_claim_ready = motion_selection.formal_motion_claim_status in FORMAL_MOTION_CLAIM_READY_STATUSES
     motion_threshold_ready = motion_threshold_decision.get("motion_threshold_calibration_ready") is True
     motion_exclusion_ready, motion_exclusion_excluded_count, motion_exclusion_status = _motion_consistency_exclusion_ready(run_root)
+    formality_guard = build_paper_result_formality_guard(
+        run_root,
+        paper_result_level=str(config["paper_result_level"]),
+        target_fpr=float(config["target_fpr"]),
+    )
 
     requirement_checks = {
+        "paper_result_formality_guard_passed": formality_guard["paper_result_formality_guard_decision"] == "PASS",
         "validation_generation_records_ready": prompt_count >= config["minimum_prompt_count"] and seed_per_prompt_min >= config["minimum_seed_per_prompt"],
         "validation_motion_threshold_calibration_ready": (not config["require_motion_threshold_calibration_ready"]) or motion_threshold_ready,
         "validation_formal_motion_claim_ready": (not config["require_formal_motion_claim_ready"]) or formal_motion_claim_ready,
@@ -1012,6 +1019,19 @@ def build_paper_profile_gate_audit(
         "paper_profile_gate_decision": gate_decision,
         profile_gate_field: gate_decision,
         "claim_support_status": claim_support_status,
+        "paper_claim_id": formality_guard["paper_claim_id"],
+        "paper_claim_level": formality_guard["paper_claim_level"],
+        "paper_claim_support_status": (
+            formality_guard["paper_claim_support_status"]
+            if gate_decision == "PASS"
+            else f"{formality_guard['paper_claim_id']}_blocked"
+        ),
+        "paper_result_formality_guard_decision": formality_guard["paper_result_formality_guard_decision"],
+        "paper_result_formality_guard_status": formality_guard["paper_result_formality_guard_status"],
+        "paper_result_formality_guard_violation_count": formality_guard["paper_result_formality_guard_violation_count"],
+        "paper_result_formality_guard_scanned_file_count": formality_guard["paper_result_formality_guard_scanned_file_count"],
+        "paper_result_formality_guard_blocking_terms": formality_guard["paper_result_formality_guard_blocking_terms"],
+        "paper_result_formality_guard_violations": formality_guard["paper_result_formality_guard_violations"],
         "paper_result_level": config["paper_result_level"],
         "target_fpr": config["target_fpr"],
         "missing_validation_requirements": missing_requirements,
@@ -1151,6 +1171,10 @@ def write_paper_profile_gate_audit(
         + report_scope
         + f"- paper_profile_gate_decision: {audit['paper_profile_gate_decision']}\n"
         f"- claim_support_status: {audit['claim_support_status']}\n"
+        f"- paper_claim_id: {audit['paper_claim_id']}\n"
+        f"- paper_claim_support_status: {audit['paper_claim_support_status']}\n"
+        f"- paper_result_formality_guard_decision: {audit['paper_result_formality_guard_decision']}\n"
+        f"- paper_result_formality_guard_violation_count: {audit['paper_result_formality_guard_violation_count']}\n"
         f"- paper_result_level: {audit['paper_result_level']}\n"
         f"- target_fpr: {target_fpr_text}\n"
         f"- missing_validation_requirements: {', '.join(audit['missing_validation_requirements']) if audit['missing_validation_requirements'] else 'none'}\n"

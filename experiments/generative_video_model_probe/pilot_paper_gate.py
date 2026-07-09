@@ -32,6 +32,7 @@ from main.attacks.video_runtime_attack_protocol import (
     required_runtime_attack_names_from_config,
 )
 from main.protocol.flow_evidence_fields import with_flow_evidence_protocol_defaults
+from main.protocol.paper_result_formality_guard import build_paper_result_formality_guard
 from main.protocol.record_writer import write_json, write_jsonl
 from main.protocol.table_builder import write_csv
 
@@ -57,8 +58,6 @@ DEFAULT_REQUIRED_MODERN_EXTERNAL_BASELINE_ADAPTER_NAMES = (
     "wam_frame",
 )
 DEFAULT_REQUIRED_EXTERNAL_BASELINE_ADAPTER_NAMES = (
-    "explicit_dtw_temporal_alignment",
-    "explicit_frame_matching_temporal_registration",
     *DEFAULT_REQUIRED_MODERN_EXTERNAL_BASELINE_ADAPTER_NAMES,
 )
 DEFAULT_MINIMUM_EXTERNAL_BASELINE_MEASURED_ADAPTER_COUNT = len(DEFAULT_REQUIRED_EXTERNAL_BASELINE_ADAPTER_NAMES)
@@ -369,6 +368,10 @@ def _probe_paper_gate_ready_for_pilot(decision: dict[str, Any]) -> tuple[bool, d
         missing.append("probe_paper_gate_decision_passed")
     if decision.get("claim_support_status") != "probe_paper_target_fpr_0_1_paper_claim_supported":
         missing.append("probe_paper_claim_support_status_ready")
+    if decision.get("paper_claim_id") != "probe_claim":
+        missing.append("probe_paper_claim_id_ready")
+    if decision.get("paper_result_formality_guard_decision") != "PASS":
+        missing.append("probe_paper_formality_guard_passed")
     if decision.get("paper_result_level") != "probe_paper":
         missing.append("probe_paper_result_level_current")
     if missing_requirements or _safe_int(decision.get("validation_missing_requirement_count")) != 0:
@@ -843,8 +846,14 @@ def build_pilot_paper_gate_audit(
         not config["require_probe_paper_to_pilot_paper_transition_decision"]
         or raw_probe_paper_to_pilot_transition_ready
     )
+    formality_guard = build_paper_result_formality_guard(
+        run_root,
+        paper_result_level=str(config["paper_result_level"]),
+        target_fpr=float(config["target_fpr"]),
+    )
 
     requirement_checks = {
+        "paper_result_formality_guard_passed": formality_guard["paper_result_formality_guard_decision"] == "PASS",
         "probe_paper_gate_passed": probe_paper_ready,
         "probe_paper_to_pilot_paper_transition_decision_passed": probe_paper_to_pilot_transition_ready,
         "motion_threshold_calibration_ready": motion_threshold_ready,
@@ -895,6 +904,19 @@ def build_pilot_paper_gate_audit(
         "run_root": str(run_root),
         "pilot_paper_gate_decision": gate_decision,
         "claim_support_status": claim_support_status,
+        "paper_claim_id": formality_guard["paper_claim_id"],
+        "paper_claim_level": formality_guard["paper_claim_level"],
+        "paper_claim_support_status": (
+            formality_guard["paper_claim_support_status"]
+            if gate_decision == "PASS"
+            else f"{formality_guard['paper_claim_id']}_blocked"
+        ),
+        "paper_result_formality_guard_decision": formality_guard["paper_result_formality_guard_decision"],
+        "paper_result_formality_guard_status": formality_guard["paper_result_formality_guard_status"],
+        "paper_result_formality_guard_violation_count": formality_guard["paper_result_formality_guard_violation_count"],
+        "paper_result_formality_guard_scanned_file_count": formality_guard["paper_result_formality_guard_scanned_file_count"],
+        "paper_result_formality_guard_blocking_terms": formality_guard["paper_result_formality_guard_blocking_terms"],
+        "paper_result_formality_guard_violations": formality_guard["paper_result_formality_guard_violations"],
         "paper_result_level": config["paper_result_level"],
         "paper_protocol_level": config["paper_protocol_level"],
         "paper_protocol_difference_from_full_paper": config["paper_protocol_difference_from_full_paper"],
@@ -1041,6 +1063,10 @@ def write_pilot_paper_gate_audit(
         f"因此该报告不支持 blocked_target_fpr={blocked_target_fpr_text}、完整 full_paper attack coverage 或 full-paper 规模结论。\n\n"
         f"- pilot_paper_gate_decision: {audit['pilot_paper_gate_decision']}\n"
         f"- claim_support_status: {audit['claim_support_status']}\n"
+        f"- paper_claim_id: {audit['paper_claim_id']}\n"
+        f"- paper_claim_support_status: {audit['paper_claim_support_status']}\n"
+        f"- paper_result_formality_guard_decision: {audit['paper_result_formality_guard_decision']}\n"
+        f"- paper_result_formality_guard_violation_count: {audit['paper_result_formality_guard_violation_count']}\n"
         f"- paper_result_level: {audit['paper_result_level']}\n"
         f"- paper_protocol_difference_from_full_paper: {audit['paper_protocol_difference_from_full_paper']}\n"
         f"- threshold_protocol: {audit['threshold_protocol']}\n"

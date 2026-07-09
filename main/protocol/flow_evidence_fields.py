@@ -7,7 +7,6 @@ from typing import Any
 
 FLOW_EVIDENCE_PROTOCOL_FIELDS = (
     "negative_family",
-    "sampler_signature_placeholder",
     "trajectory_source_level",
     "S_path_inv",
     "S_velocity",
@@ -37,9 +36,8 @@ def flow_evidence_protocol_defaults(
     字段。没有证据的字段必须保持为 None、placeholder 或 not_supported 状态,
     不能伪装成 supported claim。
     """
-    return {
+    record = {
         "negative_family": negative_family,
-        "sampler_signature_placeholder": sampler_signature_placeholder,
         "trajectory_source_level": trajectory_source_level,
         "S_path_inv": None,
         "S_velocity": None,
@@ -49,6 +47,9 @@ def flow_evidence_protocol_defaults(
         "flow_state_admissibility_status": flow_state_admissibility_status,
         "claim_support_status": claim_support_status,
     }
+    if sampler_signature_placeholder is not None:
+        record["sampler_signature_placeholder"] = sampler_signature_placeholder
+    return record
 
 
 def with_flow_evidence_protocol_defaults(

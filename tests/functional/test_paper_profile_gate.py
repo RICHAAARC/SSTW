@@ -173,34 +173,31 @@ def _external_baseline_self_containment_pass_payload() -> dict:
 def _formal_external_baseline_records() -> list[dict]:
     """构造 probe-paper 通过所需的完整 external baseline records fixture。"""
     records: list[dict] = []
-    for name in EXTERNAL_BASELINE_NAMES:
+    for name in sorted(MODERN_EXTERNAL_BASELINE_NAMES):
         record = {
             "external_baseline_name": name,
-            "external_baseline_layer": "modern_external_baseline" if name in MODERN_EXTERNAL_BASELINE_NAMES else "explicit_synchronization_control",
-            "metric_status": "measured_formal" if name in MODERN_EXTERNAL_BASELINE_NAMES else "measured_proxy",
-            "claim_support_status": "modern_external_baseline_formal_measured"
-            if name in MODERN_EXTERNAL_BASELINE_NAMES
-            else "external_baseline_proxy_comparison_not_claim_supporting",
+            "external_baseline_layer": "modern_external_baseline",
+            "metric_status": "measured_formal",
+            "claim_support_status": "modern_external_baseline_formal_measured",
         }
-        if name in MODERN_EXTERNAL_BASELINE_NAMES:
-            record.update({
-                "prompt_id": "prompt_0",
-                "seed_id": "seed_0",
-                "attack_name": "video_compression_runtime",
-                "external_baseline_score": 0.6,
-                "external_baseline_raw_detector_score": 0.6,
-                "external_baseline_score_semantics": "watermark_presence_detector_score",
-                "external_baseline_score_orientation": "higher_is_more_watermarked",
-                "external_baseline_clean_negative_score": 0.08,
-                "external_baseline_clean_negative_video_path": f"official/{name}/clean_negative.mp4",
-                "external_baseline_official_output_path": f"official/{name}/official_output.json",
-                "external_baseline_official_command_manifest_path": f"official/{name}/official_command_manifest.json",
-                "external_baseline_official_result_provenance": "repository_generated_from_third_party_official_code",
-                "external_baseline_official_result_bundle_path": f"official/{name}/official_result_bundle.json",
-                "external_baseline_official_execution_manifest_path": f"official/{name}/official_execution_manifest.json",
-                "external_baseline_official_score_extraction_policy": "test_official_detector_confidence",
-                "external_baseline_official_reference_protocol_anchor": "same_prompt_seed_attack_runtime_comparison_unit",
-            })
+        record.update({
+            "prompt_id": "prompt_0",
+            "seed_id": "seed_0",
+            "attack_name": "video_compression_runtime",
+            "external_baseline_score": 0.6,
+            "external_baseline_raw_detector_score": 0.6,
+            "external_baseline_score_semantics": "watermark_presence_detector_score",
+            "external_baseline_score_orientation": "higher_is_more_watermarked",
+            "external_baseline_clean_negative_score": 0.08,
+            "external_baseline_clean_negative_video_path": f"official/{name}/clean_negative.mp4",
+            "external_baseline_official_output_path": f"official/{name}/official_output.json",
+            "external_baseline_official_command_manifest_path": f"official/{name}/official_command_manifest.json",
+            "external_baseline_official_result_provenance": "repository_generated_from_third_party_official_code",
+            "external_baseline_official_result_bundle_path": f"official/{name}/official_result_bundle.json",
+            "external_baseline_official_execution_manifest_path": f"official/{name}/official_execution_manifest.json",
+            "external_baseline_official_score_extraction_policy": "test_official_detector_confidence",
+            "external_baseline_official_reference_protocol_anchor": "same_prompt_seed_attack_runtime_comparison_unit",
+        })
         records.append(record)
     return records
 
@@ -417,9 +414,9 @@ def test_paper_profile_gate_passes_when_all_governed_inputs_exist(tmp_path: Path
     write_jsonl(run_root / "records" / "external_baseline_score_records.jsonl", _formal_external_baseline_records())
     write_json(run_root / "artifacts" / "external_baseline_comparison_decision.json", {
         "external_baseline_comparison_decision": "PASS",
-        "external_baseline_comparison_record_count": len(EXTERNAL_BASELINE_NAMES),
-        "external_baseline_comparison_ready_count": len(EXTERNAL_BASELINE_NAMES),
-        "external_baseline_measured_adapter_count": len(EXTERNAL_BASELINE_NAMES),
+        "external_baseline_comparison_record_count": len(MODERN_EXTERNAL_BASELINE_NAMES),
+        "external_baseline_comparison_ready_count": len(MODERN_EXTERNAL_BASELINE_NAMES),
+        "external_baseline_measured_adapter_count": len(MODERN_EXTERNAL_BASELINE_NAMES),
         "modern_external_baseline_formal_measured_adapter_count": len(MODERN_EXTERNAL_BASELINE_NAMES),
         "modern_external_baseline_formal_measured_adapter_names": sorted(MODERN_EXTERNAL_BASELINE_NAMES),
         "external_baseline_claim_support_status": "external_baseline_formal_records_written",
@@ -620,6 +617,10 @@ def test_paper_profile_gate_passes_when_all_governed_inputs_exist(tmp_path: Path
 
     assert audit["paper_profile_gate_decision"] == "PASS"
     assert audit["claim_support_status"] == "probe_paper_target_fpr_0_1_paper_claim_supported"
+    assert audit["paper_claim_id"] == "probe_claim"
+    assert audit["paper_claim_support_status"] == "probe_claim_supported"
+    assert audit["paper_result_formality_guard_decision"] == "PASS"
+    assert audit["paper_result_formality_guard_violation_count"] == 0
     assert audit["paper_result_level"] == "probe_paper"
     assert audit["target_fpr"] == protocol["target_fpr"]
     assert audit["validation_generation_record_count"] == 24

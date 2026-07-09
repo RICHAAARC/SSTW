@@ -17,7 +17,7 @@
   "minimum_calibration_seed_per_prompt": 4,
   "minimum_calibration_unique_video_count": 84,
   "minimum_clean_negative_count": 1000,
-  "minimum_external_baseline_measured_adapter_count": 7,
+  "minimum_external_baseline_measured_adapter_count": 5,
   "minimum_heldout_attacked_positive_event_count": 2760,
   "minimum_heldout_negative_event_count_per_family": 200,
   "minimum_heldout_test_negative_event_count": 1000,

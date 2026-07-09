@@ -167,10 +167,10 @@ paper_workflow/colab_notebooks/runtime_detection_colab.ipynb
 - `runtime_attack_colab.ipynb`: 恢复 generation 与 quality scoring 阶段包, 执行 46 个 runtime attack 并产出 attacked videos。
 - `runtime_detection_colab.ipynb`: 恢复 generation 与 runtime attack 阶段包, 执行 SSTW runtime detection, 产出后续公平比较所需本方法 detection records。
 
-当前 validation-scale 配置:
+当前 probe-paper 配置:
 
 ```python
-SSTW_WORKFLOW_PROFILE_VALUE = 'validation_scale'
+SSTW_WORKFLOW_PROFILE_VALUE = 'probe_paper'
 ```
 
 这些 Notebook 是 validation-scale、probe-paper、pilot-paper 与 full-paper 共用的同构主方法运行入口。`SSTW_WORKFLOW_PROFILE_VALUE` 位于每个 Notebook 第一个代码 cell 的第一行。切换 profile 时只改这一行, 不改阶段顺序、命令映射或产物清单。
@@ -200,10 +200,10 @@ paper_workflow/colab_notebooks/wam_frame_formal_reference_colab.ipynb
 - 将阶段包保存到 `/content/drive/MyDrive/SSTW/<workflow_profile>/external_baseline_official_reference/`。
 - `formal_comparison_scoring_colab.ipynb` 恢复 5 个主实验 official bundle 后, 再统一重建最终 `measured_formal` records。
 
-当前 validation-scale 配置:
+当前 probe-paper 配置:
 
 ```python
-SSTW_WORKFLOW_PROFILE_VALUE = 'validation_scale'
+SSTW_WORKFLOW_PROFILE_VALUE = 'probe_paper'
 ```
 
 该变量位于每个 baseline Notebook 第一个代码 cell 的第一行。切换到 `probe_paper`、`pilot_paper` 或 `full_paper` 时只改这一行, 不改 baseline helper、runner 或打包逻辑。
@@ -592,10 +592,10 @@ paper_workflow/colab_notebooks/paper_gate_and_package_colab.ipynb
 - 构建 validation-scale gate figure 和 package manifest。
 - 打包完整结果到 Google Drive。
 
-当前 validation-scale 配置:
+当前 probe-paper 配置:
 
 ```python
-SSTW_WORKFLOW_PROFILE_VALUE = 'validation_scale'
+SSTW_WORKFLOW_PROFILE_VALUE = 'probe_paper'
 ```
 
 该 Notebook 必须在 5 个 SSTW runtime 拆分 Notebook、5 个主实验 external baseline official reference Notebook、`formal_comparison_scoring_colab.ipynb` 和 `paper_evidence_postprocess_colab.ipynb` 完成后运行, 因为 gate 需要读取前序 artifacts。

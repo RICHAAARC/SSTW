@@ -337,9 +337,9 @@ def test_split_colab_notebooks_are_profile_driven() -> None:
             assert first_code_source.startswith("SSTW_WORKFLOW_PROFILE_VALUE = ''")
             assert "SSTW_WORKFLOW_PROFILE_VALUE = globals().get('SSTW_WORKFLOW_PROFILE_VALUE', '')" in switch_source
         else:
-            assert first_code_source.startswith("SSTW_WORKFLOW_PROFILE_VALUE = 'validation_scale'")
+            assert first_code_source.startswith("SSTW_WORKFLOW_PROFILE_VALUE = 'probe_paper'")
             assert (
-                "SSTW_WORKFLOW_PROFILE_VALUE = globals().get('SSTW_WORKFLOW_PROFILE_VALUE', 'validation_scale')"
+                "SSTW_WORKFLOW_PROFILE_VALUE = globals().get('SSTW_WORKFLOW_PROFILE_VALUE', 'probe_paper')"
                 in switch_source
             )
         assert "修改第一个代码 cell 第一行的 SSTW_WORKFLOW_PROFILE_VALUE" in switch_source

@@ -276,8 +276,8 @@ def test_main_five_baseline_formal_reference_notebooks_call_repository_helpers()
         first_code_source = "".join(first_code_cell.get("source", []))
 
         assert "drive.mount('/content/drive')" in source
-        assert first_code_source.startswith("SSTW_WORKFLOW_PROFILE_VALUE = 'validation_scale'")
-        assert "SSTW_WORKFLOW_PROFILE_VALUE = globals().get('SSTW_WORKFLOW_PROFILE_VALUE', 'validation_scale')" in source
+        assert first_code_source.startswith("SSTW_WORKFLOW_PROFILE_VALUE = 'probe_paper'")
+        assert "SSTW_WORKFLOW_PROFILE_VALUE = globals().get('SSTW_WORKFLOW_PROFILE_VALUE', 'probe_paper')" in source
         assert "NOTEBOOK_ROLE = 'external_baseline_formal_scoring'" in source
         assert f"configs/external_baselines/requirements/{baseline_id}.txt" in source
         assert "SSTW_INSTALL_BASELINE_REQUIREMENTS" in source

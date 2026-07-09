@@ -122,7 +122,6 @@ def test_server_workflow_complete_pipeline_order_matches_notebook_handoff_model(
         "motion_threshold_calibration",
         "generative_video_generation",
         "generative_video_quality_scoring",
-        "sstw_mechanism_postprocess",
         "runtime_attack",
         "runtime_detection",
         "external_baseline_formal_scoring",

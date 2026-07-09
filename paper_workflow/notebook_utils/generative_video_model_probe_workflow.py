@@ -1181,43 +1181,6 @@ def build_motion_threshold_calibration_command(layout: dict[str, str]) -> list[s
     ]
 
 
-def build_mechanism_postprocess_command(layout: dict[str, str]) -> list[str]:
-    """构造 generative_video_model_probe Colab 机制后处理命令, target_fpr 由当前 protocol config 决定。"""
-    return [
-        sys.executable,
-        "-m",
-        "experiments.generative_video_model_probe.postprocess_runner",
-        "--run-root",
-        layout["drive_run_root"],
-        "--config-path",
-        layout["protocol_config_path"],
-    ]
-
-
-def build_pilot_matrix_postprocess_command(layout: dict[str, str]) -> list[str]:
-    """构造 small-scale pilot matrix postprocess 命令, 从 generation 与 trajectory records 补齐 pilot 矩阵。"""
-    return [
-        sys.executable,
-        "-m",
-        "experiments.generative_video_model_probe.pilot_matrix_postprocess",
-        "--run-root",
-        layout["drive_run_root"],
-    ]
-
-
-def build_protocol_evaluation_matrix_postprocess_command(layout: dict[str, str]) -> list[str]:
-    """构造主干协议评估矩阵 postprocess 命令, 避免继续写出历史 small-scale gate 文件名。"""
-    return [
-        sys.executable,
-        "-m",
-        "experiments.generative_video_model_probe.pilot_matrix_postprocess",
-        "--run-root",
-        layout["drive_run_root"],
-        "--output-family",
-        "protocol_evaluation_matrix",
-    ]
-
-
 def build_runtime_attack_command(layout: dict[str, str]) -> list[str]:
     """构造 runtime video-file attack 命令, 对真实 mp4 生成 attacked videos 与 governed records。"""
     return [
@@ -1271,7 +1234,7 @@ def build_external_baseline_official_resource_bootstrap_command(
     该阶段属于 Colab 冷启动修复层。它会尝试下载公开 checkpoint、安装可公开安装的
     官方依赖, 并把能回写到 Notebook 父进程的环境变量落盘到 bootstrap artifact。
     对没有公开权重或超出当前 GPU 资源的 baseline, 它只能写出明确阻断原因, 不能
-    生成 proxy 分数。
+    生成正式 measured_formal 分数; 不满足正式运行条件时只写阻断记录。
     """
     command = [
         sys.executable,
@@ -1430,8 +1393,8 @@ def build_motion_consistency_exclusion_report_command(layout: dict[str, str]) ->
     ]
 
 
-def build_adaptive_attack_command(layout: dict[str, str]) -> list[str]:
-    """构造 paper profile adaptive attack proxy 命令。"""
+def build_adaptive_attack_formal_command(layout: dict[str, str]) -> list[str]:
+    """构造 paper profile adaptive attack formal 命令。"""
     return [
         sys.executable,
         "-m",
@@ -1442,7 +1405,7 @@ def build_adaptive_attack_command(layout: dict[str, str]) -> list[str]:
 
 
 def build_replay_and_sketch_gate_command(layout: dict[str, str]) -> list[str]:
-    """构造 replay/sketch gate validation proxy 命令。"""
+    """构造 replay/sketch 证据边界命令。"""
     return [
         sys.executable,
         "-m",
@@ -1883,8 +1846,6 @@ def build_configured_colab_stage_command(
     simple_builders = {
         "prepare_prompt_suite": build_prompt_suite_command,
         "motion_threshold_calibration": build_motion_threshold_calibration_command,
-        "mechanism_postprocess": build_mechanism_postprocess_command,
-        "protocol_evaluation_matrix_postprocess": build_protocol_evaluation_matrix_postprocess_command,
         "runtime_attack": build_runtime_attack_command,
         "runtime_detection": build_runtime_detection_command,
         "external_baseline_official_result_bundle_preflight": build_external_baseline_official_result_bundle_preflight_command,
@@ -1892,7 +1853,7 @@ def build_configured_colab_stage_command(
         "external_baseline_self_containment_decision": build_external_baseline_self_containment_decision_command,
         "motion_consistency_exclusion_report": build_motion_consistency_exclusion_report_command,
         "validation_internal_ablation": build_validation_internal_ablation_command,
-        "adaptive_attack_proxy": build_adaptive_attack_command,
+        "adaptive_attack_formal": build_adaptive_attack_formal_command,
         "replay_and_sketch_gate": build_replay_and_sketch_gate_command,
         "claim3_downgrade_gate": build_claim3_downgrade_command,
         "statistical_confidence_interval": build_statistical_confidence_interval_command,

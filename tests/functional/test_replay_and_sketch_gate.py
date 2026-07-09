@@ -8,7 +8,7 @@ from main.protocol.record_writer import read_jsonl, write_jsonl
 
 
 @pytest.mark.quick
-def test_replay_and_sketch_gate_writes_validation_proxy_records(tmp_path: Path) -> None:
+def test_replay_and_sketch_gate_writes_owner_side_diagnostic_records(tmp_path: Path) -> None:
     """replay/sketch gate 必须从轨迹 records 写出四类 governed records, 但不伪装成 full-paper 强 Claim-3。"""
     run_root = tmp_path / "run"
     generation_records = []
@@ -43,7 +43,7 @@ def test_replay_and_sketch_gate_writes_validation_proxy_records(tmp_path: Path) 
     wrong_prompt_records = read_jsonl(run_root / "records" / "wrong_prompt_replay_records.jsonl")
 
     assert audit["replay_and_sketch_gate_decision"] == "PASS"
-    assert audit["replay_and_sketch_evidence_level"] == "validation_runtime_trace_proxy"
+    assert audit["replay_and_sketch_evidence_level"] == "owner_side_runtime_trace_diagnostic"
     assert audit["claim3_full_support_allowed"] is False
     assert audit["trajectory_sketch_verified_count"] == 4
     assert audit["replay_uncertainty_ready_count"] == 4
@@ -65,7 +65,7 @@ def test_replay_and_sketch_gate_writes_validation_proxy_records(tmp_path: Path) 
     claim3_audit = write_claim3_downgrade_outputs(run_root)
     assert claim3_audit["claim3_downgraded"] is True
     assert claim3_audit["claim3_full_support_allowed"] is False
-    assert claim3_audit["replay_or_sketch_status"] == "replay_and_sketch_gate_passed_validation_proxy"
+    assert claim3_audit["replay_or_sketch_status"] == "replay_and_sketch_gate_passed_owner_side_diagnostic"
 
 
 @pytest.mark.quick

@@ -148,6 +148,8 @@ def build_runtime_attack_records(
     generation_records = [
         record for record in _read_jsonl(run_root / "records" / "generation_records.jsonl")
         if record.get("generation_status") == "success"
+        and str(record.get("sample_role") or record.get("generation_sample_role") or "").lower() != "clean_negative"
+        and str(record.get("watermark_embedding_status") or "").lower() not in {"disabled_clean_negative", "clean_unwatermarked_reference"}
     ]
     formal_metric_records = _read_jsonl(run_root / "records" / "formal_quality_motion_semantic_records.jsonl")
     selection = select_motion_claim_generation_records(generation_records, formal_metric_records)
@@ -169,6 +171,9 @@ def build_runtime_attack_records(
                 "prompt_id": generation_record.get("prompt_id"),
                 "seed_id": generation_record.get("seed_id"),
                 "trajectory_trace_id": generation_record.get("trajectory_trace_id"),
+                "split": generation_record.get("split"),
+                "protocol_split": generation_record.get("protocol_split"),
+                "colab_runtime_profile": generation_record.get("colab_runtime_profile"),
                 "attack_name": attack_name,
                 "attack_matrix_evidence_level": "runtime_video_file",
                 "attack_runtime_status": "failed",
@@ -179,12 +184,15 @@ def build_runtime_attack_records(
                 "attacked_video_sha256": None,
                 "source_frame_count": 0,
                 "attacked_frame_count": 0,
-                "claim_support_status": "runtime_attack_evidence_only",
+                "runtime_attack_formal_evidence_level": "not_run",
+                "runtime_attack_claim_level": "not_run",
+                "runtime_attack_proxy_free": False,
+                "claim_support_status": "runtime_attack_formal_transform_pending",
             },
                 negative_family=None,
                 trajectory_source_level="runtime_video_file_attack",
                 flow_state_admissibility_status="not_evaluated",
-                claim_support_status="runtime_attack_evidence_only",
+                claim_support_status="runtime_attack_formal_transform_pending",
             )
             try:
                 if not source_video_path.exists():
@@ -201,6 +209,7 @@ def build_runtime_attack_records(
                     "attacked_video_sha256": _sha256_file(attacked_video_path),
                     "source_frame_count": len(frames),
                     "attacked_frame_count": len(attacked_frames),
+                    "claim_support_status": "runtime_attack_formal_video_transform_ready",
                     **attack_metadata,
                 })
             except Exception as exc:  # pragma: no cover - 依赖具体视频解码和编码后端
@@ -221,6 +230,13 @@ def audit_runtime_attack_records(
 ) -> dict:
     """审计 runtime attack records 的覆盖情况。"""
     ready_records = [record for record in records if record.get("attack_runtime_status") == "ready"]
+    formal_ready_records = [
+        record
+        for record in ready_records
+        if record.get("runtime_attack_implementation_level") == "formal_runtime_video_transform"
+        and record.get("runtime_attack_formal_evidence_level") == "formal_runtime_video_transform"
+        and record.get("runtime_attack_proxy_free") is True
+    ]
     attack_names = {str(record.get("attack_name")) for record in ready_records if record.get("attack_name")}
     required_attack_set = {str(name) for name in (required_attack_names or ()) if str(name)}
     missing_required_attack_names = sorted(required_attack_set - attack_names)
@@ -233,17 +249,21 @@ def audit_runtime_attack_records(
     return {
         "stage_id": "generative_video_runtime_attack_runner",
         "runtime_attack_decision": "PASS"
-        if ready_records and len(ready_records) == len(records) and not missing_required_attack_names
+        if ready_records and len(ready_records) == len(records) and len(formal_ready_records) == len(ready_records) and not missing_required_attack_names
         else "FAIL",
         "runtime_attack_record_count": len(records),
         "runtime_attack_ready_count": len(ready_records),
+        "runtime_attack_formal_ready_count": len(formal_ready_records),
+        "runtime_attack_formal_missing_count": len(ready_records) - len(formal_ready_records),
         "runtime_attack_count": len(attack_names),
         "runtime_attack_names": sorted(attack_names),
         "required_runtime_attack_names": sorted(required_attack_set),
         "missing_required_runtime_attack_names": missing_required_attack_names,
         "missing_required_runtime_attack_count": len(missing_required_attack_names),
         "attack_matrix_evidence_level": "runtime_video_file",
-        "claim_support_status": "runtime_attack_evidence_only",
+        "claim_support_status": "runtime_attack_formal_video_transform_ready"
+        if ready_records and len(formal_ready_records) == len(ready_records)
+        else "runtime_attack_formal_video_transform_blocked",
         **selection_fields,
     }
 
@@ -263,11 +283,13 @@ def run_runtime_attacks(
     write_json(run_root / "artifacts" / "runtime_attack_decision.json", audit)
     report = (
         "# Runtime Attack Runner Report\n\n"
-        "该报告记录对真实 mp4 文件执行的 runtime attack。当前结果用于工程验证 attack runner 与 attacked video 落盘链路, "
-        "不能单独支撑最终论文 claim。\n\n"
+        "该报告记录对真实 mp4 文件执行的 runtime attack。runtime attack 只覆盖可在仓库内复现的"
+        "视频文件级变换; 真实平台上传下载、screen recording 和生成式重生成由 non-runtime/adaptive "
+        "协议单独提供正式记录, 不在此处用替代实现放行。\n\n"
         f"- runtime_attack_decision: {audit['runtime_attack_decision']}\n"
         f"- runtime_attack_record_count: {audit['runtime_attack_record_count']}\n"
         f"- runtime_attack_ready_count: {audit['runtime_attack_ready_count']}\n"
+        f"- runtime_attack_formal_ready_count: {audit['runtime_attack_formal_ready_count']}\n"
         f"- runtime_attack_count: {audit['runtime_attack_count']}\n"
         f"- required_runtime_attack_names: {', '.join(audit['required_runtime_attack_names'])}\n"
         f"- missing_required_runtime_attack_names: {', '.join(audit['missing_required_runtime_attack_names']) if audit['missing_required_runtime_attack_names'] else 'none'}\n"

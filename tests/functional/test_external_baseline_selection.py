@@ -368,19 +368,21 @@ def _write_external_baseline_runtime_fixture(run_root: Path) -> None:
 
 @pytest.mark.quick
 def test_external_baseline_comparison_runner_uses_external_baseline_adapters(tmp_path: Path) -> None:
-    """baseline comparison 必须通过 external_baseline/ adapter 产出 records、table、decision 和 report。"""
+    """旧 explicit adapter 只能产出阻断记录, 不能替代正式 external baseline measured_formal。"""
     run_root = tmp_path / "generative_video_runtime"
     _write_external_baseline_runtime_fixture(run_root)
 
     audit = write_external_baseline_comparison_outputs(run_root)
     records = read_jsonl(run_root / "records" / "external_baseline_score_records.jsonl")
 
-    assert audit["external_baseline_comparison_decision"] == "PASS"
-    assert audit["external_baseline_measured_adapter_count"] == 2
-    assert "explicit_dtw_temporal_alignment" in audit["external_baseline_measured_adapter_names"]
-    assert "explicit_frame_matching_temporal_registration" in audit["external_baseline_measured_adapter_names"]
+    assert audit["external_baseline_comparison_decision"] == "FAIL"
+    assert audit["external_baseline_measured_adapter_count"] == 0
+    assert audit["external_baseline_formal_ready_count"] == 0
+    assert audit["modern_external_baseline_formal_measured_adapter_count"] == 0
+    assert audit["external_baseline_claim_support_status"] == "external_baseline_comparison_blocked"
     assert any(record["external_baseline_adapter_path"].startswith("external_baseline/") for record in records)
     assert all(record["external_baseline_result_used_for_claim"] is False for record in records)
+    assert all(record["metric_status"] != "measured_formal" for record in records)
     assert all(record.get("S_final") is None for record in records)
     assert (run_root / "tables" / "external_baseline_comparison_table.csv").exists()
     assert (run_root / "artifacts" / "external_baseline_comparison_decision.json").exists()

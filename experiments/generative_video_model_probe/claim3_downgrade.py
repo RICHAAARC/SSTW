@@ -95,7 +95,7 @@ def build_claim3_downgrade_audit(run_root: str | Path) -> dict[str, Any]:
     if replay_gate_passed and replay_gate_full_support_allowed:
         replay_or_sketch_status = "replay_and_sketch_gate_passed"
     elif replay_gate_passed:
-        replay_or_sketch_status = replay_decision.get("replay_or_sketch_status", "replay_and_sketch_gate_passed_validation_proxy")
+        replay_or_sketch_status = replay_decision.get("replay_or_sketch_status", "replay_and_sketch_gate_passed_owner_side_diagnostic")
     else:
         replay_or_sketch_status = "claim3_explicitly_downgraded"
 
@@ -111,7 +111,7 @@ def build_claim3_downgrade_audit(run_root: str | Path) -> dict[str, Any]:
         "claim3_downgrade_reason": "replay_and_sketch_gate_passed"
         if not claim3_downgraded
         else (
-            "replay_and_sketch_gate_validation_proxy_only"
+            "replay_and_sketch_gate_owner_side_diagnostic_only"
             if replay_gate_passed
             else "replay_and_sketch_gate_not_yet_implemented_or_not_passed"
         ),

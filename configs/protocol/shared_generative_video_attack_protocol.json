@@ -1,6 +1,6 @@
 {
   "shared_attack_protocol_id": "top_tier_video_watermark_attack_protocol_v1",
-  "shared_attack_protocol_role": "shared_runtime_and_adaptive_attack_manifest_for_validation_probe_pilot_full_paper",
+  "shared_attack_protocol_role": "shared_runtime_and_adaptive_attack_manifest_for_probe_pilot_full_paper",
   "required_runtime_attack_names": [
     "video_compression_runtime",
     "h264_crf18_runtime",
@@ -14,7 +14,7 @@
     "mpeg4_crf28_runtime",
     "mpeg4_q2_runtime",
     "mpeg4_q8_runtime",
-    "platform_transcode_proxy_runtime",
+    "platform_transcode_runtime",
     "jpeg_frame_compression_runtime",
     "temporal_crop_runtime",
     "temporal_clip_middle_runtime",
@@ -37,7 +37,7 @@
     "salt_pepper_noise_runtime",
     "gaussian_blur_runtime",
     "median_blur_runtime",
-    "denoise_proxy_runtime",
+    "denoise_runtime",
     "brightness_contrast_runtime",
     "gamma_correction_runtime",
     "color_jitter_runtime",

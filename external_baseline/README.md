@@ -301,7 +301,7 @@ self-containment 判定、validation / pilot gate 和打包。旧的通用 exter
 scoring Notebook 已删除, 防止它与 paper gate 的聚合职责重复并造成运行顺序误读。
 这样可以把三类失败原因分离:
 
-1. `generative_video_generation_colab.ipynb`、`generative_video_quality_scoring_colab.ipynb`、`sstw_mechanism_postprocess_colab.ipynb`、`runtime_attack_colab.ipynb`、`runtime_detection_colab.ipynb`: 主方法生成、formal metrics、机制后处理、attack 和 detection 是否成功。
+1. `generative_video_generation_colab.ipynb`、`generative_video_quality_scoring_colab.ipynb`、`runtime_attack_colab.ipynb`、`runtime_detection_colab.ipynb`: 主方法生成、formal metrics、attack 和 detection 是否成功。
 2. 5 个主实验 `*_formal_reference_colab.ipynb`: 现代视频水印 baseline official bundle 是否成功。
 3. `paper_gate_and_package_colab.ipynb`: 全量统一转写、self-containment、paper profile、pilot-paper 或 full-paper gate 是否满足论文协议。
 

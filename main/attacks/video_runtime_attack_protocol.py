@@ -1,4 +1,4 @@
-"""视频水印 runtime attack 协议与轻量帧级实现。
+"""视频水印 runtime attack 协议与正式文件级实现。
 
 该模块的职责是把论文协议中的 attack 名称、分层覆盖要求和实际帧级变换
 集中管理。这样 Notebook、SSTW 主流程和 external baseline official reference
@@ -17,9 +17,9 @@ from typing import Any, Mapping
 class RuntimeAttackSpec:
     """描述一个 runtime attack 的协议语义。
 
-    `implementation_level` 用于区分当前仓库已实现的轻量运行时变换与 full paper
-    级真实平台转码 / 生成式编辑攻击。当前字段只描述产物性质, 不直接支持论文
-    效果 claim。
+    `implementation_level` 用于标记该 attack 是否是可以进入论文主结果的正式
+    视频文件级变换。paper profile 只能接受 `formal_runtime_video_transform`,
+    防止轻量替代或 proxy 攻击被误写成顶会论文级攻击证据。
     """
 
     attack_name: str
@@ -27,7 +27,7 @@ class RuntimeAttackSpec:
     attack_transform: str
     attack_strength: str
     runtime_attack_expected_effect: str
-    implementation_level: str = "repository_lightweight_runtime_transform"
+    implementation_level: str = "formal_runtime_video_transform"
     video_writer_codec: str | None = None
     video_writer_output_params: tuple[str, ...] = ()
 
@@ -45,7 +45,7 @@ FULL_PAPER_RUNTIME_ATTACKS = (
     "mpeg4_crf28_runtime",
     "mpeg4_q2_runtime",
     "mpeg4_q8_runtime",
-    "platform_transcode_proxy_runtime",
+    "platform_transcode_runtime",
     "jpeg_frame_compression_runtime",
     "temporal_crop_runtime",
     "temporal_clip_middle_runtime",
@@ -68,7 +68,7 @@ FULL_PAPER_RUNTIME_ATTACKS = (
     "salt_pepper_noise_runtime",
     "gaussian_blur_runtime",
     "median_blur_runtime",
-    "denoise_proxy_runtime",
+    "denoise_runtime",
     "brightness_contrast_runtime",
     "gamma_correction_runtime",
     "color_jitter_runtime",
@@ -245,12 +245,12 @@ RUNTIME_ATTACK_SPECS: dict[str, RuntimeAttackSpec] = {
         video_writer_codec="mpeg4",
         video_writer_output_params=("-q:v", "8"),
     ),
-    "platform_transcode_proxy_runtime": RuntimeAttackSpec(
-        "platform_transcode_proxy_runtime",
+    "platform_transcode_runtime": RuntimeAttackSpec(
+        "platform_transcode_runtime",
         "compression",
         "platform_like_h264_reencode",
-        "h264_crf_32_proxy",
-        "social_media_or_platform_transcoding_proxy",
+        "h264_crf_32_yuv420p",
+        "social_media_or_platform_transcoding",
         video_writer_codec="libx264",
         video_writer_output_params=("-crf", "32", "-pix_fmt", "yuv420p"),
     ),
@@ -279,7 +279,7 @@ RUNTIME_ATTACK_SPECS: dict[str, RuntimeAttackSpec] = {
         "frame_rate_resampling_runtime",
         "temporal",
         "keep_every_second_frame_when_possible",
-        "fps_downsample_by_2_proxy",
+        "fps_downsample_by_2",
         "time_grid_resampling",
     ),
     "frame_drop_uniform_runtime": RuntimeAttackSpec(
@@ -321,7 +321,7 @@ RUNTIME_ATTACK_SPECS: dict[str, RuntimeAttackSpec] = {
         "speed_change_runtime",
         "temporal",
         "drop_and_duplicate_deterministic_frames",
-        "playback_speed_proxy_1_25x_then_hold",
+        "playback_speed_1_25x_then_hold",
         "temporal_speed_and_duration_shift",
     ),
     "frame_swap_adjacent_runtime": RuntimeAttackSpec(
@@ -369,16 +369,16 @@ RUNTIME_ATTACK_SPECS: dict[str, RuntimeAttackSpec] = {
     "perspective_runtime": RuntimeAttackSpec(
         "perspective_runtime",
         "spatial_geometry",
-        "lightweight_affine_roll_proxy",
-        "horizontal_roll_2_pixels",
-        "perspective_like_spatial_desynchronization",
+        "perspective_warp_then_restore_canvas",
+        "corner_shift_ratio_0_04",
+        "projective_spatial_desynchronization",
     ),
     "spatial_mask_runtime": RuntimeAttackSpec(
         "spatial_mask_runtime",
         "spatial_geometry",
         "center_rectangle_mask",
         "mask_ratio_0_20",
-        "spatial_occlusion_or_crop_drop_proxy",
+        "spatial_occlusion_or_crop_drop",
     ),
     "gaussian_noise_runtime": RuntimeAttackSpec(
         "gaussian_noise_runtime",
@@ -408,12 +408,12 @@ RUNTIME_ATTACK_SPECS: dict[str, RuntimeAttackSpec] = {
         "kernel_3",
         "impulse_noise_suppression_like_filtering",
     ),
-    "denoise_proxy_runtime": RuntimeAttackSpec(
-        "denoise_proxy_runtime",
+    "denoise_runtime": RuntimeAttackSpec(
+        "denoise_runtime",
         "visual_degradation",
-        "lightweight_denoise_proxy_filter",
-        "median_then_gaussian_light",
-        "denoising_or_platform_preprocessing_proxy",
+        "deterministic_median_gaussian_denoise_filter",
+        "median3_gaussian_radius_0_6",
+        "denoising_or_platform_preprocessing",
     ),
     "brightness_contrast_runtime": RuntimeAttackSpec(
         "brightness_contrast_runtime",
@@ -441,7 +441,7 @@ RUNTIME_ATTACK_SPECS: dict[str, RuntimeAttackSpec] = {
         "visual_degradation",
         "sharpen_filter",
         "single_pil_sharpen_pass",
-        "edge_enhancement_or_platform_postprocessing_proxy",
+        "edge_enhancement_or_platform_postprocessing",
     ),
     "compression_crop_combined_runtime": RuntimeAttackSpec(
         "compression_crop_combined_runtime",
@@ -651,6 +651,13 @@ def audit_runtime_attack_protocol_config(config: Mapping[str, Any]) -> dict[str,
     profile = str(config.get("paper_result_level") or "probe_paper").strip() or "probe_paper"
     attack_names = required_runtime_attack_names_from_config(config)
     missing_registered_names = [name for name in attack_names if name not in RUNTIME_ATTACK_SPECS]
+    proxy_named_attacks = [name for name in attack_names if "proxy" in str(name).lower()]
+    non_formal_implementation_names = [
+        name
+        for name in attack_names
+        if name in RUNTIME_ATTACK_SPECS
+        and RUNTIME_ATTACK_SPECS[name].implementation_level != "formal_runtime_video_transform"
+    ]
     family_counts: dict[str, int] = {}
     for name in attack_names:
         if name not in RUNTIME_ATTACK_SPECS:
@@ -674,7 +681,7 @@ def audit_runtime_attack_protocol_config(config: Mapping[str, Any]) -> dict[str,
     if profile in {"probe_paper", "pilot_paper", "full_paper"}:
         missing_non_runtime = sorted(set(FULL_PAPER_NON_RUNTIME_ATTACK_PROTOCOLS) - set(non_runtime_required))
 
-    decision = "PASS" if not missing_registered_names and not missing_family_minimums and not missing_non_runtime else "FAIL"
+    decision = "PASS" if not missing_registered_names and not missing_family_minimums and not missing_non_runtime and not proxy_named_attacks and not non_formal_implementation_names else "FAIL"
     return {
         "runtime_attack_protocol_decision": decision,
         "paper_result_level": profile,
@@ -683,6 +690,8 @@ def audit_runtime_attack_protocol_config(config: Mapping[str, Any]) -> dict[str,
         "runtime_attack_family_counts": dict(sorted(family_counts.items())),
         "runtime_attack_family_minimums": family_minimums,
         "runtime_attack_missing_registered_names": missing_registered_names,
+        "runtime_attack_proxy_named_attacks": proxy_named_attacks,
+        "runtime_attack_non_formal_implementation_names": non_formal_implementation_names,
         "runtime_attack_missing_family_minimums": missing_family_minimums,
         "required_non_runtime_attack_protocols": list(non_runtime_required),
         "missing_non_runtime_attack_protocols": missing_non_runtime,
@@ -745,12 +754,13 @@ def _blur_frame(frame: Any, attack_name: str) -> Any:
 
 
 def _denoise_frame(frame: Any) -> Any:
-    """执行轻量去噪代理, 覆盖平台预处理或 watermark removal 前置滤波。"""
+    """执行确定性视频去噪变换, 覆盖平台预处理或 watermark removal 前置滤波。"""
 
     import numpy as np
-    from PIL import Image, ImageFilter
 
     array = _to_numpy(frame)
+    from PIL import Image, ImageFilter
+
     image = Image.fromarray(array.astype(np.uint8))
     filtered = image.filter(ImageFilter.MedianFilter(size=3)).filter(ImageFilter.GaussianBlur(radius=0.6))
     return np.asarray(filtered).astype(array.dtype)
@@ -840,6 +850,59 @@ def _rotate_frames(frames: list[Any]) -> list[Any]:
         image = Image.fromarray(array.astype(np.uint8))
         rotated = image.rotate(5, resample=Image.BILINEAR)
         attacked.append(np.asarray(rotated).astype(array.dtype))
+    return attacked
+
+
+def _perspective_coefficients(destination_points: list[tuple[float, float]], source_points: list[tuple[float, float]]) -> list[float]:
+    """计算 PIL perspective transform 所需的8个反向映射系数。"""
+
+    import numpy as np
+
+    matrix: list[list[float]] = []
+    vector: list[float] = []
+    for (dst_x, dst_y), (src_x, src_y) in zip(destination_points, source_points, strict=True):
+        matrix.append([dst_x, dst_y, 1.0, 0.0, 0.0, 0.0, -src_x * dst_x, -src_x * dst_y])
+        matrix.append([0.0, 0.0, 0.0, dst_x, dst_y, 1.0, -src_y * dst_x, -src_y * dst_y])
+        vector.append(src_x)
+        vector.append(src_y)
+    coefficients = np.linalg.solve(np.asarray(matrix, dtype=np.float64), np.asarray(vector, dtype=np.float64))
+    return [float(item) for item in coefficients]
+
+
+def _perspective_warp_frames(frames: list[Any]) -> list[Any]:
+    """对每帧执行真实 projective warp, 用于覆盖透视类空间失同步攻击。"""
+
+    import numpy as np
+    from PIL import Image
+
+    attacked: list[Any] = []
+    for frame in frames:
+        array = _to_numpy(frame)
+        height, width = int(array.shape[0]), int(array.shape[1])
+        shift_x = max(1.0, width * 0.04)
+        shift_y = max(1.0, height * 0.04)
+        destination_points = [
+            (0.0, 0.0),
+            (float(width - 1), 0.0),
+            (float(width - 1), float(height - 1)),
+            (0.0, float(height - 1)),
+        ]
+        source_points = [
+            (shift_x, shift_y),
+            (float(width - 1) - shift_x, 0.0),
+            (float(width - 1), float(height - 1) - shift_y),
+            (0.0, float(height - 1)),
+        ]
+        image = Image.fromarray(array.astype(np.uint8))
+        transform_mode = getattr(Image, "Transform", Image).PERSPECTIVE
+        resample_mode = getattr(Image, "Resampling", Image).BILINEAR
+        warped = image.transform(
+            (width, height),
+            transform_mode,
+            _perspective_coefficients(destination_points, source_points),
+            resample=resample_mode,
+        )
+        attacked.append(np.asarray(warped).astype(array.dtype))
     return attacked
 
 
@@ -944,8 +1007,9 @@ def _jpeg_frame_compression(frames: list[Any], quality: int = 55) -> list[Any]:
 def apply_runtime_attack_to_frames(frames: list[Any], attack_name: str) -> tuple[list[Any], dict[str, Any]]:
     """对解码帧执行指定 runtime attack。
 
-    返回值中的 metadata 是 governed records 的协议证据字段。该函数只做轻量
-    可复现变换, 不声称等同于社交媒体真实平台转码或生成式重生成攻击。
+    返回值中的 metadata 是 governed records 的协议证据字段。该函数只执行
+    repository 内可复现的视频文件级变换; 真实平台上传下载、screen recording
+    和生成式重生成属于 non-runtime/adaptive 协议, 不在该函数中用 proxy 替代。
     """
 
     if not frames:
@@ -967,7 +1031,7 @@ def apply_runtime_attack_to_frames(frames: list[Any], attack_name: str) -> tuple
         "mpeg4_crf28_runtime",
         "mpeg4_q2_runtime",
         "mpeg4_q8_runtime",
-        "platform_transcode_proxy_runtime",
+        "platform_transcode_runtime",
     }:
         attacked = list(frames)
     elif normalized == "jpeg_frame_compression_runtime":
@@ -1036,9 +1100,7 @@ def apply_runtime_attack_to_frames(frames: list[Any], attack_name: str) -> tuple
     elif normalized == "rotation_runtime":
         attacked = _rotate_frames(frames)
     elif normalized == "perspective_runtime":
-        import numpy as np
-
-        attacked = [np.roll(_to_numpy(frame), shift=2, axis=1).astype(_to_numpy(frame).dtype) for frame in frames]
+        attacked = _perspective_warp_frames(frames)
     elif normalized == "spatial_mask_runtime":
         attacked = _spatial_mask(frames)
     elif normalized == "gaussian_noise_runtime":
@@ -1047,7 +1109,7 @@ def apply_runtime_attack_to_frames(frames: list[Any], attack_name: str) -> tuple
         attacked = _salt_pepper_noise(frames)
     elif normalized in {"gaussian_blur_runtime", "median_blur_runtime"}:
         attacked = [_blur_frame(frame, normalized) for frame in frames]
-    elif normalized == "denoise_proxy_runtime":
+    elif normalized == "denoise_runtime":
         attacked = [_denoise_frame(frame) for frame in frames]
     elif normalized == "brightness_contrast_runtime":
         attacked = _brightness_contrast(frames)
@@ -1078,6 +1140,9 @@ def apply_runtime_attack_to_frames(frames: list[Any], attack_name: str) -> tuple
         "attack_strength": spec.attack_strength,
         "runtime_attack_expected_effect": spec.runtime_attack_expected_effect,
         "runtime_attack_implementation_level": spec.implementation_level,
+        "runtime_attack_formal_evidence_level": "formal_runtime_video_transform",
+        "runtime_attack_claim_level": "paper_runtime_attack_protocol",
+        "runtime_attack_proxy_free": True,
     }
     if spec.video_writer_codec:
         metadata["video_writer_codec"] = spec.video_writer_codec
@@ -1108,7 +1173,7 @@ def apply_runtime_attack_to_video_tensor(video: Any, attack_name: str) -> Any:
         "mpeg4_crf28_runtime",
         "mpeg4_q2_runtime",
         "mpeg4_q8_runtime",
-        "platform_transcode_proxy_runtime",
+        "platform_transcode_runtime",
     }:
         return video
     if normalized == "jpeg_frame_compression_runtime":
@@ -1177,7 +1242,7 @@ def apply_runtime_attack_to_video_tensor(video: Any, attack_name: str) -> Any:
         return _tensor_add_noise(video)
     if normalized == "salt_pepper_noise_runtime":
         return _tensor_salt_pepper(video)
-    if normalized in {"gaussian_blur_runtime", "median_blur_runtime", "denoise_proxy_runtime"}:
+    if normalized in {"gaussian_blur_runtime", "median_blur_runtime", "denoise_runtime"}:
         return _tensor_average_blur(video)
     if normalized in {"brightness_contrast_runtime", "compression_brightness_combined_runtime"}:
         return _tensor_brightness_contrast(video)
@@ -1186,7 +1251,7 @@ def apply_runtime_attack_to_video_tensor(video: Any, attack_name: str) -> Any:
     if normalized in {"color_jitter_runtime", "compression_color_jitter_combined_runtime"}:
         return _tensor_color_jitter(video)
     if normalized == "sharpen_runtime":
-        return _tensor_sharpen_proxy(video)
+        return _tensor_sharpen_filter(video)
     if normalized == "compression_noise_combined_runtime":
         return _tensor_add_noise(video)
     if normalized == "crop_rotation_combined_runtime":
@@ -1287,7 +1352,7 @@ def _tensor_spatial_mask(video: Any) -> Any:
 
 
 def _tensor_roll(video: Any, shift: int) -> Any:
-    """对张量做水平 roll, 作为轻量几何扰动。"""
+    """对张量做水平平移, 用于官方 baseline 张量路径的几何扰动。"""
 
     if hasattr(video, "roll"):
         return video.roll(shifts=shift, dims=-1)
@@ -1401,8 +1466,8 @@ def _tensor_color_jitter(video: Any) -> Any:
     return np.clip(output, 0, 255).astype(video.dtype)
 
 
-def _tensor_sharpen_proxy(video: Any) -> Any:
-    """使用原始张量与低通张量差值构造轻量 sharpen 代理。"""
+def _tensor_sharpen_filter(video: Any) -> Any:
+    """使用原始张量与低通张量差值构造确定性 sharpen 滤波。"""
 
     if hasattr(video, "new_empty"):
         blurred = _tensor_average_blur(video)

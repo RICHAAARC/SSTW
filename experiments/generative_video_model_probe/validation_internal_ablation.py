@@ -1,4 +1,9 @@
-"""paper profile 内部消融矩阵后处理。"""
+"""paper profile 正式内部消融矩阵汇总。
+
+该文件只把已经真实生成并完成正式视频内容检测的不同 method_variant
+转写为内部消融记录。它不再从 full-method 分数派生替代分数, 因而不会把
+component-removal 的假设性结果写入论文 claim。
+"""
 
 from __future__ import annotations
 
@@ -13,62 +18,50 @@ from main.protocol.record_writer import write_json, write_jsonl
 from main.protocol.table_builder import write_csv
 
 
+FULL_METHOD_VARIANT = "sstw_full_method"
+FORMAL_INTERNAL_ABLATION_EVIDENCE_LEVEL = "formal_component_removal_video_detector"
+FORMAL_INTERNAL_ABLATION_CLAIM_STATUS = "formal_internal_ablation_variant_measured"
+FORMAL_DETECTOR_EVIDENCE_LEVEL = "attacked_video_content_detector"
 VALIDATION_ABLATION_VARIANTS = (
     {
-        "method_variant": "sstw_full_method",
+        "method_variant": FULL_METHOD_VARIANT,
         "ablation_family": "full_method",
         "ablation_removed_component": "none",
-        "score_multiplier": 1.0,
-        "score_offset": 0.0,
     },
     {
         "method_variant": "endpoint_only_control",
         "ablation_family": "endpoint_control",
         "ablation_removed_component": "path_and_velocity_evidence",
-        "score_multiplier": 0.76,
-        "score_offset": -0.02,
     },
     {
         "method_variant": "trajectory_only_score",
         "ablation_family": "trajectory_control",
         "ablation_removed_component": "endpoint_evidence",
-        "score_multiplier": 0.82,
-        "score_offset": -0.015,
     },
     {
         "method_variant": "without_velocity_constraint",
         "ablation_family": "velocity_constraint",
         "ablation_removed_component": "velocity_field_weak_watermark_constraint",
-        "score_multiplier": 0.72,
-        "score_offset": -0.03,
     },
     {
         "method_variant": "without_endpoint_aware_control",
         "ablation_family": "endpoint_aware_control",
         "ablation_removed_component": "endpoint_aware_minimum_energy_flow_control",
-        "score_multiplier": 0.78,
-        "score_offset": -0.025,
     },
     {
         "method_variant": "without_replay_uncertainty_weighting",
         "ablation_family": "replay_uncertainty",
         "ablation_removed_component": "replay_uncertainty_aware_weighting",
-        "score_multiplier": 0.84,
-        "score_offset": -0.01,
     },
     {
         "method_variant": "without_flow_state_admissibility",
         "ablation_family": "admissibility",
         "ablation_removed_component": "flow_state_evidence_admissibility",
-        "score_multiplier": 0.88,
-        "score_offset": 0.0,
     },
     {
         "method_variant": "generic_ssm_baseline",
         "ablation_family": "state_model_baseline",
         "ablation_removed_component": "key_conditioned_flow_state_semantics",
-        "score_multiplier": 0.70,
-        "score_offset": -0.02,
     },
 )
 INTERNAL_ABLATION_PROFILE_NAMES = {"probe_paper", "pilot_paper", "full_paper"}
@@ -77,38 +70,49 @@ PILOT_PAPER_PROFILE_NAMES = {"pilot_paper"}
 
 def _read_jsonl(path: Path) -> list[dict]:
     """读取 JSONL records, 文件不存在时返回空列表。"""
+
     if not path.exists():
         return []
     return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
 
 
-def _read_json(path: Path) -> dict:
-    """读取 JSON artifact, 文件不存在时返回空对象。"""
-    if not path.exists():
-        return {}
-    return json.loads(path.read_text(encoding="utf-8-sig"))
+def _profile_trace_map(run_root: Path) -> dict[str, dict[str, str]]:
+    """获取支持内部消融的 profile 与 method_variant 信息。
 
-
-def _profile_trace_map(run_root: Path) -> dict[str, str]:
-    """获取支持内部消融的 profile 生成样本 trace id。
-
-    通用工程写法是通过 `trajectory_trace_id` 把 generation、attack、detection 和 ablation records
-    关联起来。项目特定要求是同一个 runner 同时支持 probe_paper、pilot_paper 和
-    full_paper, 防止后续 profile 只复用前序 proxy 消融结果。
+    通用工程写法是以 `trajectory_trace_id` 关联 generation、attack、detection
+    和 ablation records。项目特定写法是只接受 paper profile 的正式样本,
+    防止旧探索样本进入 probe_paper、pilot_paper 或 full_paper 的论文结论。
     """
+
     generation_records = _read_jsonl(run_root / "records" / "generation_records.jsonl")
-    return {
-        str(record.get("trajectory_trace_id")): str(record.get("colab_runtime_profile"))
-        for record in generation_records
-        if record.get("generation_status") == "success"
-        and record.get("colab_runtime_profile") in INTERNAL_ABLATION_PROFILE_NAMES
-        and record.get("trajectory_trace_id")
-    }
+    mapping: dict[str, dict[str, str]] = {}
+    for record in generation_records:
+        trace_id = str(record.get("trajectory_trace_id") or "")
+        if (
+            record.get("generation_status") == "success"
+            and record.get("colab_runtime_profile") in INTERNAL_ABLATION_PROFILE_NAMES
+            and trace_id
+        ):
+            mapping[trace_id] = {
+                "ablation_runtime_profile": str(record.get("colab_runtime_profile")),
+                "method_variant": _normalize_method_variant(record.get("method_variant")),
+            }
+    return mapping
 
 
-def _base_score(record: dict) -> float | None:
-    """从 runtime detection record 中提取可用于 validation 消融的基础 proxy 分数。"""
-    for field_name in ("S_final_conservative", "S_runtime_attack_detection", "S_path_inv", "S_velocity"):
+def _normalize_method_variant(value: Any) -> str:
+    """把运行时 method_variant 归一到内部消融表使用的正式变体名称。"""
+
+    normalized = str(value or "").strip()
+    if normalized in {"", "key_conditioned_state_space_with_trajectory"}:
+        return FULL_METHOD_VARIANT
+    return normalized
+
+
+def _formal_score(record: dict) -> float | None:
+    """从正式视频内容检测记录中提取内部消融分数。"""
+
+    for field_name in ("sstw_raw_detector_score", "raw_detector_score", "sstw_score"):
         value = record.get(field_name)
         if value is None:
             continue
@@ -119,106 +123,163 @@ def _base_score(record: dict) -> float | None:
     return None
 
 
-def _clip_score(value: float) -> float:
-    """把消融 proxy 分数限制在 0 到 1 区间。"""
-    return round(max(0.0, min(1.0, value)), 6)
+def _formal_detection_ready(record: dict) -> bool:
+    """判断 runtime detection record 是否可支撑正式内部消融。"""
+
+    return (
+        record.get("runtime_detection_status") == "ready"
+        and record.get("sstw_detector_evidence_level") == FORMAL_DETECTOR_EVIDENCE_LEVEL
+        and record.get("trajectory_trace_used_for_score") is False
+        and record.get("runtime_detection_claim_level") == "formal_paper_detector"
+        and _formal_score(record) is not None
+    )
 
 
 def build_validation_internal_ablation_records(run_root: str | Path) -> list[dict]:
-    """从 paper profile runtime detection records 构建内部消融 proxy records。
+    """从正式 runtime detection records 构建内部消融 measured_formal records。
 
-    该实现属于工程闭环层, 不是 full-paper 正式消融。它复用已经落盘的 runtime detection proxy
-    分数, 为后续真实消融 detector 留出 governed record 形状。若当前 run_root 是 pilot_paper,
-    该函数会在同一批 pilot_paper trace 上写出消融矩阵, 从而支撑 pilot_paper gate 的完整协议检查。
+    只有当每个消融变体都已经通过独立生成配置真实产出视频, 并经过同一正式
+    视频内容检测器评分后, 对应记录才会进入 `metric_status: measured_formal`。
+    若某个变体没有真实记录, 本函数不会合成替代分数, 后续门禁会 fail-closed。
     """
+
     run_root = Path(run_root)
-    profile_by_trace_id = _profile_trace_map(run_root)
-    allowed_trace_ids = set(profile_by_trace_id)
+    trace_context = _profile_trace_map(run_root)
+    allowed_trace_ids = set(trace_context)
     detection_records = [
-        record for record in _read_jsonl(run_root / "records" / "runtime_detection_records.jsonl")
-        if record.get("runtime_detection_status") == "ready"
+        record
+        for record in _read_jsonl(run_root / "records" / "runtime_detection_records.jsonl")
+        if _formal_detection_ready(record)
         and (not allowed_trace_ids or str(record.get("trajectory_trace_id")) in allowed_trace_ids)
     ]
+    variant_config = {item["method_variant"]: item for item in VALIDATION_ABLATION_VARIANTS}
     records: list[dict] = []
     for detection_record in detection_records:
-        score = _base_score(detection_record)
+        trace_id = str(detection_record.get("trajectory_trace_id") or "")
+        generation_context = trace_context.get(trace_id, {})
+        method_variant = _normalize_method_variant(
+            detection_record.get("method_variant") or generation_context.get("method_variant")
+        )
+        if method_variant not in variant_config:
+            continue
+        config = variant_config[method_variant]
+        score = _formal_score(detection_record)
         if score is None:
             continue
-        for variant in VALIDATION_ABLATION_VARIANTS:
-            ablated_score = _clip_score(score * float(variant["score_multiplier"]) + float(variant["score_offset"]))
-            delta = round(ablated_score - score, 6)
-            records.append(with_flow_evidence_protocol_defaults({
-                "record_version": "validation_internal_ablation_v1",
-                "ablation_runtime_profile": profile_by_trace_id.get(str(detection_record.get("trajectory_trace_id") or ""), "unknown_profile"),
-                "generation_model_id": detection_record.get("generation_model_id"),
-                "prompt_id": detection_record.get("prompt_id"),
-                "seed_id": detection_record.get("seed_id"),
-                "trajectory_trace_id": detection_record.get("trajectory_trace_id"),
-                "attack_name": detection_record.get("attack_name"),
-                "method_variant": variant["method_variant"],
-                "ablation_family": variant["ablation_family"],
-                "ablation_name": variant["method_variant"],
-                "ablation_removed_component": variant["ablation_removed_component"],
-                "ablation_expected_effect": "score_decrease_or_tail_change_under_component_removal",
-                "validation_ablation_evidence_level": "runtime_detection_proxy_ablation",
-                "validation_ablation_source_score": round(score, 6),
-                "validation_ablation_proxy_score": ablated_score,
-                "ablation_observed_delta_tpr": delta,
-                "ablation_observed_delta_fpr": None,
-                "ablation_status": "ready",
-                "ablation_failure_reason": "none",
-                "claim_support_status": "validation_internal_ablation_proxy_only",
-            }, trajectory_source_level="runtime_detection_proxy_ablation", claim_support_status="validation_internal_ablation_proxy_only"))
+        records.append(with_flow_evidence_protocol_defaults({
+            "record_version": "formal_internal_ablation_variant_v1",
+            "ablation_runtime_profile": generation_context.get("ablation_runtime_profile", "unknown_profile"),
+            "generation_model_id": detection_record.get("generation_model_id"),
+            "prompt_id": detection_record.get("prompt_id"),
+            "seed_id": detection_record.get("seed_id"),
+            "trajectory_trace_id": trace_id,
+            "attack_name": detection_record.get("attack_name"),
+            "method_variant": method_variant,
+            "ablation_family": config["ablation_family"],
+            "ablation_name": method_variant,
+            "ablation_removed_component": config["ablation_removed_component"],
+            "ablation_expected_effect": "measured_score_change_under_real_component_removal",
+            "formal_internal_ablation_evidence_level": FORMAL_INTERNAL_ABLATION_EVIDENCE_LEVEL,
+            "formal_internal_ablation_score": round(score, 6),
+            "formal_internal_ablation_score_semantics": "sstw_key_conditioned_video_content_detector_score",
+            "metric_status": "measured_formal",
+            "ablation_status": "ready",
+            "ablation_failure_reason": "none",
+            "claim_support_status": FORMAL_INTERNAL_ABLATION_CLAIM_STATUS,
+        }, trajectory_source_level=FORMAL_INTERNAL_ABLATION_EVIDENCE_LEVEL, claim_support_status=FORMAL_INTERNAL_ABLATION_CLAIM_STATUS))
     return records
 
 
 def audit_validation_internal_ablation_records(records: list[dict]) -> dict[str, Any]:
-    """审计 paper profile 内部消融记录覆盖。"""
+    """审计 paper profile 正式内部消融记录覆盖。"""
+
     variants = {str(record.get("method_variant")) for record in records if record.get("method_variant")}
     attacks = {str(record.get("attack_name")) for record in records if record.get("attack_name")}
     profile_counts: dict[str, int] = {}
+    trace_counts_by_variant: dict[str, set[str]] = {}
     for record in records:
         profile = str(record.get("ablation_runtime_profile") or "unknown_profile")
         profile_counts[profile] = profile_counts.get(profile, 0) + 1
+        variant = str(record.get("method_variant") or "")
+        trace_id = str(record.get("trajectory_trace_id") or "")
+        if variant and trace_id:
+            trace_counts_by_variant.setdefault(variant, set()).add(trace_id)
+
+    required_variants = {item["method_variant"] for item in VALIDATION_ABLATION_VARIANTS}
+    missing_variants = sorted(required_variants - variants)
+    full_scores = [
+        float(record["formal_internal_ablation_score"])
+        for record in records
+        if record.get("method_variant") == FULL_METHOD_VARIANT
+    ]
+    ablated_scores = [
+        float(record["formal_internal_ablation_score"])
+        for record in records
+        if record.get("method_variant") != FULL_METHOD_VARIANT
+    ]
+    score_margin = None
+    if full_scores and ablated_scores:
+        score_margin = round(mean(full_scores) - mean(ablated_scores), 6)
     pilot_paper_records = [
         record for record in records
         if record.get("ablation_runtime_profile") in PILOT_PAPER_PROFILE_NAMES
     ]
-    full_scores = [float(record["validation_ablation_proxy_score"]) for record in records if record.get("method_variant") == "sstw_full_method"]
-    ablated_scores = [float(record["validation_ablation_proxy_score"]) for record in records if record.get("method_variant") != "sstw_full_method"]
-    score_margin = None
-    if full_scores and ablated_scores:
-        score_margin = round(mean(full_scores) - mean(ablated_scores), 6)
-    decision = "PASS" if len(variants) >= len(VALIDATION_ABLATION_VARIANTS) and attacks and score_margin is not None and score_margin > 0 else "FAIL"
+    formal_record_count = sum(
+        1
+        for record in records
+        if record.get("metric_status") == "measured_formal"
+        and record.get("formal_internal_ablation_evidence_level") == FORMAL_INTERNAL_ABLATION_EVIDENCE_LEVEL
+    )
+    decision = (
+        "PASS"
+        if records
+        and formal_record_count == len(records)
+        and not missing_variants
+        and attacks
+        and score_margin is not None
+        and score_margin > 0
+        else "FAIL"
+    )
     return {
-        "stage_id": "validation_internal_ablation",
+        "stage_id": "formal_internal_ablation_variant_matrix",
         "validation_internal_ablation_decision": decision,
-        "claim_support_status": "validation_internal_ablation_proxy_only" if decision == "PASS" else "validation_internal_ablation_blocked",
+        "claim_support_status": "formal_internal_ablation_variant_matrix_ready"
+        if decision == "PASS"
+        else "formal_internal_ablation_variant_matrix_blocked",
         "internal_ablation_record_count": len(records),
+        "formal_internal_ablation_record_count": formal_record_count,
         "validation_internal_ablation_variant_count": len(variants),
         "validation_internal_ablation_attack_count": len(attacks),
         "validation_internal_ablation_score_margin": score_margin,
-        "validation_internal_ablation_evidence_level": "runtime_detection_proxy_ablation",
+        "validation_internal_ablation_evidence_level": FORMAL_INTERNAL_ABLATION_EVIDENCE_LEVEL,
+        "validation_internal_ablation_missing_variants": missing_variants,
         "validation_internal_ablation_profile_counts": profile_counts,
+        "validation_internal_ablation_trace_counts": {
+            variant: len(trace_ids) for variant, trace_ids in sorted(trace_counts_by_variant.items())
+        },
         "pilot_paper_internal_ablation_record_count": len(pilot_paper_records),
     }
 
 
 def run_validation_internal_ablation(run_root: str | Path) -> dict[str, Any]:
-    """写出 paper profile 内部消融 records、table、decision 和 report。"""
+    """写出正式内部消融 records、table、decision 和 report。"""
+
     run_root = Path(run_root)
     records = build_validation_internal_ablation_records(run_root)
     audit = audit_validation_internal_ablation_records(records)
+    write_jsonl(run_root / "records" / "formal_internal_ablation_variant_records.jsonl", records)
     write_jsonl(run_root / "records" / "validation_internal_ablation_records.jsonl", records)
     write_csv(run_root / "tables" / "validation_internal_ablation_table.csv", records)
     write_json(run_root / "artifacts" / "validation_internal_ablation_decision.json", audit)
     report = (
-        "# Validation Internal Ablation Report\n\n"
-        "该报告由 paper profile runtime detection proxy records 自动生成。当前结果用于验证消融矩阵工程闭环, "
-        "pilot_paper 运行时必须覆盖同一批 pilot_paper trace, 但仍不能替代 full-paper 正式消融表。\n\n"
+        "# Formal Internal Ablation Variant Matrix Report\n\n"
+        "该报告只消费正式 runtime detection records。若某个 component-removal 变体没有"
+        "独立生成视频并完成正式视频内容检测, 该变体保持 missing, 不会由 full-method "
+        "分数合成替代结果。\n\n"
         f"- validation_internal_ablation_decision: {audit['validation_internal_ablation_decision']}\n"
         f"- internal_ablation_record_count: {audit['internal_ablation_record_count']}\n"
         f"- validation_internal_ablation_variant_count: {audit['validation_internal_ablation_variant_count']}\n"
+        f"- validation_internal_ablation_missing_variants: {', '.join(audit['validation_internal_ablation_missing_variants']) if audit['validation_internal_ablation_missing_variants'] else 'none'}\n"
         f"- pilot_paper_internal_ablation_record_count: {audit['pilot_paper_internal_ablation_record_count']}\n"
         f"- validation_internal_ablation_score_margin: {audit['validation_internal_ablation_score_margin']}\n"
         f"- claim_support_status: {audit['claim_support_status']}\n"
@@ -230,7 +291,7 @@ def run_validation_internal_ablation(run_root: str | Path) -> dict[str, Any]:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="构建 paper profile 内部消融 proxy records。")
+    parser = argparse.ArgumentParser(description="构建 paper profile 正式内部消融 records。")
     parser.add_argument("--run-root", required=True)
     args = parser.parse_args()
     payload = run_validation_internal_ablation(args.run_root)

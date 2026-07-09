@@ -36,6 +36,103 @@ REQUIRED_NON_RUNTIME_ATTACK_PROTOCOLS = FULL_PAPER_NON_RUNTIME_ATTACK_PROTOCOLS
 REQUIRED_ANCHOR_KEYS = tuple(f"prompt_0::seed_0::{attack_name}" for attack_name in REQUIRED_RUNTIME_ATTACK_NAMES)
 
 
+def _formal_runtime_attack_record(attack_name: str) -> dict:
+    """构造 paper gate 可接受的正式 runtime attack 记录。"""
+
+    return {
+        "attack_name": attack_name,
+        "attack_runtime_status": "ready",
+        "runtime_attack_implementation_level": "formal_runtime_video_transform",
+        "runtime_attack_formal_evidence_level": "formal_runtime_video_transform",
+        "runtime_attack_claim_level": "paper_runtime_attack_protocol",
+        "runtime_attack_proxy_free": True,
+    }
+
+
+def _formal_runtime_detection_record(attack_name: str) -> dict:
+    """构造正式 SSTW 视频内容检测记录, 不再依赖 trajectory proxy。"""
+
+    return {
+        "attack_name": attack_name,
+        "runtime_detection_status": "ready",
+        "sstw_detector_evidence_level": "attacked_video_content_detector",
+        "sstw_detector_input_contract": "video_file_plus_project_watermark_key",
+        "sstw_raw_detector_score": 0.82,
+        "raw_detector_score": 0.82,
+        "trajectory_trace_used_for_score": False,
+        "runtime_detection_claim_level": "formal_paper_detector",
+    }
+
+
+def _formal_sstw_measured_records() -> list[dict]:
+    """构造包含 attacked positive 与 clean negative 的正式 SSTW measured_formal 记录。"""
+
+    records = [
+        {
+            "metric_status": "measured_formal",
+            "sample_role": "attacked_positive",
+            "sstw_score": 0.82,
+            "sstw_raw_detector_score": 0.82,
+            "raw_detector_score": 0.82,
+            "prompt_id": "prompt_0",
+            "seed_id": "seed_0",
+            "attack_name": attack_name,
+            "sstw_detector_evidence_level": "attacked_video_content_detector",
+            "sstw_detector_input_contract": "video_file_plus_project_watermark_key",
+            "trajectory_trace_used_for_score": False,
+            "runtime_detection_claim_level": "formal_paper_detector",
+            "claim_support_status": "sstw_measured_formal_paper_profile_claim_candidate",
+        }
+        for attack_name in REQUIRED_RUNTIME_ATTACK_NAMES
+    ]
+    records.append({
+        "metric_status": "measured_formal",
+        "sample_role": "clean_negative",
+        "sstw_score": 0.05,
+        "sstw_clean_negative_score": 0.05,
+        "prompt_id": "negative_prompt_0",
+        "seed_id": "seed_0",
+        "clean_negative_evidence_level": "project_owned_clean_video_content_detector",
+        "trajectory_trace_used_for_score": False,
+    })
+    return records
+
+
+def _formal_internal_ablation_summary_records() -> list[dict]:
+    """构造全变体 measured_formal 的内部消融汇总记录。"""
+
+    return [
+        {
+            "method_variant": variant,
+            "metric_status": "measured_formal",
+            "formal_internal_ablation_evidence_level": "formal_component_removal_video_detector",
+        }
+        for variant in (
+            "sstw_full_method",
+            "endpoint_only_control",
+            "trajectory_only_score",
+            "without_velocity_constraint",
+            "without_endpoint_aware_control",
+            "without_replay_uncertainty_weighting",
+            "without_flow_state_admissibility",
+            "generic_ssm_baseline",
+        )
+    ]
+
+
+def _formal_adaptive_attack_record(protocol_name: str) -> dict:
+    """构造 Claim-3 降级路径外的正式 adaptive attack 证据。"""
+
+    return {
+        "adaptive_attack_name": protocol_name,
+        "non_runtime_attack_protocol": protocol_name,
+        "adaptive_attack_status": "ready",
+        "metric_status": "measured_formal",
+        "adaptive_attack_evidence_level": "formal_adaptive_attack_execution",
+        "adaptive_robustness_claim_allowed": True,
+    }
+
+
 def _external_baseline_self_containment_pass_payload() -> dict:
     """构造 probe-paper gate 所需的完整 self-containment PASS fixture。"""
 
@@ -138,14 +235,14 @@ def test_claim3_downgrade_gate_preserves_full_support_when_replay_gate_passed(tm
 
 
 @pytest.mark.quick
-def test_claim3_downgrade_keeps_downgrade_for_validation_proxy_replay_gate(tmp_path: Path) -> None:
-    """validation proxy 级 replay/sketch gate 通过后, Claim-3 仍不能升级为 full-paper 强支持。"""
+def test_claim3_downgrade_keeps_downgrade_for_owner_side_diagnostic_replay_gate(tmp_path: Path) -> None:
+    """owner-side diagnostic 级 replay/sketch gate 通过后, Claim-3 仍不能升级为 full-paper 强支持。"""
     run_root = tmp_path / "run"
     write_json(run_root / "artifacts" / "replay_and_sketch_gate_decision.json", {
         "replay_and_sketch_gate_decision": "PASS",
         "claim3_full_support_allowed": False,
-        "replay_or_sketch_status": "replay_and_sketch_gate_passed_validation_proxy",
-        "replay_and_sketch_evidence_level": "validation_runtime_trace_proxy",
+        "replay_or_sketch_status": "replay_and_sketch_gate_passed_owner_side_diagnostic",
+        "replay_and_sketch_evidence_level": "owner_side_runtime_trace_diagnostic",
     })
 
     audit = build_claim3_downgrade_audit(run_root)
@@ -153,8 +250,8 @@ def test_claim3_downgrade_keeps_downgrade_for_validation_proxy_replay_gate(tmp_p
     assert audit["claim3_downgraded"] is True
     assert audit["claim3_full_support_allowed"] is False
     assert audit["claim3_allowed_scope"] == "owner_side_audit_or_exploratory_replay_analysis"
-    assert audit["replay_or_sketch_status"] == "replay_and_sketch_gate_passed_validation_proxy"
-    assert audit["claim3_downgrade_reason"] == "replay_and_sketch_gate_validation_proxy_only"
+    assert audit["replay_or_sketch_status"] == "replay_and_sketch_gate_passed_owner_side_diagnostic"
+    assert audit["claim3_downgrade_reason"] == "replay_and_sketch_gate_owner_side_diagnostic_only"
 
 
 @pytest.mark.quick
@@ -184,24 +281,25 @@ def test_paper_profile_gate_accepts_claim3_downgrade_path(tmp_path: Path) -> Non
         for record in generation_records
     ])
     write_jsonl(run_root / "records" / "runtime_attack_records.jsonl", [
-        {"attack_name": attack_name, "attack_runtime_status": "ready"}
+        _formal_runtime_attack_record(attack_name)
         for attack_name in REQUIRED_RUNTIME_ATTACK_NAMES
     ])
     write_jsonl(run_root / "records" / "runtime_detection_records.jsonl", [
-        {"attack_name": attack_name, "runtime_detection_status": "ready"}
+        _formal_runtime_detection_record(attack_name)
         for attack_name in REQUIRED_RUNTIME_ATTACK_NAMES
     ])
     write_jsonl(run_root / "records" / "external_baseline_records.jsonl", run_external_baseline_status())
     write_jsonl(run_root / "records" / "external_baseline_score_records.jsonl", _formal_external_baseline_records())
-    write_jsonl(run_root / "records" / "validation_internal_ablation_records.jsonl", [
-        {"method_variant": "without_velocity_constraint", "ablation_status": "ready"},
-    ])
+    write_jsonl(
+        run_root / "records" / "formal_internal_ablation_variant_records.jsonl",
+        _formal_internal_ablation_summary_records(),
+    )
+    write_jsonl(
+        run_root / "records" / "validation_internal_ablation_records.jsonl",
+        _formal_internal_ablation_summary_records(),
+    )
     write_jsonl(run_root / "records" / "adaptive_attack_records.jsonl", [
-        {
-            "adaptive_attack_name": protocol_name,
-            "non_runtime_attack_protocol": protocol_name,
-            "adaptive_attack_status": "ready",
-        }
+        _formal_adaptive_attack_record(protocol_name)
         for protocol_name in REQUIRED_NON_RUNTIME_ATTACK_PROTOCOLS
     ])
     write_json(run_root / "artifacts" / "small_scale_claim_pilot_gate_decision.json", {"pilot_gate_decision": "PASS"})
@@ -225,7 +323,7 @@ def test_paper_profile_gate_accepts_claim3_downgrade_path(tmp_path: Path) -> Non
         "external_baseline_measured_adapter_count": 7,
         "modern_external_baseline_formal_measured_adapter_count": 5,
         "modern_external_baseline_formal_measured_adapter_names": sorted(MODERN_EXTERNAL_BASELINE_NAMES),
-        "external_baseline_claim_support_status": "external_baseline_formal_and_proxy_records_written",
+        "external_baseline_claim_support_status": "external_baseline_formal_records_written",
     })
     write_json(
         run_root / "artifacts" / "external_baseline_self_containment_decision.json",
@@ -243,17 +341,7 @@ def test_paper_profile_gate_accepts_claim3_downgrade_path(tmp_path: Path) -> Non
         "motion_consistency_excluded_count": 0,
         "claim_support_status": "motion_consistency_exclusion_audit_record",
     })
-    write_jsonl(run_root / "records" / "sstw_measured_formal_records.jsonl", [
-        {
-            "metric_status": "measured_formal",
-            "sstw_score": 0.82,
-            "prompt_id": "prompt_0",
-            "seed_id": "seed_0",
-            "attack_name": attack_name,
-            "claim_support_status": "sstw_measured_formal_paper_profile_claim_candidate",
-        }
-        for attack_name in REQUIRED_RUNTIME_ATTACK_NAMES
-    ])
+    write_jsonl(run_root / "records" / "sstw_measured_formal_records.jsonl", _formal_sstw_measured_records())
     write_json(run_root / "artifacts" / "sstw_measured_formal_decision.json", {
         "sstw_measured_formal_decision": "PASS",
         "sstw_measured_formal_record_count": len(REQUIRED_RUNTIME_ATTACK_NAMES),
@@ -360,10 +448,10 @@ def test_paper_profile_gate_accepts_claim3_downgrade_path(tmp_path: Path) -> Non
         "target_fpr": 0.1,
         "claim_support_status": "formal_baseline_difference_interval_paper_profile_claim_candidate",
     })
-    write_jsonl(run_root / "records" / "formal_internal_ablation_summary_records.jsonl", [
-        {"method_variant": "sstw_full_method", "metric_status": "measured_formal"},
-        {"method_variant": "without_velocity_constraint", "metric_status": "measured_proxy"},
-    ])
+    write_jsonl(
+        run_root / "records" / "formal_internal_ablation_summary_records.jsonl",
+        _formal_internal_ablation_summary_records(),
+    )
     write_json(run_root / "artifacts" / "formal_internal_ablation_summary_decision.json", {
         "formal_internal_ablation_summary_decision": "PASS",
         "formal_internal_ablation_variant_count": 8,
@@ -371,7 +459,8 @@ def test_paper_profile_gate_accepts_claim3_downgrade_path(tmp_path: Path) -> Non
     })
     write_json(run_root / "artifacts" / "validation_internal_ablation_decision.json", {
         "validation_internal_ablation_decision": "PASS",
-        "claim_support_status": "validation_internal_ablation_ready",
+        "claim_support_status": "formal_internal_ablation_variant_matrix_ready",
+        "validation_internal_ablation_evidence_level": "formal_component_removal_video_detector",
     })
     write_json(run_root / "artifacts" / "adaptive_attack_decision.json", {
         "adaptive_attack_decision": "PASS",

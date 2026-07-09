@@ -1,4 +1,4 @@
-"""generative_video_model_probe 检测记录状态构建与 runtime attacked video 评分。"""
+"""generative_video_model_probe 正式视频内容检测记录构建。"""
 
 from __future__ import annotations
 
@@ -11,6 +11,14 @@ from typing import Any
 
 from main.core.progress import ProgressReporter
 from main.protocol.flow_evidence_fields import with_flow_evidence_protocol_defaults
+from main.methods.state_space_watermark.video_content_detector import (
+    FORMAL_CLEAN_NEGATIVE_EVIDENCE_LEVEL,
+    FORMAL_VIDEO_DETECTOR_EVIDENCE_LEVEL,
+    FORMAL_VIDEO_DETECTOR_INPUT_CONTRACT,
+    FORMAL_VIDEO_DETECTOR_SCORE_SEMANTICS,
+    build_sstw_detector_key,
+    score_video_content,
+)
 from main.protocol.record_writer import write_json, write_jsonl
 from main.protocol.table_builder import write_csv
 
@@ -63,20 +71,15 @@ def _sha256_file(path: Path) -> str:
 
 
 def _clip(value: float, lower: float = 0.0, upper: float = 1.0) -> float:
-    """把轻量 proxy 分数裁剪到稳定区间, 避免异常视频导致下游表格不可比较。"""
+    """把检测分数裁剪到稳定区间, 避免异常视频导致下游表格不可比较。"""
     return max(lower, min(upper, value))
-
-
-def _safe_divide(numerator: float, denominator: float) -> float:
-    """执行带零值保护的除法。"""
-    return 0.0 if denominator == 0 else numerator / denominator
 
 
 def _load_video_frame_count(video_path: Path) -> tuple[str, int, str]:
     """读取视频帧数。
 
-    该函数只做文件级可解码性检查, 不执行重型神经网络检测。这样可以在默认 pytest 和 Colab 后处理阶段快速验证
-    runtime attack 输出是否真的进入 detection 链路。
+    该函数只做文件级可解码性检查。正式检测分数由
+    `score_video_content` 另行读取视频内容后给出。
     """
     try:
         import imageio.v3 as iio
@@ -86,72 +89,130 @@ def _load_video_frame_count(video_path: Path) -> tuple[str, int, str]:
     except Exception as exc:  # pragma: no cover - 依赖具体视频编解码后端
         return "decode_failed", 0, str(exc)
 
+def _formal_runtime_detection_score(runtime_attack_record: dict, attacked_video_path: Path) -> dict[str, Any]:
+    """对 attacked video 执行 SSTW 正式视频内容检测。
 
-def _trajectory_features(trajectory_records: list[dict]) -> dict[str, dict[str, float]]:
-    """从 callback trajectory records 中提取可复用的轻量轨迹特征。
-
-    这是项目特定写法: 当前真实 Wan2.1 GPU preflight 能记录 latent 统计量, 但尚未完成正式水印检测器的全量 GPU 复算。
-    因此这里仅把 trajectory proxy 作为 runtime detection evidence, 并通过 claim_support_status 明确限制其 claim 边界。
+    该函数不读取 trajectory trace, 也不使用 latent callback 统计量。它只消费
+    attacked video 文件和由 prompt / seed 派生的项目水印 key, 因而可以与
+    external baseline 的 official detector score 放在同一 fixed-FPR 校准层比较。
     """
-    grouped: dict[str, list[dict]] = {}
-    for record in trajectory_records:
-        trace_id = record.get("trajectory_trace_id")
-        if trace_id:
-            grouped.setdefault(str(trace_id), []).append(record)
 
-    features: dict[str, dict[str, float]] = {}
-    for trace_id, rows in grouped.items():
-        ordered = sorted(rows, key=lambda item: item.get("trajectory_step_index", 0))
-        norms = [float(item["latent_norm"]) for item in ordered if item.get("latent_norm") is not None]
-        stds = [float(item["latent_std"]) for item in ordered if item.get("latent_std") is not None]
-        if len(norms) < 2:
-            continue
-        directed_norm_drop = _safe_divide(norms[0] - norms[-1], abs(norms[0]))
-        latent_norm_range = max(norms) - min(norms)
-        latent_std_range = max(stds) - min(stds) if stds else 0.0
-        features[trace_id] = {
-            "latent_directed_norm_drop": directed_norm_drop,
-            "latent_norm_range": latent_norm_range,
-            "latent_std_range": latent_std_range,
-            "S_trajectory_observation": round(_clip(0.55 + 1.4 * max(0.0, directed_norm_drop) + 0.25 * _clip(_safe_divide(latent_std_range, 0.35))), 6),
-        }
-    return features
-
-
-def _runtime_detection_score(runtime_attack_record: dict, feature: dict[str, float] | None, decoded_frame_count: int) -> dict[str, Any]:
-    """为单个 attacked video 构造 runtime detection proxy 分数。
-
-    这一实现属于工程闭环层, 不是最终论文级检测算法。它把轨迹 evidence 与攻击后视频文件状态绑定, 用于证明
-    attacked video 已经进入检测路径, 并为后续替换成正式检测器保留 records 结构。
-    """
-    source_frame_count = int(runtime_attack_record.get("source_frame_count") or 0)
-    attacked_frame_count = int(runtime_attack_record.get("attacked_frame_count") or decoded_frame_count or 0)
-    frame_ratio = round(_safe_divide(attacked_frame_count, source_frame_count), 6)
-    decoded_ratio = round(_safe_divide(decoded_frame_count, source_frame_count), 6)
-    trajectory_score = float((feature or {}).get("S_trajectory_observation", 0.0))
-    temporal_penalty = abs(1.0 - frame_ratio) * 0.12
-    decode_penalty = 0.0 if decoded_frame_count > 0 else 0.35
-    attack_score = round(_clip(trajectory_score - temporal_penalty - decode_penalty), 6)
-    attack_delta = round(attack_score - trajectory_score, 6)
+    detector_key = build_sstw_detector_key(runtime_attack_record)
+    result = score_video_content(attacked_video_path, detector_key=detector_key)
+    score = round(_clip(result.score), 6)
     return {
-        "S_trajectory_observation": round(trajectory_score, 6) if feature else None,
-        "S_path_inv": round(trajectory_score, 6) if feature else None,
-        "S_velocity": round(trajectory_score, 6) if feature else None,
-        "S_runtime_attack_detection": attack_score,
-        "S_final_conservative": attack_score,
-        "source_to_attack_frame_ratio": frame_ratio,
-        "decoded_to_source_frame_ratio": decoded_ratio,
-        "attack_score_delta": attack_delta,
-        "attacked_video_detectable": decoded_frame_count > 0 and attack_score > 0.0,
+        "sstw_raw_detector_score": score,
+        "raw_detector_score": score,
+        "S_runtime_attack_detection": score,
+        "S_final_conservative": score,
+        "sstw_detector_score_semantics": FORMAL_VIDEO_DETECTOR_SCORE_SEMANTICS,
+        "sstw_score_orientation": "higher_is_more_watermarked",
+        "sstw_detector_evidence_level": FORMAL_VIDEO_DETECTOR_EVIDENCE_LEVEL,
+        "sstw_detector_input_contract": FORMAL_VIDEO_DETECTOR_INPUT_CONTRACT,
+        "sstw_detector_key_digest": result.detector_key_digest,
+        "sstw_content_feature_count": result.content_feature_count,
+        "sstw_detector_sampled_frame_count": result.sampled_frame_count,
+        "trajectory_trace_used_for_score": False,
+        "runtime_detection_claim_level": "formal_paper_detector",
+        "attacked_video_detectable": score >= 0.5,
     }
+
+
+def _is_clean_negative_generation_record(record: dict[str, Any]) -> bool:
+    """判断 generation record 是否是未嵌入水印的 clean negative 视频。"""
+
+    role_values = {
+        str(record.get("sample_role") or "").lower(),
+        str(record.get("generation_sample_role") or "").lower(),
+        str(record.get("watermark_embedding_status") or "").lower(),
+        str(record.get("method_variant") or "").lower(),
+    }
+    return bool(
+        role_values
+        & {
+            "clean_negative",
+            "disabled_clean_negative",
+            "clean_unwatermarked_reference",
+            "sstw_clean_unwatermarked_reference",
+        }
+    )
+
+
+def build_sstw_clean_negative_score_records(run_root: str | Path) -> list[dict[str, Any]]:
+    """从 clean generation videos 构建 SSTW clean negative detector records。"""
+
+    run_root = Path(run_root)
+    generation_records = [
+        record
+        for record in _read_jsonl(run_root / "records" / "generation_records.jsonl")
+        if record.get("generation_status") == "success" and _is_clean_negative_generation_record(record)
+    ]
+    records: list[dict[str, Any]] = []
+    progress = ProgressReporter("sstw_clean_negative_video_detector", len(generation_records), "clean_video")
+    for index, generation_record in enumerate(generation_records):
+        progress.update(index + 1, f"prompt={generation_record.get('prompt_id')} seed={generation_record.get('seed_id')}")
+        video_path = Path(str(generation_record.get("video_path") or ""))
+        if not video_path.exists() and video_path.name:
+            video_path = run_root / "videos" / video_path.name
+        record = with_flow_evidence_protocol_defaults({
+            "record_version": "sstw_clean_negative_score_v1",
+            "generation_model_id": generation_record.get("generation_model_id"),
+            "prompt_id": generation_record.get("prompt_id"),
+            "seed_id": generation_record.get("seed_id"),
+            "trajectory_trace_id": generation_record.get("trajectory_trace_id"),
+            "split": generation_record.get("split"),
+            "protocol_split": generation_record.get("protocol_split"),
+            "colab_runtime_profile": generation_record.get("colab_runtime_profile"),
+            "sample_role": "clean_negative",
+            "method_variant": "sstw_clean_unwatermarked_reference",
+            "clean_negative_video_path": str(video_path),
+            "clean_negative_evidence_level": FORMAL_CLEAN_NEGATIVE_EVIDENCE_LEVEL,
+            "sstw_detector_input_contract": FORMAL_VIDEO_DETECTOR_INPUT_CONTRACT,
+            "trajectory_trace_used_for_score": False,
+            "metric_status": "missing",
+            "clean_negative_status": "failed",
+            "clean_negative_failure_reason": "not_run",
+            "claim_support_status": "sstw_clean_negative_video_detector_blocked",
+        }, trajectory_source_level="project_owned_sstw_clean_video_content_detector", claim_support_status="sstw_clean_negative_video_detector_blocked")
+        try:
+            if not video_path.exists():
+                raise FileNotFoundError("clean_negative_video_not_found")
+            detector_key = build_sstw_detector_key(generation_record)
+            result = score_video_content(video_path, detector_key=detector_key)
+            score = round(_clip(result.score), 6)
+            record.update({
+                "metric_status": "measured_formal",
+                "clean_negative_status": "ready",
+                "clean_negative_failure_reason": "none",
+                "sstw_clean_negative_score": score,
+                "clean_negative_score": score,
+                "sstw_raw_detector_score": score,
+                "raw_detector_score": score,
+                "sstw_score": score,
+                "sstw_clean_negative_score_semantics": FORMAL_VIDEO_DETECTOR_SCORE_SEMANTICS,
+                "sstw_score_semantics": FORMAL_VIDEO_DETECTOR_SCORE_SEMANTICS,
+                "sstw_score_orientation": "higher_is_more_watermarked",
+                "sstw_detector_key_digest": result.detector_key_digest,
+                "sstw_content_feature_count": result.content_feature_count,
+                "sstw_detector_sampled_frame_count": result.sampled_frame_count,
+                "claim_support_status": "sstw_clean_negative_video_detector_ready",
+            })
+        except Exception as exc:  # pragma: no cover - 依赖实际视频文件和编解码后端
+            record.update({
+                "metric_status": "missing",
+                "clean_negative_status": "failed",
+                "clean_negative_failure_reason": str(exc),
+            })
+        records.append(record)
+    ready_count = sum(1 for record in records if record.get("clean_negative_status") == "ready")
+    progress.finish(f"ready={ready_count} failed={len(records) - ready_count}")
+    return records
 
 
 def build_runtime_detection_records(run_root: str | Path) -> list[dict]:
     """读取 runtime attack outputs 并构造 attacked video detection records。"""
     run_root = Path(run_root)
     runtime_attack_records = _read_jsonl(run_root / "records" / "runtime_attack_records.jsonl")
-    trajectory_records = _read_jsonl(run_root / "records" / "trajectory_trace.jsonl")
-    features_by_trace = _trajectory_features(trajectory_records)
     records: list[dict] = []
     progress = ProgressReporter("runtime_detection_attacked_video_scan", len(runtime_attack_records), "attacked_video")
 
@@ -166,11 +227,14 @@ def build_runtime_detection_records(run_root: str | Path) -> list[dict]:
             "prompt_id": attack_record.get("prompt_id"),
             "seed_id": attack_record.get("seed_id"),
             "trajectory_trace_id": attack_record.get("trajectory_trace_id"),
-            "method_variant": "key_conditioned_state_space_with_trajectory",
-            "attack_name": attack_record.get("attack_name"),
-            "runtime_detection_evidence_level": "runtime_attacked_video_file",
-            "runtime_detection_status": "failed",
-            "runtime_detection_failure_reason": "not_run",
+            "split": attack_record.get("split"),
+            "protocol_split": attack_record.get("protocol_split"),
+            "colab_runtime_profile": attack_record.get("colab_runtime_profile"),
+                "method_variant": "key_conditioned_state_space_with_trajectory",
+                "attack_name": attack_record.get("attack_name"),
+                "runtime_detection_evidence_level": FORMAL_VIDEO_DETECTOR_EVIDENCE_LEVEL,
+                "runtime_detection_status": "failed",
+                "runtime_detection_failure_reason": "not_run",
             "source_video_path": attack_record.get("source_video_path"),
             "source_video_sha256": attack_record.get("source_video_sha256"),
             "attacked_video_path": attack_record.get("attacked_video_path"),
@@ -179,15 +243,17 @@ def build_runtime_detection_records(run_root: str | Path) -> list[dict]:
             "attacked_video_decode_failure_reason": "not_run",
             "source_frame_count": attack_record.get("source_frame_count", 0),
             "attacked_frame_count": attack_record.get("attacked_frame_count", 0),
-            "attacked_video_decoded_frame_count": 0,
-            "decision": "not_run",
-            "decision_reason": "runtime_attack_not_ready",
-            "claim_support_status": "runtime_detection_evidence_only",
-        },
-            negative_family=attack_record.get("negative_family"),
-            trajectory_source_level="runtime_attacked_video_file_with_callback_trace_proxy",
-            flow_state_admissibility_status="not_evaluated",
-            claim_support_status="runtime_detection_evidence_only",
+                "attacked_video_decoded_frame_count": 0,
+                "trajectory_trace_used_for_score": False,
+                "runtime_detection_claim_level": "formal_paper_detector",
+                "decision": "not_run",
+                "decision_reason": "runtime_attack_not_ready",
+                "claim_support_status": "sstw_formal_video_detector_ready",
+            },
+                negative_family=attack_record.get("negative_family"),
+            trajectory_source_level="runtime_attacked_video_file_only",
+                flow_state_admissibility_status="not_evaluated",
+            claim_support_status="sstw_formal_video_detector_ready",
         )
         try:
             if attack_record.get("attack_runtime_status") != "ready":
@@ -199,19 +265,20 @@ def build_runtime_detection_records(run_root: str | Path) -> list[dict]:
             if attack_record.get("attacked_video_sha256") and actual_digest != attack_record.get("attacked_video_sha256"):
                 raise RuntimeError("attacked_video_sha256_mismatch")
             decode_status, decoded_frame_count, decode_reason = _load_video_frame_count(attacked_video_path)
-            feature = features_by_trace.get(str(attack_record.get("trajectory_trace_id") or ""))
-            score_payload = _runtime_detection_score(attack_record, feature, decoded_frame_count)
+            if decode_status != "decoded":
+                raise RuntimeError(decode_reason)
+            score_payload = _formal_runtime_detection_score(attack_record, attacked_video_path)
             detection_record.update({
-                "runtime_detection_status": "ready" if decode_status == "decoded" else "failed",
-                "runtime_detection_failure_reason": "none" if decode_status == "decoded" else decode_reason,
+                "runtime_detection_status": "ready",
+                "runtime_detection_failure_reason": "none",
                 "attacked_video_decode_status": decode_status,
                 "attacked_video_decode_failure_reason": decode_reason,
                 "attacked_video_decoded_frame_count": decoded_frame_count,
-                "decision": "runtime_detectable_proxy" if score_payload["attacked_video_detectable"] else "runtime_detection_proxy_below_threshold",
-                "decision_reason": "runtime_attacked_video_scored_with_trajectory_proxy",
-                "flow_state_admissibility_status": "proxy_admissible"
+                "decision": "sstw_formal_detector_positive" if score_payload["attacked_video_detectable"] else "sstw_formal_detector_below_threshold",
+                "decision_reason": "runtime_attacked_video_scored_by_sstw_video_content_detector",
+                "flow_state_admissibility_status": "formal_video_detector_admissible"
                 if score_payload["attacked_video_detectable"]
-                else "proxy_not_admissible",
+                else "formal_video_detector_below_threshold",
                 **score_payload,
             })
         except Exception as exc:  # pragma: no cover - 依赖实际落盘文件和编解码后端
@@ -228,21 +295,31 @@ def build_runtime_detection_records(run_root: str | Path) -> list[dict]:
 
 
 def audit_runtime_detection_records(records: list[dict]) -> dict:
-    """审计 runtime detection records 是否完成工程闭环。"""
+    """审计 runtime detection records 是否完成正式视频内容检测闭环。"""
     ready_records = [record for record in records if record.get("runtime_detection_status") == "ready"]
     detectable_records = [record for record in ready_records if record.get("attacked_video_detectable") is True]
+    formal_records = [
+        record
+        for record in ready_records
+        if record.get("sstw_detector_evidence_level") == FORMAL_VIDEO_DETECTOR_EVIDENCE_LEVEL
+        and record.get("trajectory_trace_used_for_score") is False
+        and record.get("runtime_detection_claim_level") == "formal_paper_detector"
+    ]
     attack_names = {str(record.get("attack_name")) for record in ready_records if record.get("attack_name")}
-    score_values = [float(record["S_runtime_attack_detection"]) for record in ready_records if record.get("S_runtime_attack_detection") is not None]
+    score_values = [float(record["sstw_raw_detector_score"]) for record in ready_records if record.get("sstw_raw_detector_score") is not None]
+    missing_formal_count = len(ready_records) - len(formal_records)
     return {
         "stage_id": "generative_video_runtime_detection_runner",
-        "runtime_detection_decision": "PASS" if records and len(ready_records) == len(records) else "FAIL",
+        "runtime_detection_decision": "PASS" if records and len(ready_records) == len(records) and missing_formal_count == 0 else "FAIL",
         "runtime_detection_record_count": len(records),
         "runtime_detection_ready_count": len(ready_records),
         "runtime_detection_detectable_count": len(detectable_records),
         "runtime_detection_attack_count": len(attack_names),
         "runtime_detection_score_mean": round(mean(score_values), 6) if score_values else None,
-        "runtime_detection_evidence_level": "runtime_attacked_video_file",
-        "claim_support_status": "runtime_detection_evidence_only",
+        "runtime_detection_evidence_level": FORMAL_VIDEO_DETECTOR_EVIDENCE_LEVEL,
+        "runtime_detection_formal_detector_ready_count": len(formal_records),
+        "runtime_detection_formal_detector_missing_count": missing_formal_count,
+        "claim_support_status": "sstw_formal_video_detector_ready" if missing_formal_count == 0 and ready_records else "sstw_formal_video_detector_blocked",
     }
 
 
@@ -250,17 +327,21 @@ def run_runtime_detection(run_root: str | Path) -> dict:
     """执行 runtime attacked video detection 并写出 governed artifacts。"""
     run_root = Path(run_root)
     records = build_runtime_detection_records(run_root)
+    clean_negative_records = build_sstw_clean_negative_score_records(run_root)
     audit = audit_runtime_detection_records(records)
     write_jsonl(run_root / "records" / "runtime_detection_records.jsonl", records)
+    write_jsonl(run_root / "records" / "sstw_clean_negative_score_records.jsonl", clean_negative_records)
     write_csv(run_root / "tables" / "runtime_detection_table.csv", records)
+    write_csv(run_root / "tables" / "sstw_clean_negative_score_table.csv", clean_negative_records)
     write_json(run_root / "artifacts" / "runtime_detection_decision.json", audit)
     report = (
         "# Runtime Detection Runner Report\n\n"
-        "该报告记录 attacked videos 进入 runtime detection scoring 链路的工程证据。当前分数是 trajectory proxy 与文件级可解码性绑定后的工程闭环分数, "
-        "不能单独支撑最终论文 claim。\n\n"
+        "该报告记录 attacked videos 进入 SSTW 正式视频内容检测器后的 governed evidence。"
+        "检测分数只来自 attacked video 文件和项目水印 key, 不读取 generation trajectory trace。\n\n"
         f"- runtime_detection_decision: {audit['runtime_detection_decision']}\n"
         f"- runtime_detection_record_count: {audit['runtime_detection_record_count']}\n"
         f"- runtime_detection_ready_count: {audit['runtime_detection_ready_count']}\n"
+        f"- runtime_detection_formal_detector_ready_count: {audit['runtime_detection_formal_detector_ready_count']}\n"
         f"- runtime_detection_detectable_count: {audit['runtime_detection_detectable_count']}\n"
         f"- runtime_detection_score_mean: {audit['runtime_detection_score_mean']}\n"
         f"- claim_support_status: {audit['claim_support_status']}\n"
@@ -272,7 +353,7 @@ def run_runtime_detection(run_root: str | Path) -> dict:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="对 runtime attacked videos 执行轻量检测评分。")
+    parser = argparse.ArgumentParser(description="对 runtime attacked videos 执行 SSTW 正式视频内容检测。")
     parser.add_argument("--run-root", required=True)
     args = parser.parse_args()
     payload = run_runtime_detection(args.run_root)

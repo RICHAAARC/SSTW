@@ -18,6 +18,10 @@ from experiments.generative_video_model_probe.external_baseline_runner import (
     formal_clean_negative_score_record_ready_for_calibration,
     formal_score_record_ready_for_claim,
 )
+from experiments.generative_video_model_probe.sstw_formal_result import (
+    formal_sstw_clean_negative_record_ready_for_calibration,
+    formal_sstw_score_record_ready_for_claim,
+)
 from main.core.digest import build_stable_digest
 from main.attacks.video_runtime_attack_protocol import (
     load_protocol_config_with_shared_attack_protocol,
@@ -31,6 +35,10 @@ from main.protocol.table_builder import write_csv
 DEFAULT_PROTOCOL_CONFIG = "configs/protocol/probe_paper_generative_probe.json"
 SSTW_METHOD_ID = "sstw_key_conditioned_flow_trajectory"
 DEFAULT_REQUIRED_BASELINES = ("videoshield", "vidsig", "videoseal", "revmark", "wam_frame")
+SPLIT_FIELDS = ("split", "protocol_split", "data_split", "sample_split")
+CALIBRATION_SPLITS = {"calibration", "calibration_negative", "calibration_split"}
+HELDOUT_TEST_SPLITS = {"test", "heldout", "heldout_test", "test_split"}
+SPLIT_THRESHOLD_PROTOCOL = "calibration_split_to_frozen_threshold_to_heldout_test_split"
 
 
 def _read_json(path: Path) -> dict[str, Any]:
@@ -80,6 +88,11 @@ def _load_profile_context(config_path: str | Path) -> dict[str, Any]:
         "target_fpr": float(config["target_fpr"]),
         "target_fpr_source_config_path": str(config_path),
         "minimum_clean_negative_count": int(config.get("minimum_clean_negative_count") or 0),
+        "minimum_calibration_negative_event_count": int(config.get("minimum_calibration_negative_event_count") or 0),
+        "minimum_heldout_test_negative_event_count": int(config.get("minimum_heldout_test_negative_event_count") or 0),
+        "minimum_heldout_attacked_positive_event_count": int(config.get("minimum_heldout_attacked_positive_event_count") or 0),
+        "threshold_protocol": str(config.get("threshold_protocol") or ""),
+        "threshold_source_split": str(config.get("threshold_source_split") or "calibration"),
         "required_modern_external_baseline_adapter_names": [
             str(item)
             for item in config.get("required_modern_external_baseline_adapter_names", DEFAULT_REQUIRED_BASELINES)
@@ -123,6 +136,44 @@ def _is_attacked_positive_record(record: Mapping[str, Any]) -> bool:
     return bool(attack_name)
 
 
+def _canonical_split(value: object) -> str:
+    """把不同 split 写法归一到 calibration / heldout_test 等论文协议名称。"""
+
+    normalized = str(value or "").strip().lower()
+    if normalized in CALIBRATION_SPLITS:
+        return "calibration"
+    if normalized in HELDOUT_TEST_SPLITS:
+        return "heldout_test"
+    return normalized
+
+
+def _prompt_seed_split_map(generation_records: Iterable[Mapping[str, Any]]) -> dict[tuple[str, str], str]:
+    """从 generation records 建立 prompt / seed 到 split 的映射。"""
+
+    mapping: dict[tuple[str, str], str] = {}
+    for record in generation_records:
+        prompt_id = str(record.get("prompt_id") or "")
+        seed_id = str(record.get("seed_id") or "")
+        if not prompt_id or not seed_id:
+            continue
+        split = _record_split(record, {})
+        if split:
+            mapping[(prompt_id, seed_id)] = split
+    return mapping
+
+
+def _record_split(record: Mapping[str, Any], split_lookup: Mapping[tuple[str, str], str]) -> str:
+    """读取 record split, 缺失时按 prompt / seed 从 generation split 映射补齐。"""
+
+    for field_name in SPLIT_FIELDS:
+        split = _canonical_split(record.get(field_name))
+        if split:
+            return split
+    prompt_id = str(record.get("prompt_id") or "")
+    seed_id = str(record.get("seed_id") or "")
+    return split_lookup.get((prompt_id, seed_id), "")
+
+
 def _first_score(record: Mapping[str, Any], field_names: tuple[str, ...]) -> tuple[float | None, str]:
     """按候选字段顺序提取第一个可用分数。"""
 
@@ -140,6 +191,7 @@ def _deduplicated_score_rows(
     negative_embedded_fields: tuple[str, ...] = (),
     negative_record_ready_predicate: Callable[[Mapping[str, Any]], bool] | None = None,
     embedded_negative_record_ready_predicate: Callable[[Mapping[str, Any]], bool] | None = None,
+    split_lookup: Mapping[tuple[str, str], str] | None = None,
 ) -> list[dict[str, Any]]:
     """提取 clean negative 分数, 并按视频路径或 prompt / seed 去重。
 
@@ -149,6 +201,7 @@ def _deduplicated_score_rows(
     """
 
     rows: list[dict[str, Any]] = []
+    split_lookup = split_lookup or {}
     seen: set[tuple[str, str, str, str]] = set()
     for record in records:
         is_clean_negative = _is_clean_negative_record(record)
@@ -192,6 +245,7 @@ def _deduplicated_score_rows(
             "prompt_id": record.get("prompt_id"),
             "seed_id": record.get("seed_id"),
             "video_path": path,
+            "split": _record_split(record, split_lookup),
         })
     return rows
 
@@ -201,6 +255,7 @@ def _positive_score_rows(
     *,
     score_fields: tuple[str, ...],
     positive_record_ready_predicate: Callable[[Mapping[str, Any]], bool] | None = None,
+    split_lookup: Mapping[tuple[str, str], str] | None = None,
 ) -> list[dict[str, Any]]:
     """提取具备完整 prompt / seed / attack anchor 的 attacked positive 分数。
 
@@ -210,6 +265,7 @@ def _positive_score_rows(
     """
 
     rows: list[dict[str, Any]] = []
+    split_lookup = split_lookup or {}
     for record in records:
         if record.get("metric_status") != "measured_formal" or not _is_attacked_positive_record(record):
             continue
@@ -230,6 +286,7 @@ def _positive_score_rows(
             "prompt_id": prompt_id,
             "seed_id": seed_id,
             "attack_name": attack_name,
+            "split": _record_split(record, split_lookup),
             "comparison_anchor_key": comparison_anchor_key,
             "comparison_unit_id": record.get("runtime_comparison_unit_id")
             or record.get("external_baseline_score_record_id")
@@ -368,13 +425,16 @@ def _calibrated_method_record(
     positive_record_ready_predicate: Callable[[Mapping[str, Any]], bool] | None = None,
     negative_record_ready_predicate: Callable[[Mapping[str, Any]], bool] | None = None,
     embedded_negative_record_ready_predicate: Callable[[Mapping[str, Any]], bool] | None = None,
+    split_lookup: Mapping[tuple[str, str], str] | None = None,
 ) -> dict[str, Any]:
     """构建单个方法的公平校准记录。"""
 
+    split_lookup = split_lookup or {}
     positive_rows = _positive_score_rows(
         records,
         score_fields=positive_score_fields,
         positive_record_ready_predicate=positive_record_ready_predicate,
+        split_lookup=split_lookup,
     )
     positive_missing_anchor_count = _positive_score_missing_anchor_count(records, score_fields=positive_score_fields)
     positive_formal_evidence_missing_count = _positive_formal_evidence_missing_count(
@@ -395,13 +455,25 @@ def _calibrated_method_record(
         negative_embedded_fields=embedded_negative_score_fields,
         negative_record_ready_predicate=negative_record_ready_predicate,
         embedded_negative_record_ready_predicate=embedded_negative_record_ready_predicate,
+        split_lookup=split_lookup,
     )
-    negative_scores = [row["score"] for row in negative_rows]
-    positive_scores = [row["score"] for row in positive_rows]
-    positive_attack_names = sorted({str(row["attack_name"]) for row in positive_rows if row.get("attack_name")})
+    split_required = context.get("threshold_protocol") == SPLIT_THRESHOLD_PROTOCOL
+    calibration_negative_rows = [row for row in negative_rows if row.get("split") == "calibration"]
+    heldout_negative_rows = [row for row in negative_rows if row.get("split") == "heldout_test"]
+    heldout_positive_rows = [row for row in positive_rows if row.get("split") == "heldout_test"]
+    threshold_negative_rows = calibration_negative_rows if split_required else negative_rows
+    fpr_negative_rows = heldout_negative_rows if split_required else negative_rows
+    eval_positive_rows = heldout_positive_rows if split_required else positive_rows
+    negative_scores = [row["score"] for row in threshold_negative_rows]
+    heldout_negative_scores = [row["score"] for row in fpr_negative_rows]
+    positive_scores = [row["score"] for row in eval_positive_rows]
+    positive_attack_names = sorted({str(row["attack_name"]) for row in eval_positive_rows if row.get("attack_name")})
     required_attack_names = [str(item) for item in context.get("required_runtime_attack_names", []) if str(item)]
     missing_required_attack_names = sorted(set(required_attack_names) - set(positive_attack_names))
-    threshold, heldout_fpr, threshold_policy = _threshold_for_target_fpr(negative_scores, float(context["target_fpr"]))
+    threshold, calibration_fpr, threshold_policy = _threshold_for_target_fpr(negative_scores, float(context["target_fpr"]))
+    heldout_fpr = _fpr_at_threshold(heldout_negative_scores, threshold) if threshold is not None and heldout_negative_scores else None
+    if heldout_fpr is not None:
+        heldout_fpr = round(float(heldout_fpr), 6)
     detected_count = 0
     positive_detection_units: list[dict[str, Any]] = []
     if threshold is not None:
@@ -412,10 +484,11 @@ def _calibrated_method_record(
                 "prompt_id": row.get("prompt_id"),
                 "seed_id": row.get("seed_id"),
                 "attack_name": row.get("attack_name"),
+                "split": row.get("split"),
                 "score": row["score"],
                 "detected_at_target_fpr": row["score"] >= threshold,
             }
-            for row in positive_rows
+            for row in eval_positive_rows
         ]
     tpr = round(detected_count / len(positive_scores), 6) if positive_scores else None
     ci_lower, ci_upper = _wilson_interval(detected_count, len(positive_scores))
@@ -430,8 +503,17 @@ def _calibrated_method_record(
     missing_reasons: list[str] = []
     if len(negative_rows) < int(context["minimum_clean_negative_count"]):
         missing_reasons.append("clean_negative_score_count_below_minimum")
+    if split_required:
+        if len(calibration_negative_rows) < int(context.get("minimum_calibration_negative_event_count") or 0):
+            missing_reasons.append("calibration_clean_negative_score_count_below_minimum")
+        if len(heldout_negative_rows) < int(context.get("minimum_heldout_test_negative_event_count") or 0):
+            missing_reasons.append("heldout_clean_negative_score_count_below_minimum")
+        if len(heldout_positive_rows) < int(context.get("minimum_heldout_attacked_positive_event_count") or 0):
+            missing_reasons.append("heldout_attacked_positive_score_count_below_minimum")
     if not positive_rows:
         missing_reasons.append("attacked_positive_scores_missing")
+    if split_required and not eval_positive_rows:
+        missing_reasons.append("heldout_attacked_positive_scores_missing")
     if positive_missing_anchor_count:
         missing_reasons.append("positive_anchor_fields_missing")
     if positive_formal_evidence_missing_count:
@@ -455,7 +537,13 @@ def _calibrated_method_record(
         "positive_score_field": positive_rows[0]["score_field"] if positive_rows else positive_score_fields[0],
         "clean_negative_score_field": negative_rows[0]["score_field"] if negative_rows else (embedded_negative_score_fields or negative_score_fields or ("missing",))[0],
         "clean_negative_score_count": len(negative_rows),
+        "calibration_clean_negative_score_count": len(calibration_negative_rows),
+        "heldout_clean_negative_score_count": len(heldout_negative_rows),
         "attacked_positive_score_count": len(positive_rows),
+        "heldout_attacked_positive_score_count": len(heldout_positive_rows),
+        "threshold_protocol": context.get("threshold_protocol"),
+        "threshold_source_split": "calibration" if split_required else "all_clean_negative",
+        "calibration_fpr_at_calibrated_threshold": calibration_fpr,
         "positive_anchor_missing_count": positive_missing_anchor_count,
         "positive_formal_evidence_missing_count": positive_formal_evidence_missing_count,
         "negative_formal_evidence_missing_count": negative_formal_evidence_missing_count,
@@ -504,6 +592,7 @@ def build_fair_detection_calibration_records(
 
     run_root = Path(run_root)
     context = _load_profile_context(config_path)
+    split_lookup = _prompt_seed_split_map(_read_jsonl(run_root / "records" / "generation_records.jsonl"))
     rows: list[dict[str, Any]] = []
     sstw_records = _read_jsonl(run_root / "records" / "sstw_measured_formal_records.jsonl")
     rows.append(_calibrated_method_record(
@@ -514,8 +603,12 @@ def build_fair_detection_calibration_records(
         negative_score_fields=("sstw_clean_negative_score", "clean_negative_score", "sstw_raw_detector_score", "sstw_score", "raw_detector_score"),
         embedded_negative_score_fields=("sstw_clean_negative_score", "clean_negative_score"),
         score_semantics_field="sstw_score_semantics",
-        default_score_semantics="sstw_conservative_detector_score",
+        default_score_semantics="sstw_key_conditioned_video_content_detector_score",
         context=context,
+        positive_record_ready_predicate=formal_sstw_score_record_ready_for_claim,
+        negative_record_ready_predicate=formal_sstw_clean_negative_record_ready_for_calibration,
+        embedded_negative_record_ready_predicate=formal_sstw_score_record_ready_for_claim,
+        split_lookup=split_lookup,
     ))
     external_records = _read_jsonl(run_root / "records" / "external_baseline_score_records.jsonl")
     records_by_baseline: dict[str, list[dict[str, Any]]] = {}
@@ -539,6 +632,7 @@ def build_fair_detection_calibration_records(
             positive_record_ready_predicate=formal_score_record_ready_for_claim,
             negative_record_ready_predicate=formal_clean_negative_score_record_ready_for_calibration,
             embedded_negative_record_ready_predicate=formal_score_record_ready_for_claim,
+            split_lookup=split_lookup,
         ))
     return rows
 

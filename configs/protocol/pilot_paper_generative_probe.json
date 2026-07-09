@@ -48,8 +48,6 @@
   "require_modern_external_baseline_formal_results": true,
   "require_motion_threshold_calibration_ready": true,
   "required_external_baseline_adapter_names": [
-    "explicit_dtw_temporal_alignment",
-    "explicit_frame_matching_temporal_registration",
     "videoshield",
     "vidsig",
     "videoseal",

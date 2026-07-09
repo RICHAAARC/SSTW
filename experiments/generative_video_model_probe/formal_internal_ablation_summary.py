@@ -45,12 +45,11 @@ def _mean_or_none(values: list[float]) -> float | None:
 
 
 def build_formal_internal_ablation_summary_records(run_root: str | Path) -> list[dict[str, Any]]:
-    """把 SSTW formal full-method 结果和 validation proxy 消融矩阵合成 paper_profile 消融表。
+    """汇总 paper_profile 内部消融正式结果。
 
-    该函数的核心作用是消除“只有 proxy ablation, 没有与 SSTW formal 结果绑定”的文档缺口。
-    `sstw_full_method` 行来自 SSTW measured_formal records; 其余 component-removal 行仍来自
-    paper_profile proxy ablation, 因此只能支持小样本论文闭合检查, 不能支持 full-paper
-    正式消融效果主张。
+    该函数只允许 `metric_status: measured_formal` 的消融记录进入 ready 状态。
+    若当前 run_root 只有历史内部消融替代记录, 对应消融变体会被写成 missing,
+    从而阻断 paper gate, 防止非正式消融影响论文结论。
     """
     run_root = Path(run_root)
     sstw_records = [
@@ -58,10 +57,10 @@ def build_formal_internal_ablation_summary_records(run_root: str | Path) -> list
         for record in _read_jsonl(run_root / "records" / "sstw_measured_formal_records.jsonl")
         if record.get("metric_status") == "measured_formal"
     ]
-    proxy_ablation_records = [
+    formal_ablation_records = [
         record
-        for record in _read_jsonl(run_root / "records" / "validation_internal_ablation_records.jsonl")
-        if record.get("ablation_status") == "ready"
+        for record in _read_jsonl(run_root / "records" / "formal_internal_ablation_variant_records.jsonl")
+        if record.get("ablation_status") == "ready" and record.get("metric_status") == "measured_formal"
     ]
     variant_config = _variant_config_by_name()
     full_scores = [
@@ -81,15 +80,15 @@ def build_formal_internal_ablation_summary_records(run_root: str | Path) -> list
             variant_scores = [
                 value
                 for value in (
-                    _safe_float(record.get("validation_ablation_proxy_score"))
-                    for record in proxy_ablation_records
+                    _safe_float(record.get("formal_internal_ablation_score"))
+                    for record in formal_ablation_records
                     if record.get("method_variant") == variant_name
                 )
                 if value is not None
             ]
-            metric_status = "measured_proxy" if variant_scores else "missing"
-            evidence_level = "paper_profile_proxy_component_removal"
-            source_record_family = "validation_internal_ablation_records"
+            metric_status = "measured_formal" if variant_scores else "missing"
+            evidence_level = "formal_component_removal_video_detector"
+            source_record_family = "formal_internal_ablation_variant_records"
         score_mean = _mean_or_none(variant_scores)
         delta = round(score_mean - full_score_mean, 6) if score_mean is not None and full_score_mean is not None else None
         claim_support_status = (
@@ -120,7 +119,7 @@ def audit_formal_internal_ablation_summary_records(records: list[dict[str, Any]]
     ready_variants = {
         str(record.get("method_variant"))
         for record in records
-        if record.get("metric_status") in {"measured_formal", "measured_proxy"}
+        if record.get("metric_status") == "measured_formal"
     }
     full_formal_ready = any(
         record.get("method_variant") == FULL_METHOD_VARIANT and record.get("metric_status") == "measured_formal"
@@ -152,9 +151,8 @@ def run_formal_internal_ablation_summary(run_root: str | Path) -> dict[str, Any]
     write_json(run_root / "artifacts" / "formal_internal_ablation_summary_decision.json", audit)
     report = (
         "# Formal Internal Ablation Summary Report\n\n"
-        "该报告把 SSTW full-method measured_formal 结果与 paper profile proxy component-removal "
-        "消融矩阵绑定, 用于确认内部消融产物在 paper_profile 阶段闭环。除 full-method 行外, "
-        "component-removal 行用于支撑 target_fpr=0.1 小样本机制解释, 但不能外推为 full_paper 规模正式消融结论。\n\n"
+        "该报告只汇总 measured_formal 内部消融记录。若缺少正式 component-removal "
+        "视频检测结果, 对应变体保持 missing 并阻断 paper gate。\n\n"
         f"- formal_internal_ablation_summary_decision: {audit['formal_internal_ablation_summary_decision']}\n"
         f"- formal_internal_ablation_variant_count: {audit['formal_internal_ablation_variant_count']}\n"
         f"- formal_internal_ablation_full_method_formal_ready: {str(audit['formal_internal_ablation_full_method_formal_ready']).lower()}\n"

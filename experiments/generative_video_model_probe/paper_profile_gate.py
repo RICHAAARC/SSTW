@@ -9,6 +9,11 @@ from typing import Any
 
 from main.external_baselines.baseline_registry import audit_external_baseline_records
 from experiments.generative_video_model_probe.external_baseline_runner import audit_external_baseline_comparison_records
+from experiments.generative_video_model_probe.sstw_formal_result import (
+    formal_sstw_clean_negative_record_ready_for_calibration,
+    formal_sstw_score_record_ready_for_claim,
+)
+from main.methods.state_space_watermark.video_content_detector import FORMAL_VIDEO_DETECTOR_EVIDENCE_LEVEL
 from experiments.generative_video_model_probe.formal_motion_claim_filter import (
     FORMAL_MOTION_CLAIM_READY_STATUSES,
     select_motion_claim_generation_records,
@@ -226,15 +231,29 @@ def _external_baseline_comparison_ready(
     )
 
 def _internal_ablation_ready(run_root: Path) -> tuple[bool, int, str]:
-    """检查 paper profile 是否已有内部消融记录。"""
-    records = _read_jsonl(run_root / "records" / "validation_internal_ablation_records.jsonl")
+    """检查 paper profile 是否已有正式内部消融原始记录。"""
+
+    records = _read_jsonl(run_root / "records" / "formal_internal_ablation_variant_records.jsonl")
     if not records:
-        records = _read_jsonl(run_root / "records" / "ablation_scores.jsonl")
+        records = _read_jsonl(run_root / "records" / "validation_internal_ablation_records.jsonl")
     decision = _read_json(run_root / "artifacts" / "validation_internal_ablation_decision.json")
     if not decision:
         decision = _read_json(run_root / "artifacts" / "internal_ablation_decision.json")
-    decision_ready = not decision or _decision_pass(decision, "validation_internal_ablation_decision", "internal_ablation_decision")
-    return bool(records) and decision_ready, len(records), decision.get("claim_support_status", "missing_internal_ablation_decision")
+    formal_records = [
+        record
+        for record in records
+        if record.get("metric_status") == "measured_formal"
+        and record.get("formal_internal_ablation_evidence_level") == "formal_component_removal_video_detector"
+    ]
+    decision_ready = (
+        _decision_pass(decision, "validation_internal_ablation_decision", "internal_ablation_decision")
+        and decision.get("validation_internal_ablation_evidence_level") == "formal_component_removal_video_detector"
+    )
+    return (
+        bool(records) and len(formal_records) == len(records) and decision_ready,
+        len(records),
+        decision.get("claim_support_status", "missing_internal_ablation_decision"),
+    )
 
 
 def _motion_consistency_exclusion_ready(run_root: Path) -> tuple[bool, int, str]:
@@ -250,9 +269,19 @@ def _formal_internal_ablation_summary_ready(run_root: Path) -> tuple[bool, int, 
     """检查 paper_profile 级 formal-compatible 内部消融汇总是否已通过。"""
     records = _read_jsonl(run_root / "records" / "formal_internal_ablation_summary_records.jsonl")
     decision = _read_json(run_root / "artifacts" / "formal_internal_ablation_summary_decision.json")
-    ready = bool(records) and _decision_pass(decision, "formal_internal_ablation_summary_decision")
-    ready_count = int(decision.get("formal_internal_ablation_variant_count") or 0)
-    return ready, ready_count, decision.get("claim_support_status", "missing_formal_internal_ablation_summary_decision")
+    formal_records = [record for record in records if record.get("metric_status") == "measured_formal"]
+    proxy_records = [record for record in records if str(record.get("metric_status") or "") == "measured_proxy" or "proxy" in str(record.get("formal_internal_ablation_evidence_level") or "")]
+    ready = (
+        bool(records)
+        and _decision_pass(decision, "formal_internal_ablation_summary_decision")
+        and len(formal_records) == len(records)
+        and not proxy_records
+    )
+    ready_count = len(formal_records)
+    status = decision.get("claim_support_status", "missing_formal_internal_ablation_summary_decision")
+    if proxy_records:
+        status = "formal_internal_ablation_summary_blocked_by_proxy_records"
+    return ready, ready_count, status
 
 
 def _adaptive_attack_ready(
@@ -263,9 +292,16 @@ def _adaptive_attack_ready(
     """检查 paper profile 是否已有完整 non-runtime/adaptive attack 协议记录。"""
     records = _read_jsonl(run_root / "records" / "adaptive_attack_records.jsonl")
     decision = _read_json(run_root / "artifacts" / "adaptive_attack_decision.json")
+    formal_records = [
+        record
+        for record in records
+        if record.get("adaptive_attack_evidence_level") == "formal_adaptive_attack_execution"
+        and record.get("adaptive_robustness_claim_allowed") is True
+        and record.get("metric_status") == "measured_formal"
+    ]
     observed_protocols = {
         str(record.get("non_runtime_attack_protocol") or record.get("adaptive_attack_name") or "")
-        for record in records
+        for record in formal_records
         if record.get("non_runtime_attack_protocol") or record.get("adaptive_attack_name")
     }
     required_protocols = {str(item) for item in required_non_runtime_attack_protocols if str(item)}
@@ -273,6 +309,7 @@ def _adaptive_attack_ready(
     ready = (
         bool(records)
         and _decision_pass(decision, "adaptive_attack_decision")
+        and len(formal_records) == len(records)
         and len(observed_protocols) >= minimum_non_runtime_attack_protocol_count
         and not missing_protocols
     )
@@ -392,8 +429,30 @@ def _sstw_measured_formal_ready(run_root: Path) -> tuple[bool, int, str]:
     records = _read_jsonl(run_root / "records" / "sstw_measured_formal_records.jsonl")
     decision = _read_json(run_root / "artifacts" / "sstw_measured_formal_decision.json")
     ready_records = [record for record in records if record.get("metric_status") == "measured_formal"]
-    ready = bool(ready_records) and _decision_pass(decision, "sstw_measured_formal_decision")
-    return ready, len(ready_records), decision.get("claim_support_status", "missing_sstw_measured_formal_decision")
+    positive_records = [
+        record
+        for record in ready_records
+        if str(record.get("sample_role") or "").lower() not in {"clean_negative", "controlled_negative"}
+    ]
+    clean_negative_records = [
+        record
+        for record in ready_records
+        if str(record.get("sample_role") or "").lower() == "clean_negative"
+    ]
+    formal_positive_count = sum(1 for record in positive_records if formal_sstw_score_record_ready_for_claim(record))
+    formal_clean_negative_count = sum(1 for record in clean_negative_records if formal_sstw_clean_negative_record_ready_for_calibration(record))
+    ready = (
+        bool(ready_records)
+        and _decision_pass(decision, "sstw_measured_formal_decision")
+        and formal_positive_count == len(positive_records)
+        and formal_clean_negative_count == len(clean_negative_records)
+        and bool(positive_records)
+        and bool(clean_negative_records)
+    )
+    status = decision.get("claim_support_status", "missing_sstw_measured_formal_decision")
+    if ready_records and not ready:
+        status = "sstw_measured_formal_blocked_by_non_formal_video_detector_evidence"
+    return ready, len(ready_records), status
 
 
 def _required_fair_method_ids(required_modern_adapter_names: list[str]) -> set[str]:
@@ -467,6 +526,35 @@ def _records_cover_required_attacks(records: list[dict], status_field: str, read
     required = {str(item) for item in required_attack_names if str(item)}
     missing = sorted(required - set(observed))
     return not missing, observed, missing
+
+
+def _runtime_attack_records_formal_ready(records: list[dict]) -> tuple[bool, int]:
+    """检查 runtime attack records 是否全部是正式视频文件级变换。"""
+
+    ready_records = [record for record in records if record.get("attack_runtime_status") == "ready"]
+    formal_ready = [
+        record
+        for record in ready_records
+        if record.get("runtime_attack_implementation_level") == "formal_runtime_video_transform"
+        and record.get("runtime_attack_formal_evidence_level") == "formal_runtime_video_transform"
+        and record.get("runtime_attack_proxy_free") is True
+    ]
+    return bool(ready_records) and len(formal_ready) == len(ready_records), len(formal_ready)
+
+
+def _runtime_detection_records_formal_ready(records: list[dict]) -> tuple[bool, int]:
+    """检查 runtime detection records 是否全部来自 SSTW 正式视频内容检测器。"""
+
+    ready_records = [record for record in records if record.get("runtime_detection_status") == "ready"]
+    formal_ready = [
+        record
+        for record in ready_records
+        if record.get("sstw_detector_evidence_level") == FORMAL_VIDEO_DETECTOR_EVIDENCE_LEVEL
+        and record.get("trajectory_trace_used_for_score") is False
+        and record.get("runtime_detection_claim_level") == "formal_paper_detector"
+        and record.get("sstw_raw_detector_score") is not None
+    ]
+    return bool(ready_records) and len(formal_ready) == len(ready_records), len(formal_ready)
 
 
 def _fair_detection_anchor_ready(record: dict, minimum_clean_negative_count: int, required_attack_names: list[str]) -> bool:
@@ -794,6 +882,8 @@ def build_paper_profile_gate_audit(
         "ready",
         config["required_runtime_attack_names"],
     )
+    runtime_attack_formal_ready, runtime_attack_formal_ready_count = _runtime_attack_records_formal_ready(runtime_attack_records)
+    runtime_detection_formal_ready, runtime_detection_formal_ready_count = _runtime_detection_records_formal_ready(runtime_detection_records)
 
     external_baseline_audit = audit_external_baseline_records(external_baseline_records) if external_baseline_records else {}
     (
@@ -879,10 +969,12 @@ def build_paper_profile_gate_audit(
         "validation_runtime_attack_protocol_config_ready": config["runtime_attack_protocol_audit"]["runtime_attack_protocol_decision"] == "PASS",
         "validation_attack_records_ready": _decision_pass(runtime_attack_decision, "runtime_attack_decision")
         and attack_count >= config["minimum_attack_count"]
-        and runtime_attack_required_ready,
+        and runtime_attack_required_ready
+        and runtime_attack_formal_ready,
         "validation_detection_records_ready": _decision_pass(runtime_detection_decision, "runtime_detection_decision")
         and runtime_detection_ready_count >= runtime_attack_ready_count > 0
-        and runtime_detection_required_ready,
+        and runtime_detection_required_ready
+        and runtime_detection_formal_ready,
         "validation_external_baseline_status_records_ready": (not config["require_external_baseline_status_records"]) or external_baseline_audit.get("external_baseline_status_decision") == "PASS",
         "validation_external_baseline_comparison_records_ready": (not config["require_external_baseline_comparison_records"]) or external_baseline_comparison_ready,
         "validation_external_baseline_self_containment_ready": (not config["require_external_baseline_self_containment_decision"]) or external_baseline_self_containment_ready,
@@ -951,6 +1043,7 @@ def build_paper_profile_gate_audit(
         "required_non_runtime_attack_protocols": sorted(config["required_non_runtime_attack_protocols"]),
         "missing_non_runtime_attack_protocols": config["runtime_attack_protocol_audit"]["missing_non_runtime_attack_protocols"],
         "runtime_attack_ready_count": runtime_attack_ready_count,
+        "runtime_attack_formal_ready_count": runtime_attack_formal_ready_count,
         "runtime_attack_count": attack_count,
         "required_runtime_attack_names": sorted(config["required_runtime_attack_names"]),
         "runtime_attack_observed_names": runtime_attack_observed_names,
@@ -958,6 +1051,7 @@ def build_paper_profile_gate_audit(
         "runtime_attack_missing_required_count": len(runtime_attack_missing_names),
         "runtime_detection_decision": runtime_detection_decision.get("runtime_detection_decision"),
         "runtime_detection_ready_count": runtime_detection_ready_count,
+        "runtime_detection_formal_ready_count": runtime_detection_formal_ready_count,
         "runtime_detection_observed_names": runtime_detection_observed_names,
         "runtime_detection_missing_required_names": runtime_detection_missing_names,
         "runtime_detection_missing_required_count": len(runtime_detection_missing_names),

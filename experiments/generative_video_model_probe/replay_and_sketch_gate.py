@@ -7,7 +7,7 @@
 4. wrong prompt replay control。
 
 该实现属于 paper profile 工程闭环。它可以证明 replay/sketch 协议入口、records、table、report 和 gate
-能够由 governed records 自动重建, 但不会把 validation proxy 伪装成 full-paper 强 Claim-3。
+能够由 governed records 自动重建, 但不会把 owner-side diagnostic 伪装成 full-paper 强 Claim-3。
 """
 
 from __future__ import annotations
@@ -26,8 +26,8 @@ from main.protocol.record_writer import write_json, write_jsonl
 from main.protocol.table_builder import write_csv
 
 
-REPLAY_AND_SKETCH_CLAIM_SUPPORT_STATUS = "replay_and_sketch_validation_proxy_only"
-REPLAY_AND_SKETCH_EVIDENCE_LEVEL = "validation_runtime_trace_proxy"
+REPLAY_AND_SKETCH_CLAIM_SUPPORT_STATUS = "replay_and_sketch_owner_side_diagnostic_only"
+REPLAY_AND_SKETCH_EVIDENCE_LEVEL = "owner_side_runtime_trace_diagnostic"
 REPLAY_RECORD_TABLE_FIELDS = (
     "record_version",
     "replay_record_type",
@@ -87,9 +87,9 @@ def _float_values(records: list[dict], field_name: str) -> list[float]:
 
 
 def _replay_uncertainty(trace_records: list[dict]) -> float:
-    """根据 latent norm 的相对变化估计 replay uncertainty proxy。
+    """根据 latent norm 的相对变化估计 replay uncertainty diagnostic。
 
-    这是 paper profile proxy 写法。它只使用 trajectory trace 中的路径统计, 不读取 `S_final`
+    这是 paper profile owner-side diagnostic 写法。它只使用 trajectory trace 中的路径统计, 不读取 `S_final`
     或最终检测判定分数, 因此不会把最终检测结果反向用于污染过滤。
     """
     norms = _float_values(trace_records, "latent_norm")
@@ -133,8 +133,8 @@ def _base_replay_record(generation_record: dict, replay_record_type: str) -> dic
         "trajectory_sketch_verification_status": "not_evaluated",
         "replay_uncertainty_weight": None,
         "replay_uncertainty_mean": None,
-        "replay_scheduler_id": generation_record.get("scheduler_id") or "wan21_validation_proxy_scheduler",
-        "replay_time_grid_id": generation_record.get("time_grid_id") or "wan21_validation_proxy_time_grid",
+        "replay_scheduler_id": generation_record.get("scheduler_id") or "wan21_owner_side_diagnostic_scheduler",
+        "replay_time_grid_id": generation_record.get("time_grid_id") or "wan21_owner_side_diagnostic_time_grid",
         "wrong_sampler_replay_control": "not_applicable",
         "wrong_prompt_replay_control": "not_applicable",
         "replay_control_status": "not_applicable",
@@ -148,7 +148,7 @@ def _with_protocol(record: dict[str, Any], *, admissibility_status: str) -> dict
     """为 replay/sketch record 补齐 Flow evidence 协议字段。"""
     return with_flow_evidence_protocol_defaults(
         record,
-        trajectory_source_level="replay_and_sketch_validation_trace_proxy",
+        trajectory_source_level="replay_and_sketch_owner_side_trace_diagnostic",
         flow_state_admissibility_status=admissibility_status,
         claim_support_status=REPLAY_AND_SKETCH_CLAIM_SUPPORT_STATUS,
     )
@@ -312,11 +312,11 @@ def audit_replay_and_sketch_records(record_groups: dict[str, list[dict[str, Any]
     return {
         "stage_id": "replay_and_authenticated_sketch_gate",
         "replay_and_sketch_gate_decision": decision,
-        "claim_support_status": REPLAY_AND_SKETCH_CLAIM_SUPPORT_STATUS if decision == "PASS" else "replay_and_sketch_validation_proxy_blocked",
+        "claim_support_status": REPLAY_AND_SKETCH_CLAIM_SUPPORT_STATUS if decision == "PASS" else "replay_and_sketch_owner_side_diagnostic_blocked",
         "replay_and_sketch_evidence_level": REPLAY_AND_SKETCH_EVIDENCE_LEVEL,
         "claim3_full_support_allowed": False,
-        "claim3_full_support_blocking_reason": "validation_proxy_not_full_paper_authenticated_replay",
-        "replay_or_sketch_status": "replay_and_sketch_gate_passed_validation_proxy" if decision == "PASS" else "replay_and_sketch_gate_blocked",
+        "claim3_full_support_blocking_reason": "owner_side_diagnostic_not_full_paper_authenticated_replay",
+        "replay_or_sketch_status": "replay_and_sketch_gate_passed_owner_side_diagnostic" if decision == "PASS" else "replay_and_sketch_gate_blocked",
         "replay_and_sketch_missing_requirements": missing,
         "replay_and_sketch_missing_requirement_count": len(missing),
         "trajectory_sketch_verification_record_count": len(sketch_records),
@@ -345,7 +345,7 @@ def run_replay_and_sketch_gate(run_root: str | Path) -> dict[str, Any]:
     report = (
         "# Replay and Authenticated Sketch Gate Report\n\n"
         "该报告由 generation records 与 trajectory trace 自动生成, 用于闭合 paper profile 的 replay/sketch 工程入口。"
-        "当前 evidence level 是 validation proxy, 不允许直接声明 full-paper 强 Claim-3。\n\n"
+        "当前 evidence level 是 owner-side diagnostic, 不允许直接声明 full-paper 强 Claim-3。\n\n"
         f"- replay_and_sketch_gate_decision: {audit['replay_and_sketch_gate_decision']}\n"
         f"- replay_and_sketch_evidence_level: {audit['replay_and_sketch_evidence_level']}\n"
         f"- trajectory_sketch_verified_count: {audit['trajectory_sketch_verified_count']}\n"

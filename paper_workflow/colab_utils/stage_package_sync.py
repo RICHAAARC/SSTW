@@ -57,14 +57,12 @@ MODERN_EXTERNAL_BASELINE_IDS = (
 
 GEN_VIDEO_GENERATION_PACKAGE_ID = "generative_video_generation_colab"
 GEN_VIDEO_QUALITY_SCORING_PACKAGE_ID = "generative_video_quality_scoring_colab"
-SSTW_MECHANISM_POSTPROCESS_PACKAGE_ID = "sstw_mechanism_postprocess_colab"
 RUNTIME_ATTACK_PACKAGE_ID = "runtime_attack_colab"
 RUNTIME_DETECTION_PACKAGE_ID = "runtime_detection_colab"
 
 GEN_VIDEO_RUNTIME_SPLIT_STAGE_PACKAGE_IDS = (
     GEN_VIDEO_GENERATION_PACKAGE_ID,
     GEN_VIDEO_QUALITY_SCORING_PACKAGE_ID,
-    SSTW_MECHANISM_POSTPROCESS_PACKAGE_ID,
     RUNTIME_ATTACK_PACKAGE_ID,
     RUNTIME_DETECTION_PACKAGE_ID,
 )
@@ -98,23 +96,6 @@ GEN_VIDEO_QUALITY_SCORING_PACKAGE_RELPATHS = (
     "tables/formal_quality_motion_semantic_table.csv",
 )
 
-SSTW_MECHANISM_POSTPROCESS_PACKAGE_RELPATHS = (
-    "artifacts/generative_video_mechanism_postprocess_decision.json",
-    "artifacts/notebook_runtime_report.json",
-    "artifacts/notebook_run_timing_manifest.json",
-    "artifacts/protocol_evaluation_matrix_decision.json",
-    "artifacts/stage_package_restore_decision.json",
-    "records/controlled_negative_records.jsonl",
-    "records/mechanism_score_records.jsonl",
-    "records/notebook_stage_timing_records.jsonl",
-    "records/protocol_evaluation_matrix_records.jsonl",
-    "records/quality_motion_semantic_proxy_records.jsonl",
-    "reports/generative_video_mechanism_postprocess_report.md",
-    "tables/mechanism_proxy_comparison_table.csv",
-    "tables/protocol_evaluation_matrix_table.csv",
-    "thresholds/mechanism_proxy_thresholds.json",
-)
-
 RUNTIME_ATTACK_PACKAGE_RELPATHS = (
     "artifacts/notebook_runtime_report.json",
     "artifacts/notebook_run_timing_manifest.json",
@@ -134,6 +115,8 @@ RUNTIME_DETECTION_PACKAGE_RELPATHS = (
     "artifacts/stage_package_restore_decision.json",
     "records/notebook_stage_timing_records.jsonl",
     "records/runtime_detection_records.jsonl",
+    "records/sstw_clean_negative_score_records.jsonl",
+    "tables/sstw_clean_negative_score_table.csv",
     "reports/runtime_detection_report.md",
     "tables/runtime_detection_table.csv",
 )
@@ -214,6 +197,7 @@ PAPER_EVIDENCE_POSTPROCESS_PACKAGE_RELPATHS = (
     "records/statistical_confidence_interval_records.jsonl",
     "records/trajectory_sketch_verification_records.jsonl",
     "records/validation_internal_ablation_records.jsonl",
+    "records/formal_internal_ablation_variant_records.jsonl",
     "records/formal_internal_ablation_summary_records.jsonl",
     "records/video_quality_metric_records.jsonl",
     "records/wrong_prompt_replay_records.jsonl",
@@ -270,7 +254,6 @@ MAIN_STAGE_PACKAGE_IDS = {
     RUNTIME_DETECTION_PACKAGE_ID,
     "paper_evidence_postprocess_colab",
     "paper_gate_and_package_colab",
-    SSTW_MECHANISM_POSTPROCESS_PACKAGE_ID,
 }
 
 REMOVED_NOTEBOOK_ROLES = {
@@ -754,14 +737,12 @@ def _default_required_stage_packages(layout: Mapping[str, str], notebook_role: s
         if profile != "motion_calibration":
             required.append("motion_threshold_calibration_colab")
         return required
-    if role == "sstw_mechanism_postprocess":
-        return [GEN_VIDEO_GENERATION_PACKAGE_ID, GEN_VIDEO_QUALITY_SCORING_PACKAGE_ID]
     if role == "runtime_attack":
         return [GEN_VIDEO_GENERATION_PACKAGE_ID, GEN_VIDEO_QUALITY_SCORING_PACKAGE_ID]
     if role == "runtime_detection":
         return [GEN_VIDEO_GENERATION_PACKAGE_ID, RUNTIME_ATTACK_PACKAGE_ID]
     if role == "formal_comparison_scoring":
-        required = [SSTW_MECHANISM_POSTPROCESS_PACKAGE_ID, RUNTIME_DETECTION_PACKAGE_ID]
+        required = [RUNTIME_DETECTION_PACKAGE_ID]
         required.extend(
             stage_package_id_for_notebook("external_baseline_formal_scoring", baseline_id=baseline)
             for baseline in MODERN_EXTERNAL_BASELINE_IDS
@@ -996,17 +977,6 @@ def _iter_package_sources(
             run_root,
             run_archive_root,
             GEN_VIDEO_QUALITY_SCORING_PACKAGE_RELPATHS,
-        )
-        return sources
-
-    if role == "sstw_mechanism_postprocess":
-        run_root = Path(str(layout.get("drive_run_root") or ""))
-        run_archive_root = _archive_root_for_layout_path(layout, "drive_run_root")
-        _append_existing_run_relpaths(
-            sources,
-            run_root,
-            run_archive_root,
-            SSTW_MECHANISM_POSTPROCESS_PACKAGE_RELPATHS,
         )
         return sources
 

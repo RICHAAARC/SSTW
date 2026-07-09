@@ -36,6 +36,106 @@ REQUIRED_NON_RUNTIME_ATTACK_PROTOCOLS = FULL_PAPER_NON_RUNTIME_ATTACK_PROTOCOLS
 REQUIRED_ANCHOR_KEYS = tuple(f"prompt_0::seed_0::{attack_name}" for attack_name in REQUIRED_RUNTIME_ATTACK_NAMES)
 
 
+def _formal_runtime_attack_record(attack_name: str) -> dict:
+    """构造 paper gate 可接受的正式 runtime attack 记录。
+
+    该 fixture 明确表达测试中的 attack 不是 proxy, 避免测试继续依赖旧的弱证据层级。
+    """
+
+    return {
+        "attack_name": attack_name,
+        "attack_runtime_status": "ready",
+        "runtime_attack_implementation_level": "formal_runtime_video_transform",
+        "runtime_attack_formal_evidence_level": "formal_runtime_video_transform",
+        "runtime_attack_claim_level": "paper_runtime_attack_protocol",
+        "runtime_attack_proxy_free": True,
+    }
+
+
+def _formal_runtime_detection_record(attack_name: str) -> dict:
+    """构造 paper gate 可接受的正式 SSTW 视频内容检测记录。"""
+
+    return {
+        "attack_name": attack_name,
+        "runtime_detection_status": "ready",
+        "sstw_detector_evidence_level": "attacked_video_content_detector",
+        "sstw_detector_input_contract": "video_file_plus_project_watermark_key",
+        "sstw_raw_detector_score": 0.82,
+        "raw_detector_score": 0.82,
+        "trajectory_trace_used_for_score": False,
+        "runtime_detection_claim_level": "formal_paper_detector",
+    }
+
+
+def _formal_sstw_measured_records() -> list[dict]:
+    """构造包含 positive 与 clean negative 的正式 SSTW measured_formal fixture。"""
+
+    records = [
+        {
+            "metric_status": "measured_formal",
+            "sample_role": "attacked_positive",
+            "sstw_score": 0.82,
+            "sstw_raw_detector_score": 0.82,
+            "raw_detector_score": 0.82,
+            "prompt_id": "prompt_0",
+            "seed_id": "seed_0",
+            "attack_name": attack_name,
+            "sstw_detector_evidence_level": "attacked_video_content_detector",
+            "sstw_detector_input_contract": "video_file_plus_project_watermark_key",
+            "trajectory_trace_used_for_score": False,
+            "runtime_detection_claim_level": "formal_paper_detector",
+            "claim_support_status": "sstw_measured_formal_paper_profile_claim_candidate",
+        }
+        for attack_name in REQUIRED_RUNTIME_ATTACK_NAMES
+    ]
+    records.append({
+        "metric_status": "measured_formal",
+        "sample_role": "clean_negative",
+        "sstw_score": 0.05,
+        "sstw_clean_negative_score": 0.05,
+        "prompt_id": "negative_prompt_0",
+        "seed_id": "seed_0",
+        "clean_negative_evidence_level": "project_owned_clean_video_content_detector",
+        "trajectory_trace_used_for_score": False,
+    })
+    return records
+
+
+def _formal_internal_ablation_summary_records() -> list[dict]:
+    """构造全变体 measured_formal 的内部消融汇总记录。"""
+
+    return [
+        {
+            "method_variant": variant,
+            "metric_status": "measured_formal",
+            "formal_internal_ablation_evidence_level": "formal_component_removal_video_detector",
+        }
+        for variant in (
+            "sstw_full_method",
+            "endpoint_only_control",
+            "trajectory_only_score",
+            "without_velocity_constraint",
+            "without_endpoint_aware_control",
+            "without_replay_uncertainty_weighting",
+            "without_flow_state_admissibility",
+            "generic_ssm_baseline",
+        )
+    ]
+
+
+def _formal_adaptive_attack_record(protocol_name: str) -> dict:
+    """构造非 runtime / adaptive 协议的正式执行证据记录。"""
+
+    return {
+        "adaptive_attack_name": protocol_name,
+        "non_runtime_attack_protocol": protocol_name,
+        "adaptive_attack_status": "ready",
+        "metric_status": "measured_formal",
+        "adaptive_attack_evidence_level": "formal_adaptive_attack_execution",
+        "adaptive_robustness_claim_allowed": True,
+    }
+
+
 def _external_baseline_self_containment_pass_payload() -> dict:
     """构造 probe-paper gate 接受的完整 external baseline 自包含 PASS 摘要。"""
 
@@ -306,11 +406,11 @@ def test_paper_profile_gate_passes_when_all_governed_inputs_exist(tmp_path: Path
         for record in generation_records
     ])
     write_jsonl(run_root / "records" / "runtime_attack_records.jsonl", [
-        {"attack_name": attack_name, "attack_runtime_status": "ready"}
+        _formal_runtime_attack_record(attack_name)
         for attack_name in REQUIRED_RUNTIME_ATTACK_NAMES
     ])
     write_jsonl(run_root / "records" / "runtime_detection_records.jsonl", [
-        {"attack_name": attack_name, "runtime_detection_status": "ready"}
+        _formal_runtime_detection_record(attack_name)
         for attack_name in REQUIRED_RUNTIME_ATTACK_NAMES
     ])
     write_jsonl(run_root / "records" / "external_baseline_records.jsonl", run_external_baseline_status())
@@ -322,7 +422,7 @@ def test_paper_profile_gate_passes_when_all_governed_inputs_exist(tmp_path: Path
         "external_baseline_measured_adapter_count": len(EXTERNAL_BASELINE_NAMES),
         "modern_external_baseline_formal_measured_adapter_count": len(MODERN_EXTERNAL_BASELINE_NAMES),
         "modern_external_baseline_formal_measured_adapter_names": sorted(MODERN_EXTERNAL_BASELINE_NAMES),
-        "external_baseline_claim_support_status": "external_baseline_formal_and_proxy_records_written",
+        "external_baseline_claim_support_status": "external_baseline_formal_records_written",
     })
     write_json(
         run_root / "artifacts" / "external_baseline_self_containment_decision.json",
@@ -340,17 +440,7 @@ def test_paper_profile_gate_passes_when_all_governed_inputs_exist(tmp_path: Path
         "motion_consistency_excluded_count": 0,
         "claim_support_status": "motion_consistency_exclusion_audit_record",
     })
-    write_jsonl(run_root / "records" / "sstw_measured_formal_records.jsonl", [
-        {
-            "metric_status": "measured_formal",
-            "sstw_score": 0.82,
-            "prompt_id": "prompt_0",
-            "seed_id": "seed_0",
-            "attack_name": attack_name,
-            "claim_support_status": "sstw_measured_formal_paper_profile_claim_candidate",
-        }
-        for attack_name in REQUIRED_RUNTIME_ATTACK_NAMES
-    ])
+    write_jsonl(run_root / "records" / "sstw_measured_formal_records.jsonl", _formal_sstw_measured_records())
     write_json(run_root / "artifacts" / "sstw_measured_formal_decision.json", {
         "sstw_measured_formal_decision": "PASS",
         "sstw_measured_formal_record_count": len(REQUIRED_RUNTIME_ATTACK_NAMES),
@@ -454,35 +544,25 @@ def test_paper_profile_gate_passes_when_all_governed_inputs_exist(tmp_path: Path
         "target_fpr": 0.1,
         "claim_support_status": "formal_baseline_difference_interval_paper_profile_claim_candidate",
     })
-    write_jsonl(run_root / "records" / "formal_internal_ablation_summary_records.jsonl", [
-        {"method_variant": "sstw_full_method", "metric_status": "measured_formal"},
-        *[
-            {"method_variant": variant, "metric_status": "measured_proxy"}
-            for variant in (
-                "endpoint_only_control",
-                "trajectory_only_score",
-                "without_velocity_constraint",
-                "without_endpoint_aware_control",
-                "without_replay_uncertainty_weighting",
-                "without_flow_state_admissibility",
-                "generic_ssm_baseline",
-            )
-        ],
-    ])
+    write_jsonl(
+        run_root / "records" / "formal_internal_ablation_summary_records.jsonl",
+        _formal_internal_ablation_summary_records(),
+    )
     write_json(run_root / "artifacts" / "formal_internal_ablation_summary_decision.json", {
         "formal_internal_ablation_summary_decision": "PASS",
         "formal_internal_ablation_variant_count": 8,
         "claim_support_status": "formal_internal_ablation_summary_ready_for_target_fpr_0_1_claim_context",
     })
-    write_jsonl(run_root / "records" / "validation_internal_ablation_records.jsonl", [
-        {"method_variant": "without_velocity_constraint", "ablation_status": "ready"},
-    ])
+    write_jsonl(
+        run_root / "records" / "formal_internal_ablation_variant_records.jsonl",
+        _formal_internal_ablation_summary_records(),
+    )
+    write_jsonl(
+        run_root / "records" / "validation_internal_ablation_records.jsonl",
+        _formal_internal_ablation_summary_records(),
+    )
     write_jsonl(run_root / "records" / "adaptive_attack_records.jsonl", [
-        {
-            "adaptive_attack_name": protocol_name,
-            "non_runtime_attack_protocol": protocol_name,
-            "adaptive_attack_status": "ready",
-        }
+        _formal_adaptive_attack_record(protocol_name)
         for protocol_name in REQUIRED_NON_RUNTIME_ATTACK_PROTOCOLS
     ])
     write_json(run_root / "artifacts" / "motion_threshold_calibration_decision.json", {
@@ -502,7 +582,8 @@ def test_paper_profile_gate_passes_when_all_governed_inputs_exist(tmp_path: Path
     })
     write_json(run_root / "artifacts" / "validation_internal_ablation_decision.json", {
         "validation_internal_ablation_decision": "PASS",
-        "claim_support_status": "validation_internal_ablation_ready",
+        "claim_support_status": "formal_internal_ablation_variant_matrix_ready",
+        "validation_internal_ablation_evidence_level": "formal_component_removal_video_detector",
     })
     write_json(run_root / "artifacts" / "adaptive_attack_decision.json", {
         "adaptive_attack_decision": "PASS",
@@ -551,14 +632,14 @@ def test_paper_profile_gate_passes_when_all_governed_inputs_exist(tmp_path: Path
     assert audit["formal_motion_claim_status"] == "ready"
     assert audit["full_paper_allowed"] is False
     assert audit["full_paper_next_gate"] == "pilot_paper_generative_probe_gate"
-    assert audit["external_baseline_measured_adapter_count"] == len(EXTERNAL_BASELINE_NAMES)
+    assert audit["external_baseline_measured_adapter_count"] == len(MODERN_EXTERNAL_BASELINE_NAMES)
     assert audit["modern_external_baseline_formal_measured_adapter_count"] == len(MODERN_EXTERNAL_BASELINE_NAMES)
     assert audit["external_baseline_self_containment_decision"] == "PASS"
     assert audit["external_baseline_self_containment_ready_count"] == len(MODERN_EXTERNAL_BASELINE_NAMES)
     assert audit["external_baseline_self_containment_gate_missing_requirements"] == []
     assert audit["motion_consistency_exclusion_excluded_count"] == 0
     assert audit["motion_consistency_exclusion_status"] == "motion_consistency_exclusion_audit_record"
-    assert audit["sstw_measured_formal_record_count"] == len(REQUIRED_RUNTIME_ATTACK_NAMES)
+    assert audit["sstw_measured_formal_record_count"] == len(REQUIRED_RUNTIME_ATTACK_NAMES) + 1
     assert audit["sstw_measured_formal_status"] == "sstw_measured_formal_paper_profile_claim_candidate"
     assert audit["fair_detection_calibration_ready_count"] == len(MODERN_EXTERNAL_BASELINE_NAMES) + 1
     assert audit["fair_detection_calibration_status"] == "fair_detection_calibration_paper_profile_ready"
@@ -716,7 +797,7 @@ def test_paper_profile_gate_recomputes_external_baseline_records_before_pass(tmp
         "external_baseline_measured_adapter_count": 1,
         "modern_external_baseline_formal_measured_adapter_count": 1,
         "modern_external_baseline_formal_measured_adapter_names": ["videoseal"],
-        "external_baseline_claim_support_status": "external_baseline_formal_and_proxy_records_written",
+        "external_baseline_claim_support_status": "external_baseline_formal_records_written",
     })
 
     audit = build_paper_profile_gate_audit(run_root, config_path)
@@ -996,3 +1077,5 @@ def test_paper_profile_gate_requires_reused_motion_threshold_and_formal_motion_r
     assert audit["paper_profile_gate_decision"] == "FAIL"
     assert "validation_motion_threshold_calibration_ready" in audit["missing_validation_requirements"]
     assert "validation_formal_motion_claim_ready" in audit["missing_validation_requirements"]
+
+

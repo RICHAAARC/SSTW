@@ -9,6 +9,11 @@ from statistics import mean
 from typing import Any
 
 from main.core.digest import build_stable_digest
+from main.methods.state_space_watermark.video_content_detector import (
+    FORMAL_CLEAN_NEGATIVE_EVIDENCE_LEVEL,
+    FORMAL_VIDEO_DETECTOR_EVIDENCE_LEVEL,
+    FORMAL_VIDEO_DETECTOR_SCORE_SEMANTICS,
+)
 from main.protocol.flow_evidence_fields import with_flow_evidence_protocol_defaults
 from main.protocol.record_writer import write_json, write_jsonl
 from main.protocol.table_builder import write_csv
@@ -62,27 +67,61 @@ def _safe_float(value: object) -> float | None:
 
 def _score_from_runtime_detection(record: dict[str, Any]) -> tuple[float | None, str]:
     """从 runtime detection record 中选择 SSTW 正式转写分数。"""
-    for field_name in ("S_final_conservative", "S_runtime_attack_detection", "S_path_inv", "S_velocity"):
+    for field_name in ("sstw_raw_detector_score", "raw_detector_score"):
         value = _safe_float(record.get(field_name))
         if value is not None:
             return round(value, 6), field_name
-    return None, "missing_runtime_detection_score"
+    return None, "missing_formal_video_detector_score"
+
+
+def formal_sstw_score_record_ready_for_claim(record: dict[str, Any]) -> bool:
+    """判断 SSTW positive record 是否具备正式论文级检测证据。"""
+
+    return (
+        record.get("metric_status") == "measured_formal"
+        and str(record.get("sample_role") or "").lower() not in {"clean_negative", "controlled_negative"}
+        and record.get("sstw_detector_evidence_level") == FORMAL_VIDEO_DETECTOR_EVIDENCE_LEVEL
+        and record.get("trajectory_trace_used_for_score") is False
+        and record.get("runtime_detection_claim_level") == "formal_paper_detector"
+        and _safe_float(record.get("sstw_raw_detector_score")) is not None
+    )
+
+
+def formal_sstw_clean_negative_record_ready_for_calibration(record: dict[str, Any]) -> bool:
+    """判断 SSTW clean negative record 是否可用于 fixed-FPR 校准。"""
+
+    return (
+        record.get("metric_status") == "measured_formal"
+        and str(record.get("sample_role") or "").lower() == "clean_negative"
+        and record.get("clean_negative_evidence_level") == FORMAL_CLEAN_NEGATIVE_EVIDENCE_LEVEL
+        and record.get("trajectory_trace_used_for_score") is False
+        and _safe_float(record.get("sstw_clean_negative_score")) is not None
+    )
+
+
+def _runtime_detection_record_ready(record: dict[str, Any]) -> bool:
+    """判断 runtime detection record 是否来自正式视频内容检测器。"""
+
+    return (
+        record.get("runtime_detection_status") == "ready"
+        and record.get("sstw_detector_evidence_level") == FORMAL_VIDEO_DETECTOR_EVIDENCE_LEVEL
+        and record.get("trajectory_trace_used_for_score") is False
+        and record.get("runtime_detection_claim_level") == "formal_paper_detector"
+    )
 
 
 def _score_from_control_record(record: dict[str, Any]) -> tuple[float | None, str]:
     """从 SSTW 受控负样本 record 中选择 clean negative 校准分数。
 
-    通用工程写法是让下游公平校准只消费一种稳定的 `sstw_clean_negative_score`
-    字段。项目特定写法是当前 paper profile 的 SSTW clean negative 来自
-    `controlled_negative_records.jsonl`, 它们由同一条 latent trajectory 的方向破坏
-    控制构造, 用于在 paper profile 中验证阈值校准闭环。
+    正式论文级 clean negative 必须来自 clean video content detector, 不能来自
+    latent trajectory control 或其他受控 proxy 记录。
     """
 
-    for field_name in ("S_final_conservative", "S_final", "S_path_inv", "S_velocity"):
+    for field_name in ("sstw_clean_negative_score", "clean_negative_score", "sstw_raw_detector_score", "raw_detector_score"):
         value = _safe_float(record.get(field_name))
         if value is not None:
             return round(value, 6), field_name
-    return None, "missing_control_negative_score"
+    return None, "missing_formal_clean_negative_score"
 
 
 def build_sstw_measured_formal_records(
@@ -100,7 +139,9 @@ def build_sstw_measured_formal_records(
     run_root = Path(run_root)
     profile_context = _load_profile_context(config_path)
     detection_records = _read_jsonl(run_root / "records" / "runtime_detection_records.jsonl")
-    control_records = _read_jsonl(run_root / "records" / "controlled_negative_records.jsonl")
+    control_records = _read_jsonl(run_root / "records" / "sstw_clean_negative_score_records.jsonl")
+    if not control_records:
+        control_records = _read_jsonl(run_root / "records" / "controlled_negative_records.jsonl")
     formal_records: list[dict[str, Any]] = []
     claim_support_status = (
         "sstw_measured_formal_paper_profile_claim_candidate"
@@ -108,7 +149,7 @@ def build_sstw_measured_formal_records(
         else "sstw_measured_formal_paper_profile_only"
     )
     for index, detection_record in enumerate(detection_records):
-        if detection_record.get("runtime_detection_status") != "ready":
+        if not _runtime_detection_record_ready(detection_record):
             continue
         score, score_field = _score_from_runtime_detection(detection_record)
         if score is None:
@@ -120,6 +161,9 @@ def build_sstw_measured_formal_records(
             "prompt_id": detection_record.get("prompt_id"),
             "seed_id": detection_record.get("seed_id"),
             "trajectory_trace_id": detection_record.get("trajectory_trace_id"),
+            "split": detection_record.get("split"),
+            "protocol_split": detection_record.get("protocol_split"),
+            "colab_runtime_profile": detection_record.get("colab_runtime_profile"),
             "attack_name": detection_record.get("attack_name"),
             "source_video_path": detection_record.get("source_video_path"),
             "source_video_sha256": detection_record.get("source_video_sha256"),
@@ -127,11 +171,18 @@ def build_sstw_measured_formal_records(
             "attacked_video_sha256": detection_record.get("attacked_video_sha256"),
             "sample_role": "attacked_positive",
             "sstw_score": score,
+            "sstw_raw_detector_score": score,
+            "raw_detector_score": score,
             "sstw_detected": bool(detection_record.get("attacked_video_detectable")),
-            "sstw_score_semantics": "sstw_conservative_detector_score",
+            "sstw_score_semantics": FORMAL_VIDEO_DETECTOR_SCORE_SEMANTICS,
             "sstw_score_orientation": "higher_is_more_watermarked",
             "sstw_detection_score_field": score_field,
             "runtime_detection_evidence_level": detection_record.get("runtime_detection_evidence_level"),
+            "sstw_detector_evidence_level": detection_record.get("sstw_detector_evidence_level"),
+            "sstw_detector_input_contract": detection_record.get("sstw_detector_input_contract"),
+            "sstw_detector_key_digest": detection_record.get("sstw_detector_key_digest"),
+            "trajectory_trace_used_for_score": False,
+            "runtime_detection_claim_level": detection_record.get("runtime_detection_claim_level"),
             "source_runtime_detection_record_index": index,
             **profile_context,
         }
@@ -144,9 +195,13 @@ def build_sstw_measured_formal_records(
             "sstw_measured_formal_status": "ready",
             "claim_support_status": claim_support_status,
             **payload,
-        }, trajectory_source_level="project_owned_sstw_runtime_detection", claim_support_status=claim_support_status))
+        }, trajectory_source_level="project_owned_sstw_video_content_detector", claim_support_status=claim_support_status))
     for index, control_record in enumerate(control_records):
-        if str(control_record.get("sample_role") or "").lower() not in {"controlled_negative", "clean_negative"}:
+        if str(control_record.get("sample_role") or "").lower() != "clean_negative":
+            continue
+        if control_record.get("clean_negative_evidence_level") != FORMAL_CLEAN_NEGATIVE_EVIDENCE_LEVEL:
+            continue
+        if control_record.get("trajectory_trace_used_for_score") is not False:
             continue
         score, score_field = _score_from_control_record(control_record)
         if score is None:
@@ -159,20 +214,29 @@ def build_sstw_measured_formal_records(
             "prompt_id": control_record.get("prompt_id"),
             "seed_id": control_record.get("seed_id"),
             "trajectory_trace_id": control_record.get("trajectory_trace_id"),
+            "split": control_record.get("split"),
+            "protocol_split": control_record.get("protocol_split"),
+            "colab_runtime_profile": control_record.get("colab_runtime_profile"),
             "attack_name": "",
             "sample_role": "clean_negative",
             "negative_family": control_name,
             "control_name": control_name,
             "clean_negative_unit_id": f"sstw_{control_name}_{control_record.get('prompt_id')}_{control_record.get('seed_id')}",
             "sstw_score": score,
+            "sstw_raw_detector_score": score,
+            "raw_detector_score": score,
             "sstw_clean_negative_score": score,
             "clean_negative_score": score,
-            "sstw_score_semantics": "sstw_conservative_detector_score",
-            "sstw_clean_negative_score_semantics": "sstw_conservative_detector_score",
+            "sstw_score_semantics": FORMAL_VIDEO_DETECTOR_SCORE_SEMANTICS,
+            "sstw_clean_negative_score_semantics": FORMAL_VIDEO_DETECTOR_SCORE_SEMANTICS,
             "sstw_score_orientation": "higher_is_more_watermarked",
             "sstw_detection_score_field": score_field,
-            "clean_negative_evidence_level": "project_owned_sstw_controlled_negative_record",
-            "clean_negative_source_record_family": "controlled_negative_records",
+            "clean_negative_evidence_level": FORMAL_CLEAN_NEGATIVE_EVIDENCE_LEVEL,
+            "clean_negative_video_path": control_record.get("clean_negative_video_path") or control_record.get("source_video_path"),
+            "sstw_detector_input_contract": control_record.get("sstw_detector_input_contract"),
+            "sstw_detector_key_digest": control_record.get("sstw_detector_key_digest"),
+            "trajectory_trace_used_for_score": False,
+            "clean_negative_source_record_family": "sstw_clean_negative_score_records",
             "source_controlled_negative_record_index": index,
             **profile_context,
         }
@@ -185,7 +249,7 @@ def build_sstw_measured_formal_records(
             "sstw_measured_formal_status": "ready",
             "claim_support_status": claim_support_status,
             **payload,
-        }, trajectory_source_level="project_owned_sstw_clean_negative_control", claim_support_status=claim_support_status))
+        }, trajectory_source_level="project_owned_sstw_clean_video_content_detector", claim_support_status=claim_support_status))
     if formal_records:
         all_fields = sorted({field for record in formal_records for field in record})
         for record in formal_records:
@@ -216,6 +280,8 @@ def audit_sstw_measured_formal_records(records: list[dict[str, Any]]) -> dict[st
     ]
     detected_count = sum(1 for record in positive_records if record.get("sstw_detected") is True)
     metric_statuses = {str(record.get("metric_status")) for record in records if record.get("metric_status")}
+    formal_positive_count = sum(1 for record in positive_records if formal_sstw_score_record_ready_for_claim(record))
+    formal_clean_negative_count = sum(1 for record in clean_negative_records if formal_sstw_clean_negative_record_ready_for_calibration(record))
     minimum_clean_negative_count = int(records[0].get("minimum_clean_negative_count") or 0) if records else 0
     missing_requirements: list[str] = []
     if not scores:
@@ -224,6 +290,10 @@ def audit_sstw_measured_formal_records(records: list[dict[str, Any]]) -> dict[st
         missing_requirements.append("sstw_clean_negative_measured_formal_records")
     if metric_statuses != {"measured_formal"}:
         missing_requirements.append("sstw_metric_status_measured_formal_only")
+    if formal_positive_count != len(positive_records):
+        missing_requirements.append("sstw_positive_formal_video_detector_evidence")
+    if formal_clean_negative_count != len(clean_negative_records):
+        missing_requirements.append("sstw_clean_negative_formal_video_detector_evidence")
     decision = "PASS" if not missing_requirements else "FAIL"
     return {
         "stage_id": "sstw_measured_formal_result",
@@ -240,6 +310,8 @@ def audit_sstw_measured_formal_records(records: list[dict[str, Any]]) -> dict[st
         "sstw_measured_formal_prompt_count": len(prompts),
         "sstw_measured_formal_attack_count": len(attacks),
         "sstw_measured_formal_detected_count": detected_count,
+        "sstw_formal_video_detector_positive_count": formal_positive_count,
+        "sstw_formal_video_detector_clean_negative_count": formal_clean_negative_count,
         "sstw_measured_formal_detectable_rate": round(detected_count / len(positive_records), 6) if positive_records else None,
         "sstw_measured_formal_score_mean": round(mean(scores), 6) if scores else None,
         "sstw_measured_formal_clean_negative_score_mean": round(mean(clean_negative_scores), 6) if clean_negative_scores else None,

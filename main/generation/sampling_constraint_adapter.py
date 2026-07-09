@@ -65,7 +65,10 @@ def apply_latent_sampling_constraint(
 
     该函数属于项目特定写法。它只在范数预算内对 latent 添加 key-conditioned 方向偏置, 目的是检验 sampling-time weak constraint 是否能增强 trajectory observation, 而不是强制重写生成结果。
     """
-    enabled = method_variant != "key_conditioned_state_space_with_trajectory"
+    enabled = method_variant not in {
+        "sstw_clean_unwatermarked_reference",
+        "trajectory_constraint_disabled_control",
+    }
     key_conditioned = method_variant != "trajectory_constraint_without_key_condition"
     admissibility_enabled = method_variant != "trajectory_constraint_without_admissibility"
     wrong_key_control = method_variant == "trajectory_constraint_wrong_key_control"

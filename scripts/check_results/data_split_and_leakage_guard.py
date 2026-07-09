@@ -22,9 +22,11 @@ RECORD_SOURCES = (
     ("generation_records", "records/generation_records.jsonl"),
     ("formal_quality_motion_semantic_records", "records/formal_quality_motion_semantic_records.jsonl"),
     ("runtime_detection_records", "records/runtime_detection_records.jsonl"),
-    ("protocol_evaluation_matrix_records", "records/protocol_evaluation_matrix_records.jsonl"),
-    ("small_scale_claim_pilot_matrix_records", "records/small_scale_claim_pilot_matrix_records.jsonl"),
+    ("sstw_clean_negative_score_records", "records/sstw_clean_negative_score_records.jsonl"),
+    ("sstw_measured_formal_records", "records/sstw_measured_formal_records.jsonl"),
     ("external_baseline_score_records", "records/external_baseline_score_records.jsonl"),
+    ("fair_detection_calibration_records", "records/fair_detection_calibration_records.jsonl"),
+    ("formal_internal_ablation_variant_records", "records/formal_internal_ablation_variant_records.jsonl"),
     ("validation_internal_ablation_records", "records/validation_internal_ablation_records.jsonl"),
 )
 SPLIT_FIELDS = ("split", "protocol_split", "data_split", "sample_split")

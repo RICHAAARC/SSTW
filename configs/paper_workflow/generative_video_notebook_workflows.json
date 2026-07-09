@@ -12,7 +12,6 @@
     "paper_evidence_postprocess": "probe_paper",
     "generative_video_generation": "probe_paper",
     "generative_video_quality_scoring": "probe_paper",
-    "sstw_mechanism_postprocess": "probe_paper",
     "runtime_attack": "probe_paper",
     "runtime_detection": "probe_paper"
   },
@@ -71,7 +70,7 @@
         "motion_threshold_reuse_check",
         "motion_consistency_exclusion_report",
         "validation_internal_ablation",
-        "adaptive_attack_proxy",
+        "adaptive_attack_formal",
         "replay_and_sketch_gate",
         "claim3_downgrade_gate",
         "statistical_confidence_interval",
@@ -107,20 +106,6 @@
       "stage_plan": [
         "formal_metric_scoring",
         "motion_threshold_reuse_check",
-        "quick_tests_and_harness",
-        "drive_packaging"
-      ]
-    },
-    "sstw_mechanism_postprocess": {
-      "allowed_workflow_profiles": [
-        "probe_paper",
-        "pilot_paper",
-        "full_paper"
-      ],
-      "notebook_path": "paper_workflow/colab_notebooks/sstw_mechanism_postprocess_colab.ipynb",
-      "stage_plan": [
-        "mechanism_postprocess",
-        "protocol_evaluation_matrix_postprocess",
         "quick_tests_and_harness",
         "drive_packaging"
       ]
@@ -225,13 +210,12 @@
       "disabled_stage_names": [
         "external_baseline_colab_preflight",
         "motion_threshold_reuse_check",
-        "mechanism_postprocess",
         "runtime_attack",
         "runtime_detection",
         "external_baseline_source_intake",
         "external_baseline_comparison",
         "validation_internal_ablation",
-        "adaptive_attack_proxy",
+        "adaptive_attack_formal",
         "replay_and_sketch_gate",
         "claim3_downgrade_gate",
         "statistical_confidence_interval",

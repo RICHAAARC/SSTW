@@ -13,7 +13,6 @@ import pytest
 from paper_workflow.notebook_utils.generative_video_model_probe_workflow import (
     build_drive_layout,
     build_workflow_stage_plan,
-    build_mechanism_postprocess_command,
     build_modern_baseline_command_env,
     build_external_baseline_official_bundle_generation_command,
     build_external_baseline_official_resource_bootstrap_command,
@@ -337,12 +336,11 @@ def test_generative_video_colab_notebook_calls_repository_modules() -> None:
     assert "build_protocol_evaluation_matrix_postprocess_command" not in source
     assert "build_runtime_attack_command" not in source
     assert "build_runtime_detection_command" not in source
-    assert "build_pilot_matrix_postprocess_command" not in source
     assert "build_small_scale_claim_pilot_gate_command" not in source
     assert "build_external_baseline_source_intake_command" not in source
     assert "build_external_baseline_comparison_command" not in source
     assert "build_validation_internal_ablation_command" not in source
-    assert "build_adaptive_attack_command" not in source
+    assert "build_adaptive_attack_formal_command" not in source
     assert "build_replay_and_sketch_gate_command" not in source
     assert "build_claim3_downgrade_command" not in source
     assert "build_statistical_confidence_interval_command" not in source
@@ -353,8 +351,6 @@ def test_generative_video_colab_notebook_calls_repository_modules() -> None:
     assert "experiments.generative_video_model_probe.colab_runtime" in helper_text
     assert "experiments.generative_video_model_probe.formal_metric_runner" in helper_text
     assert "experiments.generative_video_model_probe.motion_threshold_calibration" in helper_text
-    assert "experiments.generative_video_model_probe.postprocess_runner" in helper_text
-    assert "experiments.generative_video_model_probe.pilot_matrix_postprocess" in helper_text
     assert "experiments.generative_video_model_probe.motion_consistency_exclusion_report" in helper_text
     assert "experiments.generative_video_model_probe.attack_runner" in helper_text
     assert "experiments.generative_video_model_probe.detection_runner" in helper_text
@@ -390,7 +386,6 @@ def test_split_colab_notebooks_are_profile_driven() -> None:
         "motion_threshold_calibration_colab.ipynb": "motion_threshold_calibration",
         "generative_video_generation_colab.ipynb": "generative_video_generation",
         "generative_video_quality_scoring_colab.ipynb": "generative_video_quality_scoring",
-        "sstw_mechanism_postprocess_colab.ipynb": "sstw_mechanism_postprocess",
         "runtime_attack_colab.ipynb": "runtime_attack",
         "runtime_detection_colab.ipynb": "runtime_detection",
         "formal_comparison_scoring_colab.ipynb": "formal_comparison_scoring",
@@ -506,7 +501,6 @@ def test_notebook_workflow_profile_config_supports_profile_switching() -> None:
     """统一配置层必须能区分 probe_paper、pilot_paper 和 full_paper。"""
     assert default_workflow_profile_for_notebook_role("generative_video_generation") == "probe_paper"
     assert default_workflow_profile_for_notebook_role("generative_video_quality_scoring") == "probe_paper"
-    assert default_workflow_profile_for_notebook_role("sstw_mechanism_postprocess") == "probe_paper"
     assert default_workflow_profile_for_notebook_role("runtime_attack") == "probe_paper"
     assert default_workflow_profile_for_notebook_role("runtime_detection") == "probe_paper"
     assert default_workflow_profile_for_notebook_role("formal_comparison_scoring") == "probe_paper"
@@ -523,10 +517,10 @@ def test_notebook_workflow_profile_config_supports_profile_switching() -> None:
 
     assert "motion_threshold_reuse_check" in build_workflow_stage_plan("probe_paper", "paper_evidence_postprocess")
     assert "validation_internal_ablation" in build_workflow_stage_plan("probe_paper", "paper_evidence_postprocess")
-    assert "adaptive_attack_proxy" in build_workflow_stage_plan("probe_paper", "paper_evidence_postprocess")
+    assert "adaptive_attack_formal" in build_workflow_stage_plan("probe_paper", "paper_evidence_postprocess")
     assert "motion_threshold_reuse_check" not in build_workflow_stage_plan("probe_paper", "paper_gate_and_package")
     assert "validation_internal_ablation" not in build_workflow_stage_plan("probe_paper", "paper_gate_and_package")
-    assert "adaptive_attack_proxy" not in build_workflow_stage_plan("probe_paper", "paper_gate_and_package")
+    assert "adaptive_attack_formal" not in build_workflow_stage_plan("probe_paper", "paper_gate_and_package")
     assert "external_baseline_comparison" not in build_workflow_stage_plan("probe_paper", "paper_gate_and_package")
     assert "external_baseline_comparison" in build_workflow_stage_plan("probe_paper", "formal_comparison_scoring")
     assert "fair_detection_calibration" in build_workflow_stage_plan("probe_paper", "formal_comparison_scoring")
@@ -632,10 +626,6 @@ def test_split_stage_package_dependencies_match_notebook_responsibility() -> Non
         "generative_video_generation_colab",
         "motion_threshold_calibration_colab",
     ]
-    assert _default_required_stage_packages(validation_layout, "sstw_mechanism_postprocess") == [
-        "generative_video_generation_colab",
-        "generative_video_quality_scoring_colab",
-    ]
     assert _default_required_stage_packages(validation_layout, "runtime_attack") == [
         "generative_video_generation_colab",
         "generative_video_quality_scoring_colab",
@@ -644,13 +634,12 @@ def test_split_stage_package_dependencies_match_notebook_responsibility() -> Non
         "generative_video_generation_colab",
         "runtime_attack_colab",
     ]
-    assert formal_required[:2] == ["sstw_mechanism_postprocess_colab", "runtime_detection_colab"]
+    assert formal_required[0] == "runtime_detection_colab"
     assert "external_baseline_formal_reference_videoseal" in formal_required
     assert "external_baseline_formal_reference_wam_frame" in formal_required
     assert evidence_required == [
         "generative_video_generation_colab",
         "generative_video_quality_scoring_colab",
-        "sstw_mechanism_postprocess_colab",
         "runtime_attack_colab",
         "runtime_detection_colab",
         "motion_threshold_calibration_colab",
@@ -659,7 +648,6 @@ def test_split_stage_package_dependencies_match_notebook_responsibility() -> Non
     assert gate_required == [
         "generative_video_generation_colab",
         "generative_video_quality_scoring_colab",
-        "sstw_mechanism_postprocess_colab",
         "runtime_attack_colab",
         "runtime_detection_colab",
         "motion_threshold_calibration_colab",
@@ -863,7 +851,6 @@ def test_profile_specific_commands_pass_protocol_config_path(tmp_path: Path) -> 
     )
 
     validation_commands = [
-        build_mechanism_postprocess_command(evidence_layout),
         build_motion_consistency_exclusion_report_command(evidence_layout),
         build_statistical_confidence_interval_command(evidence_layout),
         build_low_fpr_formal_statistics_command(evidence_layout),
@@ -1063,7 +1050,6 @@ def test_generative_video_drive_packager_creates_archive_and_manifest(tmp_path: 
         "pilot_missing_requirement_count": 0,
     })
     write_json(run_root / "artifacts" / "small_scale_claim_pilot_matrix_decision.json", {
-        "pilot_matrix_postprocess_decision": "PASS",
         "pilot_matrix_record_count": 480,
     })
     write_json(run_root / "artifacts" / "runtime_attack_decision.json", {
@@ -1204,7 +1190,6 @@ def test_generative_video_drive_packager_creates_archive_and_manifest(tmp_path: 
     assert manifest["decision_summary"]["implementation_decision"] == "PASS"
     assert manifest["decision_summary"]["small_scale_pilot_gate_decision"] == "FAIL"
     assert manifest["decision_summary"]["small_scale_pilot_claim_support_status"] == "blocked_until_motion_threshold_calibration"
-    assert manifest["decision_summary"]["small_scale_pilot_matrix_postprocess_decision"] == "PASS"
     assert manifest["decision_summary"]["small_scale_pilot_matrix_record_count"] == 480
     assert manifest["decision_summary"]["runtime_attack_decision"] == "PASS"
     assert manifest["decision_summary"]["runtime_attack_record_count"] == 48

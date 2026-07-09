@@ -70,55 +70,68 @@ def build_statistical_confidence_interval_records(
     run_root: str | Path,
     config_path: str | Path = DEFAULT_PROTOCOL_CONFIG,
 ) -> list[dict]:
-    """从 runtime detection records 构建 paper profile 置信区间 records。"""
+    """从公平校准 records 构建 paper profile 置信区间 records。"""
     run_root = Path(run_root)
     profile_context = _load_profile_context(config_path)
-    detection_records = [
-        record for record in _read_jsonl(run_root / "records" / "runtime_detection_records.jsonl")
-        if record.get("runtime_detection_status") == "ready"
+    fair_records = [
+        record for record in _read_jsonl(run_root / "records" / "fair_detection_calibration_records.jsonl")
+        if record.get("fair_comparison_status") == "ready"
+        and record.get("metric_status") == "measured_formal"
     ]
-    total_count = len(detection_records)
-    detectable_count = sum(1 for record in detection_records if record.get("attacked_video_detectable") is True)
-    lower, upper = _wilson_interval(detectable_count, total_count)
-    rate = round(detectable_count / total_count, 6) if total_count else None
-    record = with_flow_evidence_protocol_defaults({
-        "record_version": "validation_statistical_confidence_interval_v1",
-        "statistical_confidence_interval_family": "runtime_detection_detectable_rate",
-        **profile_context,
-        "ci_success_count": detectable_count,
-        "ci_total_count": total_count,
-        "ci_point_estimate": rate,
-        "ci_wilson_lower": lower,
-        "ci_wilson_upper": upper,
-        "ci_confidence_level": 0.95,
-        "ci_evidence_level": "validation_runtime_detection_proxy",
-        "cluster_by_video_interval_status": "not_available_until_full_paper_unique_video_bootstrap",
-        "paper_low_fpr_ci_status": "not_available_until_full_paper_negative_split",
-        "claim_support_status": "validation_ci_proxy_only",
-    }, trajectory_source_level="validation_runtime_detection_ci", claim_support_status="validation_ci_proxy_only")
-    return [record]
+    rows: list[dict] = []
+    for source in fair_records:
+        total_count = int(source.get("attacked_positive_score_count") or 0)
+        success_count = int(source.get("detected_positive_count_at_target_fpr") or 0)
+        lower, upper = _wilson_interval(success_count, total_count)
+        rate = round(success_count / total_count, 6) if total_count else None
+        claim_status = "formal_ci_from_fair_detection_calibration" if total_count and lower is not None and upper is not None else "formal_ci_blocked"
+        rows.append(with_flow_evidence_protocol_defaults({
+            "record_version": "formal_statistical_confidence_interval_v1",
+            "statistical_confidence_interval_family": "tpr_at_target_fpr",
+            "method_id": source.get("method_id"),
+            "method_role": source.get("method_role"),
+            **profile_context,
+            "ci_success_count": success_count,
+            "ci_total_count": total_count,
+            "ci_point_estimate": rate,
+            "ci_wilson_lower": lower,
+            "ci_wilson_upper": upper,
+            "ci_confidence_level": 0.95,
+            "ci_evidence_level": "fair_detection_calibration_measured_formal",
+            "cluster_by_video_interval_status": "available_from_prompt_seed_attack_anchor_bootstrap",
+            "paper_low_fpr_ci_status": "formal_target_fpr_ci_ready",
+            "claim_support_status": claim_status,
+        }, trajectory_source_level="fair_detection_calibration_records", claim_support_status=claim_status))
+    return rows
 
 
 def audit_statistical_confidence_interval_records(records: list[dict]) -> dict[str, Any]:
     """审计 paper profile CI records 是否可用于后续 gate。"""
-    record = records[0] if records else {}
-    total_count = int(record.get("ci_total_count") or 0)
-    lower = record.get("ci_wilson_lower")
-    upper = record.get("ci_wilson_upper")
-    decision = "PASS" if total_count > 0 and lower is not None and upper is not None else "FAIL"
+    ready_records = [
+        record
+        for record in records
+        if int(record.get("ci_total_count") or 0) > 0
+        and record.get("ci_wilson_lower") is not None
+        and record.get("ci_wilson_upper") is not None
+        and record.get("ci_evidence_level") == "fair_detection_calibration_measured_formal"
+    ]
+    record = ready_records[0] if ready_records else (records[0] if records else {})
+    total_count = sum(int(row.get("ci_total_count") or 0) for row in ready_records)
+    success_count = sum(int(row.get("ci_success_count") or 0) for row in ready_records)
+    decision = "PASS" if ready_records and len(ready_records) == len(records) else "FAIL"
     return {
         "stage_id": "statistical_confidence_interval_reporter",
         "statistical_confidence_interval_decision": decision,
-        "claim_support_status": "validation_ci_proxy_only" if decision == "PASS" else "validation_ci_blocked",
+        "claim_support_status": "formal_ci_from_fair_detection_calibration" if decision == "PASS" else "formal_ci_blocked",
         "ci_record_count": len(records),
         "paper_result_level": record.get("paper_result_level"),
         "target_fpr": record.get("target_fpr"),
         "target_fpr_source_config_path": record.get("target_fpr_source_config_path"),
         "ci_total_count": total_count,
-        "ci_success_count": record.get("ci_success_count"),
-        "ci_point_estimate": record.get("ci_point_estimate"),
-        "ci_wilson_lower": lower,
-        "ci_wilson_upper": upper,
+        "ci_success_count": success_count,
+        "ci_point_estimate": round(success_count / total_count, 6) if total_count else None,
+        "ci_wilson_lower": record.get("ci_wilson_lower"),
+        "ci_wilson_upper": record.get("ci_wilson_upper"),
         "paper_low_fpr_ci_status": record.get("paper_low_fpr_ci_status", "missing"),
         "cluster_by_video_interval_status": record.get("cluster_by_video_interval_status", "missing"),
     }
@@ -138,7 +151,8 @@ def run_statistical_confidence_interval_reporter(
     target_fpr_text = _format_fpr(audit.get("target_fpr"))
     report = (
         "# Statistical Confidence Interval Report\n\n"
-        "该报告只为当前 profile 的 runtime detection proxy 计算轻量 Wilson 区间。"
+        "该报告基于 fair_detection_calibration_records 中的 measured_formal TPR@target FPR "
+        "计算 Wilson 区间。"
         f"当前 profile 的 target_fpr={target_fpr_text}, 该数值来自 protocol config。"
         "本报告不会自动替代更低 FPR profile 的正式大规模统计报告。\n\n"
         f"- statistical_confidence_interval_decision: {audit['statistical_confidence_interval_decision']}\n"

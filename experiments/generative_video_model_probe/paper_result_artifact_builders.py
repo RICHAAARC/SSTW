@@ -31,7 +31,7 @@ DEFAULT_PROTOCOL_CONFIG = "configs/protocol/probe_paper_generative_probe.json"
 SSTW_METHOD_ID = "sstw_key_conditioned_flow_trajectory"
 DEFAULT_TARGET_FPR_LEVELS = (0.1, 0.01, 0.001)
 REAL_WORLD_ATTACK_PROTOCOLS = (
-    "platform_transcode_proxy_runtime",
+    "platform_transcode_runtime",
     "generative_recompression_or_regeneration_attack",
     "screen_recording_or_capture_protocol",
 )
@@ -349,9 +349,15 @@ def build_real_adaptive_attack_records(run_root: str | Path, context: Mapping[st
     records: list[dict[str, Any]] = []
     for protocol in required:
         scoped = by_protocol.get(protocol, [])
-        measured_count = sum(1 for item in scoped if item.get("metric_status") == "measured_formal")
-        proxy_count = sum(1 for item in scoped if "proxy" in str(item.get("claim_support_status") or ""))
-        status = "measured_ready" if measured_count else ("proxy_protocol_ready" if scoped else "missing")
+        formal_scoped = [
+            item for item in scoped
+            if item.get("metric_status") == "measured_formal"
+            and item.get("adaptive_attack_evidence_level") == "formal_adaptive_attack_execution"
+            and item.get("adaptive_robustness_claim_allowed") is True
+        ]
+        measured_count = len(formal_scoped)
+        non_formal_count = len(scoped) - measured_count
+        status = "measured_ready" if measured_count and non_formal_count == 0 else ("non_formal_records_blocked" if scoped else "missing")
         claim_status = "real_adaptive_attack_measured_ready" if measured_count else "real_adaptive_attack_governed_protocol_record_only"
         records.append(with_flow_evidence_protocol_defaults({
             "record_version": "paper_real_adaptive_attack_v1",
@@ -360,9 +366,9 @@ def build_real_adaptive_attack_records(run_root: str | Path, context: Mapping[st
             "non_runtime_attack_protocol": protocol,
             "adaptive_attack_record_count": len(scoped),
             "adaptive_attack_measured_formal_count": measured_count,
-            "adaptive_attack_proxy_record_count": proxy_count,
+            "adaptive_attack_non_formal_record_count": non_formal_count,
             "real_adaptive_attack_status": status,
-            "metric_status": "measured_formal" if measured_count else "missing",
+            "metric_status": "measured_formal" if status == "measured_ready" else "missing",
             "claim_support_status": claim_status,
         }, trajectory_source_level="real_adaptive_attack_summary_from_governed_records", claim_support_status=claim_status))
     return records
@@ -371,17 +377,17 @@ def build_real_adaptive_attack_records(run_root: str | Path, context: Mapping[st
 def audit_real_adaptive_attack_records(records: list[dict[str, Any]], context: Mapping[str, Any]) -> dict[str, Any]:
     """审计 adaptive 协议是否覆盖配置要求。"""
 
-    missing = [str(item.get("non_runtime_attack_protocol")) for item in records if item.get("real_adaptive_attack_status") == "missing"]
-    decision = "PASS" if records and not missing else "FAIL"
+    blocked = [str(item.get("non_runtime_attack_protocol")) for item in records if item.get("real_adaptive_attack_status") != "measured_ready"]
+    decision = "PASS" if records and not blocked else "FAIL"
     return {
         "stage_id": "real_adaptive_attack_builder",
         "paper_result_level": context["paper_result_level"],
         "target_fpr": context["target_fpr"],
         "real_adaptive_attack_decision": decision,
         "real_adaptive_attack_record_count": len(records),
-        "real_adaptive_attack_missing_protocols": missing,
+        "real_adaptive_attack_missing_protocols": blocked,
         "real_adaptive_attack_measured_protocol_count": sum(1 for item in records if item.get("real_adaptive_attack_status") == "measured_ready"),
-        "real_adaptive_attack_proxy_protocol_count": sum(1 for item in records if item.get("real_adaptive_attack_status") == "proxy_protocol_ready"),
+        "real_adaptive_attack_non_formal_protocol_count": sum(1 for item in records if item.get("real_adaptive_attack_status") == "non_formal_records_blocked"),
         "claim_support_status": "real_adaptive_attack_protocol_coverage_ready" if decision == "PASS" else "real_adaptive_attack_protocol_coverage_blocked",
     }
 
@@ -402,19 +408,26 @@ def build_real_world_attack_records(run_root: str | Path, context: Mapping[str, 
     for protocol in REAL_WORLD_ATTACK_PROTOCOLS:
         if protocol in runtime_names:
             source_kind = "runtime_attack_record"
-            status = "proxy_or_runtime_ready"
-            source_count = sum(1 for item in runtime_records if item.get("attack_name") == protocol)
+            scoped_runtime = [item for item in runtime_records if item.get("attack_name") == protocol]
+            source_count = len(scoped_runtime)
+            formal_count = sum(1 for item in scoped_runtime if item.get("runtime_attack_formal_evidence_level") == "formal_runtime_video_transform")
+            status = "formal_runtime_ready" if formal_count == source_count and source_count else "non_formal_records_blocked"
         elif protocol in adaptive_names:
             source_kind = "non_runtime_adaptive_protocol_record"
-            status = "proxy_or_runtime_ready"
-            source_count = sum(1 for item in adaptive_records if (item.get("non_runtime_attack_protocol") or item.get("adaptive_attack_name")) == protocol)
+            scoped_adaptive = [
+                item for item in adaptive_records
+                if (item.get("non_runtime_attack_protocol") or item.get("adaptive_attack_name")) == protocol
+            ]
+            source_count = len(scoped_adaptive)
+            formal_count = sum(1 for item in scoped_adaptive if item.get("adaptive_attack_evidence_level") == "formal_adaptive_attack_execution")
+            status = "formal_non_runtime_ready" if formal_count == source_count and source_count else "non_formal_records_blocked"
         else:
             source_kind = "not_configured_in_current_protocol"
             status = "governed_not_available_for_current_profile"
             source_count = 0
         claim_status = (
             "real_world_attack_protocol_record_ready"
-            if status == "proxy_or_runtime_ready"
+            if status in {"formal_runtime_ready", "formal_non_runtime_ready"}
             else "real_world_attack_not_available_recorded_not_claim_evidence"
         )
         records.append(with_flow_evidence_protocol_defaults({
@@ -425,16 +438,16 @@ def build_real_world_attack_records(run_root: str | Path, context: Mapping[str, 
             "real_world_attack_source_kind": source_kind,
             "real_world_attack_source_record_count": source_count,
             "real_world_attack_status": status,
-            "metric_status": "measured_formal" if status == "proxy_or_runtime_ready" else "missing",
+            "metric_status": "measured_formal" if status in {"formal_runtime_ready", "formal_non_runtime_ready"} else "missing",
             "claim_support_status": claim_status,
         }, trajectory_source_level="real_world_attack_summary_from_protocol_records", claim_support_status=claim_status))
     return records
 
 
 def audit_real_world_attack_records(records: list[dict[str, Any]], context: Mapping[str, Any]) -> dict[str, Any]:
-    """审计真实世界攻击图表输入是否至少覆盖可运行代理。"""
+    """审计真实世界攻击图表输入是否至少覆盖正式攻击记录。"""
 
-    ready_count = sum(1 for item in records if item.get("real_world_attack_status") == "proxy_or_runtime_ready")
+    ready_count = sum(1 for item in records if item.get("real_world_attack_status") in {"formal_runtime_ready", "formal_non_runtime_ready"})
     decision = "PASS" if ready_count > 0 else "FAIL"
     return {
         "stage_id": "real_world_attack_builder",
@@ -446,9 +459,9 @@ def audit_real_world_attack_records(records: list[dict[str, Any]], context: Mapp
         "real_world_attack_missing_or_not_configured_protocols": [
             str(item.get("real_world_attack_protocol"))
             for item in records
-            if item.get("real_world_attack_status") != "proxy_or_runtime_ready"
+            if item.get("real_world_attack_status") not in {"formal_runtime_ready", "formal_non_runtime_ready"}
         ],
-        "claim_support_status": "real_world_attack_proxy_coverage_ready" if decision == "PASS" else "real_world_attack_coverage_blocked",
+        "claim_support_status": "real_world_attack_formal_coverage_ready" if decision == "PASS" else "real_world_attack_coverage_blocked",
     }
 
 

@@ -113,12 +113,13 @@ def test_runtime_detection_runner_scores_attacked_videos(tmp_path: Path) -> None
     assert detection_summary["runtime_detection_detectable_count"] == 3
     assert len(records) == 3
     assert all(record["runtime_detection_status"] == "ready" for record in records)
-    assert all(record["runtime_detection_evidence_level"] == "runtime_attacked_video_file" for record in records)
+    assert all(record["runtime_detection_evidence_level"] == "attacked_video_content_detector" for record in records)
+    assert all(record["sstw_detector_evidence_level"] == "attacked_video_content_detector" for record in records)
+    assert all(record["trajectory_trace_used_for_score"] is False for record in records)
     assert all(record["S_runtime_attack_detection"] is not None for record in records)
-    assert all(record["S_path_inv"] is not None for record in records)
-    assert all(record["S_velocity"] is not None for record in records)
+    assert all(record["sstw_raw_detector_score"] is not None for record in records)
     assert all(record["S_final_conservative"] is not None for record in records)
-    assert all(record["flow_state_admissibility_status"] == "proxy_admissible" for record in records)
+    assert all(record["flow_state_admissibility_status"] == "formal_video_detector_admissible" for record in records)
     assert (run_root / "tables" / "runtime_detection_table.csv").exists()
     assert (run_root / "artifacts" / "runtime_detection_decision.json").exists()
     assert (run_root / "reports" / "runtime_detection_report.md").exists()
@@ -158,11 +159,11 @@ def test_probe_pilot_and_full_paper_attack_protocol_registers_top_tier_coverage(
     assert set(PILOT_PAPER_RUNTIME_ATTACKS) == set(FULL_PAPER_RUNTIME_ATTACKS)
     assert pilot_audit["missing_non_runtime_attack_protocols"] == []
     assert {
-        "platform_transcode_proxy_runtime",
+        "platform_transcode_runtime",
         "irregular_frame_drop_runtime",
         "frame_insert_noise_runtime",
         "speed_change_runtime",
-        "denoise_proxy_runtime",
+        "denoise_runtime",
         "gamma_correction_runtime",
         "sharpen_runtime",
         "compression_color_jitter_combined_runtime",
@@ -275,11 +276,11 @@ def test_new_top_tier_runtime_attack_transforms_are_executable_on_frames() -> No
         "color_jitter_runtime",
         "jpeg_frame_compression_runtime",
         "compression_noise_combined_runtime",
-        "platform_transcode_proxy_runtime",
+        "platform_transcode_runtime",
         "irregular_frame_drop_runtime",
         "frame_insert_noise_runtime",
         "speed_change_runtime",
-        "denoise_proxy_runtime",
+        "denoise_runtime",
         "gamma_correction_runtime",
         "sharpen_runtime",
         "compression_color_jitter_combined_runtime",
@@ -294,4 +295,5 @@ def test_new_top_tier_runtime_attack_transforms_are_executable_on_frames() -> No
             "compression",
             "combined",
         }
-        assert metadata["runtime_attack_implementation_level"] == "repository_lightweight_runtime_transform"
+        assert metadata["runtime_attack_implementation_level"] == "formal_runtime_video_transform"
+        assert metadata["runtime_attack_proxy_free"] is True

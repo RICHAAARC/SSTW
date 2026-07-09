@@ -12,6 +12,7 @@ from typing import Any
 
 from main.external_baselines.baseline_registry import audit_external_baseline_records
 from experiments.generative_video_model_probe.external_baseline_runner import run_external_baseline_status
+from main.generation.sampling_constraint_adapter import apply_latent_sampling_constraint
 from main.protocol.flow_evidence_fields import (
     with_flow_evidence_protocol_defaults,
     with_flow_evidence_protocol_defaults_many,
@@ -88,6 +89,22 @@ PROFILE_SETTINGS = {
 
 def _read_json(path: str | Path) -> dict:
     return json.loads(Path(path).read_text(encoding="utf-8"))
+
+
+def _load_default_sampling_constraint_configs() -> tuple[dict[str, Any], dict[str, Any]]:
+    """读取 SSTW sampling-time 嵌入所需的共享配置。"""
+
+    constraint_config = _read_json("configs/generation/sampling_constraint.json")
+    schedule_bundle = _read_json("configs/generation/lambda_schedules.json")
+    default_schedule_id = str(schedule_bundle["default_schedule_id"])
+    schedules = {
+        str(item["lambda_schedule_id"]): item
+        for item in schedule_bundle.get("schedules", [])
+        if item.get("lambda_schedule_id")
+    }
+    if default_schedule_id not in schedules:
+        raise KeyError(f"缺少默认 lambda schedule: {default_schedule_id}")
+    return constraint_config, schedules[default_schedule_id]
 
 
 def _select_dtype(torch_module: Any) -> Any:
@@ -200,6 +217,10 @@ def _build_generation_plan(prompt_suite: dict, profile: str, model_id: str, cros
                 item = {**model_item, **prompt, **seed}
                 item["prompt_suite_role"] = prompt.get("prompt_suite_role")
                 item["seed_suite_role"] = seed.get("prompt_suite_role")
+                item["sample_role"] = "attacked_positive_source"
+                item["generation_sample_role"] = "attacked_positive_source"
+                item["method_variant"] = "key_conditioned_state_space_with_trajectory"
+                item["watermark_embedding_status"] = "sampling_time_key_conditioned_latent_constraint"
                 plan.append(item)
     return plan
 
@@ -216,6 +237,7 @@ def run_colab_probe(output_root: str | Path, prompt_suite_path: str | Path, prof
     output_root = Path(output_root)
     prompt_suite = _read_json(prompt_suite_path)
     settings = PROFILE_SETTINGS[profile]
+    constraint_config, schedule_config = _load_default_sampling_constraint_configs()
     dtype = _select_dtype(torch)
     hf_token_status = "provided" if os.environ.get("HF_TOKEN") else "not_provided"
     plan = _build_generation_plan(prompt_suite, profile, model_id, cross_model_id)
@@ -239,21 +261,50 @@ def run_colab_probe(output_root: str | Path, prompt_suite_path: str | Path, prof
             active_pipe_by_model[model_for_item] = _load_video_generation_pipeline(model_for_item, dtype)
         pipe = active_pipe_by_model[model_for_item]
         generator = torch.Generator(device="cuda").manual_seed(int(item["seed_value"]))
-        trace_id = f"trace_{index:04d}"
+        trace_id = f"trace_{index:04d}_{item['sample_role']}"
         step_stats: list[dict] = []
+        previous_latents: Any | None = None
+        applied_step_count = 0
 
         def capture_step(pipe_instance: Any, step_index: int, timestep: Any, callback_kwargs: dict) -> dict:  # pragma: no cover - Colab GPU path
+            nonlocal previous_latents
+            nonlocal applied_step_count
             latents = callback_kwargs.get("latents")
+            constraint_record: dict[str, Any] = {
+                "sampling_constraint_enabled": False,
+                "constraint_apply_status": "not_available",
+                "constraint_apply_reason": "latents_not_available",
+            }
+            if latents is not None:
+                constrained_latents, constraint_record = apply_latent_sampling_constraint(
+                    latents,
+                    int(step_index),
+                    int(settings["num_inference_steps"]),
+                    constraint_config,
+                    schedule_config,
+                    str(item["method_variant"]),
+                    f"{item['generation_model_id']}::{item['prompt_id']}::{item['seed_id']}",
+                    previous_latents=previous_latents,
+                )
+                previous_latents = constrained_latents.detach().clone()
+                callback_kwargs["latents"] = constrained_latents
+                latents = constrained_latents
+                if constraint_record.get("constraint_apply_status") == "applied":
+                    applied_step_count += 1
             stats = _tensor_stats(latents) if latents is not None else {"latent_norm": None, "latent_mean": None, "latent_std": None}
             step_stats.append({
                 "trajectory_trace_id": trace_id,
                 "trajectory_step_index": int(step_index),
                 "trajectory_timestep": float(timestep) if hasattr(timestep, "__float__") else str(timestep),
+                "sample_role": item["sample_role"],
+                "method_variant": item["method_variant"],
+                "watermark_embedding_status": item["watermark_embedding_status"],
+                **constraint_record,
                 **stats,
             })
             return callback_kwargs
 
-        video_path = output_root / "videos" / f"{item['generation_model_id'].replace('/', '_')}_{item['prompt_id']}_{item['seed_id']}.mp4"
+        video_path = output_root / "videos" / f"{item['generation_model_id'].replace('/', '_')}_{item['prompt_id']}_{item['seed_id']}_{item['sample_role']}.mp4"
         started = time.time()
         try:
             with suppress_third_party_progress_output("wan21_runtime_single_video_generation"):
@@ -292,6 +343,18 @@ def run_colab_probe(output_root: str | Path, prompt_suite_path: str | Path, prof
             "gpu_name": gpu_name,
             "gpu_memory_mb": gpu_memory_mb,
             "cross_model_role": item["cross_model_role"],
+            "sample_role": item["sample_role"],
+            "generation_sample_role": item["sample_role"],
+            "method_variant": item["method_variant"],
+            "watermark_embedding_status": item["watermark_embedding_status"],
+            "sampling_constraint_config_id": constraint_config.get("sampling_constraint_config_id"),
+            "lambda_schedule_id": schedule_config.get("lambda_schedule_id"),
+            "sampling_constraint_applied_step_count": applied_step_count,
+            "formal_generation_watermark_embedding_level": (
+                "sampling_time_key_conditioned_latent_constraint"
+                if item["sample_role"] != "clean_negative"
+                else "clean_unwatermarked_reference"
+            ),
             "prompt_id": item["prompt_id"],
             "prompt_text_hash": sha256(item["prompt_text"].encode("utf-8")).hexdigest()[:16],
             "prompt_category": item["prompt_category"],

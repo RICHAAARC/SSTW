@@ -32,7 +32,6 @@ SERVER_PIPELINES = (
     "motion_threshold_calibration",
     "generative_video_generation",
     "generative_video_quality_scoring",
-    "sstw_mechanism_postprocess",
     "runtime_attack",
     "runtime_detection",
     "external_baseline_references",
@@ -45,7 +44,6 @@ SERVER_PIPELINES = (
 GENERATIVE_VIDEO_SPLIT_ROLE_ORDER = (
     "generative_video_generation",
     "generative_video_quality_scoring",
-    "sstw_mechanism_postprocess",
     "runtime_attack",
     "runtime_detection",
 )
@@ -54,7 +52,6 @@ PIPELINE_ROLE_ORDER = {
     "motion_threshold_calibration": ("motion_threshold_calibration",),
     "generative_video_generation": ("generative_video_generation",),
     "generative_video_quality_scoring": ("generative_video_quality_scoring",),
-    "sstw_mechanism_postprocess": ("sstw_mechanism_postprocess",),
     "runtime_attack": ("runtime_attack",),
     "runtime_detection": ("runtime_detection",),
     "external_baseline_references": ("external_baseline_formal_scoring",),

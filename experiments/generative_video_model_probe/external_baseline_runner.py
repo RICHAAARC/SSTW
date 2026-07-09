@@ -321,9 +321,9 @@ def _proposed_method_row(runtime_detection_records: list[dict[str, Any]]) -> dic
     attack_names = {str(record.get("attack_name")) for record in ready_records if record.get("attack_name")}
     return {
         "method_id": "sstw_key_conditioned_flow_trajectory",
-        "method_role": "proposed_method_runtime_proxy",
+        "method_role": "proposed_method_runtime_detection_summary",
         "comparison_scope": "runtime_detection_common_protocol",
-        "metric_status": "measured_proxy" if ready_records else "unsupported",
+        "metric_status": "unsupported",
         "external_baseline_name": "not_applicable",
         "external_baseline_family": "not_applicable",
         "external_baseline_layer": "proposed_method",
@@ -336,7 +336,7 @@ def _proposed_method_row(runtime_detection_records: list[dict[str, Any]]) -> dic
         "external_baseline_distance_mean": None,
         "baseline_score_margin_mean": None,
         "external_baseline_formal_incomplete_record_count": 0,
-        "claim_support_status": "runtime_proxy_comparison_not_claim_supporting",
+        "claim_support_status": "sstw_formal_result_written_by_separate_adapter",
     }
 
 
@@ -353,22 +353,18 @@ def build_external_baseline_comparison_table_rows(
     for baseline_name, group in sorted(grouped.items()):
         first = group[0]
         formal_rows = [record for record in group if _formal_score_record_ready_for_claim(record)]
-        measured_rows = [
-            record
-            for record in group
-            if record.get("metric_status") == "measured_proxy" or _formal_score_record_ready_for_claim(record)
-        ]
+        measured_rows = formal_rows
         has_formal_rows = bool(formal_rows)
         attack_names = {str(record.get("attack_name")) for record in measured_rows if record.get("attack_name")}
         rows.append({
             "method_id": baseline_name,
             "method_role": f"external_baseline_{first.get('external_baseline_layer')}",
-            "comparison_scope": "external_baseline_formal_adapter" if has_formal_rows else ("external_baseline_adapter_proxy" if measured_rows else "external_baseline_result_missing"),
-            "metric_status": "measured_formal" if has_formal_rows else ("measured_proxy" if measured_rows else "unsupported"),
+            "comparison_scope": "external_baseline_formal_adapter" if has_formal_rows else "external_baseline_result_missing",
+            "metric_status": "measured_formal" if has_formal_rows else "unsupported",
             "external_baseline_name": baseline_name,
             "external_baseline_family": first.get("external_baseline_family"),
             "external_baseline_layer": first.get("external_baseline_layer"),
-            "external_baseline_score_status": "measured_formal" if has_formal_rows else ("measured_proxy" if measured_rows else first.get("external_baseline_score_status")),
+            "external_baseline_score_status": "measured_formal" if has_formal_rows else first.get("external_baseline_score_status"),
             "external_baseline_result_used_for_claim": bool(has_formal_rows and first.get("external_baseline_layer") == "modern_external_baseline"),
             "comparison_record_count": len(group),
             "comparison_attack_count": len(attack_names),
@@ -396,11 +392,7 @@ def audit_external_baseline_comparison_records(records: list[dict[str, Any]]) ->
         for record in formal_candidate_records
         if not _formal_score_record_ready_for_claim(record)
     ]
-    measured_records = [
-        record
-        for record in records
-        if record.get("metric_status") == "measured_proxy" or _formal_score_record_ready_for_claim(record)
-    ]
+    measured_records = formal_records
     measured_adapter_names = {str(record.get("external_baseline_name")) for record in measured_records if record.get("external_baseline_name")}
     formal_adapter_names = {str(record.get("external_baseline_name")) for record in formal_records if record.get("external_baseline_name")}
     modern_formal_adapter_names = {
@@ -409,7 +401,7 @@ def audit_external_baseline_comparison_records(records: list[dict[str, Any]]) ->
         if record.get("external_baseline_layer") == "modern_external_baseline"
     }
     unsupported_records = [record for record in records if record.get("metric_status") == "unsupported"]
-    decision = "PASS" if records and measured_adapter_names else "FAIL"
+    decision = "PASS" if records and formal_adapter_names else "FAIL"
     return {
         "stage_id": "external_baseline_comparison_audit",
         "external_baseline_comparison_decision": decision,
@@ -425,7 +417,7 @@ def audit_external_baseline_comparison_records(records: list[dict[str, Any]]) ->
         "modern_external_baseline_formal_measured_adapter_names": sorted(modern_formal_adapter_names),
         "external_baseline_unsupported_adapter_count": len(unsupported_records),
         "external_baseline_comparison_status": "adapter_records_written" if decision == "PASS" else "comparison_records_missing",
-        "external_baseline_claim_support_status": "external_baseline_formal_and_proxy_records_written" if formal_records else ("external_baseline_proxy_comparison_not_claim_supporting" if decision == "PASS" else "external_baseline_comparison_blocked"),
+        "external_baseline_claim_support_status": "external_baseline_formal_records_written" if formal_records else "external_baseline_comparison_blocked",
     }
 
 
@@ -455,9 +447,8 @@ def write_external_baseline_comparison_outputs(
     write_json(run_root / EXTERNAL_BASELINE_EXECUTION_MANIFEST, execution_manifest)
     report = (
         "# External Baseline Comparison Report\n\n"
-        "该报告由 `external_baseline/` adapter 产出, 用于证明本项目已经具备 baseline 对比结果落盘链路。"
-        "当前显式同步 baseline 仍属于 proxy control, modern video watermark baseline 在 adapter 未接入前保持 unsupported, "
-        "因此本报告不支持正向论文主 claim。\n\n"
+        "该报告由 `external_baseline/` adapter 产出, 只把具备项目内 official run、"
+        "clean negative 和 formal score extraction 证据的记录计入 measured_formal。\n\n"
         f"- external_baseline_comparison_decision: {audit['external_baseline_comparison_decision']}\n"
         f"- external_baseline_comparison_record_count: {audit['external_baseline_comparison_record_count']}\n"
         f"- external_baseline_comparison_ready_count: {audit['external_baseline_comparison_ready_count']}\n"

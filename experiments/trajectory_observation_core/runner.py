@@ -1,4 +1,4 @@
-"""运行 B4 trajectory observation core probe。"""
+"""运行 trajectory_observation_core_probe trajectory observation core probe。"""
 
 from __future__ import annotations
 
@@ -51,7 +51,7 @@ def _sample_index(sample_id: str) -> int:
 
 
 def build_event_and_trace_records(config: dict) -> tuple[list[dict], list[dict]]:
-    """构建 B4 event records 和 trajectory trace records。"""
+    """构建 trajectory_observation_core_probe event records 和 trajectory trace records。"""
     samples = build_synthetic_samples(SPLITS, SAMPLE_ROLES, int(config["synthetic"]["sample_count_per_cell"]), tuple(config["synthetic"]["latent_shape"]))
     attacks = default_synthetic_attacks()
     method_variants = config["methods"]["method_variants"]
@@ -72,7 +72,7 @@ def build_event_and_trace_records(config: dict) -> tuple[list[dict], list[dict]]
                 "trajectory_enabled": True,
                 "trajectory_source": trace.trajectory_source,
                 "trajectory_source_status": trace.trajectory_source_status,
-                "trajectory_status_reason": "trajectory trace provided by B4 latent replay proxy",
+                "trajectory_status_reason": "trajectory trace provided by trajectory_observation_core_probe latent replay proxy",
                 "trajectory_trace_id": trace.trajectory_trace_id,
                 "trajectory_time_grid_id": trace.trajectory_time_grid_id,
                 "trajectory_num_steps": trace.trajectory_num_steps,
@@ -104,7 +104,7 @@ def build_event_and_trace_records(config: dict) -> tuple[list[dict], list[dict]]
                     "trajectory_enabled": trajectory_enabled,
                     "trajectory_source": trace.trajectory_source,
                     "trajectory_source_status": trace.trajectory_source_status,
-                    "trajectory_status_reason": "trajectory disabled for core baseline" if not trajectory_enabled else "trajectory trace provided by B4 latent replay proxy",
+                    "trajectory_status_reason": "trajectory disabled for core baseline" if not trajectory_enabled else "trajectory trace provided by trajectory_observation_core_probe latent replay proxy",
                     "trajectory_trace_id": trace.trajectory_trace_id,
                     "trajectory_time_grid_id": trace.trajectory_time_grid_id,
                     "trajectory_num_steps": trace.trajectory_num_steps,
@@ -174,7 +174,7 @@ def enrich_records_with_audit(records: list[dict], audit: dict) -> list[dict]:
 
 
 def run(output_root: str | Path) -> dict:
-    """运行 B4 并写出 records、tables、reports 和 decision。"""
+    """运行 trajectory_observation_core_probe 并写出 records、tables、reports 和 decision。"""
     output_root = Path(output_root)
     config = _build_config()
     raw_records, trajectory_records = build_event_and_trace_records(config)
@@ -209,7 +209,7 @@ def run(output_root: str | Path) -> dict:
     write_csv(correlation_table_path, [{"correlation_name": "trajectory_payload", "correlation_value": audit["trajectory_payload_correlation"], "correlation_status": audit["correlation_status"]}, {"correlation_name": "trajectory_state", "correlation_value": audit["trajectory_state_correlation"], "correlation_status": audit["correlation_status"]}])
     write_csv(runtime_table_path, [{"trajectory_runtime_sec": r["trajectory_runtime_sec"], "trajectory_runtime_status": r["trajectory_runtime_status"]} for r in records if r["method_variant"] == "key_conditioned_state_space_with_trajectory"][:10])
     report_path.parent.mkdir(parents=True, exist_ok=True)
-    report_path.write_text("# Trajectory Observation Report\n\nB4 lightweight trajectory observation core probe completed.\n", encoding="utf-8")
+    report_path.write_text("# Trajectory Observation Report\n\ntrajectory_observation_core_probe lightweight trajectory observation core probe completed.\n", encoding="utf-8")
     control_report_path.write_text("# Trajectory Control Report\n\n" + json.dumps(control_records, ensure_ascii=False, indent=2), encoding="utf-8")
     audit_report_path.write_text("# Trajectory Mechanism Audit\n\n" + json.dumps(audit, ensure_ascii=False, indent=2), encoding="utf-8")
     implementation_pass = all([event_path.exists(), trajectory_path.exists(), control_path.exists(), table_path.exists(), all(r["trajectory_source_status"] for r in records), all(r["trajectory_state_adapter_status"] for r in records)])
@@ -221,7 +221,7 @@ def run(output_root: str | Path) -> dict:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="运行 B4 trajectory observation core probe。")
+    parser = argparse.ArgumentParser(description="运行 trajectory_observation_core_probe trajectory observation core probe。")
     parser.add_argument("--output-root", default="outputs/runs/trajectory_observation_core_probe")
     args = parser.parse_args()
     print(json.dumps(run(args.output_root), ensure_ascii=False, indent=2, sort_keys=True))

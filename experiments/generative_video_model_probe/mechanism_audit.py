@@ -1,10 +1,10 @@
-"""B5 机制 gate 审计。"""
+"""generative_video_model_probe 机制 gate 审计。"""
 
 from __future__ import annotations
 
 
 def audit_mechanism(runtime_status: dict, generalization_status: dict) -> dict:
-    """根据 B5 gate 条件给出严格审计结果。"""
+    """根据 generative_video_model_probe gate 条件给出严格审计结果。"""
     runnable = runtime_status.get("generation_model_runnable_status") == "runnable"
     generation_model_main_table_ready = False
     trajectory_observation_gain_confirmed = False
@@ -32,6 +32,6 @@ def audit_mechanism(runtime_status: dict, generalization_status: dict) -> dict:
         "negative_state_over_threshold_count": None,
         "attacked_negative_fpr": None,
         "formal_claim_status": "blocked_until_gpu_generation_run" if not mechanism_pass else "supported_by_generation_records",
-        "top_conference_b5_gate": "FAIL" if not mechanism_pass else "PASS",
+        "top_conference_generative_video_model_probe_gate": "FAIL" if not mechanism_pass else "PASS",
         "mechanism_pass": mechanism_pass,
     }

@@ -6,5 +6,5 @@
     "quality_lpips"
   ],
   "quality_lpips_status": "disabled",
-  "quality_metric_failure_reason": "lpips is disabled in lightweight B2 proxy"
+  "quality_metric_failure_reason": "lpips is disabled in lightweight real_video_latent_transfer_check proxy"
 }

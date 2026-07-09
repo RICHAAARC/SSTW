@@ -1,4 +1,4 @@
-"""分析 B3 key condition 消融。"""
+"""分析 state_space_inference_formalization key condition 消融。"""
 
 from __future__ import annotations
 

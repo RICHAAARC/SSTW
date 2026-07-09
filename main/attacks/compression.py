@@ -1,4 +1,4 @@
-"""定义 B2 压缩攻击代理。"""
+"""定义 real_video_latent_transfer_check 压缩攻击代理。"""
 
 from __future__ import annotations
 

@@ -1,4 +1,4 @@
-"""审计 B4 trajectory observation core probe。"""
+"""审计 trajectory_observation_core_probe trajectory observation core probe。"""
 
 from __future__ import annotations
 
@@ -20,7 +20,7 @@ def _mean_trajectory(records: list[dict], sample_role: str) -> float:
 
 
 def audit_mechanism(records: list[dict], control_records: list[dict], config: dict) -> dict:
-    """返回 B4 机制审计结果。"""
+    """返回 trajectory_observation_core_probe 机制审计结果。"""
     core_score = _mean_score(records, "key_conditioned_state_space_inference")
     trajectory_score = _mean_score(records, "key_conditioned_state_space_with_trajectory")
     trajectory_gain = round(trajectory_score - core_score, 6)

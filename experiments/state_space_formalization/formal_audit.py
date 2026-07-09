@@ -1,4 +1,4 @@
-"""审计 B3 state-space formalization gate。"""
+"""审计 state_space_inference_formalization state-space formalization gate。"""
 
 from __future__ import annotations
 
@@ -20,7 +20,7 @@ def _mean_score(records: list[dict], method_variant: str, attack_name: str, samp
 
 
 def audit_formalization(records: list[dict], ablation_records: list[dict], generalization_records: list[dict], target_fpr: float) -> dict:
-    """返回 B3 formalization 机制审计结果。"""
+    """返回 state_space_inference_formalization formalization 机制审计结果。"""
     aggregators = ["conv1d_temporal_aggregator", "gru_temporal_aggregator", "transformer_temporal_aggregator"]
     beats_temporal_aggregators = all(any(_mean_score(records, "key_conditioned_state_space_inference", attack, "attacked_positive") > _mean_score(records, method, attack, "attacked_positive") for attack in COMPLEX_ATTACKS) for method in aggregators)
     beats_generic_ssm = all(_mean_score(records, "key_conditioned_state_space_inference", attack, "attacked_positive") > _mean_score(records, "generic_state_space_model", attack, "attacked_positive") for attack in COMPLEX_ATTACKS)

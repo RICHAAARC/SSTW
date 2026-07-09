@@ -1,4 +1,4 @@
-﻿"""将 B6 sampling-time constraint Colab probe 结果打包到 Google Drive。"""
+﻿"""将 sampling_time_constraint_probe sampling-time constraint Colab probe 结果打包到 Google Drive。"""
 
 from __future__ import annotations
 
@@ -49,7 +49,7 @@ def package_sampling_time_constraint_colab_run(
     workflow_profile: str | None = None,
     stage_package_id: str | None = None,
 ) -> dict:
-    """打包 B6 Colab run_root。"""
+    """打包 sampling_time_constraint_probe Colab run_root。"""
     run_root_path = Path(run_root)
     if not run_root_path.exists():
         raise FileNotFoundError(run_root_path)
@@ -123,7 +123,7 @@ def package_sampling_time_constraint_colab_run(
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="打包 B6 sampling-time constraint Colab probe。")
+    parser = argparse.ArgumentParser(description="打包 sampling_time_constraint_probe sampling-time constraint Colab probe。")
     parser.add_argument("--run-root", required=True)
     parser.add_argument("--drive-project-root", default=os.environ.get("SSTW_DRIVE_PROJECT_ROOT", DEFAULT_DRIVE_PROJECT_ROOT))
     parser.add_argument("--workflow-profile", default=os.environ.get("SSTW_WORKFLOW_PROFILE", DEFAULT_WORKFLOW_PROFILE))

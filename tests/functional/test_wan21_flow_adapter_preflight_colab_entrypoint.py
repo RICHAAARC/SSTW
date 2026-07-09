@@ -18,7 +18,7 @@ from paper_workflow.notebook_utils.flow_model_adapter_preflight_workflow import 
 
 @pytest.mark.quick
 def test_wan21_preflight_workflow_uses_dedicated_drive_layout() -> None:
-    """真实 Wan2.1 GPU preflight 必须写入独立 run 目录, 不得混入 B6 输出。"""
+    """真实 Wan2.1 GPU preflight 必须写入独立 run 目录, 不得混入 sampling_time_constraint_probe 输出。"""
     layout = build_drive_layout()
     command = build_wan21_flow_adapter_preflight_command(layout)
     package_command = build_drive_packaging_command(layout)
@@ -74,7 +74,7 @@ def test_wan21_preflight_colab_notebook_calls_repository_module() -> None:
     assert "pytest -q" in source
     assert "tools/harness/run_all_audits.py" in source
     assert "adapter_preflight_decision" in source
-    assert "不得进入 B6 sampling-time constraint" in source
+    assert "不得进入 sampling_time_constraint_probe sampling-time constraint" in source
     assert "build_drive_packaging_command" in source
     assert "打包到 Google Drive packages/" not in source
     assert "package_dir = Path(layout['drive_package_dir'])" not in source

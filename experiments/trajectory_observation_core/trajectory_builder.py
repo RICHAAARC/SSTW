@@ -1,4 +1,4 @@
-"""B4 trajectory trace 构建入口。"""
+"""trajectory_observation_core_probe trajectory trace 构建入口。"""
 
 from __future__ import annotations
 

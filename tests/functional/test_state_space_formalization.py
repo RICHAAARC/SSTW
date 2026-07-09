@@ -1,4 +1,4 @@
-"""验证 B3 state-space inference formalization 的轻量闭环。"""
+"""验证 state_space_inference_formalization state-space inference formalization 的轻量闭环。"""
 
 from __future__ import annotations
 
@@ -13,7 +13,7 @@ from main.protocol.record_writer import read_jsonl
 
 @pytest.mark.quick
 def test_state_space_formalization_builds_outputs(tmp_path: Path) -> None:
-    """B3 runner 必须生成 event、state、ablation、generalization 和 decision。"""
+    """state_space_inference_formalization runner 必须生成 event、state、ablation、generalization 和 decision。"""
     output_root = tmp_path / "state_space_inference_formalization"
     summary = run(output_root)
 
@@ -42,7 +42,7 @@ def test_state_space_formalization_builds_outputs(tmp_path: Path) -> None:
 
 @pytest.mark.quick
 def test_state_space_formalization_core_mechanism_gates(tmp_path: Path) -> None:
-    """B3 机制审计必须证明 key condition、admissibility 和泛化 gate。"""
+    """state_space_inference_formalization 机制审计必须证明 key condition、admissibility 和泛化 gate。"""
     output_root = tmp_path / "state_space_inference_formalization"
     summary = run(output_root)
     audit = summary["audit"]

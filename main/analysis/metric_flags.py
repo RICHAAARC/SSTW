@@ -1,4 +1,4 @@
-"""汇总 B2 质量和时间一致性 gate。"""
+"""汇总 real_video_latent_transfer_check 质量和时间一致性 gate。"""
 
 from __future__ import annotations
 

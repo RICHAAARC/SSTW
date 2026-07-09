@@ -110,7 +110,7 @@ def compute_clip_text_video_similarity(
 ) -> dict:
     """使用 CLIP 计算 prompt 文本与采样视频帧之间的语义一致性。
 
-    这一实现属于项目特定写法: B5 阶段需要把真实生成视频的语义检查落到 governed records 中, 因此函数返回完整状态字段, 而不是只返回一个浮点数。
+    这一实现属于项目特定写法: generative_video_model_probe 阶段需要把真实生成视频的语义检查落到 governed records 中, 因此函数返回完整状态字段, 而不是只返回一个浮点数。
     在其他项目中可复用的部分包括: 有界帧采样、可选模型依赖、失败原因显式记录、文本与图像 embedding 的余弦相似度计算。
     """
     path = Path(video_path)

@@ -1,4 +1,4 @@
-"""分析 B3 泛化记录。"""
+"""分析 state_space_inference_formalization 泛化记录。"""
 
 from __future__ import annotations
 

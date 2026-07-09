@@ -1,4 +1,4 @@
-"""管理 B5 生成式视频模型候选项。"""
+"""管理 generative_video_model_probe 生成式视频模型候选项。"""
 
 from __future__ import annotations
 

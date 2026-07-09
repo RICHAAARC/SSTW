@@ -8,7 +8,7 @@ from main.trajectory.trajectory_observation import compute_trajectory_observatio
 
 
 def score_with_trajectory(sample_role: str, attack_name: str, method_variant: str, sample_index: int) -> dict:
-    """计算 B4 方法变体的检测分数。"""
+    """计算 trajectory_observation_core_probe 方法变体的检测分数。"""
     if method_variant == "key_conditioned_state_space_inference":
         base = run_formal_inference(sample_role, attack_name, "key_conditioned_state_space_inference")
         base["S_trajectory_observation"] = None

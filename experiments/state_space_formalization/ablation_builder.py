@@ -1,4 +1,4 @@
-"""B3 ablation records 构建入口。"""
+"""state_space_inference_formalization ablation records 构建入口。"""
 
 from __future__ import annotations
 

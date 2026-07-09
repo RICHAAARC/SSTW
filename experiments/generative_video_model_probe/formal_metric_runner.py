@@ -1,4 +1,4 @@
-"""对 B5 Colab 生成视频执行文件级质量、运动与语义度量。"""
+"""对 generative_video_model_probe Colab 生成视频执行文件级质量、运动与语义度量。"""
 
 from __future__ import annotations
 
@@ -314,7 +314,7 @@ def run_formal_metric_audit(
     semantic_consistency_threshold: float = DEFAULT_SEMANTIC_THRESHOLD,
     enable_semantic_metric: bool = True,
 ) -> dict:
-    """执行 B5 文件级正式 metric 计算并写出 governed artifacts。"""
+    """执行 generative_video_model_probe 文件级正式 metric 计算并写出 governed artifacts。"""
     run_root = Path(run_root)
     records = build_formal_metric_records(
         run_root,
@@ -346,7 +346,7 @@ def run_formal_metric_audit(
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="对 B5 Colab 生成视频执行文件级质量、运动与语义度量。")
+    parser = argparse.ArgumentParser(description="对 generative_video_model_probe Colab 生成视频执行文件级质量、运动与语义度量。")
     parser.add_argument("--run-root", required=True)
     parser.add_argument("--prompt-suite-path", default="")
     parser.add_argument("--semantic-model-id", default=DEFAULT_CLIP_MODEL_ID)

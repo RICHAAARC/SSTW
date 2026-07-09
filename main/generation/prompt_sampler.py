@@ -1,4 +1,4 @@
-"""读取 B5 prompt 配置。"""
+"""读取 generative_video_model_probe prompt 配置。"""
 
 from __future__ import annotations
 

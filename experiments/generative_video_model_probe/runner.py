@@ -1,4 +1,4 @@
-"""运行 B5 generative video model probe readiness 框架。"""
+"""运行 generative_video_model_probe generative video model probe readiness 框架。"""
 
 from __future__ import annotations
 
@@ -96,7 +96,7 @@ def build_quality_motion_semantic_records(generation_records: list[dict], runnab
 
 
 def run(output_root: str | Path) -> dict:
-    """运行 B5 readiness 框架并写出 governed artifacts。"""
+    """运行 generative_video_model_probe readiness 框架并写出 governed artifacts。"""
     output_root = Path(output_root)
     config = _build_config()
     runtime_status = build_generation_runtime_status(requires_gpu=bool(config["protocol"]["requires_gpu_validation"]))
@@ -147,7 +147,7 @@ def run(output_root: str | Path) -> dict:
     write_json(manifest_path, manifest)
 
     reports_dir.mkdir(parents=True, exist_ok=True)
-    (reports_dir / "generative_video_model_report.md").write_text("# Generative Video Model Report\n\nB5 真实生成视频模型验证未运行。原因记录在 decision 与 generation records 中。\n", encoding="utf-8")
+    (reports_dir / "generative_video_model_report.md").write_text("# Generative Video Model Report\n\ngenerative_video_model_probe 真实生成视频模型验证未运行。原因记录在 decision 与 generation records 中。\n", encoding="utf-8")
     (reports_dir / "external_baseline_report.md").write_text("# External Baseline Report\n\n外部 baseline 已切换为显式同步机制适配器。当前只记录可运行入口状态, 尚未生成正式对比 records, 因此不用于正向 claim。\n", encoding="utf-8")
     (reports_dir / "quality_motion_semantic_report.md").write_text("# Quality Motion Semantic Report\n\n质量、运动和语义一致性指标因生成模型不可运行而标记为 not_run。\n", encoding="utf-8")
     (reports_dir / "mechanism_audit_report.md").write_text("# Mechanism Audit Report\n\n" + json.dumps(audit, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -165,7 +165,7 @@ def run(output_root: str | Path) -> dict:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="运行 B5 generative video model probe readiness 框架。")
+    parser = argparse.ArgumentParser(description="运行 generative_video_model_probe generative video model probe readiness 框架。")
     parser.add_argument("--output-root", default="outputs/runs/generative_video_model_probe")
     args = parser.parse_args()
     print(json.dumps(run(args.output_root), ensure_ascii=False, indent=2, sort_keys=True))

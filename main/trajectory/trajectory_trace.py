@@ -1,4 +1,4 @@
-"""定义 B4 trajectory trace 的轻量结构。"""
+"""定义 trajectory_observation_core_probe trajectory trace 的轻量结构。"""
 
 from __future__ import annotations
 

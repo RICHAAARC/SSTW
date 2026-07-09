@@ -1,4 +1,4 @@
-"""提供 B2 VAE encode / decode 链路状态接口。"""
+"""提供 real_video_latent_transfer_check VAE encode / decode 链路状态接口。"""
 
 from __future__ import annotations
 

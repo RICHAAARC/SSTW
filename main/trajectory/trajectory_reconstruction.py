@@ -1,4 +1,4 @@
-"""提供 B4 trajectory replay / reconstruction 接口。"""
+"""提供 trajectory_observation_core_probe trajectory replay / reconstruction 接口。"""
 
 from __future__ import annotations
 

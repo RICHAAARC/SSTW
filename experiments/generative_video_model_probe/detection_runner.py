@@ -1,4 +1,4 @@
-"""B5 检测记录状态构建与 runtime attacked video 评分。"""
+"""generative_video_model_probe 检测记录状态构建与 runtime attacked video 评分。"""
 
 from __future__ import annotations
 

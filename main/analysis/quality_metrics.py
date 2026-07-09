@@ -1,4 +1,4 @@
-"""提供 B2 质量指标代理计算。"""
+"""提供 real_video_latent_transfer_check 质量指标代理计算。"""
 
 from __future__ import annotations
 

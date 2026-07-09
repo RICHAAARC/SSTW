@@ -1,4 +1,4 @@
-"""实现 B4 trajectory controls。"""
+"""实现 trajectory_observation_core_probe trajectory controls。"""
 
 from __future__ import annotations
 

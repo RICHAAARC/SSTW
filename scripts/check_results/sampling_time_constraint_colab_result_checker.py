@@ -1,4 +1,4 @@
-"""检查 B6 sampling-time constraint Colab probe 结果是否可进入后续审计。"""
+"""检查 sampling_time_constraint_probe sampling-time constraint Colab probe 结果是否可进入后续审计。"""
 
 from __future__ import annotations
 
@@ -77,7 +77,7 @@ def _latest_package_manifest(package_dir: Path) -> Path | None:
 
 
 def _inspect_archive_members(archive_path: Path) -> dict:
-    """检查 zip 包中是否包含 B6 关键 artifacts。"""
+    """检查 zip 包中是否包含 sampling_time_constraint_probe 关键 artifacts。"""
     if not archive_path.exists():
         return {
             "archive_path": str(archive_path),
@@ -135,12 +135,12 @@ def _next_recommended_action(mechanism_evidence_status: str, generation_records:
         return "rerun_current_profile_after_fixing_outputs"
     profiles = {str(record.get("colab_runtime_profile")) for record in generation_records if record.get("colab_runtime_profile")}
     if "recommended" in profiles:
-        return "proceed_to_b6_claim_audit_and_submission_freeze_preparation"
+        return "proceed_to_sampling_time_constraint_claim_audit_and_submission_freeze_preparation"
     return "run_recommended_profile_on_l4"
 
 
 def check_sampling_time_constraint_colab_results(run_root: str | Path) -> dict:
-    """检查 B6 Colab run 目录, 并区分实现证据、机制证据和最终 claim 边界。"""
+    """检查 sampling_time_constraint_probe Colab run 目录, 并区分实现证据、机制证据和最终 claim 边界。"""
     run_root = Path(run_root)
     generation_records = _read_jsonl(run_root / "records" / "generation_records.jsonl")
     trajectory_records = _read_jsonl(run_root / "records" / "trajectory_trace.jsonl")
@@ -280,13 +280,13 @@ def check_sampling_time_constraint_colab_results(run_root: str | Path) -> dict:
             "postprocess_formal_claim_status": postprocess_decision.get("details", {}).get("formal_claim_status"),
             "formal_metric_claim_status": formal_metric_decision.get("formal_metric_claim_status"),
         },
-        "claim_boundary": "real_sampling_probe_not_final_b6_submission_claim",
+        "claim_boundary": "real_sampling_probe_not_final_sampling_time_constraint_submission_claim",
         "next_recommended_action": _next_recommended_action(mechanism_evidence_status, generation_records),
     }
 
 
 def check_latest_sampling_time_constraint_package(package_dir: str | Path) -> dict:
-    """检查 B6 package 目录中的最新 manifest, 并在可访问 run_root 时联动检查 run 目录。"""
+    """检查 sampling_time_constraint_probe package 目录中的最新 manifest, 并在可访问 run_root 时联动检查 run 目录。"""
     package_dir = Path(package_dir)
     local_project_root = package_dir.parent.parent
     manifest_path = _latest_package_manifest(package_dir)
@@ -321,7 +321,7 @@ def check_latest_sampling_time_constraint_package(package_dir: str | Path) -> di
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="检查 B6 sampling-time constraint Colab probe 结果。")
+    parser = argparse.ArgumentParser(description="检查 sampling_time_constraint_probe sampling-time constraint Colab probe 结果。")
     parser.add_argument("--run-root", default="")
     parser.add_argument("--package-dir", default="")
     parser.add_argument("--output-json", default="")

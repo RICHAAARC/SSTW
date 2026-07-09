@@ -1,4 +1,4 @@
-"""提供 B2 VAE 重建质量代理审计。"""
+"""提供 real_video_latent_transfer_check VAE 重建质量代理审计。"""
 
 from __future__ import annotations
 

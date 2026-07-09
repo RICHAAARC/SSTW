@@ -1,4 +1,4 @@
-"""提供 B2 real video VAE latent transfer 的轻量 backend。"""
+"""提供 real_video_latent_transfer_check real video VAE latent transfer 的轻量 backend。"""
 
 from __future__ import annotations
 
@@ -20,7 +20,7 @@ REAL_VIDEO_METHOD_PENALTY = {
 def score_real_video_transfer(sample_role: str, attack_name: str, method_variant: str, severity: float):
     """计算真实视频 VAE latent transfer proxy 下的检测结果。
 
-    该实现沿用 B1 的状态空间检测结构, 只加入 VAE 重建和真实视频攻击导致的轻量退化。
+    该实现沿用 synthetic_state_inference_sanity 的状态空间检测结构, 只加入 VAE 重建和真实视频攻击导致的轻量退化。
     """
     result = score_method(sample_role, attack_name if attack_name in {"no_attack", "temporal_crop", "local_clip", "regular_frame_dropping", "irregular_frame_dropping", "frame_duplication", "speed_change", "frame_rate_resampling"} else "latent_gaussian_noise", method_variant)
     penalty = REAL_VIDEO_METHOD_PENALTY.get(method_variant, 0.05) * severity

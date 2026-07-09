@@ -1,4 +1,4 @@
-"""B5 表格构建。"""
+"""generative_video_model_probe 表格构建。"""
 
 from __future__ import annotations
 
@@ -13,5 +13,5 @@ def build_status_table(decision: dict) -> list[dict]:
         "gpu_validation_status": details["gpu_validation_status"],
         "generation_model_runnable_status": details["generation_model_runnable_status"],
         "formal_claim_status": details["formal_claim_status"],
-        "top_conference_b5_gate": details["top_conference_b5_gate"],
+        "top_conference_generative_video_model_probe_gate": details["top_conference_generative_video_model_probe_gate"],
     }]

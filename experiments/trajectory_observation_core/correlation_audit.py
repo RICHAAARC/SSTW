@@ -1,4 +1,4 @@
-"""审计 B4 trajectory observation 与 static evidence 的非冗余性。"""
+"""审计 trajectory_observation_core_probe trajectory observation 与 static evidence 的非冗余性。"""
 
 from __future__ import annotations
 

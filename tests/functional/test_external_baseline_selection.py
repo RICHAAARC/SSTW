@@ -1,4 +1,4 @@
-"""验证 B5 external baseline 推荐与 claim 约束。"""
+"""验证 generative_video_model_probe external baseline 推荐与 claim 约束。"""
 
 from __future__ import annotations
 

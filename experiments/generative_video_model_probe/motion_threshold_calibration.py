@@ -1,4 +1,4 @@
-"""B5 formal motion threshold calibration runner.
+"""generative_video_model_probe formal motion threshold calibration runner.
 
 该模块只负责 motion observability / prompt validity 层面的阈值校准。
 污染过滤不得读取或依赖最终水印检测分数, 例如 S_final、S_final_conservative 或 watermark_detection_score。

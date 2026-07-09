@@ -1,4 +1,4 @@
-"""B5 生成运行状态构建。"""
+"""generative_video_model_probe 生成运行状态构建。"""
 
 from __future__ import annotations
 

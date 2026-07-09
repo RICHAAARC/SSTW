@@ -1,4 +1,4 @@
-"""构建 B5 外部 baseline 状态记录与 comparison 产物。"""
+"""构建 generative_video_model_probe 外部 baseline 状态记录与 comparison 产物。"""
 
 from __future__ import annotations
 

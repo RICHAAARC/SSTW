@@ -1,4 +1,4 @@
-"""提供 B3 状态变量消融的影响建模。"""
+"""提供 state_space_inference_formalization 状态变量消融的影响建模。"""
 
 from __future__ import annotations
 

@@ -1,4 +1,4 @@
-"""检查 B5 Colab 生成式视频探测结果是否可进入后续机制审计。"""
+"""检查 generative_video_model_probe Colab 生成式视频探测结果是否可进入后续机制审计。"""
 
 from __future__ import annotations
 
@@ -66,7 +66,7 @@ def _video_integrity_records(run_root: Path, generation_records: list[dict]) -> 
 
 
 def check_generative_video_colab_results(run_root: str | Path) -> dict:
-    """检查 B5 Colab run 目录, 并明确区分 implementation evidence 与 mechanism evidence。"""
+    """检查 generative_video_model_probe Colab run 目录, 并明确区分 implementation evidence 与 mechanism evidence。"""
     run_root = Path(run_root)
     generation_records = _read_jsonl(run_root / "records" / "generation_records.jsonl")
     trajectory_records = _read_jsonl(run_root / "records" / "trajectory_trace.jsonl")
@@ -130,7 +130,7 @@ def check_generative_video_colab_results(run_root: str | Path) -> dict:
     if external_baseline_runnable_count < 1:
         missing_mechanism_requirements.append("external_baseline_not_runnable")
     if successful_generation_count < 4:
-        missing_mechanism_requirements.append("insufficient_prompt_seed_coverage_for_b5")
+        missing_mechanism_requirements.append("insufficient_prompt_seed_coverage_for_generative_video_model_probe")
 
     runtime_mechanism_decision = decision.get("mechanism_decision")
     postprocess_mechanism_decision = postprocess_decision.get("mechanism_decision")
@@ -178,7 +178,7 @@ def check_generative_video_colab_results(run_root: str | Path) -> dict:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="检查 B5 Colab 生成式视频探测结果。")
+    parser = argparse.ArgumentParser(description="检查 generative_video_model_probe Colab 生成式视频探测结果。")
     parser.add_argument("--run-root", required=True)
     parser.add_argument("--output-json", default="")
     args = parser.parse_args()

@@ -1,4 +1,4 @@
-"""实现 B4 velocity projection statistic 的轻量代理。"""
+"""实现 trajectory_observation_core_probe velocity projection statistic 的轻量代理。"""
 
 from __future__ import annotations
 

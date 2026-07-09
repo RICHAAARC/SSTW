@@ -10,13 +10,13 @@ from main.protocol.table_builder import write_csv
 
 
 STAGE_LABELS = {
-    "synthetic_state_protocol": "B1 synthetic latent state inference",
-    "state_space_inference_formalization": "B2 formal state-space mechanism",
-    "real_video_latent_transfer": "B3 real-video VAE latent transfer",
-    "trajectory_observation_core_probe": "B4 trajectory observation core",
-    "sampling_time_constraint_preflight": "B6 sampling-time preflight",
-    "generative_video_model_probe": "B5 generative video model probe",
-    "sampling_time_constraint_colab_probe": "B6 real sampling callback probe",
+    "synthetic_state_protocol": "synthetic_state_inference_sanity synthetic latent state inference",
+    "state_space_inference_formalization": "real_video_latent_transfer_check formal state-space mechanism",
+    "real_video_latent_transfer": "state_space_inference_formalization real-video VAE latent transfer",
+    "trajectory_observation_core_probe": "trajectory_observation_core_probe trajectory observation core",
+    "sampling_time_constraint_preflight": "sampling_time_constraint_probe sampling-time preflight",
+    "generative_video_model_probe": "generative_video_model_probe generative video model probe",
+    "sampling_time_constraint_colab_probe": "sampling_time_constraint_probe real sampling callback probe",
 }
 
 

@@ -1,4 +1,4 @@
-"""汇总 B3 state-space inference formal interface。"""
+"""汇总 state_space_inference_formalization state-space inference formal interface。"""
 
 from __future__ import annotations
 
@@ -18,7 +18,7 @@ BASELINE_ALIAS = {
 
 
 def run_formal_inference(sample_role: str, attack_name: str, method_variant: str, quality_confidence: float = 1.0) -> dict:
-    """运行 B3 的正式状态空间推断接口。"""
+    """运行 state_space_inference_formalization 的正式状态空间推断接口。"""
     if method_variant in BASELINE_ALIAS:
         baseline = score_method(sample_role, attack_name, BASELINE_ALIAS[method_variant])
         return {

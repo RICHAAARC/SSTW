@@ -1,4 +1,4 @@
-"""验证 B4 trajectory observation core probe 的轻量闭环。"""
+"""验证 trajectory_observation_core_probe trajectory observation core probe 的轻量闭环。"""
 
 from __future__ import annotations
 
@@ -13,7 +13,7 @@ from main.protocol.record_writer import read_jsonl
 
 @pytest.mark.quick
 def test_trajectory_observation_core_builds_outputs(tmp_path: Path) -> None:
-    """B4 runner 必须生成 trajectory records、control records 和 decision。"""
+    """trajectory_observation_core_probe runner 必须生成 trajectory records、control records 和 decision。"""
     output_root = tmp_path / "trajectory_observation_core_probe"
     summary = run(output_root)
 
@@ -41,7 +41,7 @@ def test_trajectory_observation_core_builds_outputs(tmp_path: Path) -> None:
 
 @pytest.mark.quick
 def test_trajectory_observation_core_mechanism_gates(tmp_path: Path) -> None:
-    """B4 机制审计必须证明 trajectory gain、非冗余和 control 抑制。"""
+    """trajectory_observation_core_probe 机制审计必须证明 trajectory gain、非冗余和 control 抑制。"""
     output_root = tmp_path / "trajectory_observation_core_probe"
     summary = run(output_root)
     audit = summary["audit"]

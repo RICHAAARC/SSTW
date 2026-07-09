@@ -1,4 +1,4 @@
-﻿"""后处理 B6 sampling-time constraint Colab probe 输出。"""
+﻿"""后处理 sampling_time_constraint_probe sampling-time constraint Colab probe 输出。"""
 
 from __future__ import annotations
 
@@ -64,7 +64,7 @@ def _variant_rows(constraint_records: list[dict], formal_records: list[dict]) ->
 
 
 def postprocess_sampling_constraint_colab_run(run_root: str | Path) -> dict:
-    """读取 B6 Colab records 并写出 postprocess artifacts。"""
+    """读取 sampling_time_constraint_probe Colab records 并写出 postprocess artifacts。"""
     run_root = Path(run_root)
     runtime_decision = _read_json(run_root / "artifacts" / "sampling_time_constraint_colab_runtime_decision.json")
     constraint_records = _read_jsonl(run_root / "records" / "constraint_records.jsonl")
@@ -134,7 +134,7 @@ def postprocess_sampling_constraint_colab_run(run_root: str | Path) -> dict:
             "flow_velocity_gain_over_unconstrained": flow_velocity_gain_over_baseline,
             "flow_velocity_proxy_ready": flow_velocity_proxy_ready,
             "formal_quality_semantic_ready": formal_ready,
-            "constraint_main_claim_status": "real_sampling_probe_not_final_b6_submission_claim",
+            "constraint_main_claim_status": "real_sampling_probe_not_final_sampling_time_constraint_submission_claim",
         },
     }
     write_jsonl(run_root / "records" / "constraint_variant_summary_records.jsonl", rows)
@@ -145,7 +145,7 @@ def postprocess_sampling_constraint_colab_run(run_root: str | Path) -> dict:
     report_path.write_text(
         "# Sampling-Time Constraint Colab Postprocess Report\n\n"
         "该报告基于真实 Colab sampling callback records 与 formal quality/motion/semantic records 生成。"
-        "它支持 B6 real sampling probe, 但不等同于最终 submission freeze claim。\n\n"
+        "它支持 sampling_time_constraint_probe real sampling probe, 但不等同于最终 submission freeze claim。\n\n"
         + json.dumps(decision, ensure_ascii=False, indent=2),
         encoding="utf-8",
     )
@@ -160,7 +160,7 @@ def postprocess_sampling_constraint_colab_run(run_root: str | Path) -> dict:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="后处理 B6 sampling-time constraint Colab probe。")
+    parser = argparse.ArgumentParser(description="后处理 sampling_time_constraint_probe sampling-time constraint Colab probe。")
     parser.add_argument("--run-root", required=True)
     args = parser.parse_args()
     print(json.dumps(postprocess_sampling_constraint_colab_run(args.run_root), ensure_ascii=False, indent=2, sort_keys=True))

@@ -1,4 +1,4 @@
-"""运行 B2 real video latent transfer check。"""
+"""运行 real_video_latent_transfer_check real video latent transfer check。"""
 
 from __future__ import annotations
 
@@ -45,7 +45,7 @@ def _build_config() -> dict:
 
 
 def build_records(config: dict) -> tuple[list[dict], list[dict]]:
-    """构建 B2 event records 和 quality records。"""
+    """构建 real_video_latent_transfer_check event records 和 quality records。"""
     samples = build_video_samples(config["real_video_transfer"], SPLITS, SAMPLE_ROLES)
     vae_backend = build_vae_backend(config["vae_backend"])
     attacks = config["attacks"]["attacks"]
@@ -116,7 +116,7 @@ def build_records(config: dict) -> tuple[list[dict], list[dict]]:
                     "trajectory_trace_placeholder": None,
                     "semantic_consistency_placeholder": None,
                     "motion_consistency_score_placeholder": None,
-                    "placeholder_reason": "B2 has no generation prompt or trajectory observation",
+                    "placeholder_reason": "real_video_latent_transfer_check has no generation prompt or trajectory observation",
                     "replacement_stage": "trajectory_observation_core_probe_or_generative_video_model_probe",
                     "replacement_field_name": "stage_specific_generation_or_trajectory_field",
                     "negative_state_over_threshold_count": 0,
@@ -132,7 +132,7 @@ def build_records(config: dict) -> tuple[list[dict], list[dict]]:
 
 
 def run(output_root: str | Path) -> dict:
-    """运行 B2 并写出 records、thresholds、tables、reports 和 decision。"""
+    """运行 real_video_latent_transfer_check 并写出 records、thresholds、tables、reports 和 decision。"""
     output_root = Path(output_root)
     config = _build_config()
     raw_records, quality_records = build_records(config)
@@ -160,7 +160,7 @@ def run(output_root: str | Path) -> dict:
     write_csv(table_path, build_method_attack_table(records))
     write_csv(quality_table_path, quality_records)
     report_path.parent.mkdir(parents=True, exist_ok=True)
-    report_path.write_text("# Real Video Latent Transfer Report\n\nB2 lightweight proxy completed.\n", encoding="utf-8")
+    report_path.write_text("# Real Video Latent Transfer Report\n\nreal_video_latent_transfer_check lightweight proxy completed.\n", encoding="utf-8")
     audit_report_path.write_text("# Real Video Latent Mechanism Audit\n\n" + json.dumps(audit, ensure_ascii=False, indent=2), encoding="utf-8")
     implementation_pass = all([event_path.exists(), threshold_path.exists(), table_path.exists(), quality_path.exists(), set(config["methods"]["method_variants"]) == {r["method_variant"] for r in records}, {a["attack_name"] for a in config["attacks"]["attacks"]} == {r["attack_name"] for r in records}, all(r["threshold_source_split"] == "calibration" for r in records), all(r["quality_metric_status"] == "enabled" for r in records)])
     decision = build_stage_decision(implementation_pass, bool(audit["mechanism_pass"]), audit)
@@ -173,7 +173,7 @@ def run(output_root: str | Path) -> dict:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="运行 B2 real video latent transfer check。")
+    parser = argparse.ArgumentParser(description="运行 real_video_latent_transfer_check real video latent transfer check。")
     parser.add_argument("--output-root", default="outputs/runs/real_video_latent_transfer_check")
     args = parser.parse_args()
     print(json.dumps(run(args.output_root), ensure_ascii=False, indent=2, sort_keys=True))

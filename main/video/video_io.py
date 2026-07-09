@@ -1,4 +1,4 @@
-"""提供 B2 阶段真实视频代理样本的读取接口。"""
+"""提供 real_video_latent_transfer_check 阶段真实视频代理样本的读取接口。"""
 
 from __future__ import annotations
 
@@ -22,7 +22,7 @@ class VideoSample:
 
 
 def build_video_samples(config: dict, splits: tuple[str, ...], sample_roles: tuple[str, ...]) -> list[VideoSample]:
-    """构造 B2 使用的轻量真实视频代理样本清单。
+    """构造 real_video_latent_transfer_check 使用的轻量真实视频代理样本清单。
 
     该函数不读取真实大文件, 只冻结真实视频链路所需的治理字段。后续可以将此接口替换为
     真实视频 reader, 但 records schema 和 split 语义保持不变。

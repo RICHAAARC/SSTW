@@ -1,4 +1,4 @@
-"""验证 B5 Colab 结果检查器。"""
+"""验证 generative_video_model_probe Colab 结果检查器。"""
 
 from __future__ import annotations
 

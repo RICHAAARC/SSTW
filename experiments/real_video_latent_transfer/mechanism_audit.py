@@ -1,4 +1,4 @@
-"""审计 B2 real video latent transfer check 的机制条件。"""
+"""审计 real_video_latent_transfer_check real video latent transfer check 的机制条件。"""
 
 from __future__ import annotations
 
@@ -16,7 +16,7 @@ def _mean_score(records: list[dict], method_variant: str, attack_name: str, samp
 
 
 def audit_mechanism(records: list[dict], target_fpr: float, quality_records: list[dict]) -> dict:
-    """返回 B2 机制审计结果。"""
+    """返回 real_video_latent_transfer_check 机制审计结果。"""
     state_beats_tubelet = all(_mean_score(records, "key_conditioned_state_space_inference", attack, "attacked_positive") > _mean_score(records, "tubelet_only", attack, "attacked_positive") for attack in TEMPORAL_ATTACKS)
     state_beats_explicit_attacks = [attack for attack in NON_UNIFORM_TEMPORAL_ATTACKS if _mean_score(records, "key_conditioned_state_space_inference", attack, "attacked_positive") > _mean_score(records, "explicit_temporal_alignment", attack, "attacked_positive")]
     state_beats_key_agnostic = all(_mean_score(records, "key_conditioned_state_space_inference", attack, "attacked_positive") > _mean_score(records, "key_agnostic_state_space_model", attack, "attacked_positive") for attack in TEMPORAL_ATTACKS)

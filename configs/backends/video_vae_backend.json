@@ -5,5 +5,5 @@
   "vae_encode_dtype": "float32",
   "vae_decode_dtype": "float32",
   "vae_reconstruction_lpips_status": "disabled",
-  "vae_reconstruction_lpips_status_reason": "lpips dependency is not required in B2 lightweight proxy"
+  "vae_reconstruction_lpips_status_reason": "lpips dependency is not required in real_video_latent_transfer_check lightweight proxy"
 }

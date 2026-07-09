@@ -1,4 +1,4 @@
-﻿"""在 Colab GPU 环境中运行 B6 sampling-time constraint probe。"""
+﻿"""在 Colab GPU 环境中运行 sampling_time_constraint_probe sampling-time constraint probe。"""
 
 from __future__ import annotations
 
@@ -54,14 +54,14 @@ def _schedule_by_id(schedule_config: dict, schedule_id: str) -> dict:
 
 
 def _variant_schedule_id(method_variant: str) -> str:
-    """为 B6 probe 方法变体选择 schedule。"""
+    """为 sampling_time_constraint_probe probe 方法变体选择 schedule。"""
     if method_variant == "key_conditioned_state_space_with_trajectory":
         return "mid_window_weak_constraint"
     return "mid_window_weak_constraint"
 
 
 def _build_generation_plan(prompt_suite: dict, profile: str, model_id: str) -> list[dict]:
-    """构造 B6 probe 的 prompt / seed / method 运行计划。"""
+    """构造 sampling_time_constraint_probe probe 的 prompt / seed / method 运行计划。"""
     settings = PROFILE_SETTINGS[profile]
     prompts = prompt_suite["prompts"][: settings["prompt_limit"]]
     seeds = prompt_suite["seeds"][: settings["seed_limit"]]
@@ -143,7 +143,7 @@ def _sampler_signature_record(pipe: Any, model_id: str, scheduler_id: str) -> di
 
 
 def _load_video_generation_pipeline(model_id: str, torch_dtype: Any) -> Any:
-    """加载 B6 / SSTW-TC 主线视频生成 pipeline。
+    """加载 sampling_time_constraint_probe / SSTW-TC 主线视频生成 pipeline。
 
     该函数属于通用工程封装。Wan2.1 被设置为 SSTW-TC 主线 Flow Matching DiT 模型;
     LTX-Video 保留为前置机制验证和回退测试入口。Notebook 仍然只调用仓库模块,
@@ -183,7 +183,7 @@ def run_sampling_constraint_colab_probe(
     constraint_config_path: str | Path = "configs/generation/sampling_constraint.json",
     lambda_schedules_path: str | Path = "configs/generation/lambda_schedules.json",
 ) -> dict:
-    """执行 B6 sampling-time constraint Colab probe 并写出 governed records。"""
+    """执行 sampling_time_constraint_probe sampling-time constraint Colab probe 并写出 governed records。"""
     import torch
 
     if not torch.cuda.is_available():
@@ -216,8 +216,8 @@ def run_sampling_constraint_colab_probe(
             f"profile={profile} variant={item['method_variant']} prompt={item['prompt_id']} seed={item['seed_id']}",
         )
         generator = torch.Generator(device="cuda").manual_seed(int(item["seed_value"]))
-        trace_id = f"b6_trace_{index:04d}"
-        constraint_trace_id = f"b6_constraint_{index:04d}"
+        trace_id = f"sampling_time_constraint_trace_{index:04d}"
+        constraint_trace_id = f"sampling_time_constraint_constraint_{index:04d}"
         step_stats: list[dict] = []
         step_constraint_records: list[dict] = []
         previous_callback_latents: Any | None = None
@@ -417,7 +417,7 @@ def run_sampling_constraint_colab_probe(
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="在 Colab GPU 环境中运行 B6 sampling-time constraint probe。")
+    parser = argparse.ArgumentParser(description="在 Colab GPU 环境中运行 sampling_time_constraint_probe sampling-time constraint probe。")
     parser.add_argument("--output-root", default="outputs/runs/sampling_time_constraint_colab")
     parser.add_argument("--prompt-suite-path", default="outputs/datasets/generative_video_prompt_suite/prompt_seed_suite.json")
     parser.add_argument("--profile", choices=sorted(PROFILE_SETTINGS), default="smoke")

@@ -1,4 +1,4 @@
-"""B4 表格重建入口。"""
+"""trajectory_observation_core_probe 表格重建入口。"""
 
 from __future__ import annotations
 

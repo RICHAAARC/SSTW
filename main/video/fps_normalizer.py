@@ -1,4 +1,4 @@
-"""提供 B2 fps 归一化接口。"""
+"""提供 real_video_latent_transfer_check fps 归一化接口。"""
 
 from __future__ import annotations
 

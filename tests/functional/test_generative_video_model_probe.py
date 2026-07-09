@@ -1,4 +1,4 @@
-"""验证 B5 generative video model probe readiness 框架。"""
+"""验证 generative_video_model_probe generative video model probe readiness 框架。"""
 
 from __future__ import annotations
 
@@ -16,7 +16,7 @@ def test_generative_video_model_probe_builds_blocked_outputs(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """B5 runner 在显式模拟无 GPU 环境时必须生成可审计 blocked decision。"""
+    """generative_video_model_probe runner 在显式模拟无 GPU 环境时必须生成可审计 blocked decision。"""
     monkeypatch.setenv("PATH", "")
     output_root = tmp_path / "generative_video_model_probe"
     summary = run(output_root)
@@ -46,12 +46,12 @@ def test_generative_video_model_probe_builds_blocked_outputs(
 
     decision = json.loads(decision_path.read_text(encoding="utf-8"))
     assert decision["details"]["formal_claim_status"] == "blocked_until_gpu_generation_run"
-    assert decision["details"]["top_conference_b5_gate"] == "FAIL"
+    assert decision["details"]["top_conference_generative_video_model_probe_gate"] == "FAIL"
 
 
 @pytest.mark.quick
 def test_generative_video_model_probe_does_not_support_positive_claim_without_runtime(tmp_path: Path) -> None:
-    """无真实生成运行时, B5 不得声明 fixed-FPR、trajectory gain 或质量一致性通过。"""
+    """无真实生成运行时, generative_video_model_probe 不得声明 fixed-FPR、trajectory gain 或质量一致性通过。"""
     output_root = tmp_path / "generative_video_model_probe"
     summary = run(output_root)
     audit = summary["audit"]

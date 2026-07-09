@@ -1,4 +1,4 @@
-"""定义 B2 像素扰动攻击代理。"""
+"""定义 real_video_latent_transfer_check 像素扰动攻击代理。"""
 
 from __future__ import annotations
 

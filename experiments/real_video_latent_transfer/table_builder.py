@@ -1,4 +1,4 @@
-"""B2 表格重建入口。"""
+"""real_video_latent_transfer_check 表格重建入口。"""
 
 from __future__ import annotations
 

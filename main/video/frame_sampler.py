@@ -1,4 +1,4 @@
-"""提供 B2 视频帧采样接口。"""
+"""提供 real_video_latent_transfer_check 视频帧采样接口。"""
 
 from __future__ import annotations
 

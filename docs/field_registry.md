@@ -56,7 +56,7 @@ Notebook 与 repository module 的跨边界数据
 | example_state_intermediate | intermediate | _intermediate | true | false | true | 跨步骤保存的示例中间状态字段, 正式产物生成前需要清理或迁移。 |
 | example_artifact_temporary | temporary | _temporary | false | false | true | 可清理的示例临时产物标记。 |
 | example_result_cache | cache | _cache | false | false | false | 可由输入、配置和代码重建的示例缓存标记。 |
-| record_version | protocol | none | true | false | false | B1 event record schema version. |
+| record_version | protocol | none | true | false | false | synthetic_state_inference_sanity event record schema version. |
 | sample_id | protocol | none | true | false | false | Synthetic sample identifier. |
 | sample_role | protocol | none | true | false | false | Sample role. |
 | method_variant | protocol | none | true | false | false | Controlled method or baseline variant. |
@@ -64,15 +64,15 @@ Notebook 与 repository module 的跨边界数据
 | attack_strength | protocol | none | true | false | false | Synthetic attack strength parameter. |
 | key_id | protocol | none | true | false | false | Watermark key identifier. |
 | content_id | protocol | none | true | false | false | Synthetic content identifier. |
-| prompt_id_placeholder | placeholder | _placeholder | true | false | true | B1 placeholder for later prompt identifier. |
+| prompt_id_placeholder | placeholder | _placeholder | true | false | true | synthetic_state_inference_sanity placeholder for later prompt identifier. |
 | seed_id | protocol | none | true | false | false | Deterministic synthetic seed identifier. |
-| generation_model_id_placeholder | placeholder | _placeholder | true | false | true | B1 placeholder for later generation model identifier. |
+| generation_model_id_placeholder | placeholder | _placeholder | true | false | true | synthetic_state_inference_sanity placeholder for later generation model identifier. |
 | backend_id | protocol | none | true | false | false | Runtime backend identifier. |
 | tubelet_length | method | none | true | false | false | Tubelet temporal length. |
 | tubelet_spatial_patch | method | none | true | false | false | Tubelet spatial patch size. |
 | tubelet_stride_t | method | none | true | false | false | Tubelet temporal stride. |
 | tubelet_stride_xy | method | none | true | false | false | Tubelet spatial stride. |
-| watermark_alpha | method | none | true | false | false | Projection margin used by B1 synthetic embedding proxy. |
+| watermark_alpha | method | none | true | false | false | Projection margin used by synthetic_state_inference_sanity synthetic embedding proxy. |
 | payload_code_id | method | none | true | false | false | Payload code configuration identifier. |
 | sync_code_id | method | none | true | false | false | Synchronization code configuration identifier. |
 | joint_code_mode | method | none | true | false | false | Joint payload and synchronization code mode. |
@@ -82,10 +82,10 @@ Notebook 与 repository module 的跨边界数据
 | key_condition_mode | method | none | true | false | false | How key conditioning is injected. |
 | filter_mode | method | none | true | false | false | State filtering mode. |
 | smoother_enabled | method | none | true | false | false | Whether smoother is enabled. |
-| phase_state_proxy | method | none | true | false | false | B1 proxy for phase state. |
-| evidence_state_proxy | method | none | true | false | false | B1 proxy for evidence state. |
-| confidence_state_proxy | method | none | true | false | false | B1 proxy for confidence state. |
-| disturbance_state_proxy | method | none | true | false | false | B1 proxy for disturbance state. |
+| phase_state_proxy | method | none | true | false | false | synthetic_state_inference_sanity proxy for phase state. |
+| evidence_state_proxy | method | none | true | false | false | synthetic_state_inference_sanity proxy for evidence state. |
+| confidence_state_proxy | method | none | true | false | false | synthetic_state_inference_sanity proxy for confidence state. |
+| disturbance_state_proxy | method | none | true | false | false | synthetic_state_inference_sanity proxy for disturbance state. |
 | state_entropy | metric | none | true | false | false | State uncertainty score. |
 | state_coverage_ratio | metric | none | true | false | false | State coverage ratio. |
 | state_matched_count | metric | none | true | false | false | Number of matched state elements. |
@@ -93,7 +93,7 @@ Notebook 与 repository module 的跨边界数据
 | S_payload_raw | metric | none | true | false | false | Raw payload score. |
 | S_payload_state | metric | none | true | false | false | State-aligned payload score. |
 | S_state_posterior | metric | none | true | false | false | State posterior score. |
-| S_trajectory_observation_placeholder | placeholder | _placeholder | true | false | true | B1 placeholder for trajectory observation score. |
+| S_trajectory_observation_placeholder | placeholder | _placeholder | true | false | true | synthetic_state_inference_sanity placeholder for trajectory observation score. |
 | S_final | metric | none | true | false | false | Final detector statistic. |
 | payload_state_gain | metric | none | true | false | false | Difference between state payload and raw payload score. |
 | key_state_admissibility_status | metric | none | true | false | false | Admissibility gate status. |
@@ -107,14 +107,14 @@ Notebook 与 repository module 的跨边界数据
 | decision | protocol | none | true | false | false | Detector decision. |
 | decision_reason | protocol | none | true | false | false | Decision provenance reason. |
 | test_time_threshold_update_blocked | protocol | none | true | false | false | Whether test-time threshold update is blocked. |
-| trajectory_trace_placeholder | placeholder | _placeholder | true | false | true | B1 placeholder for trajectory trace. |
-| real_video_quality_metrics_placeholder | placeholder | _placeholder | true | false | true | B1 placeholder for real-video quality metrics. |
-| semantic_consistency_placeholder | placeholder | _placeholder | true | false | true | B1 placeholder for semantic consistency metric. |
+| trajectory_trace_placeholder | placeholder | _placeholder | true | false | true | synthetic_state_inference_sanity placeholder for trajectory trace. |
+| real_video_quality_metrics_placeholder | placeholder | _placeholder | true | false | true | synthetic_state_inference_sanity placeholder for real-video quality metrics. |
+| semantic_consistency_placeholder | placeholder | _placeholder | true | false | true | synthetic_state_inference_sanity placeholder for semantic consistency metric. |
 | placeholder_reason | protocol | none | true | false | false | Reason explaining placeholder presence. |
 | replacement_stage | protocol | none | true | false | false | Stage expected to replace placeholder. |
 | replacement_field_name | protocol | none | true | false | false | Concrete field expected to replace placeholder. |
-| source_video_id | protocol | none | true | false | false | B2 source video identifier. |
-| dataset_id | protocol | none | true | false | false | B2 dataset identifier. |
+| source_video_id | protocol | none | true | false | false | real_video_latent_transfer_check source video identifier. |
+| dataset_id | protocol | none | true | false | false | real_video_latent_transfer_check dataset identifier. |
 | video_fps | protocol | none | true | false | false | Processed video fps. |
 | video_num_frames | protocol | none | true | false | false | Processed video frame count. |
 | video_resolution | protocol | none | true | false | false | Processed video resolution. |
@@ -159,28 +159,28 @@ Notebook 与 repository module 的跨边界数据
 | runtime_attack_expected_effect | protocol | none | true | false | false | Expected effect of a runtime attack transform. |
 | attack_failure_status | protocol | none | true | false | false | Attack failure status. |
 | attack_failure_reason | protocol | none | true | false | false | Attack failure reason. |
-| quality_psnr | metric | none | true | false | false | B2 quality PSNR proxy. |
-| quality_ssim | metric | none | true | false | false | B2 quality SSIM proxy. |
-| quality_lpips | metric | none | true | false | false | B2 quality LPIPS value or null. |
+| quality_psnr | metric | none | true | false | false | real_video_latent_transfer_check quality PSNR proxy. |
+| quality_ssim | metric | none | true | false | false | real_video_latent_transfer_check quality SSIM proxy. |
+| quality_lpips | metric | none | true | false | false | real_video_latent_transfer_check quality LPIPS value or null. |
 | quality_metric_status | metric | none | true | false | false | Quality metric status. |
 | quality_metric_failure_reason | protocol | none | true | false | false | Quality metric failure reason. |
 | quality_not_collapsed | metric | none | true | false | false | Quality gate decision. |
 | temporal_flicker_score | metric | none | true | false | false | Temporal flicker proxy score. |
 | temporal_consistency_not_collapsed | metric | none | true | false | false | Temporal consistency gate decision. |
-| motion_consistency_score_placeholder | placeholder | _placeholder | true | false | true | B2 placeholder for motion consistency score. |
+| motion_consistency_score_placeholder | placeholder | _placeholder | true | false | true | real_video_latent_transfer_check placeholder for motion consistency score. |
 | motion_consistency_status | protocol | none | true | false | false | Motion consistency metric status. |
 | motion_consistency_reason | protocol | none | true | false | false | Motion consistency status reason. |
-| formal_state_schema_version | protocol | none | true | false | false | B3 formal state schema version. |
-| state_transition_model_id | method | none | true | false | false | B3 transition model identifier. |
-| state_observation_model_id | method | none | true | false | false | B3 observation model identifier. |
-| key_conditioner_id | method | none | true | false | false | B3 key conditioner identifier. |
-| smoother_mode | method | none | true | false | false | B3 smoother mode. |
-| state_entropy_gate_threshold | method | none | true | false | false | B3 entropy gate threshold. |
-| state_entropy_gate_status | metric | none | true | false | false | B3 entropy gate status. |
+| formal_state_schema_version | protocol | none | true | false | false | state_space_inference_formalization formal state schema version. |
+| state_transition_model_id | method | none | true | false | false | state_space_inference_formalization transition model identifier. |
+| state_observation_model_id | method | none | true | false | false | state_space_inference_formalization observation model identifier. |
+| key_conditioner_id | method | none | true | false | false | state_space_inference_formalization key conditioner identifier. |
+| smoother_mode | method | none | true | false | false | state_space_inference_formalization smoother mode. |
+| state_entropy_gate_threshold | method | none | true | false | false | state_space_inference_formalization entropy gate threshold. |
+| state_entropy_gate_status | metric | none | true | false | false | state_space_inference_formalization entropy gate status. |
 | state_allowed_to_affect_final_score | metric | none | true | false | false | Whether state may affect final score. |
 | trajectory_enabled | protocol | none | true | false | false | Whether trajectory observation is enabled. |
-| trajectory_status | protocol | none | true | false | false | Trajectory status, explicit disabled in B3. |
-| trajectory_state_adapter_placeholder | placeholder | _placeholder | true | false | true | B3 placeholder for trajectory state adapter. |
+| trajectory_status | protocol | none | true | false | false | Trajectory status, explicit disabled in state_space_inference_formalization. |
+| trajectory_state_adapter_placeholder | placeholder | _placeholder | true | false | true | state_space_inference_formalization placeholder for trajectory state adapter. |
 | ablation_family | ablation | none | true | false | false | Ablation family. |
 | ablation_name | ablation | none | true | false | false | Ablation variant name. |
 | ablation_removed_component | ablation | none | true | false | false | Removed component in ablation. |
@@ -203,7 +203,7 @@ Notebook 与 repository module 的跨边界数据
 | trajectory_time_grid_id | trajectory | none | true | false | false | Trajectory time grid identifier. |
 | trajectory_num_steps | trajectory | none | true | false | false | Number of trajectory steps. |
 | trajectory_time_points | trajectory | none | true | false | false | Trajectory time point summary. |
-| trajectory_scheduler_id_placeholder | placeholder | _placeholder | true | false | true | B4 placeholder for scheduler identifier. |
+| trajectory_scheduler_id_placeholder | placeholder | _placeholder | true | false | true | trajectory_observation_core_probe placeholder for scheduler identifier. |
 | velocity_estimator_id | trajectory | none | true | false | false | Velocity estimator identifier. |
 | velocity_projection_operator_id | trajectory | none | true | false | false | Velocity projection operator identifier. |
 | trajectory_runtime_sec | metric | none | true | false | false | Trajectory runtime in seconds. |
@@ -225,57 +225,57 @@ Notebook 与 repository module 的跨边界数据
 | control_delta_vs_main | trajectory_control | none | true | false | false | Control score delta versus main trajectory. |
 | control_status | trajectory_control | none | true | false | false | Control suppression status. |
 | control_not_run_reason | trajectory_control | none | true | false | false | Control not-run reason. |
-| sampling_constraint_placeholder | placeholder | _placeholder | true | false | true | B4 placeholder for B6 sampling constraint config. |
-| correlation_threshold | metric | none | true | false | false | B4 correlation threshold. |
-| correlation_status | metric | none | true | false | false | B4 correlation audit status. |
-| top_conference_trajectory_gate | governance | none | true | false | false | B4 top conference trajectory gate decision. |
-| generation_model_id | protocol | none | true | false | false | B5 generation model identifier. |
-| generation_model_name | protocol | none | true | false | false | B5 generation model name. |
-| generation_model_family | protocol | none | true | false | false | B5 generation model family. |
+| sampling_constraint_placeholder | placeholder | _placeholder | true | false | true | trajectory_observation_core_probe placeholder for sampling_time_constraint_probe sampling constraint config. |
+| correlation_threshold | metric | none | true | false | false | trajectory_observation_core_probe correlation threshold. |
+| correlation_status | metric | none | true | false | false | trajectory_observation_core_probe correlation audit status. |
+| top_conference_trajectory_gate | governance | none | true | false | false | trajectory_observation_core_probe top conference trajectory gate decision. |
+| generation_model_id | protocol | none | true | false | false | generative_video_model_probe generation model identifier. |
+| generation_model_name | protocol | none | true | false | false | generative_video_model_probe generation model name. |
+| generation_model_family | protocol | none | true | false | false | generative_video_model_probe generation model family. |
 | primary_sstw_tc_model_id | protocol | none | true | false | false | Primary model identifier for SSTW-TC Flow Matching evaluation. |
 | primary_sstw_tc_model_status | governance | none | true | false | false | Whether the runtime model matches the configured SSTW-TC primary model. |
-| generation_model_version | protocol | none | true | false | false | B5 generation model version. |
+| generation_model_version | protocol | none | true | false | false | generative_video_model_probe generation model version. |
 | generation_model_role | protocol | none | true | false | false | Role assigned to a generation model in the SSTW-TC evaluation plan. |
-| generation_model_commit_or_hash | protocol | none | true | false | false | B5 generation model commit or hash. |
-| generation_model_license_status | protocol | none | true | false | false | B5 generation model license audit status. |
-| generation_backend_id | protocol | none | true | false | false | B5 generation backend identifier. |
-| generation_backend_status | protocol | none | true | false | false | B5 generation backend status. |
-| generation_backend_reason | protocol | none | true | false | false | B5 generation backend status reason. |
-| trajectory_capture_mode | trajectory | none | true | false | false | B5 trajectory capture mode. |
-| trajectory_availability_status | trajectory | none | true | false | false | B5 trajectory availability status. |
-| trajectory_capture_status | trajectory | none | true | false | false | B5 trajectory capture status. |
-| trajectory_capture_failure_reason | trajectory | none | true | false | false | B5 trajectory capture failure reason. |
-| latent_capture_status | protocol | none | true | false | false | B5 latent capture status. |
-| latent_capture_failure_reason | protocol | none | true | false | false | B5 latent capture failure reason. |
-| prompt_id | protocol | none | true | false | false | B5 prompt identifier. |
-| prompt_text_hash | protocol | none | true | false | false | B5 prompt text digest. |
-| prompt_category | protocol | none | true | false | false | B5 prompt category. |
-| scheduler_id | protocol | none | true | false | false | B5 scheduler identifier. |
-| trajectory_scheduler_id | trajectory | none | true | false | false | B5 trajectory scheduler identifier. |
-| num_inference_steps | protocol | none | true | false | false | B5 inference step count. |
-| guidance_scale | protocol | none | true | false | false | B5 guidance scale. |
-| video_length_frames | protocol | none | true | false | false | B5 generated video length in frames. |
-| fps | protocol | none | true | false | false | B5 generated video fps. |
-| heldout_prompt_status | generalization | none | true | false | false | B5 heldout prompt status. |
-| heldout_seed_status | generalization | none | true | false | false | B5 heldout seed status. |
-| gpu_validation_status | governance | none | true | false | false | B5 local GPU validation status. |
-| gpu_validation_reason | governance | none | true | false | false | B5 local GPU validation reason. |
-| generation_model_runnable_status | governance | none | true | false | false | B5 generation model runnable status. |
-| generation_model_not_run_reason | governance | none | true | false | false | B5 generation model not run reason. |
-| visual_quality_score | metric | none | true | false | false | B5 visual quality score. |
-| motion_consistency_score | metric | none | true | false | false | B5 motion consistency score. |
-| motion_artifact_score | metric | none | true | false | false | B5 motion artifact score. |
-| motion_metric_status | metric | none | true | false | false | B5 motion metric status. |
-| semantic_consistency_score | metric | none | true | false | false | B5 semantic consistency score. |
-| semantic_metric_name | metric | none | true | false | false | B5 semantic metric name. |
-| semantic_metric_status | metric | none | true | false | false | B5 semantic metric status. |
-| metric_failure_reason | protocol | none | true | false | false | B5 metric failure reason. |
-| external_baseline_name | protocol | none | true | false | false | B5 external baseline name. |
-| external_baseline_version | protocol | none | true | false | false | B5 external baseline version. |
-| external_baseline_runnable_status | governance | none | true | false | false | B5 external baseline runnable status. |
-| external_baseline_not_run_reason | governance | none | true | false | false | B5 external baseline not run reason. |
-| external_baseline_protocol_gap | governance | none | true | false | false | B5 external baseline protocol gap. |
-| external_baseline_result_used_for_claim | claim | none | true | true | false | Whether B5 external baseline is used for a claim. |
+| generation_model_commit_or_hash | protocol | none | true | false | false | generative_video_model_probe generation model commit or hash. |
+| generation_model_license_status | protocol | none | true | false | false | generative_video_model_probe generation model license audit status. |
+| generation_backend_id | protocol | none | true | false | false | generative_video_model_probe generation backend identifier. |
+| generation_backend_status | protocol | none | true | false | false | generative_video_model_probe generation backend status. |
+| generation_backend_reason | protocol | none | true | false | false | generative_video_model_probe generation backend status reason. |
+| trajectory_capture_mode | trajectory | none | true | false | false | generative_video_model_probe trajectory capture mode. |
+| trajectory_availability_status | trajectory | none | true | false | false | generative_video_model_probe trajectory availability status. |
+| trajectory_capture_status | trajectory | none | true | false | false | generative_video_model_probe trajectory capture status. |
+| trajectory_capture_failure_reason | trajectory | none | true | false | false | generative_video_model_probe trajectory capture failure reason. |
+| latent_capture_status | protocol | none | true | false | false | generative_video_model_probe latent capture status. |
+| latent_capture_failure_reason | protocol | none | true | false | false | generative_video_model_probe latent capture failure reason. |
+| prompt_id | protocol | none | true | false | false | generative_video_model_probe prompt identifier. |
+| prompt_text_hash | protocol | none | true | false | false | generative_video_model_probe prompt text digest. |
+| prompt_category | protocol | none | true | false | false | generative_video_model_probe prompt category. |
+| scheduler_id | protocol | none | true | false | false | generative_video_model_probe scheduler identifier. |
+| trajectory_scheduler_id | trajectory | none | true | false | false | generative_video_model_probe trajectory scheduler identifier. |
+| num_inference_steps | protocol | none | true | false | false | generative_video_model_probe inference step count. |
+| guidance_scale | protocol | none | true | false | false | generative_video_model_probe guidance scale. |
+| video_length_frames | protocol | none | true | false | false | generative_video_model_probe generated video length in frames. |
+| fps | protocol | none | true | false | false | generative_video_model_probe generated video fps. |
+| heldout_prompt_status | generalization | none | true | false | false | generative_video_model_probe heldout prompt status. |
+| heldout_seed_status | generalization | none | true | false | false | generative_video_model_probe heldout seed status. |
+| gpu_validation_status | governance | none | true | false | false | generative_video_model_probe local GPU validation status. |
+| gpu_validation_reason | governance | none | true | false | false | generative_video_model_probe local GPU validation reason. |
+| generation_model_runnable_status | governance | none | true | false | false | generative_video_model_probe generation model runnable status. |
+| generation_model_not_run_reason | governance | none | true | false | false | generative_video_model_probe generation model not run reason. |
+| visual_quality_score | metric | none | true | false | false | generative_video_model_probe visual quality score. |
+| motion_consistency_score | metric | none | true | false | false | generative_video_model_probe motion consistency score. |
+| motion_artifact_score | metric | none | true | false | false | generative_video_model_probe motion artifact score. |
+| motion_metric_status | metric | none | true | false | false | generative_video_model_probe motion metric status. |
+| semantic_consistency_score | metric | none | true | false | false | generative_video_model_probe semantic consistency score. |
+| semantic_metric_name | metric | none | true | false | false | generative_video_model_probe semantic metric name. |
+| semantic_metric_status | metric | none | true | false | false | generative_video_model_probe semantic metric status. |
+| metric_failure_reason | protocol | none | true | false | false | generative_video_model_probe metric failure reason. |
+| external_baseline_name | protocol | none | true | false | false | generative_video_model_probe external baseline name. |
+| external_baseline_version | protocol | none | true | false | false | generative_video_model_probe external baseline version. |
+| external_baseline_runnable_status | governance | none | true | false | false | generative_video_model_probe external baseline runnable status. |
+| external_baseline_not_run_reason | governance | none | true | false | false | generative_video_model_probe external baseline not run reason. |
+| external_baseline_protocol_gap | governance | none | true | false | false | generative_video_model_probe external baseline protocol gap. |
+| external_baseline_result_used_for_claim | claim | none | true | true | false | Whether generative_video_model_probe external baseline is used for a claim. |
 | external_baseline_command_config_status | governance | none | true | false | false | 现代 external baseline 官方命令是否已配置。 |
 | external_baseline_command_env_var | provenance | none | true | false | false | 现代 external baseline adapter 使用的命令环境变量名称。 |
 | external_baseline_colab_preflight_decision | governance | none | true | false | false | Colab 真实 GPU 运行前现代 external baseline command preflight 的 PASS / FAIL 决策。 |
@@ -318,27 +318,27 @@ Notebook 与 repository module 的跨边界数据
 | external_baseline_detected | metric | none | true | false | false | 外部 baseline 官方 detector 是否给出 detected 判定。 |
 | external_baseline_bit_accuracy | metric | none | true | false | false | 外部 baseline 官方 detector 给出的 bit accuracy 或等价 payload accuracy。 |
 | external_baseline_threshold | protocol | none | true | false | false | 外部 baseline 官方 detector 使用或输出的阈值。 |
-| generation_model_main_table_ready | governance | none | true | false | false | B5 main table readiness status. |
-| trajectory_observation_gain_confirmed | metric | none | true | false | false | B5 trajectory gain confirmation status. |
-| fixed_low_fpr_audit_pass | metric | none | true | false | false | B5 fixed low-FPR audit status. |
-| quality_motion_semantic_consistency_pass | metric | none | true | false | false | B5 quality motion semantic gate status. |
-| cross_prompt_generalization_pass | generalization | none | true | false | false | B5 cross prompt generalization status. |
-| cross_seed_generalization_pass | generalization | none | true | false | false | B5 cross seed generalization status. |
-| cross_motion_generalization_pass | generalization | none | true | false | false | B5 cross motion generalization status. |
-| cross_length_generalization_pass | generalization | none | true | false | false | B5 cross length generalization status. |
-| cross_prompt_seed_generalization_pass | generalization | none | true | false | false | B5 combined prompt seed generalization status. |
-| generalization_failure_reason | generalization | none | true | false | false | B5 generalization failure reason. |
-| formal_claim_status | claim | none | true | true | false | B5 formal claim status. |
-| top_conference_b5_gate | governance | none | true | false | false | B5 top conference gate decision. |
-| threshold_status | protocol | none | true | false | false | B5 threshold computation status. |
-| threshold_not_run_reason | protocol | none | true | false | false | B5 threshold not run reason. |
-| prompt_suite_id | protocol | none | true | false | false | B5 Colab prompt suite identifier. |
-| prompt_suite_role | protocol | none | true | false | false | B5 prompt or seed role inside prompt suite. |
-| prompt_suite_digest | artifact | none | true | false | false | B5 prompt suite digest. |
-| dataset_construction_status | governance | none | true | false | false | B5 input dataset construction status. |
-| dataset_source | protocol | none | true | false | false | B5 input dataset source description. |
-| prompt_negative_text | protocol | none | false | false | false | B5 prompt negative text kept in input dataset, not formal result records. |
-| colab_runtime_profile | protocol | none | true | false | false | B5 Colab runtime profile. |
+| generation_model_main_table_ready | governance | none | true | false | false | generative_video_model_probe main table readiness status. |
+| trajectory_observation_gain_confirmed | metric | none | true | false | false | generative_video_model_probe trajectory gain confirmation status. |
+| fixed_low_fpr_audit_pass | metric | none | true | false | false | generative_video_model_probe fixed low-FPR audit status. |
+| quality_motion_semantic_consistency_pass | metric | none | true | false | false | generative_video_model_probe quality motion semantic gate status. |
+| cross_prompt_generalization_pass | generalization | none | true | false | false | generative_video_model_probe cross prompt generalization status. |
+| cross_seed_generalization_pass | generalization | none | true | false | false | generative_video_model_probe cross seed generalization status. |
+| cross_motion_generalization_pass | generalization | none | true | false | false | generative_video_model_probe cross motion generalization status. |
+| cross_length_generalization_pass | generalization | none | true | false | false | generative_video_model_probe cross length generalization status. |
+| cross_prompt_seed_generalization_pass | generalization | none | true | false | false | generative_video_model_probe combined prompt seed generalization status. |
+| generalization_failure_reason | generalization | none | true | false | false | generative_video_model_probe generalization failure reason. |
+| formal_claim_status | claim | none | true | true | false | generative_video_model_probe formal claim status. |
+| top_conference_generative_video_model_probe_gate | governance | none | true | false | false | generative_video_model_probe top conference gate decision. |
+| threshold_status | protocol | none | true | false | false | generative_video_model_probe threshold computation status. |
+| threshold_not_run_reason | protocol | none | true | false | false | generative_video_model_probe threshold not run reason. |
+| prompt_suite_id | protocol | none | true | false | false | generative_video_model_probe Colab prompt suite identifier. |
+| prompt_suite_role | protocol | none | true | false | false | generative_video_model_probe prompt or seed role inside prompt suite. |
+| prompt_suite_digest | artifact | none | true | false | false | generative_video_model_probe prompt suite digest. |
+| dataset_construction_status | governance | none | true | false | false | generative_video_model_probe input dataset construction status. |
+| dataset_source | protocol | none | true | false | false | generative_video_model_probe input dataset source description. |
+| prompt_negative_text | protocol | none | false | false | false | generative_video_model_probe prompt negative text kept in input dataset, not formal result records. |
+| colab_runtime_profile | protocol | none | true | false | false | generative_video_model_probe Colab runtime profile. |
 | config_kind | governance | none | true | false | false | 配置或 artifact 的语义类型。 |
 | config_version | governance | none | true | false | false | 配置或 artifact 的版本标识。 |
 | default_drive_project_root | protocol | none | false | false | false | Colab workflow 统一配置中的默认 Google Drive 项目根目录。 |
@@ -377,24 +377,24 @@ Notebook 与 repository module 的跨边界数据
 | minimum_clean_negative_count | protocol | none | true | false | false | workflow profile 或 gate 要求的 clean negative 最小数量。 |
 | bootstrap_iteration_count | protocol | none | true | false | false | workflow profile 计划中的 bootstrap 迭代次数。 |
 | profile_switching_note | governance | none | false | false | false | workflow profile 切换时的人类可读边界说明。 |
-| cross_model_role | generalization | none | true | false | false | B5 model role for cross-model validation. |
-| generation_status | protocol | none | true | false | false | B5 generation execution status. |
-| generation_failure_reason | protocol | none | true | false | false | B5 generation failure reason. |
-| generation_runtime_sec | metric | none | true | false | false | B5 generation runtime in seconds. |
-| video_path | artifact | none | true | false | false | B5 generated video path. |
-| video_sha256 | artifact | none | true | false | false | B5 generated video hash. |
-| trajectory_step_index | trajectory | none | true | false | false | B5 trajectory callback step index. |
-| trajectory_timestep | trajectory | none | true | false | false | B5 trajectory callback timestep. |
-| latent_norm | metric | none | true | false | false | B5 latent tensor norm from trajectory callback. |
-| latent_mean | metric | none | true | false | false | B5 latent tensor mean from trajectory callback. |
-| latent_std | metric | none | true | false | false | B5 latent tensor standard deviation from trajectory callback. |
-| cross_model_validation_status | generalization | none | true | false | false | B5 cross model validation status. |
-| external_baseline_comparison_status | governance | none | true | false | false | B5 external baseline comparison status. |
+| cross_model_role | generalization | none | true | false | false | generative_video_model_probe model role for cross-model validation. |
+| generation_status | protocol | none | true | false | false | generative_video_model_probe generation execution status. |
+| generation_failure_reason | protocol | none | true | false | false | generative_video_model_probe generation failure reason. |
+| generation_runtime_sec | metric | none | true | false | false | generative_video_model_probe generation runtime in seconds. |
+| video_path | artifact | none | true | false | false | generative_video_model_probe generated video path. |
+| video_sha256 | artifact | none | true | false | false | generative_video_model_probe generated video hash. |
+| trajectory_step_index | trajectory | none | true | false | false | generative_video_model_probe trajectory callback step index. |
+| trajectory_timestep | trajectory | none | true | false | false | generative_video_model_probe trajectory callback timestep. |
+| latent_norm | metric | none | true | false | false | generative_video_model_probe latent tensor norm from trajectory callback. |
+| latent_mean | metric | none | true | false | false | generative_video_model_probe latent tensor mean from trajectory callback. |
+| latent_std | metric | none | true | false | false | generative_video_model_probe latent tensor standard deviation from trajectory callback. |
+| cross_model_validation_status | generalization | none | true | false | false | generative_video_model_probe cross model validation status. |
+| external_baseline_comparison_status | governance | none | true | false | false | generative_video_model_probe external baseline comparison status. |
 | drive_project_root | artifact | none | true | false | false | Google Drive SSTW project root used by Colab workflow. |
-| drive_dataset_root | artifact | none | true | false | false | Google Drive dataset output directory for B5 Colab workflow. |
-| drive_run_root | artifact | none | true | false | false | Google Drive run output directory for B5 Colab workflow. |
-| drive_package_dir | artifact | none | true | false | false | Google Drive package output directory for B5 Colab workflow. |
-| drive_log_dir | artifact | none | true | false | false | Google Drive log output directory for B5 Colab workflow. |
+| drive_dataset_root | artifact | none | true | false | false | Google Drive dataset output directory for generative_video_model_probe Colab workflow. |
+| drive_run_root | artifact | none | true | false | false | Google Drive run output directory for generative_video_model_probe Colab workflow. |
+| drive_package_dir | artifact | none | true | false | false | Google Drive package output directory for generative_video_model_probe Colab workflow. |
+| drive_log_dir | artifact | none | true | false | false | Google Drive log output directory for generative_video_model_probe Colab workflow. |
 | run_root | artifact | none | true | false | false | Run root packaged by Drive packager. |
 | archive_path | artifact | none | true | false | false | Archive path created by Drive packager. |
 | package_manifest_path | artifact | none | true | false | false | Package manifest path created by Drive packager. |
@@ -403,9 +403,9 @@ Notebook 与 repository module 的跨边界数据
 | decision_summary | governance | none | true | false | false | Summary of stage decision embedded in package manifest. |
 | generation_manifest_status | governance | none | true | false | false | Status showing whether generation manifest was present during packaging. |
 | hf_token_status | governance | none | true | false | false | Whether HF_TOKEN was provided to Colab runtime; token value is never recorded. |
-| implementation_evidence_status | governance | none | true | false | false | B5 Colab result checker implementation evidence status. |
-| mechanism_evidence_status | governance | none | true | false | false | B5 Colab result checker mechanism evidence status. |
-| missing_mechanism_requirements | governance | none | true | false | false | B5 missing mechanism requirements list. |
+| implementation_evidence_status | governance | none | true | false | false | generative_video_model_probe Colab result checker implementation evidence status. |
+| mechanism_evidence_status | governance | none | true | false | false | generative_video_model_probe Colab result checker mechanism evidence status. |
+| missing_mechanism_requirements | governance | none | true | false | false | generative_video_model_probe missing mechanism requirements list. |
 | successful_generation_count | metric | none | true | false | false | Number of successful generation records. |
 | external_baseline_runnable_count | metric | none | true | false | false | Number of runnable external baselines. |
 | quality_metric_ready_count | metric | none | true | false | false | Number of ready quality metric records. |
@@ -416,11 +416,11 @@ Notebook 与 repository module 的跨边界数据
 | expected_video_sha256 | artifact | none | true | false | false | Expected generated video hash from records. |
 | actual_video_sha256 | artifact | none | true | false | false | Actual generated video hash from file. |
 | next_recommended_profile | governance | none | true | false | false | Recommended next Colab profile after result checking. |
-| external_baseline_family | protocol | none | true | false | false | B5 external baseline method family. |
-| external_baseline_source_url | protocol | none | true | false | false | B5 external baseline source URL or local source marker. |
-| external_baseline_recommended_priority | governance | none | true | false | false | B5 external baseline recommendation priority. |
-| external_baseline_selection_role | governance | none | true | false | false | B5 role assigned to the external baseline. |
-| external_baseline_integration_status | governance | none | true | false | false | B5 external baseline integration status. |
+| external_baseline_family | protocol | none | true | false | false | generative_video_model_probe external baseline method family. |
+| external_baseline_source_url | protocol | none | true | false | false | generative_video_model_probe external baseline source URL or local source marker. |
+| external_baseline_recommended_priority | governance | none | true | false | false | generative_video_model_probe external baseline recommendation priority. |
+| external_baseline_selection_role | governance | none | true | false | false | generative_video_model_probe role assigned to the external baseline. |
+| external_baseline_integration_status | governance | none | true | false | false | generative_video_model_probe external baseline integration status. |
 | external_baseline_layer | governance | none | true | false | false | Comparison layer for external baseline, such as modern external baseline or explicit synchronization control. |
 | external_baseline_adapter_status | governance | none | true | false | false | Whether the external baseline has a repository adapter ready for governed execution. |
 | external_baseline_input_compatibility_status | governance | none | true | false | false | Whether the external baseline can consume the current project video, key, attack, and split inputs. |
@@ -665,50 +665,50 @@ Notebook 与 repository module 的跨边界数据
 | artifact_status | governance | none | true | false | false | Per-artifact rebuild dry-run status. |
 | full_paper_allowed | governance | none | true | false | false | Whether current gate allows full-paper result package execution. |
 | full_paper_next_gate | governance | none | true | false | false | Next gate required before full-paper result production. |
-| selection_policy | governance | none | true | false | false | B5 external baseline selection policy block. |
-| primary_selection_rule | governance | none | true | false | false | B5 external baseline primary selection rule. |
-| claim_rule | claim | none | true | true | false | B5 external baseline claim usage rule. |
-| fallback_rule | governance | none | true | false | false | B5 external baseline fallback rule. |
-| internal_mechanism_baselines | protocol | none | true | false | false | B5 internal mechanism baseline list paired with external explicit synchronization baselines. |
-| mechanism_score_source | protocol | none | true | false | false | Source used for B5 mechanism postprocess score records. |
+| selection_policy | governance | none | true | false | false | generative_video_model_probe external baseline selection policy block. |
+| primary_selection_rule | governance | none | true | false | false | generative_video_model_probe external baseline primary selection rule. |
+| claim_rule | claim | none | true | true | false | generative_video_model_probe external baseline claim usage rule. |
+| fallback_rule | governance | none | true | false | false | generative_video_model_probe external baseline fallback rule. |
+| internal_mechanism_baselines | protocol | none | true | false | false | generative_video_model_probe internal mechanism baseline list paired with external explicit synchronization baselines. |
+| mechanism_score_source | protocol | none | true | false | false | Source used for generative_video_model_probe mechanism postprocess score records. |
 | baseline_score_margin | metric | none | true | false | false | Score margin between key-conditioned trajectory score and the compared baseline score. |
 | latent_norm_range | metric | none | true | false | false | Range of latent norm values in a captured generation trajectory. |
 | latent_norm_total_variation | metric | none | true | false | false | Total variation of latent norm values across a captured generation trajectory. |
-| latent_directed_norm_drop | metric | none | true | false | false | Directed latent norm drop used by B5 trajectory proxy scoring. |
+| latent_directed_norm_drop | metric | none | true | false | false | Directed latent norm drop used by generative_video_model_probe trajectory proxy scoring. |
 | latent_mean_range | metric | none | true | false | false | Range of latent mean values in a captured generation trajectory. |
 | latent_std_range | metric | none | true | false | false | Range of latent standard deviation values in a captured generation trajectory. |
 | trajectory_observation_proxy_score | metric | none | true | false | false | Proxy trajectory observation score derived from Colab latent callback records. |
-| control_name | protocol | none | true | false | false | Controlled negative trajectory control name used by B5 postprocess. |
-| controlled_negative_count | metric | none | true | false | false | Number of controlled negative records used by B5 postprocess thresholding. |
+| control_name | protocol | none | true | false | false | Controlled negative trajectory control name used by generative_video_model_probe postprocess. |
+| controlled_negative_count | metric | none | true | false | false | Number of controlled negative records used by generative_video_model_probe postprocess thresholding. |
 | controlled_negative_false_positive_count | metric | none | true | false | false | Number of controlled negatives above the postprocess threshold. |
-| controlled_negative_fpr | metric | none | true | false | false | Controlled negative false positive rate for B5 postprocess. |
-| fixed_low_fpr_proxy_pass | metric | none | true | false | false | Whether B5 postprocess controlled negative FPR satisfies target FPR. |
+| controlled_negative_fpr | metric | none | true | false | false | Controlled negative false positive rate for generative_video_model_probe postprocess. |
+| fixed_low_fpr_proxy_pass | metric | none | true | false | false | Whether generative_video_model_probe postprocess controlled negative FPR satisfies target FPR. |
 | visual_quality_proxy_score | metric | none | true | false | false | Lightweight visual quality proxy score for generated video outputs. |
 | visual_quality_proxy_status | governance | none | true | false | false | Status for lightweight visual quality proxy records. |
 | motion_consistency_proxy_score | metric | none | true | false | false | Lightweight motion consistency proxy score from trajectory statistics. |
 | motion_consistency_proxy_status | governance | none | true | false | false | Status for lightweight motion consistency proxy records. |
 | semantic_consistency_proxy_status | governance | none | true | false | false | Status for semantic consistency proxy records. |
 | video_file_local_status | artifact | none | true | false | false | Whether a generated video path is locally available during postprocess. |
-| mechanism_postprocess_decision | governance | none | true | false | false | B5 mechanism postprocess decision based on proxy records. |
-| mechanism_score_record_count | metric | none | true | false | false | Number of B5 mechanism score records produced by postprocess. |
+| mechanism_postprocess_decision | governance | none | true | false | false | generative_video_model_probe mechanism postprocess decision based on proxy records. |
+| mechanism_score_record_count | metric | none | true | false | false | Number of generative_video_model_probe mechanism score records produced by postprocess. |
 | controlled_negative_record_count | metric | none | true | false | false | Number of controlled negative records produced by postprocess. |
 | quality_proxy_record_count | metric | none | true | false | false | Number of quality motion semantic proxy records produced by postprocess. |
 | key_conditioned_score_mean | metric | none | true | false | false | Mean key-conditioned trajectory proxy score across generated positives. |
-| best_baseline_score_mean | metric | none | true | false | false | Best mean baseline proxy score across compared B5 baselines. |
+| best_baseline_score_mean | metric | none | true | false | false | Best mean baseline proxy score across compared generative_video_model_probe baselines. |
 | trajectory_gain_over_best_baseline | metric | none | true | false | false | Mean proxy gain over the strongest compared baseline. |
-| trajectory_gain_confirmed_by_proxy | metric | none | true | false | false | Whether B5 postprocess proxy scores show trajectory gain. |
+| trajectory_gain_confirmed_by_proxy | metric | none | true | false | false | Whether generative_video_model_probe postprocess proxy scores show trajectory gain. |
 | quality_motion_semantic_proxy_pass | metric | none | true | false | false | Whether lightweight quality and motion proxies are ready; semantic remains proxy status. |
 | formal_quality_semantic_ready | governance | none | true | false | false | Whether formal quality and semantic metrics are ready for positive claim use. |
-| mechanism_postprocess_status | governance | none | true | false | false | Result checker status for B5 mechanism postprocess artifacts. |
-| postprocess_stage_id | governance | none | true | false | false | Stage id reported by B5 mechanism postprocess decision. |
+| mechanism_postprocess_status | governance | none | true | false | false | Result checker status for generative_video_model_probe mechanism postprocess artifacts. |
+| postprocess_stage_id | governance | none | true | false | false | Stage id reported by generative_video_model_probe mechanism postprocess decision. |
 | postprocess_mechanism_decision | governance | none | true | false | false | Formal mechanism decision reported by postprocess artifacts. |
 | runtime_mechanism_decision | governance | none | true | false | false | Raw mechanism decision reported by the runtime generation stage before postprocess or pilot gate aggregation. |
 | effective_mechanism_decision | governance | none | true | false | false | Package-level mechanism decision after applying governed postprocess and small-scale pilot evidence precedence. |
 | mechanism_decision_source | governance | none | true | false | false | Artifact source used to derive the package-level effective mechanism decision. |
-| video_decode_status | governance | none | true | false | false | Decode status for generated mp4 files used by B5 formal metrics. |
+| video_decode_status | governance | none | true | false | false | Decode status for generated mp4 files used by generative_video_model_probe formal metrics. |
 | video_metric_failure_reason | governance | none | true | false | false | Failure reason for generated video file metric extraction. |
 | decoded_frame_count | metric | none | true | false | false | Number of decoded frames sampled from a generated video. |
-| sampled_frame_count | metric | none | true | false | false | Number of frames sampled for B5 video file metrics. |
+| sampled_frame_count | metric | none | true | false | false | Number of frames sampled for generative_video_model_probe video file metrics. |
 | mean_brightness | metric | none | true | false | false | Mean brightness over sampled generated video frames. |
 | mean_contrast | metric | none | true | false | false | Mean contrast over sampled generated video frames. |
 | dark_pixel_ratio | metric | none | true | false | false | Ratio of near-black pixels over sampled generated video frames. |
@@ -791,7 +791,7 @@ Notebook 与 repository module 的跨边界数据
 | constraint_semantic_status | governance | none | true | false | false | Semantic gate status for sampling-time constraint. |
 | constraint_main_claim_status | claim | none | true | true | false | Claim scope status for sampling-time constraint evidence. |
 | constraint_threshold_value | metric | none | true | false | false | Decision threshold used by sampling-time constraint preflight. |
-| sampling_time_constraint_preflight_decision | governance | none | true | false | false | B6 sampling-time constraint preflight decision. |
+| sampling_time_constraint_preflight_decision | governance | none | true | false | false | sampling_time_constraint_probe sampling-time constraint preflight decision. |
 | trajectory_constraint_gain_mean | metric | none | true | false | false | Mean trajectory constraint gain across preflight records. |
 | trajectory_constraint_gain_over_unconstrained | metric | none | true | false | false | Constraint gain compared with unconstrained trajectory baseline. |
 | attacked_positive_tpr_gain | metric | none | true | false | false | TPR gain after sampling-time constraint. |
@@ -824,11 +824,11 @@ Notebook 与 repository module 的跨边界数据
 | flow_velocity_gain_over_unconstrained | metric | none | true | false | false | Flow velocity alignment gain of keyed constraint over the unconstrained baseline. |
 | flow_velocity_proxy_ready | governance | none | true | false | false | Whether flow velocity proxy evidence is ready for mechanism audit. |
 | primary_flow_matching_model_ready | governance | none | true | false | false | Whether the checked run uses Wan2.1 as the primary Flow Matching backbone. |
-| constraint_variant_summary_records | artifact | none | true | false | false | Aggregated B6 Colab constraint variant summary records. |
+| constraint_variant_summary_records | artifact | none | true | false | false | Aggregated sampling_time_constraint_probe Colab constraint variant summary records. |
 | keyed_constraint_alignment_gain_mean | metric | none | true | false | false | Mean alignment gain for keyed sampling constraint variant. |
 | baseline_alignment_gain_mean | metric | none | true | false | false | Mean alignment gain for unconstrained trajectory baseline. |
-| sampling_time_constraint_colab_probe | governance | none | true | false | false | Stage identifier for B6 real sampling callback probe. |
-| sampling_time_constraint_colab_postprocess | governance | none | true | false | false | Stage identifier for B6 Colab postprocess artifacts. |
+| sampling_time_constraint_colab_probe | governance | none | true | false | false | Stage identifier for sampling_time_constraint_probe real sampling callback probe. |
+| sampling_time_constraint_colab_postprocess | governance | none | true | false | false | Stage identifier for sampling_time_constraint_probe Colab postprocess artifacts. |
 
 | evidence_stage_id | governance | none | true | false | false | Stage identifier summarized by submission freeze preparation evidence records. |
 | evidence_decision | governance | none | true | false | false | PASS or FAIL decision summarized for one evidence stage. |

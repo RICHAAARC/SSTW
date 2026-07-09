@@ -60,13 +60,13 @@ def test_constraint_controller_builds_governed_summary() -> None:
 
 @pytest.mark.quick
 def test_sampling_time_constraint_preflight_builds_outputs(tmp_path: Path) -> None:
-    """B6 preflight runner 必须生成 records、tables、reports 和 decision。"""
+    """sampling_time_constraint_probe preflight runner 必须生成 records、tables、reports 和 decision。"""
     output_root = tmp_path / "sampling_time_constraint_preflight"
     summary = run(output_root)
 
     assert summary["implementation_decision"] == "PASS"
     assert summary["mechanism_decision"] == "PASS"
-    assert summary["audit"]["constraint_main_claim_status"] == "preflight_only_not_final_b6_claim"
+    assert summary["audit"]["constraint_main_claim_status"] == "preflight_only_not_final_sampling_time_constraint_claim"
 
     records_path = output_root / "records" / "constraint_records.jsonl"
     decision_path = output_root / "artifacts" / "sampling_time_constraint_preflight_decision.json"
@@ -81,7 +81,7 @@ def test_sampling_time_constraint_preflight_builds_outputs(tmp_path: Path) -> No
     records = read_jsonl(records_path)
     assert len(records) == 32
     assert "keyed_state_trajectory_constraint" in {record["method_variant"] for record in records}
-    assert all(record["constraint_main_claim_status"] == "preflight_only_not_final_b6_claim" for record in records)
+    assert all(record["constraint_main_claim_status"] == "preflight_only_not_final_sampling_time_constraint_claim" for record in records)
 
     decision = json.loads(decision_path.read_text(encoding="utf-8"))
     assert decision["stage_id"] == "sampling_time_constraint_preflight"

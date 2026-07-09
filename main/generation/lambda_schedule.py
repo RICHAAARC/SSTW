@@ -12,7 +12,7 @@ def build_lambda_schedule(
     """构造有界 lambda schedule。
 
     该函数属于通用工程写法。输入只包含 schedule 名称、步数、最大强度和时间窗口, 因此可复用于不同视频生成后端。
-    项目特定设计在于: 默认推荐中期采样约束, 因为 B6 假设中期 trajectory 更能反映生成语义与运动结构。
+    项目特定设计在于: 默认推荐中期采样约束, 因为 sampling_time_constraint_probe 假设中期 trajectory 更能反映生成语义与运动结构。
     """
     if num_steps <= 0:
         raise ValueError("num_steps must be positive")

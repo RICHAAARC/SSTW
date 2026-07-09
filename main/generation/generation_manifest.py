@@ -1,4 +1,4 @@
-"""生成 B5 generation manifest。"""
+"""生成 generative_video_model_probe generation manifest。"""
 
 from __future__ import annotations
 

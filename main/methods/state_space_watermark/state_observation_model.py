@@ -1,4 +1,4 @@
-"""定义 B3 正式化阶段的状态观测模型接口。"""
+"""定义 state_space_inference_formalization 正式化阶段的状态观测模型接口。"""
 
 from __future__ import annotations
 
@@ -19,9 +19,9 @@ class FormalObservationVector:
 
 
 def build_formal_observation(sample_role: str, attack_name: str, key_conditioned: bool, quality_confidence: float = 1.0) -> FormalObservationVector:
-    """构造 B3 使用的正式观测向量。
+    """构造 state_space_inference_formalization 使用的正式观测向量。
 
-    该接口明确 trajectory 在 B3 中禁用, 只使用 payload、sync、质量置信度和 key embedding。
+    该接口明确 trajectory 在 state_space_inference_formalization 中禁用, 只使用 payload、sync、质量置信度和 key embedding。
     """
     observation = build_state_observation(sample_role, attack_name, key_conditioned)
     return FormalObservationVector(

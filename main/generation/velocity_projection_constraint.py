@@ -26,7 +26,7 @@ def project_velocity_toward_direction(
 ) -> list[float]:
     """把当前速度弱投影到 key-conditioned tubelet 方向。
 
-    该函数属于项目特定写法。B6 的约束不是强制覆盖采样速度, 而是在范数预算内施加弱偏置, 以避免破坏视觉质量、运动连续性和语义一致性。
+    该函数属于项目特定写法。sampling_time_constraint_probe 的约束不是强制覆盖采样速度, 而是在范数预算内施加弱偏置, 以避免破坏视觉质量、运动连续性和语义一致性。
     """
     if len(velocity) != len(direction):
         raise ValueError("velocity and direction must have the same dimension")

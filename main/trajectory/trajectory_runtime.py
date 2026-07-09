@@ -1,4 +1,4 @@
-"""记录 B4 trajectory runtime 开销。"""
+"""记录 trajectory_observation_core_probe trajectory runtime 开销。"""
 
 from __future__ import annotations
 

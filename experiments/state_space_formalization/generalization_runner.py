@@ -1,4 +1,4 @@
-"""B3 generalization records 构建入口。"""
+"""state_space_inference_formalization generalization records 构建入口。"""
 
 from __future__ import annotations
 

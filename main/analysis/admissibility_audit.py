@@ -1,4 +1,4 @@
-"""分析 B3 admissibility negative tail。"""
+"""分析 state_space_inference_formalization admissibility negative tail。"""
 
 from __future__ import annotations
 

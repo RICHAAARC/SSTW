@@ -1,4 +1,4 @@
-"""B5 生成视频 runtime attack runner。"""
+"""generative_video_model_probe 生成视频 runtime attack runner。"""
 
 from __future__ import annotations
 

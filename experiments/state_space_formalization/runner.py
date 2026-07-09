@@ -1,4 +1,4 @@
-"""运行 B3 state-space inference formalization。"""
+"""运行 state_space_inference_formalization state-space inference formalization。"""
 
 from __future__ import annotations
 
@@ -40,7 +40,7 @@ def _build_config() -> dict:
 
 
 def build_event_records(config: dict) -> list[dict]:
-    """构建 B3 formal event records。"""
+    """构建 state_space_inference_formalization formal event records。"""
     samples = build_synthetic_samples(SPLITS, SAMPLE_ROLES, int(config["synthetic"]["sample_count_per_cell"]), tuple(config["synthetic"]["latent_shape"]))
     attacks = list(default_synthetic_attacks())
     attacks.append(type(attacks[0])("segment_jump", 0.35, True)) if not any(a.attack_name == "segment_jump" for a in attacks) else None
@@ -94,7 +94,7 @@ def _positive_rate(records: list[dict], method_variant: str) -> float:
 def _mean_complex_score(records: list[dict], method_variant: str) -> float:
     """返回复杂时间攻击上的 attacked positive 平均检测分数。
 
-    B3 的轻量 proxy 样本较少, 多数方法在 fixed-FPR 下 positive rate 都为 1。为了让消融
+    state_space_inference_formalization 的轻量 proxy 样本较少, 多数方法在 fixed-FPR 下 positive rate 都为 1。为了让消融
     记录仍能表达机制差异, 这里使用平均检测分数差作为 TPR 差的可替换代理量。
     """
     selected = [record for record in records if record["split"] == "test" and record["sample_role"] == "attacked_positive" and record["attack_name"] in COMPLEX_ATTACKS and record["method_variant"] == method_variant]
@@ -102,7 +102,7 @@ def _mean_complex_score(records: list[dict], method_variant: str) -> float:
 
 
 def build_ablation_records(records: list[dict]) -> list[dict]:
-    """从 event records 构建 B3 ablation records。"""
+    """从 event records 构建 state_space_inference_formalization ablation records。"""
     baseline_tpr = _mean_complex_score(records, "key_conditioned_state_space_inference")
     families = {
         "key_condition": ["key_conditioned_state_space_without_key_condition", "key_agnostic_state_space_model"],
@@ -129,7 +129,7 @@ def build_ablation_records(records: list[dict]) -> list[dict]:
 
 
 def build_generalization_records() -> list[dict]:
-    """构建 B3 泛化审计记录。"""
+    """构建 state_space_inference_formalization 泛化审计记录。"""
     return [
         {"generalization_axis": "unseen_key", "train_condition_id": "calibration_known_key", "test_condition_id": "test_unseen_key", "unseen_key_status": "PASS", "unseen_attack_status": "not_applicable", "generalization_delta_tpr": -0.02, "generalization_delta_fpr": 0.0},
         {"generalization_axis": "unseen_attack_type", "train_condition_id": "calibration_known_attack", "test_condition_id": "test_unseen_attack_type", "unseen_key_status": "not_applicable", "unseen_attack_status": "PASS", "generalization_delta_tpr": -0.03, "generalization_delta_fpr": 0.0},
@@ -138,7 +138,7 @@ def build_generalization_records() -> list[dict]:
 
 
 def run(output_root: str | Path) -> dict:
-    """运行 B3 并写出 records、tables、reports 和 decision。"""
+    """运行 state_space_inference_formalization 并写出 records、tables、reports 和 decision。"""
     output_root = Path(output_root)
     config = _build_config()
     raw_records = build_event_records(config)
@@ -170,7 +170,7 @@ def run(output_root: str | Path) -> dict:
     write_csv(ablation_table_path, ablation_records)
     write_csv(generalization_table_path, generalization_records)
     report_path.parent.mkdir(parents=True, exist_ok=True)
-    report_path.write_text("# State Space Formalization Report\n\nB3 lightweight formalization completed.\n", encoding="utf-8")
+    report_path.write_text("# State Space Formalization Report\n\nstate_space_inference_formalization lightweight formalization completed.\n", encoding="utf-8")
     audit_report_path.write_text("# State Space Mechanism Audit\n\n" + json.dumps(audit, ensure_ascii=False, indent=2), encoding="utf-8")
     implementation_pass = all([event_path.exists(), threshold_path.exists(), table_path.exists(), ablation_path.exists(), generalization_path.exists(), all(r["trajectory_enabled"] is False for r in records), set(config["methods"]["method_variants"]) == {r["method_variant"] for r in records}])
     decision = build_stage_decision(implementation_pass, bool(audit["mechanism_pass"]), audit)
@@ -181,7 +181,7 @@ def run(output_root: str | Path) -> dict:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="运行 B3 state-space inference formalization。")
+    parser = argparse.ArgumentParser(description="运行 state_space_inference_formalization state-space inference formalization。")
     parser.add_argument("--output-root", default="outputs/runs/state_space_inference_formalization")
     args = parser.parse_args()
     print(json.dumps(run(args.output_root), ensure_ascii=False, indent=2, sort_keys=True))

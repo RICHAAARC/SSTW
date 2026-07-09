@@ -1,4 +1,4 @@
-﻿"""B6 sampling-time constraint Colab Notebook 的路径和命令编排工具。"""
+﻿"""sampling_time_constraint_probe sampling-time constraint Colab Notebook 的路径和命令编排工具。"""
 
 from __future__ import annotations
 
@@ -15,7 +15,7 @@ DEFAULT_SSTW_TC_PRIMARY_MODEL_ID = "Wan-AI/Wan2.1-T2V-1.3B-Diffusers"
 
 
 def build_drive_layout(drive_project_root: str = DEFAULT_DRIVE_PROJECT_ROOT) -> dict[str, str]:
-    """构造 B6 Colab 在 Google Drive 中的输出目录布局。"""
+    """构造 sampling_time_constraint_probe Colab 在 Google Drive 中的输出目录布局。"""
     root = PurePosixPath(drive_project_root)
     return {
         "drive_project_root": root.as_posix(),
@@ -32,7 +32,7 @@ def build_drive_layout(drive_project_root: str = DEFAULT_DRIVE_PROJECT_ROOT) -> 
 
 
 def ensure_drive_layout(drive_project_root: str = DEFAULT_DRIVE_PROJECT_ROOT) -> dict[str, str]:
-    """创建 B6 Colab 目标目录并返回路径布局。"""
+    """创建 sampling_time_constraint_probe Colab 目标目录并返回路径布局。"""
     layout = build_drive_layout(drive_project_root)
     if stage_zip_handoff_enabled():
         # local_zip 模式下, Drive 只作为冷归档根目录使用。run / log / dataset 热路径
@@ -55,7 +55,7 @@ def build_sampling_constraint_colab_runtime_command(
     profile: str,
     model_id: str = DEFAULT_SSTW_TC_PRIMARY_MODEL_ID,
 ) -> list[str]:
-    """构造 B6 Colab GPU runtime 命令。"""
+    """构造 sampling_time_constraint_probe Colab GPU runtime 命令。"""
     return [
         sys.executable,
         "-m",
@@ -80,7 +80,7 @@ def build_formal_metric_command(
     semantic_model_id: str = "openai/clip-vit-base-patch32",
     semantic_frame_limit: int = 8,
 ) -> list[str]:
-    """构造 B6 真实视频质量、运动和语义 metric 命令。"""
+    """构造 sampling_time_constraint_probe 真实视频质量、运动和语义 metric 命令。"""
     return [
         sys.executable,
         "-m",
@@ -97,7 +97,7 @@ def build_formal_metric_command(
 
 
 def build_postprocess_command(layout: dict[str, str]) -> list[str]:
-    """构造 B6 Colab 后处理命令。"""
+    """构造 sampling_time_constraint_probe Colab 后处理命令。"""
     return [
         sys.executable,
         "-m",
@@ -108,7 +108,7 @@ def build_postprocess_command(layout: dict[str, str]) -> list[str]:
 
 
 def build_result_check_command(layout: dict[str, str]) -> list[str]:
-    """构造 B6 Colab 结果检查命令, 用于在打包前显式核对证据状态。"""
+    """构造 sampling_time_constraint_probe Colab 结果检查命令, 用于在打包前显式核对证据状态。"""
     return [
         sys.executable,
         "scripts/check_results/sampling_time_constraint_colab_result_checker.py",
@@ -135,7 +135,7 @@ def _build_legacy_drive_packaging_noop_command(packager_name: str) -> list[str]:
 
 
 def build_drive_packaging_command(layout: dict[str, str], include_videos: bool = True) -> list[str]:
-    """构造 B6 Google Drive 打包命令。"""
+    """构造 sampling_time_constraint_probe Google Drive 打包命令。"""
     if _stage_zip_mode_uses_unified_package(layout):
         return _build_legacy_drive_packaging_noop_command("sampling_time_constraint_drive_packager.py")
 

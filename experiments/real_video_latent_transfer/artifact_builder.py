@@ -1,4 +1,4 @@
-"""B2 artifact builder 入口。"""
+"""real_video_latent_transfer_check artifact builder 入口。"""
 
 from __future__ import annotations
 

@@ -1,4 +1,4 @@
-"""B3 表格重建入口。"""
+"""state_space_inference_formalization 表格重建入口。"""
 
 from __future__ import annotations
 

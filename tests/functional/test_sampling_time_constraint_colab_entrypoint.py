@@ -1,4 +1,4 @@
-﻿"""验证 B6 sampling-time constraint Colab 入口和 callback adapter。"""
+﻿"""验证 sampling_time_constraint_probe sampling-time constraint Colab 入口和 callback adapter。"""
 
 from __future__ import annotations
 
@@ -149,7 +149,7 @@ def test_sampling_constraint_adapter_scores_controls_against_matched_key() -> No
 
 @pytest.mark.quick
 def test_sampling_time_constraint_colab_workflow_uses_drive_layout() -> None:
-    """B6 Colab workflow 必须落盘到 MyDrive/SSTW 的 sampling_time_constraint 子目录。"""
+    """sampling_time_constraint_probe Colab workflow 必须落盘到 MyDrive/SSTW 的 sampling_time_constraint 子目录。"""
     layout = build_drive_layout()
 
     assert layout["drive_project_root"] == "/content/drive/MyDrive/SSTW"
@@ -205,7 +205,7 @@ def test_generation_model_config_uses_wan21_as_sstw_tc_primary() -> None:
 
 @pytest.mark.quick
 def test_sampling_time_constraint_colab_notebook_calls_repository_modules() -> None:
-    """B6 Notebook 只能作为入口, 必须调用仓库模块生成正式输出。"""
+    """sampling_time_constraint_probe Notebook 只能作为入口, 必须调用仓库模块生成正式输出。"""
     notebook_path = Path("paper_workflow/colab_notebooks/sampling_time_constraint_colab.ipynb")
     assert notebook_path.exists()
     notebook = json.loads(notebook_path.read_text(encoding="utf-8"))
@@ -239,7 +239,7 @@ def test_sampling_time_constraint_colab_notebook_calls_repository_modules() -> N
 
 @pytest.mark.quick
 def test_sampling_time_constraint_result_checker_accepts_governed_probe_records(tmp_path: Path) -> None:
-    """B6 结果检查器应能基于 governed records 判定 real sampling probe 证据状态。"""
+    """sampling_time_constraint_probe 结果检查器应能基于 governed records 判定 real sampling probe 证据状态。"""
     run_root = tmp_path / "sampling_time_constraint_colab"
     for subdir in ("records", "artifacts", "videos"):
         (run_root / subdir).mkdir(parents=True, exist_ok=True)
@@ -344,5 +344,5 @@ def test_sampling_time_constraint_result_checker_accepts_governed_probe_records(
     assert payload["mechanism_evidence_status"] == "PASS"
     assert payload["primary_flow_matching_model_ready"] is True
     assert payload["flow_velocity_proxy_ready"] is True
-    assert payload["claim_boundary"] == "real_sampling_probe_not_final_b6_submission_claim"
-    assert payload["next_recommended_action"] == "proceed_to_b6_claim_audit_and_submission_freeze_preparation"
+    assert payload["claim_boundary"] == "real_sampling_probe_not_final_sampling_time_constraint_submission_claim"
+    assert payload["next_recommended_action"] == "proceed_to_sampling_time_constraint_claim_audit_and_submission_freeze_preparation"

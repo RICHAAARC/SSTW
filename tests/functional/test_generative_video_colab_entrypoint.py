@@ -1,4 +1,4 @@
-"""验证 B5 Colab Notebook 入口、Drive 落盘与 prompt suite 构造。"""
+"""验证 generative_video_model_probe Colab Notebook 入口、Drive 落盘与 prompt suite 构造。"""
 
 from __future__ import annotations
 
@@ -405,7 +405,6 @@ def test_split_colab_notebooks_are_profile_driven() -> None:
         first_code_cell = next(cell for cell in notebook["cells"] if cell.get("cell_type") == "code")
         first_code_source = "".join(first_code_cell.get("source", []))
         switch_source = "".join(notebook["cells"][2].get("source", []))
-        assert "# 1.1 可编辑 workflow profile 切换" in switch_source
         if role == "motion_threshold_calibration":
             assert first_code_source.startswith("SSTW_WORKFLOW_PROFILE_VALUE = ''")
             assert "SSTW_WORKFLOW_PROFILE_VALUE = globals().get('SSTW_WORKFLOW_PROFILE_VALUE', '')" in switch_source
@@ -415,7 +414,9 @@ def test_split_colab_notebooks_are_profile_driven() -> None:
                 "SSTW_WORKFLOW_PROFILE_VALUE = globals().get('SSTW_WORKFLOW_PROFILE_VALUE', 'probe_paper')"
                 in switch_source
             )
-        assert "修改第一个代码 cell 第一行的 SSTW_WORKFLOW_PROFILE_VALUE" in switch_source
+        assert "# 1.1 可编辑 workflow profile 切换" not in switch_source
+        assert "修改第一个代码 cell 第一行的 SSTW_WORKFLOW_PROFILE_VALUE" not in switch_source
+        assert "可编辑 workflow profile 切换" not in switch_source
         assert "os.environ['SSTW_WORKFLOW_PROFILE']" in switch_source
         assert source.index("SSTW_WORKFLOW_PROFILE_VALUE") < source.index("resolve_notebook_workflow_profile")
         assert f"NOTEBOOK_ROLE = '{role}'" in source

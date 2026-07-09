@@ -1,4 +1,4 @@
-"""在 Colab GPU 环境中运行 B5 生成式视频模型探测。"""
+"""在 Colab GPU 环境中运行 generative_video_model_probe 生成式视频模型探测。"""
 
 from __future__ import annotations
 
@@ -394,7 +394,7 @@ def run_colab_probe(output_root: str | Path, prompt_suite_path: str | Path, prof
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="在 Colab GPU 环境中运行 B5 生成式视频模型探测。")
+    parser = argparse.ArgumentParser(description="在 Colab GPU 环境中运行 generative_video_model_probe 生成式视频模型探测。")
     parser.add_argument("--output-root", default="outputs/runs/generative_video_generation")
     parser.add_argument("--prompt-suite-path", default="outputs/datasets/generative_video_prompt_suite/prompt_seed_suite.json")
     parser.add_argument("--profile", choices=sorted(PROFILE_SETTINGS), default="pilot")

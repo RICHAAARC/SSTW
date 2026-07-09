@@ -1,4 +1,4 @@
-"""分析 B3 状态变量消融结果。"""
+"""分析 state_space_inference_formalization 状态变量消融结果。"""
 
 from __future__ import annotations
 

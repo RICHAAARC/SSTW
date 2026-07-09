@@ -1,4 +1,4 @@
-"""汇总 B1-B6 governed evidence 并生成 submission freeze preparation claim audit。"""
+"""汇总 synthetic_state_inference_sanity_to_sampling_time_constraint_probe governed evidence 并生成 submission freeze preparation claim audit。"""
 
 from __future__ import annotations
 
@@ -24,8 +24,8 @@ DEFAULT_STAGE_DECISION_PATHS = {
     "sampling_time_constraint_preflight": "outputs/runs/sampling_time_constraint_preflight/artifacts/sampling_time_constraint_preflight_decision.json",
 }
 
-DEFAULT_B5_RUN_ROOT = Path(r"G:\我的云端硬盘\SSTW\runs\generative_video_model_probe\pilot_paper")
-DEFAULT_B6_RUN_ROOT = Path(r"G:\我的云端硬盘\SSTW\runs\sampling_time_constraint_colab")
+DEFAULT_generative_video_model_probe_RUN_ROOT = Path(r"G:\我的云端硬盘\SSTW\runs\generative_video_model_probe\pilot_paper")
+DEFAULT_sampling_time_constraint_probe_RUN_ROOT = Path(r"G:\我的云端硬盘\SSTW\runs\sampling_time_constraint_colab")
 
 
 def _read_json(path: str | Path) -> dict:
@@ -90,7 +90,7 @@ def _build_claim_record(
 
 
 def _collect_stage_evidence(stage_decision_paths: dict[str, str | Path]) -> tuple[list[dict], dict[str, str]]:
-    """读取 B1-B4 与 preflight 阶段 decision 并生成证据摘要。"""
+    """读取 synthetic_state_inference_sanity_to_trajectory_observation_core_probe 与 preflight 阶段 decision 并生成证据摘要。"""
     evidence_records: list[dict] = []
     status_by_stage: dict[str, str] = {}
     for stage_id, path in stage_decision_paths.items():
@@ -101,23 +101,23 @@ def _collect_stage_evidence(stage_decision_paths: dict[str, str | Path]) -> tupl
     return evidence_records, status_by_stage
 
 
-def _collect_b5_evidence(b5_run_root: str | Path) -> tuple[dict, dict]:
-    """读取 B5 Colab result checker 输出并生成证据摘要。"""
-    b5_run_root = Path(b5_run_root)
-    payload = check_generative_video_colab_results(b5_run_root) if b5_run_root.exists() else {
+def _collect_generative_video_model_probe_evidence(generative_video_model_probe_run_root: str | Path) -> tuple[dict, dict]:
+    """读取 generative_video_model_probe Colab result checker 输出并生成证据摘要。"""
+    generative_video_model_probe_run_root = Path(generative_video_model_probe_run_root)
+    payload = check_generative_video_colab_results(generative_video_model_probe_run_root) if generative_video_model_probe_run_root.exists() else {
         "implementation_evidence_status": "FAIL",
         "mechanism_evidence_status": "FAIL",
-        "missing_mechanism_requirements": ["b5_run_root_missing"],
-        "run_root": str(b5_run_root),
+        "missing_mechanism_requirements": ["generative_video_model_probe_run_root_missing"],
+        "run_root": str(generative_video_model_probe_run_root),
     }
     status = _artifact_status_from_checker(payload)
     record = _supporting_stage_record(
         "generative_video_model_probe",
         status,
         [
-            str(b5_run_root / "records" / "generation_records.jsonl"),
-            str(b5_run_root / "records" / "formal_quality_motion_semantic_records.jsonl"),
-            str(b5_run_root / "artifacts" / "generative_video_mechanism_postprocess_decision.json"),
+            str(generative_video_model_probe_run_root / "records" / "generation_records.jsonl"),
+            str(generative_video_model_probe_run_root / "records" / "formal_quality_motion_semantic_records.jsonl"),
+            str(generative_video_model_probe_run_root / "artifacts" / "generative_video_mechanism_postprocess_decision.json"),
         ],
         {
             "generation_record_count": payload.get("generation_record_count", 0),
@@ -128,23 +128,23 @@ def _collect_b5_evidence(b5_run_root: str | Path) -> tuple[dict, dict]:
     return record, payload
 
 
-def _collect_b6_evidence(b6_run_root: str | Path) -> tuple[dict, dict]:
-    """读取 B6 Colab result checker 输出并生成证据摘要。"""
-    b6_run_root = Path(b6_run_root)
-    payload = check_sampling_time_constraint_colab_results(b6_run_root) if b6_run_root.exists() else {
+def _collect_sampling_time_constraint_evidence(sampling_time_constraint_run_root: str | Path) -> tuple[dict, dict]:
+    """读取 sampling_time_constraint_probe Colab result checker 输出并生成证据摘要。"""
+    sampling_time_constraint_run_root = Path(sampling_time_constraint_run_root)
+    payload = check_sampling_time_constraint_colab_results(sampling_time_constraint_run_root) if sampling_time_constraint_run_root.exists() else {
         "implementation_evidence_status": "FAIL",
         "mechanism_evidence_status": "FAIL",
-        "missing_mechanism_requirements": ["b6_run_root_missing"],
-        "run_root": str(b6_run_root),
+        "missing_mechanism_requirements": ["sampling_time_constraint_run_root_missing"],
+        "run_root": str(sampling_time_constraint_run_root),
     }
     status = _artifact_status_from_checker(payload)
     record = _supporting_stage_record(
         "sampling_time_constraint_colab_probe",
         status,
         [
-            str(b6_run_root / "records" / "constraint_records.jsonl"),
-            str(b6_run_root / "records" / "constraint_variant_summary_records.jsonl"),
-            str(b6_run_root / "artifacts" / "sampling_time_constraint_colab_postprocess_decision.json"),
+            str(sampling_time_constraint_run_root / "records" / "constraint_records.jsonl"),
+            str(sampling_time_constraint_run_root / "records" / "constraint_variant_summary_records.jsonl"),
+            str(sampling_time_constraint_run_root / "artifacts" / "sampling_time_constraint_colab_postprocess_decision.json"),
         ],
         {
             "generation_record_count": payload.get("generation_record_count", 0),
@@ -157,9 +157,9 @@ def _collect_b6_evidence(b6_run_root: str | Path) -> tuple[dict, dict]:
     return record, payload
 
 
-def _build_claim_records(status_by_stage: dict[str, str], b5_payload: dict, b6_payload: dict) -> list[dict]:
+def _build_claim_records(status_by_stage: dict[str, str], generative_video_model_probe_payload: dict, sampling_time_constraint_payload: dict) -> list[dict]:
     """基于阶段证据状态生成 claim audit records。"""
-    b1_b4_pass = all(
+    mechanism_precondition_pass = all(
         status_by_stage.get(stage_id) == "PASS"
         for stage_id in (
             "synthetic_state_protocol",
@@ -168,9 +168,9 @@ def _build_claim_records(status_by_stage: dict[str, str], b5_payload: dict, b6_p
             "trajectory_observation_core_probe",
         )
     )
-    b5_pass = _artifact_status_from_checker(b5_payload) == "PASS"
-    b6_pass = _artifact_status_from_checker(b6_payload) == "PASS"
-    b6_not_final = b6_payload.get("claim_boundary") == "real_sampling_probe_not_final_b6_submission_claim"
+    generative_video_model_probe_pass = _artifact_status_from_checker(generative_video_model_probe_payload) == "PASS"
+    sampling_time_constraint_pass = _artifact_status_from_checker(sampling_time_constraint_payload) == "PASS"
+    sampling_time_constraint_not_final = sampling_time_constraint_payload.get("claim_boundary") == "real_sampling_probe_not_final_sampling_time_constraint_submission_claim"
 
     claims = [
         _build_claim_record(
@@ -191,7 +191,7 @@ def _build_claim_records(status_by_stage: dict[str, str], b5_payload: dict, b6_p
         ),
         _build_claim_record(
             "claim_real_video_latent_transfer",
-            "The B1 state-space inference mechanism remains effective in the real-video VAE encode-decode-reencode pathway while preserving low false positives.",
+            "The synthetic_state_inference_sanity state-space inference mechanism remains effective in the real-video VAE encode-decode-reencode pathway while preserving low false positives.",
             "main",
             "supported" if status_by_stage.get("real_video_latent_transfer") == "PASS" else "unsupported",
             ["real_video_latent_transfer"],
@@ -209,23 +209,23 @@ def _build_claim_records(status_by_stage: dict[str, str], b5_payload: dict, b6_p
             "claim_generative_video_probe",
             "The mechanism remains observable in real generative video outputs under the governed LTX-Video probe and formal quality, motion, and semantic metrics.",
             "main",
-            "supported" if b5_pass else "unsupported",
+            "supported" if generative_video_model_probe_pass else "unsupported",
             ["generative_video_model_probe"],
-            [str(b5_payload.get("run_root", DEFAULT_B5_RUN_ROOT))],
+            [str(generative_video_model_probe_payload.get("run_root", DEFAULT_generative_video_model_probe_RUN_ROOT))],
         ),
         _build_claim_record(
             "claim_sampling_time_constraint_probe",
             "Sampling-time weak constraint improves keyed trajectory alignment in the governed real sampling callback probe while formal quality, motion, and semantic metrics remain ready.",
             "exploratory",
-            "supported" if b6_pass else "unsupported",
+            "supported" if sampling_time_constraint_pass else "unsupported",
             ["sampling_time_constraint_colab_probe"],
-            [str(b6_payload.get("run_root", DEFAULT_B6_RUN_ROOT))],
+            [str(sampling_time_constraint_payload.get("run_root", DEFAULT_sampling_time_constraint_probe_RUN_ROOT))],
         ),
         _build_claim_record(
             "claim_sstw_t_submission_preparation",
-            "SSTW-T can enter submission preparation because B1-B5 governed evidence passes and each supported claim maps to records or decision artifacts.",
+            "SSTW-T can enter submission preparation because synthetic_state_inference_sanity_to_generative_video_model_probe governed evidence passes and each supported claim maps to records or decision artifacts.",
             "main",
-            "supported" if b1_b4_pass and b5_pass else "unsupported",
+            "supported" if mechanism_precondition_pass and generative_video_model_probe_pass else "unsupported",
             [
                 "synthetic_state_protocol",
                 "state_space_inference_formalization",
@@ -233,16 +233,16 @@ def _build_claim_records(status_by_stage: dict[str, str], b5_payload: dict, b6_p
                 "trajectory_observation_core_probe",
                 "generative_video_model_probe",
             ],
-            [str(b5_payload.get("run_root", DEFAULT_B5_RUN_ROOT))],
+            [str(generative_video_model_probe_payload.get("run_root", DEFAULT_generative_video_model_probe_RUN_ROOT))],
         ),
         _build_claim_record(
             "claim_sstw_tc_submission_freeze",
             "SSTW-TC is ready as a final submission-freeze main claim.",
             "exploratory",
-            "needs_downgrade" if b6_pass and b6_not_final else "unsupported",
+            "needs_downgrade" if sampling_time_constraint_pass and sampling_time_constraint_not_final else "unsupported",
             ["sampling_time_constraint_colab_probe"],
-            [str(b6_payload.get("run_root", DEFAULT_B6_RUN_ROOT))],
-            "b6_real_sampling_probe_is_supported_but_not_final_submission_freeze_claim" if b6_pass and b6_not_final else "b6_probe_not_ready",
+            [str(sampling_time_constraint_payload.get("run_root", DEFAULT_sampling_time_constraint_probe_RUN_ROOT))],
+            "sampling_time_constraint_real_sampling_probe_is_supported_but_not_final_submission_freeze_claim" if sampling_time_constraint_pass and sampling_time_constraint_not_final else "sampling_time_constraint_probe_not_ready",
         ),
     ]
     return claims
@@ -250,8 +250,8 @@ def _build_claim_records(status_by_stage: dict[str, str], b5_payload: dict, b6_p
 
 def run_submission_freeze_preparation(
     output_root: str | Path,
-    b5_run_root: str | Path = DEFAULT_B5_RUN_ROOT,
-    b6_run_root: str | Path = DEFAULT_B6_RUN_ROOT,
+    generative_video_model_probe_run_root: str | Path = DEFAULT_generative_video_model_probe_RUN_ROOT,
+    sampling_time_constraint_run_root: str | Path = DEFAULT_sampling_time_constraint_probe_RUN_ROOT,
     stage_decision_paths: dict[str, str | Path] | None = None,
     package_dir: str | Path | None = None,
 ) -> dict:
@@ -260,10 +260,10 @@ def run_submission_freeze_preparation(
     package_dir = Path(package_dir) if package_dir else output_root / "packages"
     stage_decision_paths = stage_decision_paths or DEFAULT_STAGE_DECISION_PATHS
     evidence_records, status_by_stage = _collect_stage_evidence(stage_decision_paths)
-    b5_record, b5_payload = _collect_b5_evidence(b5_run_root)
-    b6_record, b6_payload = _collect_b6_evidence(b6_run_root)
-    evidence_records.extend([b5_record, b6_record])
-    claim_records = _build_claim_records(status_by_stage, b5_payload, b6_payload)
+    generative_video_model_probe_record, generative_video_model_probe_payload = _collect_generative_video_model_probe_evidence(generative_video_model_probe_run_root)
+    sampling_time_constraint_record, sampling_time_constraint_payload = _collect_sampling_time_constraint_evidence(sampling_time_constraint_run_root)
+    evidence_records.extend([generative_video_model_probe_record, sampling_time_constraint_record])
+    claim_records = _build_claim_records(status_by_stage, generative_video_model_probe_payload, sampling_time_constraint_payload)
 
     supported_claim_count = sum(1 for record in claim_records if record["claim_status"] == "supported")
     needs_downgrade_count = sum(1 for record in claim_records if record["claim_status"] == "needs_downgrade")
@@ -302,7 +302,7 @@ def run_submission_freeze_preparation(
     write_json(output_root / "artifacts" / "submission_freeze_preparation_manifest.json", {
         "artifact_id": "submission_freeze_preparation_manifest",
         "artifact_type": "manifest",
-        "input_paths": [str(path) for path in stage_decision_paths.values()] + [str(b5_run_root), str(b6_run_root)],
+        "input_paths": [str(path) for path in stage_decision_paths.values()] + [str(generative_video_model_probe_run_root), str(sampling_time_constraint_run_root)],
         "output_paths": [
             str(output_root / "records" / "submission_stage_evidence_records.jsonl"),
             str(output_root / "records" / "claim_audit_records.jsonl"),
@@ -315,9 +315,9 @@ def run_submission_freeze_preparation(
     report_path.parent.mkdir(parents=True, exist_ok=True)
     report_path.write_text(
         "# Submission Freeze Preparation Report\n\n"
-        "该报告由 B1-B6 governed records 和 decision artifacts 重建。"
+        "该报告由 synthetic_state_inference_sanity_to_sampling_time_constraint_probe governed records 和 decision artifacts 重建。"
         "当前允许 SSTW-T 进入投稿准备, 但将 SSTW-TC 最终主 claim 降级为 exploratory, "
-        "因为 B6 结果仍是 real sampling probe, 不是最终 submission freeze claim。\n\n"
+        "因为 sampling_time_constraint_probe 结果仍是 real sampling probe, 不是最终 submission freeze claim。\n\n"
         + json.dumps(decision, ensure_ascii=False, indent=2),
         encoding="utf-8",
     )
@@ -331,9 +331,9 @@ def run_submission_freeze_preparation(
     readiness_summary = build_submission_readiness_summary(output_root)
     report_path.write_text(
         "# Submission Freeze Preparation Report\n\n"
-        "该报告由 B1-B6 governed records 和 decision artifacts 重建。"
+        "该报告由 synthetic_state_inference_sanity_to_sampling_time_constraint_probe governed records 和 decision artifacts 重建。"
         "当前允许 SSTW-T 进入投稿准备, 但将 SSTW-TC 最终主 claim 降级为 exploratory, "
-        "因为 B6 结果仍是 real sampling probe, 不是最终 submission freeze claim。\n\n"
+        "因为 sampling_time_constraint_probe 结果仍是 real sampling probe, 不是最终 submission freeze claim。\n\n"
         + json.dumps(decision, ensure_ascii=False, indent=2),
         encoding="utf-8",
     )
@@ -351,11 +351,11 @@ def run_submission_freeze_preparation(
 def main() -> None:
     parser = argparse.ArgumentParser(description="生成 submission freeze preparation claim audit artifacts。")
     parser.add_argument("--output-root", default="outputs/runs/submission_freeze_preparation")
-    parser.add_argument("--b5-run-root", default=str(DEFAULT_B5_RUN_ROOT))
-    parser.add_argument("--b6-run-root", default=str(DEFAULT_B6_RUN_ROOT))
+    parser.add_argument("--generative-video-model-probe-run-root", default=str(DEFAULT_generative_video_model_probe_RUN_ROOT))
+    parser.add_argument("--sampling-time-constraint-run-root", default=str(DEFAULT_sampling_time_constraint_probe_RUN_ROOT))
     parser.add_argument("--package-dir", default="")
     args = parser.parse_args()
-    payload = run_submission_freeze_preparation(args.output_root, args.b5_run_root, args.b6_run_root, package_dir=args.package_dir or None)
+    payload = run_submission_freeze_preparation(args.output_root, args.generative_video_model_probe_run_root, args.sampling_time_constraint_run_root, package_dir=args.package_dir or None)
     print(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True))
 
 

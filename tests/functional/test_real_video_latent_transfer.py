@@ -1,4 +1,4 @@
-"""验证 B2 real video latent transfer check 的轻量闭环。"""
+"""验证 real_video_latent_transfer_check real video latent transfer check 的轻量闭环。"""
 
 from __future__ import annotations
 
@@ -13,7 +13,7 @@ from main.protocol.record_writer import read_jsonl
 
 @pytest.mark.quick
 def test_real_video_latent_transfer_builds_outputs(tmp_path: Path) -> None:
-    """B2 runner 必须生成 records、quality records、thresholds、tables 和 decision。"""
+    """real_video_latent_transfer_check runner 必须生成 records、quality records、thresholds、tables 和 decision。"""
     output_root = tmp_path / "real_video_latent_transfer_check"
     summary = run(output_root)
 
@@ -40,7 +40,7 @@ def test_real_video_latent_transfer_builds_outputs(tmp_path: Path) -> None:
 
 @pytest.mark.quick
 def test_real_video_latent_transfer_preserves_low_fpr(tmp_path: Path) -> None:
-    """B2 机制审计必须保持负样本安全。"""
+    """real_video_latent_transfer_check 机制审计必须保持负样本安全。"""
     output_root = tmp_path / "real_video_latent_transfer_check"
     summary = run(output_root)
     assert summary["audit"]["attacked_negative_fpr"] == 0.0

@@ -1,4 +1,4 @@
-"""验证 B5 生成视频正式质量与运动 metric runner。"""
+"""验证 generative_video_model_probe 生成视频正式质量与运动 metric runner。"""
 
 from __future__ import annotations
 

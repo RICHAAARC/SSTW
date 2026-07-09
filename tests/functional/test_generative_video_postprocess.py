@@ -1,4 +1,4 @@
-"""验证 B5 Colab 机制后处理流程。"""
+"""验证 generative_video_model_probe Colab 机制后处理流程。"""
 
 from __future__ import annotations
 

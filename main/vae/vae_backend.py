@@ -1,4 +1,4 @@
-"""提供 B2 视频 VAE backend 的轻量代理。"""
+"""提供 real_video_latent_transfer_check 视频 VAE backend 的轻量代理。"""
 
 from __future__ import annotations
 

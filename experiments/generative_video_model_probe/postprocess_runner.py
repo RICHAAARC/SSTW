@@ -1,4 +1,4 @@
-"""对 Colab 生成结果进行 B5 机制后处理。"""
+"""对 Colab 生成结果进行 generative_video_model_probe 机制后处理。"""
 
 from __future__ import annotations
 
@@ -385,7 +385,7 @@ def postprocess_colab_run(
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="对 B5 Colab 输出进行机制后处理。")
+    parser = argparse.ArgumentParser(description="对 generative_video_model_probe Colab 输出进行机制后处理。")
     parser.add_argument("--run-root", required=True)
     parser.add_argument("--config-path", default=DEFAULT_PROTOCOL_CONFIG)
     parser.add_argument("--target-fpr", type=float, default=None)

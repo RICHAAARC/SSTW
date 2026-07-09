@@ -1,4 +1,4 @@
-"""B5 生成式视频 Colab Notebook 的路径和命令编排工具。"""
+"""generative_video_model_probe 生成式视频 Colab Notebook 的路径和命令编排工具。"""
 
 from __future__ import annotations
 
@@ -1126,7 +1126,7 @@ def build_prompt_suite_command(layout: dict[str, str]) -> list[str]:
 
 
 def build_colab_runtime_command(layout: dict[str, str], profile: str, model_id: str, cross_model_id: str = "") -> list[str]:
-    """构造 B5 Colab GPU 运行命令。"""
+    """构造 generative_video_model_probe Colab GPU 运行命令。"""
     command = [
         sys.executable,
         "-m",
@@ -1151,7 +1151,7 @@ def build_formal_metric_command(
     semantic_frame_limit: int = 8,
     disable_semantic_metric: bool = False,
 ) -> list[str]:
-    """构造 B5 正式质量、运动与语义 metric 命令, 从实际 mp4 文件生成 governed records。"""
+    """构造 generative_video_model_probe 正式质量、运动与语义 metric 命令, 从实际 mp4 文件生成 governed records。"""
     command = [
         sys.executable,
         "-m",
@@ -1182,7 +1182,7 @@ def build_motion_threshold_calibration_command(layout: dict[str, str]) -> list[s
 
 
 def build_mechanism_postprocess_command(layout: dict[str, str]) -> list[str]:
-    """构造 B5 Colab 机制后处理命令, target_fpr 由当前 protocol config 决定。"""
+    """构造 generative_video_model_probe Colab 机制后处理命令, target_fpr 由当前 protocol config 决定。"""
     return [
         sys.executable,
         "-m",

@@ -1,4 +1,4 @@
-"""实现 B4 detector-side trajectory observation。"""
+"""实现 trajectory_observation_core_probe detector-side trajectory observation。"""
 
 from __future__ import annotations
 

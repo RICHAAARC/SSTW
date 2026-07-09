@@ -1,4 +1,4 @@
-"""定义 B3 正式化阶段的状态转移模型接口。"""
+"""定义 state_space_inference_formalization 正式化阶段的状态转移模型接口。"""
 
 from __future__ import annotations
 

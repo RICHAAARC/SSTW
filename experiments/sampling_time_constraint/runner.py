@@ -31,7 +31,7 @@ def _load_json(path: str) -> dict:
 
 
 def _build_config() -> dict:
-    """加载 B6 preflight 所需配置。"""
+    """加载 sampling_time_constraint_probe preflight 所需配置。"""
     return {
         "protocol": _load_json("configs/protocol/sampling_time_constraint_preflight.json"),
         "constraint": _load_json("configs/generation/sampling_constraint.json"),
@@ -116,7 +116,7 @@ def _build_constraint_config(config: dict, method_variant: str) -> SamplingConst
 
 
 def build_constraint_records(config: dict) -> list[dict]:
-    """构造 B6 preflight constraint records。"""
+    """构造 sampling_time_constraint_probe preflight constraint records。"""
     records: list[dict] = []
     num_steps = int(config["constraint"]["default_num_steps"])
     for sample_index in range(4):
@@ -153,7 +153,7 @@ def build_constraint_records(config: dict) -> list[dict]:
             records.append({
                 "record_version": "sampling_time_constraint_preflight_v1",
                 "stage_id": "sampling_time_constraint_preflight",
-                "sample_id": f"b6_preflight_sample_{sample_index:04d}",
+                "sample_id": f"sampling_time_constraint_preflight_sample_{sample_index:04d}",
                 "prompt_id": prompt_id,
                 "seed_id": seed_id,
                 "method_variant": method_variant,
@@ -175,7 +175,7 @@ def build_constraint_records(config: dict) -> list[dict]:
                 "constraint_quality_status": "PASS" if quality_delta <= config["protocol"]["quality_delta_limit"] else "BLOCKING",
                 "constraint_motion_status": "PASS" if motion_delta <= config["protocol"]["motion_delta_limit"] else "BLOCKING",
                 "constraint_semantic_status": "PASS" if semantic_delta <= config["protocol"]["semantic_delta_limit"] else "BLOCKING",
-                "constraint_main_claim_status": "preflight_only_not_final_b6_claim",
+                "constraint_main_claim_status": "preflight_only_not_final_sampling_time_constraint_claim",
                 "constraint_threshold_value": threshold,
                 **summary,
                 "trajectory_constraint_gain": gain,
@@ -190,7 +190,7 @@ def _mean_for(records: list[dict], method_variant: str, field: str) -> float:
 
 
 def audit_constraint_preflight(records: list[dict], config: dict) -> dict:
-    """审计 B6 preflight 是否形成可继续接入真实采样的证据。"""
+    """审计 sampling_time_constraint_probe preflight 是否形成可继续接入真实采样的证据。"""
     main_gain = _mean_for(records, "keyed_state_trajectory_constraint", "trajectory_constraint_gain")
     baseline_gain = _mean_for(records, "key_conditioned_state_space_with_trajectory", "trajectory_constraint_gain")
     tpr_gain = _mean_for(records, "keyed_state_trajectory_constraint", "attacked_positive_TPR_after_constraint") - _mean_for(records, "keyed_state_trajectory_constraint", "attacked_positive_TPR_before_constraint")
@@ -232,13 +232,13 @@ def audit_constraint_preflight(records: list[dict], config: dict) -> dict:
         "quality_motion_semantic_constraint_gate": "PASS" if quality_motion_semantic_gate else "FAIL",
         "lambda_schedule_ablation_supports_mid_stage": bool(mid_gain >= early_gain and mid_gain >= late_gain),
         "strong_lambda_quality_block_detected": strong_lambda_blocked,
-        "constraint_main_claim_status": "preflight_only_not_final_b6_claim",
+        "constraint_main_claim_status": "preflight_only_not_final_sampling_time_constraint_claim",
         "submission_claim_policy": config["protocol"]["submission_claim_policy"],
     }
 
 
 def run(output_root: str | Path) -> dict:
-    """运行 B6 sampling-time constraint preflight 并写出 governed artifacts。"""
+    """运行 sampling_time_constraint_probe sampling-time constraint preflight 并写出 governed artifacts。"""
     output_root = Path(output_root)
     config = _build_config()
     records = build_constraint_records(config)
@@ -266,7 +266,7 @@ def run(output_root: str | Path) -> dict:
     report_path.parent.mkdir(parents=True, exist_ok=True)
     report_path.write_text(
         "# Sampling-Time Constraint Preflight Report\n\n"
-        "该报告验证 sampling-time weak constraint 的工程闭环。当前 records 只支持 preflight 结论, 不支持最终 B6 论文 claim。\n\n"
+        "该报告验证 sampling-time weak constraint 的工程闭环。当前 records 只支持 preflight 结论, 不支持最终 sampling_time_constraint_probe 论文 claim。\n\n"
         + json.dumps(audit, ensure_ascii=False, indent=2),
         encoding="utf-8",
     )
@@ -285,7 +285,7 @@ def run(output_root: str | Path) -> dict:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="运行 B6 sampling-time weak constraint preflight。")
+    parser = argparse.ArgumentParser(description="运行 sampling_time_constraint_probe sampling-time weak constraint preflight。")
     parser.add_argument("--output-root", default="outputs/runs/sampling_time_constraint_preflight")
     args = parser.parse_args()
     print(json.dumps(run(args.output_root), ensure_ascii=False, indent=2, sort_keys=True))

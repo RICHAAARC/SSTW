@@ -1,4 +1,4 @@
-"""构造 B5 Colab 运行所需的 prompt / seed / motion 数据集。"""
+"""构造 generative_video_model_probe Colab 运行所需的 prompt / seed / motion 数据集。"""
 
 from __future__ import annotations
 
@@ -683,7 +683,7 @@ def write_prompt_suite(
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="构造 B5 Colab prompt / seed 数据集。")
+    parser = argparse.ArgumentParser(description="构造 generative_video_model_probe Colab prompt / seed 数据集。")
     parser.add_argument("--output-root", default="outputs/datasets/generative_video_prompt_suite")
     parser.add_argument("--probe-paper-config-path", default=DEFAULT_PROBE_PAPER_CONFIG)
     parser.add_argument("--pilot-paper-config-path", default=DEFAULT_PILOT_PAPER_CONFIG)

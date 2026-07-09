@@ -1,4 +1,4 @@
-"""将 B5 Colab 生成式视频探测结果打包到 Google Drive。"""
+"""将 generative_video_model_probe Colab 生成式视频探测结果打包到 Google Drive。"""
 
 from __future__ import annotations
 
@@ -82,7 +82,7 @@ def package_generative_video_colab_run(
     workflow_profile: str | None = None,
     stage_package_id: str | None = None,
 ) -> dict:
-    """将 B5 Colab run_root 打包为 zip 和 sidecar manifest。
+    """将 generative_video_model_probe Colab run_root 打包为 zip 和 sidecar manifest。
 
     该函数只移动与打包已有 governed outputs, 不生成新的实验结果。
     """
@@ -327,7 +327,7 @@ def package_generative_video_colab_run(
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="将 B5 Colab 生成式视频探测结果打包到 Google Drive。")
+    parser = argparse.ArgumentParser(description="将 generative_video_model_probe Colab 生成式视频探测结果打包到 Google Drive。")
     parser.add_argument("--run-root", required=True)
     parser.add_argument("--drive-project-root", default=os.environ.get("SSTW_DRIVE_PROJECT_ROOT", DEFAULT_DRIVE_PROJECT_ROOT))
     parser.add_argument("--workflow-profile", default=os.environ.get("SSTW_WORKFLOW_PROFILE", DEFAULT_WORKFLOW_PROFILE))

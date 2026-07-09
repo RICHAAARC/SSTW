@@ -1,29 +1,99 @@
-# governed_project_framework
+# SSTW：状态空间同步 Flow Matching 轨迹水印
 
-`governed_project_framework` 是一个面向论文相关研究项目的工程治理模板。它的目标不是提供某个具体算法, 而是提供一套可复制的项目构建方法, 用于约束论文方法实现、实验流程、Notebook workflow、表格图表重建、claim audit 和最小发布边界。
+SSTW 是一个面向生成式视频水印论文实验的 governed research project。项目目标是在真实 Flow Matching 视频生成链路中验证状态空间同步轨迹水印机制, 并用可审计的 records、tables、figures、reports 和 manifests 支撑论文结论。
 
-## 核心定位
+本仓库不是单纯的 Notebook 集合。Notebook 只作为 Colab 入口; 正式协议逻辑、阶段依赖、结果打包、门禁判定和论文产物重建必须位于仓库模块、脚本和配置中。
 
-本框架适用于论文项目, 尤其适合需要长期迭代、阶段性实验、Notebook 远程运行、正式表格重建和审稿复现材料整理的研究代码库。
+## 主干门禁
 
-框架固定使用 `main/` 作为核心 Python 包目录。`main/` 保存论文方法、实验协议、核心评估、表格重建和 CLI 复现入口。
+当前主干门禁为:
 
-## 五层结构
+```text
+protocol_governance
+-> mechanism_validation
+-> probe_paper
+-> pilot_paper
+-> full_paper
+-> submission_freeze
+```
 
-1. 契约层: `.codex/project_contract.md` 与 `docs/` 定义阶段、目录边界、字段、命名、测试和发布规则。
-2. Skill 层: `.codex/skills/*.skill.md` 约束 Agent 或协作者在不同任务中的允许行为与禁止行为。
-3. Harness 层: `tools/harness/` 将文档约束转化为可执行审计。
-4. 测试层: `tests/constraints/`、`tests/functional/`、`tests/integration/` 控制默认测试成本。
-5. 论文产物治理层: records、tables、figures、reports、manifests 和 claims 之间保持可追溯关系。
+其中 paper profile 的运行规模如下:
 
-## 推荐目录
+| profile | target FPR | 生成单元 | clean negative event | 作用 |
+|---|---:|---:|---:|---|
+| `probe_paper` | 0.1 | 5 prompt × 2 seed = 10 | 500 | 小样本论文闭合验证, 用于确认完整协议、baseline、公平比较、图表和门禁能跑通。 |
+| `pilot_paper` | 0.01 | 25 prompt × 4 seed = 100 | 5000 | 中等规模论文协议预演, 用于确认低 FPR 结论稳定性。 |
+| `full_paper` | 0.001 | 125 prompt × 8 seed = 1000 | 50000 | 正式论文主结果层。 |
+
+三个 paper profile 只能在样本规模、统计功效和 target FPR 上不同。attack 协议、baseline 接口、公平校准、内部消融、图表构建和门禁逻辑必须保持同构。
+
+## 推荐 Colab / Notebook 流程
+
+Notebook 说明见:
+
+```text
+paper_workflow/colab_notebooks/README.md
+```
+
+从零开始的正式顺序为:
+
+```text
+motion_threshold_calibration_colab.ipynb  # 仅当 motion calibration artifact 缺失或需要重校准时运行
+-> generative_video_generation_colab.ipynb
+-> generative_video_quality_scoring_colab.ipynb
+-> sstw_mechanism_postprocess_colab.ipynb
+-> runtime_attack_colab.ipynb
+-> runtime_detection_colab.ipynb
+-> 5 个主实验 external baseline formal reference Notebook
+-> formal_comparison_scoring_colab.ipynb
+-> paper_evidence_postprocess_colab.ipynb
+-> paper_gate_and_package_colab.ipynb
+```
+
+硬件与并行原则由 `paper_workflow/colab_notebooks/README.md` 中的 Notebook 矩阵统一定义。简要原则是:
+
+1. Wan2.1 生成、motion threshold calibration、VidSig 和 VideoShield official reference 需要真实 GPU。
+2. 质量评分、VideoSeal、REVMark、WAM-frame 在小规模下可能 CPU 可运行, 但正式运行建议使用 GPU。
+3. 机制后处理、runtime attack、runtime detection、formal comparison scoring、paper evidence postprocess 和 paper gate 以 CPU 为主。
+4. 5 个 external baseline Notebook 在 `generative_video_generation_colab`、`runtime_attack_colab` 和 `runtime_detection_colab` 阶段包都完成后可以并行运行, 但每个 baseline 只打包自己的 official bundle。
+5. `formal_comparison_scoring_colab.ipynb` 必须等待 5 个 baseline official reference 阶段包全部完成后再运行。
+
+## 无 Notebook 的服务器运行入口
+
+普通 GPU 服务器可直接使用命令行入口, 不依赖 Colab Notebook:
+
+```bash
+python scripts/run_generative_video_server_workflow.py \
+  --project-root /data/SSTW \
+  --workflow-profile probe_paper \
+  --pipeline paper_protocol_complete
+```
+
+只检查计划、不运行重型任务:
+
+```bash
+python scripts/run_generative_video_server_workflow.py \
+  --project-root /data/SSTW \
+  --workflow-profile probe_paper \
+  --pipeline paper_protocol_complete \
+  --dry-run
+```
+
+更多命令见:
+
+```text
+scripts/README.md
+```
+
+## 目录职责
 
 ```text
 main/                   论文方法、协议、分析、CLI 和核心复现能力
-configs/                实验配置模板
-experiments/            阶段性实验 runner 和 paper protocol
-paper_workflow/         Notebook / Colab workflow 入口和 session helper
-scripts/                数据准备、结果检查、打包和发布辅助命令
+configs/                profile、protocol、baseline 和 workflow 配置
+experiments/            实验 runner、paper protocol 和后处理逻辑
+external_baseline/      external baseline source intake、official runtime 和 adapter
+paper_workflow/         Notebook / Colab workflow 入口和共享 helper
+scripts/                数据准备、结果检查、打包和服务器 workflow 入口
 docs/                   工程治理、实验协议和复现说明
 tools/harness/          可执行治理审计
 tests/                  分层测试目录
@@ -34,34 +104,20 @@ outputs/                本地运行输出, 默认不提交
 
 ## 必需检查
 
+修改代码或治理文档后运行:
+
 ```bash
-python tools/harness/inspect_repository.py
 pytest -q
 python tools/harness/run_all_audits.py
 ```
 
-## 复制到新论文项目
+`pytest -q` 默认只运行轻量测试, 不应把真实 GPU 运行放入默认测试路径。
 
-1. 将本目录内容复制到新仓库根目录。
-2. 修改 `.codex/project_contract.md` 中的论文目标、阶段名称、方法对象和通过条件。
-3. 在 `main/` 中实现论文方法和核心协议, 不要把正式逻辑只写在 Notebook 中。
-4. 在 `experiments/` 中放置阶段性实验 runner。
-5. 在 `paper_workflow/` 中放置 Notebook workflow, 但 Notebook 只负责调度。
-6. 在 `docs/field_registry.md` 中登记 governed fields。
-7. 保持 `pytest -q` 默认只运行 `unit`、`constraint` 或 `quick` 测试。
+## 论文产物治理原则
 
-## 发布建议
-
-该框架可作为 GitHub 模板仓库发布。使用者应先替换论文主题、方法名称、阶段名称和 field registry, 再接入 CI。
-
-## 方法抽离与论文附件
-
-模板支持将完整开发仓库抽离为不同附件 profile:
-
-1. `development_repository`: 保留治理、harness、Notebook workflow 和全部测试。
-2. `paper_artifact_rebuild_package`: 保留 records 到 tables、figures、reports、manifests 的重建能力。
-3. `minimal_method_package`: 只保留 `main/core/`、`main/methods/`、`main/protocol/` 和最小配置。
-
-抽离规则见 `docs/extraction_profiles.md`。核心原则是: 核心方法层不得依赖 `.codex/`、`tools/harness/`、`tests/`、`experiments/`、`scripts/`、`paper_workflow/` 或本地输出目录。
-
-中间状态字段、临时字段和缓存字段的规则见 `docs/intermediate_state_governance.md`。跨边界保存的中间状态必须显式命名并登记到 `docs/field_registry.md`。
+1. records 是论文结果事实来源。
+2. tables、figures 和 reports 必须可由 records 与 manifests 重建。
+3. supported claims 必须绑定到 governed artifacts。
+4. external baseline 必须在项目内完成 clone / build / run / adapt / record, 不能依赖外部补交结果。
+5. `metric_status: measured_formal` 只能由正式 workflow 转写生成; `non-run record` 只能记录阻断原因, 不能替代正式 baseline 结果。
+6. Notebook 不得直接手写正式 records、thresholds、tables、figures 或 reports。

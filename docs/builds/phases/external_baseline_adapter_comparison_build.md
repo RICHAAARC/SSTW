@@ -131,7 +131,7 @@ reports/external_baseline_self_containment_report.md
 2. adapter score 只使用 callback trajectory records 与 runtime video metadata, 不使用 `S_final` 或最终判定分数做污染过滤或 baseline 打分。
 3. 现代视频水印 baseline 必须通过项目内 clone / build / run / adapt / record 和正式 adapter 产出 `metric_status = measured_formal`; 官方资源或命令未配置时只能形成 governed unsupported / non-run comparison row。
 4. 所有 comparison 表必须从 `external_baseline_score_records.jsonl` 重建, 不能手工写结论。
-5. 显式同步 control 的 `external_baseline_result_used_for_claim` 必须保持 `false`; 现代 baseline 只有项目内自包含的 `measured_formal` records 才能进入 probe_paper / probe_paper / pilot_paper / full_paper 比较审计。
+5. 显式同步 control 的 `external_baseline_result_used_for_claim` 必须保持 `false`; 现代 baseline 只有项目内自包含的 `measured_formal` records 才能进入 probe_paper / pilot_paper / full_paper 比较审计。
 
 ## 当前阶段状态
 

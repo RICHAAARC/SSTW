@@ -232,7 +232,7 @@ pilot_paper_gate 与 full_paper_result_checker 工程入口已实现, 但 full_p
 |---|---|
 | 完成状态 | checker 工程入口已实现, full_paper 真实结果仍等待前置门禁与大规模运行 |
 | 主要差距项 | 历史 small-scale 机制 pilot 已解除, pilot_paper gate 已要求 baseline comparison 与内部消融覆盖同批 trace, 但 probe_paper、pilot_paper 真实结果、probe_paper、现代外部 baseline 正式主表对比、full-scale 内部消融、adaptive attack、replay/sketch、FPR=0.001 和 full_paper_result_checker 仍未闭合。 |
-| 下一步构建方向 | 先完成 probe_paper 小样本全流程打通验证, 同步推进现代外部 baseline adapter、内部消融、adaptive attack、replay/sketch 和 CI reporter。 |
+| 下一步构建方向 | 先完成 probe_paper 小样本论文闭合验证, 同步推进现代外部 baseline adapter、内部消融、adaptive attack、replay/sketch 和 CI reporter。 |
 | full_paper 影响 | 本阶段未通过时, 禁止生成 full_paper 论文结果包。 |
 
 ### 3.1 2026-06-23 最新阶段边界

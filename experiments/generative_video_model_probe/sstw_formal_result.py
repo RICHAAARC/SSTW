@@ -75,7 +75,7 @@ def _score_from_control_record(record: dict[str, Any]) -> tuple[float | None, st
     通用工程写法是让下游公平校准只消费一种稳定的 `sstw_clean_negative_score`
     字段。项目特定写法是当前 paper profile 的 SSTW clean negative 来自
     `controlled_negative_records.jsonl`, 它们由同一条 latent trajectory 的方向破坏
-    控制构造, 用于在 paper 级前验证阈值校准闭环。
+    控制构造, 用于在 paper profile 中验证阈值校准闭环。
     """
 
     for field_name in ("S_final_conservative", "S_final", "S_path_inv", "S_velocity"):

@@ -25,13 +25,13 @@ paper 级主干门禁只保留以下顺序:
 protocol_governance -> mechanism_validation -> probe_paper -> pilot_paper -> full_paper -> submission_freeze
 ```
 
-`small_scale_claim_pilot_gate` 不再作为主干门禁使用, 只能作为 `mechanism_validation` 下的历史小样本机制检查记录。`generative_video_model_probe` 不再作为独立门禁使用, 只表示真实生成式视频模型实验的实现包或 phase 文档。正式阶段跳转必须以主干门禁和本节列出的轻量判定为准。
+`small_scale_mechanism_pilot_check` 是 `mechanism_validation` 下的小样本机制检查记录。`generative_video_model_probe` 表示真实生成式视频模型实验的实现包或 phase 文档。正式阶段跳转必须以主干门禁和本节列出的轻量判定为准。
 
 paper 级工程组件分为核心门禁、支撑 runner / reporter 和轻量判定三类:
 
 | 组件 | 作用 | 产物性质 |
 |---|---|---|
-| `paper_profile_gate` | 进入 probe_paper 前的 target_fpr=0.1 小样本全流程打通门禁, 验证完整论文产物链路是否可生成, 但不支持正式效果主张 | gate decision |
+| `paper_profile_gate` | probe_paper 使用的 target_fpr=0.1 小样本论文闭合门禁, 验证完整论文产物链路是否可生成, 并只支持 FPR=10% 小样本结论候选 | gate decision |
 | `probe_paper_gate` | 在 probe_paper 通过后, 使用 pilot_paper 级样本结构执行 target_fpr=0.1 小样本论文闭合验证, 判断 SSTW 是否具备 fpr=0.1 有效性与优势证据 | gate decision |
 | `pilot_paper_gate` | 在 probe_paper 通过后小规模跑完整 paper 协议并产出 pilot 级 FPR=1% 论文结果 | gate decision |
 | `modern_external_baseline_runner` | 在项目内完成 external baseline 的 clone / build / run / adapt / record, 产出 measured_formal 或受治理 non-run 记录 | governed records + lightweight decision |
@@ -72,7 +72,7 @@ tests/functional/test_lightweight_gate_decisions.py
 
 ## 3. paper_profile_gate 接口规范
 
-`probe_paper` 的正式定义是“target_fpr=0.1 小样本全流程打通验证”。它不是 full_paper 效果证明, 也不是只检查单个 runner 是否能启动的 smoke test。该 gate 的功能是作为 probe_paper 前的完整协议打通层, 在 probe_paper protocol config 指定的 `target_fpr=0.1` 小样本口径下提前验证 `probe_paper`、`pilot_paper` 和 `full_paper` 会需要的产物类型是否都能由本项目自动生成。它必须要求 SSTW 本方法 measured_formal、5 个现代 external baseline 同协议比较、差值置信区间、内部消融、低 FPR 阻断记录和 motion consistency 解释等产物类型闭合, 但不在 probe_paper 层支持正式效果主张。
+`probe_paper` 的正式定义是 target_fpr=0.1 小样本论文闭合验证。它不是 full_paper 效果证明, 也不是只检查单个 runner 是否能启动的 smoke test。该 gate 在 probe_paper protocol config 指定的 `target_fpr=0.1` 小样本口径下验证 `pilot_paper` 和 `full_paper` 会需要的产物类型是否都能由本项目自动生成, 并判断 SSTW 在 FPR=10% 设定下是否具备小样本论文结论候选。它必须要求 SSTW 本方法 measured_formal、5 个现代 external baseline 同协议比较、差值置信区间、内部消融、低 FPR 阻断记录和 motion consistency 解释等产物类型闭合。
 
 ### 3.1 输入
 
@@ -672,7 +672,7 @@ full_paper_result_checker 读取 pilot_paper_to_full_paper_transition_decision
 submission_package_freeze 读取 full_paper_to_submission_freeze_transition_decision
 ```
 
-该判定用于防止从 `method_mechanism_validation`、历史 small-scale pilot 记录或 `probe_paper` 直接跳到不合法阶段。`probe_paper` 通过只允许进入 `pilot_paper`; `probe_paper` 通过只允许进入 `pilot_paper`; `pilot_paper` 通过后才允许进入 `full_paper`; `full_paper` 的正式 claim 仍由 `full_paper_result_checker` 决定。
+该判定用于防止从 `method_mechanism_validation`、`small_scale_mechanism_pilot_check` 或 `probe_paper` 直接跳到不合法阶段。`probe_paper` 通过只允许进入 `pilot_paper`; `pilot_paper` 通过后才允许进入 `full_paper`; `full_paper` 的正式 claim 仍由 `full_paper_result_checker` 决定。
 
 ### 11.2 external_baseline_self_containment_decision
 
@@ -760,7 +760,7 @@ unsupported_claim_blocks_reviewer_evidence_index
 17. submission_package_freeze
 ```
 
-原因是 `probe_paper` 是进入 `probe_paper` 前的 target_fpr=0.1 小样本全流程打通层。所有 paper 相关机制必须先在 probe_paper protocol config 指定的 target_fpr 小样本口径下产出 governed records、tables、figures、reports、manifests 和 claim audit, 证明结果生产链路不会阻断; 随后 `probe_paper` 在同一 FPR=0.1 设定下使用更完整的小样本论文闭合协议证明 SSTW 成立且相对 5 个现代 baseline 具备优势证据。只有 `probe_paper_to_pilot_paper_transition_decision` 分别 PASS 后, 才允许进入 `pilot_paper`; 不能直接进入 `full_paper`。`pilot_paper` 和 `full_paper` claim 仍分别由更低 FPR、更大样本和对应 checker 放行。如果 external baseline、内部消融、adaptive attack、replay/sketch、CI 或 artifact rebuild 在 probe_paper 阻断, 后续步骤不得用 paper 级运行补造缺失产物。`reviewer_evidence_index_builder` 必须晚于 `full_paper_result_checker`, 因为它只能索引已经由 checker 确认的 claims、tables、figures、reports 和 manifests, 不能在 claim 未通过前提前构造审稿证据。
+原因是 `probe_paper` 是 target_fpr=0.1 小样本论文闭合层。所有 paper 相关机制必须在 probe_paper protocol config 指定的 target_fpr 小样本口径下产出 governed records、tables、figures、reports、manifests 和 claim audit, 并证明 SSTW 在 FPR=10% 设定下成立且相对 5 个现代 baseline 具备优势证据。只有 `probe_paper_to_pilot_paper_transition_decision` PASS 后, 才允许进入 `pilot_paper`; 不能直接进入 `full_paper`。`pilot_paper` 和 `full_paper` claim 仍分别由更低 FPR、更大样本和对应 checker 放行。如果 external baseline、内部消融、adaptive attack、replay/sketch、CI 或 artifact rebuild 在 probe_paper 阻断, 后续步骤不得用 paper 级运行补造缺失产物。`reviewer_evidence_index_builder` 必须晚于 `full_paper_result_checker`, 因为它只能索引已经由 checker 确认的 claims、tables、figures、reports 和 manifests, 不能在 claim 未通过前提前构造审稿证据。
 
 ## 14. 不允许的捷径
 
@@ -805,7 +805,7 @@ modern_video_watermark_baselines: measured_formal 或 unsupported_with_reason
 用 unsupported modern baseline row 声明 SSTW 优于该 baseline
 缺少 external_baseline_score_records.jsonl 时进入 baseline comparison claim
 缺少 external_baseline_execution_manifest.json 时进入 baseline comparison claim
-缺少 source intake / source inspection / clone / build / run / adapt / record 清单时进入 probe_paper PASS
+缺少 source intake / source inspection / clone / build / run / adapt / record 清单时禁止判定 probe_paper PASS
 ```
 
 

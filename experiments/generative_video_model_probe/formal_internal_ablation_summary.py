@@ -49,7 +49,7 @@ def build_formal_internal_ablation_summary_records(run_root: str | Path) -> list
 
     该函数的核心作用是消除“只有 proxy ablation, 没有与 SSTW formal 结果绑定”的文档缺口。
     `sstw_full_method` 行来自 SSTW measured_formal records; 其余 component-removal 行仍来自
-    paper_profile proxy ablation, 因此只能支持小样本全流程打通检查, 不能支持 full-paper
+    paper_profile proxy ablation, 因此只能支持小样本论文闭合检查, 不能支持 full-paper
     正式消融效果主张。
     """
     run_root = Path(run_root)

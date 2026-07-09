@@ -148,7 +148,7 @@ def test_paper_profile_gate_rejects_pilot_profile_as_validation(tmp_path: Path) 
 
 @pytest.mark.quick
 def test_paper_profile_gate_cannot_disable_fair_comparison_hard_requirements(tmp_path: Path) -> None:
-    """probe_paper 不能通过配置关闭公平比较硬前置后进入 probe_paper。"""
+    """probe_paper 不能通过配置关闭公平比较硬前置后进入 pilot_paper。"""
     config_path = tmp_path / "probe_paper_config.json"
     config_path.write_text(json.dumps({
         "target_fpr": 0.1,

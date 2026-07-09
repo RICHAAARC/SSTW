@@ -139,11 +139,10 @@ def _load_config(config_path: str | Path = DEFAULT_PAPER_PROFILE_CONFIG) -> dict
 def _hard_required_config_missing(config: dict[str, Any]) -> list[str]:
     """检查当前 profile 的公平比较硬前置是否被配置关闭。
 
-    paper_profile 只负责小样本全流程打通, 因此必须要求 self-contained
-    baseline、SSTW measured_formal、公平 FPR 校准、同协议比较、差值区间和数据切分
-    防泄漏都能生成, 但不要求在该小样本层证明 SSTW 优势。probe_paper 才是
-    target_fpr=0.1 的小样本论文闭合层, 因此在 probe_paper 中额外要求
-    SSTW 优势 claim ready。该检查属于项目特定门禁硬化, 用于防止通过配置关闭核心证据链。
+    paper_profile 是共享检查实现, 不是独立主干阶段。当前主干首个 paper profile 是
+    probe_paper, 它在 target_fpr=0.1 下要求 self-contained baseline、SSTW measured_formal、
+    公平 FPR 校准、同协议比较、差值区间、数据切分防泄漏和 SSTW 优势 claim ready
+    都能生成。该检查属于项目特定门禁硬化, 用于防止通过配置关闭核心证据链。
     """
     required_flags = (
         HARD_REQUIRED_PROBE_PAPER_CONFIG_FLAGS
@@ -1046,11 +1045,11 @@ def write_paper_profile_gate_audit(
     else:
         report_scope = (
             "该报告由已落盘的 governed records 与 decision artifacts 自动生成。它只判断 paper_profile "
-            "是否已经作为 target_fpr=0.1 的小样本全流程打通门禁完成闭环。该层级使用当前 protocol config "
+            "是否已经作为当前 paper profile 的小样本论文协议闭合检查完成闭环。该层级使用当前 protocol config "
             f"指定的 target_fpr={target_fpr_text} "
             "验证 records、tables、figures、reports、manifests、baseline、clean negative 公平校准、消融、46 个 runtime attack、"
             "11 个 non-runtime/adaptive 协议、CI 和 artifact rebuild 是否能够完整产出。"
-            "通过后只允许进入 probe_paper; paper_profile 本身不支持正式效果主张, "
+            "该共享报告本身不定义阶段跳转; 具体跳转必须由 profile-specific transition decision 控制, "
             "也不能外推到 pilot_paper 的 FPR=0.01 或 full_paper 的 FPR=0.001。\n\n"
         )
     report = (

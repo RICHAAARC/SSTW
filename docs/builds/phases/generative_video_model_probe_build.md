@@ -84,7 +84,7 @@ generic_ssm_baseline
 
 ### 1.8 probe_paper 运行要求
 
-在进入 pilot_paper 和 full_paper 结果运行前, 本实现 package 必须先服务于 `probe_paper` 运行。`probe_paper` 是 target_fpr=0.1 的小样本全流程打通门禁。它不要求达到 pilot_paper 或 full_paper 样本量, 但必须完成 paper 相关的全部机制构建, 覆盖与 full_paper 一致的 46 个 runtime attack 和 11 个 non-runtime/adaptive 协议, 并能够在小样本规模上产出全部结果类型。
+在进入 pilot_paper 和 full_paper 结果运行前, 本实现 package 必须先服务于 `probe_paper` 运行。`probe_paper` 是 target_fpr=0.1 的小样本论文闭合门禁。它不要求达到 pilot_paper 或 full_paper 样本量, 但必须完成 paper 相关的全部机制构建, 覆盖与 full_paper 一致的 46 个 runtime attack 和 11 个 non-runtime/adaptive 协议, 并能够在小样本规模上产出全部结果类型。
 
 必须覆盖:
 
@@ -101,7 +101,7 @@ wrong sampler / wrong prompt / wrong time grid replay records
 replay/sketch gate records 或受治理 Claim-3 downgrade records
 negative family records
 fixed-FPR confidence interval report
-validation tables / figures / reports
+paper profile tables / figures / reports
 artifact rebuild dry-run
 claim audit report
 package manifest
@@ -123,11 +123,11 @@ external_baseline_protocol_gap
 external_baseline_result_used_for_claim
 ```
 
-若 baseline 不能运行, 也必须生成 governed record, 不能静默缺失。但在 `probe_paper` 作为 paper 级前小样本全流程打通门禁时, 必需现代 baseline 只能用 `measured_formal` records 支撑通过; governed non-run record 只能解释阻断原因, 不能替代正式对比结果。
+若 baseline 不能运行, 也必须生成 governed record, 不能静默缺失。但在 `probe_paper` 作为 FPR=10% 小样本论文闭合门禁时, 必需现代 baseline 只能用 `measured_formal` records 支撑通过; governed non-run record 只能解释阻断原因, 不能替代正式对比结果。
 
 ### 1.10 probe_paper 充分性矩阵
 
-历史 small-scale pilot PASS 后不得直接进入 full_paper。必须先执行 `probe_paper` 真实模型实验, 用较小但覆盖完整的矩阵验证全链路:
+`small_scale_mechanism_pilot_check` PASS 后不得直接进入 full_paper。必须先执行 `probe_paper` 真实模型实验, 用较小但覆盖完整的矩阵验证全链路:
 
 ```text
 validation_generation_records_ready
@@ -145,7 +145,7 @@ validation_artifact_rebuild_dry_run_ready
 validation_claim_audit_ready
 ```
 
-`probe_paper` 不要求达到 full_paper 的最终样本量, 但必须覆盖 paper 协议的所有机制和所有产物类型。若某一类产物在 probe_paper 阻断, 不允许进入 `probe_paper` 或 `pilot_paper`; 此时只能继续修复缺失机制、adapter 或门禁规则。probe_paper 通过只是进入 probe_paper 的必要条件, 还必须生成 probe_paper_to_pilot_paper_transition_decision; probe_paper 通过后再生成 probe_paper_to_pilot_paper_transition_decision 才能进入 pilot_paper; full_paper 仍需 pilot_paper_gate、pilot_paper_to_full_paper_transition_decision 与 full_paper_result_checker。
+`probe_paper` 不要求达到 full_paper 的最终样本量, 但必须覆盖 paper 协议的所有机制和所有产物类型。若某一类产物在 probe_paper 阻断, 不得判定 `probe_paper` 通过, 也不得进入 `pilot_paper`; 此时只能继续修复缺失机制、adapter 或门禁规则。probe_paper 通过后还必须生成 `probe_paper_to_pilot_paper_transition_decision`; 该 transition 通过后才能进入 pilot_paper。full_paper 仍需 pilot_paper_gate、pilot_paper_to_full_paper_transition_decision 与 full_paper_result_checker。
 
 ### 1.11 现代 baseline 最小接入组合
 
@@ -287,7 +287,7 @@ runtime_detection_ready_count: 48
 small_scale_pilot_claim_support_status: blocked_until_motion_threshold_calibration
 ```
 
-该历史状态表示工程层面已经从真实视频生成推进到攻击、检测、gate 和 package 的完整闭环, 但当时正式实验结论仍等待 `motion_threshold_calibration` 完成。当前最新 motion calibration 与 pilot profile 均已 PASS, 因此本阶段下一步不再是重算 pilot gate, 而是进入 probe_paper 规划与工程门禁构建。
+当前工程层面必须保持真实视频生成、攻击、检测、gate 和 package 的完整闭环。motion calibration 与 profile gate 均应以当前落盘 artifacts 为准; 下一步应按 `probe_paper -> pilot_paper -> full_paper` 顺序推进论文级证据充分性构建。
 
 ### 2.5 formal motion claim 过滤边界
 
@@ -341,7 +341,7 @@ strong visible displacement in every frame
 | 项目 | 当前标注 |
 |---|---|
 | 完成状态 | pilot 已通过, probe_paper 未完成 |
-| 下一步构建方向 | 构建 probe_paper 真实模型小样本全流程打通实验、现代 baseline adapter contract、内部消融和 fixed-FPR CI reporter。 |
+| 下一步构建方向 | 构建 probe_paper 真实模型小样本论文闭合实验、现代 baseline adapter contract、内部消融和 fixed-FPR CI reporter。 |
 | full_paper 影响 | 未满足本阶段要求时, 不得把相关结果写入 full_paper supported claim。 |
 
 ### 3.1 快速检查清单
@@ -397,7 +397,7 @@ artifacts/paper_profile_gate_decision.json
 reports/paper_profile_gate_report.md
 ```
 
-该 gate 的作用是检查 small_scale_mechanism_pilot_check 通过后是否已经具备进入 paper 级前小样本全流程打通验证的条件。它只读取已经落盘的 governed records 和 decision artifacts, 不运行 GPU, 也不补造缺失的 baseline、消融、adaptive attack、replay/sketch、CI、tables、figures、reports 或 claim audit 结果。
+该 gate 的作用是检查 small_scale_mechanism_pilot_check 通过后, 当前 `probe_paper` 是否已经具备 FPR=10% 小样本论文闭合条件。它只读取已经落盘的 governed records 和 decision artifacts, 不运行 GPU, 也不补造缺失的 baseline、消融、adaptive attack、replay/sketch、CI、tables、figures、reports 或 claim audit 结果。
 
 当前 probe_paper gate 检查的最小条件为:
 
@@ -427,7 +427,7 @@ expected_generation_count: 24
 profile_name: probe_paper
 ```
 
-需要强调的是, `paper_profile_gate_decision = PASS` 表示 paper 级运行的全部机制已经在小样本规模上闭合, 因而可以生成 `probe_paper_to_pilot_paper_transition_decision` 并进入 `probe_paper`; 它仍不允许直接生成 pilot_paper 或 full_paper 规模论文主表, 但它必须已经能产出小样本全结果包。`probe_paper_gate_decision = PASS` 后才允许生成 `probe_paper_to_pilot_paper_transition_decision` 并进入 `pilot_paper_gate`。
+需要强调的是, `paper_profile_gate_decision = PASS` 表示 paper 级运行的全部机制已经在小样本规模上闭合, 因而可以生成 `probe_paper_to_pilot_paper_transition_decision` 并进入 `pilot_paper`; 它仍不允许直接生成 pilot_paper 或 full_paper 规模论文主表, 但它必须已经能产出小样本全结果包。`probe_paper_gate_decision = PASS` 后才允许生成 `probe_paper_to_pilot_paper_transition_decision` 并进入 `pilot_paper_gate`。
 
 ## 2026-06-23 probe_paper 后处理工程闭环
 
@@ -470,7 +470,7 @@ Colab workflow 已按以下顺序接入:
 
 ```text
 runtime detection
-validation / pilot_paper internal ablation
+paper profile / pilot_paper internal ablation
 statistical confidence interval
 validation artifact rebuild dry-run
 probe_paper gate
@@ -488,7 +488,7 @@ Colab workflow 已在 runtime detection 之后新增 external baseline compariso
 runtime detection
 external_baseline adapter comparison
 small-scale mechanism pilot check
-validation / pilot_paper internal ablation
+paper profile / pilot_paper internal ablation
 statistical confidence interval
 validation artifact rebuild dry-run
 probe_paper gate

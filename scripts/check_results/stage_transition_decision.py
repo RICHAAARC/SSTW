@@ -218,10 +218,9 @@ def _paper_profile_fair_gate_missing_requirements(
 def _probe_paper_fair_gate_missing_requirements(source_payload: Mapping[str, Any]) -> list[str]:
     """检查 probe_paper PASS 是否已经达到 fpr=0.1 小样本论文闭合层。
 
-    `probe_paper` 复用 paper profile gate 的公平比较审计逻辑, 但它的语义不再是
-    “打通验证”, 而是在同 target_fpr=0.1 下使用更完整样本规模输出可写论文的
-    小样本闭合结果。因此这里先复用公共公平比较要求, 再把 result level 和
-    claim_support_status 收紧为 probe_paper 专属字段。
+    `probe_paper` 复用 paper profile gate 的公平比较审计逻辑, 并在
+    target_fpr=0.1 下输出可写论文的小样本闭合结果。因此这里先复用公共
+    公平比较要求, 再把 result level 和 claim_support_status 收紧为 probe_paper 专属字段。
     """
 
     missing = _paper_profile_fair_gate_missing_requirements(

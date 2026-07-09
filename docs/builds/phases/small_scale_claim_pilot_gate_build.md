@@ -143,7 +143,7 @@ run_cross_model: false
 6 method variants
 ```
 
-`small_scale_mechanism_pilot_check` 失败时不得进入 `probe_paper`。`small_scale_mechanism_pilot_check` 通过后, 只允许进入 `probe_paper` 的小样本全流程打通验证, 不允许直接进入 `pilot_paper` 或 `full_paper`。
+`small_scale_mechanism_pilot_check` 失败时不得进入 `probe_paper`。`small_scale_mechanism_pilot_check` 通过后, 只允许进入 `probe_paper` 的小样本论文闭合验证, 不允许直接进入 `pilot_paper` 或 `full_paper`。
 
 ### 2.4 motion threshold calibration 冻结策略
 
@@ -483,7 +483,7 @@ prompt_suite_id: generative_video_probe_prompt_suite_motion_observability_and_pi
 |---|---|
 | 完成状态 | 已完成 small-scale pilot, 可进入 probe_paper |
 | 主要差距项 | 本阶段阻塞已解除; 剩余差距转移到 probe_paper、pilot_paper、现代外部 baseline 主表对比、内部消融和论文级 fixed-FPR。 |
-| 下一步构建方向 | 进入 probe_paper, 并在 probe_paper 通过后生成 probe_paper_to_pilot_paper_transition_decision 进入 pilot_paper, probe_paper 通过后生成 probe_paper_to_pilot_paper_transition_decision 再进入 pilot_paper, 同步补现代外部 baseline、内部消融和 CI reporter。 |
+| 下一步构建方向 | 进入 probe_paper, 并在 probe_paper 通过后生成 probe_paper_to_pilot_paper_transition_decision 再进入 pilot_paper, 同步补现代外部 baseline、内部消融和 CI reporter。 |
 | full_paper 影响 | 未满足本阶段要求时, 不得把相关结果写入 full_paper supported claim。 |
 
 ### 3.1 快速检查清单
@@ -491,7 +491,7 @@ prompt_suite_id: generative_video_probe_prompt_suite_motion_observability_and_pi
 ```text
 stage_status: 已完成 small-scale pilot, 可进入 probe_paper
 gap_item: 本阶段阻塞已解除; 剩余差距转移到 probe_paper、pilot_paper、现代外部 baseline 主表对比、内部消融和论文级 fixed-FPR。
-next_action: 进入 probe_paper, 并在 probe_paper 通过后生成 probe_paper_to_pilot_paper_transition_decision 进入 pilot_paper, probe_paper 通过后生成 probe_paper_to_pilot_paper_transition_decision 再进入 pilot_paper, 同步补现代外部 baseline、内部消融和 CI reporter。
+next_action: 进入 probe_paper, 并在 probe_paper 通过后生成 probe_paper_to_pilot_paper_transition_decision 再进入 pilot_paper, 同步补现代外部 baseline、内部消融和 CI reporter。
 full_paper_blocking_rule: unresolved_gap_blocks_full_paper_claim
 ```
 
@@ -507,24 +507,24 @@ pilot_baseline_results_not_used_as_external_main_comparison
 pilot_attack_results_not_used_as_full_robustness_claim
 ```
 
-`small_scale_mechanism_pilot_check` PASS 后的下一步只能是 probe_paper, 不是 pilot_paper 或 full_paper。probe_paper 通过后, 只能通过 `probe_paper_to_pilot_paper_transition_decision` 进入 pilot_paper; probe_paper 通过后, 才能通过 `probe_paper_to_pilot_paper_transition_decision` 进入 pilot_paper。若 Codex 检测到用户或脚本试图从 `small_scale_mechanism_pilot_check` 直接生成 full_paper package, 应将其标记为阶段跳跃。
+`small_scale_mechanism_pilot_check` PASS 后的下一步只能是 probe_paper, 不是 pilot_paper 或 full_paper。probe_paper 通过后, 只能通过 `probe_paper_to_pilot_paper_transition_decision` 进入 pilot_paper。若 Codex 检测到用户或脚本试图从 `small_scale_mechanism_pilot_check` 直接生成 full_paper package, 应将其标记为阶段跳跃。
 
 ## 5. small_scale_mechanism_pilot_check 通过后的 probe_paper 准入清单
 
-`small_scale_mechanism_pilot_check` 通过后, 进入 probe_paper 前仍需确认:
+`small_scale_mechanism_pilot_check` 通过后, 启动 probe_paper 前仍需确认:
 
 ```text
-validation_prompt_manifest_prepared
-validation_seed_plan_prepared
-validation_attack_manifest_prepared
-validation_baseline_manifest_prepared
-validation_ablation_manifest_prepared
-validation_replay_or_sketch_plan_prepared
-validation_artifact_rebuild_plan_prepared
-validation_resource_budget_checked
+probe_paper_prompt_manifest_prepared
+probe_paper_seed_plan_prepared
+probe_paper_attack_manifest_prepared
+probe_paper_baseline_manifest_prepared
+probe_paper_ablation_manifest_prepared
+probe_paper_replay_or_sketch_plan_prepared
+probe_paper_artifact_rebuild_plan_prepared
+probe_paper_resource_budget_checked
 ```
 
-上述条件缺失时, 只能补齐 validation 规划, 不能进入 `pilot_paper` 或 `full_paper`。
+上述条件缺失时, 只能补齐 probe_paper 规划, 不能进入 `pilot_paper` 或 `full_paper`。
 
 
 ## 2026-06-23 最新原生复跑状态
@@ -542,7 +542,7 @@ runtime_detection_ready_count: 48
 protocol_missing_failures: []
 ```
 
-本阶段现在的结论是: 可以进入 probe_paper 小样本全流程打通验证。该结论不能被解释为 full_paper ready, 也不能用于生成最终 `TPR@FPR=0.001` 主表。
+本阶段现在的结论是: 可以进入 probe_paper 小样本论文闭合验证。该结论不能被解释为 full_paper ready, 也不能用于生成最终 `TPR@FPR=0.001` 主表。
 
 ## 2026-06-24 formal motion exclusion gate 判定修复
 

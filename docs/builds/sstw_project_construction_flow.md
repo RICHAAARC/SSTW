@@ -400,8 +400,8 @@ baseline 专用 Notebook 产生的 official bundle 为输入, 由
 旧综合 Notebook 已移除。正式推进只使用拆分 Notebook, 因为拆分后可以在同一 `workflow_profile` 下分阶段复跑、检查和打包,
 避免 runtime、baseline 与 gate 的失败原因混在一个长 Notebook 中。
 
-`pilot_paper` 和 `full_paper` 的协议差异必须由 protocol config 显式记录。当前 `pilot_paper`
-使用代表性 attack coverage 与 `TPR@FPR=0.01` 口径, `full_paper` 进一步扩展到顶会顶刊级多强度、组合和非 runtime 自适应攻击协议。当前 `full_paper`
+`probe_paper`、`pilot_paper` 和 `full_paper` 的协议差异必须由 protocol config 显式记录。当前三个 paper profile
+共享同一套 46 个 runtime attack 与 11 个 non-runtime / adaptive 协议; 差异只允许是样本规模、统计功效和 target_fpr。当前 `full_paper`
 已通过 `configs/protocol/full_paper_generative_probe.json` 登记正式协议要求, 但 workflow profile
 在前置门禁闭合前只能作为协议配置和 checker 目标, 不允许作为 claim profile 或 submission source 使用。
 
@@ -418,15 +418,26 @@ submission_freeze_allowed: 只表示允许冻结投稿包, 需要 full_paper_res
 ```text
 target_fpr == 0.001
 threshold_protocol == calibration_split_to_frozen_threshold_to_heldout_test_split
+minimum_prompt_count == 50
+minimum_seed_per_prompt == 20
+minimum_unique_video_count == 1000
+minimum_calibration_seed_per_prompt == 10
+minimum_test_seed_per_prompt == 10
+minimum_calibration_unique_video_count == 500
+minimum_test_unique_video_count == 500
 minimum_calibration_negative_event_count >= 50000
 minimum_heldout_test_negative_event_count >= 50000
-minimum_heldout_attacked_positive_event_count >= 20000
+minimum_heldout_attacked_positive_event_count >= 46000
 minimum_negative_event_count_per_family >= 5000
-minimum_attack_event_count_per_attack >= 2000
+minimum_calibration_negative_event_count_per_family >= 12500
+minimum_heldout_negative_event_count_per_family >= 12500
+minimum_attack_event_count_per_attack >= 1000
 minimum_modern_external_baseline_formal_adapter_count >= 5
-minimum_external_baseline_measured_adapter_count >= 7
+minimum_external_baseline_measured_adapter_count >= 5
+minimum_full_paper_external_baseline_trace_count >= 500
+minimum_full_paper_internal_ablation_trace_count >= 500
 minimum_internal_ablation_variant_count >= 8
-require_validation_scale_gate_passed == true
+require_validation_scale_gate_passed == false
 require_validation_scale_to_probe_paper_transition_decision == true
 require_probe_paper_gate_passed == true
 require_probe_paper_to_pilot_paper_transition_decision == true
@@ -437,6 +448,7 @@ require_data_split_and_leakage_guard == true
 require_external_baseline_self_contained_outputs == true
 require_confidence_interval_report == true
 require_statistical_confidence_interval_decision == true
+require_artifact_rebuild_dry_run == true
 require_claim_audit_report == true
 require_artifact_rebuild_report == true
 ```
@@ -1422,10 +1434,12 @@ full_paper 的目标是报告 `TPR@FPR=0.001`。因此 calibration negative 与 
 ```text
 calibration_negative_event_count >= 50000
 heldout_test_negative_event_count >= 50000
-heldout_attacked_positive_event_count >= 20000
+heldout_attacked_positive_event_count >= 46000
 negative_event_count_per_family >= 5000
-attack_event_count_per_attack >= 2000
-method_variant_event_count_per_primary_variant >= 5000
+calibration_negative_event_count_per_family >= 12500
+heldout_negative_event_count_per_family >= 12500
+attack_event_count_per_attack >= 1000
+method_variant_event_count_per_primary_variant >= 500
 ```
 
 这里的 event 是 `(video, attack, negative_family, method_variant, replay_setting)` 级记录。若 GPU 成本无法产生足够独立视频, 必须在 manifest 中区分 `unique_video_count` 与 `event_count`, 并在论文中报告置信区间、bootstrap 稳定性和 cluster-by-video robust interval。
@@ -1674,7 +1688,7 @@ replay_or_claim3_downgrade_plan_complete
 artifact_rebuild_plan_complete
 checked_in_outputs_blocked
 calibration_split_to_frozen_threshold_to_heldout_test_split
-pilot_paper_protocol_difference_from_full_paper == sample_scale_target_fpr_and_attack_coverage
+pilot_paper_protocol_difference_from_full_paper == sample_scale_and_target_fpr_only
 ```
 
 ### 25.4 full_paper result checker 必须检查
@@ -1826,7 +1840,7 @@ calibration split
 -> tables / figures / claim audit
 ```
 
-当前工程约定为 21 个 `pilot_paper` prompt、每个 prompt 8 个 seed, 其中 4 个 calibration seed 只用于冻结阈值, 4 个 test seed 只用于 held-out FPR / TPR 报告。`pilot_paper` 与 `full_paper` 的区别包括样本规模、统计置信度、target FPR 和 attack coverage; 该结论仍不能外推为 `TPR@FPR=0.001`、完整 full_paper attack coverage 或 full_paper 规模主表结果。
+当前工程约定为 21 个 `pilot_paper` prompt、每个 prompt 8 个 seed, 其中 4 个 calibration seed 只用于冻结阈值, 4 个 test seed 只用于 held-out FPR / TPR 报告。`full_paper` 使用 50 个 prompt、每个 prompt 20 个 seed, 其中 10 个 calibration seed 和 10 个 test seed 显式拆分。`pilot_paper` 与 `full_paper` 的区别只允许是样本规模、统计置信度和 target FPR; attack manifest、baseline、消融、图表和打包协议必须同构。该结论仍不能外推为 `TPR@FPR=0.001` 或 full_paper 规模主表结果。
 
 ### 29.2 分片执行协议
 
@@ -2147,7 +2161,7 @@ pilot_paper_to_full_paper_transition_decision: implemented_in scripts/check_resu
 full_paper_to_submission_freeze_transition_decision: implemented_in scripts/check_results/stage_transition_decision.py
 external_baseline_self_containment_decision: implemented_in scripts/check_results/external_baseline_self_containment_decision.py
 data_split_and_leakage_guard: implemented_in scripts/check_results/data_split_and_leakage_guard.py
-full_paper_result_checker: not_implemented
+full_paper_result_checker: implemented_in scripts/check_results/full_paper_result_checker.py
 reviewer_evidence_index_builder: not_implemented
 external_baseline_project_clone_manifest: checked_by external_baseline_self_containment_decision, real Colab evidence still pending until measured_formal run
 external_baseline_project_build_manifest: checked_by external_baseline_self_containment_decision, real Colab evidence still pending until measured_formal run

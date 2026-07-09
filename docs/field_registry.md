@@ -967,16 +967,49 @@ Notebook 与 repository module 的跨边界数据
 | heldout_negative_family_event_counts | metric | none | true | false | false | held-out test split 中各 negative family 的事件数映射。 |
 | attack_event_counts | metric | none | true | false | false | held-out attacked positive split 中各 attack 的事件数映射。 |
 | negative_tail_status | governance | none | true | false | false | negative score tail 是否未膨胀的审计状态。 |
+| full_paper_prompt_count | metric | none | true | false | false | full_paper result checker 读取到的 prompt 覆盖数量。 |
+| full_paper_seed_per_prompt_min | metric | none | true | false | false | full_paper 每个 prompt 的最小 seed 覆盖数量。 |
+| full_paper_calibration_seed_per_prompt_min | metric | none | true | false | false | full_paper calibration split 中每个 prompt 的最小 seed 覆盖数量。 |
+| full_paper_test_seed_per_prompt_min | metric | none | true | false | false | full_paper held-out test split 中每个 prompt 的最小 seed 覆盖数量。 |
+| full_paper_unique_video_count | metric | none | true | false | false | full_paper 成功生成且可进入 checker 的 unique video 数量。 |
+| full_paper_calibration_unique_video_count | metric | none | true | false | false | full_paper calibration split 的 unique video 数量。 |
+| full_paper_test_unique_video_count | metric | none | true | false | false | full_paper held-out test split 的 unique video 数量。 |
+| full_paper_runtime_attack_event_count_per_attack_min | metric | none | true | false | false | full_paper runtime attack records 中每个必需 attack 的最小 ready 事件数。 |
+| full_paper_runtime_detection_event_count_per_attack_min | metric | none | true | false | false | full_paper runtime detection records 中每个必需 attack 的最小 ready 事件数。 |
+| full_paper_runtime_attack_event_counts | metric | none | true | false | false | full_paper runtime attack records 中各必需 attack 的 ready 事件数映射。 |
+| full_paper_runtime_detection_event_counts | metric | none | true | false | false | full_paper runtime detection records 中各必需 attack 的 ready 事件数映射。 |
 | minimum_unique_video_count | protocol | none | true | false | false | gate 要求的最小 unique video 数量。 |
+| minimum_calibration_seed_per_prompt | protocol | none | true | false | false | gate 要求的每个 prompt 在 calibration split 中的最小 seed 数量。 |
+| minimum_test_seed_per_prompt | protocol | none | true | false | false | gate 要求的每个 prompt 在 held-out test split 中的最小 seed 数量。 |
+| minimum_calibration_unique_video_count | protocol | none | true | false | false | gate 要求的 calibration split 最小 unique video 数量。 |
+| minimum_test_unique_video_count | protocol | none | true | false | false | gate 要求的 held-out test split 最小 unique video 数量。 |
 | minimum_calibration_negative_event_count | protocol | none | true | false | false | gate 要求的最小 calibration negative event 数量。 |
 | minimum_heldout_test_negative_event_count | protocol | none | true | false | false | gate 要求的最小 held-out test negative event 数量。 |
 | minimum_heldout_attacked_positive_event_count | protocol | none | true | false | false | gate 要求的最小 held-out attacked positive event 数量。 |
 | minimum_calibration_negative_event_count_per_family | protocol | none | true | false | false | gate 要求的 calibration split 每个 negative family 最小事件数。 |
 | minimum_heldout_negative_event_count_per_family | protocol | none | true | false | false | gate 要求的 held-out split 每个 negative family 最小事件数。 |
 | minimum_attack_event_count_per_attack | protocol | none | true | false | false | gate 要求的每个 attack 最小 held-out positive event 数量。 |
+| minimum_full_paper_external_baseline_trace_count | protocol | none | true | false | false | full_paper formal external baseline comparison 对每个必需 baseline 的最小 held-out trace 覆盖数量。 |
+| minimum_full_paper_internal_ablation_trace_count | protocol | none | true | false | false | full_paper internal ablation 对每个必需消融变体的最小 held-out trace 覆盖数量。 |
 | require_external_baseline_comparison_ready | protocol | none | true | false | false | pilot_paper gate 是否要求 external_baseline adapter comparison 已完成。 |
 | require_modern_external_baseline_formal_results | protocol | none | true | false | false | pilot_paper gate 是否要求现代视频水印 baseline 使用正式 adapter measured_formal 结果。 |
 | require_internal_ablation_matrix_ready | protocol | none | true | false | false | pilot_paper gate 是否要求内部消融矩阵已完成。 |
+| require_data_split_and_leakage_guard | protocol | none | true | false | false | gate 是否要求 calibration / held-out test split 与阈值来源通过泄漏防护审计。 |
+| require_external_baseline_self_containment_decision | protocol | none | true | false | false | gate 是否要求 external baseline 自包含产出判定已通过。 |
+| require_complete_result_artifact_skeleton | protocol | none | true | false | false | gate 是否要求论文结果表格、图和报告骨架已由 records 自动构建。 |
+| require_paper_result_artifact_skeleton | protocol | none | true | false | false | gate 是否要求当前 paper profile 的正式结果表格、图和报告骨架存在。 |
+| require_video_quality_metric_records | protocol | none | true | false | false | gate 是否要求正式视频质量指标 records 已落盘。 |
+| require_efficiency_metric_records | protocol | none | true | false | false | gate 是否要求效率指标 records 已落盘。 |
+| require_low_fpr_curve_records | protocol | none | true | false | false | gate 是否要求低 FPR 曲线图表 records 已落盘。 |
+| require_real_adaptive_attack_records | protocol | none | true | false | false | gate 是否要求真实 adaptive attack records 已落盘。 |
+| require_real_world_attack_records | protocol | none | true | false | false | gate 是否要求真实平台、screen recording 或真实转码类 attack records 已落盘。 |
+| require_adaptive_attack_records | protocol | none | true | false | false | gate 是否要求 adaptive attack 相关 records 已落盘。 |
+| require_replay_or_sketch_records_or_claim3_downgrade | protocol | none | true | false | false | gate 是否要求 replay / authenticated sketch records 已闭合, 或 Claim-3 已显式降级。 |
+| require_confidence_interval_report | protocol | none | true | false | false | gate 是否要求置信区间报告已生成。 |
+| require_claim_audit_report | protocol | none | true | false | false | gate 是否要求 claim audit 报告已生成。 |
+| require_artifact_rebuild_report | protocol | none | true | false | false | gate 是否要求 artifact rebuild 报告已生成。 |
+| require_statistical_confidence_interval_decision | protocol | none | true | false | false | gate 是否要求统计置信区间轻量判定已通过。 |
+| require_artifact_rebuild_dry_run | protocol | none | true | false | false | gate 是否要求 artifact rebuild dry-run 判定已通过。 |
 | required_external_baseline_adapter_names | protocol | none | true | false | false | pilot_paper gate 要求出现的 external_baseline adapter 名称列表。 |
 | required_modern_external_baseline_adapter_names | protocol | none | true | false | false | pilot_paper gate 要求产出 measured_formal records 的现代视频水印 baseline adapter 名称列表。 |
 | required_internal_ablation_variants | protocol | none | true | false | false | pilot_paper gate 要求出现的内部消融 method variant 列表。 |

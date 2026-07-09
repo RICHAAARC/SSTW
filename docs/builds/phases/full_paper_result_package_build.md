@@ -6,7 +6,7 @@
 
 ### 1.1 阶段目标
 
-在真正运行 full_paper 之前, 检查所有前序阶段是否已经通过, 并冻结 full_paper 的 dataset manifest、baseline manifest、ablation manifest、attack manifest、threshold protocol 和 artifact rebuild protocol。
+在启动 full_paper 之前, 前序 transition decision 必须确认 dataset manifest、baseline manifest、ablation manifest、attack manifest、threshold protocol 和 artifact rebuild protocol 已经冻结。`full_paper_result_checker` 本身在 full_paper 真实结果落盘后运行, 只读取 records、tables、figures、reports 和 manifests, 不补造任何结果。
 
 ### 1.2 进入条件
 
@@ -14,6 +14,8 @@
 mechanism_validation_passed = true
 validation_scale_gate_passed = true
 validation_scale_to_probe_paper_transition_decision_passed = true
+probe_paper_gate_passed = true
+probe_paper_to_pilot_paper_transition_decision_passed = true
 pilot_paper_gate_passed = true
 pilot_paper_to_full_paper_transition_decision_passed = true
 external_baseline_self_containment_decision_passed = true
@@ -32,9 +34,11 @@ artifact_rebuild_dry_run_passed = true
 ```text
 calibration_negative_event_count >= 50000
 heldout_test_negative_event_count >= 50000
-heldout_attacked_positive_event_count >= 20000
+heldout_attacked_positive_event_count >= 46000
 negative_event_count_per_family >= 5000
-attack_event_count_per_attack >= 2000
+calibration_negative_event_count_per_family >= 12500
+heldout_negative_event_count_per_family >= 12500
+attack_event_count_per_attack >= 1000
 ```
 
 ### 1.4 必须冻结的输入
@@ -206,28 +210,28 @@ full_paper_result_checker
 ### 2.1 当前完成状态
 
 ```text
-stage_status: 未开始, validation_scale 前置阻塞
+stage_status: checker 工程入口已实现, full_paper 真实结果仍等待前置门禁与大规模运行
 ```
 
 ### 2.2 差距项
 
 ```text
 历史 small-scale 机制 pilot 已在 workflow progression 级别 PASS, 但不再作为主干门禁
-pilot_paper FPR=0.01 真实 GPU 结果尚未生成, 不能替代 full_paper 规模结果
+probe_paper / pilot_paper 真实 GPU 结果必须先闭合, 不能替代 full_paper 规模结果
 validation_scale_gate_passed 尚未成立
 external baseline comparison 链路已接入 pilot_paper gate, 但现代 baseline 项目内自包含 measured_formal 主表 adapter 仍未闭合
 internal ablation 已接入 pilot_paper gate, full-scale records 尚未完成
 flow_specific_adaptive_attack_gate 尚未完成
 replay_and_authenticated_sketch_gate 尚未闭合
 paper-level FPR=0.001 大规模阈值协议尚未运行
-pilot_paper_gate 工程入口已实现但真实 GPU 结果尚未生成, full_paper_result_checker 尚未实现
+pilot_paper_gate 与 full_paper_result_checker 工程入口已实现, 但 full_paper 真实 GPU 结果尚未生成
 ```
 
 ## 3. 当前查漏补缺状态
 
 | 项目 | 当前标注 |
 |---|---|
-| 完成状态 | 未开始, validation_scale 前置阻塞 |
+| 完成状态 | checker 工程入口已实现, full_paper 真实结果仍等待前置门禁与大规模运行 |
 | 主要差距项 | 历史 small-scale 机制 pilot 已解除, pilot_paper gate 已要求 baseline comparison 与内部消融覆盖同批 trace, 但 probe_paper、pilot_paper 真实结果、validation_scale、现代外部 baseline 正式主表对比、full-scale 内部消融、adaptive attack、replay/sketch、FPR=0.001 和 full_paper_result_checker 仍未闭合。 |
 | 下一步构建方向 | 先完成 validation_scale 小样本全流程打通验证, 同步推进现代外部 baseline adapter、内部消融、adaptive attack、replay/sketch 和 CI reporter。 |
 | full_paper 影响 | 本阶段未通过时, 禁止生成 full_paper 论文结果包。 |

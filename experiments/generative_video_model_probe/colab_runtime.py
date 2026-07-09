@@ -67,6 +67,17 @@ PROFILE_SETTINGS = {
         "prompt_suite_roles": ["pilot_paper"],
         "seed_suite_roles": ["pilot_paper"],
     },
+    "full_paper": {
+        "prompt_limit": None,
+        "seed_limit": None,
+        "num_inference_steps": 16,
+        "num_frames": 49,
+        "height": 320,
+        "width": 512,
+        "run_cross_model": False,
+        "prompt_suite_roles": ["full_paper"],
+        "seed_suite_roles": ["full_paper"],
+    },
     "extended": {"prompt_limit": 3, "seed_limit": 3, "num_inference_steps": 24, "num_frames": 65, "height": 384, "width": 640, "run_cross_model": True},
     "motion_calibration": {
         "prompt_limit": None,

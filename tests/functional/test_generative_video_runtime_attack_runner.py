@@ -227,6 +227,20 @@ def test_paper_profile_attack_event_minimums_match_declared_sample_capacity() ->
 
     full_positive_capacity_per_attack = int(full_config["minimum_unique_video_count"])
     full_required_attack_count = len(full_config["required_runtime_attack_names"])
+    assert int(full_config["minimum_calibration_seed_per_prompt"]) == 10
+    assert int(full_config["minimum_test_seed_per_prompt"]) == 10
+    assert int(full_config["minimum_calibration_seed_per_prompt"]) + int(full_config["minimum_test_seed_per_prompt"]) == int(
+        full_config["minimum_seed_per_prompt"]
+    )
+    assert int(full_config["minimum_calibration_unique_video_count"]) == (
+        int(full_config["minimum_prompt_count"]) * int(full_config["minimum_calibration_seed_per_prompt"])
+    )
+    assert int(full_config["minimum_test_unique_video_count"]) == (
+        int(full_config["minimum_prompt_count"]) * int(full_config["minimum_test_seed_per_prompt"])
+    )
+    assert int(full_config["minimum_calibration_unique_video_count"]) + int(full_config["minimum_test_unique_video_count"]) == int(
+        full_config["minimum_unique_video_count"]
+    )
     assert int(full_config["minimum_attack_event_count_per_attack"]) == 1000
     assert int(full_config["minimum_attack_event_count_per_attack"]) <= full_positive_capacity_per_attack
     assert int(full_config["minimum_heldout_attacked_positive_event_count"]) == (

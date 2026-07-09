@@ -93,7 +93,18 @@ no_detection_score_used_for_prompt_filtering
 ```text
 calibration_negative_event_count >= 50000
 heldout_test_negative_event_count >= 50000
+heldout_attacked_positive_event_count >= 46000
 negative_event_count_per_family >= 5000
+calibration_negative_event_count_per_family >= 12500
+heldout_negative_event_count_per_family >= 12500
+attack_event_count_per_attack >= 1000
+minimum_prompt_count == 50
+minimum_seed_per_prompt == 20
+minimum_calibration_seed_per_prompt == 10
+minimum_test_seed_per_prompt == 10
+minimum_unique_video_count == 1000
+minimum_calibration_unique_video_count == 500
+minimum_test_unique_video_count == 500
 threshold_source_split == calibration
 test_time_threshold_update_blocked == true
 binomial_confidence_interval_for_fpr_available
@@ -200,13 +211,14 @@ collusion_multi_sample_attack
 adversarial_detector_evasion_attack
 ```
 
-当前工程协议采用三层 attack 要求:
+当前工程协议采用同构 attack 要求:
 
-- `validation_scale`: `video_compression_runtime`、`temporal_crop_runtime`、`frame_rate_resampling_runtime`, 只用于小样本全流程打通和公平比较门禁。
-- `pilot_paper`: 使用代表性压缩、时间、空间和视觉退化 attack manifest。其作用是以较小样本提前暴露 official baseline 适配、fixed-FPR 统计和 attack 覆盖缺口。
-- `full_paper`: 使用多强度压缩、完整时间扰动、空间几何、视觉退化、组合攻击和非 runtime 自适应攻击协议。此层级才可支撑顶会 / 顶刊级“完整鲁棒性”讨论。
+- `validation_scale`: 使用与 paper profile 相同的 46 个 runtime attack 和 11 个 non-runtime / adaptive 协议, 只用于小样本全流程打通和公平比较门禁。
+- `probe_paper`: 使用与 `pilot_paper` 相同样本结构, 在 target_fpr=0.1 下判断论文结论是否可闭合。
+- `pilot_paper`: 使用同一 attack manifest, 以 target_fpr=0.01 暴露 official baseline 适配、fixed-FPR 统计和 attack 覆盖缺口。
+- `full_paper`: 使用同一 attack manifest, 但扩展到 50 prompts × 20 seeds 与 target_fpr=0.001。此层级才可支撑顶会 / 顶刊级正式完整鲁棒性讨论。
 
-`pilot_paper` 和 `full_paper` 的 runtime attack manifest 都必须从 protocol config 读取, 不应由 Notebook 手工缩减。若需要临时调试, 只能使用 helper 或 dry-run profile, 其产物不得进入 paper gate。
+`validation_scale`、`probe_paper`、`pilot_paper` 和 `full_paper` 的 runtime attack manifest 都必须从 protocol config 读取, 不应由 Notebook 手工缩减。若需要临时调试, 只能使用 helper 或 dry-run profile, 其产物不得进入 paper gate。
 
 如果 flow-specific adaptive attack 未完成, 必须降级 adaptive robustness claim, 不能把普通视频攻击结果写成 Flow-specific robustness。
 

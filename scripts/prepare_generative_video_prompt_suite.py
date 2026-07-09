@@ -15,6 +15,7 @@ from main.attacks.video_runtime_attack_protocol import (
 
 DEFAULT_PROBE_PAPER_CONFIG = "configs/protocol/probe_paper_generative_probe.json"
 DEFAULT_PILOT_PAPER_CONFIG = "configs/protocol/pilot_paper_generative_probe.json"
+DEFAULT_FULL_PAPER_CONFIG = "configs/protocol/full_paper_generative_probe.json"
 
 
 def _read_json(path: str | Path) -> dict:
@@ -325,6 +326,41 @@ PILOT_PAPER_PROMPT_ITEMS = [
 
 ]
 
+
+def _build_full_paper_prompts() -> list[dict]:
+    """构造 full_paper 专用 prompt 列表。
+
+    该函数属于项目特定写法。full_paper 需要 50 个 prompt, 同时必须与 probe_paper
+    和 pilot_paper 保持同构运动类别。这里以 pilot_paper 的代表性运动 prompt 为
+    锚点, 通过稳定场景修饰生成唯一 prompt, 避免 Notebook 维护长列表。
+    """
+
+    scene_modifiers = [
+        "under bright studio lighting with a plain matte background",
+        "on a high contrast checker floor with clear object boundaries",
+        "with colored fiducial markers visible near the moving object",
+        "in a minimal indoor scene with stable exposure and fixed camera",
+        "with a neutral background and large foreground motion occupying most of the frame",
+    ]
+    prompts: list[dict] = []
+    for index in range(50):
+        base = PILOT_PAPER_PROMPT_ITEMS[index % len(PILOT_PAPER_PROMPT_ITEMS)]
+        modifier = scene_modifiers[index % len(scene_modifiers)]
+        prompts.append({
+            "prompt_id": f"full_paper_motion_{index + 1:02d}_{base['motion_pattern_id']}",
+            "prompt_text": f"{base['prompt_text']} Full-paper variant {index + 1:02d}, {modifier}.",
+            "prompt_negative_text": base["prompt_negative_text"],
+            "prompt_category": f"full_paper_{base['prompt_category']}",
+            "motion_pattern_id": f"full_paper_{base['motion_pattern_id']}_{index + 1:02d}",
+            "motion_claim_role": "positive_motion",
+            "prompt_suite_role": "full_paper",
+            "split": "full_paper",
+        })
+    return prompts
+
+
+FULL_PAPER_PROMPT_ITEMS = _build_full_paper_prompts()
+
 SEED_ITEMS = [
     {"seed_id": "seed_main_a", "seed_value": 101, "prompt_suite_role": "main"},
     {"seed_id": "seed_main_b", "seed_value": 202, "prompt_suite_role": "main"},
@@ -341,6 +377,25 @@ PILOT_PAPER_SEED_ITEMS = [
     {"seed_id": "seed_pilot_paper_test_b", "seed_value": 1906, "prompt_suite_role": "pilot_paper", "split": "test"},
     {"seed_id": "seed_pilot_paper_test_c", "seed_value": 2007, "prompt_suite_role": "pilot_paper", "split": "test"},
     {"seed_id": "seed_pilot_paper_test_d", "seed_value": 2108, "prompt_suite_role": "pilot_paper", "split": "test"},
+]
+
+
+FULL_PAPER_SEED_ITEMS = [
+    {
+        "seed_id": f"seed_full_paper_calib_{index + 1:02d}",
+        "seed_value": 3001 + index * 37,
+        "prompt_suite_role": "full_paper",
+        "split": "calibration",
+    }
+    for index in range(10)
+] + [
+    {
+        "seed_id": f"seed_full_paper_test_{index + 1:02d}",
+        "seed_value": 4001 + index * 37,
+        "prompt_suite_role": "full_paper",
+        "split": "test",
+    }
+    for index in range(10)
 ]
 
 MOTION_CALIBRATION_SEED_ITEMS = [
@@ -430,16 +485,24 @@ def _build_motion_calibration_prompts() -> list[dict]:
 def build_prompt_suite(
     pilot_paper_config_path: str | Path = DEFAULT_PILOT_PAPER_CONFIG,
     probe_paper_config_path: str | Path = DEFAULT_PROBE_PAPER_CONFIG,
+    full_paper_config_path: str | Path = DEFAULT_FULL_PAPER_CONFIG,
 ) -> dict:
     """构造独立于测试运行的 prompt suite, 便于 Colab 重复使用。"""
     pilot_paper_config = _read_json(pilot_paper_config_path)
     probe_paper_config = _read_json(probe_paper_config_path)
+    full_paper_config = _read_json(full_paper_config_path)
     pilot_paper_prompt_count = len(PILOT_PAPER_PROMPT_ITEMS)
     pilot_paper_seed_count = len(PILOT_PAPER_SEED_ITEMS)
     pilot_paper_test_seed_count = sum(1 for item in PILOT_PAPER_SEED_ITEMS if item.get("split") == "test")
     pilot_paper_runtime_attack_names = required_runtime_attack_names_from_config(pilot_paper_config)
     pilot_paper_runtime_attack_count = len(pilot_paper_runtime_attack_names)
     pilot_paper_negative_family_count = 4
+    full_paper_prompt_count = len(FULL_PAPER_PROMPT_ITEMS)
+    full_paper_seed_count = len(FULL_PAPER_SEED_ITEMS)
+    full_paper_calibration_seed_count = sum(1 for item in FULL_PAPER_SEED_ITEMS if item.get("split") == "calibration")
+    full_paper_test_seed_count = sum(1 for item in FULL_PAPER_SEED_ITEMS if item.get("split") == "test")
+    full_paper_runtime_attack_names = required_runtime_attack_names_from_config(full_paper_config)
+    full_paper_runtime_attack_count = len(full_paper_runtime_attack_names)
     suite = {
         "prompt_suite_id": "generative_video_probe_prompt_suite_motion_observability_pilot_paper",
         "dataset_construction_status": "constructed",
@@ -488,6 +551,28 @@ def build_prompt_suite(
             "claim_support_status": "probe_paper_dataset_constructed_not_generated",
             "split": "calibration_and_test"
         },
+        "full_paper_design": {
+            "paper_result_level": full_paper_config.get("paper_result_level", "full_paper"),
+            "paper_protocol_level": full_paper_config.get("paper_protocol_level", "paper_grade_protocol"),
+            "paper_protocol_difference_from_pilot_paper": full_paper_config.get("paper_protocol_difference_from_pilot_paper", "sample_scale_and_target_fpr_only"),
+            "recommended_runtime_profile": "full_paper",
+            "target_fpr": _required_float(full_paper_config, "target_fpr", full_paper_config_path),
+            "prompt_count": full_paper_prompt_count,
+            "seed_count": full_paper_seed_count,
+            "calibration_seed_count": full_paper_calibration_seed_count,
+            "test_seed_count": full_paper_test_seed_count,
+            "target_generation_video_count": full_paper_prompt_count * full_paper_seed_count,
+            "target_calibration_unique_video_count": full_paper_prompt_count * full_paper_calibration_seed_count,
+            "target_test_unique_video_count": full_paper_prompt_count * full_paper_test_seed_count,
+            "target_runtime_attack_count": full_paper_runtime_attack_count,
+            "target_runtime_attack_names": list(full_paper_runtime_attack_names),
+            "target_test_attacked_positive_event_count": full_paper_prompt_count * full_paper_seed_count * full_paper_runtime_attack_count,
+            "target_calibration_negative_event_count": int(full_paper_config.get("minimum_calibration_negative_event_count", 0)),
+            "target_heldout_test_negative_event_count": int(full_paper_config.get("minimum_heldout_test_negative_event_count", 0)),
+            "threshold_protocol": full_paper_config.get("threshold_protocol", "calibration_split_to_frozen_threshold_to_heldout_test_split"),
+            "claim_support_status": "full_paper_dataset_constructed_not_generated",
+            "split": "calibration_and_test"
+        },
         "motion_calibration_design": {
             "negative_static_prompt_count": 16,
             "positive_motion_prompt_count": 8,
@@ -498,8 +583,8 @@ def build_prompt_suite(
             "ambiguous_low_motion_target_video_count": 32,
             "split": "calibration"
         },
-        "prompts": PROMPT_ITEMS + PILOT_PAPER_PROMPT_ITEMS + _build_motion_calibration_prompts(),
-        "seeds": SEED_ITEMS + PILOT_PAPER_SEED_ITEMS + MOTION_CALIBRATION_SEED_ITEMS,
+        "prompts": PROMPT_ITEMS + PILOT_PAPER_PROMPT_ITEMS + FULL_PAPER_PROMPT_ITEMS + _build_motion_calibration_prompts(),
+        "seeds": SEED_ITEMS + PILOT_PAPER_SEED_ITEMS + FULL_PAPER_SEED_ITEMS + MOTION_CALIBRATION_SEED_ITEMS,
     }
     payload = json.dumps(suite, ensure_ascii=False, sort_keys=True).encode("utf-8")
     suite["prompt_suite_digest"] = sha256(payload).hexdigest()
@@ -510,11 +595,12 @@ def write_prompt_suite(
     output_root: str | Path,
     pilot_paper_config_path: str | Path = DEFAULT_PILOT_PAPER_CONFIG,
     probe_paper_config_path: str | Path = DEFAULT_PROBE_PAPER_CONFIG,
+    full_paper_config_path: str | Path = DEFAULT_FULL_PAPER_CONFIG,
 ) -> dict:
     """写出 prompt suite 数据集, 不执行任何模型测试。"""
     output_root = Path(output_root)
     output_root.mkdir(parents=True, exist_ok=True)
-    suite = build_prompt_suite(pilot_paper_config_path, probe_paper_config_path)
+    suite = build_prompt_suite(pilot_paper_config_path, probe_paper_config_path, full_paper_config_path)
     path = output_root / "prompt_seed_suite.json"
     path.write_text(json.dumps(suite, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     manifest = {
@@ -523,12 +609,13 @@ def write_prompt_suite(
         "dataset_construction_status": suite["dataset_construction_status"],
         "dataset_source": suite["dataset_source"],
         "output_paths": [str(path)],
-        "input_paths": [str(probe_paper_config_path), str(pilot_paper_config_path)],
+        "input_paths": [str(probe_paper_config_path), str(pilot_paper_config_path), str(full_paper_config_path)],
         "rebuild_command": (
             f"python scripts/prepare_generative_video_prompt_suite.py "
             f"--output-root {output_root.as_posix()} "
             f"--probe-paper-config-path {probe_paper_config_path} "
-            f"--pilot-paper-config-path {pilot_paper_config_path}"
+            f"--pilot-paper-config-path {pilot_paper_config_path} "
+            f"--full-paper-config-path {full_paper_config_path}"
         ),
     }
     manifest_path = output_root / "prompt_seed_suite_manifest.json"
@@ -541,9 +628,10 @@ def main() -> None:
     parser.add_argument("--output-root", default="outputs/datasets/generative_video_prompt_suite")
     parser.add_argument("--probe-paper-config-path", default=DEFAULT_PROBE_PAPER_CONFIG)
     parser.add_argument("--pilot-paper-config-path", default=DEFAULT_PILOT_PAPER_CONFIG)
+    parser.add_argument("--full-paper-config-path", default=DEFAULT_FULL_PAPER_CONFIG)
     args = parser.parse_args()
     print(json.dumps(
-        write_prompt_suite(args.output_root, args.pilot_paper_config_path, args.probe_paper_config_path),
+        write_prompt_suite(args.output_root, args.pilot_paper_config_path, args.probe_paper_config_path, args.full_paper_config_path),
         ensure_ascii=False,
         indent=2,
         sort_keys=True,

@@ -29,13 +29,13 @@ PROFILE = pilot_paper
 ```text
 paper_result_level: pilot_paper
 paper_protocol_level: paper_grade_protocol
-paper_protocol_difference_from_full_paper: sample_scale_target_fpr_and_attack_coverage
+paper_protocol_difference_from_full_paper: sample_scale_and_target_fpr_only
 prompt_count: 21
 seed_per_prompt: 8
 calibration_seed_per_prompt: 4
 test_seed_per_prompt: 4
 target_generation_video_count: 168
-target_runtime_attack_count: 3
+target_runtime_attack_count: 46
 target_negative_family_count: 4
 target_calibration_negative_event_count: 1008
 target_heldout_test_negative_event_count: 1008
@@ -94,7 +94,7 @@ artifacts/pilot_paper_gate_decision.json
 reports/pilot_paper_gate_report.md
 ```
 
-文件名和 artifact 字段统一使用 `pilot_paper`; artifact 内部必须写出 `paper_result_level = pilot_paper` 和 `paper_protocol_difference_from_full_paper = sample_scale_target_fpr_and_attack_coverage`。
+文件名和 artifact 字段统一使用 `pilot_paper`; artifact 内部必须写出 `paper_result_level = pilot_paper` 和 `paper_protocol_difference_from_full_paper = sample_scale_and_target_fpr_only`。
 
 package manifest 会同步记录:
 
@@ -168,7 +168,7 @@ pilot_paper_internal_ablation_trace_count_min >= 84
 
 ```text
 paper_result_level: pilot_paper
-paper_protocol_difference_from_full_paper: sample_scale_target_fpr_and_attack_coverage
+paper_protocol_difference_from_full_paper: sample_scale_and_target_fpr_only
 claim_support_status: pilot_paper_calibrated_heldout_claim_ready
 pilot_paper_claim_allowed: true
 tpr_at_fpr_01_pilot_claim_allowed: true

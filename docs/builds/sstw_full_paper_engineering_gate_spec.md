@@ -498,6 +498,9 @@ sample_size_insufficient_for_fpr_0_001_claim
 
 ```text
 configs/protocol/full_paper_generative_probe.json
+records/generation_records.jsonl
+records/runtime_attack_records.jsonl
+records/runtime_detection_records.jsonl
 records/event_scores.jsonl
 records/trajectory_traces.jsonl
 records/thresholds.jsonl
@@ -523,6 +526,20 @@ manifests/full_paper_package_manifest.json
 threshold_source_split == calibration
 test_time_threshold_update_blocked == true
 target_fpr includes 0.001
+minimum_prompt_count == 50
+minimum_seed_per_prompt == 20
+minimum_calibration_seed_per_prompt == 10
+minimum_test_seed_per_prompt == 10
+minimum_unique_video_count == 1000
+minimum_calibration_unique_video_count == 500
+minimum_test_unique_video_count == 500
+minimum_attack_event_count_per_attack == 1000
+minimum_heldout_attacked_positive_event_count == 46000
+full_paper_generation_prompt_seed_grid_ready == true
+full_paper_calibration_split_ready == true
+full_paper_heldout_test_split_ready == true
+full_paper_runtime_attack_event_coverage_ready == true
+full_paper_runtime_detection_event_coverage_ready == true
 heldout_clean_negative_fpr <= target_fpr
 heldout_attacked_negative_fpr <= target_fpr
 heldout_replay_negative_fpr <= target_fpr

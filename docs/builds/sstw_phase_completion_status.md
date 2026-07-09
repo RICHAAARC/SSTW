@@ -826,7 +826,7 @@ pilot_paper gate 规范已写入总体流程
 
 ```text
 pilot_paper_gate: implemented_waiting_for_real_gpu_result
-full_paper_result_checker: not_implemented
+full_paper_result_checker: implemented_in scripts/check_results/full_paper_result_checker.py
 modern_external_baseline_runner: governed_status_records_ready_but_main_comparison_not_ready
 flow_specific_adaptive_attack_runner: not_implemented
 replay_sketch_verification_checker: incomplete
@@ -1270,7 +1270,7 @@ Google Drive package manifest pilot_paper summary
 ```text
 paper_result_level: pilot_paper
 paper_protocol_level: paper_grade_protocol
-paper_protocol_difference_from_full_paper: sample_scale_target_fpr_and_attack_coverage
+paper_protocol_difference_from_full_paper: sample_scale_and_target_fpr_only
 prompt_count: 21
 seed_per_prompt: 8
 calibration_seed_per_prompt: 4

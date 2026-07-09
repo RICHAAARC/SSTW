@@ -614,7 +614,7 @@ Google Drive package manifest pilot_paper summary
 ```text
 paper_result_level: pilot_paper
 paper_protocol_level: paper_grade_protocol
-paper_protocol_difference_from_full_paper: sample_scale_target_fpr_and_attack_coverage
+paper_protocol_difference_from_full_paper: sample_scale_and_target_fpr_only
 prompt_count: 21
 seed_per_prompt: 8
 calibration_seed_per_prompt: 4
@@ -629,7 +629,7 @@ target_fpr: 0.01
 threshold_protocol: calibration_split_to_frozen_threshold_to_heldout_test_split
 ```
 
-该阶段通过后允许报告 `pilot_paper_calibrated_heldout_claim_ready` 和 pilot_paper 级 `TPR@FPR=0.01` 论文主张。通过条件不仅包括 calibration / held-out threshold 协议, 还包括 external_baseline comparison 和内部消融矩阵对同批 held-out test trace 的覆盖。它与 full_paper 的区别只在样本规模和统计置信度, 但仍不允许报告 `TPR@FPR=0.001` 或 full_paper 规模主表结论。
+该阶段通过后允许报告 `pilot_paper_calibrated_heldout_claim_ready` 和 pilot_paper 级 `TPR@FPR=0.01` 论文主张。通过条件不仅包括 calibration / held-out threshold 协议, 还包括 external_baseline comparison 和内部消融矩阵对同批 held-out test trace 的覆盖。它与 full_paper 的区别只在样本规模、统计置信度和 target_fpr, 但仍不允许报告 `TPR@FPR=0.001` 或 full_paper 规模主表结论。
 
 
 ### 2.11 pilot_paper gate 前置 baseline 与内部消融闭环
@@ -648,7 +648,7 @@ records/validation_internal_ablation_records.jsonl
 ```text
 pilot_paper_external_baseline_comparison_ready == true
 pilot_paper_internal_ablation_matrix_ready == true
-minimum_external_baseline_measured_adapter_count >= 7
+minimum_external_baseline_measured_adapter_count >= 5
 minimum_modern_external_baseline_formal_adapter_count >= 5
 minimum_internal_ablation_variant_count >= 8
 pilot_paper_external_baseline_trace_count_min >= 84

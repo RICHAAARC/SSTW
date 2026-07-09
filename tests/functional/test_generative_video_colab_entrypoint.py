@@ -215,6 +215,47 @@ def test_pilot_paper_profile_constructs_medium_scale_low_fpr_plan(tmp_path: Path
 
 
 @pytest.mark.quick
+def test_full_paper_profile_constructs_full_scale_split_plan(tmp_path: Path) -> None:
+    """full_paper profile 必须一次展开完整 50 prompt × 20 seed 计划。
+
+    该测试属于工程门禁约束, 作用是防止 full_paper 在昂贵 GPU 运行前仍缺少
+    prompt / seed / split 配置。Notebook 只切换 profile, 具体样本计划必须由仓库代码生成。
+    """
+    output_root = tmp_path / "prompt_suite"
+    summary = write_prompt_suite(output_root)
+    suite = json.loads(Path(summary["prompt_suite_path"]).read_text(encoding="utf-8"))
+    plan = _build_generation_plan(suite, "full_paper", "Wan-AI/Wan2.1-T2V-1.3B-Diffusers", None)
+
+    full_paper_prompts = [item for item in suite["prompts"] if item.get("prompt_suite_role") == "full_paper"]
+    full_paper_seeds = [item for item in suite["seeds"] if item.get("prompt_suite_role") == "full_paper"]
+    full_protocol = load_protocol_config_with_shared_attack_protocol("configs/protocol/full_paper_generative_probe.json")
+    expected_attack_count = len(full_protocol["required_runtime_attack_names"])
+
+    assert suite["full_paper_design"]["paper_result_level"] == "full_paper"
+    assert suite["full_paper_design"]["recommended_runtime_profile"] == "full_paper"
+    assert suite["full_paper_design"]["threshold_protocol"] == "calibration_split_to_frozen_threshold_to_heldout_test_split"
+    assert suite["full_paper_design"]["target_fpr"] == full_protocol["target_fpr"]
+    assert suite["full_paper_design"]["target_generation_video_count"] == 1000
+    assert suite["full_paper_design"]["target_calibration_unique_video_count"] == 500
+    assert suite["full_paper_design"]["target_test_unique_video_count"] == 500
+    assert suite["full_paper_design"]["target_runtime_attack_count"] == expected_attack_count
+    assert suite["full_paper_design"]["target_runtime_attack_names"] == full_protocol["required_runtime_attack_names"]
+    assert suite["full_paper_design"]["target_test_attacked_positive_event_count"] == 1000 * expected_attack_count
+    assert suite["full_paper_design"]["target_calibration_negative_event_count"] == 50000
+    assert suite["full_paper_design"]["target_heldout_test_negative_event_count"] == 50000
+    assert len(full_paper_prompts) == 50
+    assert len(full_paper_seeds) == 20
+    assert len(plan) == 1000
+    assert len({item["prompt_id"] for item in plan}) == 50
+    assert len({item["seed_id"] for item in plan}) == 20
+    assert {item["seed_suite_role"] for item in plan} == {"full_paper"}
+    assert {item["prompt_suite_role"] for item in plan} == {"full_paper"}
+    assert {item["split"] for item in plan} == {"calibration", "test"}
+    assert sum(1 for item in plan if item["split"] == "calibration") == 500
+    assert sum(1 for item in plan if item["split"] == "test") == 500
+
+
+@pytest.mark.quick
 def test_generative_video_colab_notebook_calls_repository_modules() -> None:
     """generation Notebook 只能作为入口, 必须通过统一 workflow profile 调用仓库模块。"""
     notebook_path = Path("paper_workflow/colab_notebooks/generative_video_generation_colab.ipynb")

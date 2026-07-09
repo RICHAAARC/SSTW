@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import csv
+
 import pytest
 
 from main.analysis.artifact_manifest import build_artifact_manifest
 from main.core.records import ExperimentRecord, validate_record
+from main.protocol.table_builder import write_csv
 
 
 @pytest.mark.quick
@@ -39,3 +42,40 @@ def test_artifact_manifest_records_rebuild_provenance() -> None:
     assert manifest_dict["artifact_id"] == "table_example"
     assert manifest_dict["config_digest"]
     assert manifest_dict["rebuild_command"]
+
+
+@pytest.mark.quick
+def test_write_csv_preserves_later_governed_record_fields(tmp_path) -> None:
+    """CSV 写出器必须兼容同一 governed table 中后续行的补充字段。"""
+
+    output_path = tmp_path / "tables" / "low_fpr_curve_table.csv"
+    write_csv(
+        output_path,
+        [
+            {
+                "method_id": "sstw",
+                "curve_point_fpr_level": 0.1,
+                "tpr_at_target_fpr": 1.0,
+            },
+            {
+                "method_id": "all_methods",
+                "curve_point_fpr_level": 0.01,
+                "curve_point_scope_note": "需要切换到对应 workflow profile 后生成。",
+                "covered_method_count_at_current_target_fpr": 5,
+            },
+        ],
+    )
+
+    with output_path.open("r", encoding="utf-8", newline="") as handle:
+        reader = csv.DictReader(handle)
+        rows = list(reader)
+
+    assert reader.fieldnames == [
+        "method_id",
+        "curve_point_fpr_level",
+        "tpr_at_target_fpr",
+        "curve_point_scope_note",
+        "covered_method_count_at_current_target_fpr",
+    ]
+    assert rows[0]["curve_point_scope_note"] == ""
+    assert rows[1]["covered_method_count_at_current_target_fpr"] == "5"

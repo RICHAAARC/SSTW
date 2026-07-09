@@ -21,13 +21,26 @@ def build_method_attack_table(records: list[dict]) -> list[dict]:
 
 
 def write_csv(path: str | Path, rows: list[dict]) -> None:
-    """将聚合表写为 CSV。"""
+    """将聚合表写为 CSV。
+
+    通用工程写法是用所有行字段的并集构造表头, 而不是只使用第一行字段。
+    项目特定原因在于部分 governed records 会同时包含正式曲线点和范围说明行,
+    后者可能拥有额外说明字段。CSV 表格应保留这些字段并用空值补齐其它行,
+    不能因为记录类型存在轻微扩展而阻断 Notebook 阶段。
+    """
     output_path = Path(path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     if not rows:
         output_path.write_text("", encoding="utf-8")
         return
+    fieldnames: list[str] = []
+    seen: set[str] = set()
+    for row in rows:
+        for key in row:
+            if key not in seen:
+                seen.add(key)
+                fieldnames.append(key)
     with output_path.open("w", encoding="utf-8", newline="") as handle:
-        writer = csv.DictWriter(handle, fieldnames=list(rows[0].keys()))
+        writer = csv.DictWriter(handle, fieldnames=fieldnames)
         writer.writeheader()
         writer.writerows(rows)

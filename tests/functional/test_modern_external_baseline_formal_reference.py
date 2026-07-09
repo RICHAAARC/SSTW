@@ -272,9 +272,12 @@ def test_main_five_baseline_formal_reference_notebooks_call_repository_helpers()
         assert notebook_path.exists()
         notebook = json.loads(notebook_path.read_text(encoding="utf-8"))
         source = "".join("".join(cell.get("source", [])) for cell in notebook["cells"])
+        first_code_cell = next(cell for cell in notebook["cells"] if cell.get("cell_type") == "code")
+        first_code_source = "".join(first_code_cell.get("source", []))
 
         assert "drive.mount('/content/drive')" in source
-        assert "SSTW_WORKFLOW_PROFILE_VALUE = 'validation_scale'" in source
+        assert first_code_source.startswith("SSTW_WORKFLOW_PROFILE_VALUE = 'validation_scale'")
+        assert "SSTW_WORKFLOW_PROFILE_VALUE = globals().get('SSTW_WORKFLOW_PROFILE_VALUE', 'validation_scale')" in source
         assert "NOTEBOOK_ROLE = 'external_baseline_formal_scoring'" in source
         assert f"configs/external_baselines/requirements/{baseline_id}.txt" in source
         assert "SSTW_INSTALL_BASELINE_REQUIREMENTS" in source

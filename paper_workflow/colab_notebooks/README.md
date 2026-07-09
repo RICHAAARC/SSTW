@@ -136,7 +136,7 @@ profile 设置:
 SSTW_WORKFLOW_PROFILE_VALUE = ''
 ```
 
-该 Notebook 的默认 role profile 是 `motion_calibration`, 因此通常保持空字符串即可。不要把该 Notebook 切换到 `validation_scale` 或 `pilot_paper`。
+该变量位于 Notebook 第一个代码 cell 的第一行, 便于打开 Notebook 后直接切换。该 Notebook 的默认 role profile 是 `motion_calibration`, 因此通常保持空字符串即可。不要把该 Notebook 切换到 `validation_scale` 或 `pilot_paper`。
 
 主要落盘位置:
 
@@ -173,7 +173,7 @@ paper_workflow/colab_notebooks/runtime_detection_colab.ipynb
 SSTW_WORKFLOW_PROFILE_VALUE = 'validation_scale'
 ```
 
-这些 Notebook 是 validation-scale、pilot-paper 与 full-paper 共用的同构主方法运行入口。切换 profile 时只改 `SSTW_WORKFLOW_PROFILE_VALUE`, 不改阶段顺序、命令映射或产物清单。
+这些 Notebook 是 validation-scale、probe-paper、pilot-paper 与 full-paper 共用的同构主方法运行入口。`SSTW_WORKFLOW_PROFILE_VALUE` 位于每个 Notebook 第一个代码 cell 的第一行。切换 profile 时只改这一行, 不改阶段顺序、命令映射或产物清单。
 
 现代 baseline 使用 bridge 模式时, workflow 默认会把 `SSTW_RUN_EXTERNAL_BASELINE_SOURCE_CLONE`
 视为 `true`, 以适配 Colab 冷启动环境。若已经手动挂载或克隆官方源码, 可以显式设置为 `"false"`。
@@ -205,6 +205,8 @@ paper_workflow/colab_notebooks/wam_frame_formal_reference_colab.ipynb
 ```python
 SSTW_WORKFLOW_PROFILE_VALUE = 'validation_scale'
 ```
+
+该变量位于每个 baseline Notebook 第一个代码 cell 的第一行。切换到 `probe_paper`、`pilot_paper` 或 `full_paper` 时只改这一行, 不改 baseline helper、runner 或打包逻辑。
 
 进入 formal comparison scoring 前必须完成 5 个主实验现代 baseline 的 official reference 阶段包。若使用通用 command adapter,
 仍必须配置 5 个主实验现代 baseline command:

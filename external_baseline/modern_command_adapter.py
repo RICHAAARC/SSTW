@@ -21,6 +21,7 @@ from external_baseline.score_semantics import (
 )
 from external_baseline.official_eval_adapters.common import (
     REPOSITORY_GENERATED_OFFICIAL_PROVENANCE,
+    read_official_result_bundle_if_available,
     validate_complete_official_bundle_baseline_identity,
     validate_clean_negative_payload,
 )
@@ -158,6 +159,33 @@ def _official_command_evidence_paths(
     }
 
 
+def _adapter_args_from_detection_record(
+    detection_record: Mapping[str, Any],
+    *,
+    output_json_path: Path,
+) -> Any:
+    """把 runtime detection record 转成 official bundle reader 需要的参数对象。
+
+    该函数属于项目特定适配层。formal comparison 阶段可能只恢复了阶段 zip
+    中的 official bundle, 没有恢复原始 source / attacked video 小文件。official
+    bundle 的查找只依赖 prompt / seed / attack / trajectory anchor, 因此这里不把
+    视频路径存在性作为读取 bundle 的前置条件。
+    """
+
+    import argparse
+
+    return argparse.Namespace(
+        source_video=str(detection_record.get("source_video_path") or ""),
+        attacked_video=str(detection_record.get("attacked_video_path") or ""),
+        attack_name=str(detection_record.get("attack_name") or ""),
+        official_output_json=str(output_json_path),
+        run_root="",
+        prompt_id=str(detection_record.get("prompt_id") or ""),
+        seed_id=str(detection_record.get("seed_id") or ""),
+        trajectory_trace_id=str(detection_record.get("trajectory_trace_id") or ""),
+    )
+
+
 def _extract_score(payload: Mapping[str, Any]) -> float:
     """从常见官方输出字段中提取 baseline score。"""
     return float(normalized_score_payload(payload)["external_baseline_raw_detector_score"])
@@ -220,6 +248,126 @@ def _official_bundle_evidence_payload(payload: Mapping[str, Any], *, baseline_id
         "external_baseline_official_adapter_baseline_id": payload.get("official_adapter_baseline_id"),
         "external_baseline_official_baseline_id": payload.get("official_baseline_id"),
     }
+
+
+def _write_bundle_reader_evidence(
+    *,
+    config: ModernBaselineCommandConfig,
+    score_record_id: str,
+    evidence_paths: Mapping[str, str],
+    payload: Mapping[str, Any],
+) -> None:
+    """写出 formal scoring 读取 official bundle 的轻量证据文件。
+
+    该函数不伪装成重新运行第三方 baseline。它只记录本次统一 scoring 阶段已经
+    从项目内 official reference bundle 读取并转写了对应 record。真正的
+    clone / build / run / adapt 证据仍由 official bundle 自身的 execution
+    manifest 提供。
+    """
+
+    output_path = Path(evidence_paths["external_baseline_official_output_path"])
+    stdout_path = Path(evidence_paths["external_baseline_official_stdout_path"])
+    stderr_path = Path(evidence_paths["external_baseline_official_stderr_path"])
+    manifest_path = Path(evidence_paths["external_baseline_official_command_manifest_path"])
+    _write_json(output_path, payload)
+    _write_text(
+        stdout_path,
+        (
+            "official_result_bundle_read_status=success\n"
+            f"baseline_name={config.baseline_name}\n"
+            f"official_result_bundle_path={payload.get('official_result_bundle_path')}\n"
+        ),
+    )
+    _write_text(stderr_path, "")
+    _write_json(manifest_path, {
+        "manifest_kind": "external_baseline_official_bundle_reader_evidence",
+        "baseline_name": config.baseline_name,
+        "external_baseline_score_record_id": score_record_id,
+        "command_return_code": 0,
+        "command_executable": "official_result_bundle_reader",
+        "command_argument_count": 0,
+        "official_output_json_path": str(output_path),
+        "official_stdout_path": str(stdout_path),
+        "official_stderr_path": str(stderr_path),
+        "official_result_bundle_path": str(payload.get("official_result_bundle_path") or ""),
+        "official_execution_manifest_path": str(payload.get("official_execution_manifest_path") or ""),
+        "claim_support_status": "external_baseline_official_bundle_reader_evidence",
+    })
+
+
+def _measured_formal_record_from_payload(
+    *,
+    config: ModernBaselineCommandConfig,
+    baseline_record: Mapping[str, Any],
+    detection_record: Mapping[str, Any],
+    payload: Mapping[str, Any],
+    score_record_id: str,
+    evidence_paths: Mapping[str, str],
+) -> dict[str, Any]:
+    """把官方 adapter 或 official bundle payload 转写为统一 measured_formal record。
+
+    通用工程写法是把“获取 payload”和“转写 governed record”分离。项目特定
+    约束是: 不论 payload 来自即时官方命令还是已完成的 official reference
+    bundle, 进入论文比较前都必须通过同一套 clean negative、score semantics、
+    provenance 和 official baseline 身份检查。
+    """
+
+    validate_clean_negative_payload(payload)
+    validate_official_score_extraction_payload(payload)
+    validate_official_formal_comparison_eligibility(payload)
+    score_payload = normalized_score_payload(payload)
+    clean_negative_payload = _clean_negative_score_payload(payload)
+    official_bundle_payload = _official_bundle_evidence_payload(payload, baseline_id=config.baseline_name)
+    score = round(float(score_payload["external_baseline_raw_detector_score"]), 6)
+    method_score = safe_float(detection_record.get("S_runtime_attack_detection"), 0.0)
+    score_extraction_policy = official_score_extraction_policy(payload)
+    return with_flow_evidence_protocol_defaults({
+        "record_version": "external_baseline_score_v2",
+        "external_baseline_score_record_id": score_record_id,
+        "external_baseline_name": config.baseline_name,
+        "external_baseline_family": baseline_record.get("external_baseline_family") or config.baseline_family,
+        "external_baseline_layer": baseline_record.get("external_baseline_layer"),
+        "external_baseline_adapter_path": config.adapter_path,
+        "external_baseline_command_env_var": config.env_var,
+        "external_baseline_command_config_status": "configured",
+        "generation_model_id": detection_record.get("generation_model_id"),
+        "prompt_id": payload.get("prompt_id", detection_record.get("prompt_id")),
+        "seed_id": payload.get("seed_id", detection_record.get("seed_id")),
+        "trajectory_trace_id": payload.get("trajectory_trace_id", detection_record.get("trajectory_trace_id")),
+        "attack_name": payload.get("attack_name", detection_record.get("attack_name")),
+        "sample_role": detection_record.get("sample_role"),
+        "negative_family": detection_record.get("negative_family"),
+        "source_video_path": detection_record.get("source_video_path"),
+        "attacked_video_path": detection_record.get("attacked_video_path"),
+        "external_baseline_source_video_path": payload.get("external_baseline_source_video_path", payload.get("baseline_source_video_path")),
+        "external_baseline_attacked_video_path": payload.get("external_baseline_attacked_video_path", payload.get("baseline_attacked_video_path")),
+        "external_baseline_generation_model_id": payload.get("external_baseline_generation_model_id"),
+        "external_baseline_official_execution_mode": payload.get(
+            "external_baseline_official_execution_mode",
+            payload.get("official_adapter_status", payload.get("official_bridge_status")),
+        ),
+        "external_baseline_official_score_extraction_policy": score_extraction_policy,
+        "external_baseline_official_reference_protocol_anchor": payload.get("official_reference_protocol_anchor"),
+        "external_baseline_attack_protocol_status": payload.get("attack_protocol_status"),
+        **official_bundle_payload,
+        "metric_status": "measured_formal",
+        "external_baseline_score_status": "measured_formal",
+        "external_baseline_score_source": config.score_source,
+        "external_baseline_score_failure_reason": "none",
+        "external_baseline_reference_sequence_length": None,
+        "external_baseline_observed_sequence_length": None,
+        "external_baseline_distance": payload.get("external_baseline_distance"),
+        **score_payload,
+        "external_baseline_score": score,
+        "external_baseline_detected": payload.get("external_baseline_detected", payload.get("detected")),
+        "external_baseline_bit_accuracy": payload.get("external_baseline_bit_accuracy", payload.get("bit_accuracy")),
+        **clean_negative_payload,
+        "external_baseline_threshold": payload.get("external_baseline_threshold", payload.get("threshold")),
+        "baseline_score_margin": round(method_score - score, 6),
+        "external_baseline_result_used_for_claim": True,
+        "claim_support_status": config.claim_support_status,
+        **evidence_paths,
+    }, trajectory_source_level="external_modern_baseline_official_adapter", claim_support_status=config.claim_support_status)
 
 
 def _unsupported_record(
@@ -324,14 +472,37 @@ def build_modern_score_records(
         score_record_id = build_comparison_unit_id(config.baseline_name, detection_record)
         evidence_paths: dict[str, str] = {}
         try:
+            evidence_paths = _official_command_evidence_paths(root, config, score_record_id)
+            output_json_path = Path(evidence_paths["external_baseline_official_output_path"])
+            bundled_payload = read_official_result_bundle_if_available(
+                baseline_id=config.baseline_name,
+                args=_adapter_args_from_detection_record(detection_record, output_json_path=output_json_path),
+                source_dir=Path(config.default_source_script).parent,
+                output_json_path=output_json_path,
+            )
+            if bundled_payload is not None:
+                _write_bundle_reader_evidence(
+                    config=config,
+                    score_record_id=score_record_id,
+                    evidence_paths=evidence_paths,
+                    payload=bundled_payload,
+                )
+                records.append(_measured_formal_record_from_payload(
+                    config=config,
+                    baseline_record=baseline_record,
+                    detection_record=detection_record,
+                    payload=bundled_payload,
+                    score_record_id=score_record_id,
+                    evidence_paths=evidence_paths,
+                ))
+                continue
+
             source_path = Path(str(detection_record.get("source_video_path") or ""))
             attacked_path = Path(str(detection_record.get("attacked_video_path") or ""))
             if not source_path.exists():
                 raise FileNotFoundError("source_video_path_missing")
             if not attacked_path.exists():
                 raise FileNotFoundError("attacked_video_path_missing")
-            evidence_paths = _official_command_evidence_paths(root, config, score_record_id)
-            output_json_path = Path(evidence_paths["external_baseline_official_output_path"])
             stdout_path = Path(evidence_paths["external_baseline_official_stdout_path"])
             stderr_path = Path(evidence_paths["external_baseline_official_stderr_path"])
             command_manifest_path = Path(evidence_paths["external_baseline_official_command_manifest_path"])
@@ -364,62 +535,14 @@ def build_modern_score_records(
             if completed.returncode != 0:
                 raise RuntimeError(f"official_command_failed:{completed.returncode}:{completed.stderr[-500:]}")
             payload = _read_official_output(output_json_path)
-            validate_clean_negative_payload(payload)
-            validate_official_score_extraction_payload(payload)
-            validate_official_formal_comparison_eligibility(payload)
-            score_payload = normalized_score_payload(payload)
-            clean_negative_payload = _clean_negative_score_payload(payload)
-            official_bundle_payload = _official_bundle_evidence_payload(payload, baseline_id=config.baseline_name)
-            score = round(float(score_payload["external_baseline_raw_detector_score"]), 6)
-            method_score = safe_float(detection_record.get("S_runtime_attack_detection"), 0.0)
-            score_extraction_policy = official_score_extraction_policy(payload)
-            records.append(with_flow_evidence_protocol_defaults({
-                "record_version": "external_baseline_score_v2",
-                "external_baseline_score_record_id": score_record_id,
-                "external_baseline_name": config.baseline_name,
-                "external_baseline_family": baseline_record.get("external_baseline_family") or config.baseline_family,
-                "external_baseline_layer": baseline_record.get("external_baseline_layer"),
-                "external_baseline_adapter_path": config.adapter_path,
-                "external_baseline_command_env_var": config.env_var,
-                "external_baseline_command_config_status": "configured",
-                "generation_model_id": detection_record.get("generation_model_id"),
-                "prompt_id": detection_record.get("prompt_id"),
-                "seed_id": detection_record.get("seed_id"),
-                "trajectory_trace_id": detection_record.get("trajectory_trace_id"),
-                "attack_name": detection_record.get("attack_name"),
-                "sample_role": detection_record.get("sample_role"),
-                "negative_family": detection_record.get("negative_family"),
-                "source_video_path": detection_record.get("source_video_path"),
-                "attacked_video_path": detection_record.get("attacked_video_path"),
-                "external_baseline_source_video_path": payload.get("external_baseline_source_video_path", payload.get("baseline_source_video_path")),
-                "external_baseline_attacked_video_path": payload.get("external_baseline_attacked_video_path", payload.get("baseline_attacked_video_path")),
-                "external_baseline_generation_model_id": payload.get("external_baseline_generation_model_id"),
-                "external_baseline_official_execution_mode": payload.get(
-                    "external_baseline_official_execution_mode",
-                    payload.get("official_adapter_status", payload.get("official_bridge_status")),
-                ),
-                "external_baseline_official_score_extraction_policy": score_extraction_policy,
-                "external_baseline_official_reference_protocol_anchor": payload.get("official_reference_protocol_anchor"),
-                "external_baseline_attack_protocol_status": payload.get("attack_protocol_status"),
-                **official_bundle_payload,
-                "metric_status": "measured_formal",
-                "external_baseline_score_status": "measured_formal",
-                "external_baseline_score_source": config.score_source,
-                "external_baseline_score_failure_reason": "none",
-                "external_baseline_reference_sequence_length": None,
-                "external_baseline_observed_sequence_length": None,
-                "external_baseline_distance": payload.get("external_baseline_distance"),
-                **score_payload,
-                "external_baseline_score": score,
-                "external_baseline_detected": payload.get("external_baseline_detected", payload.get("detected")),
-                "external_baseline_bit_accuracy": payload.get("external_baseline_bit_accuracy", payload.get("bit_accuracy")),
-                **clean_negative_payload,
-                "external_baseline_threshold": payload.get("external_baseline_threshold", payload.get("threshold")),
-                "baseline_score_margin": round(method_score - score, 6),
-                "external_baseline_result_used_for_claim": True,
-                "claim_support_status": config.claim_support_status,
-                **evidence_paths,
-            }, trajectory_source_level="external_modern_baseline_official_adapter", claim_support_status=config.claim_support_status))
+            records.append(_measured_formal_record_from_payload(
+                config=config,
+                baseline_record=baseline_record,
+                detection_record=detection_record,
+                payload=payload,
+                score_record_id=score_record_id,
+                evidence_paths=evidence_paths,
+            ))
         except Exception as exc:
             records.append(_unsupported_record(config, baseline_record, detection_record, str(exc), evidence_paths=evidence_paths))
     measured_count = sum(1 for record in records if record.get("external_baseline_score_status") == "measured_formal")

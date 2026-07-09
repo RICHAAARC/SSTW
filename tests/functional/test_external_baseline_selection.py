@@ -794,6 +794,100 @@ def test_modern_external_baseline_formal_command_adapter_normalizes_clean_negati
 
 
 @pytest.mark.quick
+def test_modern_external_baseline_formal_scoring_reads_official_bundle_without_local_runtime_videos(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """formal scoring 应优先消费 official bundle, 不能因本地视频小文件未恢复而失败。"""
+
+    run_root = tmp_path / "generative_video_runtime"
+    _write_external_baseline_runtime_fixture(run_root)
+    runtime_records = read_jsonl(run_root / "records" / "runtime_detection_records.jsonl")
+    for record in runtime_records:
+        Path(record["source_video_path"]).unlink(missing_ok=True)
+        Path(record["attacked_video_path"]).unlink(missing_ok=True)
+
+    baseline_id = "unit_modern"
+    bundle_root = tmp_path / "external_baseline_official_result_bundles" / "validation_scale"
+    baseline_root = bundle_root / baseline_id
+    records_root = baseline_root / "records"
+    records_root.mkdir(parents=True)
+    execution_manifest_path = baseline_root / "official_execution_manifest.json"
+    execution_manifest_path.write_text(
+        json.dumps(
+            {
+                "baseline_id": baseline_id,
+                "execution_status": "official_reference_bundle_complete",
+                "failed_bundle_record_count": 0,
+                "generated_bundle_record_count": len(runtime_records),
+                "input_runtime_detection_record_count": len(runtime_records),
+            },
+            ensure_ascii=False,
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+    for index, record in enumerate(runtime_records):
+        bundle_path = records_root / f"{record['prompt_id']}__{record['seed_id']}__{record['attack_name']}.json"
+        payload = {
+            "official_adapter_baseline_id": baseline_id,
+            "official_baseline_id": baseline_id,
+            "official_result_provenance": "repository_generated_from_third_party_official_code",
+            "official_execution_manifest_path": str(execution_manifest_path),
+            "official_result_bundle_path": str(bundle_path),
+            "official_reference_protocol_anchor": "same_prompt_seed_attack_runtime_comparison_unit",
+            "official_score_extraction_policy": "test_official_detector_confidence",
+            "score_semantics": "watermark_presence_confidence",
+            "score_orientation": "higher_is_more_watermarked",
+            "official_score_granularity": "per_prompt_seed_attack",
+            "official_score_value_type": "continuous_detector_score",
+            "official_clean_negative_score_granularity": "per_clean_negative_sample",
+            "official_clean_negative_score_value_type": "continuous_detector_score",
+            "prompt_id": record["prompt_id"],
+            "seed_id": record["seed_id"],
+            "trajectory_trace_id": record["trajectory_trace_id"],
+            "attack_name": record["attack_name"],
+            "external_baseline_score": 0.61 + index * 0.01,
+            "external_baseline_clean_negative_score": 0.07,
+            "external_baseline_clean_negative_score_semantics": "watermark_presence_confidence",
+            "external_baseline_clean_negative_video_path": str(baseline_root / "clean_negative.mp4"),
+            "external_baseline_source_video_path": str(baseline_root / "official_source.mp4"),
+            "external_baseline_attacked_video_path": str(baseline_root / f"official_attacked_{index}.mp4"),
+            "detected": True,
+        }
+        bundle_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    monkeypatch.setenv("SSTW_EXTERNAL_BASELINE_OFFICIAL_RESULT_BUNDLE_ROOT", str(bundle_root))
+    monkeypatch.setenv("SSTW_UNIT_MODERN_EVAL_COMMAND", "python should_not_run.py --output-json {output_json_path}")
+    config = ModernBaselineCommandConfig(
+        baseline_name=baseline_id,
+        baseline_family="unit_modern_video_watermark",
+        adapter_path="external_baseline/primary/unit_modern/adapter/run_sstw_eval.py",
+        env_var="SSTW_UNIT_MODERN_EVAL_COMMAND",
+        default_source_script="external_baseline/primary/unit_modern/adapter/run_sstw_eval.py",
+        score_source="official_command_adapter",
+    )
+
+    modern_records = build_modern_score_records(
+        run_root,
+        {
+            "external_baseline_name": baseline_id,
+            "external_baseline_family": "unit_modern_video_watermark",
+            "external_baseline_layer": "modern_external_baseline",
+        },
+        config,
+    )
+
+    assert len(modern_records) == len(runtime_records)
+    assert all(record["metric_status"] == "measured_formal" for record in modern_records)
+    assert all(record["external_baseline_score_failure_reason"] == "none" for record in modern_records)
+    assert all(record["external_baseline_result_used_for_claim"] is True for record in modern_records)
+    assert all(Path(record["external_baseline_official_command_manifest_path"]).is_file() for record in modern_records)
+    assert all(Path(record["external_baseline_official_output_path"]).is_file() for record in modern_records)
+    assert not any("source_video_path_missing" in str(record) for record in modern_records)
+
+
+@pytest.mark.quick
 def test_modern_external_baseline_bridge_rejects_incomplete_official_identity(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

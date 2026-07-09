@@ -49,6 +49,9 @@ HARD_REQUIRED_VALIDATION_SCALE_CONFIG_FLAGS = (
     "require_formal_method_baseline_comparison",
     "require_formal_baseline_difference_interval",
     "require_data_split_and_leakage_guard",
+)
+HARD_REQUIRED_PROBE_PAPER_CONFIG_FLAGS = (
+    *HARD_REQUIRED_VALIDATION_SCALE_CONFIG_FLAGS,
     "require_validation_scale_sstw_advantage_claim_ready",
 )
 
@@ -91,6 +94,7 @@ def _load_config(config_path: str | Path = DEFAULT_VALIDATION_SCALE_CONFIG) -> d
         "validation_profile_names": config.get("validation_profile_names", sorted(DEFAULT_VALIDATION_PROFILE_NAMES)),
         "target_fpr": _required_float(config, "target_fpr", path),
         "paper_result_level": config.get("paper_result_level", "validation_scale"),
+        "stage_id": config.get("stage_id", "validation_scale_generative_probe_gate"),
         "minimum_prompt_count": int(config.get("minimum_prompt_count", DEFAULT_MINIMUM_PROMPT_COUNT)),
         "minimum_seed_per_prompt": int(config.get("minimum_seed_per_prompt", DEFAULT_MINIMUM_SEED_PER_PROMPT)),
         "minimum_attack_count": int(config.get("minimum_attack_count", max(DEFAULT_MINIMUM_ATTACK_COUNT, len(required_runtime_attack_names)))),
@@ -129,15 +133,22 @@ def _load_config(config_path: str | Path = DEFAULT_VALIDATION_SCALE_CONFIG) -> d
 
 
 def _hard_required_config_missing(config: dict[str, Any]) -> list[str]:
-    """检查 validation_scale 公平比较硬前置是否被配置关闭。
+    """检查当前 profile 的公平比较硬前置是否被配置关闭。
 
-    validation_scale 通过即表示可以进入 pilot_paper, 因此 external baseline 自包含、
-    SSTW measured_formal、公平 FPR 校准、同协议比较、差值区间和数据切分防泄漏
-    不能作为可选中间态。该检查属于项目特定门禁硬化, 用于防止通过配置关闭核心证据链。
+    validation_scale 只负责小样本全流程打通, 因此必须要求 self-contained
+    baseline、SSTW measured_formal、公平 FPR 校准、同协议比较、差值区间和数据切分
+    防泄漏都能生成, 但不要求在该小样本层证明 SSTW 优势。probe_paper 才是
+    target_fpr=0.1 的小样本论文闭合层, 因此在 probe_paper 中额外要求
+    SSTW 优势 claim ready。该检查属于项目特定门禁硬化, 用于防止通过配置关闭核心证据链。
     """
+    required_flags = (
+        HARD_REQUIRED_PROBE_PAPER_CONFIG_FLAGS
+        if str(config.get("paper_result_level")) == "probe_paper"
+        else HARD_REQUIRED_VALIDATION_SCALE_CONFIG_FLAGS
+    )
     return [
         f"{field_name}_must_be_true"
-        for field_name in HARD_REQUIRED_VALIDATION_SCALE_CONFIG_FLAGS
+        for field_name in required_flags
         if config.get(field_name) is not True
     ]
 
@@ -891,16 +902,20 @@ def build_validation_scale_gate_audit(
         [name for name, passed in requirement_checks.items() if not passed] + hard_config_missing
     ))
     gate_decision = "PASS" if not missing_requirements else "FAIL"
-    claim_support_status = (
-        "validation_scale_target_fpr_0_1_paper_claim_supported"
-        if gate_decision == "PASS"
-        else "validation_scale_blocked"
-    )
+    paper_result_level = str(config["paper_result_level"])
+    if gate_decision == "PASS" and paper_result_level == "probe_paper":
+        claim_support_status = "probe_paper_target_fpr_0_1_paper_claim_supported"
+    elif gate_decision == "PASS":
+        claim_support_status = "validation_scale_full_protocol_handoff_ready"
+    else:
+        claim_support_status = f"{paper_result_level}_blocked"
+    profile_gate_field = f"{paper_result_level}_gate_decision"
 
     return {
-        "stage_id": "validation_scale_generative_probe_gate",
+        "stage_id": config["stage_id"],
         "run_root": str(run_root),
         "validation_scale_gate_decision": gate_decision,
+        profile_gate_field: gate_decision,
         "claim_support_status": claim_support_status,
         "paper_result_level": config["paper_result_level"],
         "target_fpr": config["target_fpr"],
@@ -989,7 +1004,11 @@ def build_validation_scale_gate_audit(
         "paper_result_artifact_skeleton_status": paper_skeleton_status,
         "artifact_rebuild_status": artifact_rebuild_status,
         "full_paper_allowed": False,
-        "full_paper_next_gate": "pilot_paper_generative_probe_gate" if gate_decision == "PASS" else "complete_missing_validation_requirements",
+        "full_paper_next_gate": (
+            "pilot_paper_generative_probe_gate"
+            if gate_decision == "PASS" and paper_result_level == "probe_paper"
+            else ("probe_paper_generative_probe_gate" if gate_decision == "PASS" else "complete_missing_validation_requirements")
+        ),
     }
 
 
@@ -1010,16 +1029,30 @@ def write_validation_scale_gate_audit(
     write_csv(run_root / "tables" / "validation_scale_gate_table.csv", [record])
     write_json(run_root / "artifacts" / "validation_scale_gate_decision.json", audit)
     target_fpr_text = _format_fpr(audit.get("target_fpr"))
+    if audit.get("paper_result_level") == "probe_paper":
+        report_scope = (
+            "该报告由已落盘的 governed records 与 decision artifacts 自动生成。它判断 probe_paper "
+            "是否已经作为 target_fpr=0.1 的小样本论文闭合层完成闭环。该层级使用当前 protocol config "
+            f"指定的 target_fpr={target_fpr_text} "
+            "验证 records、tables、figures、reports、manifests、baseline、clean negative 公平校准、消融、46 个 runtime attack、"
+            "11 个 non-runtime/adaptive 协议、CI、SSTW 对 5 个现代 baseline 的优势证据和 artifact rebuild 是否能够完整产出。"
+            "通过后表示如果论文结论限定在 FPR=0.1 设定, 当前 probe_paper 结果可以支撑小样本论文写作; "
+            "它仍不能外推到 pilot_paper 的 FPR=0.01 或 full_paper 的 FPR=0.001, 也不能直接进入 full_paper。\n\n"
+        )
+    else:
+        report_scope = (
+            "该报告由已落盘的 governed records 与 decision artifacts 自动生成。它只判断 validation_scale "
+            "是否已经作为 target_fpr=0.1 的小样本全流程打通门禁完成闭环。该层级使用当前 protocol config "
+            f"指定的 target_fpr={target_fpr_text} "
+            "验证 records、tables、figures、reports、manifests、baseline、clean negative 公平校准、消融、46 个 runtime attack、"
+            "11 个 non-runtime/adaptive 协议、CI 和 artifact rebuild 是否能够完整产出。"
+            "通过后只允许进入 probe_paper; validation_scale 本身不支持正式效果主张, "
+            "也不能外推到 pilot_paper 的 FPR=0.01 或 full_paper 的 FPR=0.001。\n\n"
+        )
     report = (
         "# Validation-scale Generative Probe Gate Report\n\n"
-        "该报告由已落盘的 governed records 与 decision artifacts 自动生成。它只判断 validation-scale "
-        "是否已经作为 target_fpr=0.1 论文设定下的小样本完整协议层完成闭环。该层级使用当前 protocol config "
-        f"指定的 target_fpr={target_fpr_text} "
-        "验证 records、tables、figures、reports、manifests、baseline、clean negative 公平校准、消融、46 个 runtime attack、"
-        "11 个 non-runtime/adaptive 协议、CI、SSTW 对 5 个现代 baseline 的优势证据和 artifact rebuild 是否能够完整产出。"
-        "通过后表示如果论文结论限定在 FPR=0.1 设定, 当前 validation_scale 结果可以支撑论文写作; "
-        "它仍不能外推到 pilot_paper 的 FPR=0.01 或 full_paper 的 FPR=0.001, 也不能直接进入 full_paper。\n\n"
-        f"- validation_scale_gate_decision: {audit['validation_scale_gate_decision']}\n"
+        + report_scope
+        + f"- validation_scale_gate_decision: {audit['validation_scale_gate_decision']}\n"
         f"- claim_support_status: {audit['claim_support_status']}\n"
         f"- paper_result_level: {audit['paper_result_level']}\n"
         f"- target_fpr: {target_fpr_text}\n"
@@ -1069,6 +1102,25 @@ def write_validation_scale_gate_audit(
     report_path = run_root / "reports" / "validation_scale_gate_report.md"
     report_path.parent.mkdir(parents=True, exist_ok=True)
     report_path.write_text(report, encoding="utf-8")
+    paper_result_level = str(audit.get("paper_result_level") or "validation_scale")
+    if paper_result_level != "validation_scale":
+        profile_gate_field = f"{paper_result_level}_gate_decision"
+        profile_record = {
+            **record,
+            "record_version": f"{paper_result_level}_gate_v1",
+        }
+        write_jsonl(run_root / "records" / f"{paper_result_level}_gate_records.jsonl", [profile_record])
+        write_csv(run_root / "tables" / f"{paper_result_level}_gate_table.csv", [profile_record])
+        write_json(run_root / "artifacts" / f"{paper_result_level}_gate_decision.json", audit)
+        profile_report = report.replace(
+            "Validation-scale Generative Probe Gate Report",
+            f"{paper_result_level} Generative Probe Gate Report",
+        )
+        profile_report += f"\n- {profile_gate_field}: {audit.get(profile_gate_field)}\n"
+        (run_root / "reports" / f"{paper_result_level}_gate_report.md").write_text(
+            profile_report,
+            encoding="utf-8",
+        )
     return audit
 
 

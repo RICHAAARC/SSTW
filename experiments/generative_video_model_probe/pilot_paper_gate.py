@@ -74,8 +74,8 @@ DEFAULT_REQUIRED_INTERNAL_ABLATION_VARIANTS = (
     "generic_ssm_baseline",
 )
 HARD_REQUIRED_PILOT_PAPER_CONFIG_FLAGS = (
-    "require_validation_scale_gate_passed",
-    "require_validation_scale_to_pilot_paper_transition_decision",
+    "require_probe_paper_gate_passed",
+    "require_probe_paper_to_pilot_paper_transition_decision",
     "require_external_baseline_comparison_ready",
     "require_external_baseline_self_contained_outputs",
     "require_modern_external_baseline_formal_results",
@@ -126,7 +126,7 @@ def _format_fpr(value: float | None) -> str:
 def _read_validation_scale_artifact(run_root: Path, relative_path: str) -> dict:
     """读取 validation_scale 上游 artifact。
 
-    Colab 中 `validation_scale` 与 `pilot_paper` 使用隔离 run_root。pilot_paper gate
+    Colab 中 `validation_scale`、`probe_paper` 与 `pilot_paper` 使用隔离 run_root。pilot_paper gate
     需要消费 validation_scale 的 gate 和 transition decision, 因此先查当前 run_root
     中是否已有复用副本, 再查同级 `validation_scale` run_root。
     """
@@ -134,6 +134,21 @@ def _read_validation_scale_artifact(run_root: Path, relative_path: str) -> dict:
     if local_path.exists():
         return _read_json(local_path)
     sibling_path = run_root.parent / "validation_scale" / relative_path
+    return _read_json(sibling_path)
+
+
+def _read_probe_paper_artifact(run_root: Path, relative_path: str) -> dict:
+    """读取 probe_paper 上游 artifact。
+
+    pilot_paper 只能从 probe_paper 进入。Colab / 服务器 workflow 会把 probe_paper
+    的 paper gate 阶段包恢复到同级 run_root, 因此这里先查当前目录中的复用副本,
+    再查同级 `probe_paper` run_root。
+    """
+
+    local_path = run_root / relative_path
+    if local_path.exists():
+        return _read_json(local_path)
+    sibling_path = run_root.parent / "probe_paper" / relative_path
     return _read_json(sibling_path)
 
 
@@ -148,7 +163,7 @@ def _load_config(config_path: str | Path = DEFAULT_PILOT_PAPER_CONFIG) -> dict[s
     """读取 pilot_paper gate 配置。
 
     target_fpr 是 paper gate 的核心语义, 必须来自 protocol config。这里不再提供
-    脚本内置默认值, 避免 validation_scale / pilot_paper / full_paper 切换时出现脚本
+    脚本内置默认值, 避免 validation_scale / probe_paper / pilot_paper / full_paper 切换时出现脚本
     默认值覆盖配置的问题。
     """
     path = Path(config_path)
@@ -195,7 +210,9 @@ def _load_config(config_path: str | Path = DEFAULT_PILOT_PAPER_CONFIG) -> dict[s
         "require_internal_ablation_matrix_ready": bool(raw.get("require_internal_ablation_matrix_ready", True)),
         "require_motion_threshold_calibration_ready": bool(raw.get("require_motion_threshold_calibration_ready", True)),
         "require_validation_scale_gate_passed": bool(raw.get("require_validation_scale_gate_passed", True)),
-        "require_validation_scale_to_pilot_paper_transition_decision": bool(raw.get("require_validation_scale_to_pilot_paper_transition_decision", True)),
+        "require_probe_paper_gate_passed": bool(raw.get("require_probe_paper_gate_passed", False)),
+        "require_probe_paper_to_pilot_paper_transition_decision": bool(raw.get("require_probe_paper_to_pilot_paper_transition_decision", False)),
+        "require_validation_scale_to_pilot_paper_transition_decision": bool(raw.get("require_validation_scale_to_pilot_paper_transition_decision", False)),
         "require_formal_motion_claim_ready": bool(raw.get("require_formal_motion_claim_ready", True)),
     }
 
@@ -392,8 +409,8 @@ def _validation_scale_gate_ready_for_pilot(
     missing: list[str] = []
     if decision.get("validation_scale_gate_decision") != "PASS":
         missing.append("validation_scale_gate_decision_passed")
-    if decision.get("claim_support_status") != "validation_scale_target_fpr_0_1_paper_claim_supported":
-        missing.append("validation_scale_claim_support_status_ready")
+    if decision.get("claim_support_status") != "validation_scale_full_protocol_handoff_ready":
+        missing.append("validation_scale_handoff_status_ready")
     if decision.get("paper_result_level") != "validation_scale":
         missing.append("validation_scale_paper_result_level_current")
     if missing_validation_requirements or _safe_int(decision.get("validation_missing_requirement_count")) != 0:
@@ -408,7 +425,10 @@ def _validation_scale_gate_ready_for_pilot(
         missing.append("validation_scale_data_split_and_leakage_guard_passed")
     if (_safe_int(decision.get("sstw_measured_formal_record_count")) or 0) <= 0:
         missing.append("validation_scale_sstw_measured_formal_records_ready")
-    if decision.get("sstw_measured_formal_status") != "sstw_measured_formal_paper_profile_claim_candidate":
+    if decision.get("sstw_measured_formal_status") not in {
+        "sstw_measured_formal_validation_scale_only",
+        "sstw_measured_formal_paper_profile_claim_candidate",
+    }:
         missing.append("validation_scale_sstw_measured_formal_status_ready")
     if fair_ready_count is None or fair_ready_count < required_method_count:
         missing.append("validation_scale_fair_detection_calibration_ready")
@@ -422,8 +442,6 @@ def _validation_scale_gate_ready_for_pilot(
         missing.append("validation_scale_formal_baseline_difference_interval_ready")
     if decision.get("formal_baseline_difference_interval_status") != "formal_baseline_difference_interval_paper_profile_claim_candidate":
         missing.append("validation_scale_formal_baseline_difference_interval_status_ready")
-    if decision.get("validation_scale_sstw_advantage_claim_ready") is not True:
-        missing.append("validation_scale_sstw_advantage_claim_ready")
     if decision.get("full_paper_allowed") is not False:
         missing.append("validation_scale_must_not_allow_full_paper")
     return not missing, {
@@ -441,7 +459,7 @@ def _validation_scale_gate_ready_for_pilot(
 
 
 def _validation_scale_transition_ready_for_pilot(decision: dict[str, Any]) -> tuple[bool, dict[str, Any]]:
-    """检查 validation_scale -> pilot_paper 跳转判定是否为完整 governed PASS。"""
+    """检查历史兼容 validation_scale -> pilot_paper 直连跳转判定是否为完整 governed PASS。当前主链不使用该路径。"""
 
     missing_transition_requirements = _string_list(decision.get("missing_transition_requirements"))
     allowed_profiles = _string_list(decision.get("allowed_next_result_profiles"))
@@ -472,6 +490,65 @@ def _validation_scale_transition_ready_for_pilot(decision: dict[str, Any]) -> tu
         "validation_scale_transition_allowed_next_result_profiles": allowed_profiles,
         "validation_scale_transition_blocked_next_result_profiles": blocked_profiles,
         "validation_scale_transition_fairness_missing_requirements": missing,
+    }
+
+
+def _probe_paper_gate_ready_for_pilot(decision: dict[str, Any]) -> tuple[bool, dict[str, Any]]:
+    """检查 probe_paper gate 是否为进入 pilot_paper 的完整 PASS。"""
+
+    missing_requirements = _string_list(decision.get("missing_validation_requirements"))
+    missing: list[str] = []
+    if decision.get("probe_paper_gate_decision") != "PASS":
+        missing.append("probe_paper_gate_decision_passed")
+    if decision.get("claim_support_status") != "probe_paper_target_fpr_0_1_paper_claim_supported":
+        missing.append("probe_paper_claim_support_status_ready")
+    if decision.get("paper_result_level") != "probe_paper":
+        missing.append("probe_paper_result_level_current")
+    if missing_requirements or _safe_int(decision.get("validation_missing_requirement_count")) != 0:
+        missing.append("probe_paper_missing_requirements_empty")
+    if decision.get("full_paper_allowed") is not False:
+        missing.append("probe_paper_must_not_allow_full_paper")
+    return not missing, {
+        "probe_paper_gate_decision": decision.get("probe_paper_gate_decision"),
+        "probe_paper_claim_support_status": decision.get("claim_support_status"),
+        "probe_paper_gate_missing_requirements": missing_requirements,
+        "probe_paper_gate_missing_requirement_count": _safe_int(decision.get("validation_missing_requirement_count")),
+        "probe_paper_gate_fairness_missing_requirements": missing,
+    }
+
+
+def _probe_paper_transition_ready_for_pilot(decision: dict[str, Any]) -> tuple[bool, dict[str, Any]]:
+    """检查 probe_paper -> pilot_paper 跳转判定是否为完整 governed PASS。"""
+
+    missing_transition_requirements = _string_list(decision.get("missing_transition_requirements"))
+    allowed_profiles = _string_list(decision.get("allowed_next_result_profiles"))
+    blocked_profiles = _string_list(decision.get("blocked_next_result_profiles"))
+    missing: list[str] = []
+    if decision.get("probe_paper_to_pilot_paper_transition_decision") != "PASS":
+        missing.append("probe_paper_to_pilot_paper_transition_decision_passed")
+    if decision.get("claim_support_status") != "probe_paper_ready_to_enter_pilot_paper":
+        missing.append("probe_paper_transition_claim_support_status_ready")
+    if decision.get("source_stage") != "probe_paper" or decision.get("target_stage") != "pilot_paper":
+        missing.append("probe_paper_transition_source_target_registered")
+    if decision.get("source_gate_passed") is not True:
+        missing.append("probe_paper_transition_source_gate_passed")
+    if missing_transition_requirements or _safe_int(decision.get("transition_missing_requirement_count")) != 0:
+        missing.append("probe_paper_transition_missing_requirements_empty")
+    if "pilot_paper" not in allowed_profiles:
+        missing.append("probe_paper_transition_allows_pilot_paper")
+    if not {"full_paper", "submission_freeze"}.issubset(set(blocked_profiles)):
+        missing.append("probe_paper_transition_blocks_later_profiles")
+    if decision.get("full_paper_allowed") is not False:
+        missing.append("probe_paper_transition_must_not_allow_full_paper")
+    return not missing, {
+        "probe_paper_to_pilot_paper_transition_decision": decision.get("probe_paper_to_pilot_paper_transition_decision"),
+        "probe_paper_transition_claim_support_status": decision.get("claim_support_status"),
+        "probe_paper_transition_source_gate_passed": decision.get("source_gate_passed"),
+        "probe_paper_transition_missing_requirements": missing_transition_requirements,
+        "probe_paper_transition_missing_requirement_count": _safe_int(decision.get("transition_missing_requirement_count")),
+        "probe_paper_transition_allowed_next_result_profiles": allowed_profiles,
+        "probe_paper_transition_blocked_next_result_profiles": blocked_profiles,
+        "probe_paper_transition_fairness_missing_requirements": missing,
     }
 
 
@@ -883,6 +960,8 @@ def build_pilot_paper_gate_audit(
 
     validation_scale_decision = _read_validation_scale_artifact(run_root, "artifacts/validation_scale_gate_decision.json")
     validation_scale_to_pilot_transition = _read_validation_scale_artifact(run_root, "artifacts/validation_scale_to_pilot_paper_transition_decision.json")
+    probe_paper_decision = _read_probe_paper_artifact(run_root, "artifacts/probe_paper_gate_decision.json")
+    probe_paper_to_pilot_transition = _read_probe_paper_artifact(run_root, "artifacts/probe_paper_to_pilot_paper_transition_decision.json")
     motion_threshold_decision = _read_json(run_root / "artifacts" / "motion_threshold_calibration_decision.json")
     raw_validation_scale_ready, validation_scale_summary = _validation_scale_gate_ready_for_pilot(
         validation_scale_decision,
@@ -890,6 +969,10 @@ def build_pilot_paper_gate_audit(
     )
     raw_validation_scale_to_pilot_transition_ready, validation_scale_transition_summary = _validation_scale_transition_ready_for_pilot(
         validation_scale_to_pilot_transition,
+    )
+    raw_probe_paper_ready, probe_paper_summary = _probe_paper_gate_ready_for_pilot(probe_paper_decision)
+    raw_probe_paper_to_pilot_transition_ready, probe_paper_transition_summary = _probe_paper_transition_ready_for_pilot(
+        probe_paper_to_pilot_transition,
     )
     formal_motion_claim_ready = (
         not config["require_formal_motion_claim_ready"]
@@ -907,10 +990,20 @@ def build_pilot_paper_gate_audit(
         not config["require_validation_scale_to_pilot_paper_transition_decision"]
         or raw_validation_scale_to_pilot_transition_ready
     )
+    probe_paper_ready = (
+        not config["require_probe_paper_gate_passed"]
+        or raw_probe_paper_ready
+    )
+    probe_paper_to_pilot_transition_ready = (
+        not config["require_probe_paper_to_pilot_paper_transition_decision"]
+        or raw_probe_paper_to_pilot_transition_ready
+    )
 
     requirement_checks = {
         "validation_scale_gate_passed": validation_scale_ready,
         "validation_scale_to_pilot_paper_transition_decision_passed": validation_scale_to_pilot_transition_ready,
+        "probe_paper_gate_passed": probe_paper_ready,
+        "probe_paper_to_pilot_paper_transition_decision_passed": probe_paper_to_pilot_transition_ready,
         "motion_threshold_calibration_ready": motion_threshold_ready,
         "formal_motion_claim_ready": formal_motion_claim_ready,
         "pilot_paper_profile_generation_records_ready": prompt_count >= config["minimum_prompt_count"]
@@ -977,6 +1070,8 @@ def build_pilot_paper_gate_audit(
         "threshold_protocol": config["threshold_protocol"],
         **validation_scale_summary,
         **validation_scale_transition_summary,
+        **probe_paper_summary,
+        **probe_paper_transition_summary,
         **external_baseline_summary,
         **external_baseline_self_containment_summary,
         **fair_detection_summary,
@@ -1115,6 +1210,10 @@ def write_pilot_paper_gate_audit(
         f"- validation_scale_gate_fairness_missing_requirements: {', '.join(audit['validation_scale_gate_fairness_missing_requirements']) if audit['validation_scale_gate_fairness_missing_requirements'] else 'none'}\n"
         f"- validation_scale_to_pilot_paper_transition_decision: {audit['validation_scale_to_pilot_paper_transition_decision']}\n"
         f"- validation_scale_transition_fairness_missing_requirements: {', '.join(audit['validation_scale_transition_fairness_missing_requirements']) if audit['validation_scale_transition_fairness_missing_requirements'] else 'none'}\n"
+        f"- probe_paper_gate_decision: {audit['probe_paper_gate_decision']}\n"
+        f"- probe_paper_gate_fairness_missing_requirements: {', '.join(audit['probe_paper_gate_fairness_missing_requirements']) if audit['probe_paper_gate_fairness_missing_requirements'] else 'none'}\n"
+        f"- probe_paper_to_pilot_paper_transition_decision: {audit['probe_paper_to_pilot_paper_transition_decision']}\n"
+        f"- probe_paper_transition_fairness_missing_requirements: {', '.join(audit['probe_paper_transition_fairness_missing_requirements']) if audit['probe_paper_transition_fairness_missing_requirements'] else 'none'}\n"
         f"- external_baseline_comparison_decision: {audit['external_baseline_comparison_decision']}\n"
         f"- external_baseline_self_containment_decision: {audit['external_baseline_self_containment_decision']}\n"
         f"- external_baseline_measured_adapter_count: {audit['external_baseline_measured_adapter_count']}\n"

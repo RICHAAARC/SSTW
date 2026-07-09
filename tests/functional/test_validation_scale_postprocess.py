@@ -251,7 +251,7 @@ def test_sstw_measured_formal_result_writes_project_method_records(tmp_path: Pat
     assert records[0]["method_id"] == "sstw_key_conditioned_flow_trajectory"
     assert records[0]["method_role"] == "proposed_method"
     assert records[0]["comparison_scope"] == "paper_protocol_formal_adapter"
-    assert records[0]["claim_support_status"] == "sstw_measured_formal_paper_profile_claim_candidate"
+    assert records[0]["claim_support_status"] == "sstw_measured_formal_validation_scale_only"
     assert records[0]["sstw_detection_score_field"] == "S_final_conservative"
     assert any(record.get("sample_role") == "clean_negative" for record in records)
     assert (run_root / "tables" / "sstw_measured_formal_table.csv").exists()

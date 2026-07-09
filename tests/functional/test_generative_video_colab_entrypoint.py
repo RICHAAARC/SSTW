@@ -32,7 +32,8 @@ from paper_workflow.notebook_utils.generative_video_model_probe_workflow import 
     build_validation_scale_formal_internal_ablation_command,
     build_pilot_paper_gate_command,
     build_validation_scale_gate_command,
-    build_validation_scale_to_pilot_paper_transition_decision_command,
+    build_validation_scale_to_probe_paper_transition_decision_command,
+    build_probe_paper_to_pilot_paper_transition_decision_command,
     default_workflow_profile_for_notebook_role,
     ensure_drive_layout,
     resolve_notebook_workflow_profile,
@@ -414,7 +415,7 @@ def test_colab_notebooks_are_separated_from_python_helpers() -> None:
 @pytest.mark.quick
 @pytest.mark.quick
 def test_notebook_workflow_profile_config_supports_profile_switching() -> None:
-    """统一配置层必须能区分 validation_scale、pilot_paper 和 full_paper。"""
+    """统一配置层必须能区分 validation_scale、probe_paper、pilot_paper 和 full_paper。"""
     assert default_workflow_profile_for_notebook_role("generative_video_generation") == "validation_scale"
     assert default_workflow_profile_for_notebook_role("generative_video_quality_scoring") == "validation_scale"
     assert default_workflow_profile_for_notebook_role("sstw_mechanism_postprocess") == "validation_scale"
@@ -426,16 +427,18 @@ def test_notebook_workflow_profile_config_supports_profile_switching() -> None:
     formal_scoring = resolve_notebook_workflow_profile("validation_scale", "formal_comparison_scoring")
     evidence_postprocess = resolve_notebook_workflow_profile("validation_scale", "paper_evidence_postprocess")
     validation = resolve_notebook_workflow_profile("validation_scale", "paper_gate_and_package")
+    probe = resolve_notebook_workflow_profile("probe_paper", "paper_gate_and_package")
     pilot = resolve_notebook_workflow_profile("pilot_paper", "paper_gate_and_package")
     full = resolve_notebook_workflow_profile("full_paper", config_path="configs/paper_workflow/generative_video_notebook_workflows.json", allow_disabled=True)
     validation_protocol = json.loads(Path(validation["protocol_config_path"]).read_text(encoding="utf-8"))
+    probe_protocol = json.loads(Path(probe["protocol_config_path"]).read_text(encoding="utf-8"))
     pilot_protocol = json.loads(Path(pilot["protocol_config_path"]).read_text(encoding="utf-8"))
     full_protocol = json.loads(Path(full["protocol_config_path"]).read_text(encoding="utf-8"))
 
     assert validation["workflow_profile"] == "validation_scale"
     assert validation["result_tier"] == "validation_scale"
-    assert validation["enabled_for_claim"] is True
-    assert validation["claim_support_status"] == "validation_scale_target_fpr_0_1_paper_claim_candidate"
+    assert validation["enabled_for_claim"] is False
+    assert validation["claim_support_status"] == "validation_scale_full_protocol_handoff_only"
     assert validation["target_fpr"] == validation_protocol["target_fpr"]
     assert validation["protocol_target_fpr"] == validation_protocol["target_fpr"]
     assert validation["target_fpr_source_config_path"] == validation["protocol_config_path"]
@@ -449,6 +452,8 @@ def test_notebook_workflow_profile_config_supports_profile_switching() -> None:
     assert "external_baseline_comparison" in build_workflow_stage_plan("validation_scale", "formal_comparison_scoring")
     assert "fair_detection_calibration" in build_workflow_stage_plan("validation_scale", "formal_comparison_scoring")
     assert "validation_scale_gate" in build_workflow_stage_plan("validation_scale", "paper_gate_and_package")
+    assert "validation_scale_to_probe_paper_transition_decision" in build_workflow_stage_plan("validation_scale", "paper_gate_and_package")
+    assert "probe_paper_to_pilot_paper_transition_decision" not in build_workflow_stage_plan("validation_scale", "paper_gate_and_package")
     assert "pilot_paper_gate" not in build_workflow_stage_plan("validation_scale", "paper_gate_and_package")
     assert validation["notebook_path"] == "paper_workflow/colab_notebooks/paper_gate_and_package_colab.ipynb"
     assert evidence_postprocess["notebook_path"] == "paper_workflow/colab_notebooks/paper_evidence_postprocess_colab.ipynb"
@@ -459,6 +464,20 @@ def test_notebook_workflow_profile_config_supports_profile_switching() -> None:
         default_workflow_profile_for_notebook_role("validation_scale_formal_gate")
     with pytest.raises(KeyError):
         resolve_notebook_workflow_profile("validation_scale", "validation_scale_formal_gate")
+
+    assert probe["requested_workflow_profile"] == "probe_paper"
+    assert probe["workflow_profile"] == "probe_paper"
+    assert probe["result_tier"] == "probe_paper"
+    assert probe["enabled_for_claim"] is True
+    assert probe["method_sample_count"] == 168
+    assert probe["baseline_sample_count"] == 84
+    assert probe["protocol_config_path"] == "configs/protocol/probe_paper_generative_probe.json"
+    assert probe["target_fpr"] == probe_protocol["target_fpr"]
+    assert probe["protocol_target_fpr"] == probe_protocol["target_fpr"]
+    assert "validation_scale_gate" in build_workflow_stage_plan("probe_paper", "paper_gate_and_package")
+    assert "validation_scale_to_probe_paper_transition_decision" not in build_workflow_stage_plan("probe_paper", "paper_gate_and_package")
+    assert "probe_paper_to_pilot_paper_transition_decision" in build_workflow_stage_plan("probe_paper", "paper_gate_and_package")
+    assert "pilot_paper_gate" not in build_workflow_stage_plan("probe_paper", "paper_gate_and_package")
 
     assert pilot["requested_workflow_profile"] == "pilot_paper"
     assert pilot["workflow_profile"] == "pilot_paper"
@@ -477,6 +496,7 @@ def test_notebook_workflow_profile_config_supports_profile_switching() -> None:
     assert "external_baseline_comparison" in build_workflow_stage_plan("pilot_paper", "formal_comparison_scoring")
     assert "pilot_paper_gate" in build_workflow_stage_plan("pilot_paper", "paper_gate_and_package")
     assert "validation_scale_gate" not in build_workflow_stage_plan("pilot_paper", "paper_gate_and_package")
+    assert "probe_paper_to_pilot_paper_transition_decision" not in build_workflow_stage_plan("pilot_paper", "paper_gate_and_package")
 
     assert full["workflow_profile"] == "full_paper"
     assert full["profile_status"] == "implemented_requires_pilot_paper_gate_and_full_scale_resources"
@@ -754,6 +774,11 @@ def test_profile_specific_commands_pass_protocol_config_path(tmp_path: Path) -> 
         workflow_profile="pilot_paper",
         notebook_role="paper_gate_and_package",
     )
+    probe_layout = build_drive_layout(
+        str(tmp_path / "SSTW"),
+        workflow_profile="probe_paper",
+        notebook_role="paper_gate_and_package",
+    )
 
     validation_commands = [
         build_mechanism_postprocess_command(evidence_layout),
@@ -767,12 +792,15 @@ def test_profile_specific_commands_pass_protocol_config_path(tmp_path: Path) -> 
         build_validation_scale_gate_command(validation_layout),
     ]
     pilot_command = build_pilot_paper_gate_command(pilot_layout)
+    probe_gate_command = build_validation_scale_gate_command(probe_layout)
 
     for command in validation_commands:
         assert "--config-path" in command
         assert command[command.index("--config-path") + 1] == "configs/protocol/validation_scale_generative_probe.json"
     assert "--config-path" in pilot_command
     assert pilot_command[pilot_command.index("--config-path") + 1] == "configs/protocol/pilot_paper_generative_probe.json"
+    assert "--config-path" in probe_gate_command
+    assert probe_gate_command[probe_gate_command.index("--config-path") + 1] == "configs/protocol/probe_paper_generative_probe.json"
 
 
 @pytest.mark.quick
@@ -797,7 +825,8 @@ def test_paper_gate_commands_use_module_mode_for_check_result_scripts(tmp_path: 
     commands = [
         build_external_baseline_self_containment_decision_command(formal_layout),
         build_data_split_and_leakage_guard_command(evidence_layout),
-        build_validation_scale_to_pilot_paper_transition_decision_command(gate_layout),
+        build_validation_scale_to_probe_paper_transition_decision_command(gate_layout),
+        build_probe_paper_to_pilot_paper_transition_decision_command(gate_layout),
     ]
 
     for command in commands:

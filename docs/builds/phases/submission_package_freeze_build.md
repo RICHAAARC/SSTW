@@ -156,16 +156,16 @@ scripts/package_results/submission_freeze_preparation_packager.py
 | 项目 | 当前标注 |
 |---|---|
 | 完成状态 | 结构就绪, 未进入最终冻结 |
-| 主要差距项 | small-scale pilot 已通过, 但上游 validation_scale、pilot_paper、full_paper records 与三个轻量判定不存在或未通过, 只能报告 evidence gap。 |
-| 下一步构建方向 | 等待 validation_scale、pilot_paper 与 full_paper_result_checker 通过后, 再重建 tables、figures、reports、reviewer evidence index 和 claim audit。 |
+| 主要差距项 | small-scale pilot 已通过, 但上游 validation_scale、probe_paper、pilot_paper、full_paper records 与三个轻量判定不存在或未通过, 只能报告 evidence gap。 |
+| 下一步构建方向 | 等待 validation_scale、probe_paper、pilot_paper 与 full_paper_result_checker 通过后, 再重建 tables、figures、reports、reviewer evidence index 和 claim audit。 |
 | full_paper 影响 | 未满足本阶段要求时, 不得把相关结果写入 full_paper supported claim。 |
 
 ### 3.1 快速检查清单
 
 ```text
 stage_status: 结构就绪, 未进入最终冻结
-gap_item: small-scale pilot 已通过, 但上游 validation_scale、pilot_paper、full_paper records 与三个轻量判定不存在或未通过, 只能报告 evidence gap。
-next_action: 等待 validation_scale、pilot_paper 与 full_paper_result_checker 通过后, 再重建 tables、figures、reports、reviewer evidence index 和 claim audit。
+gap_item: small-scale pilot 已通过, 但上游 validation_scale、probe_paper、pilot_paper、full_paper records 与三个轻量判定不存在或未通过, 只能报告 evidence gap。
+next_action: 等待 validation_scale、probe_paper、pilot_paper 与 full_paper_result_checker 通过后, 再重建 tables、figures、reports、reviewer evidence index 和 claim audit。
 full_paper_blocking_rule: unresolved_gap_blocks_full_paper_claim
 ```
 

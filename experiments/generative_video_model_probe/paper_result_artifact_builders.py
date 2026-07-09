@@ -1,6 +1,6 @@
 """论文级结果图表与补充实验产物的统一构建器。
 
-该模块的作用是把 validation_scale、pilot_paper 和 full_paper 共享的论文产物
+该模块的作用是把 validation_scale、probe_paper、pilot_paper 和 full_paper 共享的论文产物
 结构固定下来。Notebook 与服务器 CLI 只调用本模块命令, 不在入口层手写图表、
 低 FPR 曲线、效率指标或 adaptive / real-world 攻击汇总逻辑。
 

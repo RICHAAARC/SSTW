@@ -475,7 +475,7 @@ def _stage_package_source_workflow_profile(
 
     通用写法是从当前 Notebook 的 workflow profile 读取前置阶段包。项目特定例外是
     `motion_threshold_calibration_colab`: 它属于独立 calibration split, 后续
-    validation / pilot / full profile 都必须复用 `motion_calibration` 中冻结的阈值,
+    validation / probe / pilot / full profile 都必须复用 `motion_calibration` 中冻结的阈值,
     不能到当前 evaluation profile 下查找或重新估计阈值。
     """
 
@@ -483,8 +483,10 @@ def _stage_package_source_workflow_profile(
         return "motion_calibration"
     workflow_profile = str(layout.get("workflow_profile") or layout.get("runtime_profile") or "default")
     if sanitize_filename_token(stage_package_id) == "paper_gate_and_package_colab":
-        if workflow_profile == "pilot_paper":
+        if workflow_profile == "probe_paper":
             return "validation_scale"
+        if workflow_profile == "pilot_paper":
+            return "probe_paper"
         if workflow_profile == "full_paper":
             return "pilot_paper"
     return workflow_profile
@@ -779,7 +781,7 @@ def _default_required_stage_packages(layout: Mapping[str, str], notebook_role: s
             required.append("motion_threshold_calibration_colab")
             required.append("formal_comparison_scoring_colab")
             required.append("paper_evidence_postprocess_colab")
-            if profile in {"pilot_paper", "full_paper"}:
+            if profile in {"probe_paper", "pilot_paper", "full_paper"}:
                 required.append("paper_gate_and_package_colab")
         return required
     return []
@@ -1229,7 +1231,7 @@ def _validation_scale_paper_gate_publish_blocker(
     """判断 validation_scale paper gate 包是否允许发布完整 zip。
 
     该门禁属于项目特定写法。普通阶段 zip 只是文件交接容器, 但
-    validation_scale 的 paper gate zip 同时承担“进入 pilot_paper 前最终证据包”
+    validation_scale 的 paper gate zip 同时承担“进入 probe_paper 前最终证据包”
     的职责。若 package manifest 缺失或失败, 说明公平比较、artifact rebuild、
     stage transition 等闭环没有被当前运行证明, 因此只能写阻断 manifest, 不能
     发布可被误用的完整 zip。
@@ -1249,7 +1251,7 @@ def _validation_scale_paper_gate_publish_blocker(
             "validation_scale_package_manifest_path": str(manifest_path),
             "validation_scale_package_manifest_decision": "MISSING",
             "validation_scale_gate_decision": "UNKNOWN",
-            "validation_scale_to_pilot_paper_transition_decision": "UNKNOWN",
+            "validation_scale_to_probe_paper_transition_decision": "UNKNOWN",
             "stage_package_publish_block_reason": "missing_validation_scale_package_manifest",
         }
     try:
@@ -1260,7 +1262,7 @@ def _validation_scale_paper_gate_publish_blocker(
             "validation_scale_package_manifest_path": str(manifest_path),
             "validation_scale_package_manifest_decision": "INVALID",
             "validation_scale_gate_decision": "UNKNOWN",
-            "validation_scale_to_pilot_paper_transition_decision": "UNKNOWN",
+            "validation_scale_to_probe_paper_transition_decision": "UNKNOWN",
             "stage_package_publish_block_reason": f"invalid_validation_scale_package_manifest_json:{exc}",
         }
     if not isinstance(manifest, dict):
@@ -1269,13 +1271,13 @@ def _validation_scale_paper_gate_publish_blocker(
             "validation_scale_package_manifest_path": str(manifest_path),
             "validation_scale_package_manifest_decision": "INVALID",
             "validation_scale_gate_decision": "UNKNOWN",
-            "validation_scale_to_pilot_paper_transition_decision": "UNKNOWN",
+            "validation_scale_to_probe_paper_transition_decision": "UNKNOWN",
             "stage_package_publish_block_reason": "validation_scale_package_manifest_top_level_not_object",
         }
 
     decision = str(manifest.get("validation_scale_package_manifest_decision") or "UNKNOWN")
     gate_decision = str(manifest.get("validation_scale_gate_decision") or "UNKNOWN")
-    transition_decision = str(manifest.get("validation_scale_to_pilot_paper_transition_decision") or "UNKNOWN")
+    transition_decision = str(manifest.get("validation_scale_to_probe_paper_transition_decision") or "UNKNOWN")
     if decision == "PASS" and gate_decision == "PASS" and transition_decision == "PASS":
         return None
     return {
@@ -1283,7 +1285,7 @@ def _validation_scale_paper_gate_publish_blocker(
         "validation_scale_package_manifest_path": str(manifest_path),
         "validation_scale_package_manifest_decision": decision,
         "validation_scale_gate_decision": gate_decision,
-        "validation_scale_to_pilot_paper_transition_decision": transition_decision,
+        "validation_scale_to_probe_paper_transition_decision": transition_decision,
         "missing_artifact_count": manifest.get("missing_artifact_count", 0),
         "missing_artifact_relpaths": manifest.get("missing_artifact_relpaths", []),
         "stage_package_publish_block_reason": "validation_scale_package_manifest_not_pass",

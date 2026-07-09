@@ -183,7 +183,7 @@ def _workflow_profile_for_role(args: argparse.Namespace, notebook_role: str) -> 
     """返回某个 role 实际使用的 workflow profile。
 
     motion threshold calibration 使用独立 calibration split, 不应误用
-    validation_scale / pilot_paper / full_paper 的 evaluation profile。
+    validation_scale / probe_paper / pilot_paper / full_paper 的 evaluation profile。
     """
 
     if notebook_role == "motion_threshold_calibration":
@@ -353,7 +353,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     parser = argparse.ArgumentParser(description="在无 Notebook 的 GPU 服务器上运行 SSTW 生成式视频 workflow")
     parser.add_argument("--project-root", required=True, help="服务器上的 SSTW 结果根目录, 等价于 Colab 的 Drive 项目根")
-    parser.add_argument("--workflow-profile", default="validation_scale", choices=["validation_scale", "pilot_paper", "full_paper"], help="运行层级")
+    parser.add_argument("--workflow-profile", default="validation_scale", choices=["validation_scale", "probe_paper", "pilot_paper", "full_paper"], help="运行层级")
     parser.add_argument("--pipeline", default="validation_scale_complete", choices=SERVER_PIPELINES, help="要执行的语义 pipeline")
     parser.add_argument("--repo-root", default=".", help="SSTW 仓库根目录")
     parser.add_argument("--baseline-id", action="append", choices=MODERN_EXTERNAL_BASELINE_BUILD_ORDER, help="只运行指定 external baseline, 可重复传入")

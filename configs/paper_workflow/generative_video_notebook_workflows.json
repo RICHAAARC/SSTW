@@ -20,6 +20,7 @@
     "external_baseline_formal_scoring": {
       "allowed_workflow_profiles": [
         "validation_scale",
+        "probe_paper",
         "pilot_paper",
         "full_paper"
       ],
@@ -44,6 +45,7 @@
     "formal_comparison_scoring": {
       "allowed_workflow_profiles": [
         "validation_scale",
+        "probe_paper",
         "pilot_paper",
         "full_paper"
       ],
@@ -63,6 +65,7 @@
     "paper_evidence_postprocess": {
       "allowed_workflow_profiles": [
         "validation_scale",
+        "probe_paper",
         "pilot_paper",
         "full_paper"
       ],
@@ -86,6 +89,7 @@
     "generative_video_generation": {
       "allowed_workflow_profiles": [
         "validation_scale",
+        "probe_paper",
         "pilot_paper",
         "full_paper"
       ],
@@ -100,6 +104,7 @@
     "generative_video_quality_scoring": {
       "allowed_workflow_profiles": [
         "validation_scale",
+        "probe_paper",
         "pilot_paper",
         "full_paper"
       ],
@@ -114,6 +119,7 @@
     "sstw_mechanism_postprocess": {
       "allowed_workflow_profiles": [
         "validation_scale",
+        "probe_paper",
         "pilot_paper",
         "full_paper"
       ],
@@ -128,6 +134,7 @@
     "runtime_attack": {
       "allowed_workflow_profiles": [
         "validation_scale",
+        "probe_paper",
         "pilot_paper",
         "full_paper"
       ],
@@ -141,6 +148,7 @@
     "runtime_detection": {
       "allowed_workflow_profiles": [
         "validation_scale",
+        "probe_paper",
         "pilot_paper",
         "full_paper"
       ],
@@ -168,6 +176,7 @@
     "paper_gate_and_package": {
       "allowed_workflow_profiles": [
         "validation_scale",
+        "probe_paper",
         "pilot_paper",
         "full_paper"
       ],
@@ -175,7 +184,8 @@
       "stage_plan": [
         "validation_artifact_rebuild_dry_run",
         "validation_scale_gate",
-        "validation_scale_to_pilot_paper_transition_decision",
+        "validation_scale_to_probe_paper_transition_decision",
+        "probe_paper_to_pilot_paper_transition_decision",
         "pilot_paper_gate",
         "pilot_paper_to_full_paper_transition_decision",
         "validation_scale_gate_figure_builder",
@@ -195,11 +205,12 @@
       "disabled_stage_names": [
         "motion_threshold_calibration",
         "validation_scale_gate",
-        "validation_scale_to_pilot_paper_transition_decision",
         "pilot_paper_gate",
         "pilot_paper_to_full_paper_transition_decision",
         "validation_scale_gate_figure_builder",
-        "validation_scale_package_manifest_builder"
+        "validation_scale_package_manifest_builder",
+        "validation_scale_to_probe_paper_transition_decision",
+        "probe_paper_to_pilot_paper_transition_decision"
       ],
       "drive_log_dir_relative": "logs/generative_video_model_probe/full_paper",
       "drive_package_dir_relative": "full_paper",
@@ -213,7 +224,7 @@
       "motion_threshold_artifact_run_root_relative": "runs/generative_video_model_probe/motion_calibration",
       "paper_gate_profile": true,
       "profile_status": "implemented_requires_pilot_paper_gate_and_full_scale_resources",
-      "profile_switching_note": "full_paper 使用与 validation_scale 和 pilot_paper 同构的论文协议入口; 与前两层的差异只允许是样本规模、统计功效和 target_fpr=0.001。正式 claim 仍需 full_paper_result_checker 和 full_paper_to_submission_freeze_transition_decision 通过。",
+      "profile_switching_note": "full_paper 使用与 validation_scale、probe_paper 和 pilot_paper 同构的论文协议入口; 与前序层的差异只允许是样本规模、统计功效和 target_fpr=0.001。正式 claim 仍需 full_paper_result_checker 和 full_paper_to_submission_freeze_transition_decision 通过。",
       "protocol_config_path": "configs/protocol/full_paper_generative_probe.json",
       "result_tier": "full_paper",
       "runtime_profile": "full_paper",
@@ -265,9 +276,10 @@
         "validation_scale_gate",
         "validation_scale_gate_figure_builder",
         "validation_scale_package_manifest_builder",
-        "validation_scale_to_pilot_paper_transition_decision",
         "full_paper_result_checker",
-        "full_paper_to_submission_freeze_transition_decision"
+        "full_paper_to_submission_freeze_transition_decision",
+        "validation_scale_to_probe_paper_transition_decision",
+        "probe_paper_to_pilot_paper_transition_decision"
       ],
       "drive_log_dir_relative": "logs/generative_video_model_probe/pilot_paper",
       "drive_package_dir_relative": "pilot_paper",
@@ -280,8 +292,8 @@
       "minimum_clean_negative_count": 1000,
       "motion_threshold_artifact_run_root_relative": "runs/generative_video_model_probe/motion_calibration",
       "paper_gate_profile": true,
-      "profile_status": "implemented_requires_validation_scale_gate_and_self_contained_baselines",
-      "profile_switching_note": "pilot_paper 使用与 validation_scale 和 full_paper 同构的 46 个 runtime attack 与 11 个 non-runtime/adaptive 协议; 与 full_paper 的差异只允许是样本规模、统计功效和 target_fpr=0.01。",
+      "profile_status": "implemented_requires_probe_paper_gate_and_self_contained_baselines",
+      "profile_switching_note": "pilot_paper 使用与 validation_scale、probe_paper 和 full_paper 同构的 46 个 runtime attack 与 11 个 non-runtime/adaptive 协议; 与 probe_paper 的差异只允许是 target_fpr=0.01, 与 full_paper 的差异只允许是样本规模、统计功效和 target_fpr=0.01。",
       "protocol_config_path": "configs/protocol/pilot_paper_generative_probe.json",
       "result_tier": "pilot_paper",
       "runtime_profile": "pilot_paper"
@@ -289,18 +301,19 @@
     "validation_scale": {
       "baseline_sample_count": 24,
       "bootstrap_iteration_count": 200,
-      "claim_support_status": "validation_scale_target_fpr_0_1_paper_claim_candidate",
+      "claim_support_status": "validation_scale_full_protocol_handoff_only",
       "disabled_stage_names": [
         "motion_threshold_calibration",
         "pilot_paper_gate",
         "pilot_paper_to_full_paper_transition_decision",
         "full_paper_result_checker",
-        "full_paper_to_submission_freeze_transition_decision"
+        "full_paper_to_submission_freeze_transition_decision",
+        "probe_paper_to_pilot_paper_transition_decision"
       ],
       "drive_log_dir_relative": "logs/generative_video_model_probe/validation_scale",
       "drive_package_dir_relative": "validation_scale",
       "drive_run_root_relative": "runs/generative_video_model_probe/validation_scale",
-      "enabled_for_claim": true,
+      "enabled_for_claim": false,
       "enabled_for_run": true,
       "max_content_records": 24,
       "max_source_records": 24,
@@ -308,19 +321,59 @@
       "minimum_clean_negative_count": 10,
       "motion_threshold_artifact_run_root_relative": "runs/generative_video_model_probe/motion_calibration",
       "next_allowed_result_profiles_after_pass": [
+        "probe_paper"
+      ],
+      "next_forbidden_result_profiles_after_pass": [
+        "pilot_paper",
+        "full_paper",
+        "submission_freeze"
+      ],
+      "paper_gate_preflight_layer": true,
+      "paper_gate_profile": true,
+      "profile_status": "implemented_small_sample_full_protocol_target_fpr_0_1_handoff_gate_requires_self_contained_baselines_and_fair_calibration",
+      "profile_switching_note": "validation_scale 是 target_fpr=0.1 的小样本全流程打通门禁, 使用与 probe_paper、pilot_paper 和 full_paper 同构的 46 个 runtime attack 与 11 个 non-runtime/adaptive 协议验证 records、tables、figures、reports、manifests、baseline、消融、CI、clean negative 公平校准和 artifact rebuild 能闭环; 它不支持正式效果主张, 通过后只允许进入 probe_paper, 不能直接进入 pilot_paper 或 full_paper。",
+      "protocol_config_path": "configs/protocol/validation_scale_generative_probe.json",
+      "result_tier": "validation_scale",
+      "runtime_profile": "validation_scale"
+    },
+    "probe_paper": {
+      "baseline_sample_count": 84,
+      "bootstrap_iteration_count": 1000,
+      "disabled_stage_names": [
+        "motion_threshold_calibration",
+        "validation_scale_to_probe_paper_transition_decision",
+        "pilot_paper_gate",
+        "pilot_paper_to_full_paper_transition_decision",
+        "validation_scale_gate_figure_builder",
+        "validation_scale_package_manifest_builder",
+        "full_paper_result_checker",
+        "full_paper_to_submission_freeze_transition_decision"
+      ],
+      "drive_log_dir_relative": "logs/generative_video_model_probe/probe_paper",
+      "drive_package_dir_relative": "probe_paper",
+      "drive_run_root_relative": "runs/generative_video_model_probe/probe_paper",
+      "enabled_for_claim": true,
+      "enabled_for_run": true,
+      "max_content_records": 168,
+      "max_source_records": 168,
+      "method_sample_count": 168,
+      "minimum_clean_negative_count": 1000,
+      "motion_threshold_artifact_run_root_relative": "runs/generative_video_model_probe/motion_calibration",
+      "paper_gate_profile": true,
+      "profile_status": "implemented_requires_validation_scale_gate_and_self_contained_baselines",
+      "profile_switching_note": "probe_paper 是 fpr=0.1 的小样本论文闭合验证层, 使用 pilot_paper 级样本规模和同构 attack / baseline / 消融 / 图表协议。它通过后只允许进入 pilot_paper, 不能直接进入 full_paper。",
+      "protocol_config_path": "configs/protocol/probe_paper_generative_probe.json",
+      "result_tier": "probe_paper",
+      "runtime_profile": "probe_paper",
+      "claim_support_status": "probe_paper_target_fpr_0_1_paper_claim_candidate",
+      "next_allowed_result_profiles_after_pass": [
         "pilot_paper"
       ],
       "next_forbidden_result_profiles_after_pass": [
         "full_paper",
         "submission_freeze"
       ],
-      "paper_gate_preflight_layer": false,
-      "paper_gate_profile": true,
-      "profile_status": "implemented_small_sample_full_protocol_target_fpr_0_1_claim_gate_requires_self_contained_baselines_and_fair_calibration",
-      "profile_switching_note": "validation_scale 是 target_fpr=0.1 的小样本完整协议论文主张候选门禁, 使用与 pilot_paper 和 full_paper 同构的 46 个 runtime attack 与 11 个 non-runtime/adaptive 协议验证全部 records、tables、figures、reports、manifests、baseline、消融、CI、clean negative 公平校准和 artifact rebuild 能闭环; 通过后可支撑 fpr=0.1 论文设定下的 SSTW 有效性与优势结论候选, 但不能外推到 pilot_paper 的 fpr=0.01 或 full_paper 的 fpr=0.001。",
-      "protocol_config_path": "configs/protocol/validation_scale_generative_probe.json",
-      "result_tier": "validation_scale",
-      "runtime_profile": "validation_scale"
+      "target_fpr": 0.1
     }
   }
 }

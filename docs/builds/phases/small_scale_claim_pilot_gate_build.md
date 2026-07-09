@@ -6,7 +6,7 @@
 
 ### 1.1 阶段目标
 
-该检查在进入 `validation_scale` 前, 以较小成本验证主要 claim 是否有成立迹象。该检查不产生论文级结果表格, 也不能直接决定是否进入 `pilot_paper` 或 `full_paper`。`small_scale_mechanism_pilot_check` 通过后只允许进入 `validation_scale`; `validation_scale` 通过并生成 `validation_scale_to_pilot_paper_transition_decision` 后, 才允许进入 `pilot_paper`。
+该检查在进入 `validation_scale` 前, 以较小成本验证主要 claim 是否有成立迹象。该检查不产生论文级结果表格, 也不能直接决定是否进入 `pilot_paper` 或 `full_paper`。`small_scale_mechanism_pilot_check` 通过后只允许进入 `validation_scale`; `validation_scale` 通过并生成 `validation_scale_to_probe_paper_transition_decision` 后, 才允许进入 `probe_paper`; `probe_paper` 通过并生成 `probe_paper_to_pilot_paper_transition_decision` 后, 才允许进入 `pilot_paper`。
 
 ### 1.2 建议规模
 
@@ -483,7 +483,7 @@ prompt_suite_id: generative_video_probe_prompt_suite_motion_observability_and_pi
 |---|---|
 | 完成状态 | 已完成 small-scale pilot, 可进入 validation_scale |
 | 主要差距项 | 本阶段阻塞已解除; 剩余差距转移到 validation_scale、pilot_paper、现代外部 baseline 主表对比、内部消融和论文级 fixed-FPR。 |
-| 下一步构建方向 | 进入 validation_scale, 并在 validation_scale 通过后生成 validation_scale_to_pilot_paper_transition_decision 再进入 pilot_paper, 同步补现代外部 baseline、内部消融和 CI reporter。 |
+| 下一步构建方向 | 进入 validation_scale, 并在 validation_scale 通过后生成 validation_scale_to_probe_paper_transition_decision 进入 probe_paper, probe_paper 通过后生成 probe_paper_to_pilot_paper_transition_decision 再进入 pilot_paper, 同步补现代外部 baseline、内部消融和 CI reporter。 |
 | full_paper 影响 | 未满足本阶段要求时, 不得把相关结果写入 full_paper supported claim。 |
 
 ### 3.1 快速检查清单
@@ -491,7 +491,7 @@ prompt_suite_id: generative_video_probe_prompt_suite_motion_observability_and_pi
 ```text
 stage_status: 已完成 small-scale pilot, 可进入 validation_scale
 gap_item: 本阶段阻塞已解除; 剩余差距转移到 validation_scale、pilot_paper、现代外部 baseline 主表对比、内部消融和论文级 fixed-FPR。
-next_action: 进入 validation_scale, 并在 validation_scale 通过后生成 validation_scale_to_pilot_paper_transition_decision 再进入 pilot_paper, 同步补现代外部 baseline、内部消融和 CI reporter。
+next_action: 进入 validation_scale, 并在 validation_scale 通过后生成 validation_scale_to_probe_paper_transition_decision 进入 probe_paper, probe_paper 通过后生成 probe_paper_to_pilot_paper_transition_decision 再进入 pilot_paper, 同步补现代外部 baseline、内部消融和 CI reporter。
 full_paper_blocking_rule: unresolved_gap_blocks_full_paper_claim
 ```
 
@@ -507,7 +507,7 @@ pilot_baseline_results_not_used_as_external_main_comparison
 pilot_attack_results_not_used_as_full_robustness_claim
 ```
 
-`small_scale_mechanism_pilot_check` PASS 后的下一步只能是 validation_scale, 不是 pilot_paper 或 full_paper。validation_scale 通过后, 才能通过 `validation_scale_to_pilot_paper_transition_decision` 进入 pilot_paper。若 Codex 检测到用户或脚本试图从 `small_scale_mechanism_pilot_check` 直接生成 full_paper package, 应将其标记为阶段跳跃。
+`small_scale_mechanism_pilot_check` PASS 后的下一步只能是 validation_scale, 不是 pilot_paper 或 full_paper。validation_scale 通过后, 只能通过 `validation_scale_to_probe_paper_transition_decision` 进入 probe_paper; probe_paper 通过后, 才能通过 `probe_paper_to_pilot_paper_transition_decision` 进入 pilot_paper。若 Codex 检测到用户或脚本试图从 `small_scale_mechanism_pilot_check` 直接生成 full_paper package, 应将其标记为阶段跳跃。
 
 ## 5. small_scale_mechanism_pilot_check 通过后的 validation_scale 准入清单
 

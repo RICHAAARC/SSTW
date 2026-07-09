@@ -1,7 +1,7 @@
 {
-  "allow_effect_size_claims": true,
+  "allow_effect_size_claims": false,
   "artifact_rebuild_dry_run_required": true,
-  "claim_support_status": "validation_scale_target_fpr_0_1_paper_claim_candidate",
+  "claim_support_status": "validation_scale_full_protocol_handoff_only",
   "external_baseline_prohibited_result_sources": [
     "externally_supplied_result_bundle",
     "manual_result_json",
@@ -20,15 +20,16 @@
   "minimum_sstw_advantage_baseline_count": 5,
   "minimum_sstw_tpr_at_target_fpr_difference": 0.0,
   "next_allowed_result_profiles_after_pass": [
-    "pilot_paper"
+    "probe_paper"
   ],
   "next_forbidden_result_profiles_after_pass": [
+    "pilot_paper",
     "full_paper",
     "submission_freeze"
   ],
-  "paper_gate_preflight_layer": false,
+  "paper_gate_preflight_layer": true,
   "paper_protocol_difference_from_full_paper": "same_full_attack_protocol_smaller_sample_scale_and_fpr_0_10",
-  "paper_protocol_difference_from_pilot_paper": "validation_uses_full_attack_protocol_with_smaller_sample_scale_and_fpr_0_10",
+  "paper_protocol_difference_from_pilot_paper": "validation_is_full_protocol_handoff_smaller_sample_scale_and_fpr_0_10_requires_probe_paper_before_pilot",
   "paper_result_level": "validation_scale",
   "repository_generated_external_baseline_cache_allowed": true,
   "require_adaptive_attack_records": true,
@@ -50,10 +51,10 @@
   "require_motion_threshold_calibration_ready": true,
   "require_pilot_paper_and_full_paper_blocked_until_pass": true,
   "require_replay_or_sketch_records_or_claim3_downgrade": true,
-  "require_sstw_advantage_ci_lower_above_zero": true,
+  "require_sstw_advantage_ci_lower_above_zero": false,
   "require_sstw_measured_formal_records": true,
   "require_validation_scale_formal_internal_ablation": true,
-  "require_validation_scale_sstw_advantage_claim_ready": true,
+  "require_validation_scale_sstw_advantage_claim_ready": false,
   "required_modern_external_baseline_adapter_names": [
     "videoshield",
     "vidsig",
@@ -61,15 +62,15 @@
     "revmark",
     "wam_frame"
   ],
-  "required_runtime_attack_protocol_note": "validation_scale 使用与 full_paper 相同的 46 个 runtime attack 和 11 个 non-runtime/adaptive 协议, 覆盖压缩、时间、空间几何、视觉退化和组合攻击; validation_scale 的区别仅是样本量较小且 target_fpr=0.1, 通过后表示在 fpr=0.1 论文设定下 SSTW 结论和优势主张具备 governed evidence, 但不能外推到 pilot_paper 的 fpr=0.01 或 full_paper 的 fpr=0.001。",
+  "required_runtime_attack_protocol_note": "validation_scale 使用与 probe_paper、pilot_paper 和 full_paper 相同的 46 个 runtime attack 和 11 个 non-runtime/adaptive 协议, 覆盖压缩、时间、空间几何、视觉退化和组合攻击; validation_scale 的区别是样本量较小且 target_fpr=0.1, 通过后只允许进入 probe_paper, 不能直接进入 pilot_paper 或 full_paper。",
   "stage_id": "validation_scale_generative_probe_gate",
   "target_fpr": 0.1,
-  "transition_decision_after_pass": "validation_scale_to_pilot_paper_transition_decision",
+  "transition_decision_after_pass": "validation_scale_to_probe_paper_transition_decision",
   "validation_profile_names": [
     "validation_scale"
   ],
-  "validation_scale_definition": "small_sample_full_protocol_target_fpr_0_1_claim_validation",
-  "validation_scale_role": "target_fpr_0_1_paper_claim_support_gate_before_pilot_paper",
+  "validation_scale_definition": "small_sample_full_protocol_handoff_validation",
+  "validation_scale_role": "paper_grade_preflight_gate_before_probe_paper",
   "require_paper_result_artifact_skeleton": true,
   "require_video_quality_metric_records": true,
   "require_efficiency_metric_records": true,

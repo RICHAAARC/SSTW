@@ -1,6 +1,6 @@
 # generative_video_model_probe 实现 package 构建流程
 
-本文档是 SSTW 分阶段构建流程文档。文档结构固定为: 先说明本实现 package 构建流程, 再说明当前具体完成情况。`generative_video_model_probe` 不再作为独立主门禁使用, 只表示真实生成式视频模型实验 package。阶段放行必须服从主干门禁: `protocol_governance -> mechanism_validation -> validation_scale -> pilot_paper -> full_paper -> submission_freeze`。
+本文档是 SSTW 分阶段构建流程文档。文档结构固定为: 先说明本实现 package 构建流程, 再说明当前具体完成情况。`generative_video_model_probe` 不再作为独立主门禁使用, 只表示真实生成式视频模型实验 package。阶段放行必须服从主干门禁: `protocol_governance -> mechanism_validation -> validation_scale -> probe_paper -> pilot_paper -> full_paper -> submission_freeze`。
 
 本阶段文档服从 `docs/builds/sstw_project_construction_flow.md` 与 `docs/builds/sstw_method_mechanism_design.md`。阶段完成情况只描述仓库当前可观察的工程、配置、测试和文档状态, 不把临时实验输出写成论文结论。
 
@@ -84,7 +84,7 @@ generic_ssm_baseline
 
 ### 1.8 validation_scale 运行要求
 
-在进入 pilot_paper 和 full_paper 结果运行前, 本实现 package 必须先服务于 `validation_scale` 运行。`validation_scale` 是 target_fpr=0.1 的小样本完整协议论文主张候选门禁。它不要求达到 pilot_paper 或 full_paper 样本量, 但必须完成 paper 相关的全部机制构建, 覆盖与 full_paper 一致的 46 个 runtime attack 和 11 个 non-runtime/adaptive 协议, 并能够在小样本规模上产出全部结果类型。
+在进入 pilot_paper 和 full_paper 结果运行前, 本实现 package 必须先服务于 `validation_scale` 运行。`validation_scale` 是 target_fpr=0.1 的小样本全流程打通门禁。它不要求达到 pilot_paper 或 full_paper 样本量, 但必须完成 paper 相关的全部机制构建, 覆盖与 full_paper 一致的 46 个 runtime attack 和 11 个 non-runtime/adaptive 协议, 并能够在小样本规模上产出全部结果类型。
 
 必须覆盖:
 
@@ -145,7 +145,7 @@ validation_artifact_rebuild_dry_run_ready
 validation_claim_audit_ready
 ```
 
-`validation_scale` 不要求达到 full_paper 的最终样本量, 但必须覆盖 paper 协议的所有机制和所有产物类型。若某一类产物在 validation_scale 阻断, 不允许进入 `pilot_paper`; 此时只能继续修复缺失机制、adapter 或门禁规则。validation_scale 通过只是进入 pilot_paper 的必要条件, 还必须生成 validation_scale_to_pilot_paper_transition_decision; full_paper 仍需 pilot_paper_gate、pilot_paper_to_full_paper_transition_decision 与 full_paper_result_checker。
+`validation_scale` 不要求达到 full_paper 的最终样本量, 但必须覆盖 paper 协议的所有机制和所有产物类型。若某一类产物在 validation_scale 阻断, 不允许进入 `probe_paper` 或 `pilot_paper`; 此时只能继续修复缺失机制、adapter 或门禁规则。validation_scale 通过只是进入 probe_paper 的必要条件, 还必须生成 validation_scale_to_probe_paper_transition_decision; probe_paper 通过后再生成 probe_paper_to_pilot_paper_transition_decision 才能进入 pilot_paper; full_paper 仍需 pilot_paper_gate、pilot_paper_to_full_paper_transition_decision 与 full_paper_result_checker。
 
 ### 1.11 现代 baseline 最小接入组合
 
@@ -427,7 +427,7 @@ expected_generation_count: 24
 profile_name: validation_scale
 ```
 
-需要强调的是, `validation_scale_gate_decision = PASS` 表示 paper 级运行的全部机制已经在小样本规模上闭合, 因而可以生成 `validation_scale_to_pilot_paper_transition_decision` 并进入 `pilot_paper_gate`; 它仍不允许直接生成 full_paper 规模论文主表, 但它必须已经能产出小样本全结果包。
+需要强调的是, `validation_scale_gate_decision = PASS` 表示 paper 级运行的全部机制已经在小样本规模上闭合, 因而可以生成 `validation_scale_to_probe_paper_transition_decision` 并进入 `probe_paper`; 它仍不允许直接生成 pilot_paper 或 full_paper 规模论文主表, 但它必须已经能产出小样本全结果包。`probe_paper_gate_decision = PASS` 后才允许生成 `probe_paper_to_pilot_paper_transition_decision` 并进入 `pilot_paper_gate`。
 
 ## 2026-06-23 validation_scale 后处理工程闭环
 
@@ -588,7 +588,7 @@ package
 
 ## 2026-06-24 pilot_paper FPR=0.01 工程入口
 
-当前 `generative_video_model_probe` 已新增 `pilot_paper` 语义层级, 用于在 validation_scale 通过并生成 validation_scale_to_pilot_paper_transition_decision 后执行小样本论文级结果包。该层级不是 workflow-only pilot, 而是小规模跑代表性 paper 协议并产出 pilot 级论文结果。
+当前 `generative_video_model_probe` 已新增 `probe_paper` 与 `pilot_paper` 语义层级。`probe_paper` 用于在 validation_scale 通过并生成 validation_scale_to_probe_paper_transition_decision 后执行 FPR=10% 小样本论文闭合验证; `pilot_paper` 用于在 probe_paper 通过并生成 probe_paper_to_pilot_paper_transition_decision 后执行 FPR=1% 小规模论文级结果包。二者都不是 workflow-only pilot, 而是受门禁约束的 paper profile。
 
 该阶段协议为:
 
@@ -655,7 +655,7 @@ pilot_paper_external_baseline_trace_count_min >= 84
 pilot_paper_internal_ablation_trace_count_min >= 84
 ```
 
-这一实现属于项目特定 gate 设计: 它强制 `validation_scale` 先闭合对比链路和消融链路, 再允许 `pilot_paper` 输出 pilot 级 fixed-FPR 论文主张。显式 DTW 与 frame matching 仍只是同步 control proxy, 现代视频水印 baseline 的正式 adapter 必须在 `validation_scale` 通过前基于项目内 clone / build / run / adapt / record 产出 `measured_formal` records。
+这一实现属于项目特定 gate 设计: 它强制 `validation_scale` 先闭合对比链路和消融链路, 再由 `probe_paper` 证明 FPR=10% 小样本论文闭合, 最后才允许 `pilot_paper` 输出 pilot 级 fixed-FPR 论文主张。显式 DTW 与 frame matching 仍只是同步 control proxy, 现代视频水印 baseline 的正式 adapter 必须在 `validation_scale` 通过前基于项目内 clone / build / run / adapt / record 产出 `measured_formal` records。
 
 
 ### 2.12 现代视频水印 baseline 正式 adapter 要求

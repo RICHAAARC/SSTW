@@ -2,7 +2,7 @@
 
 ## 1. 阶段定位
 
-`pilot_paper` 是小样本论文级结果层级, 不是仅用于 workflow progression 的工程预演。该阶段位于 `validation_scale` 与 `full_paper` 之间, 目标是在真实 Wan2.1 上产出可审计的 pilot-scale paper claim, 重点报告 `TPR@FPR=0.01`。
+`pilot_paper` 是小样本论文级结果层级, 不是仅用于 workflow progression 的工程预演。该阶段位于 `probe_paper` 与 `full_paper` 之间, 目标是在真实 Wan2.1 上产出可审计的 pilot-scale paper claim, 重点报告 `TPR@FPR=0.01`。它必须消费已经通过的 `validation_scale_to_probe_paper_transition_decision`、`probe_paper_gate_decision` 和 `probe_paper_to_pilot_paper_transition_decision`, 不能由 validation_scale 直接跳入。
 
 `pilot_paper` 与 `full_paper` 的核心区别只允许是样本规模和统计置信度。二者必须共享同一类论文级协议:
 
@@ -64,6 +64,8 @@ explicit_frame_matching_temporal_registration
 videoshield
 vidsig
 videoseal
+revmark
+wam_frame
 ```
 
 其中显式 DTW 与 frame matching 只能写出 `measured_proxy` control records; 5 个主实验现代视频水印 baseline 必须通过项目内 clone / build / run / adapt / record 和正式 adapter 写出 `metric_status = measured_formal` records。内部消融矩阵至少需要覆盖 `sstw_full_method`、endpoint-only、trajectory-only、去 velocity constraint、去 endpoint-aware control、去 replay uncertainty weighting、去 admissibility 和 generic SSM baseline。若任何现代 baseline 或消融缺失, `pilot_paper` gate 必须失败, 不允许先报告 `TPR@FPR=0.01` 再补表。
@@ -145,7 +147,7 @@ wrong_sampler_replay_control_not_equivalent == true
 motion_threshold_calibration_ready == true
 method_mechanism_validation_decision == PASS
 validation_scale_gate_decision == PASS
-validation_scale_to_pilot_paper_transition_decision == PASS
+validation_scale_to_probe_paper_transition_decision == PASS
 data_split_and_leakage_guard_decision == PASS
 external_baseline_comparison_decision == PASS
 external_baseline_self_containment_decision == PASS

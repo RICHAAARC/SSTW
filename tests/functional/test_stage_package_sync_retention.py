@@ -28,7 +28,7 @@ def _write_validation_scale_package_pass_manifest(run_root: Path) -> None:
             {
                 "validation_scale_package_manifest_decision": "PASS",
                 "validation_scale_gate_decision": "PASS",
-                "validation_scale_to_pilot_paper_transition_decision": "PASS",
+                "validation_scale_to_probe_paper_transition_decision": "PASS",
                 "missing_artifact_count": 0,
                 "missing_artifact_relpaths": [],
             }

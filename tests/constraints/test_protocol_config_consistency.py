@@ -10,6 +10,7 @@ import pytest
 
 PAPER_PROFILE_PROTOCOL_CONFIGS = (
     Path("configs/protocol/validation_scale_generative_probe.json"),
+    Path("configs/protocol/probe_paper_generative_probe.json"),
     Path("configs/protocol/pilot_paper_generative_probe.json"),
     Path("configs/protocol/full_paper_generative_probe.json"),
 )

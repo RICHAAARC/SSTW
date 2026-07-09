@@ -46,8 +46,7 @@
   "require_pilot_paper_gate_passed": true,
   "require_pilot_paper_to_full_paper_transition_decision": true,
   "require_replay_or_sketch_records_or_claim3_downgrade": true,
-  "require_validation_scale_gate_passed": true,
-  "require_validation_scale_to_pilot_paper_transition_decision": true,
+  "require_validation_scale_gate_passed": false,
   "required_external_baseline_adapter_names": [
     "explicit_dtw_temporal_alignment",
     "explicit_frame_matching_temporal_registration",
@@ -74,7 +73,7 @@
     "revmark",
     "wam_frame"
   ],
-  "required_runtime_attack_protocol_note": "full_paper 使用顶会/顶刊级多类别、多强度 runtime attack 协议, 覆盖 codec/platform 转码、时间结构扰动、空间几何、视觉退化和组合攻击; 同时要求生成式重压缩/重生成、Flow-specific adaptive、wrong sampler、wrong prompt、wrong key、detector probing、watermark removal、spoofing、collusion 和 adversarial evasion 等非 runtime/adaptive 协议产物; 所有结果必须从当前 protocol config 读取 attack manifest, 不允许 Notebook 或手工参数缩减。",
+  "required_runtime_attack_protocol_note": "full_paper 使用顶会/顶刊级多类别、多强度 runtime attack 协议, 覆盖 codec/platform 转码、时间结构扰动、空间几何、视觉退化和组合攻击; 同时要求生成式重压缩/重生成、Flow-specific adaptive、wrong sampler、wrong prompt、wrong key、detector probing、watermark removal、spoofing、collusion 和 adversarial evasion 等非 runtime/adaptive 协议产物; validation_scale、probe_paper、pilot_paper 和 full_paper 共用同一 attack manifest, 只允许样本规模、统计功效和 target_fpr 不同。",
   "reviewer_evidence_index_required": true,
   "shard_execution_required": true,
   "shard_resume_manifest_required": true,
@@ -93,5 +92,9 @@
   "require_real_adaptive_attack_records": true,
   "require_real_world_attack_records": true,
   "shared_attack_protocol_config_path": "configs/protocol/shared_generative_video_attack_protocol.json",
-  "shared_attack_protocol_id": "top_tier_video_watermark_attack_protocol_v1"
+  "shared_attack_protocol_id": "top_tier_video_watermark_attack_protocol_v1",
+  "require_probe_paper_gate_passed": true,
+  "require_probe_paper_to_pilot_paper_transition_decision": true,
+  "require_validation_scale_to_probe_paper_transition_decision": true,
+  "paper_protocol_difference_from_probe_paper": "sample_scale_and_target_fpr_only"
 }

@@ -36,23 +36,24 @@ reproducibility_evidence_sufficient
 
 若任一项缺失, 论文可以继续作为 validation 或 workshop 版本推进, 但不应直接生成 full_paper 结果包。
 
-### 1.1 四层结果产出梯度
+### 1.1 五层结果产出梯度
 
-顶刊顶会实验不应把“方法能运行”“小样本能跑通”“pilot 级论文结果”和“正式 full_paper 结果”混为一类。本项目统一采用以下四层结果产出梯度:
+顶刊顶会实验不应把“方法能运行”“小样本能跑通”“FPR=10% 小样本论文闭合”“pilot 级论文结果”和“正式 full_paper 结果”混为一类。本项目统一采用以下五层结果产出梯度:
 
 | 层级 | 目标 FPR | 样本规模 | 主要作用 | 是否允许支撑效果主张 |
 |---|---:|---|---|---|
 | `method_mechanism_validation` | 不固定 | 最小机制样本 | 验证 SSTW 方法机制、状态空间证据、轨迹观测和基础 runner 是否可运行。 | 否 |
 | `validation_scale` | `0.10` | 小样本 | 小样本全流程打通验证, 属于 paper 级前的全流程打通层。它必须产出与论文协议同构的 records、tables、figures、reports、manifests、baseline、消融、attack、CI 和 artifact rebuild 文件, 用于提前发现 pilot_paper / full_paper 的阻断。 | 否 |
+| `probe_paper` | `0.10` | 小样本论文闭合协议 | 使用 pilot_paper 级样本结构和同构 attack / baseline / 消融 / 图表协议, 在 FPR=10% 下验证论文结论是否能够闭合。 | 仅允许 FPR=10% 小样本论文闭合主张 |
 | `pilot_paper` | `0.01` | 小规模论文协议 | 以较小成本产出 FPR=1% 级别的代表性 paper 协议结果, 检查真实模型、baseline、消融和 fixed-FPR 统计是否具备扩展到 full_paper 的可报告性。 | 仅允许 pilot 级主张 |
 | `full_paper` | `0.001` | 正式规模论文协议 | 产出 FPR=0.1% 级别正式论文主结果, 包含主表、主图、CI、claim audit、artifact rebuild 和 reviewer evidence index。 | 是 |
 
-`validation_scale` 是进入 `pilot_paper` 和后续 `full_paper` 流程的硬门禁。它通过只说明论文协议产物链路已经小样本跑通, 不说明 SSTW 的效果已经达到投稿主张。进入 `pilot_paper` 还必须在 `validation_scale` PASS 后生成 `validation_scale_to_pilot_paper_transition_decision`。`validation_scale` 是 `full_paper` 的必要条件但不是充分条件; `full_paper` 仍需要 `pilot_paper_gate`、`pilot_paper_to_full_paper_transition_decision`、`full_paper_result_checker`、CI、claim audit、artifact rebuild 和 submission freeze 相关检查通过。
+`validation_scale` 是进入 `probe_paper`、`pilot_paper` 和后续 `full_paper` 流程的硬门禁。它通过只说明论文协议产物链路已经小样本跑通, 不说明 SSTW 的效果已经达到投稿主张。进入 `probe_paper` 必须在 `validation_scale` PASS 后生成 `validation_scale_to_probe_paper_transition_decision`; 进入 `pilot_paper` 还必须在 `probe_paper` PASS 后生成 `probe_paper_to_pilot_paper_transition_decision`。`validation_scale` 与 `probe_paper` 都是 `full_paper` 的必要条件但不是充分条件; `full_paper` 仍需要 `pilot_paper_gate`、`pilot_paper_to_full_paper_transition_decision`、`full_paper_result_checker`、CI、claim audit、artifact rebuild 和 submission freeze 相关检查通过。
 
 主干门禁只保留:
 
 ```text
-protocol_governance -> mechanism_validation -> validation_scale -> pilot_paper -> full_paper -> submission_freeze
+protocol_governance -> mechanism_validation -> validation_scale -> probe_paper -> pilot_paper -> full_paper -> submission_freeze
 ```
 
 历史 `small_scale_claim_pilot_gate` 只作为 `mechanism_validation` 下的小样本机制检查记录, 不再作为主干门禁。`generative_video_model_probe` 只表示真实生成式视频模型实现 package, 不再作为独立门禁。
@@ -296,7 +297,7 @@ harness 是否通过
 解释:
 
 ```text
-90-100: 可作为进入下一主干阶段前的工程化预检, 仍必须遵守 protocol_governance -> mechanism_validation -> validation_scale -> pilot_paper -> full_paper -> submission_freeze 顺序
+90-100: 可作为进入下一主干阶段前的工程化预检, 仍必须遵守 protocol_governance -> mechanism_validation -> validation_scale -> probe_paper -> pilot_paper -> full_paper -> submission_freeze 顺序
 75-89: 可进入 validation_scale, 但仍需补齐部分 gate
 60-74: 只能作为实验协议验证阶段
 <60: 不应进入论文主结果生产

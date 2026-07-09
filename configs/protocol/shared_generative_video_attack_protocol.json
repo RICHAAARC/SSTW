@@ -1,6 +1,6 @@
 {
   "shared_attack_protocol_id": "top_tier_video_watermark_attack_protocol_v1",
-  "shared_attack_protocol_role": "shared_runtime_and_adaptive_attack_manifest_for_validation_pilot_full_paper",
+  "shared_attack_protocol_role": "shared_runtime_and_adaptive_attack_manifest_for_validation_probe_pilot_full_paper",
   "required_runtime_attack_names": [
     "video_compression_runtime",
     "h264_crf18_runtime",
@@ -76,5 +76,5 @@
     0.01,
     0.001
   ],
-  "shared_attack_protocol_note": "validation_scale、pilot_paper 和 full_paper 共用该 attack 协议清单; profile 之间只允许样本规模、统计功效和 target_fpr 不同。"
+  "shared_attack_protocol_note": "validation_scale、probe_paper、pilot_paper 和 full_paper 共用该 attack 协议清单; profile 之间只允许样本规模、统计功效和 target_fpr 不同。"
 }

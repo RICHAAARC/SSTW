@@ -31,7 +31,7 @@ VALIDATION_SCALE_GATE_PACKAGE_RELPATHS = (
     "artifacts/external_baseline_self_containment_decision.json",
     "artifacts/validation_artifact_rebuild_dry_run_decision.json",
     "artifacts/data_split_and_leakage_guard_decision.json",
-    "artifacts/validation_scale_to_pilot_paper_transition_decision.json",
+    "artifacts/validation_scale_to_probe_paper_transition_decision.json",
     "artifacts/paper_result_artifact_skeleton_decision.json",
     "figures/validation_scale_gate_figure.json",
 )
@@ -96,8 +96,17 @@ def _requirement_rows(decision: Mapping[str, Any]) -> list[dict[str, Any]]:
     return [
         {
             "requirement_name": name,
-            "requirement_status": "FAIL" if name in missing else "PASS",
-            "requirement_ready_value": 0 if name in missing else 1,
+            "requirement_status": (
+                "NOT_REQUIRED"
+                if name == "validation_scale_sstw_advantage_claim_ready"
+                and decision.get("paper_result_level") == "validation_scale"
+                else ("FAIL" if name in missing else "PASS")
+            ),
+            "requirement_ready_value": (
+                0
+                if name in missing
+                else (0 if name == "validation_scale_sstw_advantage_claim_ready" and decision.get("paper_result_level") == "validation_scale" else 1)
+            ),
         }
         for name in observed
     ]
@@ -167,7 +176,7 @@ def build_validation_scale_package_manifest(run_root: str | Path) -> dict[str, A
     low_fpr = _read_json(run_root / "artifacts" / "low_fpr_formal_statistics_decision.json")
     data_guard = _read_json(run_root / "artifacts" / "data_split_and_leakage_guard_decision.json")
     paper_skeleton = _read_json(run_root / "artifacts" / "paper_result_artifact_skeleton_decision.json")
-    transition = _read_json(run_root / "artifacts" / "validation_scale_to_pilot_paper_transition_decision.json")
+    transition = _read_json(run_root / "artifacts" / "validation_scale_to_probe_paper_transition_decision.json")
     decision_ready = (
         validation_gate.get("validation_scale_gate_decision") == "PASS"
         and motion_exclusion.get("motion_consistency_exclusion_decision") == "PASS"
@@ -180,7 +189,7 @@ def build_validation_scale_package_manifest(run_root: str | Path) -> dict[str, A
         and low_fpr.get("low_fpr_formal_statistics_decision") == "PASS"
         and paper_skeleton.get("paper_result_artifact_skeleton_decision") == "PASS"
         and data_guard.get("data_split_and_leakage_guard_decision") == "PASS"
-        and transition.get("validation_scale_to_pilot_paper_transition_decision") == "PASS"
+        and transition.get("validation_scale_to_probe_paper_transition_decision") == "PASS"
         and not missing
     )
     return {
@@ -205,7 +214,7 @@ def build_validation_scale_package_manifest(run_root: str | Path) -> dict[str, A
         "low_fpr_formal_statistics_decision": low_fpr.get("low_fpr_formal_statistics_decision"),
         "paper_result_artifact_skeleton_decision": paper_skeleton.get("paper_result_artifact_skeleton_decision"),
         "data_split_and_leakage_guard_decision": data_guard.get("data_split_and_leakage_guard_decision"),
-        "validation_scale_to_pilot_paper_transition_decision": transition.get("validation_scale_to_pilot_paper_transition_decision"),
+        "validation_scale_to_probe_paper_transition_decision": transition.get("validation_scale_to_probe_paper_transition_decision"),
         "required_artifact_count": len(inventory),
         "present_artifact_count": sum(1 for row in inventory if row["artifact_exists"]),
         "missing_artifact_count": len(missing),
@@ -237,7 +246,7 @@ def write_validation_scale_package_manifest(run_root: str | Path) -> dict[str, A
         f"- low_fpr_formal_statistics_decision: {manifest['low_fpr_formal_statistics_decision']}\n"
         f"- paper_result_artifact_skeleton_decision: {manifest['paper_result_artifact_skeleton_decision']}\n"
         f"- data_split_and_leakage_guard_decision: {manifest['data_split_and_leakage_guard_decision']}\n"
-        f"- validation_scale_to_pilot_paper_transition_decision: {manifest['validation_scale_to_pilot_paper_transition_decision']}\n"
+        f"- validation_scale_to_probe_paper_transition_decision: {manifest['validation_scale_to_probe_paper_transition_decision']}\n"
         f"- missing_artifact_relpaths: {', '.join(manifest['missing_artifact_relpaths']) if manifest['missing_artifact_relpaths'] else 'none'}\n"
     )
     report_path = run_root / "reports" / "validation_scale_package_manifest_report.md"

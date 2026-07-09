@@ -67,11 +67,11 @@ def _official_score_extraction_payload() -> dict:
 
 
 def _validation_scale_gate_pass_payload() -> dict:
-    """构造当前 validation_scale -> pilot_paper 所需的完整 PASS gate fixture。"""
+    """构造当前 validation_scale -> probe_paper 所需的完整 PASS gate fixture。"""
 
     return {
         "validation_scale_gate_decision": "PASS",
-        "claim_support_status": "validation_scale_target_fpr_0_1_paper_claim_supported",
+        "claim_support_status": "validation_scale_full_protocol_handoff_ready",
         "paper_result_level": "validation_scale",
         "target_fpr": 0.1,
         "missing_validation_requirements": [],
@@ -100,24 +100,64 @@ def _validation_scale_gate_pass_payload() -> dict:
     }
 
 
+def _probe_paper_gate_pass_payload() -> dict:
+    """构造当前 probe_paper -> pilot_paper 所需的完整 PASS gate fixture。"""
+
+    payload = _validation_scale_gate_pass_payload()
+    payload.update({
+        "stage_id": "probe_paper_generative_probe_gate",
+        "probe_paper_gate_decision": "PASS",
+        "claim_support_status": "probe_paper_target_fpr_0_1_paper_claim_supported",
+        "paper_result_level": "probe_paper",
+        "sstw_measured_formal_record_count": 168,
+        "validation_generation_record_count": 168,
+        "validation_prompt_count": 21,
+        "validation_seed_per_prompt_min": 8,
+        "validation_scale_sstw_advantage_claim_status": "probe_paper_target_fpr_0_1_sstw_advantage_claim_supported",
+    })
+    return payload
+
+
 @pytest.mark.quick
-def test_validation_scale_to_pilot_transition_writes_governed_records(tmp_path: Path) -> None:
-    """validation_scale PASS 后只能生成进入 pilot_paper 的跳转判定, 不能直接放行 full_paper。"""
+def test_validation_scale_to_probe_transition_writes_governed_records(tmp_path: Path) -> None:
+    """validation_scale PASS 后只能生成进入 probe_paper 的跳转判定, 不能直接放行 pilot_paper 或 full_paper。"""
     run_root = tmp_path / "run"
     write_json(run_root / "artifacts" / "validation_scale_gate_decision.json", _validation_scale_gate_pass_payload())
 
-    audit = write_stage_transition_decision(run_root, "validation_scale_to_pilot_paper")
+    audit = write_stage_transition_decision(run_root, "validation_scale_to_probe_paper")
 
-    assert audit["validation_scale_to_pilot_paper_transition_decision"] == "PASS"
-    assert audit["allowed_next_result_profiles"] == ["pilot_paper"]
+    assert audit["validation_scale_to_probe_paper_transition_decision"] == "PASS"
+    assert audit["allowed_next_result_profiles"] == ["probe_paper"]
+    assert "pilot_paper" in audit["blocked_next_result_profiles"]
     assert "full_paper" in audit["blocked_next_result_profiles"]
     assert audit["full_paper_allowed"] is False
-    assert (run_root / "artifacts" / "validation_scale_to_pilot_paper_transition_decision.json").exists()
-    assert (run_root / "records" / "validation_scale_to_pilot_paper_transition_decision_records.jsonl").exists()
+    assert (run_root / "artifacts" / "validation_scale_to_probe_paper_transition_decision.json").exists()
+    assert (run_root / "records" / "validation_scale_to_probe_paper_transition_decision_records.jsonl").exists()
 
 
 @pytest.mark.quick
-def test_validation_scale_to_pilot_transition_rejects_legacy_pass_without_fair_comparison(
+def test_probe_paper_to_pilot_transition_requires_validation_to_probe_transition(tmp_path: Path) -> None:
+    """probe_paper 通过后必须消费 validation_scale -> probe_paper 判定, 才能进入 pilot_paper。"""
+
+    run_root = tmp_path / "runs" / "generative_video_model_probe" / "probe_paper"
+    validation_run_root = run_root.parent / "validation_scale"
+    write_json(run_root / "artifacts" / "probe_paper_gate_decision.json", _probe_paper_gate_pass_payload())
+
+    blocked = write_stage_transition_decision(run_root, "probe_paper_to_pilot_paper")
+    assert blocked["probe_paper_to_pilot_paper_transition_decision"] == "FAIL"
+    assert "validation_scale_to_probe_paper_transition_decision_passed" in blocked["missing_transition_requirements"]
+
+    write_json(validation_run_root / "artifacts" / "validation_scale_to_probe_paper_transition_decision.json", {
+        "validation_scale_to_probe_paper_transition_decision": "PASS",
+    })
+    passed = write_stage_transition_decision(run_root, "probe_paper_to_pilot_paper")
+    assert passed["probe_paper_to_pilot_paper_transition_decision"] == "PASS"
+    assert passed["allowed_next_result_profiles"] == ["pilot_paper"]
+    assert "full_paper" in passed["blocked_next_result_profiles"]
+
+
+@pytest.mark.quick
+def test_validation_scale_to_probe_transition_rejects_legacy_pass_without_fair_comparison(
     tmp_path: Path,
 ) -> None:
     """旧版 validation_scale PASS 若缺公平比较字段, 不能作为进入 pilot_paper 的依据。"""
@@ -129,17 +169,17 @@ def test_validation_scale_to_pilot_transition_rejects_legacy_pass_without_fair_c
         "claim_support_status": "validation_scale_ready_for_pilot_paper",
     })
 
-    audit = write_stage_transition_decision(run_root, "validation_scale_to_pilot_paper")
+    audit = write_stage_transition_decision(run_root, "validation_scale_to_probe_paper")
 
-    assert audit["validation_scale_to_pilot_paper_transition_decision"] == "FAIL"
+    assert audit["validation_scale_to_probe_paper_transition_decision"] == "FAIL"
     assert "validation_scale_fair_detection_calibration_ready" in audit["missing_transition_requirements"]
     assert "validation_scale_formal_method_baseline_comparison_ready" in audit["missing_transition_requirements"]
     assert "validation_scale_formal_baseline_difference_interval_ready" in audit["missing_transition_requirements"]
 
 
 @pytest.mark.quick
-def test_validation_scale_to_pilot_transition_requires_runtime_attack_coverage(tmp_path: Path) -> None:
-    """validation_scale -> pilot_paper 跳转必须显式证明完整 runtime attack 已参与检测。"""
+def test_validation_scale_to_probe_transition_requires_runtime_attack_coverage(tmp_path: Path) -> None:
+    """validation_scale -> probe_paper 跳转必须显式证明完整 runtime attack 已参与检测。"""
 
     run_root = tmp_path / "run"
     payload = _validation_scale_gate_pass_payload()
@@ -150,9 +190,9 @@ def test_validation_scale_to_pilot_transition_requires_runtime_attack_coverage(t
     payload["runtime_detection_ready_count"] = 1
     write_json(run_root / "artifacts" / "validation_scale_gate_decision.json", payload)
 
-    audit = write_stage_transition_decision(run_root, "validation_scale_to_pilot_paper")
+    audit = write_stage_transition_decision(run_root, "validation_scale_to_probe_paper")
 
-    assert audit["validation_scale_to_pilot_paper_transition_decision"] == "FAIL"
+    assert audit["validation_scale_to_probe_paper_transition_decision"] == "FAIL"
     assert "validation_scale_runtime_attack_protocol_passed" in audit["missing_transition_requirements"]
     assert "validation_scale_required_runtime_attacks_registered" in audit["missing_transition_requirements"]
     assert "validation_scale_runtime_attack_missing_required_names_empty" in audit["missing_transition_requirements"]
@@ -162,7 +202,7 @@ def test_validation_scale_to_pilot_transition_requires_runtime_attack_coverage(t
 
 @pytest.mark.quick
 def test_pilot_to_full_transition_requires_previous_transition(tmp_path: Path) -> None:
-    """pilot_paper -> full_paper 不能绕过 validation_scale -> pilot_paper 跳转记录。"""
+    """pilot_paper -> full_paper 不能绕过 probe_paper -> pilot_paper 跳转记录。"""
     run_root = tmp_path / "run"
     write_json(run_root / "artifacts" / "pilot_paper_gate_decision.json", {
         "pilot_paper_gate_decision": "PASS",
@@ -171,10 +211,10 @@ def test_pilot_to_full_transition_requires_previous_transition(tmp_path: Path) -
 
     blocked = write_stage_transition_decision(run_root, "pilot_paper_to_full_paper")
     assert blocked["pilot_paper_to_full_paper_transition_decision"] == "FAIL"
-    assert "validation_scale_to_pilot_paper_transition_decision_passed" in blocked["missing_transition_requirements"]
+    assert "probe_paper_to_pilot_paper_transition_decision_passed" in blocked["missing_transition_requirements"]
 
-    write_json(run_root / "artifacts" / "validation_scale_to_pilot_paper_transition_decision.json", {
-        "validation_scale_to_pilot_paper_transition_decision": "PASS",
+    write_json(run_root / "artifacts" / "probe_paper_to_pilot_paper_transition_decision.json", {
+        "probe_paper_to_pilot_paper_transition_decision": "PASS",
     })
     passed = write_stage_transition_decision(run_root, "pilot_paper_to_full_paper")
     assert passed["pilot_paper_to_full_paper_transition_decision"] == "PASS"
@@ -182,16 +222,16 @@ def test_pilot_to_full_transition_requires_previous_transition(tmp_path: Path) -
 
 
 @pytest.mark.quick
-def test_pilot_to_full_transition_can_consume_sibling_validation_scale_run_root(tmp_path: Path) -> None:
-    """profile 隔离时, pilot_paper 可以消费同级 validation_scale run_root 中的跳转判定。"""
+def test_pilot_to_full_transition_can_consume_sibling_probe_paper_run_root(tmp_path: Path) -> None:
+    """profile 隔离时, pilot_paper 可以消费同级 probe_paper run_root 中的跳转判定。"""
     project_run_root = tmp_path / "runs" / "generative_video_model_probe"
-    validation_run_root = project_run_root / "validation_scale"
+    probe_run_root = project_run_root / "probe_paper"
     pilot_run_root = project_run_root / "pilot_paper"
     write_json(pilot_run_root / "artifacts" / "pilot_paper_gate_decision.json", {
         "pilot_paper_gate_decision": "PASS",
     })
-    write_json(validation_run_root / "artifacts" / "validation_scale_to_pilot_paper_transition_decision.json", {
-        "validation_scale_to_pilot_paper_transition_decision": "PASS",
+    write_json(probe_run_root / "artifacts" / "probe_paper_to_pilot_paper_transition_decision.json", {
+        "probe_paper_to_pilot_paper_transition_decision": "PASS",
     })
 
     audit = write_stage_transition_decision(pilot_run_root, "pilot_paper_to_full_paper")
@@ -971,8 +1011,8 @@ def test_validation_scale_figure_and_package_manifest_are_rebuilt_from_artifacts
     write_json(run_root / "artifacts" / "data_split_and_leakage_guard_decision.json", {
         "data_split_and_leakage_guard_decision": "PASS",
     })
-    write_json(run_root / "artifacts" / "validation_scale_to_pilot_paper_transition_decision.json", {
-        "validation_scale_to_pilot_paper_transition_decision": "PASS",
+    write_json(run_root / "artifacts" / "validation_scale_to_probe_paper_transition_decision.json", {
+        "validation_scale_to_probe_paper_transition_decision": "PASS",
     })
 
     figure = write_validation_scale_gate_figure(run_root)

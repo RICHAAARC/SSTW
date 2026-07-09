@@ -4,7 +4,7 @@
 
 本文档用于记录 SSTW 各阶段在当前仓库中的工程状态、证据状态和后续缺口。它不是论文 claim 的直接来源。论文中的 supported claims 必须由 governed records、tables、figures、reports 或 manifests 支撑。
 
-最新语义优先级如下: 主干门禁只保留 `protocol_governance -> mechanism_validation -> validation_scale -> pilot_paper -> full_paper -> submission_freeze`。历史 `small_scale_claim_pilot_gate` 仅作为 `mechanism_validation` 下的小样本机制检查记录, 不再作为主干门禁。`generative_video_model_probe` 仅作为真实生成式视频模型实现 package, 不再作为独立门禁。本文档较早日期段落中的旧名称、`EXTERNAL_BASELINE_EVIDENCE_PATHS`、安装或挂载官方实现、外部补交 official result bundle 等旧说法均为历史状态记录; 当前规则以项目内 clone / build / run / adapt / record 和 `measured_formal` 自包含产出为准。
+最新语义优先级如下: 主干门禁只保留 `protocol_governance -> mechanism_validation -> validation_scale -> probe_paper -> pilot_paper -> full_paper -> submission_freeze`。历史 `small_scale_claim_pilot_gate` 仅作为 `mechanism_validation` 下的小样本机制检查记录, 不再作为主干门禁。`generative_video_model_probe` 仅作为真实生成式视频模型实现 package, 不再作为独立门禁。本文档较早日期段落中的旧名称、`EXTERNAL_BASELINE_EVIDENCE_PATHS`、安装或挂载官方实现、外部补交 official result bundle 等旧说法均为历史状态记录; 当前规则以项目内 clone / build / run / adapt / record 和 `measured_formal` 自包含产出为准。
 
 ## 1. 阶段状态分级
 
@@ -29,12 +29,13 @@
 | `sampling_time_constraint_probe` | 已完成机制前置验证 | recommended profile 显示 keyed alignment gain 与 wrong-key 分离。 | 尚不能替代 attack matrix、negative family、fixed-FPR path gain。 | 作为 small_scale_mechanism_pilot_check 前置证据。 | 证明可进入 mechanism_validation 后续检查, 不直接支撑 full_paper。 |
 | `motion_threshold_calibration` | 已完成 engineering calibration | 已有 `motion_delta_calibrated_v1` 可作 pilot guardrail。 | 不是论文级 `TPR@FPR=0.001` fixed-FPR 证据。 | full_paper 前补齐更大 held-out negative 和 CI。 | 影响 motion claim 样本资格过滤。 |
 | `small_scale_mechanism_pilot_check` | 已完成 small-scale pilot, 作为 mechanism_validation 子检查保留 | 最新 Wan2.1 pilot 原生复跑已达到 16/16 eligible、seed_per_prompt_min=2、runtime attack/detection 48/48 ready、pilot_gate_decision=PASS。 | 它只判断机制是否值得继续, 不是主干门禁, 也不是 paper 级结果包。 | 进入 validation_scale 小样本全流程打通验证, 并保留 small-scale pilot 作为工作流证据。 | 只能解除 validation_scale 的机制前置缺口, 不能直接放行 pilot_paper 或 full_paper。 |
-| `validation_scale` | paper 级前小样本全流程打通门禁已完成硬阻断实现, 真实运行待复跑 | 已重新定义为 FPR=10% 小样本全流程打通层, 必须闭合完整现代 external_baseline formal records、内部消融、adaptive attack、replay/sketch 或受治理 Claim-3 downgrade、CI、tables、figures、reports、manifests、artifact rebuild 和 claim audit。 | 真实 validation_scale 结果尚未生成; 5 个主实验现代 baseline 仍需由本项目 clone / build / run / adapt / record 产出 measured_formal, 不接受外部补交结果。 | 先配置并运行现代 baseline 自包含产出链路, 然后在 Colab 中运行 `PROFILE = validation_scale`。 | 通过并生成 validation_scale_to_pilot_paper_transition_decision 后才允许进入 pilot_paper 或继续准备 full_paper; 但 full_paper claim 仍需 pilot_paper、full_paper_result_checker 和轻量判定通过。若 baseline / ablation / replay / CI / artifact rebuild 任一缺失, 不得进入 paper 级结果运行。 |
-| `pilot_paper` | 工程入口已完成, 真实 GPU 结果待运行 | 已接入 21 prompt × 8 seed、calibration split、frozen threshold artifact、held-out test split、代表性 runtime attack coverage、完整现代 external_baseline 自包含 measured_formal adapter 前置检查、内部消融矩阵前置检查和 claim audit。 | 真实 Wan2.1 GPU 结果尚未生成; 5 个主实验现代 baseline 需要在 Colab / 本地通过项目内 clone / build / run / adapt / record 后才能产出 measured_formal。 | 在 validation_scale 通过并生成 validation_scale_to_pilot_paper_transition_decision 后运行 `PROFILE = pilot_paper`, 审计 `pilot_paper_calibrated_heldout_claim_ready`, 同时要求 `modern_external_baseline_formal_measured_adapter_count >= 5` 与 `pilot_paper_internal_ablation_matrix_ready`。 | 它是小规模跑代表性 paper 协议并产出 pilot 级论文结果的阶段, 可支撑 pilot_paper 级 `TPR@FPR=0.01`, 但不支撑 `TPR@FPR=0.001`、full_paper 规模结论或顶会顶刊级完整 attack coverage 结论。 |
-| `generative_video_model_probe` | 作为实现 package 保留, validation_scale 真实运行待复跑 | 生成、attack、detection、postprocess、external_baseline source intake、项目内自包含 baseline adapter、内部消融 runner、packager 与协议字段闭包已接入。 | 现代外部 baseline measured_formal、完整内部消融、replay/sketch、CI、tables / figures / reports 和 claim audit 尚未以同一 validation run 通过。 | 按 validation_scale -> pilot_paper -> full_paper 的主干门禁顺序推进。 | 只提供实现 package; 是否允许进入 pilot_paper、full_paper 由主干门禁和轻量判定决定。 |
+| `validation_scale` | paper 级前小样本全流程打通门禁已完成硬阻断实现, 真实运行待复跑 | 已重新定义为 FPR=10% 小样本全流程打通层, 必须闭合完整现代 external_baseline formal records、内部消融、adaptive attack、replay/sketch 或受治理 Claim-3 downgrade、CI、tables、figures、reports、manifests、artifact rebuild 和 claim audit, 但不支持正式效果主张。 | 真实 validation_scale 结果尚未生成; 5 个主实验现代 baseline 仍需由本项目 clone / build / run / adapt / record 产出 measured_formal, 不接受外部补交结果。 | 先配置并运行现代 baseline 自包含产出链路, 然后在 Colab 中运行 `PROFILE = validation_scale`。 | 通过并生成 validation_scale_to_probe_paper_transition_decision 后才允许进入 probe_paper; 但 pilot_paper 和 full_paper claim 仍需 probe_paper、pilot_paper、full_paper_result_checker 和轻量判定通过。若 baseline / ablation / replay / CI / artifact rebuild 任一缺失, 不得进入 paper 级结果运行。 |
+| `probe_paper` | 新增 FPR=10% 小样本论文闭合验证层, 工程入口已完成, 真实 GPU 结果待运行 | 已接入 pilot_paper 级样本结构、target_fpr=0.1、公平比较、差值区间、内部消融、完整 attack 协议和 package profile。 | 真实 probe_paper 结果尚未生成; 需要先消费 validation_scale PASS 与 validation_scale_to_probe_paper_transition_decision。 | 在 validation_scale 通过后运行 `PROFILE = probe_paper`, 审计 `probe_paper_target_fpr_0_1_paper_claim_supported`, 并在通过后生成 `probe_paper_to_pilot_paper_transition_decision`。 | 可支撑 FPR=10% 小样本论文闭合结论候选, 但不能替代 pilot_paper 的 FPR=1% 或 full_paper 的 FPR=0.1% 主结果。 |
+| `pilot_paper` | 工程入口已完成, 真实 GPU 结果待运行 | 已接入 21 prompt × 8 seed、calibration split、frozen threshold artifact、held-out test split、代表性 runtime attack coverage、完整现代 external_baseline 自包含 measured_formal adapter 前置检查、内部消融矩阵前置检查和 claim audit。 | 真实 Wan2.1 GPU 结果尚未生成; 5 个主实验现代 baseline 需要在 Colab / 本地通过项目内 clone / build / run / adapt / record 后才能产出 measured_formal。 | 在 validation_scale_to_probe_paper_transition_decision、probe_paper gate 和 probe_paper_to_pilot_paper_transition_decision 都通过后运行 `PROFILE = pilot_paper`, 审计 `pilot_paper_calibrated_heldout_claim_ready`, 同时要求 `modern_external_baseline_formal_measured_adapter_count >= 5` 与 `pilot_paper_internal_ablation_matrix_ready`。 | 它是小规模跑代表性 paper 协议并产出 pilot 级论文结果的阶段, 可支撑 pilot_paper 级 `TPR@FPR=0.01`, 但不支撑 `TPR@FPR=0.001`、full_paper 规模结论或顶会顶刊级完整 attack coverage 结论。 |
+| `generative_video_model_probe` | 作为实现 package 保留, validation_scale 真实运行待复跑 | 生成、attack、detection、postprocess、external_baseline source intake、项目内自包含 baseline adapter、内部消融 runner、packager 与协议字段闭包已接入。 | 现代外部 baseline measured_formal、完整内部消融、replay/sketch、CI、tables / figures / reports 和 claim audit 尚未以同一 validation run 通过。 | 按 validation_scale -> probe_paper -> pilot_paper -> full_paper 的主干门禁顺序推进。 | 只提供实现 package; 是否允许进入 pilot_paper、full_paper 由主干门禁和轻量判定决定。 |
 | `replay_and_authenticated_sketch_gate` | 未完成 | digest、manifest、trajectory trace 基础模块存在。 | authenticated sketch、replay uncertainty、wrong prompt replay 未闭合。 | 补齐签名 sketch、replay records 和 checker。 | 影响 Claim-3 强度; 不通过则降级 Claim-3。 |
 | `flow_specific_adaptive_attack_gate` | 未完成 | phase 文档已补建, 但 runner、manifest 与 governed records 尚未完成。 | adaptive attacks、endpoint-preserving resampling、path cancellation 未形成 records。 | 补齐 runner 设计、stress protocol、attack manifest 和 checker。 | full_paper 前必须完成或明确降级。 |
-| `full_paper` | 未开始 | 仅有文档规范, 尚无 full_paper 大规模 records。 | 必须等 validation_scale、pilot_paper、现代外部 baseline、adaptive attack、replay/sketch 与 paper-level fixed-FPR 通过后才能运行。 | 使用 full_paper protocol config 中登记的顶会顶刊级 attack coverage、低 FPR 样本规模和完整 checker, 产出最终论文主结果。 | 是 submission_package_freeze 前的最终结果来源。 |
+| `full_paper` | 未开始 | 仅有文档规范, 尚无 full_paper 大规模 records。 | 必须等 validation_scale、probe_paper、pilot_paper、现代外部 baseline、adaptive attack、replay/sketch 与 paper-level fixed-FPR 通过后才能运行。 | 使用 full_paper protocol config 中登记的顶会顶刊级 attack coverage、低 FPR 样本规模和完整 checker, 产出最终论文主结果。 | 是 submission_package_freeze 前的最终结果来源。 |
 | `submission_package_freeze` | 结构就绪, 未进入最终冻结 | submission freeze runner 和 readiness summary 已存在。 | 上游 full_paper records 不存在, 不得冻结论文结论。 | 等 full_paper 完成后重建 tables、figures、reports。 | 负责最终 claim audit 和 artifact rebuild。 |
 
 ## 3. 2026-06-18 阶段状态更新: 机制前置验证闭合
@@ -757,7 +758,7 @@ core_method_runtime_construction 已具备主要工程骨架
 sampling_time_constraint_probe 已完成机制前置验证
 small_scale_claim_pilot_gate 已完成 small-scale pilot
 generative_video_model_probe 已进入 validation_scale 准备阶段
-full_paper 未开始, 且在 validation_scale / pilot_paper / adaptive attack / baseline / replay-sketch 前不得启动
+full_paper 未开始, 且在 validation_scale / probe_paper / pilot_paper / adaptive attack / baseline / replay-sketch 前不得启动
 ```
 
 ### 当前阻塞项
@@ -1367,7 +1368,7 @@ validation_scale_requirement: upgraded_to_small_sample_full_pipeline_gate
 validation_scale_code_gate: implemented_with_full_baseline_hard_blockers
 validation_scale_real_gpu_run: pending_after_official_baseline_command_configuration
 pilot_paper_allowed: false_until_validation_scale_full_pipeline_pass
-full_paper_allowed: false_until_validation_scale_pilot_paper_and_full_paper_checker_pass
+full_paper_allowed: false_until_validation_scale_probe_paper_pilot_paper_and_full_paper_checker_pass
 ```
 
 该更新的核心含义是: `pilot_paper` 只能执行 paper 级结果运行和报告 pilot 级结论, 不能再承担补现代 baseline、补内部消融、补 replay/sketch、补 CI 或补 artifact rebuild 的职责。若这些内容在 `validation_scale` 中没有闭合, 下一步必须修复 validation_scale 机制, 不能进入 `pilot_paper`。
@@ -1526,7 +1527,7 @@ validation_scale_single_notebook_gate_test: removed_split_workflow_required
 validation_scale_run_through_test_without_fake_claim: removed_with_monolithic_notebook
 ```
 
-该变更解决的问题是: `validation_scale`、`pilot_paper` 和未来 `full_paper` 不再依赖 Notebook 中多处硬编码路径、样本数量或 profile 集合。切换运行层级时, 用户只需要设置:
+该变更解决的问题是: `validation_scale`、`probe_paper`、`pilot_paper` 和 `full_paper` 不再依赖 Notebook 中多处硬编码路径、样本数量或 profile 集合。切换运行层级时, 用户只需要设置:
 
 ```text
 SSTW_WORKFLOW_PROFILE=validation_scale
@@ -1737,13 +1738,14 @@ workflow 会写出 `manual_official_resource_required`, 仍然不会把该 basel
 
 ## 2026-06-26 validation_scale 语义重定义与 full_paper protocol 补齐
 
-本次更新把 `validation_scale` 明确定义为“target_fpr=0.1 小样本完整协议论文主张候选验证”。它的功能是 pilot_paper 前的完整协议打通层, 使用 validation_scale protocol config 中 `target_fpr=0.1` 的评价口径验证全部论文产物链路是否可生成, 并要求 SSTW 本方法 measured_formal、同协议 external baseline 比较、优势差值置信区间、内部消融和攻击协议覆盖均能支撑 fpr=0.1 论文设定下的结论候选。
+本段记录 2026-06-26 的历史语义重定义。当前主链已进一步加入 `probe_paper`, 因此本段中“validation_scale 直接承担 fpr=0.1 论文结论候选”的表述仅保留为历史状态。当前规则是: `validation_scale` 明确定义为“target_fpr=0.1 小样本全流程打通验证”, 功能是 `probe_paper` 前的完整协议打通层; `probe_paper` 才使用同一 FPR=10% 口径和 pilot_paper 级样本结构判断 SSTW 是否具备小样本论文闭合证据。
 
 更新后的阶段边界为:
 
 ```text
 method_mechanism_validation: 验证 SSTW 方法机制和基础 runner
-validation_scale: FPR=10% 小样本完整协议论文主张候选验证
+validation_scale: FPR=10% 小样本全流程打通验证
+probe_paper: FPR=10% 小样本论文闭合验证
 pilot_paper: FPR=1% 小规模 paper 协议结果
 full_paper: FPR=0.1% 正式 paper 协议结果
 ```
@@ -1751,9 +1753,10 @@ full_paper: FPR=0.1% 正式 paper 协议结果
 关键配置与文档变更:
 
 ```text
-configs/protocol/validation_scale_generative_probe.json: target_fpr 由该 protocol config 作为唯一语义来源, validation_scale_definition = small_sample_full_protocol_target_fpr_0_1_claim_validation
+configs/protocol/validation_scale_generative_probe.json: target_fpr 由该 protocol config 作为唯一语义来源, validation_scale_definition = small_sample_full_protocol_handoff_validation
+configs/protocol/probe_paper_generative_probe.json: 新增 target_fpr=0.1 小样本论文闭合协议配置
 configs/protocol/full_paper_generative_probe.json: 新增 full_paper 正式协议配置, target_fpr 由该 protocol config 作为唯一语义来源
-configs/paper_workflow/generative_video_notebook_workflows.json: validation_scale profile 改为 target_fpr=0.1 论文主张候选入口, paper_gate_preflight_layer = false
+configs/paper_workflow/generative_video_notebook_workflows.json: validation_scale profile 改为 target_fpr=0.1 全流程打通入口, paper_gate_preflight_layer = true; probe_paper profile 承担 fpr=0.1 小样本论文闭合
 configs/external_baselines/official_resource_requirements.json: external baseline 改为项目内自包含产出要求
 configs/external_baselines/modern_baseline_colab_commands.json: repository-generated official cache 语义改为 repository-generated cache only
 ```
@@ -1791,7 +1794,7 @@ full_paper_protocol_config_registered: true
 external_baseline_self_contained_output_required: true
 validation_scale_real_gpu_run: pending
 pilot_paper_allowed: false_until_validation_scale_pass
-full_paper_allowed: false_until_validation_scale_pilot_paper_and_full_paper_checker_pass
+full_paper_allowed: false_until_validation_scale_probe_paper_pilot_paper_and_full_paper_checker_pass
 ```
 
 ## 2026-06-26 主干门禁去重与轻量判定更新
@@ -1806,7 +1809,7 @@ generative_video_model_probe -> implementation package, 不作为独立门禁
 当前主干门禁固定为:
 
 ```text
-protocol_governance -> mechanism_validation -> validation_scale -> pilot_paper -> full_paper -> submission_freeze
+protocol_governance -> mechanism_validation -> validation_scale -> probe_paper -> pilot_paper -> full_paper -> submission_freeze
 ```
 
 同时新增并实现三个轻量判定, 它们不新增重型实验阶段, 只负责 fail-closed 阶段跳转和证据边界:
@@ -1817,6 +1820,6 @@ external_baseline_self_containment_decision
 data_split_and_leakage_guard
 ```
 
-其中 `stage_transition_decision` 已拆成阶段明确的跳转判定: `validation_scale_to_pilot_paper_transition_decision`、`pilot_paper_to_full_paper_transition_decision` 和 `full_paper_to_submission_freeze_transition_decision`。这些判定只能在 source gate 已 PASS 后生成, 并由 target gate 消费, 不得反向作为 source gate 自身 PASS 条件。
+其中 `stage_transition_decision` 已拆成阶段明确的跳转判定: `validation_scale_to_probe_paper_transition_decision` 与 `probe_paper_to_pilot_paper_transition_decision`、`pilot_paper_to_full_paper_transition_decision` 和 `full_paper_to_submission_freeze_transition_decision`。这些判定只能在 source gate 已 PASS 后生成, 并由 target gate 消费, 不得反向作为 source gate 自身 PASS 条件。
 
 external baseline 的正式主表证据统一要求 `metric_status == measured_formal`, 且必须由项目内 clone / build / run / adapt / record 产出。governed non-run record 只能作为阻断记录或 limitation 说明, 不能替代 measured_formal baseline。

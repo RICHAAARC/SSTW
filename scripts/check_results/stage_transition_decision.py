@@ -2,7 +2,7 @@
 
 该脚本只读取已经落盘的 source gate decision artifact, 不运行实验、不生成分数,
 也不把上游失败解释为人工放行。它的作用是把
-`validation_scale -> pilot_paper -> full_paper -> submission_freeze` 的阶段跳转
+`validation_scale -> probe_paper -> pilot_paper -> full_paper -> submission_freeze` 的阶段跳转
 写成可审计 records, 供下一阶段 gate 消费。
 """
 
@@ -20,6 +20,17 @@ from main.protocol.table_builder import write_csv
 
 
 TRANSITION_SPECS: dict[str, dict[str, Any]] = {
+    "validation_scale_to_probe_paper": {
+        "decision_field": "validation_scale_to_probe_paper_transition_decision",
+        "source_stage": "validation_scale",
+        "target_stage": "probe_paper",
+        "source_gate_path": "artifacts/validation_scale_gate_decision.json",
+        "source_gate_fields": ("validation_scale_gate_decision",),
+        "allowed_next_result_profiles": ("probe_paper",),
+        "blocked_next_result_profiles": ("pilot_paper", "full_paper", "submission_freeze"),
+        "claim_support_status_pass": "validation_scale_ready_to_enter_probe_paper",
+        "claim_support_status_fail": "validation_scale_to_probe_paper_blocked",
+    },
     "validation_scale_to_pilot_paper": {
         "decision_field": "validation_scale_to_pilot_paper_transition_decision",
         "source_stage": "validation_scale",
@@ -28,8 +39,29 @@ TRANSITION_SPECS: dict[str, dict[str, Any]] = {
         "source_gate_fields": ("validation_scale_gate_decision",),
         "allowed_next_result_profiles": ("pilot_paper",),
         "blocked_next_result_profiles": ("full_paper", "submission_freeze"),
-        "claim_support_status_pass": "validation_scale_ready_to_enter_pilot_paper",
+        "claim_support_status_pass": "validation_scale_direct_to_pilot_paper_deprecated",
         "claim_support_status_fail": "validation_scale_to_pilot_paper_blocked",
+        "deprecated_direct_transition": True,
+    },
+    "probe_paper_to_pilot_paper": {
+        "decision_field": "probe_paper_to_pilot_paper_transition_decision",
+        "source_stage": "probe_paper",
+        "target_stage": "pilot_paper",
+        "source_gate_path": "artifacts/probe_paper_gate_decision.json",
+        "alternate_source_gate_paths": (
+            "artifacts/validation_scale_gate_decision.json",
+        ),
+        "source_gate_fields": ("probe_paper_gate_decision", "validation_scale_gate_decision"),
+        "required_upstream_transitions": (
+            "artifacts/validation_scale_to_probe_paper_transition_decision.json",
+        ),
+        "required_upstream_transition_fields": (
+            "validation_scale_to_probe_paper_transition_decision",
+        ),
+        "allowed_next_result_profiles": ("pilot_paper",),
+        "blocked_next_result_profiles": ("full_paper", "submission_freeze"),
+        "claim_support_status_pass": "probe_paper_ready_to_enter_pilot_paper",
+        "claim_support_status_fail": "probe_paper_to_pilot_paper_blocked",
     },
     "pilot_paper_to_full_paper": {
         "decision_field": "pilot_paper_to_full_paper_transition_decision",
@@ -38,10 +70,10 @@ TRANSITION_SPECS: dict[str, dict[str, Any]] = {
         "source_gate_path": "artifacts/pilot_paper_gate_decision.json",
         "source_gate_fields": ("pilot_paper_gate_decision",),
         "required_upstream_transitions": (
-            "artifacts/validation_scale_to_pilot_paper_transition_decision.json",
+            "artifacts/probe_paper_to_pilot_paper_transition_decision.json",
         ),
         "required_upstream_transition_fields": (
-            "validation_scale_to_pilot_paper_transition_decision",
+            "probe_paper_to_pilot_paper_transition_decision",
         ),
         "allowed_next_result_profiles": ("full_paper",),
         "blocked_next_result_profiles": ("submission_freeze",),
@@ -112,17 +144,18 @@ def _validation_scale_fair_gate_missing_requirements(source_payload: Mapping[str
     """检查 validation_scale PASS 是否已经包含公平比较闭环。
 
     该函数属于项目特定门禁。旧版 `validation_scale_gate_decision: PASS` 只表示
-    小样本流程曾经打通, 不足以证明当前论文协议所需的公平比较已经闭合。这里要求
+    小样本流程曾经打通, 不足以证明当前论文协议所需的公平比较产物链路已经闭合。这里要求
     source gate artifact 显式包含 SSTW measured_formal、5 个现代 baseline 的
-    clean negative 校准、同协议统计表、差值区间和数据切分防泄漏判定。只有这些
-    字段同时满足时, `validation_scale -> pilot_paper` 跳转才允许 PASS。
+    clean negative 校准、同协议统计表、差值区间和数据切分防泄漏判定。validation_scale
+    只负责进入 probe_paper 前的全流程打通, 因此这里不要求 SSTW 优势 claim 已成立。
+    真正的 target_fpr=0.1 论文闭合主张由 probe_paper gate 承担。
     """
 
     missing: list[str] = []
     if source_payload.get("paper_result_level") != "validation_scale":
         missing.append("validation_scale_paper_result_level_current")
-    if source_payload.get("claim_support_status") != "validation_scale_target_fpr_0_1_paper_claim_supported":
-        missing.append("validation_scale_claim_support_status_ready")
+    if source_payload.get("claim_support_status") != "validation_scale_full_protocol_handoff_ready":
+        missing.append("validation_scale_handoff_status_ready")
     target_fpr = _safe_float(source_payload.get("target_fpr"))
     if target_fpr is None:
         missing.append("validation_scale_target_fpr_registered")
@@ -185,7 +218,10 @@ def _validation_scale_fair_gate_missing_requirements(source_payload: Mapping[str
 
     if (_safe_int(source_payload.get("sstw_measured_formal_record_count")) or 0) <= 0:
         missing.append("validation_scale_sstw_measured_formal_records_ready")
-    if source_payload.get("sstw_measured_formal_status") != "sstw_measured_formal_paper_profile_claim_candidate":
+    if source_payload.get("sstw_measured_formal_status") not in {
+        "sstw_measured_formal_validation_scale_only",
+        "sstw_measured_formal_paper_profile_claim_candidate",
+    }:
         missing.append("validation_scale_sstw_measured_formal_status_ready")
 
     fair_count = _safe_int(source_payload.get("fair_detection_calibration_ready_count"))
@@ -204,10 +240,35 @@ def _validation_scale_fair_gate_missing_requirements(source_payload: Mapping[str
         missing.append("validation_scale_formal_baseline_difference_interval_ready")
     if source_payload.get("formal_baseline_difference_interval_status") != "formal_baseline_difference_interval_paper_profile_claim_candidate":
         missing.append("validation_scale_formal_baseline_difference_interval_status_ready")
-    if source_payload.get("validation_scale_sstw_advantage_claim_ready") is not True:
-        missing.append("validation_scale_sstw_advantage_claim_ready")
-
     return missing
+
+
+def _probe_paper_fair_gate_missing_requirements(source_payload: Mapping[str, Any]) -> list[str]:
+    """检查 probe_paper PASS 是否已经达到 fpr=0.1 小样本论文闭合层。
+
+    `probe_paper` 复用 validation-scale gate 的公平比较审计逻辑, 但它的语义不再是
+    “打通验证”, 而是在同 target_fpr=0.1 下使用更完整样本规模输出可写论文的
+    小样本闭合结果。因此这里先复用公共公平比较要求, 再把 result level 和
+    claim_support_status 收紧为 probe_paper 专属字段。
+    """
+
+    missing = [
+        item.replace("validation_scale_", "probe_paper_", 1)
+        for item in _validation_scale_fair_gate_missing_requirements({
+            **dict(source_payload),
+            "paper_result_level": "validation_scale",
+            "claim_support_status": "validation_scale_full_protocol_handoff_ready",
+        })
+    ]
+    if source_payload.get("paper_result_level") != "probe_paper":
+        missing.append("probe_paper_result_level_current")
+    if source_payload.get("claim_support_status") != "probe_paper_target_fpr_0_1_paper_claim_supported":
+        missing.append("probe_paper_claim_support_status_ready")
+    if source_payload.get("probe_paper_gate_decision", source_payload.get("validation_scale_gate_decision")) != "PASS":
+        missing.append("probe_paper_gate_decision_passed")
+    if source_payload.get("validation_scale_sstw_advantage_claim_ready") is not True:
+        missing.append("probe_paper_sstw_advantage_claim_ready")
+    return list(dict.fromkeys(missing))
 
 
 def _resolve_source_gate_path(run_root: Path, spec: Mapping[str, Any]) -> Path:
@@ -247,7 +308,7 @@ def _upstream_transition_status(
 def _resolve_cross_profile_artifact_path(run_root: Path, relative_path: str, field: str) -> Path:
     """解析跨 profile 的上游轻量判定 artifact。
 
-    Colab 的 `validation_scale`、`pilot_paper` 和 `full_paper` 使用相互隔离的
+    Colab 的 `validation_scale`、`probe_paper`、`pilot_paper` 和 `full_paper` 使用相互隔离的
     run_root。目标阶段 gate 可以消费上一阶段 artifact, 但不能要求用户手工复制文件。
     因此这里先查当前 run_root, 再查同级 profile run_root。
     """
@@ -255,6 +316,8 @@ def _resolve_cross_profile_artifact_path(run_root: Path, relative_path: str, fie
     if local_path.exists():
         return local_path
     profile_by_field = {
+        "validation_scale_to_probe_paper_transition_decision": "validation_scale",
+        "probe_paper_to_pilot_paper_transition_decision": "probe_paper",
         "validation_scale_to_pilot_paper_transition_decision": "validation_scale",
         "pilot_paper_to_full_paper_transition_decision": "pilot_paper",
     }
@@ -296,8 +359,17 @@ def build_stage_transition_decision(
 
     if transition_id == "validation_scale_to_pilot_paper":
         missing_requirements.extend(_validation_scale_fair_gate_missing_requirements(source_payload))
+        missing_requirements.append("direct_validation_scale_to_pilot_paper_deprecated_use_validation_scale_to_probe_paper")
         if source_payload.get("full_paper_allowed") is True:
             missing_requirements.append("validation_scale_must_not_directly_allow_full_paper")
+    if transition_id == "validation_scale_to_probe_paper":
+        missing_requirements.extend(_validation_scale_fair_gate_missing_requirements(source_payload))
+        if source_payload.get("full_paper_allowed") is True:
+            missing_requirements.append("validation_scale_must_not_directly_allow_full_paper")
+    if transition_id == "probe_paper_to_pilot_paper":
+        missing_requirements.extend(_probe_paper_fair_gate_missing_requirements(source_payload))
+        if source_payload.get("full_paper_allowed") is True:
+            missing_requirements.append("probe_paper_must_not_directly_allow_full_paper")
 
     transition_decision = "PASS" if not missing_requirements and upstream_passed else "FAIL"
     claim_support_status = (

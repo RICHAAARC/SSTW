@@ -323,14 +323,53 @@ PILOT_PAPER_PROMPT_ITEMS = [
         "prompt_suite_role": "pilot_paper",
         "split": "pilot",
     },
-
+    {
+        "prompt_id": "pilot_paper_spinning_pinwheel_closeup",
+        "prompt_text": "A large multicolor pinwheel spins quickly in close-up against a plain white wall, fixed camera, each blade crosses a clearly visible circular path.",
+        "prompt_negative_text": "static image, frozen pinwheel, weak rotation, blurry, jittery, distorted",
+        "prompt_category": "pilot_paper_rotation",
+        "motion_pattern_id": "closeup_pinwheel_rotation",
+        "motion_claim_role": "positive_motion",
+        "prompt_suite_role": "pilot_paper",
+        "split": "pilot",
+    },
+    {
+        "prompt_id": "pilot_paper_marker_cart_pull",
+        "prompt_text": "A small cart carrying a bright red marker is pulled from the back of the scene to the front along a straight track, fixed camera, large depth-wise displacement.",
+        "prompt_negative_text": "static image, frozen cart, weak depth motion, blurry, jittery, distorted",
+        "prompt_category": "pilot_paper_depth_motion",
+        "motion_pattern_id": "depth_axis_cart_translation",
+        "motion_claim_role": "positive_motion",
+        "prompt_suite_role": "pilot_paper",
+        "split": "pilot",
+    },
+    {
+        "prompt_id": "pilot_paper_color_blocks_cascade",
+        "prompt_text": "Five brightly colored blocks slide down a tilted ramp one after another, fixed camera, each block moves across most of the frame with clear temporal ordering.",
+        "prompt_negative_text": "static image, frozen blocks, subtle motion, blurry, jittery, distorted",
+        "prompt_category": "pilot_paper_structured_motion",
+        "motion_pattern_id": "sequential_ramp_translation",
+        "motion_claim_role": "positive_motion",
+        "prompt_suite_role": "pilot_paper",
+        "split": "pilot",
+    },
+    {
+        "prompt_id": "pilot_paper_large_marker_wave",
+        "prompt_text": "A person waves a large rectangular board with black and yellow markers from left to right across the center of the frame, fixed camera, high contrast foreground motion.",
+        "prompt_negative_text": "static image, frozen board, tiny object, weak motion, blurry, jittery, distorted",
+        "prompt_category": "pilot_paper_foreground_motion",
+        "motion_pattern_id": "large_marker_board_wave",
+        "motion_claim_role": "positive_motion",
+        "prompt_suite_role": "pilot_paper",
+        "split": "pilot",
+    },
 ]
 
 
 def _build_full_paper_prompts() -> list[dict]:
     """构造 full_paper 专用 prompt 列表。
 
-    该函数属于项目特定写法。full_paper 需要 50 个 prompt, 同时必须与 probe_paper
+    该函数属于项目特定写法。full_paper 需要 125 个 prompt, 同时必须与 probe_paper
     和 pilot_paper 保持同构运动类别。这里以 pilot_paper 的代表性运动 prompt 为
     锚点, 通过稳定场景修饰生成唯一 prompt, 避免 Notebook 维护长列表。
     """
@@ -343,7 +382,7 @@ def _build_full_paper_prompts() -> list[dict]:
         "with a neutral background and large foreground motion occupying most of the frame",
     ]
     prompts: list[dict] = []
-    for index in range(50):
+    for index in range(125):
         base = PILOT_PAPER_PROMPT_ITEMS[index % len(PILOT_PAPER_PROMPT_ITEMS)]
         modifier = scene_modifiers[index % len(scene_modifiers)]
         prompts.append({
@@ -386,14 +425,8 @@ PROBE_PAPER_SEED_ITEMS = [
 PILOT_PAPER_SEED_ITEMS = [
     {"seed_id": "seed_pilot_paper_calib_a", "seed_value": 1401, "prompt_suite_role": "pilot_paper", "split": "calibration"},
     {"seed_id": "seed_pilot_paper_calib_b", "seed_value": 1502, "prompt_suite_role": "pilot_paper", "split": "calibration"},
-    {"seed_id": "seed_pilot_paper_calib_c", "seed_value": 1603, "prompt_suite_role": "pilot_paper", "split": "calibration"},
-    {"seed_id": "seed_pilot_paper_calib_d", "seed_value": 1704, "prompt_suite_role": "pilot_paper", "split": "calibration"},
-    {"seed_id": "seed_pilot_paper_calib_e", "seed_value": 1754, "prompt_suite_role": "pilot_paper", "split": "calibration"},
     {"seed_id": "seed_pilot_paper_test_a", "seed_value": 1805, "prompt_suite_role": "pilot_paper", "split": "test"},
     {"seed_id": "seed_pilot_paper_test_b", "seed_value": 1906, "prompt_suite_role": "pilot_paper", "split": "test"},
-    {"seed_id": "seed_pilot_paper_test_c", "seed_value": 2007, "prompt_suite_role": "pilot_paper", "split": "test"},
-    {"seed_id": "seed_pilot_paper_test_d", "seed_value": 2108, "prompt_suite_role": "pilot_paper", "split": "test"},
-    {"seed_id": "seed_pilot_paper_test_e", "seed_value": 2209, "prompt_suite_role": "pilot_paper", "split": "test"},
 ]
 
 
@@ -404,7 +437,7 @@ FULL_PAPER_SEED_ITEMS = [
         "prompt_suite_role": "full_paper",
         "split": "calibration",
     }
-    for index in range(10)
+    for index in range(4)
 ] + [
     {
         "seed_id": f"seed_full_paper_test_{index + 1:02d}",
@@ -412,7 +445,7 @@ FULL_PAPER_SEED_ITEMS = [
         "prompt_suite_role": "full_paper",
         "split": "test",
     }
-    for index in range(10)
+    for index in range(4)
 ]
 
 MOTION_CALIBRATION_SEED_ITEMS = [

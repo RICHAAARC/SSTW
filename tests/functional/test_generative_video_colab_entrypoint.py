@@ -203,12 +203,12 @@ def test_pilot_paper_profile_constructs_medium_scale_low_fpr_plan(tmp_path: Path
     assert suite["pilot_paper_design"]["target_calibration_negative_event_count"] == 5000
     assert suite["pilot_paper_design"]["target_heldout_test_negative_event_count"] == 5000
     assert suite["pilot_paper_design"]["target_test_attacked_positive_event_count"] == expected_test_positive_count
-    assert len(pilot_paper_prompts) >= 10
-    assert len(pilot_paper_seeds) == 10
+    assert len(pilot_paper_prompts) == 25
+    assert len(pilot_paper_seeds) == 4
     assert len(plan) == 100
     assert len(pilot_paper_plan) == 100
     assert [(item["prompt_id"], item["seed_id"]) for item in pilot_paper_plan] == [(item["prompt_id"], item["seed_id"]) for item in plan]
-    assert len({item["prompt_id"] for item in plan}) == 10
+    assert len({item["prompt_id"] for item in plan}) == 25
     assert {item["seed_suite_role"] for item in plan} == {"pilot_paper"}
     assert {item["prompt_suite_role"] for item in plan} == {"pilot_paper"}
     assert {item["split"] for item in plan} == {"calibration", "test"}
@@ -251,7 +251,7 @@ def test_probe_paper_profile_constructs_ten_unit_fixed_fpr_plan(tmp_path: Path) 
 
 @pytest.mark.quick
 def test_full_paper_profile_constructs_full_scale_split_plan(tmp_path: Path) -> None:
-    """full_paper profile 必须一次展开完整 50 prompt × 20 seed 计划。
+    """full_paper profile 必须一次展开完整 125 prompt × 8 seed 计划。
 
     该测试属于工程门禁约束, 作用是防止 full_paper 在昂贵 GPU 运行前仍缺少
     prompt / seed / split 配置。Notebook 只切换 profile, 具体样本计划必须由仓库代码生成。
@@ -278,11 +278,11 @@ def test_full_paper_profile_constructs_full_scale_split_plan(tmp_path: Path) -> 
     assert suite["full_paper_design"]["target_test_attacked_positive_event_count"] == 1000 * expected_attack_count
     assert suite["full_paper_design"]["target_calibration_negative_event_count"] == 50000
     assert suite["full_paper_design"]["target_heldout_test_negative_event_count"] == 50000
-    assert len(full_paper_prompts) == 50
-    assert len(full_paper_seeds) == 20
+    assert len(full_paper_prompts) == 125
+    assert len(full_paper_seeds) == 8
     assert len(plan) == 1000
-    assert len({item["prompt_id"] for item in plan}) == 50
-    assert len({item["seed_id"] for item in plan}) == 20
+    assert len({item["prompt_id"] for item in plan}) == 125
+    assert len({item["seed_id"] for item in plan}) == 8
     assert {item["seed_suite_role"] for item in plan} == {"full_paper"}
     assert {item["prompt_suite_role"] for item in plan} == {"full_paper"}
     assert {item["split"] for item in plan} == {"calibration", "test"}
@@ -1352,3 +1352,4 @@ def test_generative_video_colab_runtime_uses_optional_hf_token_without_recording
     assert '"seed_suite_roles": ["main", "heldout_seed"]' in runtime_text
     assert 'default="pilot"' in runtime_text
     assert 'default=WAN21_PRIMARY_MODEL_ID' in runtime_text
+

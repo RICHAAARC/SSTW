@@ -278,9 +278,9 @@ def _seed_pilot_paper_run(
     run_root: Path,
     *,
     profile: str = "pilot_paper",
-    prompt_count: int = 10,
-    calibration_seed_count: int = 5,
-    test_seed_count: int = 5,
+    prompt_count: int = 25,
+    calibration_seed_count: int = 2,
+    test_seed_count: int = 2,
     validation_scale_gate_decision: str | None = "PASS",
     write_external_baseline: bool = True,
     write_internal_ablation: bool = True,
@@ -623,8 +623,8 @@ def test_pilot_paper_gate_passes_calibrated_heldout_fixture(tmp_path: Path) -> N
     assert audit["pilot_paper_unique_video_count"] == 100
     assert audit["pilot_paper_calibration_unique_video_count"] == 50
     assert audit["pilot_paper_test_unique_video_count"] == 50
-    assert audit["pilot_paper_calibration_seed_per_prompt_min"] == 5
-    assert audit["pilot_paper_test_seed_per_prompt_min"] == 5
+    assert audit["pilot_paper_calibration_seed_per_prompt_min"] == 2
+    assert audit["pilot_paper_test_seed_per_prompt_min"] == 2
     expected_attacked_positive_count = 50 * len(ATTACKS)
     assert audit["calibration_negative_event_count"] == expected_attacked_positive_count * len(NEGATIVE_FAMILIES)
     assert audit["heldout_test_negative_event_count"] == expected_attacked_positive_count * len(NEGATIVE_FAMILIES)

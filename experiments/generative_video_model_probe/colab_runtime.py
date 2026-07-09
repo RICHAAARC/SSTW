@@ -46,8 +46,8 @@ PROFILE_SETTINGS = {
         "seed_suite_roles": ["main", "heldout_seed"],
     },
     "pilot_paper": {
-        "prompt_limit": 10,
-        "seed_limit": 10,
+        "prompt_limit": 25,
+        "seed_limit": 4,
         "num_inference_steps": 16,
         "num_frames": 49,
         "height": 320,

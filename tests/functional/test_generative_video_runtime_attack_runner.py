@@ -237,8 +237,8 @@ def test_paper_profile_attack_event_minimums_match_declared_sample_capacity() ->
 
     full_positive_capacity_per_attack = int(full_config["minimum_unique_video_count"])
     full_required_attack_count = len(full_config["required_runtime_attack_names"])
-    assert int(full_config["minimum_calibration_seed_per_prompt"]) == 10
-    assert int(full_config["minimum_test_seed_per_prompt"]) == 10
+    assert int(full_config["minimum_calibration_seed_per_prompt"]) == 4
+    assert int(full_config["minimum_test_seed_per_prompt"]) == 4
     assert int(full_config["minimum_calibration_seed_per_prompt"]) + int(full_config["minimum_test_seed_per_prompt"]) == int(
         full_config["minimum_seed_per_prompt"]
     )

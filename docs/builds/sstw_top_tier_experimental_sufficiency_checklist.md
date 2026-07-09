@@ -98,10 +98,10 @@ negative_event_count_per_family >= 12500
 calibration_negative_event_count_per_family >= 12500
 heldout_negative_event_count_per_family >= 12500
 attack_event_count_per_attack >= 1000
-minimum_prompt_count == 50
-minimum_seed_per_prompt == 20
-minimum_calibration_seed_per_prompt == 10
-minimum_test_seed_per_prompt == 10
+minimum_prompt_count == 125
+minimum_seed_per_prompt == 8
+minimum_calibration_seed_per_prompt == 4
+minimum_test_seed_per_prompt == 4
 minimum_unique_video_count == 1000
 minimum_calibration_unique_video_count == 500
 minimum_test_unique_video_count == 500

@@ -30,10 +30,10 @@ PROFILE = pilot_paper
 paper_result_level: pilot_paper
 paper_protocol_level: paper_grade_protocol
 paper_protocol_difference_from_full_paper: sample_scale_and_target_fpr_only
-prompt_count: 10
-seed_per_prompt: 10
-calibration_seed_per_prompt: 5
-test_seed_per_prompt: 5
+prompt_count: 25
+seed_per_prompt: 4
+calibration_seed_per_prompt: 2
+test_seed_per_prompt: 2
 target_generation_video_count: 100
 target_runtime_attack_count: 46
 target_negative_family_count: 4

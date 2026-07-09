@@ -418,11 +418,11 @@ submission_freeze_allowed: 只表示允许冻结投稿包, 需要 full_paper_res
 ```text
 target_fpr == 0.001
 threshold_protocol == calibration_split_to_frozen_threshold_to_heldout_test_split
-minimum_prompt_count == 50
-minimum_seed_per_prompt == 20
+minimum_prompt_count == 125
+minimum_seed_per_prompt == 8
 minimum_unique_video_count == 1000
-minimum_calibration_seed_per_prompt == 10
-minimum_test_seed_per_prompt == 10
+minimum_calibration_seed_per_prompt == 4
+minimum_test_seed_per_prompt == 4
 minimum_calibration_unique_video_count == 500
 minimum_test_unique_video_count == 500
 minimum_calibration_negative_event_count >= 50000
@@ -1840,7 +1840,7 @@ calibration split
 -> tables / figures / claim audit
 ```
 
-当前工程采用等比例 paper profile 规模: `probe_paper` 为 5 个 prompt × 2 个 seed = 10 个生成单元, clean negative event 为 500; `pilot_paper` 为 10 个 prompt × 10 个 seed = 100 个生成单元, clean negative event 为 5000; `full_paper` 为 50 个 prompt × 20 个 seed = 1000 个生成单元, clean negative event 为 50000。三个 paper profile 均显式拆分 calibration / test seed, 且 attack manifest、baseline、消融、图表和打包协议必须同构; 差异只允许是样本规模、统计置信度和 target FPR。`probe_paper` 和 `pilot_paper` 结论仍不能外推为 `TPR@FPR=0.001` 或 full_paper 规模主表结果。
+当前工程采用等比例 paper profile 规模: `probe_paper` 为 5 个 prompt × 2 个 seed = 10 个生成单元, clean negative event 为 500; `pilot_paper` 为 25 个 prompt × 4 个 seed = 100 个生成单元, clean negative event 为 5000; `full_paper` 为 125 个 prompt × 8 个 seed = 1000 个生成单元, clean negative event 为 50000。三个 paper profile 均显式拆分 calibration / test seed, 且 attack manifest、baseline、消融、图表和打包协议必须同构; 差异只允许是样本规模、统计置信度和 target FPR。`probe_paper` 和 `pilot_paper` 结论仍不能外推为 `TPR@FPR=0.001` 或 full_paper 规模主表结果。
 
 ### 29.2 分片执行协议
 

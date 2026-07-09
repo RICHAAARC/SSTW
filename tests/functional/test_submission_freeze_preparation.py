@@ -81,11 +81,13 @@ def test_submission_freeze_preparation_downgrades_sstw_tc_claim(tmp_path: Path) 
         "mechanism_decision": "FAIL",
         "details": {"fixed_low_fpr_audit_pass": True, "trajectory_observation_gain_confirmed": True},
     })
-    _write_json(generative_video_model_probe_run / "artifacts" / "generative_video_mechanism_postprocess_decision.json", {
-        "stage_id": "generative_video_mechanism_postprocess",
-        "mechanism_postprocess_decision": "PASS",
-        "mechanism_decision": "PASS",
-        "details": {"formal_quality_semantic_ready": True},
+    _write_json(generative_video_model_probe_run / "artifacts" / "paper_profile_gate_decision.json", {
+        "paper_profile_gate_decision": "PASS",
+        "claim_support_status": "paper_profile_claim_ready",
+    })
+    _write_json(generative_video_model_probe_run / "artifacts" / "sstw_measured_formal_decision.json", {
+        "sstw_measured_formal_decision": "PASS",
+        "sstw_measured_formal_record_count": 4,
     })
 
     sampling_time_constraint_run = tmp_path / "sampling_time_constraint_run"

@@ -681,41 +681,11 @@ Notebook 与 repository module 的跨边界数据
 | claim_rule | claim | none | true | true | false | generative_video_model_probe external baseline claim usage rule. |
 | fallback_rule | governance | none | true | false | false | generative_video_model_probe external baseline fallback rule. |
 | internal_mechanism_baselines | protocol | none | true | false | false | generative_video_model_probe internal mechanism baseline list paired with external explicit synchronization baselines. |
-| mechanism_score_source | protocol | none | true | false | false | Source used for generative_video_model_probe mechanism postprocess score records. |
 | baseline_score_margin | metric | none | true | false | false | Score margin between key-conditioned trajectory score and the compared baseline score. |
-| latent_norm_range | metric | none | true | false | false | Range of latent norm values in a captured generation trajectory. |
-| latent_norm_total_variation | metric | none | true | false | false | Total variation of latent norm values across a captured generation trajectory. |
-| latent_directed_norm_drop | metric | none | true | false | false | Directed latent norm drop used by generative_video_model_probe trajectory proxy scoring. |
-| latent_mean_range | metric | none | true | false | false | Range of latent mean values in a captured generation trajectory. |
-| latent_std_range | metric | none | true | false | false | Range of latent standard deviation values in a captured generation trajectory. |
-| trajectory_observation_proxy_score | metric | none | true | false | false | Proxy trajectory observation score derived from Colab latent callback records. |
 | control_name | protocol | none | true | false | false | Controlled negative trajectory control name used by generative_video_model_probe postprocess. |
-| controlled_negative_count | metric | none | true | false | false | Number of controlled negative records used by generative_video_model_probe postprocess thresholding. |
-| controlled_negative_false_positive_count | metric | none | true | false | false | Number of controlled negatives above the postprocess threshold. |
-| controlled_negative_fpr | metric | none | true | false | false | Controlled negative false positive rate for generative_video_model_probe postprocess. |
-| fixed_low_fpr_proxy_pass | metric | none | true | false | false | Whether generative_video_model_probe postprocess controlled negative FPR satisfies target FPR. |
-| visual_quality_proxy_score | metric | none | true | false | false | Lightweight visual quality proxy score for generated video outputs. |
-| visual_quality_proxy_status | governance | none | true | false | false | Status for lightweight visual quality proxy records. |
-| motion_consistency_proxy_score | metric | none | true | false | false | Lightweight motion consistency proxy score from trajectory statistics. |
-| motion_consistency_proxy_status | governance | none | true | false | false | Status for lightweight motion consistency proxy records. |
-| semantic_consistency_proxy_status | governance | none | true | false | false | Status for semantic consistency proxy records. |
-| video_file_local_status | artifact | none | true | false | false | Whether a generated video path is locally available during postprocess. |
-| mechanism_postprocess_decision | governance | none | true | false | false | generative_video_model_probe mechanism postprocess decision based on proxy records. |
-| mechanism_score_record_count | metric | none | true | false | false | Number of generative_video_model_probe mechanism score records produced by postprocess. |
-| controlled_negative_record_count | metric | none | true | false | false | Number of controlled negative records produced by postprocess. |
-| quality_proxy_record_count | metric | none | true | false | false | Number of quality motion semantic proxy records produced by postprocess. |
-| key_conditioned_score_mean | metric | none | true | false | false | Mean key-conditioned trajectory proxy score across generated positives. |
-| best_baseline_score_mean | metric | none | true | false | false | Best mean baseline proxy score across compared generative_video_model_probe baselines. |
-| trajectory_gain_over_best_baseline | metric | none | true | false | false | Mean proxy gain over the strongest compared baseline. |
-| trajectory_gain_confirmed_by_proxy | metric | none | true | false | false | Whether generative_video_model_probe postprocess proxy scores show trajectory gain. |
-| quality_motion_semantic_proxy_pass | metric | none | true | false | false | Whether lightweight quality and motion proxies are ready; semantic remains proxy status. |
-| formal_quality_semantic_ready | governance | none | true | false | false | Whether formal quality and semantic metrics are ready for positive claim use. |
-| mechanism_postprocess_status | governance | none | true | false | false | Result checker status for generative_video_model_probe mechanism postprocess artifacts. |
-| postprocess_stage_id | governance | none | true | false | false | Stage id reported by generative_video_model_probe mechanism postprocess decision. |
-| postprocess_mechanism_decision | governance | none | true | false | false | Formal mechanism decision reported by postprocess artifacts. |
-| runtime_mechanism_decision | governance | none | true | false | false | Raw mechanism decision reported by the runtime generation stage before postprocess or pilot gate aggregation. |
-| effective_mechanism_decision | governance | none | true | false | false | Package-level mechanism decision after applying governed postprocess and small-scale pilot evidence precedence. |
-| mechanism_decision_source | governance | none | true | false | false | Artifact source used to derive the package-level effective mechanism decision. |
+| runtime_mechanism_decision | governance | none | true | false | false | Raw mechanism decision reported by the generation runtime stage; final paper claims must use paper profile or pilot/full paper gate decisions. |
+| effective_mechanism_decision | governance | none | true | false | false | Package-level mirror of the generation runtime mechanism decision; it no longer merges deleted proxy postprocess artifacts. |
+| mechanism_decision_source | governance | none | true | false | false | Artifact source used for the package-level mechanism decision; current formal mainline uses runtime_mechanism_artifact and separate paper gates. |
 | video_decode_status | governance | none | true | false | false | Decode status for generated mp4 files used by generative_video_model_probe formal metrics. |
 | video_metric_failure_reason | governance | none | true | false | false | Failure reason for generated video file metric extraction. |
 | decoded_frame_count | metric | none | true | false | false | Number of decoded frames sampled from a generated video. |
@@ -909,15 +879,6 @@ Notebook 与 repository module 的跨边界数据
 | motion_claim_excluded_generation_count | metric | none | true | false | false | Number of successful generation records excluded from motion or trajectory claim use by formal metric gates. |
 | motion_claim_runtime_attack_ready_count | metric | none | true | false | false | Number of runtime attack records counted after formal motion claim eligibility filtering. |
 | motion_claim_runtime_detection_ready_count | metric | none | true | false | false | Number of runtime detection records counted after formal motion claim eligibility filtering. |
-| pilot_gate_decision | governance | none | true | false | false | Small-scale claim pilot gate decision. |
-| missing_pilot_requirements | governance | none | true | false | false | List of missing requirements blocking small-scale claim pilot progression. |
-| pilot_missing_requirement_count | metric | none | true | false | false | Count of missing small-scale claim pilot requirements. |
-| pilot_matrix_record_count | metric | none | true | false | false | Number of small-scale claim pilot matrix proxy records. |
-| pilot_matrix_attack_count | metric | none | true | false | false | Number of attacks covered by small-scale claim pilot matrix proxy records. |
-| pilot_matrix_method_variant_count | metric | none | true | false | false | Number of method variants covered by small-scale claim pilot matrix proxy records. |
-| pilot_matrix_negative_family_count | metric | none | true | false | false | Number of negative families covered by small-scale claim pilot matrix proxy records. |
-| pilot_matrix_postprocess_decision | governance | none | true | false | false | Postprocess decision for small-scale claim pilot matrix proxy records. |
-| pilot_evidence_level | governance | none | true | false | false | Evidence level of pilot records, such as proxy postprocess or runtime attack. |
 | attack_matrix_evidence_level | governance | none | true | false | false | Evidence level used to support attack matrix coverage. |
 | negative_family_evidence_level | governance | none | true | false | false | Evidence level used to support negative family coverage. |
 | prompt_count | metric | none | true | false | false | Number of unique successful prompts observed by a pilot gate. |

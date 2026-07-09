@@ -357,7 +357,8 @@ def test_generative_video_colab_notebook_calls_repository_modules() -> None:
     assert "scripts/build_external_baseline_source_intake.py" in helper_text
     assert "--execute-clone" in helper_text
     assert "experiments.generative_video_model_probe.external_baseline_runner" in helper_text
-    assert "experiments.generative_video_model_probe.pilot_claim_gate" in helper_text
+    removed_pilot_gate_module = ".".join(["experiments", "generative_video_model_probe", "pilot_claim_gate"])
+    assert removed_pilot_gate_module not in helper_text
     assert "experiments.generative_video_model_probe.validation_internal_ablation" in helper_text
     assert "experiments.generative_video_model_probe.adaptive_attack_runner" in helper_text
     assert "experiments.generative_video_model_probe.replay_and_sketch_gate" in helper_text
@@ -1044,14 +1045,6 @@ def test_generative_video_drive_packager_creates_archive_and_manifest(tmp_path: 
     write_jsonl(run_root / "records" / "generation_records.jsonl", [{"generation_model_id": "model", "prompt_id": "prompt"}])
     write_json(run_root / "artifacts" / "generative_video_colab_runtime_decision.json", {"stage_id": "generative_video_generation", "implementation_decision": "PASS", "mechanism_decision": "FAIL"})
     write_json(run_root / "artifacts" / "generation_manifest.json", {"artifact_id": "manifest"})
-    write_json(run_root / "artifacts" / "small_scale_claim_pilot_gate_decision.json", {
-        "pilot_gate_decision": "FAIL",
-        "claim_support_status": "blocked_until_motion_threshold_calibration",
-        "pilot_missing_requirement_count": 0,
-    })
-    write_json(run_root / "artifacts" / "small_scale_claim_pilot_matrix_decision.json", {
-        "pilot_matrix_record_count": 480,
-    })
     write_json(run_root / "artifacts" / "runtime_attack_decision.json", {
         "runtime_attack_decision": "PASS",
         "runtime_attack_record_count": 48,
@@ -1188,9 +1181,6 @@ def test_generative_video_drive_packager_creates_archive_and_manifest(tmp_path: 
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     assert manifest["generation_manifest_status"] == "present"
     assert manifest["decision_summary"]["implementation_decision"] == "PASS"
-    assert manifest["decision_summary"]["small_scale_pilot_gate_decision"] == "FAIL"
-    assert manifest["decision_summary"]["small_scale_pilot_claim_support_status"] == "blocked_until_motion_threshold_calibration"
-    assert manifest["decision_summary"]["small_scale_pilot_matrix_record_count"] == 480
     assert manifest["decision_summary"]["runtime_attack_decision"] == "PASS"
     assert manifest["decision_summary"]["runtime_attack_record_count"] == 48
     assert manifest["decision_summary"]["runtime_attack_ready_count"] == 48
@@ -1285,8 +1275,8 @@ def test_generative_video_drive_packager_creates_archive_and_manifest(tmp_path: 
 
 
 @pytest.mark.quick
-def test_generative_video_drive_packager_reports_effective_mechanism_decision(tmp_path: Path) -> None:
-    """package manifest 必须区分 runtime 原始机制判定与后处理后的有效机制判定。"""
+def test_generative_video_drive_packager_keeps_runtime_mechanism_decision(tmp_path: Path) -> None:
+    """package manifest 不应再用已删除的 proxy 后处理结果提升 runtime 机制判定。"""
     run_root = tmp_path / "runs" / "generative_video_runtime"
     package_dir = tmp_path / "packages"
     write_jsonl(run_root / "records" / "generation_records.jsonl", [{"generation_model_id": "model", "prompt_id": "prompt"}])
@@ -1295,27 +1285,16 @@ def test_generative_video_drive_packager_reports_effective_mechanism_decision(tm
         "implementation_decision": "PASS",
         "mechanism_decision": "FAIL",
     })
-    write_json(run_root / "artifacts" / "generative_video_mechanism_postprocess_decision.json", {
-        "stage_id": "generative_video_mechanism_postprocess",
-        "mechanism_postprocess_decision": "PASS",
-        "mechanism_decision": "PASS",
-        "details": {"formal_claim_status": "supported_by_governed_generation_records"},
-    })
-    write_json(run_root / "artifacts" / "small_scale_claim_pilot_gate_decision.json", {
-        "pilot_gate_decision": "PASS",
-        "claim_support_status": "supported_by_small_scale_claim_pilot_records",
-        "pilot_missing_requirement_count": 0,
-    })
 
     payload = package_generative_video_colab_run(run_root, package_dir, include_videos=False)
 
     manifest = json.loads(Path(payload["package_manifest_path"]).read_text(encoding="utf-8"))
     summary = manifest["decision_summary"]
     assert summary["runtime_mechanism_decision"] == "FAIL"
-    assert summary["postprocess_mechanism_decision"] == "PASS"
-    assert summary["mechanism_decision"] == "PASS"
-    assert summary["effective_mechanism_decision"] == "PASS"
-    assert summary["mechanism_decision_source"] == "small_scale_claim_pilot_gate"
+    assert summary["mechanism_decision"] == "FAIL"
+    assert summary["effective_mechanism_decision"] == "FAIL"
+    assert summary["mechanism_decision_source"] == "runtime_mechanism_artifact"
+    assert "postprocess_mechanism_decision" not in summary
 
 
 @pytest.mark.quick

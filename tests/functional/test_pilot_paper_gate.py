@@ -275,7 +275,6 @@ def _seed_pilot_paper_run(
     formal_records = []
     runtime_detection_records = []
     sstw_measured_formal_records = []
-    pilot_matrix_records = []
     external_baseline_records = []
     internal_ablation_records = []
     fair_anchor_units = []
@@ -346,44 +345,7 @@ def _seed_pilot_paper_run(
                         "seed_id": seed_id,
                         "attack_name": attack_name,
                     })
-                for method_variant in (
-                    "sstw_full_method",
-                    "endpoint_only_control",
-                    "trajectory_only_score",
-                    "without_velocity_constraint",
-                    "without_endpoint_aware_control",
-                    "without_replay_uncertainty_weighting",
-                ):
-                    pilot_matrix_records.append({
-                        **base,
-                        "attack_name": attack_name,
-                        "method_variant": method_variant,
-                        "sample_role": "generated_positive",
-                        "S_final_conservative": 0.80,
-                        "sstw_raw_detector_score": 0.80,
-                        "raw_detector_score": 0.80,
-                        "path_marginal_gain_at_fixed_fpr": 0.07,
-                        "replay_uncertainty_mean": 0.05,
-                    })
                 for negative_family in NEGATIVE_FAMILIES:
-                    pilot_matrix_records.append({
-                        **base,
-                        "attack_name": attack_name,
-                        "method_variant": "sstw_full_method",
-                        "sample_role": "controlled_negative",
-                        "negative_family": negative_family,
-                        "control_name": negative_family,
-                        "S_final_conservative": 0.20,
-                        "S_final": 0.20,
-                        "sstw_raw_detector_score": 0.20,
-                        "raw_detector_score": 0.20,
-                        "path_marginal_gain_at_fixed_fpr": 0.07,
-                        "replay_uncertainty_mean": 0.05,
-                        "negative_tail_status": "not_inflated",
-                        "wrong_sampler_replay_control_not_equivalent": negative_family == "wrong_sampler_replay",
-                        "wrong_sampler_replay_status": "replay_rejected" if negative_family == "wrong_sampler_replay" else "not_applicable",
-                        "decision": "replay_rejected" if negative_family == "wrong_sampler_replay" else "controlled_negative_below_threshold",
-                    })
                     sstw_measured_formal_records.append({
                         **base,
                         "method_id": "sstw_key_conditioned_flow_trajectory",
@@ -450,7 +412,6 @@ def _seed_pilot_paper_run(
     write_jsonl(run_root / "records" / "formal_quality_motion_semantic_records.jsonl", formal_records)
     write_jsonl(run_root / "records" / "runtime_detection_records.jsonl", runtime_detection_records)
     write_jsonl(run_root / "records" / "sstw_measured_formal_records.jsonl", sstw_measured_formal_records)
-    write_jsonl(run_root / "records" / "small_scale_claim_pilot_matrix_records.jsonl", pilot_matrix_records)
     if write_external_baseline:
         write_jsonl(run_root / "records" / "external_baseline_score_records.jsonl", external_baseline_records)
         write_json(run_root / "artifacts" / "external_baseline_comparison_decision.json", {
@@ -490,7 +451,6 @@ def _seed_pilot_paper_run(
             "validation_internal_ablation_evidence_level": "formal_component_removal_video_detector",
             "claim_support_status": "formal_internal_ablation_variant_matrix_ready",
         })
-    write_json(run_root / "artifacts" / "small_scale_claim_pilot_gate_decision.json", {"pilot_gate_decision": "PASS"})
     write_json(run_root / "artifacts" / "motion_threshold_calibration_decision.json", {
         "motion_threshold_calibration_decision": "PASS",
         "motion_threshold_calibration_ready": True,

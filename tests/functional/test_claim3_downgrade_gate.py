@@ -302,7 +302,6 @@ def test_paper_profile_gate_accepts_claim3_downgrade_path(tmp_path: Path) -> Non
         _formal_adaptive_attack_record(protocol_name)
         for protocol_name in REQUIRED_NON_RUNTIME_ATTACK_PROTOCOLS
     ])
-    write_json(run_root / "artifacts" / "small_scale_claim_pilot_gate_decision.json", {"pilot_gate_decision": "PASS"})
     write_json(run_root / "artifacts" / "motion_threshold_calibration_decision.json", {
         "motion_threshold_calibration_decision": "PASS",
         "motion_threshold_calibration_ready": True,

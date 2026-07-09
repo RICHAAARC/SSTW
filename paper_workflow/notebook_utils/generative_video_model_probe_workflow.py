@@ -1569,18 +1569,6 @@ def build_validation_artifact_rebuild_dry_run_command(layout: dict[str, str]) ->
     ]
 
 
-def build_small_scale_claim_pilot_gate_command(layout: dict[str, str]) -> list[str]:
-    """构造 small-scale claim pilot gate 命令, 从 governed records 汇总 pilot 状态。"""
-    return [
-        sys.executable,
-        "-m",
-        "experiments.generative_video_model_probe.pilot_claim_gate",
-        "--run-root",
-        layout["drive_run_root"],
-        "--write-outputs",
-    ]
-
-
 def build_paper_profile_gate_command(layout: dict[str, str]) -> list[str]:
     """构造当前 paper profile 的 gate 命令。"""
     return [

@@ -313,15 +313,6 @@ def _records_in_keys(records: Iterable[dict], keys: set[tuple[str, str, str, str
     return [record for record in records if record_identity_key(record) in keys]
 
 
-def _protocol_matrix_records(run_root: Path) -> list[dict]:
-    """读取当前主干协议矩阵 records, 并兼容历史 pilot matrix 本地复现记录。"""
-
-    records = _read_jsonl(run_root / "records" / "protocol_evaluation_matrix_records.jsonl")
-    if records:
-        return records
-    return _read_jsonl(run_root / "records" / "small_scale_claim_pilot_matrix_records.jsonl")
-
-
 def _trace_ids(records: Iterable[dict]) -> set[str]:
     """提取 records 中非空 trajectory trace id, 用于检查 baseline 和消融是否覆盖同一批样本。"""
     return {str(record.get("trajectory_trace_id")) for record in records if record.get("trajectory_trace_id") not in {None, ""}}
@@ -723,7 +714,7 @@ def _attack_counts(records: Iterable[dict]) -> Counter[str]:
     counter: Counter[str] = Counter()
     for record in records:
         attack_name = str(record.get("attack_name") or "")
-        if attack_name and attack_name not in {"no_attack", "postprocess_no_attack"}:
+        if attack_name and attack_name != "no_attack":
             counter[attack_name] += 1
     return counter
 

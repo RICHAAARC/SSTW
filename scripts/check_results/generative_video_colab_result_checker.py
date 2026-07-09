@@ -73,11 +73,9 @@ def check_generative_video_colab_results(run_root: str | Path) -> dict:
     quality_records = _read_jsonl(run_root / "records" / "quality_motion_semantic_records.jsonl")
     external_records = _read_jsonl(run_root / "records" / "external_baseline_records.jsonl")
     decision = _read_json(run_root / "artifacts" / "generative_video_colab_runtime_decision.json")
-    postprocess_decision = _read_json(run_root / "artifacts" / "generative_video_mechanism_postprocess_decision.json")
+    paper_profile_decision = _read_json(run_root / "artifacts" / "paper_profile_gate_decision.json")
+    pilot_paper_decision = _read_json(run_root / "artifacts" / "pilot_paper_gate_decision.json")
     manifest = _read_json(run_root / "artifacts" / "generation_manifest.json")
-    mechanism_records = _read_jsonl(run_root / "records" / "mechanism_score_records.jsonl")
-    controlled_negative_records = _read_jsonl(run_root / "records" / "controlled_negative_records.jsonl")
-    quality_proxy_records = _read_jsonl(run_root / "records" / "quality_motion_semantic_proxy_records.jsonl")
     formal_metric_records = _read_jsonl(run_root / "records" / "formal_quality_motion_semantic_records.jsonl")
     video_checks = _video_integrity_records(run_root, generation_records)
 
@@ -103,40 +101,37 @@ def check_generative_video_colab_results(run_root: str | Path) -> dict:
     ]) else "FAIL"
 
     missing_mechanism_requirements = []
-    postprocess_details = postprocess_decision.get("details", {})
-    if (
-        decision.get("details", {}).get("fixed_low_fpr_audit_pass") is not True
-        and postprocess_details.get("fixed_low_fpr_proxy_pass") is not True
-    ):
-        missing_mechanism_requirements.append("fixed_low_fpr_audit_not_passed")
-    if (
-        decision.get("details", {}).get("trajectory_observation_gain_confirmed") is not True
-        and postprocess_details.get("trajectory_gain_confirmed_by_proxy") is not True
-    ):
-        missing_mechanism_requirements.append("trajectory_observation_gain_not_confirmed")
-    if decision.get("details", {}).get("quality_motion_semantic_consistency_pass") is not True:
-        if postprocess_details.get("formal_quality_semantic_ready") is True:
-            pass
-        elif postprocess_details.get("formal_claim_status") == "blocked_by_formal_visual_quality":
-            missing_mechanism_requirements.append("formal_visual_quality_metric_missing")
-        elif postprocess_details.get("formal_claim_status") == "blocked_by_formal_motion_consistency":
-            missing_mechanism_requirements.append("formal_motion_consistency_metric_missing")
-        elif postprocess_details.get("formal_visual_motion_ready") is True and postprocess_details.get("formal_semantic_ready") is not True:
-            missing_mechanism_requirements.append("formal_semantic_metric_missing")
-        elif postprocess_details.get("quality_motion_semantic_proxy_pass") is True:
-            missing_mechanism_requirements.append("formal_quality_motion_semantic_metrics_missing")
-        else:
-            missing_mechanism_requirements.append("quality_motion_semantic_consistency_not_passed")
-    if external_baseline_runnable_count < 1:
-        missing_mechanism_requirements.append("external_baseline_not_runnable")
-    if successful_generation_count < 4:
-        missing_mechanism_requirements.append("insufficient_prompt_seed_coverage_for_generative_video_model_probe")
+    paper_profile_gate_pass = paper_profile_decision.get("paper_profile_gate_decision") == "PASS" or paper_profile_decision.get("probe_paper_gate_decision") == "PASS"
+    pilot_paper_gate_pass = pilot_paper_decision.get("pilot_paper_gate_decision") == "PASS"
+    formal_gate_pass = paper_profile_gate_pass or pilot_paper_gate_pass
+    if not formal_gate_pass:
+        if decision.get("details", {}).get("fixed_low_fpr_audit_pass") is not True:
+            missing_mechanism_requirements.append("fixed_low_fpr_audit_not_passed")
+        if decision.get("details", {}).get("trajectory_observation_gain_confirmed") is not True:
+            missing_mechanism_requirements.append("trajectory_observation_gain_not_confirmed")
+        if decision.get("details", {}).get("quality_motion_semantic_consistency_pass") is not True:
+            if successful_generation_count > 0 and formal_visual_motion_ready_count >= successful_generation_count and formal_semantic_ready_count >= successful_generation_count:
+                pass
+            elif not formal_metric_records:
+                missing_mechanism_requirements.append("formal_quality_motion_semantic_metrics_missing")
+            elif formal_visual_motion_ready_count < successful_generation_count:
+                missing_mechanism_requirements.append("formal_visual_quality_metric_missing")
+            elif formal_semantic_ready_count < successful_generation_count:
+                missing_mechanism_requirements.append("formal_semantic_metric_missing")
+            else:
+                missing_mechanism_requirements.append("quality_motion_semantic_consistency_not_passed")
+        if external_baseline_runnable_count < 1:
+            missing_mechanism_requirements.append("external_baseline_not_runnable")
+        if successful_generation_count < 4:
+            missing_mechanism_requirements.append("insufficient_prompt_seed_coverage_for_generative_video_model_probe")
 
     runtime_mechanism_decision = decision.get("mechanism_decision")
-    postprocess_mechanism_decision = postprocess_decision.get("mechanism_decision")
-    if postprocess_mechanism_decision == "PASS":
+    if pilot_paper_gate_pass:
         effective_mechanism_decision = "PASS"
-        mechanism_decision_source = "postprocess_mechanism_artifact"
+        mechanism_decision_source = "pilot_paper_gate_artifact"
+    elif paper_profile_gate_pass:
+        effective_mechanism_decision = "PASS"
+        mechanism_decision_source = "paper_profile_gate_artifact"
     else:
         effective_mechanism_decision = runtime_mechanism_decision
         mechanism_decision_source = "runtime_mechanism_artifact"
@@ -150,13 +145,9 @@ def check_generative_video_colab_results(run_root: str | Path) -> dict:
         "quality_record_count": len(quality_records),
         "external_baseline_record_count": len(external_records),
         "external_baseline_runnable_count": external_baseline_runnable_count,
-        "mechanism_score_record_count": len(mechanism_records),
-        "controlled_negative_record_count": len(controlled_negative_records),
-        "quality_proxy_record_count": len(quality_proxy_records),
         "formal_metric_record_count": len(formal_metric_records),
         "formal_visual_motion_ready_count": formal_visual_motion_ready_count,
         "formal_semantic_ready_count": formal_semantic_ready_count,
-        "mechanism_postprocess_status": postprocess_decision.get("mechanism_postprocess_decision", "missing"),
         "quality_metric_ready_count": quality_metric_ready_count,
         "video_checks": video_checks,
         "implementation_evidence_status": implementation_evidence_status,
@@ -169,9 +160,6 @@ def check_generative_video_colab_results(run_root: str | Path) -> dict:
             "effective_mechanism_decision": effective_mechanism_decision,
             "mechanism_decision_source": mechanism_decision_source,
             "runtime_mechanism_decision": runtime_mechanism_decision,
-            "postprocess_stage_id": postprocess_decision.get("stage_id"),
-            "mechanism_postprocess_decision": postprocess_decision.get("mechanism_postprocess_decision"),
-            "postprocess_mechanism_decision": postprocess_mechanism_decision,
         },
         "next_recommended_profile": "recommended_on_l4_or_a100" if implementation_evidence_status == "PASS" else "rerun_smoke_after_fixing_outputs",
     }

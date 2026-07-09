@@ -10,7 +10,6 @@ import pytest
 import experiments.generative_video_model_probe.formal_metric_runner as formal_metric_runner
 import main.analysis.semantic_video_metrics as semantic_video_metrics
 from experiments.generative_video_model_probe.formal_metric_runner import run_formal_metric_audit
-from experiments.generative_video_model_probe.postprocess_runner import postprocess_colab_run
 from main.protocol.record_writer import read_jsonl, write_json, write_jsonl
 from scripts.check_results.generative_video_colab_result_checker import check_generative_video_colab_results
 
@@ -374,14 +373,15 @@ def test_checker_reports_semantic_only_block_after_formal_visual_motion_metrics(
         "stage_id": "generative_video_generation",
         "implementation_decision": "PASS",
         "mechanism_decision": "FAIL",
-        "details": {},
+        "details": {
+            "fixed_low_fpr_audit_pass": True,
+            "trajectory_observation_gain_confirmed": True,
+        },
     })
 
     run_formal_metric_audit(run_root)
-    postprocess_colab_run(run_root)
     summary = check_generative_video_colab_results(run_root)
 
-    assert summary["mechanism_postprocess_status"] == "PASS"
     assert summary["formal_visual_motion_ready_count"] == 4
     assert summary["formal_semantic_ready_count"] == 0
     assert summary["missing_mechanism_requirements"] == ["formal_semantic_metric_missing"]

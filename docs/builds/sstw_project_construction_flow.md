@@ -368,7 +368,6 @@ Notebook 只能通过 `paper_workflow/notebook_utils/generative_video_model_prob
 motion_threshold_calibration_colab.ipynb
 -> generative_video_generation_colab.ipynb
 -> generative_video_quality_scoring_colab.ipynb
--> sstw_mechanism_postprocess_colab.ipynb
 -> runtime_attack_colab.ipynb
 -> runtime_detection_colab.ipynb
 -> 5 个主实验 modern external baseline formal reference Notebook
@@ -385,11 +384,11 @@ motion_threshold_calibration_colab.ipynb
 其中:
 
 1. `motion_threshold_calibration_colab.ipynb` 只负责独立 calibration split 和阈值冻结。
-2. 5 个 SSTW runtime 拆分 Notebook 负责 Wan2.1 生成、formal metrics、阈值复用、
+2. 4 个 SSTW runtime 拆分 Notebook 负责 Wan2.1 生成、formal metrics、阈值复用、
    runtime attack 和 detection, 不执行现代 baseline command 预检或 baseline scoring。
 3. 5 个主实验 modern external baseline formal reference Notebook 分别负责对应 baseline 的 source intake、clone / build / run / adapt 和 official bundle 生成, 不默认调用全量 runner 转写 `measured_formal` records。
 4. `formal_comparison_scoring_colab.ipynb` 负责恢复 5 个主实验 baseline official reference 阶段包, 重新执行全量统一转写、self-containment 判定、公平校准和差值区间统计。
-5. `paper_evidence_postprocess_colab.ipynb` 负责恢复 runtime、motion threshold 和 formal comparison scoring 阶段包, 再执行内部消融、adaptive attack proxy、replay/sketch 或 Claim-3 downgrade、CI、low-FPR formal statistics 和数据切分泄漏检查。
+5. `paper_evidence_postprocess_colab.ipynb` 负责恢复 runtime、motion threshold 和 formal comparison scoring 阶段包, 再执行正式内部消融、formal adaptive attack 证据整理、replay/sketch 或 Claim-3 downgrade、CI、low-FPR formal statistics 和数据切分泄漏检查。
 6. `paper_gate_and_package_colab.ipynb` 负责恢复 runtime、motion threshold、formal comparison scoring 和 paper evidence postprocess 阶段包, 只执行最终 fixed-FPR gate、transition decision、artifact rebuild dry run、figure/package manifest builder 和 Drive package。
 
 旧的通用 external baseline scoring Notebook 已删除。正式主流程应以 5 个主实验

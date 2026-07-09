@@ -117,7 +117,8 @@ def _collect_generative_video_model_probe_evidence(generative_video_model_probe_
         [
             str(generative_video_model_probe_run_root / "records" / "generation_records.jsonl"),
             str(generative_video_model_probe_run_root / "records" / "formal_quality_motion_semantic_records.jsonl"),
-            str(generative_video_model_probe_run_root / "artifacts" / "generative_video_mechanism_postprocess_decision.json"),
+            str(generative_video_model_probe_run_root / "artifacts" / "paper_profile_gate_decision.json"),
+            str(generative_video_model_probe_run_root / "artifacts" / "sstw_measured_formal_decision.json"),
         ],
         {
             "generation_record_count": payload.get("generation_record_count", 0),

@@ -210,16 +210,26 @@ def test_paper_profile_attack_event_minimums_match_declared_sample_capacity() ->
     pilot_config = load_protocol_config_with_shared_attack_protocol(
         "configs/protocol/pilot_paper_generative_probe.json"
     )
+    probe_config = load_protocol_config_with_shared_attack_protocol(
+        "configs/protocol/probe_paper_generative_probe.json"
+    )
     full_config = load_protocol_config_with_shared_attack_protocol(
         "configs/protocol/full_paper_generative_probe.json"
     )
 
     assert "minimum_attack_event_count_per_attack" not in validation_config
 
-    pilot_positive_capacity_per_attack = int(pilot_config["minimum_prompt_count"]) * int(
-        pilot_config["minimum_test_seed_per_prompt"]
+    probe_positive_capacity_per_attack = int(probe_config["minimum_unique_video_count"])
+    probe_required_attack_count = len(probe_config["required_runtime_attack_names"])
+    assert int(probe_config["minimum_attack_event_count_per_attack"]) == 5
+    assert int(probe_config["minimum_attack_event_count_per_attack"]) <= probe_positive_capacity_per_attack
+    assert int(probe_config["minimum_heldout_attacked_positive_event_count"]) == (
+        int(probe_config["minimum_attack_event_count_per_attack"]) * probe_required_attack_count
     )
+
+    pilot_positive_capacity_per_attack = int(pilot_config["minimum_unique_video_count"])
     pilot_required_attack_count = len(pilot_config["required_runtime_attack_names"])
+    assert int(pilot_config["minimum_attack_event_count_per_attack"]) == 50
     assert int(pilot_config["minimum_attack_event_count_per_attack"]) <= pilot_positive_capacity_per_attack
     assert int(pilot_config["minimum_heldout_attacked_positive_event_count"]) == (
         int(pilot_config["minimum_attack_event_count_per_attack"]) * pilot_required_attack_count

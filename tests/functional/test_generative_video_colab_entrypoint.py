@@ -193,25 +193,60 @@ def test_pilot_paper_profile_constructs_medium_scale_low_fpr_plan(tmp_path: Path
     assert suite["pilot_paper_design"]["paper_protocol_difference_from_full_paper"] == "sample_scale_and_target_fpr_only"
     assert suite["pilot_paper_design"]["recommended_runtime_profile"] == "pilot_paper"
     assert suite["pilot_paper_design"]["threshold_protocol"] == "calibration_split_to_frozen_threshold_to_heldout_test_split"
-    assert suite["pilot_paper_design"]["target_generation_video_count"] == 168
+    assert suite["pilot_paper_design"]["target_generation_video_count"] == 100
+    assert suite["pilot_paper_design"]["target_calibration_unique_video_count"] == 50
+    assert suite["pilot_paper_design"]["target_test_unique_video_count"] == 50
     expected_attack_count = len(pilot_protocol["required_runtime_attack_names"])
-    expected_test_positive_count = 21 * 4 * expected_attack_count
+    expected_test_positive_count = 50 * expected_attack_count
     assert suite["pilot_paper_design"]["target_runtime_attack_count"] == expected_attack_count
     assert suite["pilot_paper_design"]["target_runtime_attack_names"] == pilot_protocol["required_runtime_attack_names"]
-    assert suite["pilot_paper_design"]["target_calibration_negative_event_count"] == expected_test_positive_count * 4
-    assert suite["pilot_paper_design"]["target_heldout_test_negative_event_count"] == expected_test_positive_count * 4
+    assert suite["pilot_paper_design"]["target_calibration_negative_event_count"] == 5000
+    assert suite["pilot_paper_design"]["target_heldout_test_negative_event_count"] == 5000
     assert suite["pilot_paper_design"]["target_test_attacked_positive_event_count"] == expected_test_positive_count
-    assert len(pilot_paper_prompts) == 21
-    assert len(pilot_paper_seeds) == 8
-    assert len(plan) == 168
-    assert len(pilot_paper_plan) == 168
+    assert len(pilot_paper_prompts) >= 10
+    assert len(pilot_paper_seeds) == 10
+    assert len(plan) == 100
+    assert len(pilot_paper_plan) == 100
     assert [(item["prompt_id"], item["seed_id"]) for item in pilot_paper_plan] == [(item["prompt_id"], item["seed_id"]) for item in plan]
-    assert len({item["prompt_id"] for item in plan}) == 21
+    assert len({item["prompt_id"] for item in plan}) == 10
     assert {item["seed_suite_role"] for item in plan} == {"pilot_paper"}
     assert {item["prompt_suite_role"] for item in plan} == {"pilot_paper"}
     assert {item["split"] for item in plan} == {"calibration", "test"}
-    assert sum(1 for item in plan if item["split"] == "calibration") == 84
-    assert sum(1 for item in plan if item["split"] == "test") == 84
+    assert sum(1 for item in plan if item["split"] == "calibration") == 50
+    assert sum(1 for item in plan if item["split"] == "test") == 50
+
+
+@pytest.mark.quick
+def test_probe_paper_profile_constructs_ten_unit_fixed_fpr_plan(tmp_path: Path) -> None:
+    """probe_paper profile 必须构造 10 生成单元与 500 clean negative event 设计。"""
+    output_root = tmp_path / "prompt_suite"
+    summary = write_prompt_suite(output_root)
+    suite = json.loads(Path(summary["prompt_suite_path"]).read_text(encoding="utf-8"))
+    plan = _build_generation_plan(suite, "probe_paper", "Wan-AI/Wan2.1-T2V-1.3B-Diffusers", None)
+
+    probe_paper_prompts = [item for item in suite["prompts"] if item.get("prompt_suite_role") == "probe_paper"]
+    probe_paper_seeds = [item for item in suite["seeds"] if item.get("prompt_suite_role") == "probe_paper"]
+    probe_protocol = load_protocol_config_with_shared_attack_protocol("configs/protocol/probe_paper_generative_probe.json")
+    expected_attack_count = len(probe_protocol["required_runtime_attack_names"])
+
+    assert suite["probe_paper_design"]["target_fpr"] == 0.1
+    assert suite["probe_paper_design"]["paper_result_level"] == "probe_paper"
+    assert suite["probe_paper_design"]["target_generation_video_count"] == 10
+    assert suite["probe_paper_design"]["target_calibration_unique_video_count"] == 5
+    assert suite["probe_paper_design"]["target_test_unique_video_count"] == 5
+    assert suite["probe_paper_design"]["target_test_attacked_positive_event_count"] == 5 * expected_attack_count
+    assert suite["probe_paper_design"]["target_calibration_negative_event_count"] == 500
+    assert suite["probe_paper_design"]["target_heldout_test_negative_event_count"] == 500
+    assert len(probe_paper_prompts) == 5
+    assert len(probe_paper_seeds) == 2
+    assert len(plan) == 10
+    assert len({item["prompt_id"] for item in plan}) == 5
+    assert len({item["seed_id"] for item in plan}) == 2
+    assert {item["seed_suite_role"] for item in plan} == {"probe_paper"}
+    assert {item["prompt_suite_role"] for item in plan} == {"probe_paper"}
+    assert {item["split"] for item in plan} == {"calibration", "test"}
+    assert sum(1 for item in plan if item["split"] == "calibration") == 5
+    assert sum(1 for item in plan if item["split"] == "test") == 5
 
 
 @pytest.mark.quick
@@ -518,8 +553,8 @@ def test_notebook_workflow_profile_config_supports_profile_switching() -> None:
     assert probe["workflow_profile"] == "probe_paper"
     assert probe["result_tier"] == "probe_paper"
     assert probe["enabled_for_claim"] is True
-    assert probe["method_sample_count"] == 168
-    assert probe["baseline_sample_count"] == 84
+    assert probe["method_sample_count"] == 10
+    assert probe["baseline_sample_count"] == 10
     assert probe["protocol_config_path"] == "configs/protocol/probe_paper_generative_probe.json"
     assert probe["target_fpr"] == probe_protocol["target_fpr"]
     assert probe["protocol_target_fpr"] == probe_protocol["target_fpr"]
@@ -533,8 +568,8 @@ def test_notebook_workflow_profile_config_supports_profile_switching() -> None:
     assert pilot["profile_alias_applied"] is False
     assert pilot["result_tier"] == "pilot_paper"
     assert pilot["enabled_for_claim"] is True
-    assert pilot["method_sample_count"] == 168
-    assert pilot["baseline_sample_count"] == 84
+    assert pilot["method_sample_count"] == 100
+    assert pilot["baseline_sample_count"] == 100
     assert pilot["protocol_config_path"] == "configs/protocol/pilot_paper_generative_probe.json"
     assert pilot["target_fpr"] == pilot_protocol["target_fpr"]
     assert pilot["protocol_target_fpr"] == pilot_protocol["target_fpr"]
@@ -1125,11 +1160,11 @@ def test_generative_video_drive_packager_creates_archive_and_manifest(tmp_path: 
         "calibration_negative_fpr_at_threshold": 0.008,
         "heldout_negative_fpr_at_threshold": 0.009,
         "observed_negative_fpr_at_threshold": 0.009,
-        "calibration_negative_event_count": 1008,
-        "heldout_test_negative_event_count": 1008,
-        "heldout_negative_event_count": 1008,
-        "heldout_attacked_positive_event_count": 252,
-        "attacked_positive_event_count": 252,
+        "calibration_negative_event_count": 5000,
+        "heldout_test_negative_event_count": 5000,
+        "heldout_negative_event_count": 5000,
+        "heldout_attacked_positive_event_count": 2300,
+        "attacked_positive_event_count": 2300,
         "tpr_at_fpr_01_pilot_claim_allowed": True,
         "tpr_at_fpr_001_claim_allowed": False,
     })
@@ -1245,11 +1280,11 @@ def test_generative_video_drive_packager_creates_archive_and_manifest(tmp_path: 
     assert manifest["decision_summary"]["pilot_paper_calibration_negative_fpr_at_threshold"] == 0.008
     assert manifest["decision_summary"]["pilot_paper_heldout_negative_fpr_at_threshold"] == 0.009
     assert manifest["decision_summary"]["pilot_paper_observed_negative_fpr_at_threshold"] == 0.009
-    assert manifest["decision_summary"]["pilot_paper_calibration_negative_event_count"] == 1008
-    assert manifest["decision_summary"]["pilot_paper_heldout_test_negative_event_count"] == 1008
-    assert manifest["decision_summary"]["pilot_paper_heldout_negative_event_count"] == 1008
-    assert manifest["decision_summary"]["pilot_paper_heldout_attacked_positive_event_count"] == 252
-    assert manifest["decision_summary"]["pilot_paper_attacked_positive_event_count"] == 252
+    assert manifest["decision_summary"]["pilot_paper_calibration_negative_event_count"] == 5000
+    assert manifest["decision_summary"]["pilot_paper_heldout_test_negative_event_count"] == 5000
+    assert manifest["decision_summary"]["pilot_paper_heldout_negative_event_count"] == 5000
+    assert manifest["decision_summary"]["pilot_paper_heldout_attacked_positive_event_count"] == 2300
+    assert manifest["decision_summary"]["pilot_paper_attacked_positive_event_count"] == 2300
     assert manifest["decision_summary"]["pilot_paper_tpr_at_fpr_01_pilot_claim_allowed"] is True
     assert manifest["decision_summary"]["pilot_paper_tpr_at_fpr_001_claim_allowed"] is False
     assert manifest["decision_summary"]["validation_artifact_rebuild_dry_run_decision"] == "PASS"

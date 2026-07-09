@@ -615,16 +615,16 @@ Google Drive package manifest pilot_paper summary
 paper_result_level: pilot_paper
 paper_protocol_level: paper_grade_protocol
 paper_protocol_difference_from_full_paper: sample_scale_and_target_fpr_only
-prompt_count: 21
-seed_per_prompt: 8
-calibration_seed_per_prompt: 4
-test_seed_per_prompt: 4
-unique_video_count: 168
-calibration_unique_video_count: 84
-test_unique_video_count: 84
-expected_calibration_negative_event_count: 1008
-expected_heldout_test_negative_event_count: 1008
-expected_heldout_attacked_positive_event_count: 252
+prompt_count: 10
+seed_per_prompt: 10
+calibration_seed_per_prompt: 5
+test_seed_per_prompt: 5
+unique_video_count: 100
+calibration_unique_video_count: 50
+test_unique_video_count: 50
+expected_calibration_negative_event_count: 5000
+expected_heldout_test_negative_event_count: 5000
+expected_heldout_attacked_positive_event_count: 2300
 target_fpr: 0.01
 threshold_protocol: calibration_split_to_frozen_threshold_to_heldout_test_split
 ```
@@ -651,8 +651,8 @@ pilot_paper_internal_ablation_matrix_ready == true
 minimum_external_baseline_measured_adapter_count >= 5
 minimum_modern_external_baseline_formal_adapter_count >= 5
 minimum_internal_ablation_variant_count >= 8
-pilot_paper_external_baseline_trace_count_min >= 84
-pilot_paper_internal_ablation_trace_count_min >= 84
+pilot_paper_external_baseline_trace_count_min >= 50
+pilot_paper_internal_ablation_trace_count_min >= 50
 ```
 
 这一实现属于项目特定 gate 设计: 它强制 `validation_scale` 先闭合对比链路和消融链路, 再由 `probe_paper` 证明 FPR=10% 小样本论文闭合, 最后才允许 `pilot_paper` 输出 pilot 级 fixed-FPR 论文主张。显式 DTW 与 frame matching 仍只是同步 control proxy, 现代视频水印 baseline 的正式 adapter 必须在 `validation_scale` 通过前基于项目内 clone / build / run / adapt / record 产出 `measured_formal` records。

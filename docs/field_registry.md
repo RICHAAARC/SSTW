@@ -988,6 +988,7 @@ Notebook 与 repository module 的跨边界数据
 | minimum_heldout_attacked_positive_event_count | protocol | none | true | false | false | gate 要求的最小 held-out attacked positive event 数量。 |
 | minimum_calibration_negative_event_count_per_family | protocol | none | true | false | false | gate 要求的 calibration split 每个 negative family 最小事件数。 |
 | minimum_heldout_negative_event_count_per_family | protocol | none | true | false | false | gate 要求的 held-out split 每个 negative family 最小事件数。 |
+| minimum_negative_event_count_per_family | protocol | none | true | false | false | gate 要求的每个 negative family 最小事件数, 用于检查 clean negative event 是否按 family 均衡覆盖。 |
 | minimum_attack_event_count_per_attack | protocol | none | true | false | false | gate 要求的每个 attack 最小 held-out positive event 数量。 |
 | minimum_full_paper_external_baseline_trace_count | protocol | none | true | false | false | full_paper formal external baseline comparison 对每个必需 baseline 的最小 held-out trace 覆盖数量。 |
 | minimum_full_paper_internal_ablation_trace_count | protocol | none | true | false | false | full_paper internal ablation 对每个必需消融变体的最小 held-out trace 覆盖数量。 |
@@ -1013,6 +1014,8 @@ Notebook 与 repository module 的跨边界数据
 | required_external_baseline_adapter_names | protocol | none | true | false | false | pilot_paper gate 要求出现的 external_baseline adapter 名称列表。 |
 | required_modern_external_baseline_adapter_names | protocol | none | true | false | false | pilot_paper gate 要求产出 measured_formal records 的现代视频水印 baseline adapter 名称列表。 |
 | required_internal_ablation_variants | protocol | none | true | false | false | pilot_paper gate 要求出现的内部消融 method variant 列表。 |
+| minimum_probe_paper_external_baseline_trace_count | protocol | none | true | false | false | probe_paper external baseline comparison 要求覆盖的 held-out trace 最小数量。 |
+| minimum_probe_paper_internal_ablation_trace_count | protocol | none | true | false | false | probe_paper internal ablation 每个必需变体要求覆盖的 held-out trace 最小数量。 |
 | minimum_pilot_paper_external_baseline_trace_count | protocol | none | true | false | false | pilot_paper external baseline comparison 要求覆盖的 held-out trace 最小数量。 |
 | minimum_pilot_paper_internal_ablation_trace_count | protocol | none | true | false | false | pilot_paper internal ablation 每个必需变体要求覆盖的 held-out trace 最小数量。 |
 | minimum_internal_ablation_variant_count | protocol | none | true | false | false | pilot_paper gate 要求的内部消融变体最小数量。 |

@@ -13,8 +13,8 @@ from main.protocol.record_writer import write_json, write_jsonl
 
 ATTACKS = PILOT_PAPER_RUNTIME_ATTACKS
 NEGATIVE_FAMILIES = ("wrong_key_control", "without_key_control", "wrong_sampler_replay", "trajectory_time_shuffle_control")
-CALIBRATION_SEEDS = tuple(f"seed_calibration_{index:02d}" for index in range(4))
-TEST_SEEDS = tuple(f"seed_test_{index:02d}" for index in range(4))
+CALIBRATION_SEEDS = tuple(f"seed_calibration_{index:02d}" for index in range(5))
+TEST_SEEDS = tuple(f"seed_test_{index:02d}" for index in range(5))
 SSTW_METHOD_ID = "sstw_key_conditioned_flow_trajectory"
 EXTERNAL_BASELINE_NAMES = (
     "explicit_dtw_temporal_alignment",
@@ -96,10 +96,10 @@ def _probe_paper_gate_pass_payload() -> dict:
         "probe_paper_gate_decision": "PASS",
         "paper_result_level": "probe_paper",
         "claim_support_status": "probe_paper_target_fpr_0_1_paper_claim_supported",
-        "sstw_measured_formal_record_count": 168,
-        "validation_generation_record_count": 168,
-        "validation_prompt_count": 21,
-        "validation_seed_per_prompt_min": 8,
+        "sstw_measured_formal_record_count": 10,
+        "validation_generation_record_count": 10,
+        "validation_prompt_count": 5,
+        "validation_seed_per_prompt_min": 2,
         "validation_scale_sstw_advantage_claim_status": "probe_paper_target_fpr_0_1_sstw_advantage_claim_supported",
     })
     return payload
@@ -165,7 +165,7 @@ def _write_pilot_paper_fair_comparison_fixture(
             "fair_comparison_status": "ready" if not is_blocked else "blocked",
             "target_fpr": target_fpr,
             "paper_result_level": "pilot_paper",
-            "clean_negative_score_count": 1000 if not is_blocked else 0,
+            "clean_negative_score_count": 5000 if not is_blocked else 0,
             "attacked_positive_score_count": len(anchor_units) if not is_blocked else 0,
             "positive_anchor_count": len(anchor_units) if not is_blocked else 0,
             "positive_anchor_keys": anchor_keys if not is_blocked else [],
@@ -278,9 +278,9 @@ def _seed_pilot_paper_run(
     run_root: Path,
     *,
     profile: str = "pilot_paper",
-    prompt_count: int = 21,
-    calibration_seed_count: int = 4,
-    test_seed_count: int = 4,
+    prompt_count: int = 10,
+    calibration_seed_count: int = 5,
+    test_seed_count: int = 5,
     validation_scale_gate_decision: str | None = "PASS",
     write_external_baseline: bool = True,
     write_internal_ablation: bool = True,
@@ -582,7 +582,7 @@ def test_pilot_paper_gate_rejects_validation_scale_profile(tmp_path: Path) -> No
 
 @pytest.mark.quick
 def test_pilot_paper_gate_passes_calibrated_heldout_fixture(tmp_path: Path) -> None:
-    """满足 calibration/test split 与 1000+ held-out negative events 时允许 pilot_paper 级 TPR@target_fpr。"""
+    """满足 calibration/test split 与 5000+ held-out negative events 时允许 pilot_paper 级 TPR@target_fpr。"""
     run_root = tmp_path / "run"
     _seed_pilot_paper_run(run_root)
 
@@ -611,21 +611,21 @@ def test_pilot_paper_gate_passes_calibrated_heldout_fixture(tmp_path: Path) -> N
     assert audit["formal_baseline_difference_interval_decision"] == "PASS"
     assert audit["formal_baseline_difference_interval_ready_count"] == len(MODERN_EXTERNAL_BASELINE_NAMES)
     assert audit["formal_baseline_difference_interval_missing_baseline_ids"] == []
-    assert audit["pilot_paper_external_baseline_trace_count"] == 84
-    assert audit["pilot_paper_external_baseline_trace_count_min"] == 84
+    assert audit["pilot_paper_external_baseline_trace_count"] == 50
+    assert audit["pilot_paper_external_baseline_trace_count_min"] == 50
     assert audit["validation_internal_ablation_decision"] == "PASS"
     assert audit["validation_internal_ablation_variant_count"] >= 8
-    assert audit["pilot_paper_internal_ablation_trace_count_min"] == 84
+    assert audit["pilot_paper_internal_ablation_trace_count_min"] == 50
     assert audit["threshold_protocol"] == "calibration_split_to_frozen_threshold_to_heldout_test_split"
     assert audit["threshold_source_split"] == "calibration"
     assert audit["test_time_threshold_update_blocked"] is True
-    assert audit["pilot_paper_generation_record_count"] == 168
-    assert audit["pilot_paper_unique_video_count"] == 168
-    assert audit["pilot_paper_calibration_unique_video_count"] == 84
-    assert audit["pilot_paper_test_unique_video_count"] == 84
-    assert audit["pilot_paper_calibration_seed_per_prompt_min"] == 4
-    assert audit["pilot_paper_test_seed_per_prompt_min"] == 4
-    expected_attacked_positive_count = 84 * len(ATTACKS)
+    assert audit["pilot_paper_generation_record_count"] == 100
+    assert audit["pilot_paper_unique_video_count"] == 100
+    assert audit["pilot_paper_calibration_unique_video_count"] == 50
+    assert audit["pilot_paper_test_unique_video_count"] == 50
+    assert audit["pilot_paper_calibration_seed_per_prompt_min"] == 5
+    assert audit["pilot_paper_test_seed_per_prompt_min"] == 5
+    expected_attacked_positive_count = 50 * len(ATTACKS)
     assert audit["calibration_negative_event_count"] == expected_attacked_positive_count * len(NEGATIVE_FAMILIES)
     assert audit["heldout_test_negative_event_count"] == expected_attacked_positive_count * len(NEGATIVE_FAMILIES)
     assert audit["heldout_attacked_positive_event_count"] == expected_attacked_positive_count
@@ -633,7 +633,7 @@ def test_pilot_paper_gate_passes_calibrated_heldout_fixture(tmp_path: Path) -> N
     assert audit["heldout_negative_family_count"] == 4
     assert audit["calibration_negative_event_count_per_family_min"] == expected_attacked_positive_count
     assert audit["heldout_negative_event_count_per_family_min"] == expected_attacked_positive_count
-    assert audit["attack_event_count_per_attack_min"] == 84
+    assert audit["attack_event_count_per_attack_min"] == 50
     assert audit["calibration_negative_fpr_at_threshold"] <= audit["target_fpr"]
     assert audit["heldout_negative_fpr_at_threshold"] <= audit["target_fpr"]
     assert audit["observed_negative_fpr_at_threshold"] == audit["heldout_negative_fpr_at_threshold"]

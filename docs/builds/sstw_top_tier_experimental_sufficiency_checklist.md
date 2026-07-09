@@ -94,7 +94,7 @@ no_detection_score_used_for_prompt_filtering
 calibration_negative_event_count >= 50000
 heldout_test_negative_event_count >= 50000
 heldout_attacked_positive_event_count >= 46000
-negative_event_count_per_family >= 5000
+negative_event_count_per_family >= 12500
 calibration_negative_event_count_per_family >= 12500
 heldout_negative_event_count_per_family >= 12500
 attack_event_count_per_attack >= 1000
@@ -214,9 +214,9 @@ adversarial_detector_evasion_attack
 当前工程协议采用同构 attack 要求:
 
 - `validation_scale`: 使用与 paper profile 相同的 46 个 runtime attack 和 11 个 non-runtime / adaptive 协议, 只用于小样本全流程打通和公平比较门禁。
-- `probe_paper`: 使用与 `pilot_paper` 相同样本结构, 在 target_fpr=0.1 下判断论文结论是否可闭合。
-- `pilot_paper`: 使用同一 attack manifest, 以 target_fpr=0.01 暴露 official baseline 适配、fixed-FPR 统计和 attack 覆盖缺口。
-- `full_paper`: 使用同一 attack manifest, 但扩展到 50 prompts × 20 seeds 与 target_fpr=0.001。此层级才可支撑顶会 / 顶刊级正式完整鲁棒性讨论。
+- `probe_paper`: 使用 10 个生成单元和 500 个 clean negative event, 在 target_fpr=0.1 下判断小样本论文结论是否可闭合。
+- `pilot_paper`: 使用 100 个生成单元和 5000 个 clean negative event, 以 target_fpr=0.01 暴露 official baseline 适配、fixed-FPR 统计和 attack 覆盖缺口。
+- `full_paper`: 使用同一 attack manifest, 但扩展到 1000 个生成单元和 50000 个 clean negative event, target_fpr=0.001。此层级才可支撑顶会 / 顶刊级正式完整鲁棒性讨论。
 
 `validation_scale`、`probe_paper`、`pilot_paper` 和 `full_paper` 的 runtime attack manifest 都必须从 protocol config 读取, 不应由 Notebook 手工缩减。若需要临时调试, 只能使用 helper 或 dry-run profile, 其产物不得进入 paper gate。
 

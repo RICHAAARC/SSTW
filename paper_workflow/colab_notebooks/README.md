@@ -727,7 +727,7 @@ external baseline adapter 矩阵: len(baseline_records)
 单个 baseline 读取 runtime 视频: len(comparable_detection_records)
 ```
 
-因此 `validation_scale`、`probe_paper`、`pilot_paper` 和 `full_paper` 的样本数量不同, 进度总数会自动变化, 不需要在 Notebook 中硬编码 24、168 或 1000。
+因此 `validation_scale`、`probe_paper`、`pilot_paper` 和 `full_paper` 的样本数量不同, 进度总数会自动变化, 不需要在 Notebook 中硬编码 24、10、100 或 1000。
 
 该进度显示只写 stdout, 不写入正式 records、tables、figures、reports、manifests 或 claim artifacts。若自动化环境需要静默运行, 可以设置:
 

@@ -30,16 +30,16 @@ PROFILE = pilot_paper
 paper_result_level: pilot_paper
 paper_protocol_level: paper_grade_protocol
 paper_protocol_difference_from_full_paper: sample_scale_and_target_fpr_only
-prompt_count: 21
-seed_per_prompt: 8
-calibration_seed_per_prompt: 4
-test_seed_per_prompt: 4
-target_generation_video_count: 168
+prompt_count: 10
+seed_per_prompt: 10
+calibration_seed_per_prompt: 5
+test_seed_per_prompt: 5
+target_generation_video_count: 100
 target_runtime_attack_count: 46
 target_negative_family_count: 4
-target_calibration_negative_event_count: 1008
-target_heldout_test_negative_event_count: 1008
-target_heldout_attacked_positive_event_count: 252
+target_calibration_negative_event_count: 5000
+target_heldout_test_negative_event_count: 5000
+target_heldout_attacked_positive_event_count: 2300
 threshold_protocol: calibration_split_to_frozen_threshold_to_heldout_test_split
 ```
 
@@ -123,21 +123,21 @@ pilot_paper_tpr_at_fpr_001_claim_allowed
 ## 5. 通过标准
 
 ```text
-pilot_paper_prompt_count >= 21
-pilot_paper_seed_per_prompt_min >= 8
-pilot_paper_calibration_seed_per_prompt_min >= 4
-pilot_paper_test_seed_per_prompt_min >= 4
-pilot_paper_unique_video_count >= 168
-pilot_paper_calibration_unique_video_count >= 84
-pilot_paper_test_unique_video_count >= 84
-calibration_negative_event_count >= 1000
-heldout_test_negative_event_count >= 1000
-heldout_attacked_positive_event_count >= 200
+pilot_paper_prompt_count >= 10
+pilot_paper_seed_per_prompt_min >= 10
+pilot_paper_calibration_seed_per_prompt_min >= 5
+pilot_paper_test_seed_per_prompt_min >= 5
+pilot_paper_unique_video_count >= 100
+pilot_paper_calibration_unique_video_count >= 50
+pilot_paper_test_unique_video_count >= 50
+calibration_negative_event_count >= 5000
+heldout_test_negative_event_count >= 5000
+heldout_attacked_positive_event_count >= 2300
 calibration_negative_family_count >= 4
 heldout_negative_family_count >= 4
-calibration_negative_event_count_per_family_min >= 200
-heldout_negative_event_count_per_family_min >= 200
-attack_event_count_per_attack_min >= 60
+calibration_negative_event_count_per_family_min >= 1250
+heldout_negative_event_count_per_family_min >= 1250
+attack_event_count_per_attack_min >= 50
 frozen_threshold_artifact_computable == true
 heldout_negative_fpr_at_threshold <= 0.01
 tpr_at_fpr_01 is computable
@@ -151,15 +151,15 @@ validation_scale_to_probe_paper_transition_decision == PASS
 data_split_and_leakage_guard_decision == PASS
 external_baseline_comparison_decision == PASS
 external_baseline_self_containment_decision == PASS
-external_baseline_measured_adapter_count >= 7
+external_baseline_measured_adapter_count >= 5
 modern_external_baseline_formal_measured_adapter_count >= 5
 required_external_baseline_adapter_names covered
 required_modern_external_baseline_adapter_names measured_formal
-pilot_paper_external_baseline_trace_count_min >= 84
+pilot_paper_external_baseline_trace_count_min >= 50
 validation_internal_ablation_decision == PASS
 internal_ablation_variant_count >= 8
 required_internal_ablation_variants covered
-pilot_paper_internal_ablation_trace_count_min >= 84
+pilot_paper_internal_ablation_trace_count_min >= 50
 ```
 
 ## 6. Claim 边界

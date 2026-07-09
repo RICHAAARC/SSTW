@@ -428,7 +428,7 @@ minimum_test_unique_video_count == 500
 minimum_calibration_negative_event_count >= 50000
 minimum_heldout_test_negative_event_count >= 50000
 minimum_heldout_attacked_positive_event_count >= 46000
-minimum_negative_event_count_per_family >= 5000
+minimum_negative_event_count_per_family >= 12500
 minimum_calibration_negative_event_count_per_family >= 12500
 minimum_heldout_negative_event_count_per_family >= 12500
 minimum_attack_event_count_per_attack >= 1000
@@ -948,7 +948,7 @@ explicit_synchronization_control: explicit_dtw_temporal_alignment, frame_matchin
 validation_generation_records_ready
 validation_detection_records_ready
 validation_external_baseline_comparison_records_ready
-external_baseline_measured_adapter_count >= 7
+external_baseline_measured_adapter_count >= 5
 modern_external_baseline_formal_measured_adapter_count >= 5
 validation_internal_ablation_records_ready
 required_internal_ablation_variants covered
@@ -1072,11 +1072,11 @@ trajectory_sketch_replacement_attempt
 ```text
 validation_scale_gate_decision == PASS
 external_baseline_comparison_decision == PASS
-external_baseline_measured_adapter_count >= 7
+external_baseline_measured_adapter_count >= 5
 modern_external_baseline_formal_measured_adapter_count >= 5
-pilot_paper_external_baseline_trace_count_min >= 84
+pilot_paper_external_baseline_trace_count_min >= 50
 validation_internal_ablation_decision == PASS
-pilot_paper_internal_ablation_trace_count_min >= 84
+pilot_paper_internal_ablation_trace_count_min >= 50
 required_internal_ablation_variants covered
 ```
 
@@ -1435,7 +1435,7 @@ full_paper 的目标是报告 `TPR@FPR=0.001`。因此 calibration negative 与 
 calibration_negative_event_count >= 50000
 heldout_test_negative_event_count >= 50000
 heldout_attacked_positive_event_count >= 46000
-negative_event_count_per_family >= 5000
+negative_event_count_per_family >= 12500
 calibration_negative_event_count_per_family >= 12500
 heldout_negative_event_count_per_family >= 12500
 attack_event_count_per_attack >= 1000
@@ -1588,7 +1588,7 @@ source_registry
 `validation_scale` 是进入 `probe_paper` 前的小样本全流程打通门禁, 因此 external baseline 条件不得只要求两个显式同步 control。该阶段必须检查:
 
 ```text
-external_baseline_measured_adapter_count >= 7
+external_baseline_measured_adapter_count >= 5
 modern_external_baseline_formal_measured_adapter_count >= 5
 missing_modern_external_baseline_formal_adapter_names == []
 external_baseline_execution_manifest_status == present
@@ -1840,7 +1840,7 @@ calibration split
 -> tables / figures / claim audit
 ```
 
-当前工程约定为 21 个 `pilot_paper` prompt、每个 prompt 8 个 seed, 其中 4 个 calibration seed 只用于冻结阈值, 4 个 test seed 只用于 held-out FPR / TPR 报告。`full_paper` 使用 50 个 prompt、每个 prompt 20 个 seed, 其中 10 个 calibration seed 和 10 个 test seed 显式拆分。`pilot_paper` 与 `full_paper` 的区别只允许是样本规模、统计置信度和 target FPR; attack manifest、baseline、消融、图表和打包协议必须同构。该结论仍不能外推为 `TPR@FPR=0.001` 或 full_paper 规模主表结果。
+当前工程采用等比例 paper profile 规模: `probe_paper` 为 5 个 prompt × 2 个 seed = 10 个生成单元, clean negative event 为 500; `pilot_paper` 为 10 个 prompt × 10 个 seed = 100 个生成单元, clean negative event 为 5000; `full_paper` 为 50 个 prompt × 20 个 seed = 1000 个生成单元, clean negative event 为 50000。三个 paper profile 均显式拆分 calibration / test seed, 且 attack manifest、baseline、消融、图表和打包协议必须同构; 差异只允许是样本规模、统计置信度和 target FPR。`probe_paper` 和 `pilot_paper` 结论仍不能外推为 `TPR@FPR=0.001` 或 full_paper 规模主表结果。
 
 ### 29.2 分片执行协议
 

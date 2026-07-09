@@ -361,10 +361,25 @@ def _build_full_paper_prompts() -> list[dict]:
 
 FULL_PAPER_PROMPT_ITEMS = _build_full_paper_prompts()
 
+PROBE_PAPER_PROMPT_ITEMS = [
+    {
+        **PILOT_PAPER_PROMPT_ITEMS[index],
+        "prompt_id": f"probe_paper_{PILOT_PAPER_PROMPT_ITEMS[index]['prompt_id']}",
+        "prompt_suite_role": "probe_paper",
+        "split": "probe_paper",
+    }
+    for index in range(5)
+]
+
 SEED_ITEMS = [
     {"seed_id": "seed_main_a", "seed_value": 101, "prompt_suite_role": "main"},
     {"seed_id": "seed_main_b", "seed_value": 202, "prompt_suite_role": "main"},
     {"seed_id": "seed_heldout_c", "seed_value": 303, "prompt_suite_role": "heldout_seed"},
+]
+
+PROBE_PAPER_SEED_ITEMS = [
+    {"seed_id": "seed_probe_paper_calib_a", "seed_value": 1201, "prompt_suite_role": "probe_paper", "split": "calibration"},
+    {"seed_id": "seed_probe_paper_test_a", "seed_value": 1302, "prompt_suite_role": "probe_paper", "split": "test"},
 ]
 
 
@@ -373,10 +388,12 @@ PILOT_PAPER_SEED_ITEMS = [
     {"seed_id": "seed_pilot_paper_calib_b", "seed_value": 1502, "prompt_suite_role": "pilot_paper", "split": "calibration"},
     {"seed_id": "seed_pilot_paper_calib_c", "seed_value": 1603, "prompt_suite_role": "pilot_paper", "split": "calibration"},
     {"seed_id": "seed_pilot_paper_calib_d", "seed_value": 1704, "prompt_suite_role": "pilot_paper", "split": "calibration"},
+    {"seed_id": "seed_pilot_paper_calib_e", "seed_value": 1754, "prompt_suite_role": "pilot_paper", "split": "calibration"},
     {"seed_id": "seed_pilot_paper_test_a", "seed_value": 1805, "prompt_suite_role": "pilot_paper", "split": "test"},
     {"seed_id": "seed_pilot_paper_test_b", "seed_value": 1906, "prompt_suite_role": "pilot_paper", "split": "test"},
     {"seed_id": "seed_pilot_paper_test_c", "seed_value": 2007, "prompt_suite_role": "pilot_paper", "split": "test"},
     {"seed_id": "seed_pilot_paper_test_d", "seed_value": 2108, "prompt_suite_role": "pilot_paper", "split": "test"},
+    {"seed_id": "seed_pilot_paper_test_e", "seed_value": 2209, "prompt_suite_role": "pilot_paper", "split": "test"},
 ]
 
 
@@ -491,9 +508,14 @@ def build_prompt_suite(
     pilot_paper_config = _read_json(pilot_paper_config_path)
     probe_paper_config = _read_json(probe_paper_config_path)
     full_paper_config = _read_json(full_paper_config_path)
-    pilot_paper_prompt_count = len(PILOT_PAPER_PROMPT_ITEMS)
-    pilot_paper_seed_count = len(PILOT_PAPER_SEED_ITEMS)
-    pilot_paper_test_seed_count = sum(1 for item in PILOT_PAPER_SEED_ITEMS if item.get("split") == "test")
+    probe_paper_prompt_count = int(probe_paper_config.get("minimum_prompt_count", len(PROBE_PAPER_PROMPT_ITEMS)))
+    probe_paper_seed_count = int(probe_paper_config.get("minimum_seed_per_prompt", len(PROBE_PAPER_SEED_ITEMS)))
+    probe_paper_calibration_seed_count = int(probe_paper_config.get("minimum_calibration_seed_per_prompt", 1))
+    probe_paper_test_seed_count = int(probe_paper_config.get("minimum_test_seed_per_prompt", 1))
+    pilot_paper_prompt_count = int(pilot_paper_config.get("minimum_prompt_count", len(PILOT_PAPER_PROMPT_ITEMS)))
+    pilot_paper_seed_count = int(pilot_paper_config.get("minimum_seed_per_prompt", len(PILOT_PAPER_SEED_ITEMS)))
+    pilot_paper_calibration_seed_count = int(pilot_paper_config.get("minimum_calibration_seed_per_prompt", 0))
+    pilot_paper_test_seed_count = int(pilot_paper_config.get("minimum_test_seed_per_prompt", 0))
     pilot_paper_runtime_attack_names = required_runtime_attack_names_from_config(pilot_paper_config)
     pilot_paper_runtime_attack_count = len(pilot_paper_runtime_attack_names)
     pilot_paper_negative_family_count = 4
@@ -516,15 +538,17 @@ def build_prompt_suite(
             "blocked_target_fpr": _required_float(pilot_paper_config, "blocked_target_fpr", pilot_paper_config_path),
             "prompt_count": pilot_paper_prompt_count,
             "seed_count": pilot_paper_seed_count,
-            "calibration_seed_count": sum(1 for item in PILOT_PAPER_SEED_ITEMS if item.get("split") == "calibration"),
+            "calibration_seed_count": pilot_paper_calibration_seed_count,
             "test_seed_count": pilot_paper_test_seed_count,
             "target_generation_video_count": pilot_paper_prompt_count * pilot_paper_seed_count,
+            "target_calibration_unique_video_count": int(pilot_paper_config.get("minimum_calibration_unique_video_count", 0)),
+            "target_test_unique_video_count": int(pilot_paper_config.get("minimum_test_unique_video_count", 0)),
             "target_runtime_attack_count": pilot_paper_runtime_attack_count,
             "target_runtime_attack_names": list(pilot_paper_runtime_attack_names),
-            "target_test_attacked_positive_event_count": pilot_paper_prompt_count * pilot_paper_test_seed_count * pilot_paper_runtime_attack_count,
+            "target_test_attacked_positive_event_count": int(pilot_paper_config.get("minimum_heldout_attacked_positive_event_count", 0)),
             "target_negative_family_count": pilot_paper_negative_family_count,
-            "target_calibration_negative_event_count": pilot_paper_prompt_count * pilot_paper_test_seed_count * pilot_paper_runtime_attack_count * pilot_paper_negative_family_count,
-            "target_heldout_test_negative_event_count": pilot_paper_prompt_count * pilot_paper_test_seed_count * pilot_paper_runtime_attack_count * pilot_paper_negative_family_count,
+            "target_calibration_negative_event_count": int(pilot_paper_config.get("minimum_calibration_negative_event_count", 0)),
+            "target_heldout_test_negative_event_count": int(pilot_paper_config.get("minimum_heldout_test_negative_event_count", 0)),
             "threshold_protocol": pilot_paper_config.get("threshold_protocol", "calibration_split_to_frozen_threshold_to_heldout_test_split"),
             "claim_support_status": "pilot_paper_dataset_constructed_not_generated",
             "split": "calibration_and_test"
@@ -536,17 +560,19 @@ def build_prompt_suite(
             "recommended_runtime_profile": "probe_paper",
             "target_fpr": _required_float(probe_paper_config, "target_fpr", probe_paper_config_path),
             "blocked_target_fpr": _required_float(probe_paper_config, "blocked_target_fpr", probe_paper_config_path),
-            "prompt_count": pilot_paper_prompt_count,
-            "seed_count": pilot_paper_seed_count,
-            "calibration_seed_count": sum(1 for item in PILOT_PAPER_SEED_ITEMS if item.get("split") == "calibration"),
-            "test_seed_count": pilot_paper_test_seed_count,
-            "target_generation_video_count": pilot_paper_prompt_count * pilot_paper_seed_count,
+            "prompt_count": probe_paper_prompt_count,
+            "seed_count": probe_paper_seed_count,
+            "calibration_seed_count": probe_paper_calibration_seed_count,
+            "test_seed_count": probe_paper_test_seed_count,
+            "target_generation_video_count": probe_paper_prompt_count * probe_paper_seed_count,
+            "target_calibration_unique_video_count": int(probe_paper_config.get("minimum_calibration_unique_video_count", 0)),
+            "target_test_unique_video_count": int(probe_paper_config.get("minimum_test_unique_video_count", 0)),
             "target_runtime_attack_count": pilot_paper_runtime_attack_count,
             "target_runtime_attack_names": list(pilot_paper_runtime_attack_names),
-            "target_test_attacked_positive_event_count": pilot_paper_prompt_count * pilot_paper_test_seed_count * pilot_paper_runtime_attack_count,
+            "target_test_attacked_positive_event_count": int(probe_paper_config.get("minimum_heldout_attacked_positive_event_count", 0)),
             "target_negative_family_count": pilot_paper_negative_family_count,
-            "target_calibration_negative_event_count": pilot_paper_prompt_count * pilot_paper_test_seed_count * pilot_paper_runtime_attack_count * pilot_paper_negative_family_count,
-            "target_heldout_test_negative_event_count": pilot_paper_prompt_count * pilot_paper_test_seed_count * pilot_paper_runtime_attack_count * pilot_paper_negative_family_count,
+            "target_calibration_negative_event_count": int(probe_paper_config.get("minimum_calibration_negative_event_count", 0)),
+            "target_heldout_test_negative_event_count": int(probe_paper_config.get("minimum_heldout_test_negative_event_count", 0)),
             "threshold_protocol": probe_paper_config.get("threshold_protocol", "calibration_split_to_frozen_threshold_to_heldout_test_split"),
             "claim_support_status": "probe_paper_dataset_constructed_not_generated",
             "split": "calibration_and_test"
@@ -583,8 +609,8 @@ def build_prompt_suite(
             "ambiguous_low_motion_target_video_count": 32,
             "split": "calibration"
         },
-        "prompts": PROMPT_ITEMS + PILOT_PAPER_PROMPT_ITEMS + FULL_PAPER_PROMPT_ITEMS + _build_motion_calibration_prompts(),
-        "seeds": SEED_ITEMS + PILOT_PAPER_SEED_ITEMS + FULL_PAPER_SEED_ITEMS + MOTION_CALIBRATION_SEED_ITEMS,
+        "prompts": PROMPT_ITEMS + PROBE_PAPER_PROMPT_ITEMS + PILOT_PAPER_PROMPT_ITEMS + FULL_PAPER_PROMPT_ITEMS + _build_motion_calibration_prompts(),
+        "seeds": SEED_ITEMS + PROBE_PAPER_SEED_ITEMS + PILOT_PAPER_SEED_ITEMS + FULL_PAPER_SEED_ITEMS + MOTION_CALIBRATION_SEED_ITEMS,
     }
     payload = json.dumps(suite, ensure_ascii=False, sort_keys=True).encode("utf-8")
     suite["prompt_suite_digest"] = sha256(payload).hexdigest()

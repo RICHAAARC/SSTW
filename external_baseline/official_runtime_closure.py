@@ -34,7 +34,7 @@ from external_baseline.runtime_trace_io import comparable_detection_records, rea
 
 DEFAULT_RUNTIME_CLOSURE_REQUIREMENTS = Path("configs/external_baselines/official_runtime_closure_requirements.json")
 MODERN_BASELINE_IDS = (
-    "revmark",
+    "videomark",
     "videoseal",
     "vidsig",
     "videoshield",
@@ -348,6 +348,7 @@ def _project_owned_reference_runner_audit(row: Mapping[str, Any]) -> dict[str, A
         "project_owned_vidsig_runner_module",
         "project_owned_videoshield_runner_module",
         "project_owned_revmark_runner_module",
+        "project_owned_videomark_runner_module",
         "project_owned_wam_frame_runner_module",
     ]
     runner_module = ""

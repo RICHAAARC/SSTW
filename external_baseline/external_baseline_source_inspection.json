@@ -2,11 +2,11 @@
   "artifact_name": "external_baseline_source_inspection.json",
   "claim_support_status": "source_inspection_manifest_only_not_claim_evidence",
   "manifest_kind": "external_baseline_source_inspection",
-  "registry_path": "external_baseline\\source_registry.json",
+  "registry_path": "external_baseline/source_registry.json",
   "source_inspection_decision": "PASS",
   "source_inspection_missing_count": 4,
-  "source_inspection_ready_count": 3,
-  "source_inspection_record_count": 7,
+  "source_inspection_ready_count": 4,
+  "source_inspection_record_count": 8,
   "source_inspections": [
     {
       "baseline_id": "explicit_dtw_temporal_alignment",
@@ -69,6 +69,22 @@
       "source_dir": "external_baseline/primary/videoseal/source",
       "source_dir_exists": true,
       "source_dir_file_count": 134,
+      "source_inspection_status": "inspected"
+    },
+    {
+      "baseline_id": "videomark",
+      "entrypoint_candidate_files": [
+        "eval_quality/scripts/eval_video_quality/eval_video_quality_by_mllm.py"
+      ],
+      "metadata_files": [
+        "docs/README.md",
+        "eval_quality/README.md",
+        "readme.md",
+        "requirements.txt"
+      ],
+      "source_dir": "external_baseline/primary/videomark/source",
+      "source_dir_exists": true,
+      "source_dir_file_count": 113,
       "source_inspection_status": "inspected"
     },
     {

@@ -39,7 +39,7 @@ from external_baseline.official_runtime_progress import emit_official_reference_
 
 DEFAULT_RESOURCE_REQUIREMENTS = "configs/external_baselines/official_resource_requirements.json"
 MODERN_BASELINE_IDS = (
-    "revmark",
+    "videomark",
     "videoshield",
     "vidsig",
     "videoseal",
@@ -429,24 +429,24 @@ def run_official_bundle_generation(
             generation_manifests.append(run_videoshield_official_runtime(config))
         except Exception as exc:  # pragma: no cover - 依赖 Colab GPU 和第三方模型
             failures.append({"baseline_id": "videoshield", "failure_reason": str(exc)})
-    if generate_auto_supported and "revmark" in plan["auto_supported_baselines"]:
+    if generate_auto_supported and "videomark" in plan["auto_supported_baselines"]:
         try:
-            from external_baseline.revmark_official_runtime import (
-                build_default_revmark_official_config_from_env,
-                run_revmark_official_runtime,
+            from external_baseline.videomark_official_runtime import (
+                build_default_videomark_official_config_from_env,
+                run_videomark_official_runtime,
             )
 
-            source_dir = Path("external_baseline/primary/revmark/source")
-            config = build_default_revmark_official_config_from_env(
+            source_dir = Path("external_baseline/primary/videomark/source")
+            config = build_default_videomark_official_config_from_env(
                 run_root=root,
                 bundle_root=bundle,
                 source_dir=source_dir,
                 repo_root=".",
                 max_records=None,
             )
-            generation_manifests.append(run_revmark_official_runtime(config))
+            generation_manifests.append(run_videomark_official_runtime(config))
         except Exception as exc:  # pragma: no cover - 依赖第三方模型和视频编解码
-            failures.append({"baseline_id": "revmark", "failure_reason": str(exc)})
+            failures.append({"baseline_id": "videomark", "failure_reason": str(exc)})
     if generate_auto_supported and "wam_frame" in plan["auto_supported_baselines"]:
         try:
             from external_baseline.wam_frame_official_runtime import (

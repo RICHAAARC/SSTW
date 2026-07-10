@@ -43,7 +43,7 @@ from workflows import generative_video_paper as probe_workflow
 
 
 MODERN_EXTERNAL_BASELINE_BUILD_ORDER = (
-    "revmark",
+    "videomark",
     "videoseal",
     "vidsig",
     "videoshield",
@@ -51,6 +51,7 @@ MODERN_EXTERNAL_BASELINE_BUILD_ORDER = (
 )
 REPOSITORY_OFFICIAL_ADAPTER_BASELINES = {
     "revmark",
+    "videomark",
     "videoshield",
     "vidsig",
     "videoseal",
@@ -791,6 +792,33 @@ def _run_revmark_official_reference(
     return run_revmark_official_runtime(revmark_config)
 
 
+def _run_videomark_official_reference(
+    *,
+    run_root: Path,
+    bundle_root: Path,
+    official_source_dir: Path,
+    repo_root: Path,
+    resource_root: str,
+    max_records: int | None,
+) -> dict[str, Any]:
+    """运行 VideoMark 官方 PRC 生成、反演与时间匹配路径。"""
+
+    from external_baseline.videomark_official_runtime import (
+        build_default_videomark_official_config_from_env,
+        run_videomark_official_runtime,
+    )
+
+    config = build_default_videomark_official_config_from_env(
+        run_root=run_root,
+        bundle_root=bundle_root,
+        source_dir=official_source_dir,
+        repo_root=repo_root,
+        resource_root=resource_root,
+        max_records=max_records,
+    )
+    return run_videomark_official_runtime(config)
+
+
 def _run_wam_frame_official_reference(
     *,
     run_root: Path,
@@ -1089,6 +1117,18 @@ def run_modern_external_baseline_formal_reference_plan(
                 "true",
             ).lower() == "true":
                 return _run_revmark_official_reference(
+                    run_root=run_root,
+                    bundle_root=bundle_root,
+                    official_source_dir=official_source_dir,
+                    repo_root=repo_root,
+                    resource_root=layout["external_baseline_resource_root"],
+                    max_records=config.max_records,
+                )
+            if config.baseline_id == "videomark" and os.environ.get(
+                "SSTW_RUN_VIDEOMARK_OFFICIAL_PIPELINE",
+                "true",
+            ).lower() == "true":
+                return _run_videomark_official_reference(
                     run_root=run_root,
                     bundle_root=bundle_root,
                     official_source_dir=official_source_dir,

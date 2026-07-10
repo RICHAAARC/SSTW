@@ -82,6 +82,21 @@ REVMARK_COLAB_LIGHTWEIGHT_DEPENDENCIES = (
     "imageio",
     "imageio-ffmpeg",
 )
+VIDEOMARK_COLAB_LIGHTWEIGHT_DEPENDENCIES = (
+    "numpy",
+    "scipy",
+    "opencv-python",
+    "imageio",
+    "imageio-ffmpeg",
+    "diffusers==0.30.3",
+    "transformers>=4.49",
+    "accelerate",
+    "safetensors",
+    "galois==0.4.4",
+    "ldpc==2.2.8",
+    "pymatching==2.2.1",
+    "python-Levenshtein==0.27.1",
+)
 WAM_FRAME_COLAB_LIGHTWEIGHT_DEPENDENCIES = (
     "numpy",
     "Pillow",
@@ -410,6 +425,49 @@ def bootstrap_revmark(resource_root: Path, *, allow_network: bool, source_root: 
     }
 
 
+def bootstrap_videomark(
+    resource_root: Path,
+    *,
+    allow_network: bool,
+    source_root: Path,
+) -> dict[str, Any]:
+    """准备 VideoMark 官方源码自带 PRC key 与最小运行依赖。"""
+
+    baseline_root = resource_root / "videomark"
+    baseline_root.mkdir(parents=True, exist_ok=True)
+    source_dir = source_root / "videomark" / "source"
+    install_results = [
+        _pip_install_target(dependency, allow_network=allow_network, timeout_sec=1200)
+        for dependency in VIDEOMARK_COLAB_LIGHTWEIGHT_DEPENDENCIES
+    ]
+    failed = [item for item in install_results if item.get("install_status") == "install_failed"]
+    required_source_files = (
+        source_dir / "embedding_and_extraction.py",
+        source_dir / "temporal_tamper.py",
+        source_dir / "src" / "prc.py",
+        source_dir / "src" / "pseudogaussians.py",
+        source_dir / "keys" / "64_64_512bit.pkl",
+    )
+    missing = [
+        f"videomark_source_file:{path.relative_to(source_dir).as_posix()}"
+        for path in required_source_files
+        if not path.exists()
+    ]
+    if failed:
+        missing.append("videomark_lightweight_python_dependencies")
+    return {
+        "baseline_id": "videomark",
+        "bootstrap_status": "ready" if not missing else "manual_official_resource_required",
+        "resource_mode": "official_repository_bundled_prc_key_and_public_model_download",
+        "resource_dir": str(baseline_root),
+        "official_source_dir": str(source_dir),
+        "project_owned_runner_module": "external_baseline.videomark_official_runtime",
+        "colab_torch_stack_policy": "preserve_preinstalled_torch_and_torchvision",
+        "install_results": install_results,
+        "missing_after_bootstrap": missing,
+    }
+
+
 def bootstrap_wam_frame(resource_root: Path, *, allow_network: bool, source_root: Path) -> dict[str, Any]:
     """准备 WAM-frame 官方 runtime 的轻量依赖和 MIT checkpoint。"""
 
@@ -475,7 +533,7 @@ def bootstrap_official_resources(
     resolved_source_root = Path(source_root)
 
     baseline_rows: list[dict[str, Any]] = []
-    baseline_rows.append(bootstrap_revmark(resolved_resource_root, allow_network=allow_network, source_root=resolved_source_root))
+    baseline_rows.append(bootstrap_videomark(resolved_resource_root, allow_network=allow_network, source_root=resolved_source_root))
     baseline_rows.append(bootstrap_videoseal(resolved_resource_root, allow_network=allow_network, source_root=resolved_source_root))
     baseline_rows.append(bootstrap_vidsig(resolved_resource_root, allow_network=allow_network))
     baseline_rows.append(bootstrap_videoshield(resolved_resource_root, allow_network=allow_network, source_root=resolved_source_root))

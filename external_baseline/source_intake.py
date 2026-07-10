@@ -19,7 +19,7 @@ OFFICIAL_COMMAND_EVIDENCE_RELATIVE_ROOT = Path("artifacts/external_baseline_evid
 REPOSITORY_GENERATED_OFFICIAL_PROVENANCE = "repository_generated_from_third_party_official_code"
 
 REQUIRED_MODERN_BASELINE_IDS = {
-    "revmark",
+    "videomark",
     "videoshield",
     "vidsig",
     "videoseal",
@@ -406,23 +406,31 @@ def build_external_baseline_table_plan(
     methods: list[dict[str, Any]] = []
     for entry in _safe_list(registry.get("baseline_sources")):
         baseline_id = str(entry.get("baseline_id") or "")
-        layer = "modern_external_baseline" if baseline_id in MODERN_BASELINE_IDS else "explicit_synchronization_control"
         required_modern = baseline_id in REQUIRED_MODERN_BASELINE_IDS
+        supplemental = entry.get("comparison_group") == "supplemental"
+        if required_modern:
+            layer = "modern_external_baseline"
+            table_role = "primary_modern_video_watermark_baseline"
+            claim_boundary = "formal_measured_required"
+        elif supplemental:
+            layer = "supplemental_external_baseline"
+            table_role = "supplemental_video_watermark_baseline"
+            claim_boundary = "appendix_only_not_primary_claim"
+        else:
+            layer = "explicit_synchronization_control"
+            table_role = "synchronization_control"
+            claim_boundary = "control_only_not_positive_claim"
         methods.append({
             "method_id": baseline_id,
             "display_name": entry.get("baseline_name"),
-            "table_role": "primary_modern_video_watermark_baseline"
-            if required_modern
-            else "synchronization_control",
+            "table_role": table_role,
             "comparison_layer": layer,
             "source_url": entry.get("official_repository_url"),
             "local_source_root": entry.get("source_dir"),
             "adapter_path": entry.get("adapter_path"),
             "integration_status": entry.get("adapter_status"),
             "paper_claim_support": bool(entry.get("paper_claim_support")),
-            "claim_boundary": "formal_measured_required"
-            if required_modern
-            else "control_only_not_positive_claim",
+            "claim_boundary": claim_boundary,
         })
     return {
         "artifact_name": "external_baseline_table_plan.json",
@@ -430,6 +438,7 @@ def build_external_baseline_table_plan(
         "registry_path": str(registry_path),
         "method_count": len(methods),
         "modern_external_baseline_count": sum(1 for item in methods if item["comparison_layer"] == "modern_external_baseline"),
+        "supplemental_external_baseline_count": sum(1 for item in methods if item["comparison_layer"] == "supplemental_external_baseline"),
         "explicit_synchronization_control_count": sum(1 for item in methods if item["comparison_layer"] == "explicit_synchronization_control"),
         "claim_support_status": "table_plan_only_not_claim_evidence",
         "methods": methods,

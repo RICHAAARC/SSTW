@@ -45,7 +45,7 @@ external baseline 采用分层接入方式:
 videoshield
 vidsig
 videoseal
-revmark
+videomark
 wam_frame
 ```
 
@@ -55,6 +55,8 @@ wam_frame
 SSTW_VIDEOSHIELD_EVAL_COMMAND
 SSTW_VIDSIG_EVAL_COMMAND
 SSTW_VIDEOSEAL_EVAL_COMMAND
+SSTW_VIDEOMARK_EVAL_COMMAND
+SSTW_WAM_FRAME_EVAL_COMMAND
 ```
 
 命令模板可使用 `{source_video_path}`、`{attacked_video_path}`、`{attack_name}`、`{output_json_path}`、`{prompt_id}`、`{seed_id}`、`{trajectory_trace_id}` 和 `{run_root}`。命令必须写出 JSON score。adapter 只负责把该 JSON 映射为 `external_baseline_score_records.jsonl`, 不在本仓库中重写第三方论文方法本体。
@@ -66,7 +68,7 @@ SSTW_VIDEOSEAL_EVAL_COMMAND
 external_baseline/official_eval_adapters/videoshield.py
 external_baseline/official_eval_adapters/vidsig.py
 external_baseline/official_eval_adapters/videoseal.py
-external_baseline/official_eval_adapters/revmark.py
+external_baseline/official_eval_adapters/videomark.py
 external_baseline/official_eval_adapters/wam_frame.py
 ```
 
@@ -277,9 +279,12 @@ artifacts/external_baseline_colab_preflight_decision.json
 paper_workflow/colab_notebooks/videoseal_formal_reference_colab.ipynb
 paper_workflow/colab_notebooks/vidsig_formal_reference_colab.ipynb
 paper_workflow/colab_notebooks/videoshield_formal_reference_colab.ipynb
-paper_workflow/colab_notebooks/revmark_formal_reference_colab.ipynb
+paper_workflow/colab_notebooks/videomark_formal_reference_colab.ipynb
 paper_workflow/colab_notebooks/wam_frame_formal_reference_colab.ipynb
 ```
+
+`revmark_formal_reference_colab.ipynb` 与对应 official runtime 保留为可选附录方法,
+不替代主表中的 VideoMark。
 
 
 每个 Notebook 都读取同一 `workflow_profile` 的 `drive_run_root`, 以同一

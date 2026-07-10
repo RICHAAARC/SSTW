@@ -102,7 +102,7 @@
     "videoshield",
     "vidsig",
     "videoseal",
-    "revmark",
+    "videomark",
     "wam_frame"
   ],
   "required_internal_ablation_variants": [
@@ -119,7 +119,7 @@
     "videoshield",
     "vidsig",
     "videoseal",
-    "revmark",
+    "videomark",
     "wam_frame"
   ],
   "required_result_capabilities": [

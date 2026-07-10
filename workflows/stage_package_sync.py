@@ -48,7 +48,7 @@ MOTION_THRESHOLD_PACKAGE_DIR_NAME = "motion_threshold"
 HELPER_PACKAGE_DIR_NAME = "helper"
 
 MODERN_EXTERNAL_BASELINE_IDS = (
-    "revmark",
+    "videomark",
     "videoseal",
     "vidsig",
     "videoshield",

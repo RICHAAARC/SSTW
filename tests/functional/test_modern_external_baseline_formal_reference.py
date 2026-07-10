@@ -28,7 +28,7 @@ from workflows.modern_external_baseline_reference import (
 
 
 EXPECTED_BASELINE_ORDER = (
-    "revmark",
+    "videomark",
     "videoseal",
     "vidsig",
     "videoshield",
@@ -79,7 +79,7 @@ def test_official_reference_runtime_sources_do_not_emit_legacy_success_status_fo
         Path("external_baseline/official_bundle_generator.py"),
         Path("external_baseline/vidsig_official_runtime.py"),
         Path("external_baseline/videoshield_official_runtime.py"),
-        Path("external_baseline/revmark_official_runtime.py"),
+        Path("external_baseline/videomark_official_runtime.py"),
         Path("external_baseline/wam_frame_official_runtime.py"),
     ]
     for runtime_path in runtime_paths:

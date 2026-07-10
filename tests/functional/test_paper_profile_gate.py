@@ -21,14 +21,14 @@ EXTERNAL_BASELINE_NAMES = (
     "videoshield",
     "vidsig",
     "videoseal",
-    "revmark",
+    "videomark",
     "wam_frame",
 )
 MODERN_EXTERNAL_BASELINE_NAMES = {
     "videoshield",
     "vidsig",
     "videoseal",
-    "revmark",
+    "videomark",
     "wam_frame",
 }
 REQUIRED_RUNTIME_ATTACK_NAMES = FULL_PAPER_RUNTIME_ATTACKS
@@ -1034,5 +1034,4 @@ def test_paper_profile_gate_requires_reused_motion_threshold_and_formal_motion_r
     assert audit["paper_profile_gate_decision"] == "FAIL"
     assert "validation_motion_threshold_calibration_ready" in audit["missing_validation_requirements"]
     assert "validation_formal_motion_claim_ready" in audit["missing_validation_requirements"]
-
 

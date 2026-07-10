@@ -46,7 +46,7 @@ def test_external_baseline_status_audit_reports_modern_gap() -> None:
 
     assert audit["external_baseline_status_decision"] == "PASS"
     assert audit["modern_external_baseline_status_records_ready"] is True
-    assert audit["modern_external_baseline_record_count"] == 5
+    assert audit["modern_external_baseline_record_count"] == 6
     assert audit["modern_external_baseline_main_comparison_ready_count"] == 0
     assert audit["external_baseline_claim_support_status"] == "governed_status_records_only"
 

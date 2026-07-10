@@ -65,6 +65,27 @@
     {
       "additional_adapter_work_required": false,
       "automatic_bundle_generation_supported_by_sstw": true,
+      "baseline_id": "videomark",
+      "colab_l4_auto_bundle_status": "auto_bundle_supported_with_modelscope_1_7b",
+      "external_supplemental_result_bundle_allowed": false,
+      "official_repository_url": "https://github.com/KYRIE-LI11/VideoMark",
+      "official_runtime_mode": "official_prc_generation_ddim_inversion_temporal_matching",
+      "project_owned_runner_module": "external_baseline.videomark_official_runtime",
+      "public_resource_status": "official_source_includes_prc_keys_and_modelscope_model_is_public",
+      "reason_automatic_bundle_not_supported": "not_applicable",
+      "required_adapter_work_summary": "项目内运行器直接调用官方 PRC Encode/Detect/Decode、pseudogaussian、DDIM inversion 与时间匹配原语。",
+      "required_public_or_user_resources": [
+        "VideoMark 官方源码 external_baseline/primary/videomark/source",
+        "官方 keys/64_64_512bit.pkl PRC key",
+        "Hugging Face damo-vilab/text-to-video-ms-1.7b"
+      ],
+      "self_contained_result_policy": "project_clone_build_run_adapt_record_required",
+      "strict_gate_resolution": "项目 workflow 必须完成官方源码 clone、PRC key 可见性、ModelScope 生成、共享 runtime attack、DDIM inversion、PRC 检测与时间匹配。",
+      "probe_paper_colab_runnability_status": "runnable_if_model_download_gpu_memory_dependencies_and_video_io_succeed"
+    },
+    {
+      "additional_adapter_work_required": false,
+      "automatic_bundle_generation_supported_by_sstw": true,
       "baseline_id": "revmark",
       "colab_l4_auto_bundle_status": "auto_bundle_supported_after_source_clone_and_checkpoint_visibility",
       "external_supplemental_result_bundle_allowed": false,
@@ -104,5 +125,5 @@
       "probe_paper_colab_runnability_status": "runnable_if_public_checkpoint_download_dependencies_and_video_io_succeed"
     }
   ],
-  "runnability_audit_note": "当前主实验必跑现代 external baseline 为 VideoSeal、VideoShield、VidSig、REVMark 与 WAM-frame 共 5 个; 资源要求仅覆盖主实验门禁中的 baseline。"
+  "runnability_audit_note": "当前主实验必跑现代 external baseline 为 VideoSeal、VideoShield、VidSig、VideoMark 与 WAM-frame 共5个; REVMark 为可选附录。"
 }

@@ -23,7 +23,7 @@ MODERN_BASELINES = (
     "videoshield",
     "vidsig",
     "videoseal",
-    "revmark",
+    "videomark",
     "wam_frame",
 )
 
@@ -614,7 +614,7 @@ def test_external_baseline_self_containment_accepts_repository_generated_officia
 def test_external_baseline_self_containment_accepts_complete_official_reference_manifest(
     tmp_path: Path,
 ) -> None:
-    """接受 REVMark / WAM-frame 这类完整 official reference bundle manifest。
+    """接受 VideoMark / WAM-frame 这类完整 official reference bundle manifest。
 
     该测试覆盖项目特定写法: 部分 baseline 的 Notebook 已经在项目内完成
     clone / build / run / adapt / record, 但 execution manifest 使用
@@ -625,7 +625,7 @@ def test_external_baseline_self_containment_accepts_complete_official_reference_
 
     run_root = tmp_path / "run"
     _write_self_contained_external_baseline_fixture(run_root)
-    for baseline_name in ("revmark", "wam_frame"):
+    for baseline_name in ("videomark", "wam_frame"):
         execution_manifest_path = (
             run_root
             / "external_baseline_official_result_bundles"
@@ -642,7 +642,7 @@ def test_external_baseline_self_containment_accepts_complete_official_reference_
     audit = write_external_baseline_self_containment_decision(run_root)
 
     assert audit["external_baseline_self_containment_decision"] == "PASS"
-    for baseline_name in ("revmark", "wam_frame"):
+    for baseline_name in ("videomark", "wam_frame"):
         row = next(item for item in audit["baseline_self_containment_rows"] if item["baseline_name"] == baseline_name)
         assert row["repository_generated_official_bundle_ready"] is True
         assert row["official_bundle_record_ok_count"] == len(PAPER_PROFILE_RUNTIME_ATTACKS)

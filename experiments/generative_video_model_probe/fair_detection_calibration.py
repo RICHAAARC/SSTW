@@ -34,7 +34,7 @@ from evaluation.protocol.table_builder import write_csv
 
 DEFAULT_PROTOCOL_CONFIG = "configs/protocol/probe_paper_generative_probe.json"
 SSTW_METHOD_ID = "sstw_key_conditioned_flow_trajectory"
-DEFAULT_REQUIRED_BASELINES = ("videoshield", "vidsig", "videoseal", "revmark", "wam_frame")
+DEFAULT_REQUIRED_BASELINES = ("videoshield", "vidsig", "videoseal", "videomark", "wam_frame")
 SPLIT_FIELDS = ("split", "protocol_split", "data_split", "sample_split")
 CALIBRATION_SPLITS = {"calibration", "calibration_negative", "calibration_split"}
 HELDOUT_TEST_SPLITS = {"test", "heldout", "heldout_test", "test_split"}

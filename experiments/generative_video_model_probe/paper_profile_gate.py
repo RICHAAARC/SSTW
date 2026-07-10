@@ -48,7 +48,7 @@ DEFAULT_REQUIRED_MODERN_EXTERNAL_BASELINE_ADAPTER_NAMES = (
     "videoshield",
     "vidsig",
     "videoseal",
-    "revmark",
+    "videomark",
     "wam_frame",
 )
 SSTW_METHOD_ID = "sstw_key_conditioned_flow_trajectory"

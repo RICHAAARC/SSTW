@@ -1911,3 +1911,17 @@ Notebook 与 repository module 的跨边界数据
 | sstw_measured_formal_records_passed | governance | none | true | false | true | SSTW 正式检测记录是否由真实攻击视频产生。 |
 | motion_threshold_calibration_passed | governance | none | true | false | true | 运动一致性阈值是否仅由 calibration split 冻结。 |
 | adaptive_attack_protocol_passed | governance | none | true | false | true | adaptive 与 non-runtime 协议聚合门禁是否通过。 |
+
+## VideoMark 官方 baseline 字段
+
+| 字段名 | 类别 | 后缀要求 | 必需 | 可空 | 可支持主张 | 说明 |
+| --- | --- | --- | --- | --- | --- | --- |
+| detected_frame_rate | metric | none | true | false | true | VideoMark 官方 PRC detector 判定为有效水印帧的比例。 |
+| official_inversion_frame_count | metric | none | true | false | true | VideoMark DDIM inversion 实际返回的 latent 帧数。 |
+| official_temporal_matching_evaluated_frame_count | metric | none | true | false | true | Temporal Matching Module 实际参与视频级聚合的帧数。 |
+| official_method_primitives | method | none | true | false | true | official bundle 实际调用的 VideoMark 算法原语列表。 |
+| videomark_message_shift | protocol | none | true | false | true | 当前 prompt / seed 视频在官方 PRC 消息序列中的窗口起点。 |
+| videomark_message_bit_count | protocol | none | true | false | true | 单帧 VideoMark PRC 消息的 bit 数量。 |
+| videomark_internal_detector_fpr | protocol | none | true | false | true | VideoMark 官方逐帧 PRC Detect 使用的内部 FPR 参数。 |
+| generated_prompt_seed_pair_count | metric | none | true | false | false | official bundle 为避免按 attack 重复生成而缓存的独立 prompt / seed 数量。 |
+| supplemental_external_baseline_count | metric | none | true | false | false | table plan 中只进入附录、不参与主表必跑门禁的外部 baseline 数量。 |

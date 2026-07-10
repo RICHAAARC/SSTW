@@ -33,7 +33,7 @@ DEFAULT_REQUIRED_MODERN_BASELINES = (
     "videoshield",
     "vidsig",
     "videoseal",
-    "revmark",
+    "videomark",
     "wam_frame",
 )
 EVIDENCE_PATH_FIELDS = (

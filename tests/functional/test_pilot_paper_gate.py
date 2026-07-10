@@ -22,10 +22,10 @@ EXTERNAL_BASELINE_NAMES = (
     "videoshield",
     "vidsig",
     "videoseal",
-    "revmark",
+    "videomark",
     "wam_frame",
 )
-MODERN_EXTERNAL_BASELINE_NAMES = {"videoshield", "vidsig", "videoseal", "revmark", "wam_frame"}
+MODERN_EXTERNAL_BASELINE_NAMES = {"videoshield", "vidsig", "videoseal", "videomark", "wam_frame"}
 INTERNAL_ABLATION_VARIANTS = (
     "sstw_full_method",
     "endpoint_only_control",

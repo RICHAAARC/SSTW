@@ -105,6 +105,37 @@
     },
     {
       "automatic_bundle_generation_supported_by_sstw": true,
+      "baseline_id": "videomark",
+      "baseline_name": "VideoMark",
+      "colab_default_can_attempt_without_user_files": true,
+      "colab_default_measured_formal_ready_without_user_files": "depends_on_source_clone_model_download_gpu_memory_and_official_inversion_success",
+      "external_baseline_command_env_var": "SSTW_VIDEOMARK_EVAL_COMMAND",
+      "external_supplemental_result_bundle_allowed": false,
+      "missing_resource_action": "运行 videomark_formal_reference_colab.ipynb, 由 external_baseline.videomark_official_runtime 生成 official bundle。",
+      "native_command_env_var": "SSTW_VIDEOMARK_NATIVE_EVAL_COMMAND",
+      "official_baseline_command_env_var": "SSTW_VIDEOMARK_OFFICIAL_EVAL_COMMAND",
+      "official_bundle_policy": "preferred_project_owned_cache_or_auto_generate_from_official_prc_generation_inversion_runtime",
+      "official_repository_branch": "main",
+      "official_repository_url": "https://github.com/KYRIE-LI11/VideoMark",
+      "official_source_dir_candidates": [
+        "external_baseline/primary/videomark/source",
+        "/content/SSTW/external_baseline/primary/videomark/source"
+      ],
+      "project_owned_videomark_runner_module": "external_baseline.videomark_official_runtime",
+      "required_source_files": [
+        "embedding_and_extraction.py",
+        "temporal_tamper.py",
+        "src/prc.py",
+        "src/pseudogaussians.py",
+        "keys/64_64_512bit.pkl"
+      ],
+      "requirements_file": "configs/external_baselines/requirements/videomark.txt",
+      "resource_env_vars": [],
+      "runtime_support_mode": "project_owned_official_videomark_prc_generation_inversion_runtime_or_repository_generated_bundle",
+      "source_dir": "external_baseline/primary/videomark/source"
+    },
+    {
+      "automatic_bundle_generation_supported_by_sstw": true,
       "baseline_id": "revmark",
       "baseline_name": "REVMark",
       "colab_default_can_attempt_without_user_files": true,
@@ -185,9 +216,9 @@
   "default_run_root_pattern": "runs/generative_video_model_probe/<workflow_profile>",
   "governed_artifact": "artifacts/external_baseline_official_runtime_closure_requirements.json",
   "notebook_enforcement": {
-    "formal_reference_notebooks": "5 个独立 *_formal_reference_colab.ipynb 在 resource bootstrap 后执行该要求预检, 用于暴露缺少的官方 source / resource / bundle。",
+    "formal_reference_notebooks": "5个主表独立 *_formal_reference_colab.ipynb 在 resource bootstrap 后执行要求预检; REVMark Notebook 仅用于可选附录。",
     "non_run_record_policy": "non-run record 只能作为阻断记录, 不能替代 measured_formal baseline。",
-    "paper_gate_notebook": "paper_gate_and_package_colab.ipynb 在恢复 5 个 official reference 阶段包后执行最终聚合、self-containment 判定和 validation / pilot gate。"
+    "paper_gate_notebook": "paper_gate_and_package_colab.ipynb 在恢复5个主表 official reference 阶段包后执行最终聚合与门禁。"
   },
   "runtime_input_requirements": [
     {

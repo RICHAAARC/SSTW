@@ -20,7 +20,7 @@ from evaluation.protocol.table_builder import write_csv
 
 DEFAULT_PROTOCOL_CONFIG = "configs/protocol/probe_paper_generative_probe.json"
 SSTW_METHOD_ID = "sstw_key_conditioned_flow_trajectory"
-DEFAULT_REQUIRED_BASELINES = ("videoshield", "vidsig", "videoseal", "revmark", "wam_frame")
+DEFAULT_REQUIRED_BASELINES = ("videoshield", "vidsig", "videoseal", "videomark", "wam_frame")
 
 
 def _read_json(path: Path) -> dict[str, Any]:

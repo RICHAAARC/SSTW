@@ -57,7 +57,7 @@ DEFAULT_REQUIRED_MODERN_EXTERNAL_BASELINE_ADAPTER_NAMES = (
     "videoshield",
     "vidsig",
     "videoseal",
-    "revmark",
+    "videomark",
     "wam_frame",
 )
 DEFAULT_REQUIRED_EXTERNAL_BASELINE_ADAPTER_NAMES = (

@@ -225,6 +225,80 @@
       "verified_head_commit": "e00b98c7ca77eb1fb5b9b68260e7c6c8fc207a84"
     },
     {
+      "baseline_id": "videomark",
+      "colab_source_dir": "/content/SSTW/external_baseline/primary/videomark/source",
+      "display_name": "VideoMark",
+      "external_baseline_command_env_var": "SSTW_VIDEOMARK_EVAL_COMMAND",
+      "external_supplemental_result_bundle_allowed": false,
+      "formal_reference_runner_mode": "project_owned_videomark_prc_generation_inversion_temporal_matching_runtime",
+      "official_baseline_command_env_var": "SSTW_VIDEOMARK_OFFICIAL_EVAL_COMMAND",
+      "official_entrypoint_candidates": [
+        "embedding_and_extraction.py",
+        "temporal_tamper.py",
+        "src/prc.py",
+        "src/pseudogaussians.py"
+      ],
+      "official_eval_command_contract": {
+        "description": "该命令在 bridge 内部读取项目内 VideoMark official bundle; bundle 由 videomark_formal_reference_colab.ipynb 调用官方 PRC、ModelScope 生成、DDIM inversion 与时间匹配原语生成。",
+        "env_var": "SSTW_VIDEOMARK_OFFICIAL_EVAL_COMMAND",
+        "fail_closed_policy": "缺少官方源码、PRC key、公开生成模型、项目内 official bundle 或用户显式 native command 时必须失败, 不允许输出 proxy 分数。",
+        "formal_reference_notebook_runner_module": "external_baseline.videomark_official_runtime",
+        "formal_reference_notebook_runner_policy": "baseline 专用 Notebook 只生成当前 baseline official bundle, 不直接写 measured_formal records。",
+        "official_result_bundle_path_convention": [
+          "<bundle_root>/<baseline_id>/records/<prompt_id>__<seed_id>__<attack_name>.json",
+          "<bundle_root>/<baseline_id>/records/<trajectory_trace_id>__<attack_name>.json",
+          "<bundle_root>/<baseline_id>/<prompt_id>/<seed_id>/<attack_name>.json",
+          "<bundle_root>/<baseline_id>/<trajectory_trace_id>/<attack_name>.json"
+        ],
+        "official_result_bundle_supported": true,
+        "repository_official_eval_adapter_module": "external_baseline.official_eval_adapters.videomark",
+        "repository_official_eval_command_template": "python -m external_baseline.official_eval_adapters.videomark --official-source-dir /content/SSTW/external_baseline/primary/videomark/source --source-video {source_video_path} --attacked-video {attacked_video_path} --attack-name {attack_name} --official-output-json {official_output_json_path} --run-root {run_root} --prompt-id {prompt_id} --seed-id {seed_id} --trajectory-trace-id {trajectory_trace_id}",
+        "required_input_tokens": [
+          "{source_video_path}",
+          "{attacked_video_path}",
+          "{attack_name}"
+        ],
+        "required_output_token": "{official_output_json_path}"
+      },
+      "official_repository_branch": "main",
+      "official_repository_url": "https://github.com/KYRIE-LI11/VideoMark",
+      "official_result_bundle_path_convention": [
+        "<bundle_root>/<baseline_id>/records/<prompt_id>__<seed_id>__<attack_name>.json",
+        "<bundle_root>/<baseline_id>/records/<trajectory_trace_id>__<attack_name>.json",
+        "<bundle_root>/<baseline_id>/<prompt_id>/<seed_id>/<attack_name>.json",
+        "<bundle_root>/<baseline_id>/<trajectory_trace_id>/<attack_name>.json"
+      ],
+      "official_result_bundle_supported": true,
+      "project_owned_formal_reference_runner_module": "external_baseline.videomark_official_runtime",
+      "repository_generated_result_cache_allowed": true,
+      "repository_official_eval_adapter_module": "external_baseline.official_eval_adapters.videomark",
+      "repository_official_eval_command_template": "python -m external_baseline.official_eval_adapters.videomark --official-source-dir /content/SSTW/external_baseline/primary/videomark/source --source-video {source_video_path} --attacked-video {attacked_video_path} --attack-name {attack_name} --official-output-json {official_output_json_path} --run-root {run_root} --prompt-id {prompt_id} --seed-id {seed_id} --trajectory-trace-id {trajectory_trace_id}",
+      "repository_official_eval_command_template_status": "repository_official_wrapper_ready_with_project_owned_videomark_runtime_default",
+      "score_output_contract": {
+        "formal_record_policy": "only_command_outputs_are_converted_to_measured_formal_records",
+        "json_object_required": true,
+        "minimum_required_score_field_any_of": [
+          "external_baseline_score",
+          "watermark_score",
+          "detection_score",
+          "score",
+          "bit_accuracy",
+          "confidence",
+          "detected"
+        ]
+      },
+      "source_clone_command": "git clone --branch main https://github.com/KYRIE-LI11/VideoMark /content/SSTW/external_baseline/primary/videomark/source",
+      "source_verification_status": "git_ls_remote_head_verified_2026_07_10",
+      "sstw_eval_command_template": "python -m external_baseline.official_command_bridge --baseline-id videomark --official-source-dir /content/SSTW/external_baseline/primary/videomark/source --source-video {source_video_path} --attacked-video {attacked_video_path} --attack-name {attack_name} --output-json {output_json_path} --run-root {run_root} --prompt-id {prompt_id} --seed-id {seed_id} --trajectory-trace-id {trajectory_trace_id}",
+      "sstw_eval_command_template_status": "repository_bridge_ready_uses_project_owned_official_bundle_when_available",
+      "strict_gate_resource_resolution_order": [
+        "project_owned_videomark_prc_generation_inversion_runtime",
+        "repository_generated_official_bundle_cache",
+        "SSTW_VIDEOMARK_NATIVE_EVAL_COMMAND"
+      ],
+      "verified_head_commit": "9f8d78b73ab9f9f055651b1b4f37d68bdb05e7be"
+    },
+    {
       "baseline_id": "revmark",
       "colab_source_dir": "/content/SSTW/external_baseline/primary/revmark/source",
       "display_name": "REVMark",

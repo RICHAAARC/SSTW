@@ -13,6 +13,7 @@ ADAPTER_STATUS_BUILDERS = {
     "explicit_dtw_temporal_alignment": lambda: external_adapter_status("explicit_dtw_temporal_alignment"),
     "explicit_frame_matching_temporal_registration": lambda: external_adapter_status("explicit_frame_matching_temporal_registration"),
     "revmark": lambda: external_adapter_status("revmark"),
+    "videomark": lambda: external_adapter_status("videomark"),
     "videoshield": lambda: external_adapter_status("videoshield"),
     "vidsig": lambda: external_adapter_status("vidsig"),
     "videoseal": lambda: external_adapter_status("videoseal"),
@@ -37,6 +38,7 @@ MODERN_BASELINE_FAMILIES = {
     "latent_video_signature_baseline",
     "post_hoc_neural_video_watermark_baseline",
     "framewise_image_watermark_video_adapter_baseline",
+    "training_free_generative_video_watermark_baseline",
 }
 
 

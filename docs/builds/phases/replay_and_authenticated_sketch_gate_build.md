@@ -13,9 +13,11 @@
 1. 从攻击后视频编码 endpoint latent。
 2. 仅使用不含候选 key 的 base velocity 构造固定 reverse inversion 路径。
 3. 从同一固定初态分别运行 null forward 与候选 key forward hypothesis。
-4. 计算候选循环误差、null 循环误差与 replay log-likelihood ratio。
+4. 使用候选与 null 共享的预注册高斯观测方差, 计算两者 endpoint 残差的逐 latent 维对数似然及其差值。
 5. 路径观测只读取固定 reverse states，候选 key 不得改变观测路径。
-6. wrong key、wrong prompt、wrong sampler 与 wrong time grid 必须复用同一固定 reverse 路径，避免循环构造证据。
+6. wrong key、wrong prompt、wrong sampler 与 wrong time grid 必须复用正确条件下的同一固定 reverse 路径和初始状态，只改变候选 forward hypothesis，避免循环构造证据。
+
+clean video、wrong key、wrong prompt 和 wrong sampler/time-grid 是四个真实 negative family。它们必须由不同观测机制产生, 不能把同一种 clean-key trial 按序号拆成多个名称。fixed-FPR calibration 对每个 source video 取所有负假设的最大分数, held-out FPR 也按“任一负假设误接受即该视频误报”统计。
 
 此处设计的主要考虑在于：候选 key 只能改变待检验的 forward hypothesis，不能参与生成检验所使用的 reverse observation。该结构属于可复用的假设检验写法，可迁移到其他基于 inversion 的生成模型认证任务。
 
@@ -32,9 +34,14 @@ replay_reliability
 posterior_calibration_brier
 posterior_calibration_log_loss
 posterior_calibration_ece
+flow_state_log_likelihood_ratio
+flow_state_filter_step_count
+flow_state_filtering_status
+flow_state_smoothing_status
+replay_likelihood_model_id
 ```
 
-`watermark_posterior_probability` 必须具有明确的参考先验和校准来源，不能把未经校准的相似度分数改名为 posterior。source video 是唯一统计簇；同一视频上的多 key、多攻击和多 replay control 只能作为簇内重复观测。
+正式实现对 H0 与 H1 分别拟合线性高斯状态空间模型, 对完整 phase 序列执行 Kalman filtering 与 RTS smoothing, 再把两假设的边际对数似然比送入组外 Platt 校准。`watermark_posterior_probability` 必须具有明确的参考先验和校准来源，不能把未经校准的相似度分数或循环误差比改名为 posterior / LLR。source video 是唯一统计簇；同一视频上的多 key、多攻击和多 replay control 只能作为簇内重复观测。
 
 ## 4. 认证 sketch 与控制组
 

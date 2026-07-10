@@ -426,12 +426,17 @@ def run_ltx_control_replay(
     key_text: str,
     num_inference_steps: int,
     scheduler: Any | None = None,
+    fixed_trajectory: ReplayTrajectory | None = None,
     negative_prompt: str | None = None,
     guidance_scale: float = 3.0,
     frame_rate: int = 8,
     tubelet_config: FlowTubeletKeyCodeConfig | None = None,
 ) -> tuple[ReplayTrajectory, tuple[FlowSchedulePoint, ...], dict[str, float | int | None]]:
-    """使用显式 prompt 或 scheduler 执行一个可审计的 LTX replay control。"""
+    """使用显式 prompt 或 scheduler 执行一个可审计的 LTX replay control。
+
+    传入 fixed_trajectory 时, wrong condition 只改变 forward hypothesis,
+    reverse observation 和 null replay 均保持为正确条件下的固定结果。
+    """
 
     tubelet_config = tubelet_config or FlowTubeletKeyCodeConfig()
     velocity = LTXPromptConditionedVelocity(
@@ -454,11 +459,20 @@ def run_ltx_control_replay(
         total_steps=len(schedule),
         tubelet_config=tubelet_config,
     )
-    trajectory = run_key_independent_inversion_hypothesis(
-        endpoint_latent,
-        schedule,
-        velocity,
-        keyed_velocity,
+    trajectory = (
+        evaluate_candidate_on_fixed_inversion(
+            endpoint_latent,
+            schedule,
+            fixed_trajectory,
+            keyed_velocity,
+        )
+        if fixed_trajectory is not None
+        else run_key_independent_inversion_hypothesis(
+            endpoint_latent,
+            schedule,
+            velocity,
+            keyed_velocity,
+        )
     )
     path_evidence = score_ltx_replay_trajectory_for_key(
         trajectory,

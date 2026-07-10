@@ -26,6 +26,25 @@ from evaluation.protocol.record_writer import read_jsonl, write_json, write_json
 REQUIRED_RUNTIME_ATTACK_NAMES = FULL_PAPER_RUNTIME_ATTACKS
 
 
+def _formal_sstw_state_fields() -> dict[str, object]:
+    """构造正式 SSTW 多步状态空间后验的最小来源字段。"""
+
+    return {
+        "flow_detector_score_source": (
+            "dual_hypothesis_state_space_marginal_likelihood_calibrated_probability_posterior"
+        ),
+        "flow_state_observation_sequence_status": "measured_from_fixed_replay_path",
+        "flow_state_observation_step_count": 16,
+        "flow_state_filter_step_count": 16,
+        "flow_state_filtering_status": "kalman_filter_ready",
+        "flow_state_smoothing_status": "rauch_tung_striebel_smoother_ready",
+        "flow_state_log_likelihood_ratio": 1.0,
+        "replay_likelihood_model_id": (
+            "endpoint_energy_scaled_isotropic_gaussian_per_latent_dimension"
+        ),
+    }
+
+
 def _formal_baseline_evidence_fields(
     run_root: Path,
     baseline_id: str,
@@ -315,6 +334,7 @@ def test_sstw_measured_formal_result_writes_project_method_records(tmp_path: Pat
             "S_runtime_attack_detection": 0.8,
             "S_final_conservative": 0.8,
             "attacked_video_detectable": True,
+            **_formal_sstw_state_fields(),
         },
         {
             "runtime_detection_status": "failed",
@@ -335,6 +355,7 @@ def test_sstw_measured_formal_result_writes_project_method_records(tmp_path: Pat
             "clean_negative_evidence_level": "attacked_video_key_independent_inversion_hypothesis_replay",
             "clean_negative_video_path": f"videos/negative_{index}.mp4",
             "sstw_clean_negative_score": 0.05 + index * 0.001,
+            **_formal_sstw_state_fields(),
         }
         for index in range(500)
     ])
@@ -826,6 +847,7 @@ def test_formal_method_baseline_comparison_rejects_unaligned_prompt_seed_attack_
             "sstw_detector_input_contract": "video_file_plus_project_watermark_key",
             "trajectory_trace_used_for_score": False,
             "runtime_detection_claim_level": "formal_paper_detector",
+            **_formal_sstw_state_fields(),
         }
         for index in range(2)
     ]
@@ -841,6 +863,7 @@ def test_formal_method_baseline_comparison_rejects_unaligned_prompt_seed_attack_
             "sstw_clean_negative_score": 0.05 + index * 0.001,
             "clean_negative_evidence_level": "attacked_video_key_independent_inversion_hypothesis_replay",
             "trajectory_trace_used_for_score": False,
+            **_formal_sstw_state_fields(),
         }
         for index in range(10)
     )

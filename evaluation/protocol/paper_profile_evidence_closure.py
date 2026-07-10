@@ -163,7 +163,9 @@ def build_paper_profile_evidence_closure_audit(
         "calibrated_probability_posterior_passed",
         _required(config, "require_calibrated_probability_posterior"),
         _decision_passed(flow_evidence, "formal_flow_evidence_decision")
-        and _decision_passed(flow_evidence, "posterior_probability_calibration_decision"),
+        and _decision_passed(flow_evidence, "posterior_probability_calibration_decision")
+        and _decision_passed(flow_evidence, "state_space_posterior_mechanism_decision")
+        and _decision_passed(flow_evidence, "formal_negative_hypothesis_family_decision"),
     )
     add(
         "per_video_adaptive_attack_optimization_passed",
@@ -177,6 +179,22 @@ def build_paper_profile_evidence_closure_audit(
             "formal_adaptive_attack_execution_decision",
         )
         and adaptive_execution.get("per_video_adaptive_attack_optimization") is True
+        and _decision_passed(
+            adaptive_execution,
+            "adaptive_attack_query_provenance_decision",
+        )
+        and _decision_passed(
+            adaptive_execution,
+            "adaptive_watermark_retention_decision",
+        )
+        and _decision_passed(
+            adaptive_execution,
+            "adaptive_spoof_rejection_decision",
+        )
+        and _decision_passed(
+            adaptive_execution,
+            "adaptive_replay_control_rejection_decision",
+        )
         and adaptive_execution.get("adaptive_robustness_claim_allowed") is True,
     )
     add(

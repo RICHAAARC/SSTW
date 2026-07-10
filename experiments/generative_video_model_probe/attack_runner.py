@@ -169,8 +169,20 @@ def build_runtime_attack_records(
             record = with_flow_evidence_protocol_defaults({
                 "record_version": "generative_video_runtime_attack_v1",
                 "generation_model_id": generation_record.get("generation_model_id"),
+                "generation_model_family": generation_record.get(
+                    "generation_model_family"
+                ),
+                "cross_model_role": generation_record.get("cross_model_role"),
                 "prompt_id": generation_record.get("prompt_id"),
                 "seed_id": generation_record.get("seed_id"),
+                "generation_seed_random": generation_record.get("generation_seed_random"),
+                "generation_generator_state_digest_random": generation_record.get(
+                    "generation_generator_state_digest_random"
+                ),
+                "velocity_causal_pair_id": generation_record.get("velocity_causal_pair_id"),
+                "velocity_causal_intervention_status": generation_record.get(
+                    "velocity_causal_intervention_status"
+                ),
                 "trajectory_trace_id": generation_record.get("trajectory_trace_id"),
                 "split": generation_record.get("split"),
                 "protocol_split": generation_record.get("protocol_split"),

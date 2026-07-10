@@ -177,7 +177,9 @@ evaluation/attacks/adaptive_video_optimizer.py
 experiments/generative_video_model_probe/adaptive_attack_runner.py
 ```
 
-该实现对每个独立 held-out source video 真实解码并生成候选视频，覆盖重压缩、endpoint-preserving 扰动、探测、去除、规避以及跨视频 copy/collusion。每个候选必须记录输入输出哈希、实际查询分数、质量指标、查询预算和冻结 detector artifact。公开负样本只能用于预注册允许的探测顺序，不能更新 test 阈值或后验模型。
+该实现对每个独立 held-out source video 真实解码并生成候选视频，覆盖重压缩、endpoint-preserving 扰动、探测、去除、规避以及跨视频 copy/collusion。每个候选必须记录输入输出哈希、实际查询分数、质量指标、查询预算和冻结 detector artifact。质量指标必须读取候选写盘后重新解码的帧, 避免 codec 参数尚未生效时产生虚高 PSNR。copy/spoof 以 clean recipient 视频作为 FPR 独立单位; collusion 把视频两两组成互不重叠的 pair cluster, 禁止让同一视频进入多个独立样本。不同生成模型必须使用各自 calibration split 冻结的状态空间后验与阈值。公开负样本只能用于预注册允许的探测顺序，不能更新 test 阈值或后验模型。
+
+执行完整不等于鲁棒性主张成立。水印保留型协议必须按 source-video cluster 统计检出率, 点估计至少达到预注册最低保留率, 且95%区间下界必须高于当前目标 FPR。copy/spoof 使用 fixed-FPR 假设检验语义, 其误接受率单侧95%上界不得超过当前 profile 的目标 FPR。wrong key、prompt、sampler 与 time-grid 记录只能使用先前真实 replay control 的实测 margin, 禁止硬编码 `detected = false`。只有候选来源、保留率、spoof 拒绝和 replay control 四项同时通过, `adaptive_robustness_claim_allowed` 才能为 `true`。
 
 正式门禁至少检查：
 

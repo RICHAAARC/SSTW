@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from types import SimpleNamespace
 from dataclasses import dataclass
 
@@ -14,6 +15,9 @@ from main.methods.state_space_watermark.ltx_flow_replay_backend import (
 )
 from experiments.generative_video_model_probe.formal_flow_evidence_runner import (
     _score_records_with_frozen_calibration,
+)
+from experiments.generative_video_model_probe.formal_adaptive_attack_executor import (
+    _calibrations_by_model,
 )
 from main.methods.state_space_watermark.formal_detector import FORMAL_METHOD_VARIANTS
 
@@ -171,3 +175,39 @@ def test_formal_detector_calibration_is_isolated_by_generation_model(monkeypatch
         for method_variant in FORMAL_METHOD_VARIANTS
     }
     assert {record["generation_model_id"] for record in threshold_records} == {"wan", "ltx"}
+
+
+@pytest.mark.quick
+def test_adaptive_attack_loads_model_specific_frozen_calibrations(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    """Wan 与 LTX adaptive 查询不得误用同一份冻结后验或阈值。"""
+
+    threshold_path = tmp_path / "thresholds" / "formal_flow_detector_thresholds.jsonl"
+    threshold_path.parent.mkdir(parents=True)
+    rows = [
+        {
+            "generation_model_id": model_id,
+            "method_variant": "sstw_full_method",
+            "threshold_source_split": "calibration",
+            "test_time_threshold_update_blocked": True,
+        }
+        for model_id in ("wan", "ltx")
+    ]
+    threshold_path.write_text(
+        "\n".join(json.dumps(row) for row in rows) + "\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        "experiments.generative_video_model_probe.formal_adaptive_attack_executor."
+        "frozen_flow_detector_calibration_from_dict",
+        lambda row: f"calibration::{row['generation_model_id']}",
+    )
+
+    calibrations = _calibrations_by_model(tmp_path)
+
+    assert calibrations == {
+        "wan": "calibration::wan",
+        "ltx": "calibration::ltx",
+    }

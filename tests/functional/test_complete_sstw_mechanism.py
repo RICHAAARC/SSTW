@@ -4,6 +4,15 @@ from pathlib import Path
 import pytest
 import torch
 
+from experiments.generative_video_model_probe.formal_flow_evidence_runner import (
+    _base_record as _flow_evidence_base_record,
+    _controlled_negative_records_from_positive,
+    _paired_velocity_causal_records,
+    _state_space_posterior_mechanism_failures,
+)
+from experiments.generative_video_model_probe.formal_adaptive_attack_executor import (
+    _disjoint_collusion_peer_index,
+)
 from experiments.generative_video_model_probe.replay_and_sketch_gate import run_replay_and_sketch_gate
 from evaluation.attacks.adaptive_video_optimizer import optimize_adaptive_attack_for_video
 from evaluation.attacks.video_runtime_attack_protocol import FULL_PAPER_NON_RUNTIME_ATTACK_PROTOCOLS
@@ -17,12 +26,16 @@ from main.methods.state_space_watermark.flow_tubelet_key_code import build_flow_
 from main.methods.state_space_watermark.flow_latent_layout import PackedTokenFlowLatentLayout
 from main.methods.state_space_watermark.flow_velocity_runtime import FlowVelocityConstraintRuntime
 from main.methods.state_space_watermark.formal_detector import (
+    FLOW_STATE_POSTERIOR_SCORE_SOURCE,
     apply_frozen_flow_detector,
     fit_flow_evidence_calibration,
+    observation_sequence_from_flow_evidence_record,
 )
 from main.methods.state_space_watermark.path_observation import compute_path_step_observation
 from main.methods.state_space_watermark.replay_inversion import (
     FlowSchedulePoint,
+    ReplayGaussianLikelihoodConfig,
+    gaussian_replay_residual_likelihood,
     run_flow_inversion_and_replay,
     run_key_independent_inversion_hypothesis,
 )
@@ -32,6 +45,43 @@ from evaluation.protocol.paper_mechanism_contract import (
     load_paper_mechanism_contract,
 )
 from evaluation.protocol.record_writer import write_json, write_jsonl
+
+
+@pytest.mark.quick
+def test_flow_evidence_identity_preserves_cross_model_role() -> None:
+    """正式证据必须保留生成模型族与跨模型角色, 否则泛化审计会静默漏样本。"""
+
+    record = _flow_evidence_base_record(
+        {
+            "generation_model_id": "cross-model",
+            "generation_model_family": "rectified_flow_video",
+            "cross_model_role": "cross_model_validation_model",
+            "prompt_id": "prompt-a",
+            "seed_id": "seed-a",
+            "split": "test",
+        },
+        sample_role="attacked_positive",
+        method_variant="sstw_full_method",
+    )
+
+    assert record["generation_model_family"] == "rectified_flow_video"
+    assert record["cross_model_role"] == "cross_model_validation_model"
+
+
+@pytest.mark.quick
+def test_collusion_pairing_uses_disjoint_video_pairs() -> None:
+    """collusion 的独立统计单元必须是互不重叠的视频对。"""
+
+    assert [_disjoint_collusion_peer_index(index, 6) for index in range(6)] == [
+        1,
+        0,
+        3,
+        2,
+        5,
+        4,
+    ]
+    with pytest.raises(ValueError):
+        _disjoint_collusion_peer_index(0, 5)
 
 
 @pytest.mark.quick
@@ -208,6 +258,421 @@ def test_linear_flow_inversion_and_replay_closes_cycle() -> None:
     assert replay.reverse_step_count == 2
     assert replay.forward_step_count == 2
     assert replay.cycle_relative_error < 1e-6
+
+
+@pytest.mark.quick
+def test_replay_llr_is_gaussian_residual_likelihood_not_error_ratio() -> None:
+    """候选 replay 的 LLR 必须来自同方差高斯残差概率模型。"""
+
+    observed = torch.ones((1, 1, 2, 2, 2), dtype=torch.float32)
+    candidate = observed + 0.01
+    null = observed + 0.10
+
+    likelihood = gaussian_replay_residual_likelihood(candidate, null, observed)
+
+    expected = 0.5 * (
+        likelihood.null_residual_mean_squared_error
+        - likelihood.candidate_residual_mean_squared_error
+    ) / likelihood.observation_noise_variance
+    assert likelihood.log_likelihood_ratio_per_dimension == pytest.approx(expected)
+    assert likelihood.log_likelihood_ratio_per_dimension > 0.0
+    assert likelihood.candidate_log_likelihood_per_dimension > likelihood.null_log_likelihood_per_dimension
+    assert likelihood.likelihood_model_id == (
+        "endpoint_energy_scaled_isotropic_gaussian_per_latent_dimension"
+    )
+
+
+def _state_sequence(level: float, *, increasing: bool) -> list[dict[str, float]]:
+    """构造轻量动态序列, 用于验证状态转移而不是 GPU 结果。"""
+
+    rows = []
+    for step_index in range(5):
+        delta = 0.03 * step_index if increasing else -0.01 * step_index
+        value = level + delta
+        rows.append({
+            "flow_phase": step_index / 4,
+            "endpoint_score": value,
+            "velocity_score": value - 0.05,
+            "path_score": value - 0.03,
+            "path_endpoint_consistency": value,
+            "replay_log_likelihood_ratio": value - 0.4,
+            "replay_reliability": 0.9,
+            "time_grid_reliability": 0.9,
+            "coverage_ratio": 1.0,
+            "path_velocity_consistency": 0.9,
+            "key_agnostic_endpoint_energy": 0.5,
+            "key_agnostic_velocity_energy": 0.5,
+            "key_agnostic_path_energy": 0.5,
+        })
+    return rows
+
+
+@pytest.mark.quick
+def test_flow_posterior_uses_fitted_state_transition_filter_and_smoother() -> None:
+    """正式后验必须拟合 H0/H1 动力学并在完整序列上运行 filtering/smoothing。"""
+
+    negatives = [
+        {
+            "sample_role": "clean_negative",
+            "statistical_cluster_id": f"state-negative-{index}",
+            "flow_state_observation_sequence": _state_sequence(0.2 + index * 0.001, increasing=False),
+        }
+        for index in range(20)
+    ]
+    positives = [
+        {
+            "sample_role": "attacked_positive",
+            "statistical_cluster_id": f"state-positive-{index}",
+            "flow_state_observation_sequence": _state_sequence(0.75 + index * 0.001, increasing=True),
+        }
+        for index in range(20)
+    ]
+
+    calibration = fit_flow_evidence_calibration(
+        negatives + positives,
+        method_variant="sstw_full_method",
+        target_fpr=0.1,
+    )
+    positive_score = apply_frozen_flow_detector(positives[0], calibration)
+    negative_score = apply_frozen_flow_detector(negatives[0], calibration)
+    model_payload = calibration.posterior_model.as_dict()
+
+    assert model_payload["posterior_model_type"].startswith(
+        "dual_hypothesis_linear_gaussian_state_space_filter_rts_smoother"
+    )
+    assert model_payload["posterior_positive_state_space_model"]["training_transition_count"] > 0
+    assert model_payload["posterior_negative_state_space_model"]["training_transition_count"] > 0
+    assert positive_score["flow_state_filter_step_count"] == 5
+    assert positive_score["flow_state_filtering_status"] == "kalman_filter_ready"
+    assert positive_score["flow_state_smoothing_status"] == "rauch_tung_striebel_smoother_ready"
+    assert positive_score["flow_state_log_likelihood_ratio"] > negative_score["flow_state_log_likelihood_ratio"]
+    assert positive_score["S_final_unconstrained"] > negative_score["S_final_unconstrained"]
+    assert positive_score["flow_detector_score_source"] == FLOW_STATE_POSTERIOR_SCORE_SOURCE
+
+
+@pytest.mark.quick
+def test_formal_state_space_gate_rejects_single_step_or_unmeasured_posterior() -> None:
+    """正式 Flow 门禁不得接受单步 fallback 或缺少动态转移的概率记录。"""
+
+    negatives = [
+        {
+            "sample_role": "clean_negative",
+            "statistical_cluster_id": f"gate-negative-{index}",
+            "flow_state_observation_sequence": _state_sequence(0.2, increasing=False),
+        }
+        for index in range(12)
+    ]
+    positives = [
+        {
+            "sample_role": "attacked_positive",
+            "statistical_cluster_id": f"gate-positive-{index}",
+            "flow_state_observation_sequence": _state_sequence(0.8, increasing=True),
+        }
+        for index in range(12)
+    ]
+    calibration = fit_flow_evidence_calibration(
+        negatives + positives,
+        method_variant="sstw_full_method",
+        target_fpr=0.1,
+    )
+    detection = apply_frozen_flow_detector(positives[0], calibration)
+    valid_record = {
+        **positives[0],
+        **detection,
+        "generation_model_id": "test-flow-model",
+        "method_variant": "sstw_full_method",
+        "formal_flow_evidence_unit_id": "formal-unit-a",
+        "flow_state_observation_sequence_status": "measured_from_fixed_replay_path",
+        "flow_state_observation_step_count": 5,
+        "replay_likelihood_model_id": (
+            "endpoint_energy_scaled_isotropic_gaussian_per_latent_dimension"
+        ),
+    }
+    threshold_record = {
+        "generation_model_id": "test-flow-model",
+        **calibration.as_dict(),
+    }
+
+    assert _state_space_posterior_mechanism_failures(
+        [valid_record],
+        [threshold_record],
+    ) == []
+
+    invalid_record = {
+        **valid_record,
+        "flow_state_observation_sequence": [valid_record["flow_state_observation_sequence"][0]],
+        "flow_state_observation_sequence_status": "legacy_single_step_fallback",
+        "flow_state_observation_step_count": 1,
+    }
+    failures = _state_space_posterior_mechanism_failures(
+        [invalid_record],
+        [threshold_record],
+    )
+
+    assert failures
+    assert "measured_state_observation_sequence" in failures[0]["failed_requirements"]
+    assert "kalman_filter_consumed_complete_sequence" in failures[0]["failed_requirements"]
+
+
+@pytest.mark.quick
+def test_replay_gaussian_likelihood_configuration_matches_method_contract() -> None:
+    """核心 replay 概率模型默认值必须与受治理方法契约完全一致。"""
+
+    contract = json.loads(
+        Path("configs/methods/sstw_complete_paper_mechanism.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    config = ReplayGaussianLikelihoodConfig()
+
+    assert config.likelihood_model_id == contract["replay_likelihood_model_id"]
+    assert config.minimum_observation_noise_variance == pytest.approx(
+        contract["replay_minimum_observation_noise_variance"]
+    )
+    assert config.relative_observation_noise_standard_deviation == pytest.approx(
+        contract["replay_relative_observation_noise_standard_deviation"]
+    )
+
+
+@pytest.mark.quick
+def test_state_space_calibration_is_source_video_group_equal_weighted() -> None:
+    """重复同一视频的 key trial 不得改变状态模型或概率校准参数。"""
+
+    negatives = [
+        {
+            "sample_role": "clean_negative",
+            "statistical_cluster_id": f"equal-negative-{index}",
+            "flow_state_observation_sequence": _state_sequence(
+                0.2 + index * 0.01,
+                increasing=False,
+            ),
+        }
+        for index in range(8)
+    ]
+    positives = [
+        {
+            "sample_role": "attacked_positive",
+            "statistical_cluster_id": f"equal-positive-{index}",
+            "flow_state_observation_sequence": _state_sequence(
+                0.7 + index * 0.01,
+                increasing=True,
+            ),
+        }
+        for index in range(8)
+    ]
+    base = fit_flow_evidence_calibration(
+        negatives + positives,
+        method_variant="sstw_full_method",
+        target_fpr=0.1,
+    )
+    repeated = fit_flow_evidence_calibration(
+        negatives + [dict(negatives[0]) for _ in range(9)] + positives,
+        method_variant="sstw_full_method",
+        target_fpr=0.1,
+    )
+
+    assert repeated.posterior_model.feature_means == pytest.approx(
+        base.posterior_model.feature_means
+    )
+    assert torch.allclose(
+        torch.tensor(
+            repeated.posterior_model.negative_state_space_model.transition_matrix,
+            dtype=torch.float64,
+        ),
+        torch.tensor(
+            base.posterior_model.negative_state_space_model.transition_matrix,
+            dtype=torch.float64,
+        ),
+    )
+    assert torch.allclose(
+        torch.tensor(
+            repeated.posterior_model.positive_state_space_model.transition_matrix,
+            dtype=torch.float64,
+        ),
+        torch.tensor(
+            base.posterior_model.positive_state_space_model.transition_matrix,
+            dtype=torch.float64,
+        ),
+    )
+    assert repeated.posterior_model.platt_slope == pytest.approx(
+        base.posterior_model.platt_slope
+    )
+    assert repeated.posterior_model.platt_intercept == pytest.approx(
+        base.posterior_model.platt_intercept
+    )
+    assert repeated.final_score_threshold == pytest.approx(base.final_score_threshold)
+    assert repeated.calibration_negative_cluster_count == 8
+    assert repeated.calibration_negative_count == 17
+
+
+@pytest.mark.quick
+def test_claim1_causal_pair_uses_same_detector_and_controlled_generation_state() -> None:
+    """Claim-1 配对必须只改变速度约束, 并复用完整方法冻结检测器。"""
+
+    calibration_rows = [
+        {
+            "sample_role": "clean_negative",
+            "statistical_cluster_id": f"causal-negative-{index}",
+            "flow_state_observation_sequence": _state_sequence(0.2, increasing=False),
+        }
+        for index in range(8)
+    ] + [
+        {
+            "sample_role": "attacked_positive",
+            "statistical_cluster_id": f"causal-positive-{index}",
+            "flow_state_observation_sequence": _state_sequence(0.8, increasing=True),
+        }
+        for index in range(8)
+    ]
+    calibration = fit_flow_evidence_calibration(
+        calibration_rows,
+        method_variant="sstw_full_method",
+        target_fpr=0.1,
+    )
+    common = {
+        "generation_model_id": "test-flow-model",
+        "prompt_id": "prompt-a",
+        "seed_id": "seed-a",
+        "attack_name": "codec-a",
+        "sample_role": "attacked_positive",
+        "split": "test",
+        "velocity_causal_pair_id": "causal-pair-a",
+        "generation_seed_random": 17,
+        "generation_generator_state_digest_random": "generator-state-a",
+        "replay_sampler_signature": "FlowMatchEulerDiscreteScheduler:config-a",
+        "authenticated_generation_time_grid_id": "grid-a",
+        "statistical_cluster_id": "source-cluster-a",
+    }
+    full = {
+        **common,
+        "method_variant": "sstw_full_method",
+        "velocity_causal_intervention_status": "velocity_constraint_enabled",
+        "generation_source_video_sha256": "full-video-digest",
+        "flow_state_observation_sequence": _state_sequence(0.8, increasing=True),
+    }
+    control = {
+        **common,
+        "method_variant": "without_velocity_constraint",
+        "velocity_causal_intervention_status": "velocity_constraint_disabled",
+        "generation_source_video_sha256": "control-video-digest",
+        "flow_state_observation_sequence": _state_sequence(0.2, increasing=False),
+    }
+
+    paired = _paired_velocity_causal_records(
+        [full, control],
+        {("test-flow-model", "sstw_full_method"): calibration},
+    )
+
+    assert paired[0]["velocity_causal_pairing_status"] == "matched_single_intervention_design"
+    assert paired[0]["paired_detector_method_variant"] == "sstw_full_method"
+    assert paired[0]["paired_full_method_score"] >= 0.0
+    assert paired[0]["paired_without_velocity_constraint_score"] >= 0.0
+
+    mismatched = {**control, "generation_generator_state_digest_random": "different-state"}
+    blocked = _paired_velocity_causal_records(
+        [full, mismatched],
+        {("test-flow-model", "sstw_full_method"): calibration},
+    )
+    assert blocked[0]["velocity_causal_pairing_status"] == (
+        "blocked_by_unmatched_generation_design"
+    )
+    assert blocked[0]["metric_status"] == "missing"
+
+
+@pytest.mark.quick
+def test_wrong_condition_controls_become_real_negative_families() -> None:
+    """negative family 必须来自真实错误假设, 不能按 trial 索引改名。"""
+
+    positive = {
+        "formal_flow_evidence_unit_id": "positive-unit-a",
+        "generation_model_id": "test-flow-model",
+        "prompt_id": "prompt-a",
+        "seed_id": "seed-a",
+        "trajectory_trace_id": "trace-a",
+        "split": "calibration",
+        "method_variant": "sstw_full_method",
+        "attack_name": "codec-a",
+        "statistical_cluster_id": "source-cluster-a",
+        "statistical_independent_unit": "source_video_prompt_seed",
+        "replay_control_fixed_reverse_path_reused": True,
+        "wrong_key_flow_state_observation_sequence": _state_sequence(0.2, increasing=False),
+        "wrong_prompt_flow_state_observation_sequence": _state_sequence(0.25, increasing=False),
+        "wrong_sampler_flow_state_observation_sequence": _state_sequence(0.3, increasing=False),
+        "wrong_key_replay_log_likelihood_ratio": -0.3,
+        "wrong_prompt_replay_log_likelihood_ratio": -0.2,
+        "wrong_sampler_replay_log_likelihood_ratio": -0.1,
+        "wrong_key_S_path_inv": 0.1,
+        "wrong_prompt_S_path_inv": 0.1,
+        "wrong_sampler_S_path_inv": 0.1,
+    }
+
+    records = _controlled_negative_records_from_positive(positive)
+
+    assert {record["negative_family"] for record in records} == {
+        "watermarked_video_wrong_key_hypothesis",
+        "watermarked_video_wrong_prompt_hypothesis",
+        "watermarked_video_wrong_sampler_time_grid_hypothesis",
+    }
+    assert all(record["sample_role"] == "controlled_negative" for record in records)
+    assert all(
+        record["replay_control_fixed_reverse_path_reused"] is True
+        for record in records
+    )
+    assert all("clean_key_family" not in record["negative_family"] for record in records)
+
+
+@pytest.mark.quick
+def test_group_cross_fitting_keeps_paired_h0_h1_hypotheses_in_same_fold() -> None:
+    """同一视频的正确与错误假设可有不同标签, 但不能跨 fold 泄漏。"""
+
+    rows: list[dict[str, object]] = []
+    for index in range(8):
+        cluster_id = f"mixed-source-{index}"
+        rows.extend([
+            {
+                "sample_role": "attacked_positive",
+                "statistical_cluster_id": cluster_id,
+                "flow_state_observation_sequence": _state_sequence(0.8, increasing=True),
+            },
+            {
+                "sample_role": "controlled_negative",
+                "statistical_cluster_id": cluster_id,
+                "flow_state_observation_sequence": _state_sequence(0.2, increasing=False),
+            },
+        ])
+
+    calibration = fit_flow_evidence_calibration(
+        rows,
+        method_variant="sstw_full_method",
+        target_fpr=0.1,
+    )
+
+    assert calibration.calibration_positive_cluster_count == 8
+    assert calibration.calibration_negative_cluster_count == 8
+    assert calibration.posterior_model.calibration_group_count == 8
+
+
+@pytest.mark.quick
+def test_generic_ssm_baseline_cannot_reuse_key_conditioned_sstw_observations() -> None:
+    """generic SSM 必须只看无 key 轨迹能量, 不能复制完整 SSTW 特征。"""
+
+    record = {
+        "flow_state_observation_sequence": _state_sequence(0.8, increasing=True),
+    }
+    full = observation_sequence_from_flow_evidence_record(
+        record,
+        method_variant="sstw_full_method",
+    )
+    generic = observation_sequence_from_flow_evidence_record(
+        record,
+        method_variant="generic_ssm_baseline",
+    )
+
+    assert full[0].endpoint_score != generic[0].endpoint_score
+    assert full[0].path_score != generic[0].path_score
+    assert generic[0].endpoint_score == 0.5
+    assert generic[0].velocity_score == 0.5
+    assert generic[0].replay_log_likelihood_ratio == 0.0
 
 
 @pytest.mark.quick
@@ -395,8 +860,14 @@ def test_full_claim3_gate_requires_real_replay_controls_and_hmac(
         "flow_watermark_posterior_probability": 0.9,
         "flow_watermark_posterior_log_odds": 2.197,
         "flow_state_posterior_entropy": 0.1,
+        "flow_state_log_likelihood_ratio": 1.5,
+        "flow_state_filter_step_count": 16,
+        "flow_state_filtering_status": "kalman_filter_ready",
+        "flow_state_smoothing_status": "rauch_tung_striebel_smoother_ready",
         "replay_log_likelihood_ratio_mean": 0.5,
-        "flow_detector_score_source": "group_cross_fitted_calibrated_probability_posterior",
+        "replay_likelihood_model_id": "endpoint_energy_scaled_isotropic_gaussian_per_latent_dimension",
+        "replay_control_fixed_reverse_path_reused": True,
+        "flow_detector_score_source": FLOW_STATE_POSTERIOR_SCORE_SOURCE,
         "threshold_source_split": "calibration",
         "test_time_threshold_update_blocked": True,
         "S_final_conservative": 0.8,
@@ -453,3 +924,5 @@ def test_adaptive_optimizer_generates_and_queries_candidates_per_video(tmp_path:
     assert result.selected.attack_name == "gaussian_blur_runtime"
     assert Path(result.selected.video_path).exists()
     assert result.selected.video_sha256
+    assert result.selected.decoded_frame_count > 0
+    assert result.query_budget == 2

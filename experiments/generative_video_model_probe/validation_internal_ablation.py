@@ -182,7 +182,9 @@ def build_validation_internal_ablation_records(run_root: str | Path) -> list[dic
             "ablation_expected_effect": "measured_score_change_under_real_component_removal",
             "formal_internal_ablation_evidence_level": FORMAL_INTERNAL_ABLATION_EVIDENCE_LEVEL,
             "formal_internal_ablation_score": round(score, 6),
-            "formal_internal_ablation_score_semantics": "calibrated_probability_posterior_with_fixed_fpr_threshold",
+            "formal_internal_ablation_score_semantics": (
+                "dual_hypothesis_state_space_calibrated_probability_with_fixed_fpr_threshold"
+            ),
             "metric_status": "measured_formal",
             "ablation_status": "ready",
             "ablation_failure_reason": "none",

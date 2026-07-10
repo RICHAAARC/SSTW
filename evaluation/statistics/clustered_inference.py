@@ -161,6 +161,38 @@ def clustered_binary_rate_interval(
     )
 
 
+def clustered_binary_any_rate_interval(
+    records: Iterable[Mapping[str, object]],
+    *,
+    outcome_field: str,
+    cluster_field: str = "statistical_cluster_id",
+    bootstrap_resamples: int = 5000,
+    purpose: str = "clustered_binary_any_rate",
+) -> ClusteredEstimate:
+    """按每个 source video 是否出现任一 positive 计算保守事件率。
+
+    该函数适用于同一视频具有多个 key、prompt 或 sampler 负假设的 FPR。
+    簇内只要一个假设误接受, 该独立视频就记为一次 false positive, 从而避免
+    用更多负假设稀释误报率。
+    """
+
+    grouped: dict[str, list[float]] = {}
+    for record in records:
+        cluster_id = str(record.get(cluster_field) or "")
+        if not cluster_id:
+            raise KeyError(f"统计记录缺少 {cluster_field}")
+        grouped.setdefault(cluster_id, []).append(float(bool(record.get(outcome_field))))
+    reduced = {
+        cluster_id: [max(values)]
+        for cluster_id, values in grouped.items()
+    }
+    return clustered_mean_interval(
+        reduced,
+        bootstrap_resamples=bootstrap_resamples,
+        purpose=purpose,
+    )
+
+
 def paired_cluster_difference_interval(
     paired_rows: Iterable[Mapping[str, object]],
     *,

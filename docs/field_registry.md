@@ -1962,3 +1962,112 @@ Notebook 与 repository module 的跨边界数据
 | cross_model_velocity_score_gain_mean | generalization | none | true | false | true | 跨模型完整方法相对无速度约束的平均分数增益。 |
 | cross_model_replay_control_record_count | generalization | none | true | false | true | 跨模型真实 replay control 记录数。 |
 | claim_decision_source_path | governance | none | true | false | true | 审稿证据索引读取当前主张判定的 governed artifact 路径。 |
+| replay_likelihood_model_id | method | none | true | true | false | replay 残差概率模型的固定标识, 用于阻断误差比冒充似然比。 |
+| replay_minimum_observation_noise_variance | method | none | true | false | false | replay 高斯观测模型预注册的最小方差。 |
+| replay_relative_observation_noise_standard_deviation | method | none | true | false | false | replay 高斯观测模型相对 endpoint 能量的预注册噪声标准差。 |
+| flow_state_observation_step_index | method | none | true | false | false | 固定 replay 路径上状态空间观测的步骤索引。 |
+| velocity_score | metric | none | true | true | false | 单个 Flow phase 的 key-conditioned 速度投影观测。 |
+| path_score | metric | none | true | true | false | 单个 Flow phase 的 key-conditioned 路径投影观测。 |
+| key_agnostic_endpoint_energy | metric | none | true | false | false | generic SSM 对照可使用的 endpoint 能量, 不包含密钥方向。 |
+| key_agnostic_velocity_energy | metric | none | true | false | false | generic SSM 对照可使用的速度能量, 不包含密钥方向。 |
+| key_agnostic_path_energy | metric | none | true | false | false | generic SSM 对照可使用的路径能量, 不包含密钥方向。 |
+| replay_observation_noise_variance | metric | none | true | true | false | 单个 Flow phase 的 replay 高斯观测噪声方差。 |
+| flow_state_observation_sequence | method | none | true | true | false | 从固定反演路径逐 phase 测得的状态空间观测序列。 |
+| flow_state_observation_sequence_status | governance | none | true | true | false | 状态空间观测序列是否来自真实固定 replay 路径。 |
+| flow_state_observation_step_count | metric | none | true | true | false | 状态空间观测序列实际包含的 phase 数量。 |
+| flow_state_transition_source | method | none | true | true | false | 状态转移参数的拟合来源, 正式结果只能来自 calibration split。 |
+| replay_observation_noise_variance_mean | metric | none | true | true | false | 多网格 replay 高斯观测方差的平均值。 |
+| replay_candidate_log_likelihood_per_dimension_mean | metric | none | true | true | false | 候选密钥 replay 的逐 latent 维平均对数似然。 |
+| replay_null_log_likelihood_per_dimension_mean | metric | none | true | true | false | null replay 的逐 latent 维平均对数似然。 |
+| transition_matrix | method | none | true | false | false | calibration split 拟合的线性高斯状态转移矩阵。 |
+| transition_bias | method | none | true | false | false | calibration split 拟合的线性高斯状态转移偏置。 |
+| process_covariance | method | none | true | false | false | calibration split 拟合的状态过程噪声协方差。 |
+| observation_covariance | method | none | true | false | false | calibration split 拟合的状态观测噪声协方差。 |
+| initial_mean | method | none | true | false | false | 双假设状态空间模型的初始状态均值。 |
+| initial_covariance | method | none | true | false | false | 双假设状态空间模型的初始状态协方差。 |
+| training_sequence_count | metric | none | true | false | false | 单个假设状态模型使用的 calibration 序列数。 |
+| training_group_count | metric | none | true | true | false | 单个假设状态模型使用的独立 source-video group 数量。 |
+| training_transition_count | metric | none | true | true | false | 单个假设状态模型实际拟合的跨 phase 转移数。 |
+| training_transition_group_count | metric | none | true | true | false | 对状态转移拟合有贡献的独立 source-video group 数量。 |
+| posterior_negative_state_space_model | method | none | true | true | false | 可从 threshold artifact 重建的 H0 线性高斯状态空间参数。 |
+| posterior_positive_state_space_model | method | none | true | true | false | 可从 threshold artifact 重建的 H1 线性高斯状态空间参数。 |
+| flow_state_positive_log_likelihood_per_step | metric | none | true | true | false | H1 状态空间模型产生的逐 phase 边际对数似然。 |
+| flow_state_negative_log_likelihood_per_step | metric | none | true | true | false | H0 状态空间模型产生的逐 phase 边际对数似然。 |
+| flow_state_log_likelihood_ratio | metric | none | true | true | false | H1 与 H0 状态空间边际对数似然之差。 |
+| flow_state_filter_step_count | metric | none | true | true | false | Kalman filter 实际消费的状态观测 phase 数。 |
+| flow_state_filtering_status | governance | none | true | true | false | 正式后验是否完成 Kalman filtering。 |
+| flow_state_smoothing_status | governance | none | true | true | false | 正式后验是否完成 RTS smoothing。 |
+| state_space_posterior_mechanism_decision | governance | none | true | true | false | 正式 Flow 门禁对真实动态后验机制的审计结论。 |
+| state_space_posterior_mechanism_failures | governance | none | true | false | false | 状态空间后验机制未闭合时的明确缺失条件列表。 |
+| flow_replay_state_space_filtering_smoothing_ready | governance | none | true | true | false | Claim-3 replay 门禁是否逐记录具备多步 filtering 和 smoothing 证据。 |
+| generation_seed_random | random | _random | true | false | false | 生成视频使用的受控随机种子, 仅用于配对复现和因果审计。 |
+| generation_generator_state_digest_random | random | _digest_random | true | true | false | pipeline 调用前 GPU generator 状态的摘要, 用于证明配对生成共享随机起点。 |
+| velocity_causal_pair_id | method | none | true | true | false | 同模型、prompt、seed 和 split 的速度约束因果配对标识。 |
+| velocity_causal_intervention_status | method | none | true | true | false | 配对生成中速度约束干预是启用、禁用或不适用。 |
+| generation_source_video_sha256 | provenance | none | true | true | false | 进入攻击与检测的生成源视频内容摘要。 |
+| paired_detector_method_variant | method | none | true | true | false | Claim-1 因果配对两侧共同使用的冻结检测器变体。 |
+| paired_detector_threshold_source_split | governance | none | true | true | false | Claim-1 配对检测阈值必须来自 calibration split。 |
+| paired_test_time_threshold_update_blocked | governance | none | true | true | false | Claim-1 配对检测是否禁止 test-time 阈值更新。 |
+| full_generation_generator_state_digest_random | random | _digest_random | true | true | false | 完整方法生成侧的 GPU generator 状态摘要。 |
+| control_generation_generator_state_digest_random | random | _digest_random | true | true | false | 无速度约束对照生成侧的 GPU generator 状态摘要。 |
+| full_generation_source_video_sha256 | provenance | none | true | true | false | 完整方法配对视频的内容摘要。 |
+| control_generation_source_video_sha256 | provenance | none | true | true | false | 无速度约束配对视频的内容摘要。 |
+| velocity_causal_pairing_status | governance | none | true | true | false | Claim-1 配对是否满足单一干预、共享随机状态和共享采样配置。 |
+| claim_1_velocity_causal_expected_pair_count | metric | none | true | true | false | 每个 held-out full-method 视频应具有的速度因果配对总数。 |
+| claim_1_velocity_causal_pairing_failure_count | metric | none | true | true | false | 未满足严格受控生成设计的 Claim-1 配对数量。 |
+| claim_1_velocity_causal_pair_coverage | metric | none | true | true | false | 有效速度因果配对数占预期配对数的比例。 |
+| claim_1_velocity_causal_detector_protocol | governance | none | true | true | false | Claim-1 两侧统一应用完整方法冻结检测器的协议标识。 |
+| detector_score_source | provenance | none | true | true | false | adaptive 候选查询所返回检测分数的明确机制来源。 |
+| adaptive_attack_query_budget | governance | none | true | true | false | 单视频单协议实际允许的冻结检测器查询上限。 |
+| adaptive_query_role | governance | none | true | false | false | adaptive 查询属于 held-out 视频还是 calibration public negative。 |
+| adaptive_attack_candidate_query_count | metric | none | true | true | false | held-out 视频 adaptive 候选的真实冻结检测器查询数。 |
+| adaptive_attack_public_negative_query_count | metric | none | true | true | false | 仅用于预注册探测顺序的 calibration public negative 查询数。 |
+| adaptive_attack_query_provenance_decision | governance | none | true | true | false | 所有 adaptive 候选是否具备解码视频、内容摘要、状态空间分数和冻结阈值来源。 |
+| calibration_negative_cluster_count | metric | none | true | true | false | fixed-FPR calibration 使用的独立 negative source-video group 数。 |
+| calibration_positive_cluster_count | metric | none | true | true | false | 概率后验 calibration 使用的独立 positive source-video group 数。 |
+| paired_detector_score_source | provenance | none | true | true | false | Claim-1 两侧共享检测器的状态空间分数来源。 |
+| paired_frozen_final_score_threshold | metric | none | true | true | false | Claim-1 两侧共享的完整方法冻结阈值。 |
+| paired_detector_target_fpr | metric | none | true | true | false | Claim-1 共享检测器阈值对应的目标 FPR。 |
+| adaptive_attack_control_margin | metric | none | true | true | false | wrong key、prompt、sampler 或 time-grid replay 对照相对正确假设的实测间隔。 |
+| adaptive_attack_control_rejected | metric | none | true | true | false | replay 错误条件是否由先前真实控制运行拒绝。 |
+| adaptive_watermark_retention_minimum_rate | governance | none | true | true | false | 预注册的 adaptive 攻击后最低水印检出率。 |
+| adaptive_watermark_retention_statistics | metric | none | true | true | false | 各 adaptive 协议按 source-video cluster 计算的检出率与区间。 |
+| adaptive_watermark_retention_decision | governance | none | true | true | false | 所有水印保留型 adaptive 协议是否达到预注册检出率。 |
+| adaptive_watermark_retention_rate_estimate | metric | none | true | true | false | 单个 adaptive 协议的 cluster-equal 检出率点估计。 |
+| adaptive_watermark_retention_rate_ci_95_lower | metric | none | true | true | false | 单个 adaptive 协议检出率的95%区间下界。 |
+| adaptive_watermark_retention_rate_ci_95_upper | metric | none | true | true | false | 单个 adaptive 协议检出率的95%区间上界。 |
+| adaptive_watermark_retention_rate_cluster_count | metric | none | true | true | false | 单个 adaptive 协议的独立 source-video cluster 数。 |
+| adaptive_watermark_retention_rate_observation_count | metric | none | true | false | false | 单个 adaptive 协议的原始记录数, 不作为独立样本量。 |
+| adaptive_watermark_retention_rate_bootstrap_resample_count | metric | none | true | false | false | adaptive 检出率 cluster bootstrap 重采样次数。 |
+| adaptive_spoof_false_accept_count | metric | none | true | true | false | copy/spoof 协议在独立视频簇上的误接受数量。 |
+| adaptive_spoof_cluster_count | metric | none | true | true | false | copy/spoof 协议的独立 source-video cluster 数。 |
+| adaptive_spoof_fpr_ci_95_upper | metric | none | true | true | false | copy/spoof 误接受率的单侧95%二项上界。 |
+| adaptive_spoof_rejection_decision | governance | none | true | true | false | copy/spoof 误接受上界是否不超过当前 profile 目标 FPR。 |
+| adaptive_replay_control_rejection_decision | governance | none | true | true | false | 所有真实 wrong-condition replay 对照是否被拒绝。 |
+| minimum_adaptive_watermark_retention_rate | governance | none | true | false | false | 三档正式 profile 共享的 adaptive 水印最低保留率配置。 |
+| wrong_key_flow_state_observation_sequence | method | none | true | true | false | 在正确固定 reverse path 上执行 wrong-key forward hypothesis 得到的逐 phase 观测。 |
+| wrong_prompt_flow_state_observation_sequence | method | none | true | true | false | 在正确固定 reverse path 上执行 wrong-prompt forward hypothesis 得到的逐 phase 观测。 |
+| wrong_sampler_flow_state_observation_sequence | method | none | true | true | false | 在正确固定 reverse path 上执行 wrong-sampler/time-grid forward hypothesis 得到的逐 phase 观测。 |
+| replay_control_fixed_reverse_path_reused | governance | none | true | true | false | 三类错误 replay control 是否逐元素复用正确条件的固定 reverse states。 |
+| controlled_negative_hypothesis_type | method | none | true | true | false | controlled negative 对应 wrong key、prompt 或 sampler/time-grid 的物理假设类型。 |
+| formal_negative_hypothesis_family_decision | governance | none | true | true | false | calibration 与 held-out 是否都覆盖四类真实负假设且达到独立视频数量要求。 |
+| formal_required_negative_hypothesis_families | governance | none | true | true | false | 正式 SSTW 检测预注册的四类负假设名称。 |
+| formal_calibration_negative_family_cluster_counts | metric | none | true | true | false | calibration split 各负假设 family 的独立 source-video 数量。 |
+| formal_heldout_negative_family_cluster_counts | metric | none | true | true | false | held-out split 各负假设 family 的独立 source-video 数量。 |
+| calibration_negative_raw_hypothesis_count | metric | none | true | false | false | calibration split 的原始负假设记录数, 不作为独立样本量。 |
+| heldout_negative_raw_hypothesis_count | metric | none | true | false | false | held-out split 的原始负假设记录数, 不作为独立样本量。 |
+| coverage_ratio | metric | none | true | true | false | 单个 Flow phase 或 endpoint 的有效 tubelet 覆盖比例。 |
+| failure_scope | governance | none | true | false | false | 正式门禁失败发生在 frozen calibration 还是 scored sequence。 |
+| failed_requirements | governance | none | true | false | false | 单条机制失败记录未满足的明确要求列表。 |
+| paired_full_method_decision | metric | none | true | true | false | Claim-1 共享冻结检测器对完整方法配对视频的判定。 |
+| paired_without_velocity_constraint_decision | metric | none | true | true | false | Claim-1 共享冻结检测器对无速度约束配对视频的判定。 |
+| posterior_entropy_maximum | method | none | true | false | false | calibration positive group 分布确定的后验熵 admissibility 上限。 |
+| wrong_key_replay_log_likelihood_ratio | metric | none | true | true | false | wrong-key forward hypothesis 相对固定 null replay 的高斯 LLR。 |
+| wrong_prompt_replay_log_likelihood_ratio | metric | none | true | true | false | wrong-prompt forward hypothesis 相对固定 null replay 的高斯 LLR。 |
+| wrong_sampler_replay_log_likelihood_ratio | metric | none | true | true | false | wrong-sampler/time-grid forward hypothesis 相对固定 null replay 的高斯 LLR。 |
+| adaptive_attack_output_decoded_frame_count | metric | none | true | true | false | 跨视频攻击视频落盘后重新解码得到的实际帧数。 |
+| adaptive_attack_secondary_input_video_path | provenance | none | true | false | false | copy/spoof 或 collusion 查询使用的第二个真实输入视频路径。 |
+| adaptive_attack_secondary_input_video_sha256 | provenance | none | true | true | false | 跨视频查询第二个输入视频的内容摘要。 |
+| formal_adaptive_attack_expected_query_record_count | metric | none | true | true | false | 按各协议实际查询数与 public negative 探测数计算的预期查询日志总数。 |
+| adaptive_attack_donor_statistical_cluster_id | provenance | none | true | true | false | copy/spoof 攻击中提供水印内容的 donor 视频独立簇标识。 |
+| adaptive_attack_member_statistical_cluster_ids | provenance | none | true | true | false | collusion 不重叠视频对包含的两个 source-video cluster 标识。 |

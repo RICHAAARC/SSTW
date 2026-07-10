@@ -53,6 +53,8 @@ def _write_closed_evidence(run_root: Path, target_fpr: float) -> None:
         "formal_flow_evidence_decision.json",
         "formal_flow_evidence_decision",
         posterior_probability_calibration_decision="PASS",
+        state_space_posterior_mechanism_decision="PASS",
+        formal_negative_hypothesis_family_decision="PASS",
         **claim_fields,
     )
     _write_decision(
@@ -66,6 +68,10 @@ def _write_closed_evidence(run_root: Path, target_fpr: float) -> None:
         "formal_adaptive_attack_execution_decision.json",
         "formal_adaptive_attack_execution_decision",
         per_video_adaptive_attack_optimization=True,
+        adaptive_attack_query_provenance_decision="PASS",
+        adaptive_watermark_retention_decision="PASS",
+        adaptive_spoof_rejection_decision="PASS",
+        adaptive_replay_control_rejection_decision="PASS",
         adaptive_robustness_claim_allowed=True,
     )
     _write_decision(
@@ -215,5 +221,29 @@ def test_claim3_cannot_be_downgraded_in_any_formal_profile(tmp_path: Path) -> No
 
     assert audit["paper_profile_evidence_closure_decision"] == "FAIL"
     assert "claim_3_replay_posterior_full_support_passed" in audit[
+        "paper_profile_evidence_closure_missing_requirements"
+    ]
+
+
+@pytest.mark.quick
+def test_calibrated_probability_requires_real_state_space_mechanism(tmp_path: Path) -> None:
+    """只有校准指标而没有动态状态空间证据时, 正式 profile 必须失败。"""
+
+    run_root = tmp_path / "probe_paper"
+    config_path = tmp_path / "probe_paper.json"
+    _write_config(config_path, "probe_paper", 0.1)
+    _write_closed_evidence(run_root, 0.1)
+    _write_decision(
+        run_root,
+        "formal_flow_evidence_decision.json",
+        "formal_flow_evidence_decision",
+        posterior_probability_calibration_decision="PASS",
+        state_space_posterior_mechanism_decision="FAIL",
+    )
+
+    audit = build_paper_profile_evidence_closure_audit(run_root, config_path)
+
+    assert audit["paper_profile_evidence_closure_decision"] == "FAIL"
+    assert "calibrated_probability_posterior_passed" in audit[
         "paper_profile_evidence_closure_missing_requirements"
     ]

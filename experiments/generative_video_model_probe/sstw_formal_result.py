@@ -13,12 +13,20 @@ from evaluation.attacks.video_runtime_attack_protocol import load_protocol_confi
 from evaluation.protocol.flow_evidence_fields import with_flow_evidence_protocol_defaults
 from evaluation.protocol.record_writer import write_json, write_jsonl
 from evaluation.protocol.table_builder import write_csv
+from main.methods.state_space_watermark.formal_detector import (
+    FLOW_STATE_POSTERIOR_SCORE_SOURCE,
+)
+from main.methods.state_space_watermark.replay_inversion import (
+    REPLAY_GAUSSIAN_LIKELIHOOD_MODEL_ID,
+)
 
 
 DEFAULT_PROTOCOL_CONFIG = "configs/protocol/probe_paper_generative_probe.json"
 SSTW_METHOD_ID = "sstw_key_conditioned_flow_trajectory"
 FORMAL_FLOW_EVIDENCE_LEVEL = "attacked_video_key_independent_inversion_hypothesis_replay"
-FORMAL_FLOW_SCORE_SEMANTICS = "calibrated_probability_posterior_with_fixed_fpr_threshold"
+FORMAL_FLOW_SCORE_SEMANTICS = (
+    "dual_hypothesis_state_space_calibrated_probability_with_fixed_fpr_threshold"
+)
 FORMAL_SSTW_DETECTOR_EVIDENCE_LEVELS = {FORMAL_FLOW_EVIDENCE_LEVEL}
 FORMAL_SSTW_CLEAN_NEGATIVE_EVIDENCE_LEVELS = {FORMAL_FLOW_EVIDENCE_LEVEL}
 
@@ -74,6 +82,47 @@ def _score_from_runtime_detection(record: dict[str, Any]) -> tuple[float | None,
     return None, "missing_formal_video_detector_score"
 
 
+def _state_space_detection_record_ready(record: dict[str, Any]) -> bool:
+    """验证分数确实来自多步状态空间后验与预注册 replay 似然。"""
+
+    observation_step_count = int(record.get("flow_state_observation_step_count") or 0)
+    filter_step_count = int(record.get("flow_state_filter_step_count") or 0)
+    return (
+        record.get("flow_detector_score_source") == FLOW_STATE_POSTERIOR_SCORE_SOURCE
+        and record.get("flow_state_observation_sequence_status")
+        == "measured_from_fixed_replay_path"
+        and observation_step_count >= 2
+        and filter_step_count == observation_step_count
+        and record.get("flow_state_filtering_status") == "kalman_filter_ready"
+        and record.get("flow_state_smoothing_status")
+        == "rauch_tung_striebel_smoother_ready"
+        and record.get("flow_state_log_likelihood_ratio") is not None
+        and record.get("replay_likelihood_model_id")
+        == REPLAY_GAUSSIAN_LIKELIHOOD_MODEL_ID
+    )
+
+
+def _state_space_provenance_fields(record: dict[str, Any]) -> dict[str, Any]:
+    """把正式后验的最小可审计来源字段传递到公平比较记录。"""
+
+    return {
+        "flow_detector_score_source": record.get("flow_detector_score_source"),
+        "flow_state_observation_sequence_status": record.get(
+            "flow_state_observation_sequence_status"
+        ),
+        "flow_state_observation_step_count": record.get(
+            "flow_state_observation_step_count"
+        ),
+        "flow_state_filter_step_count": record.get("flow_state_filter_step_count"),
+        "flow_state_filtering_status": record.get("flow_state_filtering_status"),
+        "flow_state_smoothing_status": record.get("flow_state_smoothing_status"),
+        "flow_state_log_likelihood_ratio": record.get(
+            "flow_state_log_likelihood_ratio"
+        ),
+        "replay_likelihood_model_id": record.get("replay_likelihood_model_id"),
+    }
+
+
 def formal_sstw_score_record_ready_for_claim(record: dict[str, Any]) -> bool:
     """判断 SSTW positive record 是否具备正式论文级检测证据。"""
 
@@ -83,6 +132,8 @@ def formal_sstw_score_record_ready_for_claim(record: dict[str, Any]) -> bool:
         and record.get("sstw_detector_evidence_level") in FORMAL_SSTW_DETECTOR_EVIDENCE_LEVELS
         and record.get("trajectory_trace_used_for_score") is False
         and record.get("runtime_detection_claim_level") == "formal_paper_detector"
+        and record.get("cross_model_role") != "cross_model_validation_model"
+        and _state_space_detection_record_ready(record)
         and _safe_float(record.get("sstw_raw_detector_score")) is not None
     )
 
@@ -92,9 +143,11 @@ def formal_sstw_clean_negative_record_ready_for_calibration(record: dict[str, An
 
     return (
         record.get("metric_status") == "measured_formal"
-        and str(record.get("sample_role") or "").lower() == "clean_negative"
+        and str(record.get("sample_role") or "").lower()
+        in {"clean_negative", "controlled_negative"}
         and record.get("clean_negative_evidence_level") in FORMAL_SSTW_CLEAN_NEGATIVE_EVIDENCE_LEVELS
         and record.get("trajectory_trace_used_for_score") is False
+        and _state_space_detection_record_ready(record)
         and _safe_float(record.get("sstw_clean_negative_score")) is not None
     )
 
@@ -111,6 +164,7 @@ def _runtime_detection_record_ready(record: dict[str, Any]) -> bool:
         and record.get("sstw_detector_evidence_level") in FORMAL_SSTW_DETECTOR_EVIDENCE_LEVELS
         and record.get("trajectory_trace_used_for_score") is False
         and record.get("runtime_detection_claim_level") == "formal_paper_detector"
+        and _state_space_detection_record_ready(record)
     )
 
 
@@ -188,6 +242,7 @@ def build_sstw_measured_formal_records(
             "trajectory_trace_used_for_score": False,
             "runtime_detection_claim_level": detection_record.get("runtime_detection_claim_level"),
             "source_runtime_detection_record_index": index,
+            **_state_space_provenance_fields(detection_record),
             **profile_context,
         }
         digest = build_stable_digest(payload)
@@ -201,13 +256,20 @@ def build_sstw_measured_formal_records(
             **payload,
         }, trajectory_source_level=FORMAL_FLOW_EVIDENCE_LEVEL, claim_support_status=claim_support_status))
     for index, control_record in enumerate(control_records):
-        if str(control_record.get("sample_role") or "").lower() != "clean_negative":
+        if str(control_record.get("sample_role") or "").lower() not in {
+            "clean_negative",
+            "controlled_negative",
+        }:
             continue
         if str(control_record.get("method_variant") or "sstw_full_method") != "sstw_full_method":
+            continue
+        if control_record.get("cross_model_role") == "cross_model_validation_model":
             continue
         if control_record.get("clean_negative_evidence_level") not in FORMAL_SSTW_CLEAN_NEGATIVE_EVIDENCE_LEVELS:
             continue
         if control_record.get("trajectory_trace_used_for_score") is not False:
+            continue
+        if not _state_space_detection_record_ready(control_record):
             continue
         score, score_field = _score_from_control_record(control_record)
         if score is None:
@@ -224,7 +286,7 @@ def build_sstw_measured_formal_records(
             "protocol_split": control_record.get("protocol_split"),
             "colab_runtime_profile": control_record.get("colab_runtime_profile"),
             "attack_name": "",
-            "sample_role": "clean_negative",
+            "sample_role": str(control_record.get("sample_role") or "clean_negative"),
             "negative_family": control_name,
             "control_name": control_name,
             "clean_negative_unit_id": f"sstw_{control_name}_{control_record.get('prompt_id')}_{control_record.get('seed_id')}",
@@ -238,12 +300,17 @@ def build_sstw_measured_formal_records(
             "sstw_score_orientation": "higher_is_more_watermarked",
             "sstw_detection_score_field": score_field,
             "clean_negative_evidence_level": control_record.get("clean_negative_evidence_level"),
-            "clean_negative_video_path": control_record.get("clean_negative_video_path") or control_record.get("source_video_path"),
+            "clean_negative_video_path": (
+                control_record.get("clean_negative_video_path")
+                or control_record.get("attacked_video_path")
+                or control_record.get("source_video_path")
+            ),
             "sstw_detector_input_contract": control_record.get("sstw_detector_input_contract"),
             "sstw_detector_key_digest": control_record.get("sstw_detector_key_digest"),
             "trajectory_trace_used_for_score": False,
             "clean_negative_source_record_family": "sstw_clean_negative_score_records",
             "source_controlled_negative_record_index": index,
+            **_state_space_provenance_fields(control_record),
             **profile_context,
         }
         digest = build_stable_digest(payload)

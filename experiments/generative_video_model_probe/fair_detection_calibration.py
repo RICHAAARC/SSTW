@@ -631,7 +631,9 @@ def build_fair_detection_calibration_records(
         negative_score_fields=("sstw_clean_negative_score", "clean_negative_score", "sstw_raw_detector_score", "sstw_score", "raw_detector_score"),
         embedded_negative_score_fields=("sstw_clean_negative_score", "clean_negative_score"),
         score_semantics_field="sstw_score_semantics",
-        default_score_semantics="calibrated_probability_posterior_with_fixed_fpr_threshold",
+        default_score_semantics=(
+            "dual_hypothesis_state_space_calibrated_probability_with_fixed_fpr_threshold"
+        ),
         context=context,
         positive_record_ready_predicate=formal_sstw_score_record_ready_for_claim,
         negative_record_ready_predicate=formal_sstw_clean_negative_record_ready_for_calibration,

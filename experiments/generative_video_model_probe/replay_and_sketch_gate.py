@@ -19,6 +19,10 @@ from typing import Any, Iterable
 from experiments.generative_video_model_probe.formal_motion_claim_filter import select_motion_claim_generation_records
 from runtime.core.digest import build_stable_digest
 from main.methods.state_space_watermark.authenticated_trajectory_sketch import verify_authenticated_trajectory_sketch
+from main.methods.state_space_watermark.formal_detector import FLOW_STATE_POSTERIOR_SCORE_SOURCE
+from main.methods.state_space_watermark.replay_inversion import (
+    REPLAY_GAUSSIAN_LIKELIHOOD_MODEL_ID,
+)
 from evaluation.protocol.flow_evidence_fields import with_flow_evidence_protocol_defaults
 from evaluation.protocol.record_writer import write_json, write_jsonl
 from evaluation.protocol.table_builder import write_csv
@@ -41,6 +45,9 @@ REPLAY_RECORD_TABLE_FIELDS = (
     "trajectory_sketch_verification_status",
     "replay_uncertainty_weight",
     "replay_uncertainty_mean",
+    "replay_log_likelihood_ratio_mean",
+    "replay_likelihood_model_id",
+    "replay_control_fixed_reverse_path_reused",
     "replay_scheduler_id",
     "replay_time_grid_id",
     "wrong_sampler_replay_control",
@@ -51,6 +58,13 @@ REPLAY_RECORD_TABLE_FIELDS = (
     "claim_support_status",
     "trajectory_source_level",
     "flow_state_admissibility_status",
+    "flow_state_log_likelihood_ratio",
+    "flow_state_filter_step_count",
+    "flow_state_filtering_status",
+    "flow_state_smoothing_status",
+    "flow_watermark_posterior_probability",
+    "flow_watermark_posterior_log_odds",
+    "flow_state_posterior_entropy",
 )
 
 
@@ -144,8 +158,16 @@ def _build_full_claim3_records(run_root: Path) -> dict[str, list[dict[str, Any]]
             "flow_watermark_posterior_probability": evidence.get("flow_watermark_posterior_probability"),
             "flow_watermark_posterior_log_odds": evidence.get("flow_watermark_posterior_log_odds"),
             "flow_state_posterior_entropy": evidence.get("flow_state_posterior_entropy"),
+            "flow_state_log_likelihood_ratio": evidence.get("flow_state_log_likelihood_ratio"),
+            "flow_state_filter_step_count": evidence.get("flow_state_filter_step_count"),
+            "flow_state_filtering_status": evidence.get("flow_state_filtering_status"),
+            "flow_state_smoothing_status": evidence.get("flow_state_smoothing_status"),
             "flow_detector_score_source": evidence.get("flow_detector_score_source"),
             "replay_log_likelihood_ratio_mean": evidence.get("replay_log_likelihood_ratio_mean"),
+            "replay_likelihood_model_id": evidence.get("replay_likelihood_model_id"),
+            "replay_control_fixed_reverse_path_reused": evidence.get(
+                "replay_control_fixed_reverse_path_reused"
+            ),
             "threshold_source_split": evidence.get("threshold_source_split"),
             "test_time_threshold_update_blocked": evidence.get("test_time_threshold_update_blocked"),
             "S_final_conservative": evidence.get("S_final_conservative"),
@@ -451,9 +473,17 @@ def audit_replay_and_sketch_records(record_groups: dict[str, list[dict[str, Any]
             and 0.0 <= float(record["flow_watermark_posterior_probability"]) <= 1.0
             and record.get("flow_watermark_posterior_log_odds") is not None
             and record.get("flow_state_posterior_entropy") is not None
+            and record.get("flow_state_log_likelihood_ratio") is not None
+            and int(record.get("flow_state_filter_step_count") or 0) >= 2
+            and record.get("flow_state_filtering_status") == "kalman_filter_ready"
+            and record.get("flow_state_smoothing_status")
+            == "rauch_tung_striebel_smoother_ready"
             and record.get("replay_log_likelihood_ratio_mean") is not None
+            and record.get("replay_likelihood_model_id")
+            == REPLAY_GAUSSIAN_LIKELIHOOD_MODEL_ID
+            and record.get("replay_control_fixed_reverse_path_reused") is True
             and record.get("flow_detector_score_source")
-            == "group_cross_fitted_calibrated_probability_posterior"
+            == FLOW_STATE_POSTERIOR_SCORE_SOURCE
             and record.get("threshold_source_split") == "calibration"
             and record.get("test_time_threshold_update_blocked") is True
             and record.get("S_final_conservative") is not None
@@ -464,6 +494,9 @@ def audit_replay_and_sketch_records(record_groups: dict[str, list[dict[str, Any]
             "authenticated_trajectory_sketch_records_ready": total_sketch_count > 0 and sketch_ready_count == total_sketch_count,
             "attacked_video_replay_uncertainty_records_ready": total_sketch_count > 0 and uncertainty_ready_count == total_sketch_count,
             "flow_replay_posterior_records_ready": posterior_ready_count == total_sketch_count,
+            "flow_replay_state_space_filtering_smoothing_ready": (
+                posterior_ready_count == total_sketch_count
+            ),
             "replay_reliability_mean_ready": replay_reliability_mean >= minimum_replay_reliability_mean,
             "wrong_sampler_replay_control_reliable": control_rates["wrong_sampler"] >= minimum_control_pass_rate,
             "wrong_prompt_replay_control_reliable": control_rates["wrong_prompt"] >= minimum_control_pass_rate,

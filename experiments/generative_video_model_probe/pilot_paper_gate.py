@@ -707,13 +707,38 @@ def _internal_ablation_readiness(
 
 
 def _negative_family_counts(records: Iterable[dict]) -> Counter[str]:
-    """统计可审计 negative family 的样本数。"""
-    counter: Counter[str] = Counter()
+    """按独立 source-video cluster 统计真实 negative family 覆盖。"""
+
+    clusters_by_family: dict[str, set[str]] = {}
     for record in records:
         family = str(record.get("negative_family") or "")
         if family not in IGNORED_NEGATIVE_FAMILIES:
-            counter[family] += 1
-    return counter
+            cluster_id = str(
+                record.get("statistical_cluster_id")
+                or f"{record.get('prompt_id')}::{record.get('seed_id')}"
+            )
+            clusters_by_family.setdefault(family, set()).add(cluster_id)
+    return Counter({
+        family: len(cluster_ids)
+        for family, cluster_ids in clusters_by_family.items()
+    })
+
+
+def _cluster_maximum_negative_scores(records: Iterable[dict]) -> list[float]:
+    """每个独立视频只保留最高负假设分数, 防止多 trial 稀释 FPR。"""
+
+    scores_by_cluster: dict[str, float] = {}
+    for record in records:
+        cluster_id = str(
+            record.get("statistical_cluster_id")
+            or f"{record.get('prompt_id')}::{record.get('seed_id')}"
+        )
+        score = float(record["pilot_paper_score"])
+        scores_by_cluster[cluster_id] = max(
+            scores_by_cluster.get(cluster_id, float("-inf")),
+            score,
+        )
+    return list(scores_by_cluster.values())
 
 
 def _attack_counts(records: Iterable[dict]) -> Counter[str]:
@@ -768,7 +793,8 @@ def build_pilot_paper_gate_audit(
     sstw_measured_formal_records = _read_jsonl(run_root / "records" / "sstw_measured_formal_records.jsonl")
     sstw_formal_negative_records = [
         record for record in sstw_measured_formal_records
-        if str(record.get("sample_role") or "").lower() == "clean_negative"
+        if str(record.get("sample_role") or "").lower()
+        in {"clean_negative", "controlled_negative"}
         and record.get("metric_status") == "measured_formal"
     ]
     sstw_formal_positive_records = [
@@ -790,8 +816,12 @@ def build_pilot_paper_gate_audit(
         if _target_fpr_matches(record, config["target_fpr"]) and record.get("split") in {"test", "heldout", "heldout_test"}
     ])
 
-    calibration_negative_scores = [float(record["pilot_paper_score"]) for record in calibration_negative_records]
-    heldout_negative_scores = [float(record["pilot_paper_score"]) for record in heldout_negative_records]
+    calibration_negative_scores = _cluster_maximum_negative_scores(
+        calibration_negative_records
+    )
+    heldout_negative_scores = _cluster_maximum_negative_scores(
+        heldout_negative_records
+    )
     heldout_positive_scores = [float(record["pilot_paper_score"]) for record in heldout_positive_records]
     threshold, calibration_fpr, calibration_false_positive_count = _fixed_fpr_threshold(calibration_negative_scores, config["target_fpr"])
     heldout_fpr, heldout_false_positive_count = _rate_at_threshold(heldout_negative_scores, threshold)
@@ -818,8 +848,15 @@ def build_pilot_paper_gate_audit(
     path_gain_values: list[float] = []
     replay_uncertainty_values: list[float] = []
     negative_tail_statuses = {"not_inflated"} if heldout_fpr is not None and heldout_fpr <= config["target_fpr"] else set()
-    adaptive_attack_decision = _read_json(run_root / "artifacts" / "adaptive_attack_decision.json")
-    adaptive_attack_ready = _decision_pass(adaptive_attack_decision, "adaptive_attack_decision")
+    replay_gate_decision = _read_json(
+        run_root / "artifacts" / "replay_and_sketch_gate_decision.json"
+    )
+    wrong_sampler_replay_ready = (
+        _decision_pass(replay_gate_decision, "replay_and_sketch_gate_decision")
+        and int(replay_gate_decision.get("wrong_sampler_replay_record_count") or 0) > 0
+        and replay_gate_decision.get("wrong_sampler_replay_record_count")
+        == replay_gate_decision.get("wrong_sampler_replay_rejected_count")
+    )
     external_baseline_ready, external_baseline_summary = _external_baseline_readiness(run_root, config, test_trace_ids)
     internal_ablation_ready, internal_ablation_summary = _internal_ablation_readiness(run_root, config, test_trace_ids)
     external_baseline_self_containment_ready, external_baseline_self_containment_summary = _external_baseline_self_containment_ready(run_root)
@@ -870,11 +907,19 @@ def build_pilot_paper_gate_audit(
         and calibration_unique_video_count >= config["minimum_calibration_unique_video_count"],
         "pilot_paper_heldout_test_split_ready": test_seed_per_prompt_min >= config["minimum_test_seed_per_prompt"]
         and test_unique_video_count >= config["minimum_test_unique_video_count"],
-        "calibration_negative_event_count_ready": len(calibration_negative_records) >= config["minimum_calibration_negative_event_count"],
-        "heldout_test_negative_event_count_ready": len(heldout_negative_records) >= config["minimum_heldout_test_negative_event_count"],
+        "calibration_negative_event_count_ready": len(calibration_negative_scores) >= config["minimum_calibration_negative_event_count"],
+        "heldout_test_negative_event_count_ready": len(heldout_negative_scores) >= config["minimum_heldout_test_negative_event_count"],
         "heldout_attacked_positive_event_count_ready": len(heldout_positive_records) >= config["minimum_heldout_attacked_positive_event_count"],
-        "calibration_negative_family_coverage_ready": True,
-        "heldout_negative_family_coverage_ready": True,
+        "calibration_negative_family_coverage_ready": (
+            len(calibration_family_counts) >= config["minimum_negative_family_count"]
+            and calibration_negative_event_count_per_family_min
+            >= config["minimum_calibration_negative_event_count_per_family"]
+        ),
+        "heldout_negative_family_coverage_ready": (
+            len(heldout_family_counts) >= config["minimum_negative_family_count"]
+            and heldout_negative_event_count_per_family_min
+            >= config["minimum_heldout_negative_event_count_per_family"]
+        ),
         "pilot_paper_runtime_attack_protocol_config_ready": runtime_attack_protocol_ready,
         "attack_event_coverage_ready": bool(attack_counts)
         and not missing_required_runtime_attack_names
@@ -884,7 +929,7 @@ def build_pilot_paper_gate_audit(
         "tpr_at_target_fpr_computable": tpr_at_fpr is not None,
         "path_marginal_gain_ready": formal_method_comparison_ready,
         "negative_tail_not_inflated": heldout_fpr is not None and heldout_fpr <= config["target_fpr"],
-        "wrong_sampler_replay_rejected": adaptive_attack_ready,
+        "wrong_sampler_replay_rejected": wrong_sampler_replay_ready,
         "pilot_paper_external_baseline_comparison_ready": (not config["require_external_baseline_comparison_ready"]) or external_baseline_ready,
         "pilot_paper_external_baseline_self_containment_ready": (not config["require_external_baseline_self_contained_outputs"]) or external_baseline_self_containment_ready,
         "pilot_paper_fair_detection_calibration_ready": (not config["require_fair_detection_calibration"]) or fair_detection_ready,
@@ -977,10 +1022,12 @@ def build_pilot_paper_gate_audit(
         "pilot_paper_unique_video_count": unique_video_count,
         "pilot_paper_calibration_unique_video_count": calibration_unique_video_count,
         "pilot_paper_test_unique_video_count": test_unique_video_count,
-        "calibration_negative_event_count": len(calibration_negative_records),
-        "heldout_test_negative_event_count": len(heldout_negative_records),
+        "calibration_negative_event_count": len(calibration_negative_scores),
+        "calibration_negative_raw_hypothesis_count": len(calibration_negative_records),
+        "heldout_test_negative_event_count": len(heldout_negative_scores),
+        "heldout_negative_raw_hypothesis_count": len(heldout_negative_records),
         "heldout_attacked_positive_event_count": len(heldout_positive_records),
-        "heldout_negative_event_count": len(heldout_negative_records),
+        "heldout_negative_event_count": len(heldout_negative_scores),
         "attacked_positive_event_count": len(heldout_positive_records),
         "calibration_negative_family_count": len(calibration_family_counts),
         "heldout_negative_family_count": len(heldout_family_counts),

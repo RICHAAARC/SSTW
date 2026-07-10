@@ -13,6 +13,7 @@ from statistics import pstdev
 from typing import Any, Iterable, Mapping
 
 from evaluation.statistics.clustered_inference import (
+    clustered_binary_any_rate_interval,
     clustered_binary_rate_interval,
     paired_cluster_difference_interval,
 )
@@ -21,10 +22,23 @@ from evaluation.attacks.video_runtime_attack_protocol import load_protocol_confi
 from experiments.generative_video_model_probe.colab_runtime import _load_video_generation_pipeline, _select_dtype
 from runtime.core.digest import build_stable_digest
 from main.methods.state_space_watermark.endpoint_latent_detector import compute_endpoint_latent_evidence
+from main.methods.state_space_watermark.flow_tubelet_key_code import (
+    build_flow_tubelet_key_direction_like,
+)
+from main.methods.state_space_watermark.path_observation import compute_path_step_observation
+from main.methods.state_space_watermark.replay_inversion import (
+    REPLAY_GAUSSIAN_LIKELIHOOD_MODEL_ID,
+    ReplayTrajectory,
+    gaussian_replay_residual_likelihood,
+)
 from main.methods.state_space_watermark.formal_detector import (
     FORMAL_METHOD_VARIANTS,
+    FLOW_STATE_POSTERIOR_SCORE_SOURCE,
     apply_frozen_flow_detector,
     fit_flow_evidence_calibration,
+)
+from main.methods.state_space_watermark.flow_state_posterior import (
+    FLOW_STATE_POSTERIOR_MODEL_TYPE,
 )
 from main.methods.state_space_watermark.wan_flow_replay_backend import (
     WanFlowReplayResult,
@@ -46,6 +60,12 @@ from evaluation.protocol.table_builder import write_csv
 
 FORMAL_FLOW_EVIDENCE_LEVEL = "attacked_video_key_independent_inversion_hypothesis_replay"
 FORMAL_FLOW_DETECTOR_INPUT_CONTRACT = "video_file_prompt_key_model_scheduler_and_frozen_calibration"
+FORMAL_NEGATIVE_HYPOTHESIS_FAMILIES = frozenset({
+    "clean_unwatermarked_candidate_key_hypothesis",
+    "watermarked_video_wrong_key_hypothesis",
+    "watermarked_video_wrong_prompt_hypothesis",
+    "watermarked_video_wrong_sampler_time_grid_hypothesis",
+})
 
 
 def _run_attacked_video_replay_for_model(
@@ -92,6 +112,7 @@ def _run_control_replay_for_model(
     key_text: str,
     num_inference_steps: int,
     scheduler: Any | None = None,
+    fixed_trajectory: ReplayTrajectory | None = None,
 ) -> tuple[Any, tuple[Any, ...], dict[str, float | int | None]]:
     """按模型家族执行相同定义的 wrong-key、wrong-prompt 或 wrong-sampler 对照。"""
 
@@ -104,6 +125,7 @@ def _run_control_replay_for_model(
             key_text=key_text,
             num_inference_steps=num_inference_steps,
             scheduler=scheduler,
+            fixed_trajectory=fixed_trajectory,
         )
     return run_wan_control_replay(
         pipeline,
@@ -112,6 +134,7 @@ def _run_control_replay_for_model(
         key_text=key_text,
         num_inference_steps=num_inference_steps,
         scheduler=scheduler,
+        fixed_trajectory=fixed_trajectory,
     )
 
 
@@ -201,6 +224,124 @@ def _scheduler_signature(scheduler: Any) -> str:
     return f"{type(scheduler).__name__}:{sha256(payload.encode('utf-8')).hexdigest()}"
 
 
+def _replay_native_key_direction(
+    replay: WanFlowReplayResult | LTXFlowReplayResult,
+    *,
+    key_text: str,
+) -> Any:
+    """在模型原生 replay 布局中构造同一个五维 SSTW tubelet key 方向。"""
+
+    reference = replay.replay_trajectories[replay.primary_replay_index].reverse_states[0]
+    if isinstance(replay, LTXFlowReplayResult):
+        canonical = replay.latent_layout.to_canonical(reference)
+        canonical_direction, _metadata = build_flow_tubelet_key_direction_like(
+            canonical,
+            key_text=key_text,
+        )
+        return replay.latent_layout.from_canonical(canonical_direction)
+    direction, _metadata = build_flow_tubelet_key_direction_like(
+        reference,
+        key_text=key_text,
+    )
+    return direction
+
+
+def _normalized_projection(value: Any, direction: Any) -> float:
+    """计算状态或位移在 key 方向上的范数归一化投影。"""
+
+    value_flat = value.detach().float().reshape(-1)
+    direction_flat = direction.detach().float().reshape(-1)
+    denominator = value_flat.norm().clamp_min(1e-8) * direction_flat.norm().clamp_min(1e-8)
+    return float((value_flat @ direction_flat / denominator).item())
+
+
+def _root_mean_square(value: Any) -> float:
+    """计算不含候选 key 的轨迹能量, 供 generic SSM 公平对照使用。"""
+
+    return float(value.detach().float().pow(2).mean().sqrt().item())
+
+
+def build_flow_state_observation_sequence(
+    replay: WanFlowReplayResult | LTXFlowReplayResult,
+    *,
+    key_text: str,
+    trajectory: ReplayTrajectory | None = None,
+    schedule: Iterable[Any] | None = None,
+) -> list[dict[str, Any]]:
+    """从固定 inversion 路径构造真实逐 phase 状态空间观测序列。"""
+
+    active = trajectory or replay.replay_trajectories[replay.primary_replay_index]
+    active_schedule = tuple(schedule) if schedule is not None else replay.primary_schedule
+    states = active.reverse_states
+    if len(active_schedule) != len(states):
+        raise ValueError("状态空间观测的 Flow schedule 与固定 reverse path 长度不一致")
+    if len(states) != len(active_schedule):
+        raise RuntimeError("状态空间观测的 replay states 与 schedule 长度不一致")
+    if len(active.forward_states) != len(states) or len(active.null_forward_states) != len(states):
+        raise RuntimeError("候选、null 与固定 inversion 轨迹长度不一致")
+    direction = _replay_native_key_direction(replay, key_text=key_text).to(
+        device=states[0].device,
+        dtype=states[0].dtype,
+    )
+    replay_reliability = float(replay.replay_uncertainty.replay_reliability)
+    grid_reliability = _time_grid_reliability(replay)
+    coverage = float(replay.endpoint_evidence.coverage_ratio)
+    observations: list[dict[str, Any]] = []
+    for step_index in range(len(states) - 1):
+        delta_sigma = float(active_schedule[step_index + 1].sigma) - float(
+            active_schedule[step_index].sigma
+        )
+        if abs(delta_sigma) <= 1e-12:
+            continue
+        phase = step_index / max(1, len(states) - 2)
+        displacement = states[step_index + 1] - states[step_index]
+        velocity = displacement / delta_sigma
+        path = compute_path_step_observation(
+            states[step_index],
+            states[step_index + 1],
+            velocity,
+            direction,
+            flow_phase=phase,
+        )
+        state_projection = _normalized_projection(states[step_index + 1], direction)
+        endpoint_score = max(0.0, min(1.0, 0.5 + 0.5 * state_projection))
+        likelihood = gaussian_replay_residual_likelihood(
+            active.forward_states[step_index + 1],
+            active.null_forward_states[step_index + 1],
+            states[step_index + 1],
+        )
+        observations.append({
+            "flow_state_observation_step_index": step_index,
+            "flow_phase": round(phase, 8),
+            "endpoint_score": round(endpoint_score, 8),
+            "velocity_score": round(path.velocity_projection_normalized, 8),
+            "path_score": round(path.path_projection_normalized, 8),
+            "path_endpoint_consistency": round(
+                max(0.0, min(1.0, 1.0 - abs(state_projection - path.path_projection_normalized))),
+                8,
+            ),
+            "replay_log_likelihood_ratio": round(
+                likelihood.log_likelihood_ratio_per_dimension,
+                8,
+            ),
+            "replay_reliability": round(replay_reliability, 8),
+            "time_grid_reliability": round(grid_reliability, 8),
+            "coverage_ratio": round(coverage, 8),
+            "path_velocity_consistency": round(path.path_velocity_consistency, 8),
+            "key_agnostic_endpoint_energy": round(_root_mean_square(states[step_index + 1]), 8),
+            "key_agnostic_velocity_energy": round(_root_mean_square(velocity), 8),
+            "key_agnostic_path_energy": round(_root_mean_square(displacement), 8),
+            "replay_observation_noise_variance": round(
+                likelihood.observation_noise_variance,
+                10,
+            ),
+            "replay_likelihood_model_id": likelihood.likelihood_model_id,
+        })
+    if not observations:
+        raise RuntimeError("固定 replay 路径未形成有效状态空间观测")
+    return observations
+
+
 def build_flow_evidence_payload(
     replay: WanFlowReplayResult | LTXFlowReplayResult,
     *,
@@ -212,6 +353,7 @@ def build_flow_evidence_payload(
     endpoint = replay.endpoint_evidence.as_dict()
     path = dict(replay.path_evidence)
     uncertainty = replay.replay_uncertainty.as_dict()
+    state_sequence = build_flow_state_observation_sequence(replay, key_text=key_text)
     return {
         **endpoint,
         **path,
@@ -231,6 +373,10 @@ def build_flow_evidence_payload(
         "replay_primary_step_count": replay.replay_step_counts[replay.primary_replay_index],
         "trajectory_trace_used_for_score": False,
         "metric_status": "measured_formal",
+        "flow_state_observation_sequence": state_sequence,
+        "flow_state_observation_sequence_status": "measured_from_fixed_replay_path",
+        "flow_state_observation_step_count": len(state_sequence),
+        "flow_state_transition_source": "calibration_fitted_linear_gaussian_dynamics",
     }
 
 
@@ -248,19 +394,22 @@ def _control_payload(
     wrong_key_endpoint = _compute_replay_endpoint_evidence_for_key(replay, key_text=wrong_key)
 
     primary_steps = int(replay.replay_step_counts[replay.primary_replay_index])
-    wrong_key_trajectory, _wrong_key_schedule, wrong_key_path = _run_control_replay_for_model(
+    fixed_trajectory = replay.replay_trajectories[replay.primary_replay_index]
+    wrong_key_trajectory, wrong_key_schedule, wrong_key_path = _run_control_replay_for_model(
         pipeline,
         replay,
         prompt=prompt,
         key_text=wrong_key,
         num_inference_steps=primary_steps,
+        fixed_trajectory=fixed_trajectory,
     )
-    wrong_prompt_trajectory, _wrong_prompt_schedule, wrong_prompt_path = _run_control_replay_for_model(
+    wrong_prompt_trajectory, wrong_prompt_schedule, wrong_prompt_path = _run_control_replay_for_model(
         pipeline,
         replay,
         prompt=wrong_prompt,
         key_text=key_text,
         num_inference_steps=primary_steps,
+        fixed_trajectory=fixed_trajectory,
     )
 
     scheduler_class = type(pipeline.scheduler)
@@ -280,21 +429,24 @@ def _control_payload(
             pipeline.scheduler.config,
             shift=wrong_shift,
         )
-    wrong_sampler_trajectory, _wrong_sampler_schedule, wrong_sampler_path = _run_control_replay_for_model(
+    wrong_sampler_trajectory, wrong_sampler_schedule, wrong_sampler_path = _run_control_replay_for_model(
         pipeline,
         replay,
         prompt=prompt,
         key_text=key_text,
-        num_inference_steps=max(2, primary_steps + 3),
+        num_inference_steps=primary_steps,
         scheduler=wrong_scheduler,
+        fixed_trajectory=fixed_trajectory,
     )
     def hypothesis_support(trajectory: Any) -> float:
         likelihood_probability = 1.0 / (
             1.0 + math.exp(-float(trajectory.replay_log_likelihood_ratio))
         )
-        return likelihood_probability * math.exp(
-            -max(0.0, float(trajectory.candidate_cycle_relative_error))
-        )
+        gaussian_fit_probability = math.exp(-0.5 * (
+            float(trajectory.candidate_residual_mean_squared_error)
+            / max(float(trajectory.observation_noise_variance), 1e-12)
+        ))
+        return likelihood_probability * gaussian_fit_probability
 
     matched_path = float(replay.path_evidence.get("S_path_inv") or 0.0)
     matched_reliability = float(replay.replay_uncertainty.replay_reliability)
@@ -313,6 +465,32 @@ def _control_payload(
     wrong_sampler_path_reliability_score = (
         0.5 + 0.5 * float(wrong_sampler_path.get("S_path_inv") or 0.0)
     ) * hypothesis_support(wrong_sampler_trajectory)
+    wrong_key_sequence = build_flow_state_observation_sequence(
+        replay,
+        key_text=wrong_key,
+        trajectory=wrong_key_trajectory,
+        schedule=wrong_key_schedule,
+    )
+    wrong_prompt_sequence = build_flow_state_observation_sequence(
+        replay,
+        key_text=key_text,
+        trajectory=wrong_prompt_trajectory,
+        schedule=wrong_prompt_schedule,
+    )
+    wrong_sampler_sequence = build_flow_state_observation_sequence(
+        replay,
+        key_text=key_text,
+        trajectory=wrong_sampler_trajectory,
+        schedule=wrong_sampler_schedule,
+    )
+    fixed_reverse_reused = all(
+        trajectory.reverse_states is fixed_trajectory.reverse_states
+        for trajectory in (
+            wrong_key_trajectory,
+            wrong_prompt_trajectory,
+            wrong_sampler_trajectory,
+        )
+    )
     return {
         "wrong_key_endpoint_score": round(wrong_key_endpoint.score, 8),
         "wrong_key_S_path_inv": wrong_key_path.get("S_path_inv"),
@@ -347,9 +525,118 @@ def _control_payload(
             8,
         ),
         "wrong_sampler_control_shift": wrong_shift,
+        "wrong_key_flow_state_observation_sequence": wrong_key_sequence,
+        "wrong_prompt_flow_state_observation_sequence": wrong_prompt_sequence,
+        "wrong_sampler_flow_state_observation_sequence": wrong_sampler_sequence,
+        "replay_control_fixed_reverse_path_reused": fixed_reverse_reused,
         "replay_control_execution_status": "measured_formal",
         "wrong_prompt_control_prompt_digest": sha256(wrong_prompt.encode("utf-8")).hexdigest(),
     }
+
+
+def _controlled_negative_records_from_positive(
+    positive_record: Mapping[str, Any],
+) -> list[dict[str, Any]]:
+    """把真实 wrong-condition replay 展开为三个独立负假设记录。"""
+
+    identity_fields = (
+        "generation_model_id",
+        "generation_model_family",
+        "cross_model_role",
+        "prompt_id",
+        "seed_id",
+        "generation_seed_random",
+        "generation_generator_state_digest_random",
+        "velocity_causal_pair_id",
+        "velocity_causal_intervention_status",
+        "trajectory_trace_id",
+        "split",
+        "protocol_split",
+        "colab_runtime_profile",
+        "method_variant",
+        "attack_name",
+        "source_video_cluster_id",
+        "statistical_cluster_id",
+        "statistical_independent_unit",
+        "generation_source_video_sha256",
+        "attacked_video_path",
+        "attacked_video_sha256",
+        "replay_sampler_signature",
+        "authenticated_generation_time_grid_id",
+        "authenticated_generation_step_count",
+        "formal_flow_detector_input_contract",
+    )
+    common = {field: positive_record.get(field) for field in identity_fields}
+    specs = (
+        (
+            "watermarked_video_wrong_key_hypothesis",
+            "wrong_key",
+            "wrong_key_flow_state_observation_sequence",
+            "wrong_key_replay_log_likelihood_ratio",
+            "wrong_key_S_path_inv",
+        ),
+        (
+            "watermarked_video_wrong_prompt_hypothesis",
+            "wrong_prompt",
+            "wrong_prompt_flow_state_observation_sequence",
+            "wrong_prompt_replay_log_likelihood_ratio",
+            "wrong_prompt_S_path_inv",
+        ),
+        (
+            "watermarked_video_wrong_sampler_time_grid_hypothesis",
+            "wrong_sampler_time_grid",
+            "wrong_sampler_flow_state_observation_sequence",
+            "wrong_sampler_replay_log_likelihood_ratio",
+            "wrong_sampler_S_path_inv",
+        ),
+    )
+    records: list[dict[str, Any]] = []
+    for negative_family, hypothesis_type, sequence_field, llr_field, path_field in specs:
+        sequence = positive_record.get(sequence_field)
+        if not isinstance(sequence, list) or len(sequence) < 2:
+            raise RuntimeError(f"{negative_family} 缺少多步固定路径状态观测")
+        records.append(with_flow_evidence_protocol_defaults(
+            {
+                **common,
+                "record_version": "formal_flow_controlled_negative_v1",
+                "formal_flow_evidence_unit_id": build_stable_digest({
+                    "positive_unit_id": positive_record.get("formal_flow_evidence_unit_id"),
+                    "negative_family": negative_family,
+                }),
+                "sample_role": "controlled_negative",
+                "negative_family": negative_family,
+                "controlled_negative_hypothesis_type": hypothesis_type,
+                "formal_flow_evidence_level": FORMAL_FLOW_EVIDENCE_LEVEL,
+                "replay_inversion_status": "ready",
+                "replay_trajectory_source": (
+                    "attacked_video_fixed_reverse_path_wrong_condition_forward_hypothesis"
+                ),
+                "replay_control_execution_status": "measured_formal",
+                "replay_control_fixed_reverse_path_reused": positive_record.get(
+                    "replay_control_fixed_reverse_path_reused"
+                ),
+                "replay_log_likelihood_ratio_mean": positive_record.get(llr_field),
+                "replay_likelihood_model_id": REPLAY_GAUSSIAN_LIKELIHOOD_MODEL_ID,
+                "S_path_inv": positive_record.get(path_field),
+                "flow_state_observation_sequence": sequence,
+                "flow_state_observation_sequence_status": (
+                    "measured_from_fixed_replay_path"
+                ),
+                "flow_state_observation_step_count": len(sequence),
+                "flow_state_transition_source": (
+                    "calibration_fitted_linear_gaussian_dynamics"
+                ),
+                "trajectory_trace_used_for_score": False,
+                "metric_status": "measured_formal",
+            },
+            negative_family=negative_family,
+            trajectory_source_level=(
+                "attacked_video_fixed_reverse_path_wrong_condition_forward_hypothesis"
+            ),
+            flow_state_admissibility_status="pending_frozen_detector",
+            claim_support_status="sstw_controlled_negative_flow_evidence_ready",
+        ))
+    return records
 
 
 def _minimum_negative_count(config: Mapping[str, Any], split: str) -> int:
@@ -382,8 +669,18 @@ def _base_record(source: Mapping[str, Any], *, sample_role: str, method_variant:
     return {
         "record_version": "formal_flow_evidence_v1",
         "generation_model_id": source.get("generation_model_id"),
+        "generation_model_family": source.get("generation_model_family"),
+        "cross_model_role": source.get("cross_model_role"),
         "prompt_id": source.get("prompt_id"),
         "seed_id": source.get("seed_id"),
+        "generation_seed_random": source.get("generation_seed_random"),
+        "generation_generator_state_digest_random": source.get(
+            "generation_generator_state_digest_random"
+        ),
+        "velocity_causal_pair_id": source.get("velocity_causal_pair_id"),
+        "velocity_causal_intervention_status": source.get(
+            "velocity_causal_intervention_status"
+        ),
         "trajectory_trace_id": source.get("trajectory_trace_id"),
         "split": source.get("split"),
         "protocol_split": source.get("protocol_split"),
@@ -392,6 +689,7 @@ def _base_record(source: Mapping[str, Any], *, sample_role: str, method_variant:
         "method_variant": method_variant,
         "attack_name": source.get("attack_name"),
         "source_video_cluster_id": source.get("trajectory_trace_id"),
+        "generation_source_video_sha256": source.get("source_video_sha256"),
         "statistical_cluster_id": statistical_cluster_id,
         "statistical_independent_unit": "source_video_prompt_seed",
     }
@@ -431,6 +729,17 @@ def _score_records_with_frozen_calibration(
         for model_id in sorted({str(record.get("generation_model_id")) for record in rows})
         for variant in FORMAL_METHOD_VARIANTS
     }
+    cross_model_role_by_model = {
+        model_id: next(
+            (
+                record.get("cross_model_role")
+                for record in rows
+                if str(record.get("generation_model_id")) == model_id
+            ),
+            None,
+        )
+        for model_id, _variant in calibrations
+    }
     scored: list[dict[str, Any]] = []
     for record in rows:
         variant = str(record.get("method_variant"))
@@ -451,7 +760,7 @@ def _score_records_with_frozen_calibration(
             "attacked_video_detectable": bool(detection["decision"]),
             "claim_support_status": "sstw_complete_flow_mechanism_measured_formal",
         }
-        if record.get("sample_role") == "clean_negative":
+        if record.get("sample_role") in {"clean_negative", "controlled_negative"}:
             scored_record.update({
                 "clean_negative_status": "ready",
                 "clean_negative_evidence_level": FORMAL_FLOW_EVIDENCE_LEVEL,
@@ -462,6 +771,7 @@ def _score_records_with_frozen_calibration(
     threshold_records = [
         {
             "generation_model_id": model_id,
+            "cross_model_role": cross_model_role_by_model.get(model_id),
             "model_specific_calibration": True,
             **calibration.as_dict(),
         }
@@ -515,8 +825,9 @@ def _paired_path_gain_records(
 
 def _paired_velocity_causal_records(
     scored_records: Iterable[Mapping[str, Any]],
+    calibrations: Mapping[tuple[str, str], Any],
 ) -> list[dict[str, Any]]:
-    """在相同 prompt/seed/attack 上比较完整方法与无速度约束对照。"""
+    """用同一完整检测器比较受控随机种子下的速度约束干预。"""
 
     positives = [
         record
@@ -526,13 +837,14 @@ def _paired_velocity_causal_records(
         and record.get("method_variant")
         in {"sstw_full_method", "without_velocity_constraint"}
     ]
-    by_identity: dict[tuple[str, str, str, str], dict[str, Mapping[str, Any]]] = defaultdict(dict)
+    by_identity: dict[tuple[str, str, str, str, str], dict[str, Mapping[str, Any]]] = defaultdict(dict)
     for record in positives:
         identity = (
             str(record.get("generation_model_id") or ""),
             str(record.get("prompt_id") or ""),
             str(record.get("seed_id") or ""),
             str(record.get("attack_name") or ""),
+            str(record.get("velocity_causal_pair_id") or ""),
         )
         by_identity[identity][str(record.get("method_variant"))] = record
     rows: list[dict[str, Any]] = []
@@ -541,25 +853,83 @@ def _paired_velocity_causal_records(
         control = variants.get("without_velocity_constraint")
         if full is None or control is None:
             continue
-        full_score = float(full.get("S_final_conservative") or 0.0)
-        control_score = float(control.get("S_final_conservative") or 0.0)
-        rows.append({
+        matched_design = (
+            bool(identity[4])
+            and full.get("generation_seed_random") is not None
+            and bool(full.get("generation_generator_state_digest_random"))
+            and full.get("generation_generator_state_digest_random")
+            == control.get("generation_generator_state_digest_random")
+            and full.get("generation_seed_random") == control.get("generation_seed_random")
+            and bool(full.get("replay_sampler_signature"))
+            and full.get("replay_sampler_signature")
+            == control.get("replay_sampler_signature")
+            and bool(full.get("authenticated_generation_time_grid_id"))
+            and full.get("authenticated_generation_time_grid_id")
+            == control.get("authenticated_generation_time_grid_id")
+            and bool(full.get("generation_source_video_sha256"))
+            and bool(control.get("generation_source_video_sha256"))
+            and full.get("generation_source_video_sha256")
+            != control.get("generation_source_video_sha256")
+            and full.get("velocity_causal_intervention_status")
+            == "velocity_constraint_enabled"
+            and control.get("velocity_causal_intervention_status")
+            == "velocity_constraint_disabled"
+        )
+        base = {
             "record_version": "paired_velocity_causal_evidence_v1",
             "generation_model_id": identity[0],
             "cross_model_role": full.get("cross_model_role"),
             "prompt_id": identity[1],
             "seed_id": identity[2],
             "attack_name": identity[3],
+            "velocity_causal_pair_id": identity[4],
             "statistical_cluster_id": full.get("statistical_cluster_id"),
             "target_fpr": full.get("target_fpr"),
+            "paired_detector_method_variant": "sstw_full_method",
+            "paired_detector_threshold_source_split": "calibration",
+            "paired_test_time_threshold_update_blocked": True,
+            "full_generation_generator_state_digest_random": full.get(
+                "generation_generator_state_digest_random"
+            ),
+            "control_generation_generator_state_digest_random": control.get(
+                "generation_generator_state_digest_random"
+            ),
+            "full_generation_source_video_sha256": full.get(
+                "generation_source_video_sha256"
+            ),
+            "control_generation_source_video_sha256": control.get(
+                "generation_source_video_sha256"
+            ),
+        }
+        if not matched_design:
+            rows.append({
+                **base,
+                "velocity_causal_pairing_status": "blocked_by_unmatched_generation_design",
+                "metric_status": "missing",
+                "claim_support_status": "claim1_velocity_causal_evidence_blocked",
+            })
+            continue
+        frozen_full_detector = calibrations[(identity[0], "sstw_full_method")]
+        full_detection = apply_frozen_flow_detector(full, frozen_full_detector)
+        control_detection = apply_frozen_flow_detector(control, frozen_full_detector)
+        full_score = float(full_detection["S_final_conservative"])
+        control_score = float(control_detection["S_final_conservative"])
+        rows.append({
+            **base,
+            "velocity_causal_pairing_status": "matched_single_intervention_design",
+            "paired_detector_score_source": FLOW_STATE_POSTERIOR_SCORE_SOURCE,
+            "paired_frozen_final_score_threshold": (
+                frozen_full_detector.final_score_threshold
+            ),
+            "paired_detector_target_fpr": frozen_full_detector.target_fpr,
             "paired_full_method_score": full_score,
             "paired_without_velocity_constraint_score": control_score,
             "paired_velocity_causal_score_gain": round(full_score - control_score, 8),
-            "paired_full_method_decision": bool(full.get("decision")),
-            "paired_without_velocity_constraint_decision": bool(control.get("decision")),
+            "paired_full_method_decision": bool(full_detection["decision"]),
+            "paired_without_velocity_constraint_decision": bool(control_detection["decision"]),
             "paired_velocity_causal_detection_gain": (
-                int(bool(full.get("decision")))
-                - int(bool(control.get("decision")))
+                int(bool(full_detection["decision"]))
+                - int(bool(control_detection["decision"]))
             ),
             "metric_status": "measured_formal",
             "claim_support_status": "claim1_same_unit_velocity_constraint_causal_evidence",
@@ -589,11 +959,11 @@ def _audit_three_layer_mechanism(
     ]
     full_test_negative = [
         record for record in rows
-        if record.get("sample_role") == "clean_negative"
+        if record.get("sample_role") in {"clean_negative", "controlled_negative"}
         and record.get("method_variant") == "sstw_full_method"
         and record.get("split") == "test"
     ]
-    fpr_estimate = clustered_binary_rate_interval(
+    fpr_estimate = clustered_binary_any_rate_interval(
         full_test_negative,
         outcome_field="decision",
         purpose="claim1_heldout_fpr",
@@ -618,10 +988,19 @@ def _audit_three_layer_mechanism(
         difference_field="paired_path_evidence_detection_gain",
         purpose="claim2_path_detection_gain",
     )
-    velocity_paired = [
+    velocity_pair_records = [
         record
         for record in paired_velocity_records
         if record.get("cross_model_role") != "cross_model_validation_model"
+    ]
+    velocity_paired = [
+        record for record in velocity_pair_records
+        if record.get("velocity_causal_pairing_status")
+        == "matched_single_intervention_design"
+        and record.get("metric_status") == "measured_formal"
+    ]
+    velocity_pairing_failures = [
+        record for record in velocity_pair_records if record not in velocity_paired
     ]
     velocity_score_gain = paired_cluster_difference_interval(
         velocity_paired,
@@ -637,6 +1016,8 @@ def _audit_three_layer_mechanism(
         bool(full_positive)
         and bool(full_test_negative)
         and bool(velocity_paired)
+        and len(velocity_paired) == len(full_positive)
+        and not velocity_pairing_failures
         and fpr_estimate.estimate <= target_fpr
         and tpr_estimate.confidence_interval_lower > target_fpr
         and velocity_score_gain.confidence_interval_lower > 0.0
@@ -661,6 +1042,15 @@ def _audit_three_layer_mechanism(
         "claim_1_tpr_ci_95_upper": round(tpr_estimate.confidence_interval_upper, 8),
         "claim_1_tpr_statistical_cluster_count": tpr_estimate.cluster_count,
         "claim_1_velocity_causal_pair_count": len(velocity_paired),
+        "claim_1_velocity_causal_expected_pair_count": len(full_positive),
+        "claim_1_velocity_causal_pairing_failure_count": len(velocity_pairing_failures),
+        "claim_1_velocity_causal_pair_coverage": round(
+            len(velocity_paired) / max(1, len(full_positive)),
+            8,
+        ),
+        "claim_1_velocity_causal_detector_protocol": (
+            "same_frozen_full_method_detector_on_paired_generation_intervention"
+        ),
         "claim_1_velocity_causal_score_gain_mean": round(velocity_score_gain.estimate, 8),
         "claim_1_velocity_causal_score_gain_ci_95_lower": round(velocity_score_gain.confidence_interval_lower, 8),
         "claim_1_velocity_causal_score_gain_ci_95_upper": round(velocity_score_gain.confidence_interval_upper, 8),
@@ -717,7 +1107,7 @@ def _audit_cross_model_generalization(
             record
             for record in model_rows
             if record.get("method_variant") == "sstw_full_method"
-            and record.get("sample_role") == "clean_negative"
+            and record.get("sample_role") in {"clean_negative", "controlled_negative"}
             and record.get("split") == "test"
         ]
         paths = [
@@ -731,8 +1121,11 @@ def _audit_cross_model_generalization(
             for record in paired_velocity_records
             if str(record.get("generation_model_id")) == model_id
             and record.get("cross_model_role") == "cross_model_validation_model"
+            and record.get("velocity_causal_pairing_status")
+            == "matched_single_intervention_design"
+            and record.get("metric_status") == "measured_formal"
         ]
-        fpr = clustered_binary_rate_interval(
+        fpr = clustered_binary_any_rate_interval(
             negatives,
             outcome_field="decision",
             cluster_field="statistical_cluster_id",
@@ -763,6 +1156,7 @@ def _audit_cross_model_generalization(
             and bool(negatives)
             and bool(paths)
             and bool(velocities)
+            and len(velocities) == len(positives)
             and fpr.estimate <= target_fpr
             and tpr.estimate > fpr.estimate
             and path_gain.estimate > 0.0
@@ -794,6 +1188,122 @@ def _audit_cross_model_generalization(
         "cross_model_generalization_record_count": len(cross_rows),
         "cross_model_generalization_per_model": per_model,
     }
+
+
+def _state_space_posterior_mechanism_failures(
+    scored_records: Iterable[Mapping[str, Any]],
+    threshold_records: Iterable[Mapping[str, Any]],
+) -> list[dict[str, Any]]:
+    """拒绝单步代理后验、非概率 replay 分数和不可重建的状态模型。"""
+
+    failures: list[dict[str, Any]] = []
+    for record in threshold_records:
+        identity = {
+            "generation_model_id": record.get("generation_model_id"),
+            "method_variant": record.get("method_variant"),
+            "failure_scope": "frozen_calibration",
+        }
+        negative_model = record.get("posterior_negative_state_space_model")
+        positive_model = record.get("posterior_positive_state_space_model")
+        checks = {
+            "posterior_model_type": (
+                record.get("posterior_model_type") == FLOW_STATE_POSTERIOR_MODEL_TYPE
+            ),
+            "negative_state_model_reconstructable": isinstance(negative_model, Mapping),
+            "positive_state_model_reconstructable": isinstance(positive_model, Mapping),
+            "negative_state_transitions_fitted": (
+                isinstance(negative_model, Mapping)
+                and int(negative_model.get("training_transition_count") or 0) > 0
+                and int(negative_model.get("training_transition_group_count") or 0) >= 2
+                and int(negative_model.get("training_group_count") or 0) >= 2
+            ),
+            "positive_state_transitions_fitted": (
+                isinstance(positive_model, Mapping)
+                and int(positive_model.get("training_transition_count") or 0) > 0
+                and int(positive_model.get("training_transition_group_count") or 0) >= 2
+                and int(positive_model.get("training_group_count") or 0) >= 2
+            ),
+        }
+        missing = [name for name, passed in checks.items() if not passed]
+        if missing:
+            failures.append({**identity, "failed_requirements": missing})
+
+    for record in scored_records:
+        sequence = record.get("flow_state_observation_sequence")
+        step_count = int(record.get("flow_state_observation_step_count") or 0)
+        filter_step_count = int(record.get("flow_state_filter_step_count") or 0)
+        likelihood_values = (
+            record.get("flow_state_positive_log_likelihood_per_step"),
+            record.get("flow_state_negative_log_likelihood_per_step"),
+            record.get("flow_state_log_likelihood_ratio"),
+        )
+        checks = {
+            "measured_state_observation_sequence": (
+                record.get("flow_state_observation_sequence_status")
+                == "measured_from_fixed_replay_path"
+            ),
+            "multi_step_state_observation_sequence": (
+                isinstance(sequence, list)
+                and step_count >= 2
+                and len(sequence) == step_count
+            ),
+            "kalman_filter_consumed_complete_sequence": (
+                filter_step_count == step_count and filter_step_count >= 2
+            ),
+            "kalman_filter_ready": (
+                record.get("flow_state_filtering_status") == "kalman_filter_ready"
+            ),
+            "rts_smoother_ready": (
+                record.get("flow_state_smoothing_status")
+                == "rauch_tung_striebel_smoother_ready"
+            ),
+            "state_marginal_likelihood_ready": all(
+                value is not None and math.isfinite(float(value))
+                for value in likelihood_values
+            ),
+            "gaussian_replay_likelihood_ready": (
+                record.get("replay_likelihood_model_id")
+                == REPLAY_GAUSSIAN_LIKELIHOOD_MODEL_ID
+            ),
+            "state_space_posterior_score_source_ready": (
+                record.get("flow_detector_score_source")
+                == FLOW_STATE_POSTERIOR_SCORE_SOURCE
+            ),
+        }
+        missing = [name for name, passed in checks.items() if not passed]
+        if missing:
+            failures.append({
+                "generation_model_id": record.get("generation_model_id"),
+                "method_variant": record.get("method_variant"),
+                "sample_role": record.get("sample_role"),
+                "formal_flow_evidence_unit_id": record.get("formal_flow_evidence_unit_id"),
+                "failure_scope": "scored_flow_sequence",
+                "failed_requirements": missing,
+            })
+    return failures
+
+
+def _negative_family_cluster_counts(
+    records: Iterable[Mapping[str, Any]],
+    *,
+    split: str,
+) -> dict[str, int]:
+    """按 primary full-method source video 统计真实负假设 family 覆盖。"""
+
+    groups: dict[str, set[str]] = defaultdict(set)
+    for record in records:
+        if (
+            record.get("sample_role") not in {"clean_negative", "controlled_negative"}
+            or record.get("method_variant") != "sstw_full_method"
+            or record.get("split") != split
+            or record.get("cross_model_role") == "cross_model_validation_model"
+        ):
+            continue
+        family = str(record.get("negative_family") or "")
+        cluster_id = str(record.get("statistical_cluster_id") or "")
+        if family and cluster_id:
+            groups[family].add(cluster_id)
+    return {family: len(cluster_ids) for family, cluster_ids in groups.items()}
 
 
 def run_formal_flow_evidence(
@@ -838,6 +1348,21 @@ def run_formal_flow_evidence(
                 prompt=prompt,
                 key_text=key_text,
             )
+            control_payload = (
+                _control_payload(
+                    pipeline,
+                    replay,
+                    prompt=prompt,
+                    wrong_prompt=wrong_prompt,
+                    key_text=key_text,
+                )
+                if method_variant == "sstw_full_method"
+                else {
+                    "replay_control_execution_status": (
+                        "not_applicable_internal_ablation_variant"
+                    )
+                }
+            )
             payload = {
                 **_base_record(source, sample_role="attacked_positive", method_variant=method_variant),
                 "formal_flow_evidence_unit_id": build_stable_digest({
@@ -852,20 +1377,19 @@ def run_formal_flow_evidence(
                 "authenticated_generation_step_count": source.get("num_inference_steps"),
                 "replay_prompt_digest": sha256(prompt.encode("utf-8")).hexdigest(),
                 **build_flow_evidence_payload(replay, key_text=key_text, method_variant=method_variant),
-                **_control_payload(
-                    pipeline,
-                    replay,
-                    prompt=prompt,
-                    wrong_prompt=wrong_prompt,
-                    key_text=key_text,
-                ),
+                **control_payload,
             }
-            evidence_records.append(with_flow_evidence_protocol_defaults(
+            formal_positive = with_flow_evidence_protocol_defaults(
                 payload,
                 trajectory_source_level="attacked_video_model_velocity_inversion_replay",
                 flow_state_admissibility_status="pending_frozen_detector",
                 claim_support_status="sstw_complete_flow_evidence_ready",
-            ))
+            )
+            evidence_records.append(formal_positive)
+            if method_variant == "sstw_full_method":
+                evidence_records.extend(
+                    _controlled_negative_records_from_positive(formal_positive)
+                )
         except Exception as exc:  # pragma: no cover - 依赖真实 GPU、模型和视频文件
             failure_records.append({
                 **_base_record(source, sample_role="attacked_positive", method_variant=method_variant),
@@ -879,7 +1403,7 @@ def run_formal_flow_evidence(
         clean_by_split[str(record.get("split") or "test")].append(record)
     for split, sources in clean_by_split.items():
         trial_count = _clean_trial_count(config, split, len(sources))
-        for source_index, source in enumerate(sources):
+        for source in sources:
             try:
                 prompt = prompt_map[str(source.get("prompt_id"))]
                 pipeline = pipelines.get(str(source.get("generation_model_id"))) or pipeline_loader(str(source.get("generation_model_id")))
@@ -904,8 +1428,14 @@ def run_formal_flow_evidence(
                             prompt=prompt,
                             key_text=trial_key,
                         )
-                        trial_reliability = math.exp(
-                            -max(0.0, float(hypothesis.candidate_cycle_relative_error))
+                        trial_reliability = math.exp(-0.5 * (
+                            float(hypothesis.candidate_residual_mean_squared_error)
+                            / max(float(hypothesis.observation_noise_variance), 1e-12)
+                        ))
+                        state_sequence = build_flow_state_observation_sequence(
+                            base_replay,
+                            key_text=trial_key,
+                            trajectory=hypothesis,
                         )
                         payload = {
                             **_base_record(source, sample_role="clean_negative", method_variant=method_variant),
@@ -916,7 +1446,7 @@ def run_formal_flow_evidence(
                             }),
                             "clean_negative_trial_index": trial_index,
                             "statistical_within_cluster_trial_index": trial_index,
-                            "negative_family": f"clean_key_family_{(source_index + trial_index) % 4}",
+                            "negative_family": "clean_unwatermarked_candidate_key_hypothesis",
                             "clean_negative_video_path": str(video_path),
                             **endpoint.as_dict(),
                             **path,
@@ -943,6 +1473,27 @@ def run_formal_flow_evidence(
                             "flow_phase": 0.5,
                             "trajectory_trace_used_for_score": False,
                             "metric_status": "measured_formal",
+                            "replay_observation_noise_variance_mean": round(
+                                hypothesis.observation_noise_variance,
+                                10,
+                            ),
+                            "replay_candidate_log_likelihood_per_dimension_mean": round(
+                                hypothesis.candidate_log_likelihood_per_dimension,
+                                8,
+                            ),
+                            "replay_null_log_likelihood_per_dimension_mean": round(
+                                hypothesis.null_log_likelihood_per_dimension,
+                                8,
+                            ),
+                            "replay_likelihood_model_id": hypothesis.replay_likelihood_model_id,
+                            "flow_state_observation_sequence": state_sequence,
+                            "flow_state_observation_sequence_status": (
+                                "measured_from_fixed_replay_path"
+                            ),
+                            "flow_state_observation_step_count": len(state_sequence),
+                            "flow_state_transition_source": (
+                                "calibration_fitted_linear_gaussian_dynamics"
+                            ),
                         }
                         evidence_records.append(with_flow_evidence_protocol_defaults(
                             payload,
@@ -963,7 +1514,10 @@ def run_formal_flow_evidence(
         target_fpr=float(config["target_fpr"]),
     )
     paired_path_records = _paired_path_gain_records(scored_records, calibrations)
-    paired_velocity_records = _paired_velocity_causal_records(scored_records)
+    paired_velocity_records = _paired_velocity_causal_records(
+        scored_records,
+        calibrations,
+    )
     mechanism_audit = _audit_three_layer_mechanism(
         scored_records,
         paired_path_records,
@@ -977,13 +1531,33 @@ def run_formal_flow_evidence(
         target_fpr=float(config["target_fpr"]),
     )
     positive_records = [record for record in scored_records if record.get("sample_role") == "attacked_positive"]
-    negative_records = [record for record in scored_records if record.get("sample_role") == "clean_negative"]
+    negative_records = [
+        record for record in scored_records
+        if record.get("sample_role") in {"clean_negative", "controlled_negative"}
+    ]
+    calibration_negative_family_counts = _negative_family_cluster_counts(
+        negative_records,
+        split="calibration",
+    )
+    heldout_negative_family_counts = _negative_family_cluster_counts(
+        negative_records,
+        split="test",
+    )
+    negative_family_mechanism_pass = (
+        set(calibration_negative_family_counts) == FORMAL_NEGATIVE_HYPOTHESIS_FAMILIES
+        and set(heldout_negative_family_counts) == FORMAL_NEGATIVE_HYPOTHESIS_FAMILIES
+        and min(calibration_negative_family_counts.values(), default=0)
+        >= int(config.get("minimum_calibration_negative_event_count_per_family", 1))
+        and min(heldout_negative_family_counts.values(), default=0)
+        >= int(config.get("minimum_heldout_negative_event_count_per_family", 1))
+    )
     required_variants = set(FORMAL_METHOD_VARIANTS)
     observed_variants = {str(record.get("method_variant")) for record in positive_records}
     claim3_records = [
         record for record in positive_records
         if record.get("method_variant") == "sstw_full_method"
         and record.get("replay_control_execution_status") == "measured_formal"
+        and record.get("replay_control_fixed_reverse_path_reused") is True
     ]
     posterior_calibration_failures = [
         {
@@ -993,6 +1567,12 @@ def run_formal_flow_evidence(
                 "posterior_calibration_expected_calibration_error"
             ),
             "posterior_calibration_group_count": record.get("posterior_calibration_group_count"),
+            "calibration_negative_cluster_count": record.get(
+                "calibration_negative_cluster_count"
+            ),
+            "calibration_positive_cluster_count": record.get(
+                "calibration_positive_cluster_count"
+            ),
         }
         for record in threshold_records
         if float(
@@ -1009,22 +1589,51 @@ def run_formal_flow_evidence(
         > float(config.get("maximum_posterior_expected_calibration_error", 0.1))
         or int(record.get("posterior_calibration_group_count") or 0)
         < int(config.get("minimum_posterior_calibration_group_count", 2))
+        or (
+            record.get("cross_model_role") != "cross_model_validation_model"
+            and int(record.get("calibration_negative_cluster_count") or 0)
+            < int(config.get("minimum_calibration_unique_video_count", 2))
+        )
+        or (
+            record.get("cross_model_role") != "cross_model_validation_model"
+            and int(record.get("calibration_positive_cluster_count") or 0)
+            < int(config.get("minimum_calibration_unique_video_count", 2))
+        )
     ]
+    state_space_posterior_mechanism_failures = _state_space_posterior_mechanism_failures(
+        scored_records,
+        threshold_records,
+    )
+    formal_flow_evidence_pass = (
+        bool(positive_records)
+        and bool(negative_records)
+        and not failure_records
+        and required_variants.issubset(observed_variants)
+        and bool(claim3_records)
+        and not posterior_calibration_failures
+        and not state_space_posterior_mechanism_failures
+        and negative_family_mechanism_pass
+        and mechanism_audit["three_layer_mechanism_pre_replay_decision"] == "PASS"
+        and cross_model_audit["cross_model_generalization_decision"] in {"PASS", "NOT_CONFIGURED"}
+    )
     audit = {
         "stage_id": "formal_flow_evidence_runner",
-        "formal_flow_evidence_decision": "PASS" if (
-            bool(positive_records)
-            and bool(negative_records)
-            and not failure_records
-            and required_variants.issubset(observed_variants)
-            and bool(claim3_records)
-            and not posterior_calibration_failures
-            and mechanism_audit["three_layer_mechanism_pre_replay_decision"] == "PASS"
-            and cross_model_audit["cross_model_generalization_decision"] in {"PASS", "NOT_CONFIGURED"}
-        ) else "FAIL",
+        "formal_flow_evidence_decision": "PASS" if formal_flow_evidence_pass else "FAIL",
         "formal_flow_evidence_record_count": len(scored_records),
         "formal_flow_positive_record_count": len(positive_records),
         "formal_flow_clean_negative_record_count": len(negative_records),
+        "formal_negative_hypothesis_family_decision": (
+            "PASS" if negative_family_mechanism_pass else "FAIL"
+        ),
+        "formal_required_negative_hypothesis_families": sorted(
+            FORMAL_NEGATIVE_HYPOTHESIS_FAMILIES
+        ),
+        "formal_calibration_negative_family_cluster_counts": (
+            calibration_negative_family_counts
+        ),
+        "formal_heldout_negative_family_cluster_counts": (
+            heldout_negative_family_counts
+        ),
         "formal_flow_failure_record_count": len(failure_records),
         "formal_flow_observed_method_variants": sorted(observed_variants),
         "formal_flow_missing_method_variants": sorted(required_variants - observed_variants),
@@ -1034,6 +1643,12 @@ def run_formal_flow_evidence(
             "PASS" if not posterior_calibration_failures else "FAIL"
         ),
         "posterior_probability_calibration_failures": posterior_calibration_failures,
+        "state_space_posterior_mechanism_decision": (
+            "PASS" if not state_space_posterior_mechanism_failures else "FAIL"
+        ),
+        "state_space_posterior_mechanism_failures": (
+            state_space_posterior_mechanism_failures
+        ),
         "claim_1_velocity_constraint_detectable_watermark_decision": mechanism_audit["claim_1_velocity_constraint_detectable_watermark_decision"],
         "claim_2_path_evidence_independent_gain_decision": mechanism_audit["claim_2_path_evidence_independent_gain_decision"],
         "cross_model_generalization_decision": cross_model_audit["cross_model_generalization_decision"],
@@ -1041,7 +1656,11 @@ def run_formal_flow_evidence(
         "cross_model_generalization_record_count": cross_model_audit["cross_model_generalization_record_count"],
         "target_fpr": float(config["target_fpr"]),
         "test_time_threshold_update_blocked": True,
-        "claim_support_status": "sstw_complete_paper_mechanism_ready" if not failure_records else "sstw_complete_paper_mechanism_blocked",
+        "claim_support_status": (
+            "sstw_complete_paper_mechanism_ready"
+            if formal_flow_evidence_pass
+            else "sstw_complete_paper_mechanism_blocked"
+        ),
     }
     write_jsonl(run_root / "records" / "formal_flow_evidence_records.jsonl", scored_records)
     write_jsonl(run_root / "records" / "formal_flow_evidence_failure_records.jsonl", failure_records)

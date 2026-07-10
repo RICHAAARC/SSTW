@@ -26,6 +26,12 @@ Transformer 经 classifier-free guidance 后、进入 `scheduler.step` 之前的
 key code 计算 endpoint 投影和 payload bit accuracy。阈值只从 calibration negative 冻结，
 held-out test 不允许更新阈值。
 
+速度约束的因果归因使用同模型、prompt、seed、scheduler 和 time grid 的成对生成。完整方法与
+`without_velocity_constraint` 在 pipeline 调用前必须具有相同的 GPU generator state digest,
+且两个源视频内容摘要必须不同。两侧统一应用 `sstw_full_method` 的同一个冻结状态空间检测器,
+因此配对差值只对应速度约束干预, 不允许通过为对照重新拟合检测器制造不可比概率。所有
+held-out full-method 视频必须达到100%配对覆盖, 任一配对设计不一致都会阻断 Claim-1。
+
 ### 2.2 Claim-2: 路径证据在固定 FPR 下提供独立增益
 
 `paired_path_evidence_gain_records.jsonl` 在同一个 full-method attacked video evidence 上同时
@@ -44,15 +50,25 @@ Claim-2 以同视频配对的检测判定差作为主统计量。只有固定 FP
 1. 使用 Wan VAE 恢复 endpoint latent;
 2. 使用原 prompt、Wan Transformer 和 CFG 计算真实 base velocity, 再按候选 key 复现生成阶段的弱约束 velocity;
 3. 只用不含候选 key 的 base velocity 在16、20、24步网格上恢复固定 reverse inversion 路径;
-4. 从同一个固定初态分别执行 null forward 与候选 key forward hypothesis, 计算 replay log-likelihood ratio;
+4. 从同一个固定初态分别执行 null forward 与候选 key forward hypothesis, 在共享的 endpoint-energy-scaled 各向同性高斯观测模型下计算真实 replay log-likelihood ratio;
 5. 路径分数只投影固定 reverse states, 候选 key 不参与观测路径构造;
-6. 由候选循环误差、null 循环误差、ensemble endpoint 方差和 likelihood-ratio 离散度计算 replay 可靠性;
+6. 由候选残差相对预注册观测方差的标准化量、ensemble endpoint 方差和 likelihood-ratio 离散度计算 replay 可靠性;
 7. 执行 wrong key、wrong prompt 和改变 scheduler shift 的 wrong sampler/time-grid 对照;
-8. 将上述观测送入按 source-video group cross-fitting 的 logistic + Platt 概率后验;
-9. 验证生成阶段 HMAC-SHA256 trajectory sketch 的签名及模型、prompt、seed、sampler 和时间网格上下文。
+8. 将逐 Flow phase 观测序列分别送入 calibration split 拟合的 H0/H1 线性高斯状态空间模型, 执行 Kalman filtering 与 RTS smoothing, 再计算两假设的边际对数似然比;
+9. 状态转移、噪声统计和 admissibility 阈值均按 source-video group 等权拟合; 仅在按 H0/H1 分层且严格组外的状态空间似然比上拟合 Platt 概率校准, 不允许用全量模型回填 OOF 分数, test split 不更新状态模型、校准器或 fixed-FPR 阈值;
+10. 验证生成阶段 HMAC-SHA256 trajectory sketch 的签名及模型、prompt、seed、sampler 和时间网格上下文。
 
 只有真实 attacked-video replay、所有 HMAC 验证和三类错误条件对照达到门禁要求时，
 `claim3_full_support_allowed` 才能为 `true`。
+
+正式 H0 分布由四个有物理语义的 negative family 构成:
+`clean_unwatermarked_candidate_key_hypothesis`、
+`watermarked_video_wrong_key_hypothesis`、
+`watermarked_video_wrong_prompt_hypothesis` 和
+`watermarked_video_wrong_sampler_time_grid_hypothesis`。后三类直接复用正确条件下的固定
+reverse states, 只改变 forward hypothesis。禁止按 trial 索引把同一种 clean negative
+重命名为多个 family。calibration threshold 和 held-out FPR 均先取每个 source-video
+cluster 内所有负假设的最大分数, 再把视频作为唯一独立单位。
 
 ## 3. 实施顺序
 
@@ -71,7 +87,10 @@ Claim-2 以同视频配对的检测判定差作为主统计量。只有固定 FP
    `formal_flow_evidence_runner`, 不再使用早期低频视频投影检测器;
 7. 对每个独立 held-out 视频真实生成 adaptive 候选文件并查询冻结 Flow 检测器。
    endpoint-preserving、removal、probing、evasion 和 recompression 均保存完整 query log;
-   copy/spoof 与 collusion 使用不同输入视频生成新的跨视频融合文件;
+   copy/spoof 与 collusion 使用不同输入视频生成新的跨视频融合文件。copy/spoof 按 clean
+   recipient 计数, collusion 按互不重叠的视频对计数。候选质量必须在写盘后
+   重新解码的视频上计算, 不能使用编码前帧冒充 codec 后质量; Wan 与 LTX 分别读取各自的
+   状态空间后验与 fixed-FPR 阈值, 不允许跨模型共用 calibration artifact;
 8. 生成 SSTW measured-formal、内部消融、外部 baseline 与统计记录;
 9. 执行 replay/sketch gate;
 10. 执行 paper profile gate 和 profile transition gate。
@@ -92,7 +111,7 @@ python -m experiments.generative_video_model_probe.formal_flow_evidence_runner `
 | `records/trajectory_trace.jsonl` | 真实 scheduler model output 与状态更新证据。 |
 | `records/trajectory_sketch_records.jsonl` | 不包含完整 latent 的 HMAC 认证路径摘要。 |
 | `records/formal_flow_evidence_records.jsonl` | endpoint、path、replay、controls 和 posterior 的统一记录。 |
-| `thresholds/formal_flow_detector_thresholds.jsonl` | 仅由 calibration negative 冻结的标准化和 fixed-FPR 阈值。 |
+| `thresholds/formal_flow_detector_thresholds.jsonl` | 仅由 calibration split 拟合的 H0/H1 状态模型、组外 Platt 校准参数和 calibration negative 冻结的 fixed-FPR 阈值。 |
 | `records/paired_path_evidence_gain_records.jsonl` | 同视频、同攻击、同目标 FPR 的 Claim-2 配对证据。 |
 | `records/paired_velocity_causal_evidence_records.jsonl` | 完整方法与无速度约束视频的 Claim-1 因果配对证据。 |
 | `records/formal_adaptive_attack_query_records.jsonl` | 逐视频 adaptive 候选、质量约束与冻结检测查询日志。 |
@@ -114,6 +133,7 @@ python -m experiments.generative_video_model_probe.formal_flow_evidence_runner `
 7. 缺少 HMAC key、签名不匹配或认证上下文不一致;
 8. wrong key、wrong prompt 或 wrong sampler 对照不能稳定区分;
 9. 缺少完整 Claim-3 的任一正式证据。
+10. 状态观测不是来自固定 replay 路径、序列少于2步、未完成 Kalman filtering / RTS smoothing, 或 replay 分数不来自预注册高斯似然模型。
 
 这些规则的主要目的不是保证实验必然得到正结果，而是保证任何 PASS 都只能来自真实运行
 证据。若实验结果不支持某一主张，项目必须保留 FAIL，而不能通过代理分数或标签生成记录。

@@ -18,8 +18,13 @@ class AdaptiveVideoCandidate:
     attack_name: str
     video_path: str
     video_sha256: str
+    decoded_frame_count: int
     quality_psnr: float
     detector_score: float
+    detector_score_source: str
+    frozen_final_score_threshold: float | None
+    threshold_source_split: str | None
+    test_time_threshold_update_blocked: bool
     endpoint_score: float
     path_score: float
     decision: bool
@@ -41,6 +46,7 @@ class AdaptiveVideoOptimizationResult:
     endpoint_reference: float
     endpoint_tolerance: float
     minimum_quality_psnr: float
+    query_budget: int
 
     def as_dict(self) -> dict[str, Any]:
         """转换为正式 adaptive execution record 可复用的摘要。"""
@@ -48,6 +54,7 @@ class AdaptiveVideoOptimizationResult:
         return {
             "adaptive_attack_objective": self.objective,
             "adaptive_attack_query_count": len(self.candidates),
+            "adaptive_attack_query_budget": self.query_budget,
             "adaptive_attack_selected_candidate_index": self.selected.candidate_index,
             "adaptive_attack_selected_transform": self.selected.attack_name,
             "adaptive_attack_output_video_path": self.selected.video_path,
@@ -158,9 +165,10 @@ def optimize_adaptive_attack_for_video(
         attacked_frames, metadata = apply_runtime_attack_to_frames(source_frames, attack_name)
         candidate_path = destination / f"candidate_{index:03d}_{attack_name}.mp4"
         _write_video(candidate_path, attacked_frames, metadata)
+        decoded_candidate_frames = _read_video(candidate_path)
         score = dict(scorer(candidate_path))
         endpoint_score = float(score["endpoint_score"])
-        quality_psnr = _aligned_psnr(source_frames, attacked_frames)
+        quality_psnr = _aligned_psnr(source_frames, decoded_candidate_frames)
         endpoint_ok = abs(endpoint_score - float(endpoint_reference)) <= float(endpoint_tolerance)
         quality_ok = quality_psnr >= float(minimum_quality_psnr)
         candidates.append(AdaptiveVideoCandidate(
@@ -168,8 +176,23 @@ def optimize_adaptive_attack_for_video(
             attack_name=attack_name,
             video_path=str(candidate_path),
             video_sha256=_file_sha256(candidate_path),
+            decoded_frame_count=len(decoded_candidate_frames),
             quality_psnr=round(quality_psnr, 8),
             detector_score=float(score["S_final_conservative"]),
+            detector_score_source=str(score.get("flow_detector_score_source") or "unspecified_test_scorer"),
+            frozen_final_score_threshold=(
+                float(score["frozen_final_score_threshold"])
+                if score.get("frozen_final_score_threshold") is not None
+                else None
+            ),
+            threshold_source_split=(
+                str(score["threshold_source_split"])
+                if score.get("threshold_source_split") is not None
+                else None
+            ),
+            test_time_threshold_update_blocked=(
+                score.get("test_time_threshold_update_blocked") is True
+            ),
             endpoint_score=endpoint_score,
             path_score=float(score["S_path_inv"]),
             decision=bool(score["decision"]),
@@ -196,6 +219,7 @@ def optimize_adaptive_attack_for_video(
         endpoint_reference=float(endpoint_reference),
         endpoint_tolerance=float(endpoint_tolerance),
         minimum_quality_psnr=float(minimum_quality_psnr),
+        query_budget=len(names),
     )
 
 
@@ -236,10 +260,15 @@ def write_cross_video_blend(
         blended.append(np.clip((1.0 - weight) * left + weight * right, 0.0, 255.0).astype(np.uint8))
     path = Path(output_path)
     _write_video(path, blended, {})
+    decoded_blend = _read_video(path)
     return {
         "adaptive_attack_output_video_path": str(path),
         "adaptive_attack_output_video_sha256": _file_sha256(path),
-        "adaptive_attack_output_quality_psnr": round(_aligned_psnr(primary, blended), 8),
+        "adaptive_attack_output_quality_psnr": round(
+            _aligned_psnr(primary, decoded_blend),
+            8,
+        ),
+        "adaptive_attack_output_decoded_frame_count": len(decoded_blend),
         "adaptive_attack_cross_video_weight": weight,
         "adaptive_attack_aligned_frame_count": count,
     }

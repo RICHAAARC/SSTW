@@ -432,6 +432,20 @@ def run_colab_probe(output_root: str | Path, prompt_suite_path: str | Path, prof
         )
         generation_kwargs = _generation_kwargs_for_model(model_for_item, settings)
         generator = torch.Generator(device="cuda").manual_seed(int(item["seed_value"]))
+        generator_state_digest_random = sha256(
+            generator.get_state().cpu().numpy().tobytes()
+        ).hexdigest()
+        velocity_causal_pair_id = sha256(
+            json.dumps(
+                {
+                    "generation_model_id": item["generation_model_id"],
+                    "prompt_id": item["prompt_id"],
+                    "seed_id": item["seed_id"],
+                    "split": item.get("split", "main"),
+                },
+                sort_keys=True,
+            ).encode("utf-8")
+        ).hexdigest()
         trace_id = f"trace_{index:04d}_{item['sample_role']}_{item['method_variant']}"
         step_stats: list[dict] = []
         applied_step_count = 0
@@ -585,6 +599,16 @@ def run_colab_probe(output_root: str | Path, prompt_suite_path: str | Path, prof
             "motion_calibration_role": item.get("motion_calibration_role"),
             "split": item.get("split", "main"),
             "seed_id": item["seed_id"],
+            "generation_seed_random": int(item["seed_value"]),
+            "generation_generator_state_digest_random": generator_state_digest_random,
+            "velocity_causal_pair_id": velocity_causal_pair_id,
+            "velocity_causal_intervention_status": (
+                "velocity_constraint_enabled"
+                if item["method_variant"] == "sstw_full_method"
+                else "velocity_constraint_disabled"
+                if item["method_variant"] == "without_velocity_constraint"
+                else "not_in_velocity_causal_pair"
+            ),
             "scheduler_id": _scheduler_id_for_model(item["generation_model_id"]),
             "trajectory_scheduler_id": _scheduler_id_for_model(item["generation_model_id"]),
             "trajectory_time_grid_id": _trajectory_time_grid_id_for_model(item["generation_model_id"]),

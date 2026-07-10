@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 from collections import defaultdict
 from pathlib import Path
 from statistics import mean
@@ -21,6 +22,7 @@ from typing import Any, Iterable
 
 from experiments.generative_video_model_probe.formal_motion_claim_filter import select_motion_claim_generation_records
 from main.core.digest import build_stable_digest
+from main.methods.state_space_watermark.authenticated_trajectory_sketch import verify_authenticated_trajectory_sketch
 from main.protocol.flow_evidence_fields import with_flow_evidence_protocol_defaults
 from main.protocol.record_writer import write_json, write_jsonl
 from main.protocol.table_builder import write_csv
@@ -28,6 +30,7 @@ from main.protocol.table_builder import write_csv
 
 REPLAY_AND_SKETCH_CLAIM_SUPPORT_STATUS = "replay_and_sketch_owner_side_diagnostic_only"
 REPLAY_AND_SKETCH_EVIDENCE_LEVEL = "owner_side_runtime_trace_diagnostic"
+FULL_CLAIM3_EVIDENCE_LEVEL = "attacked_video_wan_vae_model_velocity_replay_with_hmac_sketch"
 REPLAY_RECORD_TABLE_FIELDS = (
     "record_version",
     "replay_record_type",
@@ -60,6 +63,15 @@ def _read_jsonl(path: Path) -> list[dict]:
     return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
 
 
+def _read_json(path: Path) -> dict[str, Any]:
+    """读取 JSON decision; 文件不存在时返回空对象。"""
+
+    if not path.exists():
+        return {}
+    payload = json.loads(path.read_text(encoding="utf-8-sig"))
+    return payload if isinstance(payload, dict) else {}
+
+
 def _group_by_trace_id(records: Iterable[dict]) -> dict[str, list[dict]]:
     """按 trajectory_trace_id 对轨迹 step records 分组。"""
     groups: dict[str, list[dict]] = defaultdict(list)
@@ -69,6 +81,114 @@ def _group_by_trace_id(records: Iterable[dict]) -> dict[str, list[dict]]:
             groups[trace_id].append(record)
     for trace_records in groups.values():
         trace_records.sort(key=lambda item: int(item.get("trajectory_step_index") or 0))
+    return groups
+
+
+def _build_full_claim3_records(run_root: Path) -> dict[str, list[dict[str, Any]]] | None:
+    """从真实 attacked-video replay 与 HMAC sketch 构造 Claim-3 正式 records。"""
+
+    evidence_records = [
+        record
+        for record in _read_jsonl(run_root / "records" / "formal_flow_evidence_records.jsonl")
+        if record.get("sample_role") == "attacked_positive"
+        and record.get("method_variant") == "sstw_full_method"
+        and record.get("split") == "test"
+        and record.get("metric_status") == "measured_formal"
+    ]
+    if not evidence_records:
+        return None
+    sketches = {
+        str(record.get("trajectory_trace_id")): record
+        for record in _read_jsonl(run_root / "records" / "trajectory_sketch_records.jsonl")
+        if record.get("authenticated_trajectory_sketch_status") == "signed"
+    }
+    authentication_key_text = os.environ.get("SSTW_TRAJECTORY_AUTHENTICATION_KEY") or ""
+    authentication_key = authentication_key_text.encode("utf-8")
+    groups: dict[str, list[dict[str, Any]]] = {
+        "trajectory_sketch_verification_records": [],
+        "replay_uncertainty_records": [],
+        "wrong_sampler_replay_records": [],
+        "wrong_prompt_replay_records": [],
+        "wrong_key_replay_records": [],
+    }
+    for evidence in evidence_records:
+        trace_id = str(evidence.get("trajectory_trace_id") or "")
+        sketch = sketches.get(trace_id, {})
+        payload = sketch.get("trajectory_sketch_payload") if isinstance(sketch, dict) else None
+        context_matches = bool(
+            isinstance(payload, dict)
+            and payload.get("model_signature") == evidence.get("generation_model_id")
+            and str(payload.get("seed_id")) == str(evidence.get("seed_id"))
+            and sketch.get("prompt_id") == evidence.get("prompt_id")
+            and sketch.get("method_variant") == evidence.get("method_variant")
+            and payload.get("prompt_digest") == evidence.get("replay_prompt_digest")
+            and payload.get("sampler_signature") == evidence.get("replay_sampler_signature")
+            and payload.get("time_grid_id") == evidence.get("authenticated_generation_time_grid_id")
+        )
+        signature_verified = bool(authentication_key) and verify_authenticated_trajectory_sketch(
+            sketch,
+            authentication_key=authentication_key,
+        )
+        sketch_verified = signature_verified and context_matches
+        common = {
+            "record_version": "replay_and_sketch_gate_v2",
+            "generation_model_id": evidence.get("generation_model_id"),
+            "prompt_id": evidence.get("prompt_id"),
+            "seed_id": evidence.get("seed_id"),
+            "trajectory_trace_id": trace_id,
+            "attack_name": evidence.get("attack_name"),
+            "method_variant": evidence.get("method_variant"),
+            "replay_and_sketch_evidence_level": FULL_CLAIM3_EVIDENCE_LEVEL,
+            "claim_support_status": "claim3_attacked_video_replay_posterior_candidate",
+            "trajectory_source_level": "attacked_video_model_velocity_inversion_replay",
+            "flow_state_admissibility_status": evidence.get("flow_state_admissibility_status"),
+            "flow_posterior_confidence": evidence.get("flow_posterior_confidence"),
+            "flow_state_posterior_entropy": evidence.get("flow_state_posterior_entropy"),
+            "S_final_conservative": evidence.get("S_final_conservative"),
+        }
+        sketch_record = {
+            **common,
+            "replay_record_type": "trajectory_sketch_verification",
+            "authenticated_trajectory_sketch_status": "ready" if sketch_verified else "not_ready",
+            "trajectory_sketch_digest_random": build_stable_digest(sketch) if sketch else None,
+            "trajectory_sketch_verification_status": "verified" if sketch_verified else "verification_failed",
+            "replay_control_status": "sketch_verified" if sketch_verified else "sketch_rejected",
+            "replay_signature_mismatch_status": "matched_authenticated_context" if context_matches else "context_mismatch",
+        }
+        groups["trajectory_sketch_verification_records"].append(sketch_record)
+
+        replay_ready = (
+            evidence.get("replay_inversion_status") == "ready"
+            and evidence.get("formal_flow_evidence_level") == "attacked_video_wan_vae_model_velocity_replay"
+            and evidence.get("replay_trajectory_source") == "attacked_video_endpoint_model_velocity_inversion"
+        )
+        groups["replay_uncertainty_records"].append({
+            **common,
+            "replay_record_type": "replay_uncertainty",
+            "authenticated_trajectory_sketch_status": "ready" if sketch_verified else "not_ready",
+            "trajectory_sketch_verification_status": "verified" if sketch_verified else "verification_failed",
+            "replay_uncertainty_mean": evidence.get("replay_uncertainty_mean"),
+            "replay_uncertainty_weight": evidence.get("replay_reliability_weight"),
+            "replay_control_status": "uncertainty_weight_ready" if replay_ready else "replay_inversion_missing",
+            "replay_scheduler_id": "wan_flow_match_euler_discrete_scheduler",
+            "replay_time_grid_id": str(evidence.get("replay_step_counts")),
+        })
+        for group_name, control_name, margin_field in (
+            ("wrong_sampler_replay_records", "wrong_sampler_replay", "wrong_sampler_control_margin"),
+            ("wrong_prompt_replay_records", "wrong_prompt_replay", "wrong_prompt_control_margin"),
+            ("wrong_key_replay_records", "wrong_key_replay", "wrong_key_control_margin"),
+        ):
+            margin = evidence.get(margin_field)
+            rejected = margin is not None and float(margin) > 0.0
+            groups[group_name].append({
+                **common,
+                "replay_record_type": control_name,
+                "authenticated_trajectory_sketch_status": "ready" if sketch_verified else "not_ready",
+                "trajectory_sketch_verification_status": "verified" if sketch_verified else "verification_failed",
+                margin_field: margin,
+                "replay_control_status": "replay_rejected" if rejected else "control_not_rejected",
+                "replay_signature_mismatch_status": f"{control_name}_measured_formal",
+            })
     return groups
 
 
@@ -157,6 +277,9 @@ def _with_protocol(record: dict[str, Any], *, admissibility_status: str) -> dict
 def build_replay_and_sketch_records(run_root: str | Path) -> dict[str, list[dict[str, Any]]]:
     """从已落盘 records 构造 replay/sketch gate 所需的四类 records。"""
     run_root = Path(run_root)
+    full_claim3_records = _build_full_claim3_records(run_root)
+    if full_claim3_records is not None:
+        return full_claim3_records
     generation_records = _read_jsonl(run_root / "records" / "generation_records.jsonl")
     formal_metric_records = _read_jsonl(run_root / "records" / "formal_quality_motion_semantic_records.jsonl")
     trajectory_records = _read_jsonl(run_root / "records" / "trajectory_trace.jsonl")
@@ -290,11 +413,78 @@ def audit_replay_and_sketch_records(record_groups: dict[str, list[dict[str, Any]
     uncertainty_records = record_groups["replay_uncertainty_records"]
     wrong_sampler_records = record_groups["wrong_sampler_replay_records"]
     wrong_prompt_records = record_groups["wrong_prompt_replay_records"]
+    wrong_key_records = record_groups.get("wrong_key_replay_records", [])
     sketch_ready_count = sum(1 for record in sketch_records if record.get("trajectory_sketch_verification_status") == "verified")
     uncertainty_ready_count = sum(1 for record in uncertainty_records if record.get("replay_control_status") == "uncertainty_weight_ready")
     wrong_sampler_rejected_count = sum(1 for record in wrong_sampler_records if record.get("replay_control_status") == "replay_rejected")
     wrong_prompt_rejected_count = sum(1 for record in wrong_prompt_records if record.get("replay_control_status") == "replay_rejected")
     total_sketch_count = len(sketch_records)
+    full_claim3_mode = bool(sketch_records) and all(
+        record.get("replay_and_sketch_evidence_level") == FULL_CLAIM3_EVIDENCE_LEVEL
+        for record in sketch_records
+    )
+
+    if full_claim3_mode:
+        wrong_key_rejected_count = sum(
+            1 for record in wrong_key_records if record.get("replay_control_status") == "replay_rejected"
+        )
+        minimum_control_pass_rate = 0.8
+        control_rates = {
+            "wrong_sampler": wrong_sampler_rejected_count / max(1, len(wrong_sampler_records)),
+            "wrong_prompt": wrong_prompt_rejected_count / max(1, len(wrong_prompt_records)),
+            "wrong_key": wrong_key_rejected_count / max(1, len(wrong_key_records)),
+        }
+        uncertainty_weights = [
+            float(record["replay_uncertainty_weight"])
+            for record in uncertainty_records
+            if record.get("replay_uncertainty_weight") is not None
+        ]
+        posterior_ready_count = sum(
+            1
+            for record in uncertainty_records
+            if record.get("flow_posterior_confidence") is not None
+            and record.get("flow_state_posterior_entropy") is not None
+            and record.get("S_final_conservative") is not None
+        )
+        minimum_replay_reliability_mean = 0.5
+        replay_reliability_mean = mean(uncertainty_weights) if uncertainty_weights else 0.0
+        requirement_checks = {
+            "authenticated_trajectory_sketch_records_ready": total_sketch_count > 0 and sketch_ready_count == total_sketch_count,
+            "attacked_video_replay_uncertainty_records_ready": total_sketch_count > 0 and uncertainty_ready_count == total_sketch_count,
+            "flow_replay_posterior_records_ready": posterior_ready_count == total_sketch_count,
+            "replay_reliability_mean_ready": replay_reliability_mean >= minimum_replay_reliability_mean,
+            "wrong_sampler_replay_control_reliable": control_rates["wrong_sampler"] >= minimum_control_pass_rate,
+            "wrong_prompt_replay_control_reliable": control_rates["wrong_prompt"] >= minimum_control_pass_rate,
+            "wrong_key_replay_control_reliable": control_rates["wrong_key"] >= minimum_control_pass_rate,
+        }
+        missing = [name for name, passed in requirement_checks.items() if not passed]
+        decision = "PASS" if not missing else "FAIL"
+        return {
+            "stage_id": "replay_and_authenticated_sketch_gate",
+            "replay_and_sketch_gate_decision": decision,
+            "claim_support_status": "claim3_attacked_video_replay_posterior_supported" if decision == "PASS" else "claim3_attacked_video_replay_posterior_blocked",
+            "replay_and_sketch_evidence_level": FULL_CLAIM3_EVIDENCE_LEVEL,
+            "claim3_full_support_allowed": decision == "PASS",
+            "claim3_full_support_blocking_reason": "none" if decision == "PASS" else "formal_replay_or_control_requirement_failed",
+            "replay_or_sketch_status": "full_attacked_video_replay_and_authenticated_sketch_ready" if decision == "PASS" else "full_attacked_video_replay_blocked",
+            "replay_and_sketch_missing_requirements": missing,
+            "replay_and_sketch_missing_requirement_count": len(missing),
+            "trajectory_sketch_verification_record_count": total_sketch_count,
+            "trajectory_sketch_verified_count": sketch_ready_count,
+            "replay_uncertainty_record_count": len(uncertainty_records),
+            "replay_uncertainty_ready_count": uncertainty_ready_count,
+            "replay_uncertainty_weight_mean": round(mean(uncertainty_weights), 6) if uncertainty_weights else None,
+            "flow_replay_posterior_ready_count": posterior_ready_count,
+            "minimum_replay_reliability_mean": minimum_replay_reliability_mean,
+            "wrong_sampler_replay_record_count": len(wrong_sampler_records),
+            "wrong_sampler_replay_rejected_count": wrong_sampler_rejected_count,
+            "wrong_prompt_replay_record_count": len(wrong_prompt_records),
+            "wrong_prompt_replay_rejected_count": wrong_prompt_rejected_count,
+            "wrong_key_replay_record_count": len(wrong_key_records),
+            "wrong_key_replay_rejected_count": wrong_key_rejected_count,
+            "minimum_replay_control_pass_rate": minimum_control_pass_rate,
+            "replay_control_pass_rates": control_rates,
+        }
 
     requirement_checks = {
         "authenticated_trajectory_sketch_records_ready": total_sketch_count > 0 and sketch_ready_count == total_sketch_count,
@@ -328,6 +518,8 @@ def audit_replay_and_sketch_records(record_groups: dict[str, list[dict[str, Any]
         "wrong_sampler_replay_rejected_count": wrong_sampler_rejected_count,
         "wrong_prompt_replay_record_count": len(wrong_prompt_records),
         "wrong_prompt_replay_rejected_count": wrong_prompt_rejected_count,
+        "wrong_key_replay_record_count": len(wrong_key_records),
+        "wrong_key_replay_rejected_count": 0,
     }
 
 
@@ -340,12 +532,31 @@ def run_replay_and_sketch_gate(run_root: str | Path) -> dict[str, Any]:
     write_jsonl(run_root / "records" / "replay_uncertainty_records.jsonl", record_groups["replay_uncertainty_records"])
     write_jsonl(run_root / "records" / "wrong_sampler_replay_records.jsonl", record_groups["wrong_sampler_replay_records"])
     write_jsonl(run_root / "records" / "wrong_prompt_replay_records.jsonl", record_groups["wrong_prompt_replay_records"])
+    write_jsonl(run_root / "records" / "wrong_key_replay_records.jsonl", record_groups.get("wrong_key_replay_records", []))
     write_csv(run_root / "tables" / "replay_verification_table.csv", _table_rows(_all_records(record_groups)))
     write_json(run_root / "artifacts" / "replay_and_sketch_gate_decision.json", audit)
+    pre_replay = _read_json(run_root / "artifacts" / "three_layer_mechanism_evidence_decision.json")
+    claim1_pass = pre_replay.get("claim_1_velocity_constraint_detectable_watermark_decision") == "PASS"
+    claim2_pass = pre_replay.get("claim_2_path_evidence_independent_gain_decision") == "PASS"
+    claim3_pass = audit.get("claim3_full_support_allowed") is True
+    complete_claim_audit = {
+        "stage_id": "sstw_complete_paper_mechanism_claim_gate",
+        "claim_1_velocity_constraint_detectable_watermark_decision": "PASS" if claim1_pass else "FAIL",
+        "claim_2_path_evidence_independent_gain_decision": "PASS" if claim2_pass else "FAIL",
+        "claim_3_attacked_video_replay_posterior_decision": "PASS" if claim3_pass else "FAIL",
+        "complete_paper_mechanism_claim_decision": "PASS" if claim1_pass and claim2_pass and claim3_pass else "FAIL",
+        "claim3_downgrade_allowed": False,
+        "claim3_full_support_allowed": claim3_pass,
+        "claim_support_status": "sstw_complete_three_layer_claim_supported"
+        if claim1_pass and claim2_pass and claim3_pass
+        else "sstw_complete_three_layer_claim_blocked",
+    }
+    write_json(run_root / "artifacts" / "complete_paper_mechanism_claim_decision.json", complete_claim_audit)
     report = (
         "# Replay and Authenticated Sketch Gate Report\n\n"
         "该报告由 generation records 与 trajectory trace 自动生成, 用于闭合 paper profile 的 replay/sketch 工程入口。"
-        "当前 evidence level 是 owner-side diagnostic, 不允许直接声明 full-paper 强 Claim-3。\n\n"
+        "报告会区分 owner-side diagnostic 与 attacked-video model-velocity replay。"
+        "只有真实 replay、HMAC 验证和三类错误条件对照同时通过时才允许 Claim-3 完整支持。\n\n"
         f"- replay_and_sketch_gate_decision: {audit['replay_and_sketch_gate_decision']}\n"
         f"- replay_and_sketch_evidence_level: {audit['replay_and_sketch_evidence_level']}\n"
         f"- trajectory_sketch_verified_count: {audit['trajectory_sketch_verified_count']}\n"
@@ -358,6 +569,15 @@ def run_replay_and_sketch_gate(run_root: str | Path) -> dict[str, Any]:
     report_path = run_root / "reports" / "replay_and_sketch_gate_report.md"
     report_path.parent.mkdir(parents=True, exist_ok=True)
     report_path.write_text(report, encoding="utf-8")
+    complete_report_path = run_root / "reports" / "complete_paper_mechanism_claim_report.md"
+    complete_report_path.write_text(
+        "# SSTW Complete Paper Mechanism Claim Report\n\n"
+        f"- claim_1_decision: {complete_claim_audit['claim_1_velocity_constraint_detectable_watermark_decision']}\n"
+        f"- claim_2_decision: {complete_claim_audit['claim_2_path_evidence_independent_gain_decision']}\n"
+        f"- claim_3_decision: {complete_claim_audit['claim_3_attacked_video_replay_posterior_decision']}\n"
+        f"- complete_paper_mechanism_claim_decision: {complete_claim_audit['complete_paper_mechanism_claim_decision']}\n",
+        encoding="utf-8",
+    )
     return audit
 
 

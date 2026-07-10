@@ -28,6 +28,10 @@ from main.attacks.video_runtime_attack_protocol import (
 from main.protocol.flow_evidence_fields import with_flow_evidence_protocol_defaults
 from main.protocol.paper_result_formality_guard import build_paper_result_formality_guard
 from main.protocol.record_writer import write_json, write_jsonl
+from main.protocol.paper_mechanism_contract import (
+    audit_paper_profile_mechanism_contract,
+    load_paper_mechanism_contract,
+)
 from main.protocol.table_builder import write_csv
 
 
@@ -97,6 +101,11 @@ def _load_config(config_path: str | Path = DEFAULT_PAPER_PROFILE_CONFIG) -> dict
     paper_result_level = str(config.get("paper_result_level", "probe_paper"))
     required_runtime_attack_names = list(required_runtime_attack_names_from_config(config))
     required_non_runtime_attack_protocols = list(required_non_runtime_attack_protocols_from_config(config))
+    mechanism_contract_path = config.get("formal_mechanism_contract_path")
+    mechanism_contract_audit = None
+    if mechanism_contract_path:
+        mechanism_contract = load_paper_mechanism_contract(mechanism_contract_path)
+        mechanism_contract_audit = audit_paper_profile_mechanism_contract([config], mechanism_contract).as_dict()
     return {
         "paper_profile_names": config.get(
             "paper_profile_names",
@@ -130,6 +139,10 @@ def _load_config(config_path: str | Path = DEFAULT_PAPER_PROFILE_CONFIG) -> dict
         "require_formal_internal_ablation_summary": bool(config.get("require_formal_internal_ablation_summary", True)),
         "require_adaptive_attack_records": bool(config.get("require_adaptive_attack_records", True)),
         "require_replay_or_sketch_records_or_claim3_downgrade": bool(config.get("require_replay_or_sketch_records_or_claim3_downgrade", True)),
+        "require_claim3_full_support": bool(config.get("require_claim3_full_support", False)),
+        "claim3_downgrade_allowed": bool(config.get("claim3_downgrade_allowed", True)),
+        "require_complete_paper_mechanism_contract": bool(config.get("require_complete_paper_mechanism_contract", False)),
+        "paper_mechanism_contract_audit": mechanism_contract_audit,
         "require_confidence_interval_report": bool(config.get("require_confidence_interval_report", True)),
         "require_low_fpr_formal_statistics_blocking_record": bool(config.get("require_low_fpr_formal_statistics_blocking_record", True)),
         "require_paper_result_artifact_skeleton": bool(config.get("require_paper_result_artifact_skeleton", True)),
@@ -325,11 +338,15 @@ def _adaptive_attack_ready(
     )
 
 
-def _replay_or_sketch_ready(run_root: Path) -> tuple[bool, str]:
-    """检查 replay/sketch gate 是否闭合, 或 Claim-3 是否已经显式降级。"""
+def _replay_or_sketch_ready(run_root: Path, *, require_full_support: bool = False) -> tuple[bool, str]:
+    """检查 replay/sketch 是否闭合, 并按 profile 决定能否接受降级。"""
     replay_decision = _read_json(run_root / "artifacts" / "replay_and_sketch_gate_decision.json")
     if _decision_pass(replay_decision, "replay_and_sketch_gate_decision"):
+        if require_full_support and replay_decision.get("claim3_full_support_allowed") is not True:
+            return False, "replay_gate_passed_without_claim3_full_support"
         return True, str(replay_decision.get("replay_or_sketch_status") or "replay_and_sketch_gate_passed")
+    if require_full_support:
+        return False, "missing_full_attacked_video_replay_and_authenticated_sketch"
     downgrade_decision = _read_json(run_root / "artifacts" / "claim3_downgrade_decision.json")
     if downgrade_decision.get("claim3_downgraded") is True:
         return True, "claim3_explicitly_downgraded"
@@ -551,7 +568,10 @@ def _runtime_detection_records_formal_ready(records: list[dict]) -> tuple[bool, 
     formal_ready = [
         record
         for record in ready_records
-        if record.get("sstw_detector_evidence_level") == FORMAL_VIDEO_DETECTOR_EVIDENCE_LEVEL
+        if record.get("sstw_detector_evidence_level") in {
+            FORMAL_VIDEO_DETECTOR_EVIDENCE_LEVEL,
+            "attacked_video_wan_vae_model_velocity_replay",
+        }
         and record.get("trajectory_trace_used_for_score") is False
         and record.get("runtime_detection_claim_level") == "formal_paper_detector"
         and record.get("sstw_raw_detector_score") is not None
@@ -915,7 +935,16 @@ def build_paper_profile_gate_audit(
         config["required_non_runtime_attack_protocols"],
         config["minimum_non_runtime_attack_protocol_count"],
     )
-    replay_or_sketch_ready, replay_or_sketch_status = _replay_or_sketch_ready(run_root)
+    replay_or_sketch_ready, replay_or_sketch_status = _replay_or_sketch_ready(
+        run_root,
+        require_full_support=config["require_claim3_full_support"],
+    )
+    mechanism_contract_audit = config.get("paper_mechanism_contract_audit") or {}
+    mechanism_contract_ready = mechanism_contract_audit.get("paper_mechanism_contract_decision") == "PASS"
+    complete_claim_decision = _read_json(
+        run_root / "artifacts" / "complete_paper_mechanism_claim_decision.json"
+    )
+    complete_claim_ready = complete_claim_decision.get("complete_paper_mechanism_claim_decision") == "PASS"
     confidence_interval_ready, confidence_interval_status = _confidence_interval_ready(run_root)
     low_fpr_ready, low_fpr_record_count, low_fpr_status = _low_fpr_formal_statistics_ready(run_root)
     paper_skeleton_ready, paper_skeleton_status = _paper_result_artifact_skeleton_ready(run_root)
@@ -996,6 +1025,11 @@ def build_paper_profile_gate_audit(
         "paper_profile_formal_internal_ablation_ready": (not config["require_formal_internal_ablation_summary"]) or formal_internal_ablation_ready,
         "validation_adaptive_attack_records_ready": (not config["require_adaptive_attack_records"]) or adaptive_attack_ready,
         "validation_replay_or_sketch_records_ready": (not config["require_replay_or_sketch_records_or_claim3_downgrade"]) or replay_or_sketch_ready,
+        "validation_claim3_full_support_ready": (not config["require_claim3_full_support"]) or replay_or_sketch_ready,
+        "validation_complete_paper_mechanism_contract_ready": (
+            (not config["require_complete_paper_mechanism_contract"])
+            or (mechanism_contract_ready and complete_claim_ready)
+        ),
         "validation_confidence_interval_report_ready": (not config["require_confidence_interval_report"]) or confidence_interval_ready,
         "validation_low_fpr_formal_statistics_blocking_record_ready": (not config["require_low_fpr_formal_statistics_blocking_record"]) or low_fpr_ready,
         "validation_paper_result_artifact_skeleton_ready": (not config["require_paper_result_artifact_skeleton"]) or paper_skeleton_ready,
@@ -1116,6 +1150,12 @@ def build_paper_profile_gate_audit(
         "adaptive_attack_missing_non_runtime_protocols": missing_non_runtime_attack_protocols,
         "adaptive_attack_missing_non_runtime_protocol_count": len(missing_non_runtime_attack_protocols),
         "replay_or_sketch_status": replay_or_sketch_status,
+        "require_claim3_full_support": config["require_claim3_full_support"],
+        "claim3_downgrade_allowed": config["claim3_downgrade_allowed"],
+        "paper_mechanism_contract_decision": mechanism_contract_audit.get("paper_mechanism_contract_decision"),
+        "formal_mechanism_contract_id": mechanism_contract_audit.get("formal_mechanism_contract_id"),
+        "paper_mechanism_contract_violations": mechanism_contract_audit.get("paper_mechanism_contract_violations", []),
+        "complete_paper_mechanism_claim_decision": complete_claim_decision.get("complete_paper_mechanism_claim_decision"),
         "confidence_interval_status": confidence_interval_status,
         "low_fpr_formal_statistics_record_count": low_fpr_record_count,
         "low_fpr_formal_statistics_status": low_fpr_status,

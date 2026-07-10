@@ -1,4 +1,4 @@
-﻿# Field Registry
+# Field Registry
 
 ## 文档定位
 
@@ -1592,3 +1592,224 @@ Notebook 与 repository module 的跨边界数据
 | probe_paper_claim_support_status | claim | none | true | false | false | pilot_paper gate 读取到的 probe_paper claim 支撑状态。 |
 | probe_paper_gate_fairness_missing_requirements | governance | none | true | false | false | pilot_paper gate 复核 probe_paper gate 时发现的缺失或不合规项。 |
 | probe_paper_transition_fairness_missing_requirements | governance | none | true | false | false | pilot_paper gate 复核 probe_paper -> pilot_paper 跳转时发现的缺失或不合规项。 |
+
+## 完整论文机制新增字段
+
+下列字段由真实 Flow velocity、endpoint、path、replay、HMAC sketch 与固定 FPR 检测链路写出。
+
+| field_name | category | required_suffix | allowed_in_records | allowed_in_claims | replacement_required | description |
+| --- | --- | --- | --- | --- | --- | --- |
+| admissibility_thresholds | metric | none | true | false | false | 完整论文机制中 `admissibility_thresholds` 的受治理记录字段。 |
+| audited_profile_count | metric | none | true | false | false | 完整论文机制中 `audited_profile_count` 的受治理记录字段。 |
+| calibration_negative_count | metric | none | true | false | false | 完整论文机制中 `calibration_negative_count` 的受治理记录字段。 |
+| claim3_downgrade_allowed | governance | none | true | false | false | 当前 paper profile 是否允许降低 Claim-3 主张强度, 完整机制固定为 false。 |
+| claim3_real_replay_record_count | metric | none | true | false | false | 完整论文机制中 `claim3_real_replay_record_count` 的受治理记录字段。 |
+| claim_1_empirical_fpr | metric | none | true | true | false | 完整论文机制中 `claim_1_empirical_fpr` 的受治理记录字段。 |
+| claim_1_heldout_negative_count | metric | none | true | true | false | 完整论文机制中 `claim_1_heldout_negative_count` 的受治理记录字段。 |
+| claim_1_heldout_positive_count | metric | none | true | true | false | 完整论文机制中 `claim_1_heldout_positive_count` 的受治理记录字段。 |
+| claim_1_tpr_at_target_fpr | metric | none | true | true | false | 完整论文机制中 `claim_1_tpr_at_target_fpr` 的受治理记录字段。 |
+| claim_1_velocity_constraint_detectable_watermark_decision | governance | none | true | true | false | 完整论文机制中 `claim_1_velocity_constraint_detectable_watermark_decision` 的受治理记录字段。 |
+| claim_2_paired_comparison_count | metric | none | true | true | false | 完整论文机制中 `claim_2_paired_comparison_count` 的受治理记录字段。 |
+| claim_2_paired_detection_gain_mean | metric | none | true | true | false | 完整论文机制中 `claim_2_paired_detection_gain_mean` 的受治理记录字段。 |
+| claim_2_paired_score_gain_ci_95_lower | metric | none | true | true | false | 完整论文机制中 `claim_2_paired_score_gain_ci_95_lower` 的受治理记录字段。 |
+| claim_2_paired_score_gain_ci_95_upper | metric | none | true | true | false | 完整论文机制中 `claim_2_paired_score_gain_ci_95_upper` 的受治理记录字段。 |
+| claim_2_paired_score_gain_mean | metric | none | true | true | false | 完整论文机制中 `claim_2_paired_score_gain_mean` 的受治理记录字段。 |
+| claim_2_path_evidence_independent_gain_decision | governance | none | true | true | false | 完整论文机制中 `claim_2_path_evidence_independent_gain_decision` 的受治理记录字段。 |
+| claim_3_attacked_video_replay_posterior_decision | governance | none | true | true | false | 完整论文机制中 `claim_3_attacked_video_replay_posterior_decision` 的受治理记录字段。 |
+| clean_negative_score | metric | none | true | false | false | 完整论文机制中 `clean_negative_score` 的受治理记录字段。 |
+| clean_negative_trial_index | protocol | none | true | false | false | 完整论文机制中 `clean_negative_trial_index` 的受治理记录字段。 |
+| coverage | metric | none | true | false | false | 完整论文机制中 `coverage` 的受治理记录字段。 |
+| detector_key_digest | protocol | none | true | false | false | 检测 key 的单向摘要, 不暴露原始 key。 |
+| endpoint | protocol | none | true | false | false | 完整论文机制中 `endpoint` 的受治理记录字段。 |
+| endpoint_control_enabled | protocol | none | true | false | false | 完整论文机制中 `endpoint_control_enabled` 的受治理记录字段。 |
+| endpoint_control_multiplier | protocol | none | true | false | false | 完整论文机制中 `endpoint_control_multiplier` 的受治理记录字段。 |
+| endpoint_response_before_step | protocol | none | true | false | false | 完整论文机制中 `endpoint_response_before_step` 的受治理记录字段。 |
+| evidence_means | metric | none | true | false | false | 完整论文机制中 `evidence_means` 的受治理记录字段。 |
+| evidence_standard_deviations | protocol | none | true | false | false | 完整论文机制中 `evidence_standard_deviations` 的受治理记录字段。 |
+| flow_detector_score_source | metric | none | true | false | false | 完整论文机制中 `flow_detector_score_source` 的受治理记录字段。 |
+| flow_endpoint_state | protocol | none | true | false | false | 完整论文机制中 `flow_endpoint_state` 的受治理记录字段。 |
+| flow_key_direction_digest | protocol | none | true | false | false | 由 key、latent shape 与 tubelet 布局确定的稳定方向摘要。 |
+| flow_key_direction_norm | metric | none | true | false | false | 完整论文机制中 `flow_key_direction_norm` 的受治理记录字段。 |
+| flow_observation_variance | metric | none | true | false | false | 完整论文机制中 `flow_observation_variance` 的受治理记录字段。 |
+| flow_path_consistency_state | protocol | none | true | false | false | 完整论文机制中 `flow_path_consistency_state` 的受治理记录字段。 |
+| flow_payload_negative_count | metric | none | true | false | false | 完整论文机制中 `flow_payload_negative_count` 的受治理记录字段。 |
+| flow_payload_positive_count | metric | none | true | false | false | 完整论文机制中 `flow_payload_positive_count` 的受治理记录字段。 |
+| flow_phase | metric | none | true | false | false | 完整论文机制中 `flow_phase` 的受治理记录字段。 |
+| flow_phase_state | metric | none | true | false | false | 完整论文机制中 `flow_phase_state` 的受治理记录字段。 |
+| flow_phase_weight | metric | none | true | false | false | 完整论文机制中 `flow_phase_weight` 的受治理记录字段。 |
+| flow_posterior_confidence | metric | none | true | false | false | 完整论文机制中 `flow_posterior_confidence` 的受治理记录字段。 |
+| flow_process_variance | metric | none | true | false | false | 完整论文机制中 `flow_process_variance` 的受治理记录字段。 |
+| flow_replay_reliability_state | metric | none | true | false | false | 完整论文机制中 `flow_replay_reliability_state` 的受治理记录字段。 |
+| flow_state_admissibility_failures | protocol | none | true | false | false | 完整论文机制中 `flow_state_admissibility_failures` 的受治理记录字段。 |
+| flow_state_posterior_entropy | metric | none | true | false | false | 完整论文机制中 `flow_state_posterior_entropy` 的受治理记录字段。 |
+| flow_temporal_disturbance_state | protocol | none | true | false | false | 完整论文机制中 `flow_temporal_disturbance_state` 的受治理记录字段。 |
+| flow_time_grid_reliability_state | metric | none | true | false | false | 完整论文机制中 `flow_time_grid_reliability_state` 的受治理记录字段。 |
+| flow_tubelet_count | metric | none | true | false | false | 完整论文机制中 `flow_tubelet_count` 的受治理记录字段。 |
+| flow_tubelet_key_code_status | governance | none | true | false | false | 完整论文机制中 `flow_tubelet_key_code_status` 的受治理记录字段。 |
+| flow_tubelet_spatial_height | protocol | none | true | false | false | 完整论文机制中 `flow_tubelet_spatial_height` 的受治理记录字段。 |
+| flow_tubelet_spatial_width | protocol | none | true | false | false | 完整论文机制中 `flow_tubelet_spatial_width` 的受治理记录字段。 |
+| flow_tubelet_temporal_size | protocol | none | true | false | false | 完整论文机制中 `flow_tubelet_temporal_size` 的受治理记录字段。 |
+| flow_velocity_consistency_state | protocol | none | true | false | false | 完整论文机制中 `flow_velocity_consistency_state` 的受治理记录字段。 |
+| formal_flow_clean_negative_record_count | metric | none | true | false | false | 完整论文机制中 `formal_flow_clean_negative_record_count` 的受治理记录字段。 |
+| formal_flow_detector_input_contract | protocol | none | true | false | false | 完整论文机制中 `formal_flow_detector_input_contract` 的受治理记录字段。 |
+| formal_flow_evidence_decision | governance | none | true | false | false | 完整论文机制中 `formal_flow_evidence_decision` 的受治理记录字段。 |
+| formal_flow_evidence_failure_reason | protocol | none | true | false | false | 完整论文机制中 `formal_flow_evidence_failure_reason` 的受治理记录字段。 |
+| formal_flow_evidence_level | protocol | none | true | false | false | 完整论文机制中 `formal_flow_evidence_level` 的受治理记录字段。 |
+| formal_flow_evidence_record_count | metric | none | true | false | false | 完整论文机制中 `formal_flow_evidence_record_count` 的受治理记录字段。 |
+| formal_flow_evidence_status | governance | none | true | false | false | 完整论文机制中 `formal_flow_evidence_status` 的受治理记录字段。 |
+| formal_flow_evidence_unit_id | protocol | none | true | false | false | 完整论文机制中 `formal_flow_evidence_unit_id` 的受治理记录字段。 |
+| formal_flow_failure_record_count | metric | none | true | false | false | 完整论文机制中 `formal_flow_failure_record_count` 的受治理记录字段。 |
+| formal_flow_missing_method_variants | protocol | none | true | false | false | 完整论文机制中 `formal_flow_missing_method_variants` 的受治理记录字段。 |
+| formal_flow_observed_method_variants | protocol | none | true | false | false | 完整论文机制中 `formal_flow_observed_method_variants` 的受治理记录字段。 |
+| formal_flow_positive_record_count | metric | none | true | false | false | 完整论文机制中 `formal_flow_positive_record_count` 的受治理记录字段。 |
+| formal_flow_threshold_record_count | metric | none | true | false | false | 完整论文机制中 `formal_flow_threshold_record_count` 的受治理记录字段。 |
+| formal_mechanism_contract_id | protocol | none | true | false | false | 三个 paper profile 共同绑定的完整论文机制契约标识。 |
+| frozen_final_score_threshold | metric | none | true | false | false | 完整论文机制中 `frozen_final_score_threshold` 的受治理记录字段。 |
+| generation_nonce_random | metric | _random | true | false | false | 生成时为防止 trajectory sketch 重放而产生的随机 nonce。 |
+| model_signature | protocol | none | true | false | false | 完整论文机制中 `model_signature` 的受治理记录字段。 |
+| paired_endpoint_only_detector_decision | governance | none | true | false | false | 完整论文机制中 `paired_endpoint_only_detector_decision` 的受治理记录字段。 |
+| paired_endpoint_only_detector_score | metric | none | true | false | false | 完整论文机制中 `paired_endpoint_only_detector_score` 的受治理记录字段。 |
+| paired_full_detector_decision | governance | none | true | false | false | 完整论文机制中 `paired_full_detector_decision` 的受治理记录字段。 |
+| paired_full_detector_score | metric | none | true | false | false | 完整论文机制中 `paired_full_detector_score` 的受治理记录字段。 |
+| paired_path_evidence_detection_gain | metric | none | true | true | false | 完整论文机制中 `paired_path_evidence_detection_gain` 的受治理记录字段。 |
+| paired_path_evidence_score_gain | metric | none | true | true | false | 完整论文机制中 `paired_path_evidence_score_gain` 的受治理记录字段。 |
+| paired_source_method_variant | protocol | none | true | false | false | 完整论文机制中 `paired_source_method_variant` 的受治理记录字段。 |
+| paper_mechanism_contract_decision | governance | none | true | false | false | paper profile 机制一致性审计判定。 |
+| paper_mechanism_contract_violations | governance | none | true | false | false | 完整论文机制中 `paper_mechanism_contract_violations` 的受治理记录字段。 |
+| path | protocol | none | true | false | false | 完整论文机制中 `path` 的受治理记录字段。 |
+| path_endpoint_consistency | protocol | none | true | false | false | 同一 key 方向上 replay 路径证据与 endpoint 证据的一致性。 |
+| path_observation_step_count | metric | none | true | false | false | 完整论文机制中 `path_observation_step_count` 的受治理记录字段。 |
+| path_projection | metric | none | true | false | false | 完整论文机制中 `path_projection` 的受治理记录字段。 |
+| path_projection_normalized | metric | none | true | false | false | 完整论文机制中 `path_projection_normalized` 的受治理记录字段。 |
+| path_step_norm | metric | none | true | false | false | 完整论文机制中 `path_step_norm` 的受治理记录字段。 |
+| path_velocity_consistency | protocol | none | true | false | false | 完整论文机制中 `path_velocity_consistency` 的受治理记录字段。 |
+| path_velocity_consistency_mean | metric | none | true | false | false | 完整论文机制中 `path_velocity_consistency_mean` 的受治理记录字段。 |
+| posterior_confidence | metric | none | true | false | false | 完整论文机制中 `posterior_confidence` 的受治理记录字段。 |
+| prompt_digest | protocol | none | true | false | false | 完整论文机制中 `prompt_digest` 的受治理记录字段。 |
+| protocol_split | protocol | none | true | false | false | 完整论文机制中 `protocol_split` 的受治理记录字段。 |
+| replay_control_execution_status | governance | none | true | false | false | 完整论文机制中 `replay_control_execution_status` 的受治理记录字段。 |
+| replay_cycle_error_maximum | metric | none | true | false | false | 完整论文机制中 `replay_cycle_error_maximum` 的受治理记录字段。 |
+| replay_cycle_error_mean | metric | none | true | false | false | 完整论文机制中 `replay_cycle_error_mean` 的受治理记录字段。 |
+| replay_endpoint_ensemble_variance | metric | none | true | false | false | 完整论文机制中 `replay_endpoint_ensemble_variance` 的受治理记录字段。 |
+| replay_ensemble_count | metric | none | true | false | false | 完整论文机制中 `replay_ensemble_count` 的受治理记录字段。 |
+| replay_inversion_status | governance | none | true | false | false | 完整论文机制中 `replay_inversion_status` 的受治理记录字段。 |
+| replay_primary_step_count | metric | none | true | false | false | 完整论文机制中 `replay_primary_step_count` 的受治理记录字段。 |
+| replay_reliability | metric | none | true | false | false | 完整论文机制中 `replay_reliability` 的受治理记录字段。 |
+| replay_reliability_weight | metric | none | true | false | false | 完整论文机制中 `replay_reliability_weight` 的受治理记录字段。 |
+| replay_step_counts | metric | none | true | false | false | 完整论文机制中 `replay_step_counts` 的受治理记录字段。 |
+| replay_trajectory_source | protocol | none | true | false | false | 完整论文机制中 `replay_trajectory_source` 的受治理记录字段。 |
+| require_claim3_full_support | governance | none | true | false | false | 当前 paper profile 是否强制要求攻击后视频 replay 后验的完整证据。 |
+| required_claim_ids | governance | none | true | false | false | 完整论文机制中 `required_claim_ids` 的受治理记录字段。 |
+| required_result_capabilities | governance | none | true | false | false | 完整论文机制中 `required_result_capabilities` 的受治理记录字段。 |
+| sampler_signature | protocol | none | true | false | false | 完整论文机制中 `sampler_signature` 的受治理记录字段。 |
+| scheduler_velocity_sign | protocol | none | true | false | false | 完整论文机制中 `scheduler_velocity_sign` 的受治理记录字段。 |
+| stage_id | protocol | none | true | false | false | 完整论文机制中 `stage_id` 的受治理记录字段。 |
+| three_layer_mechanism_pre_replay_decision | governance | none | true | false | false | Claim-1 与 Claim-2 在 Claim-3 认证门禁前的合并判定。 |
+| time_grid_id | protocol | none | true | false | false | 完整论文机制中 `time_grid_id` 的受治理记录字段。 |
+| time_grid_reliability | metric | none | true | false | false | 完整论文机制中 `time_grid_reliability` 的受治理记录字段。 |
+| trajectory_sketch_authentication_algorithm | protocol | none | true | false | false | 完整论文机制中 `trajectory_sketch_authentication_algorithm` 的受治理记录字段。 |
+| trajectory_sketch_format | protocol | none | true | false | false | 完整论文机制中 `trajectory_sketch_format` 的受治理记录字段。 |
+| trajectory_sketch_payload | protocol | none | true | false | false | 完整论文机制中 `trajectory_sketch_payload` 的受治理记录字段。 |
+| trajectory_sketch_signature | protocol | none | true | false | false | trajectory sketch 的 HMAC-SHA256 认证标签。 |
+| trajectory_step_count | metric | none | true | false | false | 完整论文机制中 `trajectory_step_count` 的受治理记录字段。 |
+| trajectory_steps | protocol | none | true | false | false | 完整论文机制中 `trajectory_steps` 的受治理记录字段。 |
+| velocity | protocol | none | true | false | false | 完整论文机制中 `velocity` 的受治理记录字段。 |
+| velocity_alignment_after_constraint | protocol | none | true | false | false | 完整论文机制中 `velocity_alignment_after_constraint` 的受治理记录字段。 |
+| velocity_alignment_before_constraint | protocol | none | true | false | false | 完整论文机制中 `velocity_alignment_before_constraint` 的受治理记录字段。 |
+| velocity_alignment_gain | metric | none | true | false | false | 完整论文机制中 `velocity_alignment_gain` 的受治理记录字段。 |
+| velocity_constraint_delta_norm | metric | none | true | false | false | 完整论文机制中 `velocity_constraint_delta_norm` 的受治理记录字段。 |
+| velocity_constraint_delta_ratio | metric | none | true | false | false | 完整论文机制中 `velocity_constraint_delta_ratio` 的受治理记录字段。 |
+| velocity_constraint_lambda | protocol | none | true | false | false | 完整论文机制中 `velocity_constraint_lambda` 的受治理记录字段。 |
+| velocity_field_constraint_status | governance | none | true | false | false | 完整论文机制中 `velocity_field_constraint_status` 的受治理记录字段。 |
+| velocity_field_source | protocol | none | true | false | false | 完整论文机制中 `velocity_field_source` 的受治理记录字段。 |
+| velocity_norm_after_constraint | metric | none | true | false | false | 完整论文机制中 `velocity_norm_after_constraint` 的受治理记录字段。 |
+| velocity_norm_before_constraint | metric | none | true | false | false | 完整论文机制中 `velocity_norm_before_constraint` 的受治理记录字段。 |
+| velocity_norm_ratio_budget | metric | none | true | false | false | 完整论文机制中 `velocity_norm_ratio_budget` 的受治理记录字段。 |
+| velocity_projection_normalized | metric | none | true | false | false | 完整论文机制中 `velocity_projection_normalized` 的受治理记录字段。 |
+| wrong_key_S_path_inv | protocol | none | true | false | false | 完整论文机制中 `wrong_key_S_path_inv` 的受治理记录字段。 |
+| wrong_key_control_margin | metric | none | true | false | false | 完整论文机制中 `wrong_key_control_margin` 的受治理记录字段。 |
+| wrong_key_endpoint_score | metric | none | true | false | false | 完整论文机制中 `wrong_key_endpoint_score` 的受治理记录字段。 |
+| wrong_prompt_S_path_inv | protocol | none | true | false | false | 完整论文机制中 `wrong_prompt_S_path_inv` 的受治理记录字段。 |
+| wrong_prompt_control_margin | metric | none | true | false | false | 完整论文机制中 `wrong_prompt_control_margin` 的受治理记录字段。 |
+| wrong_prompt_control_prompt_digest | protocol | none | true | false | false | 完整论文机制中 `wrong_prompt_control_prompt_digest` 的受治理记录字段。 |
+| wrong_prompt_replay_cycle_error | metric | none | true | false | false | 完整论文机制中 `wrong_prompt_replay_cycle_error` 的受治理记录字段。 |
+| wrong_sampler_S_path_inv | protocol | none | true | false | false | 完整论文机制中 `wrong_sampler_S_path_inv` 的受治理记录字段。 |
+| wrong_sampler_control_margin | metric | none | true | false | false | 完整论文机制中 `wrong_sampler_control_margin` 的受治理记录字段。 |
+| wrong_sampler_control_shift | metric | none | true | false | false | 完整论文机制中 `wrong_sampler_control_shift` 的受治理记录字段。 |
+| wrong_sampler_replay_cycle_error | metric | none | true | false | false | 完整论文机制中 `wrong_sampler_replay_cycle_error` 的受治理记录字段。 |
+
+| S_final_unconstrained | metric | none | true | false | false | admissibility 置零前的多证据保守分数, 用于正式 admissibility 消融。 |
+| endpoint_bit_accuracy | metric | none | true | false | false | endpoint latent 中按 tubelet 恢复的 payload bit 准确率。 |
+| endpoint_coverage_ratio | metric | none | true | false | false | 具有有效范数并参与 endpoint 检测的 tubelet 覆盖率。 |
+| endpoint_evidence_source | protocol | none | true | false | false | endpoint 证据的数据来源。 |
+| endpoint_evidence_status | protocol | none | true | false | false | endpoint VAE 重编码与 key 检测状态。 |
+| endpoint_latent_norm | metric | none | true | false | false | Wan VAE 归一化 endpoint latent 的范数。 |
+| endpoint_latent_shape | protocol | none | true | false | false | Wan VAE 归一化 endpoint latent 的五维 shape。 |
+| endpoint_projection | metric | none | true | false | false | endpoint latent 对同源 key direction 的余弦投影。 |
+| endpoint_score | metric | none | true | false | false | 映射到 [0, 1] 的 endpoint key 检测分数。 |
+| endpoint_tubelet_count | metric | none | true | false | false | endpoint 检测覆盖的时空 tubelet 数。 |
+| endpoint_vae_encode_status | protocol | none | true | false | false | 攻击后视频的 Wan VAE 编码状态。 |
+| endpoint_vae_model_class | protocol | none | true | false | false | 执行 endpoint 重建的 Wan VAE 类名。 |
+| endpoint_video_frame_count | metric | none | true | false | false | 进入 Wan VAE endpoint 重建的视频帧数。 |
+| flow_scheduler_runtime_verified | protocol | none | true | false | false | 当前 step 是否由 Flow scheduler 运行时包装器真实记录。 |
+| attacked_video_replay_uncertainty_records_ready | governance | none | true | false | false | 完整 Claim-3 replay/sketch 门禁中 `attacked_video_replay_uncertainty_records_ready` 的受治理字段。 |
+| authenticated_generation_step_count | metric | none | true | false | false | 完整 Claim-3 replay/sketch 门禁中 `authenticated_generation_step_count` 的受治理字段。 |
+| authenticated_generation_time_grid_id | protocol | none | true | false | false | 完整 Claim-3 replay/sketch 门禁中 `authenticated_generation_time_grid_id` 的受治理字段。 |
+| authenticated_trajectory_sketch_records_ready | governance | none | true | false | false | 完整 Claim-3 replay/sketch 门禁中 `authenticated_trajectory_sketch_records_ready` 的受治理字段。 |
+| claim3_full_support_blocking_reason | governance | none | true | false | false | 完整 Claim-3 replay/sketch 门禁中 `claim3_full_support_blocking_reason` 的受治理字段。 |
+| complete_result_flags | governance | none | true | false | false | 完整 Claim-3 replay/sketch 门禁中 `complete_result_flags` 的受治理字段。 |
+| matched_sketch_digest | protocol | none | true | false | false | 完整 Claim-3 replay/sketch 门禁中 `matched_sketch_digest` 的受治理字段。 |
+| minimum_replay_control_pass_rate | metric | none | true | false | false | 完整 Claim-3 replay/sketch 门禁中 `minimum_replay_control_pass_rate` 的受治理字段。 |
+| replay_and_sketch_missing_requirement_count | metric | none | true | false | false | 完整 Claim-3 replay/sketch 门禁中 `replay_and_sketch_missing_requirement_count` 的受治理字段。 |
+| replay_control_pass_rates | metric | none | true | false | false | 完整 Claim-3 replay/sketch 门禁中 `replay_control_pass_rates` 的受治理字段。 |
+| replay_prompt_digest | protocol | none | true | false | false | 完整 Claim-3 replay/sketch 门禁中 `replay_prompt_digest` 的受治理字段。 |
+| replay_record_type | protocol | none | true | false | false | 完整 Claim-3 replay/sketch 门禁中 `replay_record_type` 的受治理字段。 |
+| replay_sampler_signature | protocol | none | true | false | false | 完整 Claim-3 replay/sketch 门禁中 `replay_sampler_signature` 的受治理字段。 |
+| replay_uncertainty_ready_count | governance | none | true | false | false | 完整 Claim-3 replay/sketch 门禁中 `replay_uncertainty_ready_count` 的受治理字段。 |
+| replay_uncertainty_record_count | metric | none | true | false | false | 完整 Claim-3 replay/sketch 门禁中 `replay_uncertainty_record_count` 的受治理字段。 |
+| replay_uncertainty_records | protocol | none | true | false | false | 完整 Claim-3 replay/sketch 门禁中 `replay_uncertainty_records` 的受治理字段。 |
+| replay_uncertainty_weight_mean | metric | none | true | false | false | 完整 Claim-3 replay/sketch 门禁中 `replay_uncertainty_weight_mean` 的受治理字段。 |
+| trace_steps | protocol | none | true | false | false | 完整 Claim-3 replay/sketch 门禁中 `trace_steps` 的受治理字段。 |
+| trajectory_sketch_verification_record_count | metric | none | true | false | false | 完整 Claim-3 replay/sketch 门禁中 `trajectory_sketch_verification_record_count` 的受治理字段。 |
+| trajectory_sketch_verification_records | protocol | none | true | false | false | 完整 Claim-3 replay/sketch 门禁中 `trajectory_sketch_verification_records` 的受治理字段。 |
+| trajectory_sketch_verified_count | metric | none | true | false | false | 完整 Claim-3 replay/sketch 门禁中 `trajectory_sketch_verified_count` 的受治理字段。 |
+| wrong_key | protocol | none | true | false | false | 完整 Claim-3 replay/sketch 门禁中 `wrong_key` 的受治理字段。 |
+| wrong_key_replay_control_reliable | governance | none | true | false | false | 完整 Claim-3 replay/sketch 门禁中 `wrong_key_replay_control_reliable` 的受治理字段。 |
+| wrong_key_replay_cycle_error | metric | none | true | false | false | 完整 Claim-3 replay/sketch 门禁中 `wrong_key_replay_cycle_error` 的受治理字段。 |
+| wrong_key_replay_record_count | metric | none | true | false | false | 完整 Claim-3 replay/sketch 门禁中 `wrong_key_replay_record_count` 的受治理字段。 |
+| wrong_key_replay_records | protocol | none | true | false | false | 完整 Claim-3 replay/sketch 门禁中 `wrong_key_replay_records` 的受治理字段。 |
+| wrong_key_replay_rejected_count | metric | none | true | false | false | 完整 Claim-3 replay/sketch 门禁中 `wrong_key_replay_rejected_count` 的受治理字段。 |
+| wrong_prompt | protocol | none | true | false | false | 完整 Claim-3 replay/sketch 门禁中 `wrong_prompt` 的受治理字段。 |
+| wrong_prompt_id | protocol | none | true | false | false | 完整 Claim-3 replay/sketch 门禁中 `wrong_prompt_id` 的受治理字段。 |
+| wrong_prompt_replay_control_reliable | governance | none | true | false | false | 完整 Claim-3 replay/sketch 门禁中 `wrong_prompt_replay_control_reliable` 的受治理字段。 |
+| wrong_prompt_replay_record_count | metric | none | true | false | false | 完整 Claim-3 replay/sketch 门禁中 `wrong_prompt_replay_record_count` 的受治理字段。 |
+| wrong_prompt_replay_records | protocol | none | true | false | false | 完整 Claim-3 replay/sketch 门禁中 `wrong_prompt_replay_records` 的受治理字段。 |
+| wrong_prompt_replay_rejected_count | metric | none | true | false | false | 完整 Claim-3 replay/sketch 门禁中 `wrong_prompt_replay_rejected_count` 的受治理字段。 |
+| wrong_prompt_sketch_digest | protocol | none | true | false | false | 完整 Claim-3 replay/sketch 门禁中 `wrong_prompt_sketch_digest` 的受治理字段。 |
+| wrong_sampler | protocol | none | true | false | false | 完整 Claim-3 replay/sketch 门禁中 `wrong_sampler` 的受治理字段。 |
+| wrong_sampler_replay_control | protocol | none | true | false | false | 完整 Claim-3 replay/sketch 门禁中 `wrong_sampler_replay_control` 的受治理字段。 |
+| wrong_sampler_replay_control_reliable | governance | none | true | false | false | 完整 Claim-3 replay/sketch 门禁中 `wrong_sampler_replay_control_reliable` 的受治理字段。 |
+| wrong_sampler_replay_record_count | metric | none | true | false | false | 完整 Claim-3 replay/sketch 门禁中 `wrong_sampler_replay_record_count` 的受治理字段。 |
+| wrong_sampler_replay_records | protocol | none | true | false | false | 完整 Claim-3 replay/sketch 门禁中 `wrong_sampler_replay_records` 的受治理字段。 |
+| wrong_sampler_replay_rejected_count | metric | none | true | false | false | 完整 Claim-3 replay/sketch 门禁中 `wrong_sampler_replay_rejected_count` 的受治理字段。 |
+| complete_paper_mechanism_claim_decision | governance | none | true | true | false | 三层论文主张同时闭合后的统一机制判定。 |
+| adaptive_attack_execution_backend | protocol | none | true | false | false | adaptive protocol 的真实执行后端或查询策略。 |
+| adaptive_attack_query_count | protocol | none | true | false | false | 黑盒 adaptive attack 实际比较的候选查询数量。 |
+| adaptive_video_attack_generation_status | protocol | none | true | false | false | 跨样本 copy/collusion 视频是否成功生成。 |
+| adaptive_video_attack_input_paths | protocol | none | true | false | false | 跨样本 adaptive video 使用的全部源视频路径。 |
+| attack_runtime_failure_reason | protocol | none | true | false | false | 视频攻击执行失败原因。 |
+| attack_runtime_status | protocol | none | true | false | false | 视频攻击的实际执行状态。 |
+| formal_method_variant_execution | protocol | none | true | false | false | 当前 generation 是否属于正式8变体消融运行。 |
+| generation_sample_role | protocol | none | true | false | false | 生成单元在 positive 或 clean negative 协议中的角色。 |
+| require_complete_paper_mechanism_contract | protocol | none | true | false | false | profile 是否强制启用三层完整论文机制契约。 |
+| watermark_embedding_status | protocol | none | true | false | false | 生成单元实际采用的水印嵌入或 clean 控制状态。 |
+| claim_2_paired_detection_gain_ci_95_lower | metric | none | true | true | false | 固定 FPR 下同视频配对检测增益的 95% 区间下界。 |
+| claim_2_paired_detection_gain_ci_95_upper | metric | none | true | true | false | 固定 FPR 下同视频配对检测增益的 95% 区间上界。 |
+| claim_1_empirical_fpr_ci_95_lower | metric | none | true | true | false | held-out empirical FPR 的 Wilson 95% 区间下界。 |
+| claim_1_empirical_fpr_ci_95_upper | metric | none | true | true | false | held-out empirical FPR 的 Wilson 95% 区间上界。 |
+| claim_1_tpr_ci_95_lower | metric | none | true | true | false | 目标 FPR 下 attacked-positive TPR 的 Wilson 95% 区间下界。 |
+| claim_1_tpr_ci_95_upper | metric | none | true | true | false | 目标 FPR 下 attacked-positive TPR 的 Wilson 95% 区间上界。 |
+| flow_replay_posterior_ready_count | metric | none | true | true | false | 具备 posterior confidence、entropy 和保守分数的真实 replay 记录数。 |
+| minimum_replay_reliability_mean | metric | none | true | true | false | Claim-3 门禁要求的 replay reliability 均值下界。 |
+| flow_replay_posterior_records_ready | metric | none | true | true | false | 真实 replay posterior 字段覆盖是否完整。 |
+| replay_reliability_mean_ready | metric | none | true | true | false | replay reliability 均值是否达到 Claim-3 契约。 |

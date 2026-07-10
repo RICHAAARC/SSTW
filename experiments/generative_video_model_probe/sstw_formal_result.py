@@ -21,6 +21,14 @@ from main.protocol.table_builder import write_csv
 
 DEFAULT_PROTOCOL_CONFIG = "configs/protocol/probe_paper_generative_probe.json"
 SSTW_METHOD_ID = "sstw_key_conditioned_flow_trajectory"
+FORMAL_SSTW_DETECTOR_EVIDENCE_LEVELS = {
+    FORMAL_VIDEO_DETECTOR_EVIDENCE_LEVEL,
+    "attacked_video_wan_vae_model_velocity_replay",
+}
+FORMAL_SSTW_CLEAN_NEGATIVE_EVIDENCE_LEVELS = {
+    FORMAL_CLEAN_NEGATIVE_EVIDENCE_LEVEL,
+    "attacked_video_wan_vae_model_velocity_replay",
+}
 
 
 def _read_json(path: Path) -> dict[str, Any]:
@@ -80,7 +88,7 @@ def formal_sstw_score_record_ready_for_claim(record: dict[str, Any]) -> bool:
     return (
         record.get("metric_status") == "measured_formal"
         and str(record.get("sample_role") or "").lower() not in {"clean_negative", "controlled_negative"}
-        and record.get("sstw_detector_evidence_level") == FORMAL_VIDEO_DETECTOR_EVIDENCE_LEVEL
+        and record.get("sstw_detector_evidence_level") in FORMAL_SSTW_DETECTOR_EVIDENCE_LEVELS
         and record.get("trajectory_trace_used_for_score") is False
         and record.get("runtime_detection_claim_level") == "formal_paper_detector"
         and _safe_float(record.get("sstw_raw_detector_score")) is not None
@@ -93,7 +101,7 @@ def formal_sstw_clean_negative_record_ready_for_calibration(record: dict[str, An
     return (
         record.get("metric_status") == "measured_formal"
         and str(record.get("sample_role") or "").lower() == "clean_negative"
-        and record.get("clean_negative_evidence_level") == FORMAL_CLEAN_NEGATIVE_EVIDENCE_LEVEL
+        and record.get("clean_negative_evidence_level") in FORMAL_SSTW_CLEAN_NEGATIVE_EVIDENCE_LEVELS
         and record.get("trajectory_trace_used_for_score") is False
         and _safe_float(record.get("sstw_clean_negative_score")) is not None
     )
@@ -104,7 +112,11 @@ def _runtime_detection_record_ready(record: dict[str, Any]) -> bool:
 
     return (
         record.get("runtime_detection_status") == "ready"
-        and record.get("sstw_detector_evidence_level") == FORMAL_VIDEO_DETECTOR_EVIDENCE_LEVEL
+        and str(record.get("method_variant") or "sstw_full_method") in {
+            "sstw_full_method",
+            "key_conditioned_state_space_with_trajectory",
+        }
+        and record.get("sstw_detector_evidence_level") in FORMAL_SSTW_DETECTOR_EVIDENCE_LEVELS
         and record.get("trajectory_trace_used_for_score") is False
         and record.get("runtime_detection_claim_level") == "formal_paper_detector"
     )
@@ -199,7 +211,9 @@ def build_sstw_measured_formal_records(
     for index, control_record in enumerate(control_records):
         if str(control_record.get("sample_role") or "").lower() != "clean_negative":
             continue
-        if control_record.get("clean_negative_evidence_level") != FORMAL_CLEAN_NEGATIVE_EVIDENCE_LEVEL:
+        if str(control_record.get("method_variant") or "sstw_full_method") != "sstw_full_method":
+            continue
+        if control_record.get("clean_negative_evidence_level") not in FORMAL_SSTW_CLEAN_NEGATIVE_EVIDENCE_LEVELS:
             continue
         if control_record.get("trajectory_trace_used_for_score") is not False:
             continue
@@ -231,7 +245,7 @@ def build_sstw_measured_formal_records(
             "sstw_clean_negative_score_semantics": FORMAL_VIDEO_DETECTOR_SCORE_SEMANTICS,
             "sstw_score_orientation": "higher_is_more_watermarked",
             "sstw_detection_score_field": score_field,
-            "clean_negative_evidence_level": FORMAL_CLEAN_NEGATIVE_EVIDENCE_LEVEL,
+            "clean_negative_evidence_level": control_record.get("clean_negative_evidence_level"),
             "clean_negative_video_path": control_record.get("clean_negative_video_path") or control_record.get("source_video_path"),
             "sstw_detector_input_contract": control_record.get("sstw_detector_input_contract"),
             "sstw_detector_key_digest": control_record.get("sstw_detector_key_digest"),

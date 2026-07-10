@@ -26,6 +26,12 @@ from main.protocol.record_writer import write_json, write_jsonl
 from main.protocol.table_builder import write_csv
 
 
+def _read_json(path: Path) -> dict[str, Any]:
+    """读取 UTF-8 JSON 配置。"""
+
+    return json.loads(path.read_text(encoding="utf-8-sig"))
+
+
 def build_detection_records(generation_records: list[dict], attack_records: list[dict]) -> list[dict]:
     """把生成记录与攻击矩阵合并为 detection records, 未运行时不产生正向分数。
 
@@ -504,8 +510,21 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="对 runtime attacked videos 执行 SSTW 正式视频内容检测。")
     parser.add_argument("--run-root", required=True)
     parser.add_argument("--config-path", default="")
+    parser.add_argument("--prompt-suite-path", default="")
     args = parser.parse_args()
-    payload = run_runtime_detection(args.run_root, config_path=args.config_path or None)
+    config = _read_json(Path(args.config_path)) if args.config_path else {}
+    if config.get("require_complete_paper_mechanism_contract") is True:
+        if not args.prompt_suite_path:
+            raise ValueError("完整 paper mechanism detection 必须提供 --prompt-suite-path")
+        from experiments.generative_video_model_probe.formal_flow_evidence_runner import run_formal_flow_evidence
+
+        payload = run_formal_flow_evidence(
+            args.run_root,
+            args.prompt_suite_path,
+            args.config_path,
+        )
+    else:
+        payload = run_runtime_detection(args.run_root, config_path=args.config_path or None)
     print(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True))
 
 

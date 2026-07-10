@@ -22,6 +22,10 @@ FULL_METHOD_VARIANT = "sstw_full_method"
 FORMAL_INTERNAL_ABLATION_EVIDENCE_LEVEL = "formal_component_removal_video_detector"
 FORMAL_INTERNAL_ABLATION_CLAIM_STATUS = "formal_internal_ablation_variant_measured"
 FORMAL_DETECTOR_EVIDENCE_LEVEL = "attacked_video_content_detector"
+FORMAL_DETECTOR_EVIDENCE_LEVELS = {
+    FORMAL_DETECTOR_EVIDENCE_LEVEL,
+    "attacked_video_wan_vae_model_velocity_replay",
+}
 VALIDATION_ABLATION_VARIANTS = (
     {
         "method_variant": FULL_METHOD_VARIANT,
@@ -128,7 +132,7 @@ def _formal_detection_ready(record: dict) -> bool:
 
     return (
         record.get("runtime_detection_status") == "ready"
-        and record.get("sstw_detector_evidence_level") == FORMAL_DETECTOR_EVIDENCE_LEVEL
+        and record.get("sstw_detector_evidence_level") in FORMAL_DETECTOR_EVIDENCE_LEVELS
         and record.get("trajectory_trace_used_for_score") is False
         and record.get("runtime_detection_claim_level") == "formal_paper_detector"
         and _formal_score(record) is not None

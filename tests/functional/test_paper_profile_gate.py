@@ -588,6 +588,10 @@ def test_paper_profile_gate_passes_when_all_governed_inputs_exist(tmp_path: Path
     })
     write_json(run_root / "artifacts" / "replay_and_sketch_gate_decision.json", {
         "replay_and_sketch_gate_decision": "PASS",
+        "claim3_full_support_allowed": True,
+    })
+    write_json(run_root / "artifacts" / "complete_paper_mechanism_claim_decision.json", {
+        "complete_paper_mechanism_claim_decision": "PASS",
     })
     write_json(run_root / "artifacts" / "statistical_confidence_interval_decision.json", {
         "statistical_confidence_interval_decision": "PASS",

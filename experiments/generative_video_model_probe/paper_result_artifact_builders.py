@@ -66,6 +66,23 @@ PAPER_RESULT_ARTIFACT_RELPATHS = (
     "reports/paper_result_artifact_skeleton_report.md",
 )
 
+COMPLETE_MECHANISM_ARTIFACT_RELPATHS = (
+    "records/trajectory_sketch_records.jsonl",
+    "records/formal_flow_evidence_records.jsonl",
+    "records/paired_path_evidence_gain_records.jsonl",
+    "records/wrong_key_replay_records.jsonl",
+    "thresholds/formal_flow_detector_thresholds.jsonl",
+    "tables/formal_flow_detection_table.csv",
+    "tables/paired_path_evidence_gain_table.csv",
+    "artifacts/formal_flow_evidence_decision.json",
+    "artifacts/three_layer_mechanism_evidence_decision.json",
+    "artifacts/replay_and_sketch_gate_decision.json",
+    "artifacts/complete_paper_mechanism_claim_decision.json",
+    "reports/formal_flow_evidence_report.md",
+    "reports/replay_and_sketch_gate_report.md",
+    "reports/complete_paper_mechanism_claim_report.md",
+)
+
 
 def _read_json(path: Path) -> dict[str, Any]:
     """读取 JSON 对象, 文件不存在时返回空对象。"""
@@ -128,6 +145,9 @@ def _load_protocol_context(config_path: str | Path) -> dict[str, Any]:
         "target_fpr_levels": list(target_fpr_levels_from_config(config)),
         "claim_support_status": str(
             config.get("claim_support_status") or "paper_profile_artifact_skeleton_not_claim_evidence"
+        ),
+        "require_complete_paper_mechanism_contract": bool(
+            config.get("require_complete_paper_mechanism_contract", False)
         ),
     }
 
@@ -511,10 +531,10 @@ def _write_markdown_report(path: Path, title: str, audit: Mapping[str, Any]) -> 
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
-def _present_relpaths(run_root: Path) -> list[str]:
+def _present_relpaths(run_root: Path, required_relpaths: Iterable[str] = PAPER_RESULT_ARTIFACT_RELPATHS) -> list[str]:
     """返回已经成功写出的论文结果 artifact 相对路径。"""
 
-    return [relpath for relpath in PAPER_RESULT_ARTIFACT_RELPATHS if (run_root / relpath).exists()]
+    return [relpath for relpath in required_relpaths if (run_root / relpath).exists()]
 
 
 def run_paper_result_artifact_builders(
@@ -631,8 +651,13 @@ def run_paper_result_artifact_builders(
         "real_adaptive_attack_decision": adaptive_audit["real_adaptive_attack_decision"],
         "real_world_attack_decision": real_world_audit["real_world_attack_decision"],
     }
+    required_artifact_relpaths = PAPER_RESULT_ARTIFACT_RELPATHS + (
+        COMPLETE_MECHANISM_ARTIFACT_RELPATHS
+        if context["require_complete_paper_mechanism_contract"]
+        else ()
+    )
     missing_relpaths = [
-        relpath for relpath in PAPER_RESULT_ARTIFACT_RELPATHS
+        relpath for relpath in required_artifact_relpaths
         if relpath not in {
             "artifacts/paper_result_artifact_skeleton_decision.json",
             "reports/paper_result_artifact_skeleton_report.md",
@@ -646,8 +671,8 @@ def run_paper_result_artifact_builders(
         "target_fpr": context["target_fpr"],
         "paper_result_artifact_skeleton_decision": "PASS" if skeleton_ready else "FAIL",
         "component_decisions": component_decisions,
-        "present_artifact_count": len(_present_relpaths(run_root)),
-        "required_artifact_count": len(PAPER_RESULT_ARTIFACT_RELPATHS),
+        "present_artifact_count": len(_present_relpaths(run_root, required_artifact_relpaths)),
+        "required_artifact_count": len(required_artifact_relpaths),
         "missing_artifact_relpaths": missing_relpaths,
         "claim_support_status": "paper_result_artifact_skeleton_ready" if skeleton_ready else "paper_result_artifact_skeleton_blocked",
     }

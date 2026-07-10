@@ -1204,6 +1204,8 @@ def build_runtime_detection_command(layout: dict[str, str]) -> list[str]:
         layout["drive_run_root"],
         "--config-path",
         layout["protocol_config_path"],
+        "--prompt-suite-path",
+        layout["prompt_suite_path"],
     ]
 
 

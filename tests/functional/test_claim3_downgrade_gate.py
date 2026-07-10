@@ -254,8 +254,8 @@ def test_claim3_downgrade_keeps_downgrade_for_owner_side_diagnostic_replay_gate(
 
 
 @pytest.mark.quick
-def test_paper_profile_gate_accepts_claim3_downgrade_path(tmp_path: Path) -> None:
-    """probe-paper gate 应接受 Claim-3 显式降级路径, 但不把它当作强 replay claim。"""
+def test_paper_profile_gate_rejects_claim3_downgrade_path(tmp_path: Path) -> None:
+    """完整机制的 probe-paper gate 必须拒绝 Claim-3 显式降级路径。"""
     run_root = tmp_path / "run"
     generation_records = []
     for prompt_index in range(8):
@@ -490,6 +490,7 @@ def test_paper_profile_gate_accepts_claim3_downgrade_path(tmp_path: Path) -> Non
 
     audit = build_paper_profile_gate_audit(run_root)
 
-    assert audit["paper_profile_gate_decision"] == "PASS"
-    assert audit["replay_or_sketch_status"] == "claim3_explicitly_downgraded"
-    assert "validation_replay_or_sketch_records_ready" not in audit["missing_validation_requirements"]
+    assert audit["paper_profile_gate_decision"] == "FAIL"
+    assert audit["replay_or_sketch_status"] == "missing_full_attacked_video_replay_and_authenticated_sketch"
+    assert "validation_claim3_full_support_ready" in audit["missing_validation_requirements"]
+    assert "validation_replay_or_sketch_records_ready" in audit["missing_validation_requirements"]

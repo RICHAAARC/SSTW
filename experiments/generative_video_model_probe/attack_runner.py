@@ -107,6 +107,7 @@ def _build_attacked_video_path(run_root: Path, generation_record: dict, attack_n
         _safe_token(generation_record.get("generation_model_id")),
         _safe_token(generation_record.get("prompt_id")),
         _safe_token(generation_record.get("seed_id")),
+        _safe_token(generation_record.get("method_variant")),
         _safe_token(attack_name),
     ])
     return run_root / "attacked_videos" / f"{stem}.mp4"
@@ -174,6 +175,16 @@ def build_runtime_attack_records(
                 "split": generation_record.get("split"),
                 "protocol_split": generation_record.get("protocol_split"),
                 "colab_runtime_profile": generation_record.get("colab_runtime_profile"),
+                "sample_role": "attacked_positive",
+                "generation_sample_role": generation_record.get("generation_sample_role"),
+                "method_variant": generation_record.get("method_variant"),
+                "watermark_embedding_status": generation_record.get("watermark_embedding_status"),
+                "formal_method_variant_execution": generation_record.get("formal_method_variant_execution"),
+                "num_inference_steps": generation_record.get("num_inference_steps"),
+                "guidance_scale": generation_record.get("guidance_scale"),
+                "scheduler_id": generation_record.get("scheduler_id"),
+                "trajectory_time_grid_id": generation_record.get("trajectory_time_grid_id"),
+                "prompt_text_hash": generation_record.get("prompt_text_hash"),
                 "attack_name": attack_name,
                 "attack_matrix_evidence_level": "runtime_video_file",
                 "attack_runtime_status": "failed",
@@ -220,6 +231,139 @@ def build_runtime_attack_records(
             records.append(record)
     ready_count = sum(1 for record in records if record.get("attack_runtime_status") == "ready")
     progress.finish(f"ready={ready_count} failed={len(records) - ready_count}")
+    return records
+
+
+def _align_frame_sequences(left: list[Any], right: list[Any]) -> tuple[list[Any], list[Any]]:
+    """把两个视频对齐到相同帧数和空间尺寸。"""
+
+    import numpy as np
+    from PIL import Image
+
+    count = min(len(left), len(right))
+    if count <= 0:
+        raise ValueError("跨样本攻击至少需要两个可解码视频")
+    target_height, target_width = np.asarray(left[0]).shape[:2]
+
+    def resize(frame: Any) -> Any:
+        array = np.asarray(frame)
+        if array.shape[:2] == (target_height, target_width):
+            return array
+        return np.asarray(Image.fromarray(array).resize((target_width, target_height), Image.Resampling.BICUBIC))
+
+    return [resize(frame) for frame in left[:count]], [resize(frame) for frame in right[:count]]
+
+
+def build_cross_sample_adaptive_video_records(run_root: str | Path) -> list[dict[str, Any]]:
+    """构造真实 multi-sample collusion 与 watermark residual copy 视频。
+
+    collusion 对两条不同 key 的 watermarked videos 做逐帧平均。copy attack 从同 prompt/seed
+    的 watermarked-clean 配对中提取像素残差, 再把残差迁移到另一条 clean video。两者都写出
+    新 mp4, 下游必须重新执行 Wan VAE 与 Flow replay, 不能复用源视频分数。
+    """
+
+    import numpy as np
+
+    run_root = Path(run_root)
+    generation_records = [
+        record for record in _read_jsonl(run_root / "records" / "generation_records.jsonl")
+        if record.get("generation_status") == "success" and record.get("split") == "test"
+    ]
+    positives = [record for record in generation_records if record.get("method_variant") == "sstw_full_method"]
+    clean_by_unit = {
+        (str(record.get("prompt_id")), str(record.get("seed_id"))): record
+        for record in generation_records
+        if record.get("sample_role") == "clean_negative"
+    }
+    records: list[dict[str, Any]] = []
+    if len(positives) < 2:
+        return records
+    for index, source in enumerate(positives):
+        partner = positives[(index + 1) % len(positives)]
+        source_clean = clean_by_unit.get((str(source.get("prompt_id")), str(source.get("seed_id"))))
+        target_clean = clean_by_unit.get((str(partner.get("prompt_id")), str(partner.get("seed_id"))))
+        if source_clean is None or target_clean is None:
+            continue
+        source_path = _resolve_video_path(run_root, source)
+        partner_path = _resolve_video_path(run_root, partner)
+        source_clean_path = _resolve_video_path(run_root, source_clean)
+        target_clean_path = _resolve_video_path(run_root, target_clean)
+        attack_inputs = {
+            "collusion_multi_sample_attack": (source_path, partner_path),
+            "watermark_spoofing_or_copy_attack": (source_path, source_clean_path, target_clean_path),
+        }
+        for attack_name, input_paths in attack_inputs.items():
+            record = {
+                "record_version": "cross_sample_adaptive_video_attack_v1",
+                "generation_model_id": source.get("generation_model_id"),
+                "prompt_id": source.get("prompt_id"),
+                "seed_id": source.get("seed_id"),
+                "trajectory_trace_id": source.get("trajectory_trace_id"),
+                "split": source.get("split"),
+                "colab_runtime_profile": source.get("colab_runtime_profile"),
+                "sample_role": "attacked_positive",
+                "method_variant": "sstw_full_method",
+                "attack_name": attack_name,
+                "attack_runtime_status": "failed",
+                "attack_runtime_failure_reason": "not_run",
+                "adaptive_video_attack_input_paths": [str(path) for path in input_paths],
+                "adaptive_video_attack_generation_status": "failed",
+                "runtime_attack_formal_evidence_level": "formal_cross_sample_video_transform",
+                "runtime_attack_proxy_free": True,
+                "num_inference_steps": source.get("num_inference_steps"),
+                "guidance_scale": source.get("guidance_scale"),
+                "scheduler_id": source.get("scheduler_id"),
+                "trajectory_time_grid_id": source.get("trajectory_time_grid_id"),
+            }
+            try:
+                if attack_name == "collusion_multi_sample_attack":
+                    left, right = _align_frame_sequences(
+                        _load_video_frames(source_path),
+                        _load_video_frames(partner_path),
+                    )
+                    output_frames = [
+                        np.clip((a.astype(np.float32) + b.astype(np.float32)) * 0.5, 0, 255).astype(np.uint8)
+                        for a, b in zip(left, right)
+                    ]
+                else:
+                    watermarked, paired_clean = _align_frame_sequences(
+                        _load_video_frames(source_path),
+                        _load_video_frames(source_clean_path),
+                    )
+                    watermarked, target = _align_frame_sequences(
+                        watermarked,
+                        _load_video_frames(target_clean_path),
+                    )
+                    count = min(len(watermarked), len(paired_clean), len(target))
+                    output_frames = [
+                        np.clip(
+                            target[frame_index].astype(np.float32)
+                            + 0.8 * (
+                                watermarked[frame_index].astype(np.float32)
+                                - paired_clean[frame_index].astype(np.float32)
+                            ),
+                            0,
+                            255,
+                        ).astype(np.uint8)
+                        for frame_index in range(count)
+                    ]
+                output_path = _build_attacked_video_path(run_root, source, attack_name)
+                _write_video_frames(output_path, output_frames)
+                record.update({
+                    "attack_runtime_status": "ready",
+                    "attack_runtime_failure_reason": "none",
+                    "adaptive_video_attack_generation_status": "ready",
+                    "source_video_path": str(source_path),
+                    "source_video_sha256": _sha256_file(source_path),
+                    "attacked_video_path": str(output_path),
+                    "attacked_video_sha256": _sha256_file(output_path),
+                    "source_frame_count": len(_load_video_frames(source_path)),
+                    "attacked_frame_count": len(output_frames),
+                    "claim_support_status": "cross_sample_adaptive_video_ready_for_formal_flow_detection",
+                })
+            except Exception as exc:  # pragma: no cover - 依赖实际视频编解码后端
+                record["attack_runtime_failure_reason"] = str(exc)
+            records.append(record)
     return records
 
 
@@ -277,9 +421,17 @@ def run_runtime_attacks(
     run_root = Path(run_root)
     selected_attack_names = _load_required_attack_names(config_path, attack_names)
     records = build_runtime_attack_records(run_root, attack_names=selected_attack_names, config_path=None)
+    protocol_config = json.loads(Path(config_path).read_text(encoding="utf-8-sig")) if config_path else {}
+    cross_sample_records = (
+        build_cross_sample_adaptive_video_records(run_root)
+        if protocol_config.get("require_complete_paper_mechanism_contract") is True
+        else []
+    )
     audit = audit_runtime_attack_records(records, run_root, required_attack_names=selected_attack_names)
     write_jsonl(run_root / "records" / "runtime_attack_records.jsonl", records)
+    write_jsonl(run_root / "records" / "cross_sample_adaptive_video_attack_records.jsonl", cross_sample_records)
     write_csv(run_root / "tables" / "runtime_attack_table.csv", records)
+    write_csv(run_root / "tables" / "cross_sample_adaptive_video_attack_table.csv", cross_sample_records)
     write_json(run_root / "artifacts" / "runtime_attack_decision.json", audit)
     report = (
         "# Runtime Attack Runner Report\n\n"
@@ -296,6 +448,7 @@ def run_runtime_attacks(
         f"- motion_claim_eligible_generation_count: {audit.get('motion_claim_eligible_generation_count')}\n"
         f"- motion_claim_excluded_generation_count: {audit.get('motion_claim_excluded_generation_count')}\n"
         f"- claim_support_status: {audit['claim_support_status']}\n"
+        f"- cross_sample_adaptive_video_attack_record_count: {len(cross_sample_records)}\n"
     )
     report_path = run_root / "reports" / "runtime_attack_report.md"
     report_path.parent.mkdir(parents=True, exist_ok=True)

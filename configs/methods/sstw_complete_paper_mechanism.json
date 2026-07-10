@@ -1,0 +1,67 @@
+{
+  "contract_id": "sstw_complete_paper_mechanism_v1",
+  "profile_invariant": "probe_paper、pilot_paper 和 full_paper 必须执行相同机制、攻击、消融、检测、replay 和结果门禁; 只允许目标 FPR、样本数量与由此产生的统计功效不同。",
+  "claim3_downgrade_allowed": false,
+  "required_claims": [
+    {
+      "claim_id": "claim_1_velocity_constraint_detectable_watermark",
+      "required_evidence": [
+        "flow_scheduler_model_output_constraint",
+        "endpoint_latent_detection",
+        "heldout_fixed_fpr_result"
+      ]
+    },
+    {
+      "claim_id": "claim_2_path_evidence_independent_gain",
+      "required_evidence": [
+        "same_endpoint_path_observation",
+        "endpoint_only_ablation",
+        "paired_fixed_fpr_difference_interval"
+      ]
+    },
+    {
+      "claim_id": "claim_3_attacked_video_replay_posterior",
+      "required_evidence": [
+        "attacked_video_vae_endpoint",
+        "prompt_conditioned_model_velocity_inversion",
+        "multi_time_grid_replay_uncertainty",
+        "wrong_sampler_wrong_prompt_wrong_key_controls",
+        "authenticated_trajectory_sketch_verification",
+        "flow_state_admissibility"
+      ]
+    }
+  ],
+  "required_result_capabilities": [
+    "real_velocity_field_embedding",
+    "endpoint_latent_detection",
+    "path_evidence_scoring",
+    "fixed_fpr_calibration_and_heldout_test",
+    "real_attacked_video_replay",
+    "replay_uncertainty_weighting",
+    "authenticated_trajectory_sketch",
+    "wrong_key_wrong_prompt_wrong_sampler_controls",
+    "eight_variant_internal_ablation",
+    "shared_runtime_and_adaptive_attack_protocol",
+    "modern_external_baseline_comparison",
+    "video_quality_motion_semantic_metrics",
+    "confidence_intervals_and_low_fpr_statistics",
+    "claim_audit_and_rebuild_manifest"
+  ],
+  "formal_method_variants": [
+    "sstw_full_method",
+    "endpoint_only_control",
+    "trajectory_only_score",
+    "without_velocity_constraint",
+    "without_endpoint_aware_control",
+    "without_replay_uncertainty_weighting",
+    "without_flow_state_admissibility",
+    "generic_ssm_baseline"
+  ],
+  "replay_step_counts": [16, 20, 24],
+  "minimum_replay_reliability_mean": 0.5,
+  "authenticated_trajectory_sketch_required": true,
+  "threshold_source_split": "calibration_negative",
+  "test_time_threshold_update_blocked": true,
+  "shared_attack_protocol_config_path": "configs/protocol/shared_generative_video_attack_protocol.json",
+  "shared_attack_protocol_id": "top_tier_video_watermark_attack_protocol_v1"
+}

@@ -6,10 +6,12 @@
 
 ## Current Stage
 
-- `project_stage`: `project_bootstrap`
-- `target_construction_phase`: `core_method_runtime_construction`
-- 当前阶段只允许建立目录、文档、skill、harness、测试分层和最小 `main/` 核心包骨架。
-- 当前阶段不应引入真实大规模数据、正式实验输出、论文最终图表或发布包。
+- `project_stage`: `core_method_runtime_construction`
+- `target_construction_phase`: `experiment_protocol_validation`
+- 当前阶段允许实现真实 Flow velocity 约束、endpoint/path 检测、replay、认证 sketch、
+  fixed-FPR 校准和 paper profile runner, 并使用轻量测试验证核心语义。
+- 当前阶段不应提交真实大规模数据、正式实验输出、论文最终图表或发布包。进入
+  `experiment_protocol_validation` 前, 必须先在独立 GPU 运行目录完成 probe_paper 的三层证据闭合。
 
 ## Ordered Semantic Stages
 

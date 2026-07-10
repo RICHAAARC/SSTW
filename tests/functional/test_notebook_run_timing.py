@@ -13,6 +13,17 @@ from workflows.run_timing import (
     start_notebook_run_timer,
 )
 from workflows.stage_package_sync import publish_colab_stage_package
+from workflows.streaming_command import _resolve_repository_root
+
+
+@pytest.mark.quick
+def test_workflow_resolves_repository_root_without_outer_notebook_layer(monkeypatch: pytest.MonkeyPatch) -> None:
+    """workflow 必须从自身位置解析仓库, 不能依赖最外层 paper_workflow 目录."""
+
+    monkeypatch.delenv("SSTW_REPO_DIR", raising=False)
+    expected = Path(__file__).resolve().parents[2]
+
+    assert _resolve_repository_root() == expected
 
 
 @pytest.mark.quick

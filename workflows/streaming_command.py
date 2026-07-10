@@ -1,4 +1,4 @@
-"""Colab Notebook 子进程流式输出工具。"""
+"""服务器与 Notebook 共用的子进程流式输出工具."""
 
 from __future__ import annotations
 
@@ -14,23 +14,27 @@ from runtime.core.progress import NOISY_LIBRARY_ENV_DEFAULTS, emit_progress_even
 
 
 def _resolve_repository_root() -> Path:
-    """解析 Colab 子进程应使用的仓库根目录。
+    """解析子进程应使用的仓库根目录.
 
-    该函数属于 Notebook 入口层的通用工程写法。Colab 中直接执行
+    该函数属于 workflow 层的通用工程写法。直接执行
     `python scripts/xxx.py` 时, Python 会把 `scripts/` 放到 `sys.path[0]`,
     而不是自动把仓库根目录放到 import 路径中。这里统一从 `SSTW_REPO_DIR`
-    或当前 helper 文件位置解析仓库根目录, 让所有 Notebook 子进程都能导入
-    `main`、`experiments` 和 `paper_workflow` 等 repository module。
+    或当前 workflow 文件位置解析仓库根目录, 让服务器与 Notebook 子进程都能
+    导入 `main`, `runtime`, `evaluation`, `experiments` 和 `workflows`.
     """
 
     candidates: list[Path] = []
     env_repo_dir = os.environ.get("SSTW_REPO_DIR")
     if env_repo_dir:
         candidates.append(Path(env_repo_dir).expanduser())
-    candidates.append(Path(__file__).resolve().parents[2])
+    candidates.append(Path(__file__).resolve().parents[1])
     for candidate in candidates:
         resolved = candidate.resolve()
-        if (resolved / "main").is_dir() and (resolved / "paper_workflow").is_dir():
+        if (
+            (resolved / "pyproject.toml").is_file()
+            and (resolved / "main").is_dir()
+            and (resolved / "workflows").is_dir()
+        ):
             return resolved
     return Path.cwd().resolve()
 

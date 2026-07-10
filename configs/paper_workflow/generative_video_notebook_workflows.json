@@ -91,7 +91,7 @@
       "notebook_path": "paper_workflow/colab_notebooks/generative_video_generation_colab.ipynb",
       "stage_plan": [
         "prepare_prompt_suite",
-        "wan21_runtime_generation",
+        "flow_model_runtime_generation",
         "quick_tests_and_harness",
         "drive_packaging"
       ]
@@ -143,7 +143,7 @@
       "notebook_path": "paper_workflow/colab_notebooks/motion_threshold_calibration_colab.ipynb",
       "stage_plan": [
         "prepare_prompt_suite",
-        "wan21_runtime_generation",
+        "flow_model_runtime_generation",
         "formal_metric_scoring",
         "motion_threshold_calibration",
         "quick_tests_and_harness",
@@ -302,5 +302,29 @@
       ],
       "target_fpr": 0.1
     }
+  },
+  "default_main_generation_model_id": "Wan-AI/Wan2.1-T2V-1.3B-Diffusers",
+  "default_cross_model_generation_model_id": "Lightricks/LTX-Video",
+  "cross_model_generalization_protocol": {
+    "cross_model_family": "diffusers_ltx_video_flow_matching_dit",
+    "cross_model_role": "cross_model_validation_model",
+    "method_mechanism_requirement": "same_sstw_velocity_endpoint_path_and_replay_mechanism",
+    "sample_allocation_policy": "stratified_calibration_test_subset_for_resource_bounded_generalization",
+    "probe_paper": {
+      "prompt_count": 5,
+      "seed_count": 4,
+      "independent_video_count": 20
+    },
+    "pilot_paper": {
+      "prompt_count": 10,
+      "seed_count": 6,
+      "independent_video_count": 60
+    },
+    "full_paper": {
+      "prompt_count": 20,
+      "seed_count": 10,
+      "independent_video_count": 200
+    },
+    "claim_scope": "supportive_not_primary_fixed_fpr_closure"
   }
 }

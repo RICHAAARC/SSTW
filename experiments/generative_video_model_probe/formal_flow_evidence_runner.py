@@ -32,6 +32,13 @@ from main.methods.state_space_watermark.wan_flow_replay_backend import (
     run_wan_attacked_video_replay,
     run_wan_control_replay,
 )
+from main.methods.state_space_watermark.ltx_flow_replay_backend import (
+    LTXFlowReplayResult,
+    compute_ltx_endpoint_evidence_for_key,
+    evaluate_fixed_ltx_replay_hypothesis_for_key,
+    run_ltx_attacked_video_replay,
+    run_ltx_control_replay,
+)
 from evaluation.protocol.flow_evidence_fields import with_flow_evidence_protocol_defaults
 from evaluation.protocol.record_writer import write_json, write_jsonl
 from evaluation.protocol.table_builder import write_csv
@@ -39,6 +46,97 @@ from evaluation.protocol.table_builder import write_csv
 
 FORMAL_FLOW_EVIDENCE_LEVEL = "attacked_video_key_independent_inversion_hypothesis_replay"
 FORMAL_FLOW_DETECTOR_INPUT_CONTRACT = "video_file_prompt_key_model_scheduler_and_frozen_calibration"
+
+
+def _run_attacked_video_replay_for_model(
+    pipeline: Any,
+    video_path: str | Path,
+    *,
+    prompt: str,
+    key_text: str,
+) -> WanFlowReplayResult | LTXFlowReplayResult:
+    """按 pipeline 家族分派真实 attacked-video replay, 不允许回退到代理分数。"""
+
+    if "LTX" in type(pipeline).__name__.upper():
+        return run_ltx_attacked_video_replay(
+            pipeline,
+            video_path,
+            prompt=prompt,
+            key_text=key_text,
+        )
+    return run_wan_attacked_video_replay(
+        pipeline,
+        video_path,
+        prompt=prompt,
+        key_text=key_text,
+    )
+
+
+def _compute_replay_endpoint_evidence_for_key(
+    replay: WanFlowReplayResult | LTXFlowReplayResult,
+    *,
+    key_text: str,
+) -> Any:
+    """在模型对应的五维 VAE endpoint 坐标上计算同源 key 证据。"""
+
+    if isinstance(replay, LTXFlowReplayResult):
+        return compute_ltx_endpoint_evidence_for_key(replay, key_text=key_text)
+    return compute_endpoint_latent_evidence(replay.endpoint_latent, key_text=key_text)
+
+
+def _run_control_replay_for_model(
+    pipeline: Any,
+    replay: WanFlowReplayResult | LTXFlowReplayResult,
+    *,
+    prompt: str,
+    key_text: str,
+    num_inference_steps: int,
+    scheduler: Any | None = None,
+) -> tuple[Any, tuple[Any, ...], dict[str, float | int | None]]:
+    """按模型家族执行相同定义的 wrong-key、wrong-prompt 或 wrong-sampler 对照。"""
+
+    if isinstance(replay, LTXFlowReplayResult):
+        return run_ltx_control_replay(
+            pipeline,
+            replay.endpoint_latent,
+            latent_layout=replay.latent_layout,
+            prompt=prompt,
+            key_text=key_text,
+            num_inference_steps=num_inference_steps,
+            scheduler=scheduler,
+        )
+    return run_wan_control_replay(
+        pipeline,
+        replay.endpoint_latent,
+        prompt=prompt,
+        key_text=key_text,
+        num_inference_steps=num_inference_steps,
+        scheduler=scheduler,
+    )
+
+
+def _evaluate_fixed_replay_hypothesis_for_key(
+    pipeline: Any,
+    replay: WanFlowReplayResult | LTXFlowReplayResult,
+    *,
+    prompt: str,
+    key_text: str,
+) -> tuple[Any, dict[str, float | int | None]]:
+    """在同一 key 无关固定反演路径上评估候选 key, 防止循环构造观测。"""
+
+    if isinstance(replay, LTXFlowReplayResult):
+        return evaluate_fixed_ltx_replay_hypothesis_for_key(
+            pipeline,
+            replay,
+            prompt=prompt,
+            key_text=key_text,
+        )
+    return evaluate_fixed_wan_replay_hypothesis_for_key(
+        pipeline,
+        replay,
+        prompt=prompt,
+        key_text=key_text,
+    )
 
 
 def _read_json(path: str | Path) -> dict[str, Any]:
@@ -88,7 +186,7 @@ def _path_endpoint_consistency(endpoint_projection: float, path_projection: floa
     return max(0.0, min(1.0, 1.0 - abs(float(endpoint_projection) - float(path_projection))))
 
 
-def _time_grid_reliability(result: WanFlowReplayResult) -> float:
+def _time_grid_reliability(result: WanFlowReplayResult | LTXFlowReplayResult) -> float:
     """根据多时间网格循环误差离散程度计算独立的 time-grid 可靠性。"""
 
     errors = [float(row.cycle_relative_error) for row in result.replay_trajectories]
@@ -104,7 +202,7 @@ def _scheduler_signature(scheduler: Any) -> str:
 
 
 def build_flow_evidence_payload(
-    replay: WanFlowReplayResult,
+    replay: WanFlowReplayResult | LTXFlowReplayResult,
     *,
     key_text: str,
     method_variant: str,
@@ -138,7 +236,7 @@ def build_flow_evidence_payload(
 
 def _control_payload(
     pipeline: Any,
-    replay: WanFlowReplayResult,
+    replay: WanFlowReplayResult | LTXFlowReplayResult,
     *,
     prompt: str,
     wrong_prompt: str,
@@ -147,19 +245,19 @@ def _control_payload(
     """执行 wrong key、wrong prompt 与 wrong sampler/time-grid 真实对照。"""
 
     wrong_key = f"{key_text}::wrong_key_control"
-    wrong_key_endpoint = compute_endpoint_latent_evidence(replay.endpoint_latent, key_text=wrong_key)
+    wrong_key_endpoint = _compute_replay_endpoint_evidence_for_key(replay, key_text=wrong_key)
 
     primary_steps = int(replay.replay_step_counts[replay.primary_replay_index])
-    wrong_key_trajectory, _wrong_key_schedule, wrong_key_path = run_wan_control_replay(
+    wrong_key_trajectory, _wrong_key_schedule, wrong_key_path = _run_control_replay_for_model(
         pipeline,
-        replay.endpoint_latent,
+        replay,
         prompt=prompt,
         key_text=wrong_key,
         num_inference_steps=primary_steps,
     )
-    wrong_prompt_trajectory, _wrong_prompt_schedule, wrong_prompt_path = run_wan_control_replay(
+    wrong_prompt_trajectory, _wrong_prompt_schedule, wrong_prompt_path = _run_control_replay_for_model(
         pipeline,
-        replay.endpoint_latent,
+        replay,
         prompt=wrong_prompt,
         key_text=key_text,
         num_inference_steps=primary_steps,
@@ -167,14 +265,24 @@ def _control_payload(
 
     scheduler_class = type(pipeline.scheduler)
     scheduler_config = dict(pipeline.scheduler.config)
-    original_shift = float(scheduler_config.get("shift", 1.0))
-    wrong_scheduler = scheduler_class.from_config(
-        pipeline.scheduler.config,
-        shift=original_shift + 1.0,
-    )
-    wrong_sampler_trajectory, _wrong_sampler_schedule, wrong_sampler_path = run_wan_control_replay(
+    if isinstance(replay, LTXFlowReplayResult):
+        original_shift = float(scheduler_config.get("base_shift", 0.5))
+        wrong_shift = original_shift + 0.25
+        wrong_scheduler = scheduler_class.from_config(
+            pipeline.scheduler.config,
+            base_shift=wrong_shift,
+            max_shift=float(scheduler_config.get("max_shift", 1.15)) + 0.25,
+        )
+    else:
+        original_shift = float(scheduler_config.get("shift", 1.0))
+        wrong_shift = original_shift + 1.0
+        wrong_scheduler = scheduler_class.from_config(
+            pipeline.scheduler.config,
+            shift=wrong_shift,
+        )
+    wrong_sampler_trajectory, _wrong_sampler_schedule, wrong_sampler_path = _run_control_replay_for_model(
         pipeline,
-        replay.endpoint_latent,
+        replay,
         prompt=prompt,
         key_text=key_text,
         num_inference_steps=max(2, primary_steps + 3),
@@ -238,7 +346,7 @@ def _control_payload(
             matched_path_reliability_score - wrong_sampler_path_reliability_score,
             8,
         ),
-        "wrong_sampler_control_shift": original_shift + 1.0,
+        "wrong_sampler_control_shift": wrong_shift,
         "replay_control_execution_status": "measured_formal",
         "wrong_prompt_control_prompt_digest": sha256(wrong_prompt.encode("utf-8")).hexdigest(),
     }
@@ -265,6 +373,8 @@ def _base_record(source: Mapping[str, Any], *, sample_role: str, method_variant:
 
     statistical_cluster_id = build_stable_digest({
         "generation_model_id": source.get("generation_model_id"),
+        "generation_model_family": source.get("generation_model_family"),
+        "cross_model_role": source.get("cross_model_role"),
         "prompt_id": source.get("prompt_id"),
         "seed_id": source.get("seed_id"),
         "split": source.get("split"),
@@ -305,22 +415,27 @@ def _score_records_with_frozen_calibration(
     """按 method variant 冻结 calibration negative 后评分全部 records。"""
 
     rows = [dict(record) for record in evidence_records]
-    calibration_rows: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    calibration_rows: dict[tuple[str, str], list[dict[str, Any]]] = defaultdict(list)
     for record in rows:
         if record.get("split") == "calibration":
-            calibration_rows[str(record.get("method_variant"))].append(record)
+            calibration_rows[(
+                str(record.get("generation_model_id")),
+                str(record.get("method_variant")),
+            )].append(record)
     calibrations = {
-        variant: fit_flow_evidence_calibration(
-            calibration_rows.get(variant, []),
+        (model_id, variant): fit_flow_evidence_calibration(
+            calibration_rows.get((model_id, variant), []),
             method_variant=variant,
             target_fpr=target_fpr,
         )
+        for model_id in sorted({str(record.get("generation_model_id")) for record in rows})
         for variant in FORMAL_METHOD_VARIANTS
     }
     scored: list[dict[str, Any]] = []
     for record in rows:
         variant = str(record.get("method_variant"))
-        detection = apply_frozen_flow_detector(record, calibrations[variant])
+        model_id = str(record.get("generation_model_id"))
+        detection = apply_frozen_flow_detector(record, calibrations[(model_id, variant)])
         score = float(detection["S_final_conservative"])
         scored_record = {
             **record,
@@ -344,12 +459,20 @@ def _score_records_with_frozen_calibration(
                 "clean_negative_score": score,
             })
         scored.append(scored_record)
-    return scored, [calibration.as_dict() for calibration in calibrations.values()], calibrations
+    threshold_records = [
+        {
+            "generation_model_id": model_id,
+            "model_specific_calibration": True,
+            **calibration.as_dict(),
+        }
+        for (model_id, _variant), calibration in calibrations.items()
+    ]
+    return scored, threshold_records, calibrations
 
 
 def _paired_path_gain_records(
     scored_records: Iterable[Mapping[str, Any]],
-    calibrations: Mapping[str, Any],
+    calibrations: Mapping[tuple[str, str], Any],
 ) -> list[dict[str, Any]]:
     """在同一 full-method 视频证据上配对比较 full 与 endpoint-only 检测器。"""
 
@@ -361,12 +484,16 @@ def _paired_path_gain_records(
             or record.get("split") != "test"
         ):
             continue
-        endpoint_only = apply_frozen_flow_detector(record, calibrations["endpoint_only_control"])
+        endpoint_only = apply_frozen_flow_detector(
+            record,
+            calibrations[(str(record.get("generation_model_id")), "endpoint_only_control")],
+        )
         full_score = float(record["S_final_conservative"])
         endpoint_score = float(endpoint_only["S_final_conservative"])
         rows.append({
             "record_version": "paired_path_evidence_gain_v1",
             "generation_model_id": record.get("generation_model_id"),
+            "cross_model_role": record.get("cross_model_role"),
             "prompt_id": record.get("prompt_id"),
             "seed_id": record.get("seed_id"),
             "trajectory_trace_id": record.get("trajectory_trace_id"),
@@ -419,6 +546,7 @@ def _paired_velocity_causal_records(
         rows.append({
             "record_version": "paired_velocity_causal_evidence_v1",
             "generation_model_id": identity[0],
+            "cross_model_role": full.get("cross_model_role"),
             "prompt_id": identity[1],
             "seed_id": identity[2],
             "attack_name": identity[3],
@@ -448,7 +576,11 @@ def _audit_three_layer_mechanism(
 ) -> dict[str, Any]:
     """审计 Claim-1 与 Claim-2, Claim-3 的最终认证由 replay gate 继续完成。"""
 
-    rows = list(scored_records)
+    rows = [
+        record
+        for record in scored_records
+        if record.get("cross_model_role") != "cross_model_validation_model"
+    ]
     full_positive = [
         record for record in rows
         if record.get("sample_role") == "attacked_positive"
@@ -471,7 +603,11 @@ def _audit_three_layer_mechanism(
         outcome_field="decision",
         purpose="claim1_heldout_tpr",
     )
-    paired = list(paired_path_records)
+    paired = [
+        record
+        for record in paired_path_records
+        if record.get("cross_model_role") != "cross_model_validation_model"
+    ]
     path_score_gain = paired_cluster_difference_interval(
         paired,
         difference_field="paired_path_evidence_score_gain",
@@ -482,7 +618,11 @@ def _audit_three_layer_mechanism(
         difference_field="paired_path_evidence_detection_gain",
         purpose="claim2_path_detection_gain",
     )
-    velocity_paired = list(paired_velocity_records)
+    velocity_paired = [
+        record
+        for record in paired_velocity_records
+        if record.get("cross_model_role") != "cross_model_validation_model"
+    ]
     velocity_score_gain = paired_cluster_difference_interval(
         velocity_paired,
         difference_field="paired_velocity_causal_score_gain",
@@ -541,6 +681,121 @@ def _audit_three_layer_mechanism(
     }
 
 
+def _audit_cross_model_generalization(
+    scored_records: Iterable[Mapping[str, Any]],
+    paired_path_records: Iterable[Mapping[str, Any]],
+    paired_velocity_records: Iterable[Mapping[str, Any]],
+    *,
+    target_fpr: float,
+) -> dict[str, Any]:
+    """审计资源受限跨模型子集是否复现三层机制方向, 不冒充主固定 FPR 结论。"""
+
+    cross_rows = [
+        record
+        for record in scored_records
+        if record.get("cross_model_role") == "cross_model_validation_model"
+    ]
+    if not cross_rows:
+        return {
+            "cross_model_generalization_decision": "NOT_CONFIGURED",
+            "cross_model_generalization_claim_scope": "supportive_not_primary_fixed_fpr_closure",
+            "cross_model_generalization_model_ids": [],
+            "cross_model_generalization_record_count": 0,
+        }
+    model_ids = sorted({str(record.get("generation_model_id")) for record in cross_rows})
+    per_model: list[dict[str, Any]] = []
+    for model_id in model_ids:
+        model_rows = [record for record in cross_rows if str(record.get("generation_model_id")) == model_id]
+        positives = [
+            record
+            for record in model_rows
+            if record.get("method_variant") == "sstw_full_method"
+            and record.get("sample_role") == "attacked_positive"
+            and record.get("split") == "test"
+        ]
+        negatives = [
+            record
+            for record in model_rows
+            if record.get("method_variant") == "sstw_full_method"
+            and record.get("sample_role") == "clean_negative"
+            and record.get("split") == "test"
+        ]
+        paths = [
+            record
+            for record in paired_path_records
+            if str(record.get("generation_model_id")) == model_id
+            and record.get("cross_model_role") == "cross_model_validation_model"
+        ]
+        velocities = [
+            record
+            for record in paired_velocity_records
+            if str(record.get("generation_model_id")) == model_id
+            and record.get("cross_model_role") == "cross_model_validation_model"
+        ]
+        fpr = clustered_binary_rate_interval(
+            negatives,
+            outcome_field="decision",
+            cluster_field="statistical_cluster_id",
+            purpose=f"cross_model_fpr::{model_id}",
+        )
+        tpr = clustered_binary_rate_interval(
+            positives,
+            outcome_field="decision",
+            cluster_field="statistical_cluster_id",
+            purpose=f"cross_model_tpr::{model_id}",
+        )
+        path_gain = paired_cluster_difference_interval(
+            paths,
+            difference_field="paired_path_evidence_score_gain",
+            purpose=f"cross_model_path_gain::{model_id}",
+        )
+        velocity_gain = paired_cluster_difference_interval(
+            velocities,
+            difference_field="paired_velocity_causal_score_gain",
+            purpose=f"cross_model_velocity_gain::{model_id}",
+        )
+        replay_count = sum(
+            record.get("replay_control_execution_status") == "measured_formal"
+            for record in positives
+        )
+        model_pass = (
+            bool(positives)
+            and bool(negatives)
+            and bool(paths)
+            and bool(velocities)
+            and fpr.estimate <= target_fpr
+            and tpr.estimate > fpr.estimate
+            and path_gain.estimate > 0.0
+            and velocity_gain.estimate > 0.0
+            and replay_count == len(positives)
+        )
+        per_model.append({
+            "generation_model_id": model_id,
+            "cross_model_generalization_model_decision": "PASS" if model_pass else "FAIL",
+            "cross_model_test_positive_cluster_count": tpr.cluster_count,
+            "cross_model_test_negative_cluster_count": fpr.cluster_count,
+            "cross_model_test_tpr": round(tpr.estimate, 8),
+            "cross_model_test_fpr": round(fpr.estimate, 8),
+            "cross_model_test_fpr_ci_95_upper": round(fpr.confidence_interval_upper, 8),
+            "cross_model_path_pair_count": len(paths),
+            "cross_model_path_score_gain_mean": round(path_gain.estimate, 8),
+            "cross_model_velocity_pair_count": len(velocities),
+            "cross_model_velocity_score_gain_mean": round(velocity_gain.estimate, 8),
+            "cross_model_replay_control_record_count": replay_count,
+        })
+    return {
+        "cross_model_generalization_decision": (
+            "PASS"
+            if per_model and all(row["cross_model_generalization_model_decision"] == "PASS" for row in per_model)
+            else "FAIL"
+        ),
+        "cross_model_generalization_claim_scope": "supportive_not_primary_fixed_fpr_closure",
+        "cross_model_generalization_model_ids": model_ids,
+        "cross_model_generalization_record_count": len(cross_rows),
+        "cross_model_generalization_per_model": per_model,
+    }
+
+
 def run_formal_flow_evidence(
     run_root: str | Path,
     prompt_suite_path: str | Path,
@@ -577,7 +832,7 @@ def run_formal_flow_evidence(
             pipeline = pipelines[str(source.get("generation_model_id"))]
             key_text = _generation_key(source)
             video_path = _resolve_video_path(run_root, source.get("attacked_video_path"), fallback_dir="attacked_videos")
-            replay = run_wan_attacked_video_replay(
+            replay = _run_attacked_video_replay_for_model(
                 pipeline,
                 video_path,
                 prompt=prompt,
@@ -630,7 +885,7 @@ def run_formal_flow_evidence(
                 pipeline = pipelines.get(str(source.get("generation_model_id"))) or pipeline_loader(str(source.get("generation_model_id")))
                 pipelines[str(source.get("generation_model_id"))] = pipeline
                 video_path = _resolve_video_path(run_root, source.get("video_path"), fallback_dir="videos")
-                base_replay = run_wan_attacked_video_replay(
+                base_replay = _run_attacked_video_replay_for_model(
                     pipeline,
                     video_path,
                     prompt=prompt,
@@ -639,8 +894,11 @@ def run_formal_flow_evidence(
                 for method_variant in FORMAL_METHOD_VARIANTS:
                     for trial_index in range(trial_count):
                         trial_key = f"{_generation_key(source)}::clean_negative::{method_variant}::{trial_index:06d}"
-                        endpoint = compute_endpoint_latent_evidence(base_replay.endpoint_latent, key_text=trial_key)
-                        hypothesis, path = evaluate_fixed_wan_replay_hypothesis_for_key(
+                        endpoint = _compute_replay_endpoint_evidence_for_key(
+                            base_replay,
+                            key_text=trial_key,
+                        )
+                        hypothesis, path = _evaluate_fixed_replay_hypothesis_for_key(
                             pipeline,
                             base_replay,
                             prompt=prompt,
@@ -712,6 +970,12 @@ def run_formal_flow_evidence(
         paired_velocity_records,
         target_fpr=float(config["target_fpr"]),
     )
+    cross_model_audit = _audit_cross_model_generalization(
+        scored_records,
+        paired_path_records,
+        paired_velocity_records,
+        target_fpr=float(config["target_fpr"]),
+    )
     positive_records = [record for record in scored_records if record.get("sample_role") == "attacked_positive"]
     negative_records = [record for record in scored_records if record.get("sample_role") == "clean_negative"]
     required_variants = set(FORMAL_METHOD_VARIANTS)
@@ -756,6 +1020,7 @@ def run_formal_flow_evidence(
             and bool(claim3_records)
             and not posterior_calibration_failures
             and mechanism_audit["three_layer_mechanism_pre_replay_decision"] == "PASS"
+            and cross_model_audit["cross_model_generalization_decision"] in {"PASS", "NOT_CONFIGURED"}
         ) else "FAIL",
         "formal_flow_evidence_record_count": len(scored_records),
         "formal_flow_positive_record_count": len(positive_records),
@@ -771,6 +1036,9 @@ def run_formal_flow_evidence(
         "posterior_probability_calibration_failures": posterior_calibration_failures,
         "claim_1_velocity_constraint_detectable_watermark_decision": mechanism_audit["claim_1_velocity_constraint_detectable_watermark_decision"],
         "claim_2_path_evidence_independent_gain_decision": mechanism_audit["claim_2_path_evidence_independent_gain_decision"],
+        "cross_model_generalization_decision": cross_model_audit["cross_model_generalization_decision"],
+        "cross_model_generalization_model_ids": cross_model_audit["cross_model_generalization_model_ids"],
+        "cross_model_generalization_record_count": cross_model_audit["cross_model_generalization_record_count"],
         "target_fpr": float(config["target_fpr"]),
         "test_time_threshold_update_blocked": True,
         "claim_support_status": "sstw_complete_paper_mechanism_ready" if not failure_records else "sstw_complete_paper_mechanism_blocked",
@@ -798,6 +1066,11 @@ def run_formal_flow_evidence(
     })
     write_json(run_root / "artifacts" / "formal_flow_evidence_decision.json", audit)
     write_json(run_root / "artifacts" / "three_layer_mechanism_evidence_decision.json", mechanism_audit)
+    write_json(run_root / "artifacts" / "cross_model_generalization_decision.json", cross_model_audit)
+    write_csv(
+        run_root / "tables" / "cross_model_generalization_table.csv",
+        cross_model_audit.get("cross_model_generalization_per_model") or [],
+    )
     write_csv(run_root / "tables" / "paired_path_evidence_gain_table.csv", paired_path_records)
     write_csv(
         run_root / "tables" / "paired_velocity_causal_evidence_table.csv",
@@ -805,7 +1078,7 @@ def run_formal_flow_evidence(
     )
     report = (
         "# Formal Flow Evidence and Runtime Detection Report\n\n"
-        "该报告由攻击后视频的 Wan VAE endpoint、key-conditioned model velocity replay、"
+        "该报告由攻击后视频对应模型的真实 VAE endpoint、key-conditioned model velocity replay、"
         "多时间网格不确定性和冻结 fixed-FPR detector 自动生成。\n\n"
         f"- formal_flow_evidence_decision: {audit['formal_flow_evidence_decision']}\n"
         f"- formal_flow_positive_record_count: {audit['formal_flow_positive_record_count']}\n"
@@ -813,6 +1086,7 @@ def run_formal_flow_evidence(
         f"- claim_1_decision: {audit['claim_1_velocity_constraint_detectable_watermark_decision']}\n"
         f"- claim_2_decision: {audit['claim_2_path_evidence_independent_gain_decision']}\n"
         f"- claim3_real_replay_record_count: {audit['claim3_real_replay_record_count']}\n"
+        f"- cross_model_generalization_decision: {audit['cross_model_generalization_decision']}\n"
     )
     for report_name in ("formal_flow_evidence_report.md", "runtime_detection_report.md"):
         report_path = run_root / "reports" / report_name

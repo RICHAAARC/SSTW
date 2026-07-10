@@ -346,7 +346,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--repo-root", default=".", help="SSTW 仓库根目录")
     parser.add_argument("--baseline-id", action="append", choices=MODERN_EXTERNAL_BASELINE_BUILD_ORDER, help="只运行指定 external baseline, 可重复传入")
     parser.add_argument("--model-id", default=os.environ.get("SSTW_MODEL_ID", "Wan-AI/Wan2.1-T2V-1.3B-Diffusers"), help="主生成模型 ID")
-    parser.add_argument("--cross-model-id", default=os.environ.get("SSTW_CROSS_MODEL_ID", ""), help="可选 cross model ID")
+    parser.add_argument(
+        "--cross-model-id",
+        default=os.environ.get("SSTW_CROSS_MODEL_ID", "Lightricks/LTX-Video"),
+        help="跨模型泛化模型 ID; 传入空字符串可显式关闭",
+    )
     parser.add_argument("--semantic-model-id", default=os.environ.get("SSTW_SEMANTIC_MODEL_ID", "openai/clip-vit-base-patch32"), help="语义指标模型 ID")
     parser.add_argument("--semantic-frame-limit", type=int, default=int(os.environ.get("SSTW_SEMANTIC_FRAME_LIMIT", "8")), help="语义指标最多抽帧数")
     parser.add_argument("--disable-semantic-metric", action="store_true", help="禁用语义指标")

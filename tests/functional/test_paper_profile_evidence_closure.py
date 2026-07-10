@@ -110,6 +110,13 @@ def _write_closed_evidence(run_root: Path, target_fpr: float) -> None:
         "motion_threshold_calibration_decision",
         motion_threshold_calibration_ready=True,
     )
+    _write_decision(
+        run_root,
+        "cross_model_generalization_decision.json",
+        "cross_model_generalization_decision",
+        cross_model_generalization_claim_scope="supportive_not_primary_fixed_fpr_closure",
+        cross_model_generalization_model_ids=["Lightricks/LTX-Video"],
+    )
 
 
 def _write_config(path: Path, profile: str, target_fpr: float) -> None:
@@ -147,6 +154,7 @@ def _write_config(path: Path, profile: str, target_fpr: float) -> None:
             "require_sstw_measured_formal_records",
             "require_motion_threshold_calibration_ready",
             "require_adaptive_attack_records",
+            "require_cross_model_generalization",
         )
     }
     path.write_text(

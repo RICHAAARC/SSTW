@@ -5,6 +5,10 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
+from main.methods.state_space_watermark.flow_latent_layout import (
+    FiveDimensionalFlowLatentLayout,
+    FlowLatentLayout,
+)
 from main.methods.state_space_watermark.flow_tubelet_key_code import (
     FlowTubeletKeyCodeConfig,
     build_flow_tubelet_key_direction_like,
@@ -38,6 +42,7 @@ class FlowVelocityConstraintRuntime:
     method_variant: str = "sstw_full_method"
     velocity_config: VelocityFieldConstraintConfig = field(default_factory=VelocityFieldConstraintConfig)
     tubelet_config: FlowTubeletKeyCodeConfig = field(default_factory=FlowTubeletKeyCodeConfig)
+    latent_layout: FlowLatentLayout = field(default_factory=FiveDimensionalFlowLatentLayout)
     require_flow_scheduler: bool = True
 
     def __post_init__(self) -> None:
@@ -56,9 +61,17 @@ class FlowVelocityConstraintRuntime:
 
     @property
     def endpoint_latent(self) -> Any | None:
-        """返回最后一个 scheduler step 的 endpoint latent。"""
+        """返回最后一个 scheduler step 的模型原生 endpoint latent。"""
 
         return self._endpoint_latent
+
+    @property
+    def canonical_endpoint_latent(self) -> Any | None:
+        """返回最后一个 scheduler step 的 SSTW 五维规范 endpoint latent。"""
+
+        if self._endpoint_latent is None:
+            return None
+        return self.latent_layout.to_canonical(self._endpoint_latent)
 
     @property
     def key_metadata(self) -> dict[str, Any]:
@@ -85,12 +98,15 @@ class FlowVelocityConstraintRuntime:
             self.scheduler.step = self._original_step
 
     def _direction(self, sample: Any) -> Any:
+        canonical_sample = self.latent_layout.to_canonical(sample)
         if self._key_direction is None or tuple(self._key_direction.shape) != tuple(sample.shape):
-            self._key_direction, self._key_metadata = build_flow_tubelet_key_direction_like(
-                sample,
+            canonical_direction, self._key_metadata = build_flow_tubelet_key_direction_like(
+                canonical_sample,
                 key_text=self.key_text,
                 config=self.tubelet_config,
             )
+            self._key_direction = self.latent_layout.from_canonical(canonical_direction)
+            self._key_metadata.update(self.latent_layout.as_dict())
         return self._key_direction.to(device=sample.device, dtype=sample.dtype)
 
     @staticmethod

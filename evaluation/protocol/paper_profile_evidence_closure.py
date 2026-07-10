@@ -96,6 +96,7 @@ def build_paper_profile_evidence_closure_audit(
     sstw_measured = _read_json(artifacts / "sstw_measured_formal_decision.json")
     motion_threshold = _read_json(artifacts / "motion_threshold_calibration_decision.json")
     adaptive = _read_json(artifacts / "adaptive_attack_decision.json")
+    cross_model = _read_json(artifacts / "cross_model_generalization_decision.json")
 
     checks: dict[str, bool] = {}
 
@@ -317,6 +318,14 @@ def build_paper_profile_evidence_closure_audit(
         "adaptive_attack_protocol_passed",
         _required(config, "require_adaptive_attack_records"),
         _decision_passed(adaptive, "adaptive_attack_decision"),
+    )
+    add(
+        "cross_model_generalization_passed",
+        _required(config, "require_cross_model_generalization"),
+        _decision_passed(cross_model, "cross_model_generalization_decision")
+        and cross_model.get("cross_model_generalization_claim_scope")
+        == "supportive_not_primary_fixed_fpr_closure"
+        and bool(cross_model.get("cross_model_generalization_model_ids")),
     )
 
     missing = [name for name, passed in checks.items() if not passed]

@@ -1925,3 +1925,40 @@ Notebook 与 repository module 的跨边界数据
 | videomark_internal_detector_fpr | protocol | none | true | false | true | VideoMark 官方逐帧 PRC Detect 使用的内部 FPR 参数。 |
 | generated_prompt_seed_pair_count | metric | none | true | false | false | official bundle 为避免按 attack 重复生成而缓存的独立 prompt / seed 数量。 |
 | supplemental_external_baseline_count | metric | none | true | false | false | table plan 中只进入附录、不参与主表必跑门禁的外部 baseline 数量。 |
+
+## 跨模型 Flow latent 与泛化字段
+
+| 字段名 | 类别 | 后缀要求 | 必需 | 可空 | 可支持主张 | 说明 |
+| --- | --- | --- | --- | --- | --- | --- |
+| flow_latent_layout_id | method | none | true | false | true | 模型原生 latent 到 SSTW 五维 tubelet 坐标的可逆布局标识。 |
+| flow_latent_native_rank | method | none | true | false | true | 第三方生成模型 scheduler 实际消费的 latent 张量阶数。 |
+| flow_latent_canonical_rank | method | none | true | false | true | SSTW tubelet 原语固定使用的规范 latent 张量阶数。 |
+| flow_latent_layout_roundtrip_exact | method | none | true | false | true | layout pack/unpack 是否为逐元素精确可逆变换。 |
+| flow_latent_num_frames | method | none | false | true | true | 五维规范 latent 的时间长度。 |
+| flow_latent_height | method | none | false | true | true | 五维规范 latent 的空间高度。 |
+| flow_latent_width | method | none | false | true | true | 五维规范 latent 的空间宽度。 |
+| flow_latent_spatial_patch_size | method | none | false | true | true | token 模型使用的空间 patch 大小。 |
+| flow_latent_temporal_patch_size | method | none | false | true | true | token 模型使用的时间 patch 大小。 |
+| flow_latent_token_count | method | none | false | true | true | packed token latent 的序列长度。 |
+| endpoint_native_latent_shape | method | none | false | true | true | VAE endpoint 转换为 scheduler 原生布局后的形状。 |
+| model_specific_calibration | protocol | none | true | false | true | frozen detector 是否按 generation model 隔离校准。 |
+| cross_model_validation_record_count | generalization | none | true | false | false | 跨模型生成计划实际产生的记录数。 |
+| cross_model_validation_success_count | generalization | none | true | false | false | 跨模型生成成功记录数。 |
+| cross_model_generalization_decision | generalization | none | true | false | true | 资源受限跨模型子集的三层机制方向审计结论。 |
+| cross_model_generalization_passed | governance | none | true | false | true | 三个正式 profile 是否都通过同一跨模型支持性泛化门禁。 |
+| cross_model_generalization_claim_scope | generalization | none | true | false | true | 跨模型证据的论文主张边界, 不得冒充主固定 FPR 闭合结论。 |
+| cross_model_generalization_model_ids | generalization | none | true | false | true | 实际参加泛化审计的生成模型 ID 列表。 |
+| cross_model_generalization_record_count | generalization | none | true | false | true | 跨模型正式 Flow evidence 记录数。 |
+| cross_model_generalization_per_model | generalization | none | true | false | true | 每个跨模型的检测、因果、路径与 replay 审计摘要。 |
+| cross_model_generalization_model_decision | generalization | none | true | false | true | 单个跨模型是否复现 SSTW 三层机制的方向性证据。 |
+| cross_model_test_positive_cluster_count | generalization | none | true | false | true | 跨模型 test positive 独立视频簇数量。 |
+| cross_model_test_negative_cluster_count | generalization | none | true | false | true | 跨模型 test negative 独立视频簇数量。 |
+| cross_model_test_tpr | generalization | none | true | false | true | 跨模型模型专属冻结阈值下的 test TPR。 |
+| cross_model_test_fpr | generalization | none | true | false | true | 跨模型模型专属冻结阈值下的 test FPR 点估计。 |
+| cross_model_test_fpr_ci_95_upper | generalization | none | true | false | true | 跨模型 test FPR 的95%置信上界, 用于披露小样本不确定性。 |
+| cross_model_path_pair_count | generalization | none | true | false | true | 跨模型 Claim-2 同视频路径增益配对数量。 |
+| cross_model_path_score_gain_mean | generalization | none | true | false | true | 跨模型路径证据相对 endpoint-only 的平均分数增益。 |
+| cross_model_velocity_pair_count | generalization | none | true | false | true | 跨模型 Claim-1 速度约束因果配对数量。 |
+| cross_model_velocity_score_gain_mean | generalization | none | true | false | true | 跨模型完整方法相对无速度约束的平均分数增益。 |
+| cross_model_replay_control_record_count | generalization | none | true | false | true | 跨模型真实 replay control 记录数。 |
+| claim_decision_source_path | governance | none | true | false | true | 审稿证据索引读取当前主张判定的 governed artifact 路径。 |

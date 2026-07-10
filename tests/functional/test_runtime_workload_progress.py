@@ -242,8 +242,8 @@ def test_colab_notebooks_do_not_use_cell_level_progress_as_runtime_progress() ->
 def test_runtime_runners_use_dynamic_plan_and_record_counts_for_progress() -> None:
     """长耗时 runner 的进度总数必须来自 plan 或 records 长度, 不能在 Notebook 中硬编码数量。"""
     expected_patterns = {
-        "experiments/generative_video_model_probe/colab_runtime.py": [
-            'ProgressReporter("wan21_runtime_generation", len(plan), "video")',
+            "experiments/generative_video_model_probe/colab_runtime.py": [
+                'ProgressReporter("flow_model_runtime_generation", len(plan), "video")',
         ],
         "experiments/generative_video_model_probe/formal_metric_runner.py": [
             'ProgressReporter("formal_metric_runtime_video_scan", len(generation_records), "runtime_video")',
@@ -284,10 +284,10 @@ def test_runtime_runners_use_dynamic_plan_and_record_counts_for_progress() -> No
 def test_runtime_runners_suppress_third_party_pipeline_noise() -> None:
     """真实 GPU runner 应默认压制第三方内部进度条, 避免覆盖 SSTW 工作量进度。"""
     expected_patterns = {
-        "experiments/generative_video_model_probe/colab_runtime.py": [
+            "experiments/generative_video_model_probe/colab_runtime.py": [
             "configure_noisy_library_progress()",
             "configure_pipeline_progress_bar(pipe)",
-            'suppress_third_party_progress_output("wan21_runtime_single_video_generation")',
+                'suppress_third_party_progress_output("flow_model_runtime_single_video_generation")',
         ],
         "experiments/flow_model_adapter_preflight/wan21_preflight.py": [
             "configure_noisy_library_progress()",

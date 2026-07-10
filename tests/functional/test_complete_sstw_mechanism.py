@@ -14,6 +14,7 @@ from main.methods.state_space_watermark.authenticated_trajectory_sketch import (
 )
 from main.methods.state_space_watermark.endpoint_latent_detector import compute_endpoint_latent_evidence
 from main.methods.state_space_watermark.flow_tubelet_key_code import build_flow_tubelet_key_direction_like
+from main.methods.state_space_watermark.flow_latent_layout import PackedTokenFlowLatentLayout
 from main.methods.state_space_watermark.flow_velocity_runtime import FlowVelocityConstraintRuntime
 from main.methods.state_space_watermark.formal_detector import (
     apply_frozen_flow_detector,
@@ -117,6 +118,58 @@ def test_flow_velocity_runtime_wraps_and_restores_scheduler_step() -> None:
     assert len(runtime.step_records) == 2
     assert runtime.step_records[1]["velocity_field_constraint_status"] == "applied"
     assert scheduler.step.__func__ is original_step.__func__
+
+
+@pytest.mark.quick
+def test_packed_token_flow_layout_roundtrip_is_exact() -> None:
+    """LTX token latent 的 pack/unpack 必须保持每个元素和 tubelet 坐标不变。"""
+
+    canonical = torch.arange(1 * 4 * 3 * 4 * 6, dtype=torch.float32).reshape(1, 4, 3, 4, 6)
+    layout = PackedTokenFlowLatentLayout(
+        num_frames=3,
+        height=4,
+        width=6,
+        spatial_patch_size=2,
+        temporal_patch_size=1,
+    )
+
+    packed = layout.from_canonical(canonical)
+    restored = layout.to_canonical(packed)
+
+    assert packed.shape == (1, 18, 16)
+    assert torch.equal(restored, canonical)
+    assert layout.as_dict()["flow_latent_layout_roundtrip_exact"] is True
+
+
+@pytest.mark.quick
+def test_flow_velocity_runtime_applies_same_tubelet_primitive_to_packed_tokens() -> None:
+    """三维 token 模型必须通过可逆布局使用同一个五维 SSTW tubelet 原语。"""
+
+    scheduler = FlowMatchFakeScheduler()
+    layout = PackedTokenFlowLatentLayout(
+        num_frames=2,
+        height=4,
+        width=4,
+        spatial_patch_size=1,
+        temporal_patch_size=1,
+    )
+    canonical = torch.zeros((1, 3, 2, 4, 4), dtype=torch.float32)
+    sample = layout.from_canonical(canonical)
+    model_output = torch.ones_like(sample)
+
+    with FlowVelocityConstraintRuntime(
+        scheduler,
+        key_text="ltx-owner-key",
+        total_steps=3,
+        latent_layout=layout,
+    ) as runtime:
+        first = scheduler.step(model_output, torch.tensor(2.0), sample, return_dict=False)[0]
+        scheduler.step(model_output, torch.tensor(1.0), first, return_dict=False)
+
+    assert runtime.endpoint_latent is not None
+    assert runtime.canonical_endpoint_latent.shape == canonical.shape
+    assert runtime.step_records[0]["flow_latent_layout_id"] == "packed_token_flow_latent"
+    assert runtime.step_records[1]["velocity_field_constraint_status"] == "applied"
 
 
 @pytest.mark.quick

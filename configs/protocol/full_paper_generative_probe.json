@@ -144,6 +144,7 @@
     "group_cross_fitted_probability_calibration",
     "source_video_cluster_aware_statistics",
     "per_video_adaptive_attack_optimization",
+    "ltx_flow_matching_cross_model_generalization",
     "governed_reviewer_evidence_index"
   ],
   "required_runtime_attack_protocol_note": "full_paper 与另外两个正式层级共用完整机制、46 个 runtime attack 和 11 个 non-runtime/adaptive 协议; 当前层级采用 200 个 prompt × 30 个 seed = 6000 个独立视频, calibration/test 各 3000 个视频, target_fpr=0.001。",
@@ -157,5 +158,6 @@
   "target_fpr": 0.001,
   "test_time_threshold_update_blocked": true,
   "threshold_protocol": "calibration_split_to_frozen_threshold_to_heldout_test_split",
-  "threshold_source_split": "calibration"
+  "threshold_source_split": "calibration",
+  "require_cross_model_generalization": true
 }

@@ -1884,12 +1884,25 @@ def build_configured_colab_stage_command(
         "paper_profile_package_manifest_builder": build_paper_profile_package_manifest_builder_command,
     }
 
-    if stage_name == "wan21_runtime_generation":
+    if stage_name == "flow_model_runtime_generation":
+        workflow_config = load_notebook_workflow_config()
+        model_id = str(
+            options["model_id"]
+            if options.get("model_id")
+            else workflow_config.get("default_main_generation_model_id")
+            or "Wan-AI/Wan2.1-T2V-1.3B-Diffusers"
+        )
+        cross_model_id = str(
+            options["cross_model_id"]
+            if "cross_model_id" in options
+            else workflow_config.get("default_cross_model_generation_model_id")
+            or ""
+        )
         return build_colab_runtime_command(
             layout,
             runtime_profile,
-            str(options.get("model_id") or "Wan-AI/Wan2.1-T2V-1.3B-Diffusers"),
-            str(options.get("cross_model_id") or ""),
+            model_id,
+            cross_model_id,
         )
     if stage_name == "formal_metric_scoring":
         return build_formal_metric_command(

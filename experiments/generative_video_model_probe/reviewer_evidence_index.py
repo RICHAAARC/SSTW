@@ -36,12 +36,23 @@ CLAIM_EVIDENCE_PATHS: dict[str, tuple[str, ...]] = {
         "records/wrong_time_grid_replay_records.jsonl",
         "reports/replay_and_sketch_gate_report.md",
     ),
+    "supportive_cross_model_generalization": (
+        "artifacts/cross_model_generalization_decision.json",
+        "tables/cross_model_generalization_table.csv",
+        "records/formal_flow_evidence_records.jsonl",
+        "reports/formal_flow_evidence_report.md",
+    ),
 }
 
 CLAIM_DECISION_FIELDS = {
     "claim_1_velocity_constraint_detectable_watermark": "claim_1_velocity_constraint_detectable_watermark_decision",
     "claim_2_path_evidence_independent_gain": "claim_2_path_evidence_independent_gain_decision",
     "claim_3_attacked_video_replay_posterior": "claim_3_attacked_video_replay_posterior_decision",
+    "supportive_cross_model_generalization": "cross_model_generalization_decision",
+}
+
+CLAIM_DECISION_SOURCE_PATHS = {
+    "supportive_cross_model_generalization": "artifacts/cross_model_generalization_decision.json",
 }
 
 
@@ -93,7 +104,7 @@ def _profile_gate_passed(profile: str, gate: Mapping[str, Any]) -> bool:
 
 
 def build_reviewer_evidence_index(run_root: str | Path) -> dict[str, Any]:
-    """构建三层 claim 到真实 artifact 的可验证映射."""
+    """构建三层主 claim 与跨模型支持性 claim 到真实 artifact 的可验证映射."""
 
     run_root = Path(run_root)
     profile, gate_path, gate = _current_profile_gate(run_root)
@@ -104,7 +115,13 @@ def build_reviewer_evidence_index(run_root: str | Path) -> dict[str, Any]:
 
     for claim_id, relative_paths in CLAIM_EVIDENCE_PATHS.items():
         decision_field = CLAIM_DECISION_FIELDS[claim_id]
-        claim_passed = complete_claim.get(decision_field) == "PASS"
+        decision_source_path = CLAIM_DECISION_SOURCE_PATHS.get(claim_id)
+        decision_payload = (
+            _read_json(run_root / decision_source_path)
+            if decision_source_path
+            else complete_claim
+        )
+        claim_passed = decision_payload.get(decision_field) == "PASS"
         if not claim_passed:
             failed_claims.append(claim_id)
         for relative_path in relative_paths:
@@ -116,7 +133,11 @@ def build_reviewer_evidence_index(run_root: str | Path) -> dict[str, Any]:
                 "paper_profile": profile,
                 "claim_id": claim_id,
                 "claim_decision_field": decision_field,
-                "claim_decision": complete_claim.get(decision_field, "MISSING"),
+                "claim_decision": decision_payload.get(decision_field, "MISSING"),
+                "claim_decision_source_path": (
+                    decision_source_path
+                    or "artifacts/complete_paper_mechanism_claim_decision.json"
+                ),
                 "evidence_path": relative_path,
                 "evidence_exists": exists,
                 "evidence_sha256": _sha256(artifact_path) if exists else None,
@@ -193,7 +214,7 @@ def write_reviewer_evidence_index(run_root: str | Path) -> dict[str, Any]:
 def main() -> None:
     """命令行入口."""
 
-    parser = argparse.ArgumentParser(description="构建三层论文主张的审稿证据索引.")
+    parser = argparse.ArgumentParser(description="构建三层主张与跨模型支持性主张的审稿证据索引.")
     parser.add_argument("--run-root", required=True)
     args = parser.parse_args()
     print(json.dumps(write_reviewer_evidence_index(args.run_root), ensure_ascii=False, indent=2))

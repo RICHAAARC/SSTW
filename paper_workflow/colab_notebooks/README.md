@@ -778,13 +778,13 @@ Notebook 间复用优先读取阶段交接包:
 长耗时 repository runner 会按实际 plan 或 records 数量输出工作量进度, 而不是按 Notebook cell 数量输出进度。典型显示形式为:
 
 ```text
-SSTW 工作量进度 | wan21_runtime_generation | 7/24 (29.2%) | elapsed=42.0 min | eta=102.0 min | profile=probe_paper prompt=... seed=...
+SSTW 工作量进度 | flow_model_runtime_generation | 7/24 (29.2%) | elapsed=42.0 min | eta=102.0 min | profile=probe_paper prompt=... seed=...
 ```
 
 进度总数由运行时实际数据结构自动计算:
 
 ```text
-Wan2.1 生成: len(plan)
+Wan2.1 主模型与 LTX 跨模型生成: len(plan)
 formal metric 视频扫描: len(generation_records)
 runtime attack 视频变换: len(eligible_generation_records) * len(attack_names)
 runtime detection 视频扫描: len(runtime_attack_records)
@@ -807,7 +807,7 @@ Colab Notebook 调用仓库命令时必须使用 `workflows.streaming_command.ru
 ```text
 SSTW 工作量进度 | video_generation_model_load | start | model=...
 SSTW 工作量进度 | video_generation_model_load | finish | model=... | pipeline_progress_bar=disabled
-SSTW 工作量进度 | wan21_runtime_generation | 1/24 (4.2%) | elapsed=...
+SSTW 工作量进度 | flow_model_runtime_generation | 1/24 (4.2%) | elapsed=...
 ```
 
 该压制只影响屏幕日志, 不影响 callback latent、time grid、sampler signature、records 或 package 落盘。若需要调试第三方库内部下载或采样细节, 可以在 Notebook 前置 cell 中显式打开:

@@ -51,6 +51,8 @@ from workflows.stage_package_sync import (
     stage_package_id_for_notebook,
 )
 from experiments.generative_video_model_probe.colab_runtime import (
+    LTX_VIDEO_CROSS_MODEL_ID,
+    PROFILE_SETTINGS,
     _build_generation_plan,
     _build_internal_ablation_generation_plan,
     _formalize_paper_trajectory_record,
@@ -267,6 +269,57 @@ def test_probe_paper_profile_constructs_independent_video_fixed_fpr_plan(tmp_pat
     assert sum(1 for item in positive_plan if item["split"] == "calibration") == 30
     assert sum(1 for item in positive_plan if item["split"] == "test") == 30
     assert all(item["watermark_embedding_status"] == "clean_unwatermarked_reference" for item in clean_plan)
+
+
+@pytest.mark.quick
+def test_probe_paper_cross_model_plan_is_split_stratified_and_resource_bounded(tmp_path: Path) -> None:
+    """LTX 泛化子集必须覆盖两个 split, 同时不复制完整 Wan 主表计算规模。"""
+
+    output_root = tmp_path / "prompt_suite"
+    summary = write_prompt_suite(output_root)
+    suite = json.loads(Path(summary["prompt_suite_path"]).read_text(encoding="utf-8"))
+    plan = _build_generation_plan(
+        suite,
+        "probe_paper",
+        "Wan-AI/Wan2.1-T2V-1.3B-Diffusers",
+        "Lightricks/LTX-Video",
+    )
+
+    main_rows = [item for item in plan if item["cross_model_role"] == "main_generation_model"]
+    cross_rows = [item for item in plan if item["cross_model_role"] == "cross_model_validation_model"]
+    cross_positive = [item for item in cross_rows if item["sample_role"] == "attacked_positive_source"]
+    cross_clean = [item for item in cross_rows if item["sample_role"] == "clean_negative"]
+
+    assert len(main_rows) == 120
+    assert len(cross_positive) == 20
+    assert len(cross_clean) == 20
+    assert len({item["prompt_id"] for item in cross_rows}) == 5
+    assert len({item["seed_id"] for item in cross_rows}) == 4
+    assert sum(item["split"] == "calibration" for item in cross_positive) == 10
+    assert sum(item["split"] == "test" for item in cross_positive) == 10
+
+
+@pytest.mark.constraint
+def test_cross_model_runtime_settings_match_governed_workflow_config() -> None:
+    """跨模型 ID 与三个 profile 的资源预算必须只有一个受治理语义。"""
+
+    config = json.loads(
+        Path("configs/paper_workflow/generative_video_notebook_workflows.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    protocol = config["cross_model_generalization_protocol"]
+
+    assert config["default_cross_model_generation_model_id"] == LTX_VIDEO_CROSS_MODEL_ID
+    assert protocol["claim_scope"] == "supportive_not_primary_fixed_fpr_closure"
+    for profile in ("probe_paper", "pilot_paper", "full_paper"):
+        governed = protocol[profile]
+        runtime = PROFILE_SETTINGS[profile]
+        assert governed["prompt_count"] == runtime["cross_model_prompt_limit"]
+        assert governed["seed_count"] == runtime["cross_model_seed_limit"]
+        assert governed["independent_video_count"] == (
+            runtime["cross_model_prompt_limit"] * runtime["cross_model_seed_limit"]
+        )
 
 
 @pytest.mark.quick

@@ -22,7 +22,7 @@ def _write_text(path: Path, content: str = "evidence\n") -> None:
 
 
 def _seed_complete_claim_evidence(run_root: Path) -> None:
-    """构造三个 claim 均通过且全部 artifact 存在的最小 fixture."""
+    """构造三层主 claim 与跨模型支持性 claim 均通过的最小 fixture."""
 
     for relative_paths in CLAIM_EVIDENCE_PATHS.values():
         for relative_path in relative_paths:
@@ -40,6 +40,12 @@ def _seed_complete_claim_evidence(run_root: Path) -> None:
         "claim_2_path_evidence_independent_gain_decision": "PASS",
         "claim_3_attacked_video_replay_posterior_decision": "PASS",
     }), encoding="utf-8")
+    cross_model_path = run_root / "artifacts" / "cross_model_generalization_decision.json"
+    cross_model_path.write_text(json.dumps({
+        "cross_model_generalization_decision": "PASS",
+        "cross_model_generalization_claim_scope": "supportive_not_primary_fixed_fpr_closure",
+        "cross_model_generalization_model_ids": ["Lightricks/LTX-Video"],
+    }), encoding="utf-8")
 
 
 @pytest.mark.quick
@@ -52,7 +58,7 @@ def test_reviewer_index_requires_passed_gate_and_real_artifacts(tmp_path: Path) 
     index = write_reviewer_evidence_index(run_root)
 
     assert index["reviewer_evidence_index_decision"] == "PASS"
-    assert index["indexed_claim_count"] == 3
+    assert index["indexed_claim_count"] == 4
     assert index["missing_evidence_paths"] == []
     assert all(row["evidence_sha256"] for row in index["evidence_rows"])
     assert (run_root / "reports" / "reviewer_evidence_index.md").is_file()

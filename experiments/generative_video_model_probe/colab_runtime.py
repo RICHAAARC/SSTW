@@ -19,6 +19,8 @@ from main.methods.state_space_watermark.authenticated_trajectory_sketch import (
     sign_authenticated_trajectory_sketch,
 )
 from main.methods.state_space_watermark.flow_velocity_runtime import FlowVelocityConstraintRuntime
+from main.methods.state_space_watermark.flow_latent_layout import FiveDimensionalFlowLatentLayout
+from main.methods.state_space_watermark.ltx_flow_replay_backend import build_ltx_latent_layout
 from main.methods.state_space_watermark.path_observation import aggregate_path_observations
 from evaluation.protocol.flow_evidence_fields import (
     with_flow_evidence_protocol_defaults,
@@ -36,6 +38,7 @@ from evaluation.protocol.table_builder import write_csv
 
 
 WAN21_PRIMARY_MODEL_ID = "Wan-AI/Wan2.1-T2V-1.3B-Diffusers"
+LTX_VIDEO_CROSS_MODEL_ID = "Lightricks/LTX-Video"
 
 PAPER_RESULT_PROFILES = {"probe_paper", "pilot_paper", "full_paper"}
 
@@ -57,7 +60,9 @@ PROFILE_SETTINGS = {
         "num_frames": 49,
         "height": 320,
         "width": 512,
-        "run_cross_model": False,
+        "run_cross_model": True,
+        "cross_model_prompt_limit": 10,
+        "cross_model_seed_limit": 6,
         "prompt_suite_roles": ["pilot_paper"],
         "seed_suite_roles": ["pilot_paper"],
     },
@@ -68,7 +73,9 @@ PROFILE_SETTINGS = {
         "num_frames": 49,
         "height": 320,
         "width": 512,
-        "run_cross_model": False,
+        "run_cross_model": True,
+        "cross_model_prompt_limit": 5,
+        "cross_model_seed_limit": 4,
         "prompt_suite_roles": ["probe_paper"],
         "seed_suite_roles": ["probe_paper"],
     },
@@ -79,7 +86,9 @@ PROFILE_SETTINGS = {
         "num_frames": 49,
         "height": 320,
         "width": 512,
-        "run_cross_model": False,
+        "run_cross_model": True,
+        "cross_model_prompt_limit": 20,
+        "cross_model_seed_limit": 10,
         "prompt_suite_roles": ["full_paper"],
         "seed_suite_roles": ["full_paper"],
     },
@@ -144,8 +153,8 @@ def _scheduler_id_for_model(model_id: str) -> str:
 def _load_video_generation_pipeline(model_id: str, torch_dtype: Any) -> Any:
     """加载真实视频生成 pipeline。
 
-    该函数属于 Colab runtime 路径。项目主线必须使用 Wan2.1 Flow Matching DiT;
-    LTX-Video 只保留为工程 fallback, 不能替代主论文证据。
+    该函数属于 GPU runtime 路径。Wan2.1 是主结果模型, LTX-Video 是预注册的
+    小规模跨模型泛化模型; 两者都必须进入真实 Flow scheduler 约束和 replay 路径。
     """
     configure_noisy_library_progress()
     hf_token = os.environ.get("HF_TOKEN") or None
@@ -171,6 +180,54 @@ def _load_video_generation_pipeline(model_id: str, torch_dtype: Any) -> Any:
         pipe.vae.enable_tiling()
     emit_progress_event("video_generation_model_load", f"finish | model={model_id} | pipeline_progress_bar={progress_bar_status}")
     return pipe
+
+
+def _flow_latent_layout_for_pipeline(
+    pipeline: Any,
+    *,
+    model_id: str,
+    num_frames: int,
+    height: int,
+    width: int,
+) -> Any:
+    """返回模型原生 latent 到 SSTW 五维 tubelet 坐标的可逆适配器。"""
+
+    if _model_family_from_id(model_id) == "diffusers_ltx_video":
+        return build_ltx_latent_layout(
+            pipeline,
+            num_frames=num_frames,
+            height=height,
+            width=width,
+        )
+    return FiveDimensionalFlowLatentLayout(layout_id="wan_five_dimensional_flow_latent")
+
+
+def _generation_kwargs_for_model(model_id: str, settings: dict[str, Any]) -> dict[str, Any]:
+    """构造与模型官方 pipeline 参数语义一致的生成参数。"""
+
+    common = {
+        "width": settings["width"],
+        "height": settings["height"],
+        "num_frames": settings["num_frames"],
+        "num_inference_steps": settings["num_inference_steps"],
+    }
+    if _model_family_from_id(model_id) == "diffusers_ltx_video":
+        return {
+            **common,
+            "frame_rate": 8,
+            "guidance_scale": 3.0,
+            "decode_timestep": 0.05,
+            "decode_noise_scale": 0.025,
+        }
+    return {**common, "guidance_scale": 5.0}
+
+
+def _trajectory_time_grid_id_for_model(model_id: str) -> str:
+    """登记生成阶段真实使用的模型家族 Flow 时间网格。"""
+
+    if _model_family_from_id(model_id) == "diffusers_ltx_video":
+        return "ltx_sequence_length_shifted_flow_scheduler_runtime_step_grid"
+    return "wan_flow_scheduler_runtime_step_grid"
 
 
 def _export_video(frames: Any, path: Path, fps: int) -> None:
@@ -209,20 +266,58 @@ def _select_profile_items(items: list[dict], limit: int | None, allowed_roles: l
     return selected if limit is None else selected[:limit]
 
 
+def _select_cross_model_seeds(items: list[dict], limit: int, allowed_roles: list[str]) -> list[dict]:
+    """按 calibration/test 等量抽取跨模型 seed, 避免小样本只落入单一 split。"""
+
+    selected = _select_profile_items(items, None, allowed_roles)
+    calibration = [item for item in selected if item.get("split") == "calibration"]
+    test = [item for item in selected if item.get("split") == "test"]
+    if len(calibration) < limit // 2 or len(test) < limit // 2:
+        raise ValueError("跨模型 seed 子集无法同时覆盖 calibration 与 test split")
+    calibration_count = limit // 2
+    test_count = limit - calibration_count
+    return calibration[:calibration_count] + test[:test_count]
+
+
 def _build_generation_plan(prompt_suite: dict, profile: str, model_id: str, cross_model_id: str | None) -> list[dict]:
     """根据 profile 构建主模型与可选跨模型运行计划。"""
     settings = PROFILE_SETTINGS[profile]
     prompts = _select_profile_items(prompt_suite["prompts"], settings["prompt_limit"], settings.get("prompt_suite_roles"))
     seeds = _select_profile_items(prompt_suite["seeds"], settings["seed_limit"], settings.get("seed_suite_roles"))
-    model_items = [{"generation_model_id": model_id, "cross_model_role": "main_generation_model"}]
+    model_items = [{
+        "generation_model_id": model_id,
+        "cross_model_role": "main_generation_model",
+        "model_prompts": prompts,
+        "model_seeds": seeds,
+    }]
     if settings["run_cross_model"] and cross_model_id:
-        model_items.append({"generation_model_id": cross_model_id, "cross_model_role": "cross_model_validation_model"})
+        cross_prompts = _select_profile_items(
+            prompt_suite["prompts"],
+            int(settings["cross_model_prompt_limit"]),
+            settings.get("prompt_suite_roles"),
+        )
+        cross_seeds = _select_cross_model_seeds(
+            prompt_suite["seeds"],
+            int(settings["cross_model_seed_limit"]),
+            settings.get("seed_suite_roles") or [],
+        )
+        model_items.append({
+            "generation_model_id": cross_model_id,
+            "cross_model_role": "cross_model_validation_model",
+            "model_prompts": cross_prompts,
+            "model_seeds": cross_seeds,
+        })
     plan = []
     include_clean_negative_references = profile in {"probe_paper", "pilot_paper", "full_paper"}
     for model_item in model_items:
-        for prompt in prompts:
-            for seed in seeds:
-                base_item = {**model_item, **prompt, **seed}
+        for prompt in model_item["model_prompts"]:
+            for seed in model_item["model_seeds"]:
+                base_item = {
+                    "generation_model_id": model_item["generation_model_id"],
+                    "cross_model_role": model_item["cross_model_role"],
+                    **prompt,
+                    **seed,
+                }
                 base_item["prompt_suite_role"] = prompt.get("prompt_suite_role")
                 base_item["seed_suite_role"] = seed.get("seed_suite_role") or seed.get("prompt_suite_role")
                 method_variants = (
@@ -308,7 +403,7 @@ def run_colab_probe(output_root: str | Path, prompt_suite_path: str | Path, prof
     hf_token_status = "provided" if os.environ.get("HF_TOKEN") else "not_provided"
     main_plan = _build_generation_plan(prompt_suite, profile, model_id, cross_model_id)
     plan = main_plan + _build_internal_ablation_generation_plan(main_plan, profile)
-    progress = ProgressReporter("wan21_runtime_generation", len(plan), "video")
+    progress = ProgressReporter("flow_model_runtime_generation", len(plan), "video")
 
     generation_records: list[dict] = []
     trajectory_records: list[dict] = []
@@ -328,6 +423,14 @@ def run_colab_probe(output_root: str | Path, prompt_suite_path: str | Path, prof
         if model_for_item not in active_pipe_by_model:
             active_pipe_by_model[model_for_item] = _load_video_generation_pipeline(model_for_item, dtype)
         pipe = active_pipe_by_model[model_for_item]
+        latent_layout = _flow_latent_layout_for_pipeline(
+            pipe,
+            model_id=model_for_item,
+            num_frames=int(settings["num_frames"]),
+            height=int(settings["height"]),
+            width=int(settings["width"]),
+        )
+        generation_kwargs = _generation_kwargs_for_model(model_for_item, settings)
         generator = torch.Generator(device="cuda").manual_seed(int(item["seed_value"]))
         trace_id = f"trace_{index:04d}_{item['sample_role']}_{item['method_variant']}"
         step_stats: list[dict] = []
@@ -347,17 +450,14 @@ def run_colab_probe(output_root: str | Path, prompt_suite_path: str | Path, prof
                 key_text=key_text,
                 total_steps=int(settings["num_inference_steps"]),
                 method_variant=str(item["method_variant"]),
+                latent_layout=latent_layout,
             ) as velocity_runtime:
-                with suppress_third_party_progress_output("wan21_runtime_single_video_generation"):
+                with suppress_third_party_progress_output("flow_model_runtime_single_video_generation"):
                     result = pipe(
                         prompt=item["prompt_text"],
                         negative_prompt=item.get("prompt_negative_text"),
-                        width=settings["width"],
-                        height=settings["height"],
-                        num_frames=settings["num_frames"],
-                        num_inference_steps=settings["num_inference_steps"],
-                        guidance_scale=5.0,
                         generator=generator,
+                        **generation_kwargs,
                     )
             step_stats = [
                 {
@@ -374,11 +474,13 @@ def run_colab_probe(output_root: str | Path, prompt_suite_path: str | Path, prof
                 for record in step_stats
             )
             path_summary = aggregate_path_observations(step_stats)
-            if velocity_runtime.endpoint_latent is not None:
+            if velocity_runtime.canonical_endpoint_latent is not None:
                 endpoint_summary = compute_endpoint_latent_evidence(
-                    velocity_runtime.endpoint_latent,
+                    velocity_runtime.canonical_endpoint_latent,
                     key_text=key_text,
                 ).as_dict()
+                endpoint_summary["endpoint_evidence_source"] = "generation_scheduler_endpoint_latent"
+                endpoint_summary.update(latent_layout.as_dict())
             frames = result.frames[0]
             _export_video(frames, video_path, fps=8)
             generation_status = "success"
@@ -405,7 +507,7 @@ def run_colab_probe(output_root: str | Path, prompt_suite_path: str | Path, prof
                         f"{type(pipe.scheduler).__name__}:"
                         f"{sha256(json.dumps(dict(pipe.scheduler.config), sort_keys=True, default=str).encode('utf-8')).hexdigest()}"
                     ),
-                    time_grid_id="wan_flow_scheduler_runtime_step_grid",
+                    time_grid_id=_trajectory_time_grid_id_for_model(model_for_item),
                     generation_nonce_random=secrets.token_hex(16),
                 )
                 signed_sketch = sign_authenticated_trajectory_sketch(
@@ -485,9 +587,9 @@ def run_colab_probe(output_root: str | Path, prompt_suite_path: str | Path, prof
             "seed_id": item["seed_id"],
             "scheduler_id": _scheduler_id_for_model(item["generation_model_id"]),
             "trajectory_scheduler_id": _scheduler_id_for_model(item["generation_model_id"]),
-            "trajectory_time_grid_id": "wan_flow_scheduler_runtime_step_grid",
+            "trajectory_time_grid_id": _trajectory_time_grid_id_for_model(item["generation_model_id"]),
             "num_inference_steps": settings["num_inference_steps"],
-            "guidance_scale": 5.0,
+            "guidance_scale": generation_kwargs["guidance_scale"],
             "video_length_frames": settings["num_frames"],
             "video_resolution": f"{settings['width']}x{settings['height']}",
             "fps": 8,
@@ -516,6 +618,15 @@ def run_colab_probe(output_root: str | Path, prompt_suite_path: str | Path, prof
         })
 
     success_count = sum(1 for record in generation_records if record["generation_status"] == "success")
+    cross_model_records = [
+        record
+        for record in generation_records
+        if record.get("cross_model_role") == "cross_model_validation_model"
+    ]
+    cross_model_success_count = sum(
+        record.get("generation_status") == "success"
+        for record in cross_model_records
+    )
     progress.finish(f"success={success_count} failed={len(generation_records) - success_count}")
 
     generation_records = [
@@ -562,7 +673,15 @@ def run_colab_probe(output_root: str | Path, prompt_suite_path: str | Path, prof
             "trajectory_observation_gain_confirmed": False,
             "fixed_low_fpr_audit_pass": False,
             "quality_motion_semantic_consistency_pass": False,
-            "cross_model_validation_status": "run" if cross_model_id else "not_configured",
+            "cross_model_validation_status": (
+                "run_success"
+                if cross_model_records and cross_model_success_count == len(cross_model_records)
+                else "run_failed"
+                if cross_model_records
+                else "not_configured"
+            ),
+            "cross_model_validation_record_count": len(cross_model_records),
+            "cross_model_validation_success_count": cross_model_success_count,
             "external_baseline_comparison_status": "limitation_records_written",
             "gpu_name": gpu_name,
             "gpu_memory_mb": gpu_memory_mb,
@@ -592,7 +711,7 @@ def main() -> None:
     parser.add_argument("--prompt-suite-path", default="outputs/datasets/generative_video_prompt_suite/prompt_seed_suite.json")
     parser.add_argument("--profile", choices=sorted(PROFILE_SETTINGS), default="pilot")
     parser.add_argument("--model-id", default=WAN21_PRIMARY_MODEL_ID)
-    parser.add_argument("--cross-model-id", default="")
+    parser.add_argument("--cross-model-id", default=LTX_VIDEO_CROSS_MODEL_ID)
     args = parser.parse_args()
     cross_model_id = args.cross_model_id or None
     print(json.dumps(run_colab_probe(args.output_root, args.prompt_suite_path, args.profile, args.model_id, cross_model_id), ensure_ascii=False, indent=2, sort_keys=True))

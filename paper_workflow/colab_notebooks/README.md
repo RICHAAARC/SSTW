@@ -10,6 +10,7 @@
 4. 当前 Colab 主流程只使用新的 profile-driven workflow。旧的诊断 Notebook 可以用于排查, 但不作为 paper workflow 的正式执行顺序。
 5. 默认 Drive 根目录为 `/content/drive/MyDrive/SSTW`, Windows 本地映射通常对应 `G:\我的云端硬盘\SSTW`。
 6. Notebook 的热路径必须使用阶段 zip 交接: 先把前置阶段 zip 从 Drive 复制到 `/content` 本地解压, 后续 runner 只读写本地 workspace, 阶段结束后再把单个 zip 和 manifest 写回 Drive。
+7. paper profile 主流程统一从 `/content/drive/MyDrive/SSTW/.sstw_private/trajectory_authentication.json` 加载 HMAC 轨迹认证密钥。该私有文件不得进入仓库、阶段包或正式实验输出。
 
 ## Colab 冷启动准备
 
@@ -38,6 +39,35 @@ os.environ["SSTW_DRIVE_PROJECT_ROOT"] = "/content/drive/MyDrive/SSTW"
 ```
 
 除非需要隔离实验, 否则建议保持默认目录, 便于在本地通过 `G:\我的云端硬盘\SSTW` 检查落盘结果。
+
+### 轨迹认证私有文件
+
+本项目的 paper profile Notebook 会在执行仓库 runner 前调用
+`paper_workflow.colab_utils.trajectory_authentication`。默认路径映射为:
+
+```text
+Windows: G:\我的云端硬盘\SSTW\.sstw_private\trajectory_authentication.json
+Colab:   /content/drive/MyDrive/SSTW/.sstw_private/trajectory_authentication.json
+```
+
+加载器执行以下 fail-closed 检查:
+
+1. 文件存在且顶层是 JSON 对象;
+2. `secret_format` 与项目约定一致;
+3. Base64 密钥解码后至少包含32字节熵;
+4. key ID 只包含安全标识字符;
+5. 当前 Colab 进程若已经存在不同密钥或不同 key ID, 立即失败;
+6. Notebook 只显示来源路径、key ID 和熵字节数, 不返回或打印密钥本体。
+
+如果服务器使用不同目录, 可以在启动 Notebook 前设置:
+
+```python
+import os
+os.environ["SSTW_TRAJECTORY_AUTHENTICATION_FILE"] = "/安全路径/trajectory_authentication.json"
+```
+
+生成、检测、paper evidence postprocess 和最终 gate 必须读取同一文件。删除或替换该
+文件后, 既有 trajectory sketch 将无法通过 HMAC 验证。
 
 ## 阶段 zip 交接与本地 workspace
 

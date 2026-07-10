@@ -58,8 +58,11 @@ Claim-2 以同视频配对的检测判定差作为主统计量。只有固定 FP
 正式运行必须按以下顺序执行:
 
 1. 准备 prompt/seed suite;
-2. 设置 `SSTW_TRAJECTORY_AUTHENTICATION_KEY` 和
-   `SSTW_TRAJECTORY_AUTHENTICATION_KEY_ID`;
+2. 从 Google Drive 私有文件
+   `/content/drive/MyDrive/SSTW/.sstw_private/trajectory_authentication.json`
+   自动加载 `SSTW_TRAJECTORY_AUTHENTICATION_KEY` 和
+   `SSTW_TRAJECTORY_AUTHENTICATION_KEY_ID`。Windows 本地映射为
+   `G:\我的云端硬盘\SSTW\.sstw_private\trajectory_authentication.json`;
 3. 执行 paper profile 生成;
 4. 执行质量、运动与语义指标;
 5. 执行 runtime attacks;

@@ -7,8 +7,8 @@ from experiments.generative_video_model_probe.pilot_paper_gate import (
     build_pilot_paper_gate_audit,
     write_pilot_paper_gate_audit,
 )
-from main.attacks.video_runtime_attack_protocol import PILOT_PAPER_RUNTIME_ATTACKS
-from main.protocol.record_writer import write_json, write_jsonl
+from evaluation.attacks.video_runtime_attack_protocol import PILOT_PAPER_RUNTIME_ATTACKS
+from evaluation.protocol.record_writer import write_json, write_jsonl
 
 
 ATTACKS = PILOT_PAPER_RUNTIME_ATTACKS
@@ -59,13 +59,13 @@ def _paper_profile_gate_pass_payload() -> dict:
         "external_baseline_self_containment_decision": "PASS",
         "data_split_and_leakage_guard_decision": "PASS",
         "sstw_measured_formal_record_count": 24,
-        "sstw_measured_formal_status": "sstw_measured_formal_paper_profile_claim_candidate",
+        "sstw_measured_formal_status": "sstw_measured_formal_paper_profile_claim_evidence",
         "fair_detection_calibration_ready_count": len(MODERN_EXTERNAL_BASELINE_NAMES) + 1,
         "fair_detection_calibration_status": "fair_detection_calibration_paper_profile_ready",
         "formal_method_baseline_comparison_ready_count": len(MODERN_EXTERNAL_BASELINE_NAMES) + 1,
-        "formal_method_baseline_comparison_status": "formal_method_baseline_comparison_paper_profile_claim_candidate",
+        "formal_method_baseline_comparison_status": "formal_method_baseline_comparison_paper_profile_claim_evidence",
         "formal_baseline_difference_interval_ready_count": len(MODERN_EXTERNAL_BASELINE_NAMES),
-        "formal_baseline_difference_interval_status": "formal_baseline_difference_interval_paper_profile_claim_candidate",
+        "formal_baseline_difference_interval_status": "formal_baseline_difference_interval_paper_profile_claim_evidence",
         "paper_profile_sstw_advantage_claim_ready": True,
         "paper_profile_sstw_advantage_claim_status": "paper_profile_target_fpr_0_1_sstw_advantage_claim_supported",
         "full_paper_allowed": False,
@@ -322,7 +322,7 @@ def _seed_pilot_paper_run(
                     "S_final_conservative": 0.82,
                     "sstw_raw_detector_score": 0.82,
                     "raw_detector_score": 0.82,
-                    "sstw_detector_evidence_level": "attacked_video_content_detector",
+                    "sstw_detector_evidence_level": "attacked_video_key_independent_inversion_hypothesis_replay",
                     "trajectory_trace_used_for_score": False,
                     "runtime_detection_claim_level": "formal_paper_detector",
                     "attacked_video_detectable": True,
@@ -339,7 +339,7 @@ def _seed_pilot_paper_run(
                     "sstw_score": 0.82,
                     "sstw_raw_detector_score": 0.82,
                     "raw_detector_score": 0.82,
-                    "sstw_detector_evidence_level": "attacked_video_content_detector",
+                    "sstw_detector_evidence_level": "attacked_video_key_independent_inversion_hypothesis_replay",
                     "trajectory_trace_used_for_score": False,
                     "runtime_detection_claim_level": "formal_paper_detector",
                 })
@@ -365,7 +365,7 @@ def _seed_pilot_paper_run(
                         "sstw_clean_negative_score": 0.20,
                         "clean_negative_score": 0.20,
                         "raw_detector_score": 0.20,
-                        "clean_negative_evidence_level": "project_owned_clean_video_content_detector",
+                        "clean_negative_evidence_level": "attacked_video_key_independent_inversion_hypothesis_replay",
                         "trajectory_trace_used_for_score": False,
                     })
                 if split_name == "test":
@@ -464,7 +464,7 @@ def _seed_pilot_paper_run(
     })
     write_json(run_root / "artifacts" / "adaptive_attack_decision.json", {
         "adaptive_attack_decision": "PASS",
-        "claim_support_status": "formal_adaptive_attack_execution_ready",
+        "claim_support_status": "per_video_frozen_flow_detector_adaptive_execution_ready",
     })
     if paper_profile_gate_decision is not None:
         validation_payload = _paper_profile_gate_pass_payload() if paper_profile_gate_decision == "PASS" else {
@@ -574,80 +574,15 @@ def test_pilot_paper_gate_rejects_probe_paper_profile(tmp_path: Path) -> None:
 
 
 @pytest.mark.quick
-def test_pilot_paper_gate_passes_calibrated_heldout_fixture(tmp_path: Path) -> None:
-    """满足 calibration/test split 与 5000+ held-out negative events 时允许 pilot_paper 级 TPR@target_fpr。"""
+def test_pilot_paper_gate_blocks_pseudoreplicated_heldout_fixture(tmp_path: Path) -> None:
+    """旧 fixture 虽有大量 key trial, 但独立视频数不足时必须阻断。"""
     run_root = tmp_path / "run"
     _seed_pilot_paper_run(run_root)
 
     audit = write_pilot_paper_gate_audit(run_root)
 
-    assert audit["pilot_paper_gate_decision"] == "PASS"
-    assert audit["claim_support_status"] == "pilot_paper_calibrated_heldout_claim_ready"
-    assert audit["paper_claim_id"] == "pilot_claim"
-    assert audit["paper_claim_support_status"] == "pilot_claim_supported"
-    assert audit["paper_result_formality_guard_decision"] == "PASS"
-    assert audit["paper_result_formality_guard_violation_count"] == 0
-    assert audit["paper_result_level"] == "pilot_paper"
-    assert audit["paper_protocol_level"] == "paper_grade_protocol"
-    assert audit["paper_protocol_difference_from_full_paper"] == "sample_scale_and_target_fpr_only"
-    assert audit["pilot_paper_protocol_matches_full_paper"] is True
-    assert audit["pilot_paper_hard_required_config_missing_count"] == 0
-    assert audit["probe_paper_gate_decision"] == "PASS"
-    assert audit["probe_paper_to_pilot_paper_transition_decision"] == "PASS"
-    assert audit["external_baseline_comparison_decision"] == "PASS"
-    assert audit["external_baseline_self_containment_decision"] == "PASS"
-    assert audit["external_baseline_measured_adapter_count"] == len(MODERN_EXTERNAL_BASELINE_NAMES)
-    assert audit["modern_external_baseline_formal_measured_adapter_count"] == len(MODERN_EXTERNAL_BASELINE_NAMES)
-    assert audit["missing_modern_external_baseline_formal_adapter_names"] == []
-    assert audit["fair_detection_calibration_decision"] == "PASS"
-    assert audit["fair_detection_calibration_ready_count"] == len(MODERN_EXTERNAL_BASELINE_NAMES) + 1
-    assert audit["fair_detection_calibration_missing_method_ids"] == []
-    assert audit["formal_method_baseline_comparison_decision"] == "PASS"
-    assert audit["formal_method_baseline_comparison_ready_count"] == len(MODERN_EXTERNAL_BASELINE_NAMES) + 1
-    assert audit["formal_method_baseline_comparison_missing_method_ids"] == []
-    assert audit["formal_baseline_difference_interval_decision"] == "PASS"
-    assert audit["formal_baseline_difference_interval_ready_count"] == len(MODERN_EXTERNAL_BASELINE_NAMES)
-    assert audit["formal_baseline_difference_interval_missing_baseline_ids"] == []
-    assert audit["pilot_paper_external_baseline_trace_count"] == 50
-    assert audit["pilot_paper_external_baseline_trace_count_min"] == 50
-    assert audit["validation_internal_ablation_decision"] == "PASS"
-    assert audit["validation_internal_ablation_variant_count"] >= 8
-    assert audit["pilot_paper_internal_ablation_trace_count_min"] == 50
-    assert audit["threshold_protocol"] == "calibration_split_to_frozen_threshold_to_heldout_test_split"
-    assert audit["threshold_source_split"] == "calibration"
-    assert audit["test_time_threshold_update_blocked"] is True
-    assert audit["pilot_paper_generation_record_count"] == 100
-    assert audit["pilot_paper_unique_video_count"] == 100
-    assert audit["pilot_paper_calibration_unique_video_count"] == 50
-    assert audit["pilot_paper_test_unique_video_count"] == 50
-    assert audit["pilot_paper_calibration_seed_per_prompt_min"] == 2
-    assert audit["pilot_paper_test_seed_per_prompt_min"] == 2
-    expected_attacked_positive_count = 50 * len(ATTACKS)
-    assert audit["calibration_negative_event_count"] == expected_attacked_positive_count * len(NEGATIVE_FAMILIES)
-    assert audit["heldout_test_negative_event_count"] == expected_attacked_positive_count * len(NEGATIVE_FAMILIES)
-    assert audit["heldout_attacked_positive_event_count"] == expected_attacked_positive_count
-    assert audit["calibration_negative_family_count"] == 4
-    assert audit["heldout_negative_family_count"] == 4
-    assert audit["calibration_negative_event_count_per_family_min"] == expected_attacked_positive_count
-    assert audit["heldout_negative_event_count_per_family_min"] == expected_attacked_positive_count
-    assert audit["attack_event_count_per_attack_min"] == 50
-    assert audit["calibration_negative_fpr_at_threshold"] <= audit["target_fpr"]
-    assert audit["heldout_negative_fpr_at_threshold"] <= audit["target_fpr"]
-    assert audit["observed_negative_fpr_at_threshold"] == audit["heldout_negative_fpr_at_threshold"]
-    assert audit["tpr_at_target_fpr"] == 1.0
-    assert audit["target_fpr_claim_allowed"] is True
-    assert audit["tpr_at_fpr_01"] == 1.0
-    assert audit["tpr_at_fpr_01_pilot_claim_allowed"] is True
-    assert audit["pilot_paper_claim_allowed"] is True
-    assert audit["blocked_target_fpr_claim_allowed"] is False
-    assert audit["tpr_at_fpr_001_claim_allowed"] is False
-    assert audit["full_paper_allowed"] is False
-    assert (run_root / "records" / "pilot_paper_gate_records.jsonl").exists()
-    assert (run_root / "tables" / "pilot_paper_gate_table.csv").exists()
-    assert (run_root / "thresholds" / "pilot_paper_frozen_threshold.json").exists()
-    assert (run_root / "artifacts" / "pilot_paper_gate_decision.json").exists()
-    assert (run_root / "reports" / "pilot_paper_gate_report.md").exists()
-
+    assert audit["pilot_paper_gate_decision"] == "FAIL"
+    assert audit["pilot_paper_claim_allowed"] is False
 
 @pytest.mark.quick
 def test_pilot_paper_gate_rejects_incomplete_formal_external_baseline(tmp_path: Path) -> None:
@@ -674,7 +609,7 @@ def test_pilot_paper_gate_rejects_incomplete_formal_external_baseline(tmp_path: 
 
 @pytest.mark.quick
 def test_pilot_paper_gate_requires_probe_paper_gate(tmp_path: Path) -> None:
-    """pilot_paper 是 full_paper 协议的小规模预演, 因此必须先通过 probe_paper。"""
+    """pilot_paper 是 FPR=0.01 的完整论文协议, 并且必须先通过 probe_paper."""
     run_root = tmp_path / "run"
     _seed_pilot_paper_run(run_root, paper_profile_gate_decision=None)
 
@@ -730,7 +665,7 @@ def test_pilot_paper_gate_rejects_bare_probe_transition_pass(tmp_path: Path) -> 
 
 @pytest.mark.quick
 def test_pilot_paper_gate_requires_external_baseline_and_ablation(tmp_path: Path) -> None:
-    """pilot_paper 是完整协议预演, 因此必须同时具备 baseline comparison 与内部消融矩阵。"""
+    """pilot_paper 是完整论文协议, 因此必须同时具备 baseline comparison 与内部消融矩阵."""
     run_root = tmp_path / "run"
     _seed_pilot_paper_run(run_root, write_external_baseline=False, write_internal_ablation=False)
 

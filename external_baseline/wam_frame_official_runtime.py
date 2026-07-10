@@ -23,9 +23,9 @@ from external_baseline.official_runtime_progress import emit_official_reference_
 from external_baseline.runtime_trace_io import build_comparison_unit_id, comparable_detection_records
 from external_baseline.score_semantics import official_score_formal_comparison_summary
 from external_baseline.video_tensor_io import read_video_tchw_uint8, write_video_tchw
-from main.attacks.video_runtime_attack_protocol import apply_runtime_attack_to_video_tensor
-from main.core.digest import build_stable_digest
-from main.core.progress import ProgressReporter, suppress_third_party_progress_output
+from evaluation.attacks.video_runtime_attack_protocol import apply_runtime_attack_to_video_tensor
+from runtime.core.digest import build_stable_digest
+from runtime.core.progress import ProgressReporter, suppress_third_party_progress_output
 
 
 BASELINE_ID = "wam_frame"

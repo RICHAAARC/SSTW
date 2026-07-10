@@ -13,9 +13,9 @@ from external_baseline.runtime_trace_io import (
     load_trace_groups,
     safe_float,
 )
-from main.external_baselines.explicit_dtw_temporal_alignment import compute_dtw_alignment_cost
-from main.core.progress import ProgressReporter
-from main.protocol.flow_evidence_fields import with_flow_evidence_protocol_defaults
+from external_baseline.explicit_dtw_temporal_alignment import compute_dtw_alignment_cost
+from runtime.core.progress import ProgressReporter
+from evaluation.protocol.flow_evidence_fields import with_flow_evidence_protocol_defaults
 
 
 ADAPTER_NAME = "explicit_dtw_temporal_alignment"

@@ -8,9 +8,9 @@ from pathlib import Path
 import pytest
 
 import experiments.generative_video_model_probe.formal_metric_runner as formal_metric_runner
-import main.analysis.semantic_video_metrics as semantic_video_metrics
+import evaluation.metrics.semantic_video_metrics as semantic_video_metrics
 from experiments.generative_video_model_probe.formal_metric_runner import run_formal_metric_audit
-from main.protocol.record_writer import read_jsonl, write_json, write_jsonl
+from evaluation.protocol.record_writer import read_jsonl, write_json, write_jsonl
 from scripts.check_results.generative_video_colab_result_checker import check_generative_video_colab_results
 
 

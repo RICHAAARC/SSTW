@@ -7,8 +7,8 @@ from pathlib import Path, PurePosixPath
 import subprocess
 import sys
 
-from paper_workflow.colab_utils.stage_package_sync import stage_zip_handoff_enabled
-from paper_workflow.notebook_utils.streaming_command import run_streaming_command
+from workflows.stage_package_sync import stage_zip_handoff_enabled
+from workflows.streaming_command import run_streaming_command
 
 
 DEFAULT_DRIVE_PROJECT_ROOT = "/content/drive/MyDrive/SSTW"

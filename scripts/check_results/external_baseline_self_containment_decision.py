@@ -18,14 +18,14 @@ from external_baseline.official_eval_adapters.common import (
     validate_complete_official_bundle_baseline_identity,
 )
 from external_baseline.score_semantics import validate_official_score_extraction_payload
-from main.attacks.video_runtime_attack_protocol import (
+from evaluation.attacks.video_runtime_attack_protocol import (
     PAPER_PROFILE_RUNTIME_ATTACKS,
     load_protocol_config_with_shared_attack_protocol,
     required_runtime_attack_names_from_config,
 )
-from main.protocol.flow_evidence_fields import with_flow_evidence_protocol_defaults
-from main.protocol.record_writer import write_json, write_jsonl
-from main.protocol.table_builder import write_csv
+from evaluation.protocol.flow_evidence_fields import with_flow_evidence_protocol_defaults
+from evaluation.protocol.record_writer import write_json, write_jsonl
+from evaluation.protocol.table_builder import write_csv
 
 
 DEFAULT_PROTOCOL_CONFIG = "configs/protocol/probe_paper_generative_probe.json"

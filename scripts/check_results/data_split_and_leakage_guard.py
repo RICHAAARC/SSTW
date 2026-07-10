@@ -13,9 +13,9 @@ from collections import defaultdict
 from pathlib import Path
 from typing import Any, Iterable, Mapping
 
-from main.protocol.flow_evidence_fields import with_flow_evidence_protocol_defaults
-from main.protocol.record_writer import write_json, write_jsonl
-from main.protocol.table_builder import write_csv
+from evaluation.protocol.flow_evidence_fields import with_flow_evidence_protocol_defaults
+from evaluation.protocol.record_writer import write_json, write_jsonl
+from evaluation.protocol.table_builder import write_csv
 
 
 RECORD_SOURCES = (

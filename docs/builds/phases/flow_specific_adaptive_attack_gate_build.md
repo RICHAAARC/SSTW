@@ -169,42 +169,26 @@ stage_status: 未完成
 
 ### 3.1 2026-06-23 最新阶段边界
 
-当前 small-scale pilot 已经解除前置阻塞, 但这不等于 adaptive robustness 已成立。本阶段仍必须补齐独立的 Flow-specific adaptive attack 证据:
+当前正式实现已将 adaptive attack 从记录整理升级为逐视频真实优化。执行入口为：
 
 ```text
-method_mechanism_validation_passed = true
-adaptive_attack_runner_ready = false
-adaptive_attack_manifest_ready = false
-endpoint_path_decoupling_records_ready = false
-path_response_cancellation_records_ready = false
-adaptive_negative_tail_audit_ready = false
-adaptive_robustness_claim_allowed = false
-```
-
-下一步应优先在 probe_paper 中构建最小可运行 adaptive attack runner, 覆盖 `scheduler_change`、`time_grid_jitter`、`wrong_sampler_replay`、`endpoint_path_decoupling` 与 `path_response_cancellation` 的受控记录。若该阶段持续缺失, full_paper 只能报告普通视频攻击鲁棒性, 不能报告 Flow-specific adaptive attack robustness。
-
-### 3.2 2026-06-24 validation proxy runner
-
-当前已新增 probe_paper adaptive attack proxy runner:
-
-```text
+experiments/generative_video_model_probe/formal_adaptive_attack_executor.py
+evaluation/attacks/adaptive_video_optimizer.py
 experiments/generative_video_model_probe/adaptive_attack_runner.py
-records/adaptive_attack_records.jsonl
-tables/adaptive_attack_table.csv
-artifacts/adaptive_attack_decision.json
-reports/adaptive_attack_report.md
 ```
 
-该 runner 覆盖 scheduler change、step count change、time grid jitter、wrong sampler replay、wrong prompt replay、wrong key attack、latent noise perturbation、VAE reencode attack、velocity projection suppression、endpoint-path decoupling、path response cancellation、replay signature mismatch、trajectory sketch replacement attempt 和 detector probing with public negatives。其作用是闭合 probe_paper 的 governed records 入口, 不是 full_paper Flow-specific adaptive robustness 证明。
+该实现对每个独立 held-out source video 真实解码并生成候选视频，覆盖重压缩、endpoint-preserving 扰动、探测、去除、规避以及跨视频 copy/collusion。每个候选必须记录输入输出哈希、实际查询分数、质量指标、查询预算和冻结 detector artifact。公开负样本只能用于预注册允许的探测顺序，不能更新 test 阈值或后验模型。
 
-当前阶段边界更新为:
+正式门禁至少检查：
 
 ```text
-adaptive_attack_runner_ready = true_for_validation_proxy
-adaptive_attack_manifest_ready = validation_proxy_manifest_embedded
-adaptive_negative_tail_audit_ready = false
-adaptive_robustness_claim_allowed = false
+per_video_adaptive_attack_optimization == true
+adaptive_attack_query_count > 0
+adaptive_attack_candidate_records_ready == true
+adaptive_attack_output_video_sha256_ready == true
+adaptive_attack_quality_constraint_ready == true
+adaptive_attack_complete_protocol_coverage == true
+adaptive_negative_tail_audit_ready == true
 ```
 
-后续 full_paper 前仍需用真实 adaptive negative split、真实 quality guard 和 fixed-FPR negative tail audit 替换 validation proxy。
-
+source video 是唯一独立统计单位。同一视频产生的多候选、多查询和多攻击属于簇内观测，不能扩充样本量。若真实视频文件、冻结 scorer、完整攻击覆盖或质量约束缺失，当前 paper profile 必须失败，不能用 synthetic score、validation proxy 或手工记录替代。

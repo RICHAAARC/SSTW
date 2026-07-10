@@ -15,10 +15,10 @@ from pathlib import Path
 from statistics import mean, median
 from typing import Any
 
-from main.analysis.video_file_metrics import MOTION_DELTA_MIN
-from main.protocol.flow_evidence_fields import with_flow_evidence_protocol_defaults
-from main.protocol.record_writer import write_json, write_jsonl
-from main.protocol.table_builder import write_csv
+from evaluation.metrics.video_file_metrics import MOTION_DELTA_MIN
+from evaluation.protocol.flow_evidence_fields import with_flow_evidence_protocol_defaults
+from evaluation.protocol.record_writer import write_json, write_jsonl
+from evaluation.protocol.table_builder import write_csv
 
 CALIBRATED_MOTION_THRESHOLD_ID = "motion_delta_calibrated_v1"
 HEURISTIC_MOTION_THRESHOLD_ID = "motion_delta_heuristic_v1"

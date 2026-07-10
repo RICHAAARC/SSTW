@@ -1,30 +1,51 @@
 {
+  "authenticated_trajectory_sketch_required": true,
   "contract_id": "sstw_complete_paper_mechanism_v1",
+  "formal_method_variants": [
+    "sstw_full_method",
+    "endpoint_only_control",
+    "trajectory_only_score",
+    "without_velocity_constraint",
+    "without_endpoint_aware_control",
+    "without_replay_uncertainty_weighting",
+    "without_flow_state_admissibility",
+    "generic_ssm_baseline"
+  ],
+  "minimum_replay_reliability_mean": 0.5,
   "profile_invariant": "probe_paper、pilot_paper 和 full_paper 必须执行相同机制、攻击、消融、检测、replay 和结果门禁; 只允许目标 FPR、样本数量与由此产生的统计功效不同。",
-  "claim3_downgrade_allowed": false,
+  "replay_step_counts": [
+    16,
+    20,
+    24
+  ],
   "required_claims": [
     {
       "claim_id": "claim_1_velocity_constraint_detectable_watermark",
       "required_evidence": [
         "flow_scheduler_model_output_constraint",
         "endpoint_latent_detection",
-        "heldout_fixed_fpr_result"
+        "heldout_fixed_fpr_result",
+        "same_prompt_seed_attack_without_velocity_causal_control",
+        "source_video_cluster_bootstrap_interval"
       ]
     },
     {
       "claim_id": "claim_2_path_evidence_independent_gain",
       "required_evidence": [
-        "same_endpoint_path_observation",
+        "key_independent_fixed_inversion_path_observation",
         "endpoint_only_ablation",
-        "paired_fixed_fpr_difference_interval"
+        "same_video_paired_fixed_fpr_difference_interval",
+        "source_video_cluster_bootstrap_interval"
       ]
     },
     {
       "claim_id": "claim_3_attacked_video_replay_posterior",
       "required_evidence": [
         "attacked_video_vae_endpoint",
-        "prompt_conditioned_model_velocity_inversion",
+        "key_independent_prompt_conditioned_model_velocity_inversion",
+        "null_vs_candidate_forward_log_likelihood_ratio",
         "multi_time_grid_replay_uncertainty",
+        "group_cross_fitted_calibrated_probability_posterior",
         "wrong_sampler_wrong_prompt_wrong_key_controls",
         "authenticated_trajectory_sketch_verification",
         "flow_state_admissibility"
@@ -45,23 +66,15 @@
     "modern_external_baseline_comparison",
     "video_quality_motion_semantic_metrics",
     "confidence_intervals_and_low_fpr_statistics",
-    "claim_audit_and_rebuild_manifest"
+    "claim_audit_and_rebuild_manifest",
+    "key_independent_replay_hypothesis_testing",
+    "group_cross_fitted_probability_calibration",
+    "source_video_cluster_aware_statistics",
+    "per_video_adaptive_attack_optimization",
+    "governed_reviewer_evidence_index"
   ],
-  "formal_method_variants": [
-    "sstw_full_method",
-    "endpoint_only_control",
-    "trajectory_only_score",
-    "without_velocity_constraint",
-    "without_endpoint_aware_control",
-    "without_replay_uncertainty_weighting",
-    "without_flow_state_admissibility",
-    "generic_ssm_baseline"
-  ],
-  "replay_step_counts": [16, 20, 24],
-  "minimum_replay_reliability_mean": 0.5,
-  "authenticated_trajectory_sketch_required": true,
-  "threshold_source_split": "calibration_negative",
-  "test_time_threshold_update_blocked": true,
   "shared_attack_protocol_config_path": "configs/protocol/shared_generative_video_attack_protocol.json",
-  "shared_attack_protocol_id": "top_tier_video_watermark_attack_protocol_v1"
+  "shared_attack_protocol_id": "top_tier_video_watermark_attack_protocol_v1",
+  "test_time_threshold_update_blocked": true,
+  "threshold_source_split": "calibration"
 }

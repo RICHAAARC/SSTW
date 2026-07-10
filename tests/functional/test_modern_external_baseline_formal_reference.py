@@ -16,7 +16,7 @@ from external_baseline.official_eval_adapters.common import (
     OFFICIAL_REFERENCE_INCOMPLETE_STATUS,
     build_official_reference_bundle_execution_status,
 )
-from paper_workflow.colab_utils.modern_external_baseline_formal_reference import (
+from workflows.modern_external_baseline_reference import (
     MODERN_EXTERNAL_BASELINE_BUILD_ORDER,
     _build_runtime_closure_blocked_reference_manifest,
     _enrich_official_bundle_payload,
@@ -298,7 +298,7 @@ def test_main_five_baseline_formal_reference_notebooks_call_repository_helpers()
 def test_formal_reference_helper_defaults_to_bundle_only_with_opt_in_unified_scoring() -> None:
     """单 baseline helper 默认只生成 official bundle, 统一转写保留为显式 opt-in。"""
 
-    helper_text = Path("paper_workflow/colab_utils/modern_external_baseline_formal_reference.py").read_text(encoding="utf-8")
+    helper_text = Path("workflows/modern_external_baseline_reference.py").read_text(encoding="utf-8")
 
     assert "same_prompt_seed_attack_runtime_comparison_unit" in helper_text
     assert "SSTW_DISABLE_OFFICIAL_RESULT_BUNDLE_READ" in helper_text

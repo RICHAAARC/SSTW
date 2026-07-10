@@ -29,8 +29,8 @@ from external_baseline.official_runtime_progress import (
 )
 from external_baseline.runtime_trace_io import build_comparison_unit_id, comparable_detection_records
 from external_baseline.score_semantics import official_score_formal_comparison_summary
-from main.attacks.video_runtime_attack_protocol import apply_runtime_attack_to_frames
-from main.core.progress import ProgressReporter, emit_progress_event
+from evaluation.attacks.video_runtime_attack_protocol import apply_runtime_attack_to_frames
+from runtime.core.progress import ProgressReporter, emit_progress_event
 
 
 BASELINE_ID = "vidsig"

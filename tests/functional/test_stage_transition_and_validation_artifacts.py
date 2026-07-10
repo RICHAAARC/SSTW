@@ -10,8 +10,8 @@ from experiments.generative_video_model_probe.paper_profile_artifact_package imp
     write_paper_profile_gate_figure,
     write_paper_profile_package_manifest,
 )
-from main.attacks.video_runtime_attack_protocol import PAPER_PROFILE_RUNTIME_ATTACKS
-from main.protocol.record_writer import write_json, write_jsonl
+from evaluation.attacks.video_runtime_attack_protocol import PAPER_PROFILE_RUNTIME_ATTACKS
+from evaluation.protocol.record_writer import write_json, write_jsonl
 from scripts.check_results.data_split_and_leakage_guard import write_data_split_and_leakage_guard
 from scripts.check_results.external_baseline_self_containment_decision import (
     write_external_baseline_self_containment_decision,
@@ -92,13 +92,13 @@ def _paper_profile_gate_pass_payload() -> dict:
         "runtime_detection_missing_required_names": [],
         "runtime_detection_ready_count": len(PAPER_PROFILE_RUNTIME_ATTACKS),
         "sstw_measured_formal_record_count": 24,
-        "sstw_measured_formal_status": "sstw_measured_formal_paper_profile_claim_candidate",
+        "sstw_measured_formal_status": "sstw_measured_formal_paper_profile_claim_evidence",
         "fair_detection_calibration_ready_count": len(MODERN_BASELINES) + 1,
         "fair_detection_calibration_status": "fair_detection_calibration_paper_profile_ready",
         "formal_method_baseline_comparison_ready_count": len(MODERN_BASELINES) + 1,
-        "formal_method_baseline_comparison_status": "formal_method_baseline_comparison_paper_profile_claim_candidate",
+        "formal_method_baseline_comparison_status": "formal_method_baseline_comparison_paper_profile_claim_evidence",
         "formal_baseline_difference_interval_ready_count": len(MODERN_BASELINES),
-        "formal_baseline_difference_interval_status": "formal_baseline_difference_interval_paper_profile_claim_candidate",
+        "formal_baseline_difference_interval_status": "formal_baseline_difference_interval_paper_profile_claim_evidence",
         "paper_profile_sstw_advantage_claim_ready": True,
         "paper_profile_sstw_advantage_claim_status": "paper_profile_target_fpr_0_1_sstw_advantage_claim_supported",
         "full_paper_allowed": False,
@@ -141,7 +141,7 @@ def test_probe_paper_to_pilot_transition_writes_governed_records(tmp_path: Path)
 
 @pytest.mark.quick
 def test_probe_paper_to_pilot_transition_no_longer_requires_validation_to_probe_transition(tmp_path: Path) -> None:
-    """主干移除 probe_paper 后, probe_paper 可直接生成进入 pilot_paper 的跳转判定。"""
+    """probe_paper PASS 后可以生成进入 pilot_paper 的显式跳转判定。"""
 
     run_root = tmp_path / "runs" / "generative_video_model_probe" / "probe_paper"
     write_json(run_root / "artifacts" / "probe_paper_gate_decision.json", _probe_paper_gate_pass_payload())

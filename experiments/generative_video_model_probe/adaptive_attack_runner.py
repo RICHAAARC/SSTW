@@ -14,18 +14,29 @@ from pathlib import Path
 from statistics import mean
 from typing import Any
 
-from main.attacks.video_runtime_attack_protocol import FULL_PAPER_NON_RUNTIME_ATTACK_PROTOCOLS
-from main.protocol.flow_evidence_fields import with_flow_evidence_protocol_defaults
-from main.protocol.record_writer import write_json, write_jsonl
-from main.protocol.table_builder import write_csv
+from evaluation.attacks.video_runtime_attack_protocol import FULL_PAPER_NON_RUNTIME_ATTACK_PROTOCOLS
+from evaluation.protocol.flow_evidence_fields import with_flow_evidence_protocol_defaults
+from evaluation.protocol.record_writer import write_json, write_jsonl
+from evaluation.protocol.table_builder import write_csv
 
 
-FORMAL_ADAPTIVE_ATTACK_EVIDENCE_LEVEL = "formal_adaptive_attack_execution"
+FORMAL_ADAPTIVE_ATTACK_EVIDENCE_LEVEL = "per_video_frozen_flow_detector_adaptive_execution"
 FORMAL_ADAPTIVE_ATTACK_READY_STATUS = "formal_adaptive_attack_measured_ready"
 FORMAL_ADAPTIVE_ATTACK_BLOCKED_STATUS = "formal_adaptive_attack_missing_execution"
 FORMAL_ADAPTIVE_ATTACK_INPUT_FILENAMES = (
     "formal_adaptive_attack_execution_records.jsonl",
 )
+PER_VIDEO_SEARCH_PROTOCOLS = {
+    "generative_recompression_or_regeneration_attack",
+    "endpoint_preserving_path_perturbation_attack",
+    "detector_probing_with_public_negatives",
+    "watermark_removal_optimization_attack",
+    "adversarial_detector_evasion_attack",
+}
+CROSS_VIDEO_PROTOCOLS = {
+    "watermark_spoofing_or_copy_attack",
+    "collusion_multi_sample_attack",
+}
 
 
 def _adaptive_family_from_protocol(protocol_name: str) -> str:
@@ -93,13 +104,30 @@ def _formal_input_records(run_root: Path) -> list[dict[str, Any]]:
 def _formal_record_ready(record: dict[str, Any]) -> bool:
     """判断一条 adaptive attack 记录是否具备正式论文证据资格。"""
 
-    return (
+    protocol = str(record.get("non_runtime_attack_protocol") or record.get("adaptive_attack_name") or "")
+    base_ready = (
         record.get("metric_status") == "measured_formal"
         and record.get("adaptive_attack_evidence_level") == FORMAL_ADAPTIVE_ATTACK_EVIDENCE_LEVEL
         and record.get("adaptive_robustness_claim_allowed") is True
         and record.get("adaptive_attack_status") == "ready"
-        and bool(record.get("non_runtime_attack_protocol") or record.get("adaptive_attack_name"))
+        and int(record.get("adaptive_attack_query_count") or 0) > 0
+        and bool(record.get("statistical_cluster_id"))
+        and record.get("test_time_threshold_update_blocked") is True
+        and bool(protocol)
     )
+    if not base_ready:
+        return False
+    if protocol in PER_VIDEO_SEARCH_PROTOCOLS:
+        return (
+            int(record.get("adaptive_attack_query_count") or 0) >= 2
+            and bool(record.get("adaptive_attack_output_video_sha256"))
+            and isinstance(record.get("adaptive_attack_candidate_records"), list)
+            and len(record["adaptive_attack_candidate_records"])
+            == int(record.get("adaptive_attack_query_count") or 0)
+        )
+    if protocol in CROSS_VIDEO_PROTOCOLS:
+        return bool(record.get("adaptive_attack_output_video_sha256"))
+    return record.get("adaptive_attack_execution_backend") == "per_video_precomputed_key_independent_replay_control"
 
 
 def _normalize_formal_record(record: dict[str, Any]) -> dict[str, Any]:
@@ -114,7 +142,7 @@ def _normalize_formal_record(record: dict[str, Any]) -> dict[str, Any]:
     )
     payload = {
         **record,
-        "record_version": "formal_adaptive_attack_execution_v1",
+        "record_version": str(record.get("record_version") or "formal_per_video_adaptive_attack_v1"),
         "non_runtime_attack_protocol": protocol,
         "adaptive_attack_name": str(record.get("adaptive_attack_name") or protocol),
         "adaptive_attack_family": family,
@@ -191,6 +219,20 @@ def audit_adaptive_attack_records(records: list[dict[str, Any]]) -> dict[str, An
         for record in formal_records
         if record.get("non_runtime_attack_protocol") or record.get("adaptive_attack_name")
     }
+    video_clusters = {
+        str(record.get("statistical_cluster_id"))
+        for record in formal_records
+        if record.get("statistical_cluster_id")
+    }
+    incomplete_clusters = sorted(
+        cluster
+        for cluster in video_clusters
+        if {
+            str(record.get("non_runtime_attack_protocol"))
+            for record in formal_records
+            if str(record.get("statistical_cluster_id")) == cluster
+        } != required_protocols
+    )
     missing_non_runtime_protocols = sorted(required_protocols - observed_protocols)
     non_formal_records = [record for record in records if not _formal_record_ready(record)]
     scores = [
@@ -198,7 +240,7 @@ def audit_adaptive_attack_records(records: list[dict[str, Any]]) -> dict[str, An
         for value in (_safe_float(record.get("adaptive_attack_score")) for record in formal_records)
         if value is not None
     ]
-    decision = "PASS" if records and not missing_non_runtime_protocols and not non_formal_records else "FAIL"
+    decision = "PASS" if records and not missing_non_runtime_protocols and not non_formal_records and not incomplete_clusters else "FAIL"
     return {
         "stage_id": "formal_adaptive_attack_execution_gate",
         "adaptive_attack_decision": decision,
@@ -226,6 +268,9 @@ def audit_adaptive_attack_records(records: list[dict[str, Any]]) -> dict[str, An
         "adaptive_robustness_claim_allowed": decision == "PASS",
         "adaptive_attack_evidence_level": FORMAL_ADAPTIVE_ATTACK_EVIDENCE_LEVEL,
         "adaptive_attack_non_formal_record_count": len(non_formal_records),
+        "adaptive_attack_independent_video_count": len(video_clusters),
+        "adaptive_attack_incomplete_video_clusters": incomplete_clusters,
+        "per_video_adaptive_attack_optimization": True,
     }
 
 

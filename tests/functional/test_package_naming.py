@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from main.protocol.package_naming import build_package_batch_id, build_package_file_stem, sanitize_filename_token
+from evaluation.protocol.package_naming import build_package_batch_id, build_package_file_stem, sanitize_filename_token
 from scripts.package_results.drive_package_paths import (
     archive_run_root_for_stage,
     build_packager_file_stem,
@@ -73,7 +73,6 @@ def test_independent_packager_cli_defaults_do_not_reference_legacy_packages_dir(
 
     for path in (
         Path("scripts/package_results/generative_video_drive_packager.py"),
-        Path("scripts/package_results/sampling_time_constraint_drive_packager.py"),
         Path("scripts/package_results/wan21_flow_adapter_preflight_drive_packager.py"),
     ):
         source = path.read_text(encoding="utf-8")

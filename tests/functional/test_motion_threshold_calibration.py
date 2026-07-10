@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 
 from experiments.generative_video_model_probe.motion_threshold_calibration import run_motion_threshold_calibration
-from main.protocol.record_writer import write_json, write_jsonl
+from evaluation.protocol.record_writer import write_json, write_jsonl
 
 
 def _write_formal_motion_records(run_root: Path, negative_count: int, positive_count: int, ambiguous_count: int = 0, source_split: str = "calibration") -> None:

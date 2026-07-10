@@ -10,16 +10,16 @@ from pathlib import Path
 from typing import Any
 
 from experiments.generative_video_model_probe.formal_motion_claim_filter import select_motion_claim_generation_records
-from main.attacks.video_runtime_attack_protocol import (
+from evaluation.attacks.video_runtime_attack_protocol import (
     PAPER_PROFILE_RUNTIME_ATTACKS,
     RUNTIME_ATTACK_SPECS,
     apply_runtime_attack_to_frames,
     required_runtime_attack_names_from_config,
 )
-from main.core.progress import ProgressReporter
-from main.protocol.flow_evidence_fields import with_flow_evidence_protocol_defaults
-from main.protocol.record_writer import write_json, write_jsonl
-from main.protocol.table_builder import write_csv
+from runtime.core.progress import ProgressReporter
+from evaluation.protocol.flow_evidence_fields import with_flow_evidence_protocol_defaults
+from evaluation.protocol.record_writer import write_json, write_jsonl
+from evaluation.protocol.table_builder import write_csv
 
 
 ATTACK_NAMES = tuple(RUNTIME_ATTACK_SPECS)
@@ -95,7 +95,7 @@ def _write_video_frames(video_path: Path, frames: list[Any], fps: int = 8, attac
 def _apply_runtime_attack(frames: list[Any], attack_name: str) -> tuple[list[Any], dict]:
     """对视频帧执行 runtime attack。
 
-    具体 attack 协议和帧级实现由 `main.attacks.video_runtime_attack_protocol`
+    具体 attack 协议和帧级实现由 `evaluation.attacks.video_runtime_attack_protocol`
     统一管理, 本函数保留为 runner 内部兼容入口。
     """
     return apply_runtime_attack_to_frames(frames, attack_name)

@@ -16,15 +16,15 @@ from pathlib import Path
 from statistics import mean
 from typing import Any, Iterable, Mapping
 
-from main.attacks.video_runtime_attack_protocol import (
+from evaluation.attacks.video_runtime_attack_protocol import (
     load_protocol_config_with_shared_attack_protocol,
     required_non_runtime_attack_protocols_from_config,
     required_runtime_attack_names_from_config,
     target_fpr_levels_from_config,
 )
-from main.protocol.flow_evidence_fields import with_flow_evidence_protocol_defaults
-from main.protocol.record_writer import write_json, write_jsonl
-from main.protocol.table_builder import write_csv
+from evaluation.protocol.flow_evidence_fields import with_flow_evidence_protocol_defaults
+from evaluation.protocol.record_writer import write_json, write_jsonl
+from evaluation.protocol.table_builder import write_csv
 
 
 DEFAULT_PROTOCOL_CONFIG = "configs/protocol/probe_paper_generative_probe.json"

@@ -10,14 +10,14 @@ from hashlib import sha256
 from pathlib import Path
 from typing import Any
 
-from main.core.progress import (
+from runtime.core.progress import (
     configure_noisy_library_progress,
     configure_pipeline_progress_bar,
     emit_progress_event,
     suppress_third_party_progress_output,
 )
-from main.protocol.flow_evidence_fields import conservative_flow_score, flow_evidence_protocol_defaults
-from main.protocol.record_writer import write_json, write_jsonl
+from evaluation.protocol.flow_evidence_fields import conservative_flow_score, flow_evidence_protocol_defaults
+from evaluation.protocol.record_writer import write_json, write_jsonl
 
 WAN21_PRIMARY_MODEL_ID = "Wan-AI/Wan2.1-T2V-1.3B-Diffusers"
 

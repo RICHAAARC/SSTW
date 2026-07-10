@@ -9,7 +9,7 @@ import sys
 
 import pytest
 
-from main.core.progress import (
+from runtime.core.progress import (
     ProgressReporter,
     _BoundedProgressCapture,
     configure_noisy_library_progress,
@@ -17,7 +17,7 @@ from main.core.progress import (
     suppress_third_party_progress_output,
 )
 from external_baseline.official_runtime_progress import run_official_subprocess_with_heartbeat
-from paper_workflow.notebook_utils.streaming_command import run_streaming_command
+from workflows.streaming_command import run_streaming_command
 
 
 @pytest.mark.quick
@@ -245,9 +245,6 @@ def test_runtime_runners_use_dynamic_plan_and_record_counts_for_progress() -> No
         "experiments/generative_video_model_probe/colab_runtime.py": [
             'ProgressReporter("wan21_runtime_generation", len(plan), "video")',
         ],
-        "experiments/sampling_time_constraint/colab_runtime.py": [
-            'ProgressReporter("sampling_time_constraint_generation", len(plan), "constraint_video")',
-        ],
         "experiments/generative_video_model_probe/formal_metric_runner.py": [
             'ProgressReporter("formal_metric_runtime_video_scan", len(generation_records), "runtime_video")',
         ],
@@ -255,8 +252,9 @@ def test_runtime_runners_use_dynamic_plan_and_record_counts_for_progress() -> No
             "total_attack_jobs = len(selection.eligible_generation_records) * len(selected_attack_names)",
             'ProgressReporter("runtime_attack_video_transform", total_attack_jobs, "attack_video")',
         ],
-        "experiments/generative_video_model_probe/detection_runner.py": [
-            'ProgressReporter("runtime_detection_attacked_video_scan", len(runtime_attack_records), "attacked_video")',
+        "experiments/generative_video_model_probe/formal_adaptive_attack_executor.py": [
+            'ProgressReporter(',
+            '"formal_per_video_adaptive_attack"',
         ],
         "experiments/generative_video_model_probe/external_baseline_runner.py": [
             'ProgressReporter("external_baseline_adapter_matrix", len(baseline_records), "baseline_adapter")',
@@ -291,17 +289,12 @@ def test_runtime_runners_suppress_third_party_pipeline_noise() -> None:
             "configure_pipeline_progress_bar(pipe)",
             'suppress_third_party_progress_output("wan21_runtime_single_video_generation")',
         ],
-        "experiments/sampling_time_constraint/colab_runtime.py": [
-            "configure_noisy_library_progress()",
-            "configure_pipeline_progress_bar(pipe)",
-            'suppress_third_party_progress_output("sampling_constraint_single_video_generation")',
-        ],
         "experiments/flow_model_adapter_preflight/wan21_preflight.py": [
             "configure_noisy_library_progress()",
             "configure_pipeline_progress_bar(pipe)",
             'suppress_third_party_progress_output("wan21_preflight_single_video_generation")',
         ],
-        "paper_workflow/notebook_utils/streaming_command.py": [
+        "workflows/streaming_command.py": [
             "NOISY_LIBRARY_ENV_DEFAULTS",
             'env.setdefault("SSTW_SUPPRESS_THIRD_PARTY_PROGRESS", "1")',
             'env.setdefault("SSTW_ENABLE_PIPELINE_PROGRESS_BAR", "0")',
@@ -331,8 +324,7 @@ def test_runtime_runners_suppress_third_party_pipeline_noise() -> None:
 def test_notebook_workflow_helpers_do_not_capture_subprocess_output() -> None:
     """Colab workflow helper 不得使用 capture_output 缓存长耗时 runner 进度。"""
     helper_paths = [
-        Path("paper_workflow/notebook_utils/generative_video_model_probe_workflow.py"),
-        Path("paper_workflow/notebook_utils/sampling_time_constraint_workflow.py"),
+        Path("workflows/generative_video_paper.py"),
         Path("paper_workflow/notebook_utils/flow_model_adapter_preflight_workflow.py"),
     ]
     for helper_path in helper_paths:
@@ -345,7 +337,7 @@ def test_notebook_workflow_helpers_do_not_capture_subprocess_output() -> None:
 def test_formal_comparison_scoring_uses_shared_stage_plan_progress() -> None:
     """formal comparison Notebook 的进度显示必须位于共享 helper, 不能写在 Notebook cell 中。"""
 
-    helper_source = Path("paper_workflow/notebook_utils/generative_video_model_probe_workflow.py").read_text(
+    helper_source = Path("workflows/generative_video_paper.py").read_text(
         encoding="utf-8"
     )
     notebook_source = Path("paper_workflow/colab_notebooks/formal_comparison_scoring_colab.ipynb").read_text(

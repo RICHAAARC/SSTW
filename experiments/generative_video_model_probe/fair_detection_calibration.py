@@ -22,14 +22,14 @@ from experiments.generative_video_model_probe.sstw_formal_result import (
     formal_sstw_clean_negative_record_ready_for_calibration,
     formal_sstw_score_record_ready_for_claim,
 )
-from main.core.digest import build_stable_digest
-from main.attacks.video_runtime_attack_protocol import (
+from runtime.core.digest import build_stable_digest
+from evaluation.attacks.video_runtime_attack_protocol import (
     load_protocol_config_with_shared_attack_protocol,
     required_runtime_attack_names_from_config,
 )
-from main.protocol.flow_evidence_fields import with_flow_evidence_protocol_defaults
-from main.protocol.record_writer import write_json, write_jsonl
-from main.protocol.table_builder import write_csv
+from evaluation.protocol.flow_evidence_fields import with_flow_evidence_protocol_defaults
+from evaluation.protocol.record_writer import write_json, write_jsonl
+from evaluation.protocol.table_builder import write_csv
 
 
 DEFAULT_PROTOCOL_CONFIG = "configs/protocol/probe_paper_generative_probe.json"
@@ -376,6 +376,17 @@ def _fpr_at_threshold(scores: list[float], threshold: float) -> float:
     return sum(1 for score in scores if score >= threshold) / len(scores)
 
 
+def _negative_cluster_scores(rows: Iterable[Mapping[str, Any]]) -> dict[str, float]:
+    """按 clean source video 聚合多个 key trial, 每簇采用最大分数。"""
+
+    grouped: dict[str, float] = {}
+    for row in rows:
+        cluster_id = f"{row.get('prompt_id')}::{row.get('seed_id')}"
+        score = float(row["score"])
+        grouped[cluster_id] = max(grouped.get(cluster_id, float("-inf")), score)
+    return grouped
+
+
 def _threshold_for_target_fpr(scores: list[float], target_fpr: float) -> tuple[float | None, float | None, str]:
     """从 clean negative 分布选择满足 target FPR 的阈值。"""
 
@@ -464,8 +475,10 @@ def _calibrated_method_record(
     threshold_negative_rows = calibration_negative_rows if split_required else negative_rows
     fpr_negative_rows = heldout_negative_rows if split_required else negative_rows
     eval_positive_rows = heldout_positive_rows if split_required else positive_rows
-    negative_scores = [row["score"] for row in threshold_negative_rows]
-    heldout_negative_scores = [row["score"] for row in fpr_negative_rows]
+    calibration_negative_cluster_scores = _negative_cluster_scores(threshold_negative_rows)
+    heldout_negative_cluster_scores = _negative_cluster_scores(fpr_negative_rows)
+    negative_scores = list(calibration_negative_cluster_scores.values())
+    heldout_negative_scores = list(heldout_negative_cluster_scores.values())
     positive_scores = [row["score"] for row in eval_positive_rows]
     positive_attack_names = sorted({str(row["attack_name"]) for row in eval_positive_rows if row.get("attack_name")})
     required_attack_names = [str(item) for item in context.get("required_runtime_attack_names", []) if str(item)]
@@ -476,6 +489,7 @@ def _calibrated_method_record(
         heldout_fpr = round(float(heldout_fpr), 6)
     detected_count = 0
     positive_detection_units: list[dict[str, Any]] = []
+    negative_detection_units: list[dict[str, Any]] = []
     if threshold is not None:
         detected_count = sum(1 for score in positive_scores if score >= threshold)
         positive_detection_units = [
@@ -490,6 +504,14 @@ def _calibrated_method_record(
             }
             for row in eval_positive_rows
         ]
+        negative_detection_units = [
+            {
+                "statistical_cluster_id": cluster_id,
+                "cluster_maximum_score": score,
+                "false_positive_at_target_fpr": score >= threshold,
+            }
+            for cluster_id, score in sorted(heldout_negative_cluster_scores.items())
+        ]
     tpr = round(detected_count / len(positive_scores), 6) if positive_scores else None
     ci_lower, ci_upper = _wilson_interval(detected_count, len(positive_scores))
     semantics = next(
@@ -501,12 +523,13 @@ def _calibrated_method_record(
         default_score_semantics,
     )
     missing_reasons: list[str] = []
-    if len(negative_rows) < int(context["minimum_clean_negative_count"]):
+    all_negative_cluster_count = len(_negative_cluster_scores(negative_rows))
+    if all_negative_cluster_count < int(context["minimum_clean_negative_count"]):
         missing_reasons.append("clean_negative_score_count_below_minimum")
     if split_required:
-        if len(calibration_negative_rows) < int(context.get("minimum_calibration_negative_event_count") or 0):
+        if len(calibration_negative_cluster_scores) < int(context.get("minimum_calibration_negative_event_count") or 0):
             missing_reasons.append("calibration_clean_negative_score_count_below_minimum")
-        if len(heldout_negative_rows) < int(context.get("minimum_heldout_test_negative_event_count") or 0):
+        if len(heldout_negative_cluster_scores) < int(context.get("minimum_heldout_test_negative_event_count") or 0):
             missing_reasons.append("heldout_clean_negative_score_count_below_minimum")
         if len(heldout_positive_rows) < int(context.get("minimum_heldout_attacked_positive_event_count") or 0):
             missing_reasons.append("heldout_attacked_positive_score_count_below_minimum")
@@ -536,9 +559,12 @@ def _calibrated_method_record(
         "score_orientation": "higher_is_more_watermarked",
         "positive_score_field": positive_rows[0]["score_field"] if positive_rows else positive_score_fields[0],
         "clean_negative_score_field": negative_rows[0]["score_field"] if negative_rows else (embedded_negative_score_fields or negative_score_fields or ("missing",))[0],
-        "clean_negative_score_count": len(negative_rows),
-        "calibration_clean_negative_score_count": len(calibration_negative_rows),
-        "heldout_clean_negative_score_count": len(heldout_negative_rows),
+        "clean_negative_score_count": all_negative_cluster_count,
+        "clean_negative_raw_trial_count": len(negative_rows),
+        "calibration_clean_negative_score_count": len(calibration_negative_cluster_scores),
+        "calibration_clean_negative_raw_trial_count": len(calibration_negative_rows),
+        "heldout_clean_negative_score_count": len(heldout_negative_cluster_scores),
+        "heldout_clean_negative_raw_trial_count": len(heldout_negative_rows),
         "attacked_positive_score_count": len(positive_rows),
         "heldout_attacked_positive_score_count": len(heldout_positive_rows),
         "threshold_protocol": context.get("threshold_protocol"),
@@ -557,6 +583,8 @@ def _calibrated_method_record(
             positive_detection_units,
             key=lambda item: str(item["comparison_anchor_key"]),
         ),
+        "negative_detection_units_at_target_fpr": negative_detection_units,
+        "statistical_independent_unit": "source_video_prompt_seed",
         "calibrated_threshold": threshold,
         "threshold_selection_policy": threshold_policy,
         "heldout_fpr_at_calibrated_threshold": heldout_fpr,
@@ -603,7 +631,7 @@ def build_fair_detection_calibration_records(
         negative_score_fields=("sstw_clean_negative_score", "clean_negative_score", "sstw_raw_detector_score", "sstw_score", "raw_detector_score"),
         embedded_negative_score_fields=("sstw_clean_negative_score", "clean_negative_score"),
         score_semantics_field="sstw_score_semantics",
-        default_score_semantics="sstw_key_conditioned_video_content_detector_score",
+        default_score_semantics="calibrated_probability_posterior_with_fixed_fpr_threshold",
         context=context,
         positive_record_ready_predicate=formal_sstw_score_record_ready_for_claim,
         negative_record_ready_predicate=formal_sstw_clean_negative_record_ready_for_calibration,

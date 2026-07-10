@@ -4,18 +4,18 @@ from __future__ import annotations
 
 import argparse
 import json
-import math
 from pathlib import Path
 from statistics import mean
 from typing import Any, Iterable
 
-from main.attacks.video_runtime_attack_protocol import (
+from evaluation.statistics.clustered_inference import clustered_mean_interval
+from evaluation.attacks.video_runtime_attack_protocol import (
     load_protocol_config_with_shared_attack_protocol,
     required_runtime_attack_names_from_config,
 )
-from main.protocol.flow_evidence_fields import with_flow_evidence_protocol_defaults
-from main.protocol.record_writer import write_json, write_jsonl
-from main.protocol.table_builder import write_csv
+from evaluation.protocol.flow_evidence_fields import with_flow_evidence_protocol_defaults
+from evaluation.protocol.record_writer import write_json, write_jsonl
+from evaluation.protocol.table_builder import write_csv
 
 
 DEFAULT_PROTOCOL_CONFIG = "configs/protocol/probe_paper_generative_probe.json"
@@ -80,47 +80,6 @@ def _mean(values: list[float]) -> float | None:
     return round(mean(values), 6) if values else None
 
 
-def _sample_variance(values: list[float]) -> float:
-    """计算样本方差, 样本不足时返回 0。"""
-    if len(values) < 2:
-        return 0.0
-    value_mean = mean(values)
-    return sum((value - value_mean) ** 2 for value in values) / (len(values) - 1)
-
-
-def _normal_difference_interval(reference_scores: list[float], baseline_scores: list[float]) -> tuple[float | None, float | None, str]:
-    """计算两个均值差的轻量 95% 正态近似区间。"""
-    if not reference_scores or not baseline_scores:
-        return None, None, "missing_scores"
-    delta = float(mean(reference_scores) - mean(baseline_scores))
-    variance = _sample_variance(reference_scores) / len(reference_scores) + _sample_variance(baseline_scores) / len(baseline_scores)
-    if variance <= 0:
-        return round(delta, 6), round(delta, 6), "degenerate_interval_singleton_or_zero_variance"
-    half_width = 1.96 * math.sqrt(variance)
-    return round(delta - half_width, 6), round(delta + half_width, 6), "normal_approx_difference_of_means"
-
-
-def _normal_difference_of_proportions_interval(
-    reference_tpr: float | None,
-    reference_count: int,
-    baseline_tpr: float | None,
-    baseline_count: int,
-) -> tuple[float | None, float | None, str]:
-    """计算两个 TPR 比例差的轻量 95% 正态近似区间。"""
-
-    if reference_tpr is None or baseline_tpr is None or reference_count <= 0 or baseline_count <= 0:
-        return None, None, "missing_calibrated_tpr"
-    delta = float(reference_tpr) - float(baseline_tpr)
-    variance = (
-        float(reference_tpr) * (1.0 - float(reference_tpr)) / reference_count
-        + float(baseline_tpr) * (1.0 - float(baseline_tpr)) / baseline_count
-    )
-    if variance <= 0:
-        return round(delta, 6), round(delta, 6), "degenerate_interval_singleton_or_zero_variance"
-    half_width = 1.96 * math.sqrt(variance)
-    return round(delta - half_width, 6), round(delta + half_width, 6), "normal_approx_difference_of_tpr_at_target_fpr"
-
-
 def _paired_detection_difference_interval(
     reference_units: dict[str, bool],
     baseline_units: dict[str, bool],
@@ -135,24 +94,28 @@ def _paired_detection_difference_interval(
     shared_keys = sorted(set(reference_units) & set(baseline_units))
     if not shared_keys:
         return None, None, None, 0, "missing_paired_detection_units"
-    differences = [
-        (1.0 if reference_units[key] else 0.0) - (1.0 if baseline_units[key] else 0.0)
-        for key in shared_keys
-    ]
-    delta = float(mean(differences))
-    if len(differences) < 2:
-        return round(delta, 6), round(delta, 6), round(delta, 6), len(differences), "paired_anchor_singleton_interval"
-    value_mean = mean(differences)
-    variance = sum((value - value_mean) ** 2 for value in differences) / (len(differences) - 1)
-    if variance <= 0:
-        return round(delta, 6), round(delta, 6), round(delta, 6), len(differences), "paired_anchor_degenerate_interval"
-    half_width = 1.96 * math.sqrt(variance / len(differences))
+    differences_by_cluster: dict[str, list[float]] = {}
+    for key in shared_keys:
+        parts = key.split("::")
+        if len(parts) < 2:
+            continue
+        cluster_id = "::".join(parts[:2])
+        differences_by_cluster.setdefault(cluster_id, []).append(
+            (1.0 if reference_units[key] else 0.0)
+            - (1.0 if baseline_units[key] else 0.0)
+        )
+    if len(differences_by_cluster) < 2:
+        return None, None, None, len(shared_keys), "insufficient_independent_source_video_clusters"
+    estimate = clustered_mean_interval(
+        differences_by_cluster,
+        purpose="sstw_baseline_paired_detection_difference",
+    )
     return (
-        round(delta, 6),
-        round(delta - half_width, 6),
-        round(delta + half_width, 6),
-        len(differences),
-        "paired_anchor_normal_approx_detection_difference",
+        round(estimate.estimate, 6),
+        round(estimate.confidence_interval_lower, 6),
+        round(estimate.confidence_interval_upper, 6),
+        estimate.observation_count,
+        "paired_source_video_cluster_bootstrap_detection_difference",
     )
 
 
@@ -230,7 +193,7 @@ def build_formal_baseline_difference_interval_records(
 
     rows: list[dict[str, Any]] = []
     claim_support_status = (
-        "formal_baseline_difference_interval_paper_profile_claim_candidate"
+        "formal_baseline_difference_interval_paper_profile_claim_evidence"
         if profile_context["allow_effect_size_claims"]
         else "formal_baseline_difference_interval_paper_profile_only"
     )
@@ -323,8 +286,8 @@ def audit_formal_baseline_difference_interval_records(records: list[dict[str, An
     ]
     decision = "PASS" if records and len(ready_records) == len(records) else "FAIL"
     ready_claim_statuses = {str(record.get("claim_support_status")) for record in ready_records}
-    if decision == "PASS" and ready_claim_statuses == {"formal_baseline_difference_interval_paper_profile_claim_candidate"}:
-        claim_support_status = "formal_baseline_difference_interval_paper_profile_claim_candidate"
+    if decision == "PASS" and ready_claim_statuses == {"formal_baseline_difference_interval_paper_profile_claim_evidence"}:
+        claim_support_status = "formal_baseline_difference_interval_paper_profile_claim_evidence"
         significance_claim_status = "paper_profile_interval_ready_requires_claim_audit"
     elif decision == "PASS":
         claim_support_status = "formal_baseline_difference_interval_paper_profile_only"
@@ -361,7 +324,7 @@ def run_formal_baseline_difference_interval(
         "# Formal Baseline Difference Interval Report\n\n"
         "该报告计算 SSTW 相对 5 个现代 external baseline 的 TPR@target FPR 差值及 95% 置信区间。"
         "当 protocol config 启用 allow_effect_size_claims 时, probe_paper 差值区间用于支撑 target_fpr=0.1 "
-        "的小样本优势结论候选, 且仍需由 claim audit 限定其不能外推到更低 FPR 或更大样本结论。\n\n"
+        "的FPR=0.1 条件下的完整优势结论, 且仍需由 claim audit 限定其不能外推到更低 FPR 或更大样本结论。\n\n"
         f"- formal_baseline_difference_interval_decision: {audit['formal_baseline_difference_interval_decision']}\n"
         f"- paper_result_level: {audit['paper_result_level']}\n"
         f"- target_fpr: {audit['target_fpr']}\n"

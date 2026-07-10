@@ -8,13 +8,13 @@ from pathlib import Path
 from statistics import mean
 from typing import Any, Iterable
 
-from main.attacks.video_runtime_attack_protocol import (
+from evaluation.attacks.video_runtime_attack_protocol import (
     load_protocol_config_with_shared_attack_protocol,
     required_runtime_attack_names_from_config,
 )
-from main.protocol.flow_evidence_fields import with_flow_evidence_protocol_defaults
-from main.protocol.record_writer import write_json, write_jsonl
-from main.protocol.table_builder import write_csv
+from evaluation.protocol.flow_evidence_fields import with_flow_evidence_protocol_defaults
+from evaluation.protocol.record_writer import write_json, write_jsonl
+from evaluation.protocol.table_builder import write_csv
 
 
 DEFAULT_PROTOCOL_CONFIG = "configs/protocol/probe_paper_generative_probe.json"
@@ -143,7 +143,7 @@ def _method_row(
     if metric_status == "missing" and fair_ready and anchor_aligned and missing_required_attack_names:
         missing_reason = "required_runtime_attack_coverage_missing"
     claim_support_status = (
-        "formal_method_baseline_comparison_paper_profile_claim_candidate"
+        "formal_method_baseline_comparison_paper_profile_claim_evidence"
         if profile_context["allow_effect_size_claims"] and metric_status == "measured_formal"
         else "formal_method_baseline_comparison_paper_profile_only"
         if metric_status == "measured_formal"
@@ -246,8 +246,8 @@ def audit_formal_method_baseline_comparison_records(records: list[dict[str, Any]
     )
     decision = "PASS" if records and sstw_ready and not missing_method_ids else "FAIL"
     ready_claim_statuses = {str(record.get("claim_support_status")) for record in ready_rows}
-    if decision == "PASS" and ready_claim_statuses == {"formal_method_baseline_comparison_paper_profile_claim_candidate"}:
-        claim_support_status = "formal_method_baseline_comparison_paper_profile_claim_candidate"
+    if decision == "PASS" and ready_claim_statuses == {"formal_method_baseline_comparison_paper_profile_claim_evidence"}:
+        claim_support_status = "formal_method_baseline_comparison_paper_profile_claim_evidence"
     elif decision == "PASS":
         claim_support_status = "formal_method_baseline_comparison_paper_profile_only"
     else:
@@ -283,7 +283,7 @@ def run_formal_method_baseline_comparison(
         "该报告只聚合已经通过 clean negative calibration 的 fair_detection_calibration records, "
         "主指标为 `tpr_at_target_fpr`。这保证 SSTW 与 5 个现代 external baseline 处在同 FPR、"
         "同攻击锚点、同证据层级的统计表中。若 protocol config 启用 allow_effect_size_claims, "
-        "probe_paper 结果可支撑 target_fpr=0.1 的小样本论文结论候选, 但不能外推到更低 FPR。\n\n"
+        "probe_paper 结果可支撑 target_fpr=0.1 的FPR=0.1 条件下的完整论文结论, 但不能外推到更低 FPR。\n\n"
         f"- formal_method_baseline_comparison_decision: {audit['formal_method_baseline_comparison_decision']}\n"
         f"- paper_result_level: {audit['paper_result_level']}\n"
         f"- target_fpr: {audit['target_fpr']}\n"

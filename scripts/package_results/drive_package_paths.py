@@ -9,8 +9,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from main.protocol.package_naming import build_package_file_stem, sanitize_filename_token
-from paper_workflow.colab_utils.stage_package_sync import stage_package_dir
+from evaluation.protocol.package_naming import build_package_file_stem, sanitize_filename_token
+from workflows.stage_package_sync import stage_package_dir
 
 
 DEFAULT_DRIVE_PROJECT_ROOT = "/content/drive/MyDrive/SSTW"
@@ -99,8 +99,6 @@ def archive_run_root_for_stage(
         return f"runs/generative_video_model_probe/{profile}"
     if package_id == "motion_threshold_calibration_colab":
         return "runs/generative_video_model_probe/motion_calibration"
-    if package_id == "sampling_time_constraint_colab":
-        return "runs/sampling_time_constraint_colab"
     if package_id == "wan21_flow_adapter_preflight_colab":
         return "runs/wan21_flow_adapter_preflight"
     return f"runs/{package_id}"

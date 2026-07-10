@@ -6,7 +6,7 @@ import json
 from pathlib import Path
 from typing import Any, Iterable, Mapping
 
-from main.core.digest import build_stable_digest
+from runtime.core.digest import build_stable_digest
 
 
 RUNTIME_DETECTION_RECORD_PATH = Path("records/runtime_detection_records.jsonl")

@@ -9,9 +9,9 @@ from statistics import mean
 from typing import Any
 
 from experiments.generative_video_model_probe.validation_internal_ablation import VALIDATION_ABLATION_VARIANTS
-from main.protocol.flow_evidence_fields import with_flow_evidence_protocol_defaults
-from main.protocol.record_writer import write_json, write_jsonl
-from main.protocol.table_builder import write_csv
+from evaluation.protocol.flow_evidence_fields import with_flow_evidence_protocol_defaults
+from evaluation.protocol.record_writer import write_json, write_jsonl
+from evaluation.protocol.table_builder import write_csv
 
 
 FULL_METHOD_VARIANT = "sstw_full_method"

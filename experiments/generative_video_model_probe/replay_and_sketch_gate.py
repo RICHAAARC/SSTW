@@ -1,13 +1,9 @@
-"""replay/sketch gate 的 paper profile 工程 runner。
+"""replay/sketch gate 的 paper profile 正式 runner.
 
-该模块把已经落盘的 generation records 与 trajectory trace 转换为四类可审计 records:
-1. authenticated trajectory sketch verification;
-2. replay uncertainty weighting;
-3. wrong sampler replay control;
-4. wrong prompt replay control。
-
-该实现属于 paper profile 工程闭环。它可以证明 replay/sketch 协议入口、records、table、report 和 gate
-能够由 governed records 自动重建, 但不会把 owner-side diagnostic 伪装成 full-paper 强 Claim-3。
+该模块消费真实攻击后视频 replay records, 并审计 authenticated sketch, replay
+uncertainty, wrong key, wrong sampler, wrong prompt 和 wrong time grid 控制. 只有
+校准概率后验, 固定路径假设检验和全部控制同时通过时, 才允许 Claim-3 完整支持.
+owner-side diagnostic 只能形成 FAIL 关闭记录, 不能替代正式 replay 证据.
 """
 
 from __future__ import annotations
@@ -21,16 +17,18 @@ from statistics import mean
 from typing import Any, Iterable
 
 from experiments.generative_video_model_probe.formal_motion_claim_filter import select_motion_claim_generation_records
-from main.core.digest import build_stable_digest
+from runtime.core.digest import build_stable_digest
 from main.methods.state_space_watermark.authenticated_trajectory_sketch import verify_authenticated_trajectory_sketch
-from main.protocol.flow_evidence_fields import with_flow_evidence_protocol_defaults
-from main.protocol.record_writer import write_json, write_jsonl
-from main.protocol.table_builder import write_csv
+from evaluation.protocol.flow_evidence_fields import with_flow_evidence_protocol_defaults
+from evaluation.protocol.record_writer import write_json, write_jsonl
+from evaluation.protocol.table_builder import write_csv
 
 
 REPLAY_AND_SKETCH_CLAIM_SUPPORT_STATUS = "replay_and_sketch_owner_side_diagnostic_only"
 REPLAY_AND_SKETCH_EVIDENCE_LEVEL = "owner_side_runtime_trace_diagnostic"
-FULL_CLAIM3_EVIDENCE_LEVEL = "attacked_video_wan_vae_model_velocity_replay_with_hmac_sketch"
+FULL_CLAIM3_EVIDENCE_LEVEL = (
+    "attacked_video_key_independent_inversion_hypothesis_replay_with_hmac_sketch"
+)
 REPLAY_RECORD_TABLE_FIELDS = (
     "record_version",
     "replay_record_type",
@@ -139,11 +137,17 @@ def _build_full_claim3_records(run_root: Path) -> dict[str, list[dict[str, Any]]
             "attack_name": evidence.get("attack_name"),
             "method_variant": evidence.get("method_variant"),
             "replay_and_sketch_evidence_level": FULL_CLAIM3_EVIDENCE_LEVEL,
-            "claim_support_status": "claim3_attacked_video_replay_posterior_candidate",
+            "claim_support_status": "claim3_attacked_video_replay_posterior_evidence",
             "trajectory_source_level": "attacked_video_model_velocity_inversion_replay",
             "flow_state_admissibility_status": evidence.get("flow_state_admissibility_status"),
             "flow_posterior_confidence": evidence.get("flow_posterior_confidence"),
+            "flow_watermark_posterior_probability": evidence.get("flow_watermark_posterior_probability"),
+            "flow_watermark_posterior_log_odds": evidence.get("flow_watermark_posterior_log_odds"),
             "flow_state_posterior_entropy": evidence.get("flow_state_posterior_entropy"),
+            "flow_detector_score_source": evidence.get("flow_detector_score_source"),
+            "replay_log_likelihood_ratio_mean": evidence.get("replay_log_likelihood_ratio_mean"),
+            "threshold_source_split": evidence.get("threshold_source_split"),
+            "test_time_threshold_update_blocked": evidence.get("test_time_threshold_update_blocked"),
             "S_final_conservative": evidence.get("S_final_conservative"),
         }
         sketch_record = {
@@ -159,7 +163,8 @@ def _build_full_claim3_records(run_root: Path) -> dict[str, list[dict[str, Any]]
 
         replay_ready = (
             evidence.get("replay_inversion_status") == "ready"
-            and evidence.get("formal_flow_evidence_level") == "attacked_video_wan_vae_model_velocity_replay"
+            and evidence.get("formal_flow_evidence_level")
+            == "attacked_video_key_independent_inversion_hypothesis_replay"
             and evidence.get("replay_trajectory_source") == "attacked_video_endpoint_model_velocity_inversion"
         )
         groups["replay_uncertainty_records"].append({
@@ -442,8 +447,15 @@ def audit_replay_and_sketch_records(record_groups: dict[str, list[dict[str, Any]
         posterior_ready_count = sum(
             1
             for record in uncertainty_records
-            if record.get("flow_posterior_confidence") is not None
+            if record.get("flow_watermark_posterior_probability") is not None
+            and 0.0 <= float(record["flow_watermark_posterior_probability"]) <= 1.0
+            and record.get("flow_watermark_posterior_log_odds") is not None
             and record.get("flow_state_posterior_entropy") is not None
+            and record.get("replay_log_likelihood_ratio_mean") is not None
+            and record.get("flow_detector_score_source")
+            == "group_cross_fitted_calibrated_probability_posterior"
+            and record.get("threshold_source_split") == "calibration"
+            and record.get("test_time_threshold_update_blocked") is True
             and record.get("S_final_conservative") is not None
         )
         minimum_replay_reliability_mean = 0.5
@@ -545,7 +557,6 @@ def run_replay_and_sketch_gate(run_root: str | Path) -> dict[str, Any]:
         "claim_2_path_evidence_independent_gain_decision": "PASS" if claim2_pass else "FAIL",
         "claim_3_attacked_video_replay_posterior_decision": "PASS" if claim3_pass else "FAIL",
         "complete_paper_mechanism_claim_decision": "PASS" if claim1_pass and claim2_pass and claim3_pass else "FAIL",
-        "claim3_downgrade_allowed": False,
         "claim3_full_support_allowed": claim3_pass,
         "claim_support_status": "sstw_complete_three_layer_claim_supported"
         if claim1_pass and claim2_pass and claim3_pass

@@ -1,7 +1,0 @@
-{
-  "ablation_family": "admissibility",
-  "variants": [
-    "key_conditioned_state_space_inference",
-    "key_conditioned_state_space_without_admissibility"
-  ]
-}

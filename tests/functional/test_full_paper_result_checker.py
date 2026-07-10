@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from main.protocol.record_writer import write_json, write_jsonl
+from evaluation.protocol.record_writer import write_json, write_jsonl
 from scripts.check_results.full_paper_result_checker import build_full_paper_result_checker_audit
 
 

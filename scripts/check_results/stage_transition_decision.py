@@ -13,11 +13,11 @@ import json
 from pathlib import Path
 from typing import Any, Mapping
 
-from main.attacks.video_runtime_attack_protocol import PAPER_PROFILE_RUNTIME_ATTACKS
-from main.protocol.flow_evidence_fields import with_flow_evidence_protocol_defaults
-from main.protocol.paper_result_formality_guard import paper_claim_id_for_level
-from main.protocol.record_writer import write_json, write_jsonl
-from main.protocol.table_builder import write_csv
+from evaluation.attacks.video_runtime_attack_protocol import PAPER_PROFILE_RUNTIME_ATTACKS
+from evaluation.protocol.flow_evidence_fields import with_flow_evidence_protocol_defaults
+from evaluation.protocol.paper_result_formality_guard import paper_claim_id_for_level
+from evaluation.protocol.record_writer import write_json, write_jsonl
+from evaluation.protocol.table_builder import write_csv
 
 
 TRANSITION_SPECS: dict[str, dict[str, Any]] = {
@@ -193,7 +193,7 @@ def _paper_profile_fair_gate_missing_requirements(
     if (_safe_int(source_payload.get("sstw_measured_formal_record_count")) or 0) <= 0:
         missing.append(f"{missing_prefix}_sstw_measured_formal_records_ready")
     if source_payload.get("sstw_measured_formal_status") not in {
-        "sstw_measured_formal_paper_profile_claim_candidate",
+        "sstw_measured_formal_paper_profile_claim_evidence",
     }:
         missing.append(f"{missing_prefix}_sstw_measured_formal_status_ready")
 
@@ -205,13 +205,13 @@ def _paper_profile_fair_gate_missing_requirements(
         missing.append(f"{missing_prefix}_formal_method_baseline_comparison_ready")
     if source_payload.get("fair_detection_calibration_status") != "fair_detection_calibration_paper_profile_ready":
         missing.append(f"{missing_prefix}_fair_detection_calibration_status_ready")
-    if source_payload.get("formal_method_baseline_comparison_status") != "formal_method_baseline_comparison_paper_profile_claim_candidate":
+    if source_payload.get("formal_method_baseline_comparison_status") != "formal_method_baseline_comparison_paper_profile_claim_evidence":
         missing.append(f"{missing_prefix}_formal_method_baseline_comparison_status_ready")
 
     interval_count = _safe_int(source_payload.get("formal_baseline_difference_interval_ready_count"))
     if interval_count is None or (required_baseline_count and interval_count < required_baseline_count):
         missing.append(f"{missing_prefix}_formal_baseline_difference_interval_ready")
-    if source_payload.get("formal_baseline_difference_interval_status") != "formal_baseline_difference_interval_paper_profile_claim_candidate":
+    if source_payload.get("formal_baseline_difference_interval_status") != "formal_baseline_difference_interval_paper_profile_claim_evidence":
         missing.append(f"{missing_prefix}_formal_baseline_difference_interval_status_ready")
     return missing
 

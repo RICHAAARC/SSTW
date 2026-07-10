@@ -25,7 +25,8 @@ from main.methods.state_space_watermark.replay_inversion import (
     ReplayTrajectory,
     ReplayUncertainty,
     estimate_replay_uncertainty,
-    run_flow_inversion_and_replay,
+    evaluate_candidate_on_fixed_inversion,
+    run_key_independent_inversion_hypothesis,
 )
 from main.methods.state_space_watermark.velocity_field_constraint import (
     VelocityFieldConstraintConfig,
@@ -178,12 +179,11 @@ def _path_evidence_from_replay(
     *,
     key_text: str,
     tubelet_config: FlowTubeletKeyCodeConfig,
-    velocity_function: Any,
     schedule: Sequence[FlowSchedulePoint],
 ) -> dict[str, float | int | None]:
-    """从攻击后视频恢复出的 forward states 计算同源路径证据。"""
+    """在 key 无关固定反演路径上计算候选 key 投影证据。"""
 
-    states = trajectory.forward_states
+    states = trajectory.reverse_states
     if len(states) != len(schedule):
         raise RuntimeError("replay states 与 Flow schedule 长度不一致")
     direction, _metadata = build_flow_tubelet_key_direction_like(
@@ -193,8 +193,11 @@ def _path_evidence_from_replay(
     )
     records: list[dict[str, Any]] = []
     for step_index in range(len(states) - 1):
+        delta_sigma = float(schedule[step_index + 1].sigma) - float(schedule[step_index].sigma)
+        if abs(delta_sigma) <= 1e-12:
+            continue
         phase = step_index / max(1, len(states) - 2)
-        velocity = velocity_function(states[step_index], schedule[step_index].timestep, step_index)
+        velocity = (states[step_index + 1] - states[step_index]) / delta_sigma
         records.append(compute_path_step_observation(
             states[step_index],
             states[step_index + 1],
@@ -214,13 +217,12 @@ def score_replay_trajectory_for_key(
 ) -> dict[str, float | int | None]:
     """在不重复模型推理的情况下为另一把 key 重算 replay 路径证据。
 
-    replay forward states 已由真实 Wan velocity 产生。相邻状态除以 sigma 差即可
-    恢复当前数值积分实际使用的 velocity, 因而 clean negative 的多 key 校准不需要
-    为每个 key 重复执行昂贵的 Transformer replay。
+    固定反演路径只由 attacked-video endpoint 和基础 Wan velocity 决定。候选 key
+    仅用于读取该路径的投影, 因而 clean negative 的多 key 校准不会重新构造观测。
     """
 
     tubelet_config = tubelet_config or FlowTubeletKeyCodeConfig()
-    states = trajectory.forward_states
+    states = trajectory.reverse_states
     if len(states) != len(schedule):
         raise RuntimeError("replay states 与 Flow schedule 长度不一致")
     direction, _metadata = build_flow_tubelet_key_direction_like(
@@ -243,6 +245,46 @@ def score_replay_trajectory_for_key(
             flow_phase=phase,
         ).as_dict())
     return aggregate_path_observations(records)
+
+
+def evaluate_fixed_wan_replay_hypothesis_for_key(
+    pipeline: Any,
+    replay: WanFlowReplayResult,
+    *,
+    prompt: str,
+    key_text: str,
+    negative_prompt: str | None = None,
+    guidance_scale: float = 5.0,
+    tubelet_config: FlowTubeletKeyCodeConfig | None = None,
+) -> tuple[ReplayTrajectory, dict[str, float | int | None]]:
+    """在固定 attacked-video 反演观测上评估另一把候选 key。"""
+
+    tubelet_config = tubelet_config or FlowTubeletKeyCodeConfig()
+    base_velocity = WanPromptConditionedVelocity(
+        pipeline,
+        prompt=prompt,
+        negative_prompt=negative_prompt,
+        guidance_scale=guidance_scale,
+    )
+    keyed_velocity = WanKeyConditionedVelocity(
+        base_velocity,
+        key_text=key_text,
+        total_steps=len(replay.primary_schedule),
+        tubelet_config=tubelet_config,
+    )
+    fixed = replay.replay_trajectories[replay.primary_replay_index]
+    hypothesis = evaluate_candidate_on_fixed_inversion(
+        replay.endpoint_latent,
+        replay.primary_schedule,
+        fixed,
+        keyed_velocity,
+    )
+    return hypothesis, score_replay_trajectory_for_key(
+        hypothesis,
+        replay.primary_schedule,
+        key_text=key_text,
+        tubelet_config=tubelet_config,
+    )
 
 
 def run_wan_control_replay(
@@ -278,12 +320,16 @@ def run_wan_control_replay(
         total_steps=len(schedule),
         tubelet_config=tubelet_config,
     )
-    trajectory = run_flow_inversion_and_replay(endpoint_latent, schedule, keyed_velocity)
+    trajectory = run_key_independent_inversion_hypothesis(
+        endpoint_latent,
+        schedule,
+        velocity,
+        keyed_velocity,
+    )
     path_evidence = _path_evidence_from_replay(
         trajectory,
         key_text=key_text,
         tubelet_config=tubelet_config,
-        velocity_function=keyed_velocity,
         schedule=schedule,
     )
     return trajectory, tuple(schedule), path_evidence
@@ -317,7 +363,6 @@ def run_wan_attacked_video_replay(
     )
     replay_rows: list[ReplayTrajectory] = []
     schedules: list[list[FlowSchedulePoint]] = []
-    keyed_velocities: list[WanKeyConditionedVelocity] = []
     for step_count in replay_step_counts:
         if int(step_count) < 2:
             raise ValueError("replay step count 必须至少为2")
@@ -333,15 +378,19 @@ def run_wan_attacked_video_replay(
             total_steps=len(schedule),
             tubelet_config=tubelet_config,
         )
-        keyed_velocities.append(keyed_velocity)
-        replay_rows.append(run_flow_inversion_and_replay(endpoint_latent, schedule, keyed_velocity))
+        replay_rows.append(run_key_independent_inversion_hypothesis(
+            endpoint_latent,
+            schedule,
+            base_velocity,
+            keyed_velocity,
+        ))
     uncertainty = estimate_replay_uncertainty(replay_rows)
-    primary_index = min(range(len(replay_rows)), key=lambda index: replay_rows[index].cycle_relative_error)
+    # 主网格固定为预注册列表的中间项, 禁止按结果挑选最有利网格。
+    primary_index = len(replay_rows) // 2
     path_evidence = _path_evidence_from_replay(
         replay_rows[primary_index],
         key_text=key_text,
         tubelet_config=tubelet_config,
-        velocity_function=keyed_velocities[primary_index],
         schedule=schedules[primary_index],
     )
     return WanFlowReplayResult(

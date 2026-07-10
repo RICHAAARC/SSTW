@@ -14,7 +14,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from main.protocol.package_naming import build_package_batch_id, current_short_commit, current_utc_time_for_filename
+from evaluation.protocol.package_naming import build_package_batch_id, current_short_commit, current_utc_time_for_filename
 from scripts.package_results.drive_package_paths import (
     DEFAULT_DRIVE_PROJECT_ROOT,
     archive_run_root_for_stage,

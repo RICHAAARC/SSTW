@@ -20,7 +20,7 @@ from experiments.generative_video_model_probe.validation_artifact_rebuild import
 from experiments.generative_video_model_probe.paper_result_artifact_builders import (
     PAPER_RESULT_ARTIFACT_RELPATHS,
 )
-from main.protocol.record_writer import write_json
+from evaluation.protocol.record_writer import write_json
 
 
 PAPER_PROFILE_SHARED_PACKAGE_RELPATHS = (
@@ -28,6 +28,11 @@ PAPER_PROFILE_SHARED_PACKAGE_RELPATHS = (
     "artifacts/validation_artifact_rebuild_dry_run_decision.json",
     "artifacts/data_split_and_leakage_guard_decision.json",
     "artifacts/paper_result_artifact_skeleton_decision.json",
+    "records/reviewer_evidence_index_records.jsonl",
+    "tables/reviewer_evidence_index_table.csv",
+    "artifacts/reviewer_evidence_index_decision.json",
+    "reports/reviewer_evidence_index.json",
+    "reports/reviewer_evidence_index.md",
 )
 
 

@@ -141,7 +141,7 @@ explicit_dtw_temporal_alignment_adapter: implemented_proxy_control
 explicit_frame_matching_temporal_registration_adapter: implemented_proxy_control
 modern_video_watermark_baseline_adapter: self_contained_project_execution_required
 baseline_comparison_output_chain: implemented
-claim_support_status: measured_formal_self_contained_results_required_for_probe_paper_probe_paper_pilot_paper_and_full_paper
+claim_support_status: measured_formal_self_contained_results_required_for_probe_paper_pilot_paper_and_full_paper
 ```
 
 ## 后续工作
@@ -153,7 +153,7 @@ claim_support_status: measured_formal_self_contained_results_required_for_probe_
 4. 默认使用 repository bridge + official inner command; 不要求用户手写 5 个主实验 `SSTW_<BASELINE>_EVAL_COMMAND`。只有在官方仓库新增更合适 CLI 时, 才通过 `SSTW_<BASELINE>_NATIVE_EVAL_COMMAND` 覆盖单个 baseline。
 6. 在 5 个主实验 official bundle 全部完成后运行 `paper_workflow/colab_notebooks/formal_comparison_scoring_colab.ipynb`, 由该阶段恢复全部 official reference 阶段包后执行全量统一转写、self-containment 判定、公平校准和差值区间统计。随后 `paper_evidence_postprocess_colab.ipynb` 生成辅助证据, `paper_gate_and_package_colab.ipynb` 恢复 runtime、motion threshold、formal comparison scoring 和 paper evidence postprocess 阶段包并执行最终门禁与打包。
 7. 写出 `artifacts/external_baseline_self_containment_decision.json`, 逐 baseline 记录 clone / build / run / adapt / record 状态。
-8. 仅当全部现代 baseline 都产生项目内自包含 governed `measured_formal` records 后, 才允许 probe_paper gate 通过; probe_paper 通过后还必须生成 probe_paper_to_pilot_paper_transition_decision 才能进入 pilot_paper; probe_paper 通过后再生成 probe_paper_to_pilot_paper_transition_decision 才能进入 pilot_paper, full_paper 仍需 pilot_paper gate、pilot_paper_to_full_paper_transition_decision 与 full_paper_result_checker。
+8. 仅当全部现代 baseline 都产生项目内自包含 governed `measured_formal` records 后, 才允许 probe_paper gate 通过; probe_paper 通过后必须生成 probe_paper_to_pilot_paper_transition_decision 才能进入 pilot_paper, full_paper 仍需 pilot_paper gate、pilot_paper_to_full_paper_transition_decision 与 full_paper_result_checker。
 ```
 
 
@@ -181,7 +181,7 @@ external_baseline_threshold 或 threshold
 {run_root}
 ```
 
-若命令未配置、项目内 clone / build / run / adapt / record 任一缺失, 或输出缺失, adapter 必须写出 unsupported / non-run record, 并使 `probe_paper`、`probe_paper`、`pilot_paper` 和 `full_paper` 相关检查失败。该设计保证 `pilot_paper` 与后续更大规模 paper 运行的差异由 protocol config 显式记录; baseline 自包含产出规则不得存在协议缺口。
+若命令未配置、项目内 clone / build / run / adapt / record 任一缺失, 或输出缺失, adapter 必须写出 unsupported / non-run record, 并使 `probe_paper`、`pilot_paper` 和 `full_paper` 相关检查失败。该设计保证 `pilot_paper` 与后续更大规模 paper 运行的差异由 protocol config 显式记录; baseline 自包含产出规则不得存在协议缺口。
 
 ### 6. Notebook role 边界
 

@@ -195,9 +195,9 @@ Sign_server(hash)
 2. 验证 replay uncertainty 已参与 posterior weighting, 而不是只作为报告指标。
 3. 验证 wrong sampler、wrong prompt 和 wrong time grid replay 不能伪造正确轨迹。
 4. 验证 replay negative 与 sampler-mismatch negative 的 FPR tail 受控。
-5. 在证据不足时触发 Claim-3 downgrade, 防止 unsupported robust replay verification claim。
+5. 在证据不足时阻断当前 paper profile, 防止 unsupported robust replay verification claim。
 
-因此, 项目可以短期使用 `Claim-3 downgrade gate` 推进 probe_paper, 但最终若要把 Claim-3 作为强创新性贡献, 必须实现并通过 `replay/sketch gate`。
+因此, `probe_paper` 也必须实现并通过完整 `replay/sketch gate`; 它与后续 profile 的机制和判定要求相同, 只在目标 FPR、样本量与统计置信度上不同。
 
 ## 11. P9: Baseline-Separated Evaluation
 

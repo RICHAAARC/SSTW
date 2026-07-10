@@ -6,12 +6,12 @@ import zipfile
 
 import pytest
 
-from paper_workflow.colab_utils.stage_package_sync import (
+from workflows.stage_package_sync import (
     hydrate_external_baseline_resource_packages,
     latest_stage_package_zip,
     publish_colab_stage_package,
 )
-from paper_workflow.notebook_utils.generative_video_model_probe_workflow import build_drive_packaging_command
+from workflows.generative_video_paper import build_drive_packaging_command
 
 
 def _write_probe_paper_package_pass_manifest(run_root: Path) -> None:

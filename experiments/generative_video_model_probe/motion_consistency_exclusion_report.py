@@ -12,9 +12,9 @@ from experiments.generative_video_model_probe.formal_motion_claim_filter import 
     record_identity_key,
     select_motion_claim_generation_records,
 )
-from main.protocol.flow_evidence_fields import with_flow_evidence_protocol_defaults
-from main.protocol.record_writer import write_json, write_jsonl
-from main.protocol.table_builder import write_csv
+from evaluation.protocol.flow_evidence_fields import with_flow_evidence_protocol_defaults
+from evaluation.protocol.record_writer import write_json, write_jsonl
+from evaluation.protocol.table_builder import write_csv
 
 
 def _read_jsonl(path: Path) -> list[dict[str, Any]]:

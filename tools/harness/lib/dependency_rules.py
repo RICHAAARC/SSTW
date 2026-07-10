@@ -7,53 +7,19 @@ from pathlib import Path
 
 
 FORBIDDEN_IMPORT_PREFIXES_BY_ROOT = {
-    "main/core": (
-        "main.analysis",
-        "main.cli",
-        "experiments",
-        "scripts",
-        "tests",
-        "tools",
-        "paper_workflow",
-    ),
-    "main/methods": (
-        "main.analysis",
-        "main.cli",
-        "experiments",
-        "scripts",
-        "tests",
-        "tools",
-        "paper_workflow",
-    ),
-    "main/protocol": (
-        "main.analysis",
-        "main.cli",
-        "experiments",
-        "scripts",
-        "tests",
-        "tools",
-        "paper_workflow",
-    ),
-    "main/analysis": (
-        "experiments",
-        "scripts",
-        "tests",
-        "tools",
-        "paper_workflow",
-    ),
-    "main/cli": (
-        "experiments",
-        "scripts",
-        "tests",
-        "tools",
-        "paper_workflow",
-    ),
+    "main": ("runtime", "evaluation", "external_baseline", "experiments", "workflows", "scripts", "paper_workflow", "tests", "tools"),
+    "runtime": ("evaluation", "external_baseline", "experiments", "workflows", "scripts", "paper_workflow", "tests", "tools"),
+    "evaluation": ("experiments", "workflows", "scripts", "paper_workflow", "tests", "tools"),
+    "external_baseline": ("experiments", "workflows", "scripts", "paper_workflow", "tests", "tools"),
+    "experiments": ("workflows", "scripts", "paper_workflow", "tests", "tools"),
+    "workflows": ("paper_workflow", "tests", "tools"),
+    "scripts": ("paper_workflow", "tests", "tools"),
 }
 
 
 def extract_imported_modules(path: Path) -> list[str]:
     """从 Python 文件中提取顶层导入模块名。"""
-    tree = ast.parse(path.read_text(encoding="utf-8"))
+    tree = ast.parse(path.read_text(encoding="utf-8-sig"))
     modules: list[str] = []
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):

@@ -12,8 +12,14 @@ from pathlib import Path
 from statistics import pstdev
 from typing import Any, Iterable, Mapping
 
+from evaluation.statistics.clustered_inference import (
+    clustered_binary_rate_interval,
+    paired_cluster_difference_interval,
+)
+from evaluation.attacks.video_runtime_attack_protocol import load_protocol_config_with_shared_attack_protocol
+
 from experiments.generative_video_model_probe.colab_runtime import _load_video_generation_pipeline, _select_dtype
-from main.core.digest import build_stable_digest
+from runtime.core.digest import build_stable_digest
 from main.methods.state_space_watermark.endpoint_latent_detector import compute_endpoint_latent_evidence
 from main.methods.state_space_watermark.formal_detector import (
     FORMAL_METHOD_VARIANTS,
@@ -22,16 +28,16 @@ from main.methods.state_space_watermark.formal_detector import (
 )
 from main.methods.state_space_watermark.wan_flow_replay_backend import (
     WanFlowReplayResult,
+    evaluate_fixed_wan_replay_hypothesis_for_key,
     run_wan_attacked_video_replay,
     run_wan_control_replay,
-    score_replay_trajectory_for_key,
 )
-from main.protocol.flow_evidence_fields import with_flow_evidence_protocol_defaults
-from main.protocol.record_writer import write_json, write_jsonl
-from main.protocol.table_builder import write_csv
+from evaluation.protocol.flow_evidence_fields import with_flow_evidence_protocol_defaults
+from evaluation.protocol.record_writer import write_json, write_jsonl
+from evaluation.protocol.table_builder import write_csv
 
 
-FORMAL_FLOW_EVIDENCE_LEVEL = "attacked_video_wan_vae_model_velocity_replay"
+FORMAL_FLOW_EVIDENCE_LEVEL = "attacked_video_key_independent_inversion_hypothesis_replay"
 FORMAL_FLOW_DETECTOR_INPUT_CONTRACT = "video_file_prompt_key_model_scheduler_and_frozen_calibration"
 
 
@@ -174,34 +180,59 @@ def _control_payload(
         num_inference_steps=max(2, primary_steps + 3),
         scheduler=wrong_scheduler,
     )
+    def hypothesis_support(trajectory: Any) -> float:
+        likelihood_probability = 1.0 / (
+            1.0 + math.exp(-float(trajectory.replay_log_likelihood_ratio))
+        )
+        return likelihood_probability * math.exp(
+            -max(0.0, float(trajectory.candidate_cycle_relative_error))
+        )
+
     matched_path = float(replay.path_evidence.get("S_path_inv") or 0.0)
     matched_reliability = float(replay.replay_uncertainty.replay_reliability)
-    matched_path_reliability_score = (0.5 + 0.5 * matched_path) * matched_reliability
+    matched_trajectory = replay.replay_trajectories[replay.primary_replay_index]
+    matched_path_reliability_score = (
+        (0.5 + 0.5 * matched_path)
+        * matched_reliability
+        * hypothesis_support(matched_trajectory)
+    )
     wrong_key_path_reliability_score = (
         0.5 + 0.5 * float(wrong_key_path.get("S_path_inv") or 0.0)
-    ) * math.exp(-max(0.0, wrong_key_trajectory.cycle_relative_error))
+    ) * hypothesis_support(wrong_key_trajectory)
     wrong_prompt_path_reliability_score = (
         0.5 + 0.5 * float(wrong_prompt_path.get("S_path_inv") or 0.0)
-    ) * math.exp(-max(0.0, wrong_prompt_trajectory.cycle_relative_error))
+    ) * hypothesis_support(wrong_prompt_trajectory)
     wrong_sampler_path_reliability_score = (
         0.5 + 0.5 * float(wrong_sampler_path.get("S_path_inv") or 0.0)
-    ) * math.exp(-max(0.0, wrong_sampler_trajectory.cycle_relative_error))
+    ) * hypothesis_support(wrong_sampler_trajectory)
     return {
         "wrong_key_endpoint_score": round(wrong_key_endpoint.score, 8),
         "wrong_key_S_path_inv": wrong_key_path.get("S_path_inv"),
         "wrong_key_replay_cycle_error": round(wrong_key_trajectory.cycle_relative_error, 8),
+        "wrong_key_replay_log_likelihood_ratio": round(
+            wrong_key_trajectory.replay_log_likelihood_ratio,
+            8,
+        ),
         "wrong_key_control_margin": round(
             (replay.endpoint_evidence.score + matched_path_reliability_score)
             - (wrong_key_endpoint.score + wrong_key_path_reliability_score),
             8,
         ),
         "wrong_prompt_replay_cycle_error": round(wrong_prompt_trajectory.cycle_relative_error, 8),
+        "wrong_prompt_replay_log_likelihood_ratio": round(
+            wrong_prompt_trajectory.replay_log_likelihood_ratio,
+            8,
+        ),
         "wrong_prompt_S_path_inv": wrong_prompt_path.get("S_path_inv"),
         "wrong_prompt_control_margin": round(
             matched_path_reliability_score - wrong_prompt_path_reliability_score,
             8,
         ),
         "wrong_sampler_replay_cycle_error": round(wrong_sampler_trajectory.cycle_relative_error, 8),
+        "wrong_sampler_replay_log_likelihood_ratio": round(
+            wrong_sampler_trajectory.replay_log_likelihood_ratio,
+            8,
+        ),
         "wrong_sampler_S_path_inv": wrong_sampler_path.get("S_path_inv"),
         "wrong_sampler_control_margin": round(
             matched_path_reliability_score - wrong_sampler_path_reliability_score,
@@ -232,6 +263,12 @@ def _clean_trial_count(config: Mapping[str, Any], split: str, source_count: int)
 def _base_record(source: Mapping[str, Any], *, sample_role: str, method_variant: str) -> dict[str, Any]:
     """构造 positive 与 negative evidence 的共享身份字段。"""
 
+    statistical_cluster_id = build_stable_digest({
+        "generation_model_id": source.get("generation_model_id"),
+        "prompt_id": source.get("prompt_id"),
+        "seed_id": source.get("seed_id"),
+        "split": source.get("split"),
+    })
     return {
         "record_version": "formal_flow_evidence_v1",
         "generation_model_id": source.get("generation_model_id"),
@@ -244,6 +281,9 @@ def _base_record(source: Mapping[str, Any], *, sample_role: str, method_variant:
         "sample_role": sample_role,
         "method_variant": method_variant,
         "attack_name": source.get("attack_name"),
+        "source_video_cluster_id": source.get("trajectory_trace_id"),
+        "statistical_cluster_id": statistical_cluster_id,
+        "statistical_independent_unit": "source_video_prompt_seed",
     }
 
 
@@ -267,7 +307,7 @@ def _score_records_with_frozen_calibration(
     rows = [dict(record) for record in evidence_records]
     calibration_rows: dict[str, list[dict[str, Any]]] = defaultdict(list)
     for record in rows:
-        if record.get("sample_role") == "clean_negative" and record.get("split") == "calibration":
+        if record.get("split") == "calibration":
             calibration_rows[str(record.get("method_variant"))].append(record)
     calibrations = {
         variant: fit_flow_evidence_calibration(
@@ -331,6 +371,7 @@ def _paired_path_gain_records(
             "seed_id": record.get("seed_id"),
             "trajectory_trace_id": record.get("trajectory_trace_id"),
             "attack_name": record.get("attack_name"),
+            "statistical_cluster_id": record.get("statistical_cluster_id"),
             "target_fpr": record.get("target_fpr"),
             "paired_source_method_variant": "sstw_full_method",
             "paired_full_detector_score": full_score,
@@ -345,9 +386,63 @@ def _paired_path_gain_records(
     return rows
 
 
+def _paired_velocity_causal_records(
+    scored_records: Iterable[Mapping[str, Any]],
+) -> list[dict[str, Any]]:
+    """在相同 prompt/seed/attack 上比较完整方法与无速度约束对照。"""
+
+    positives = [
+        record
+        for record in scored_records
+        if record.get("sample_role") == "attacked_positive"
+        and record.get("split") == "test"
+        and record.get("method_variant")
+        in {"sstw_full_method", "without_velocity_constraint"}
+    ]
+    by_identity: dict[tuple[str, str, str, str], dict[str, Mapping[str, Any]]] = defaultdict(dict)
+    for record in positives:
+        identity = (
+            str(record.get("generation_model_id") or ""),
+            str(record.get("prompt_id") or ""),
+            str(record.get("seed_id") or ""),
+            str(record.get("attack_name") or ""),
+        )
+        by_identity[identity][str(record.get("method_variant"))] = record
+    rows: list[dict[str, Any]] = []
+    for identity, variants in by_identity.items():
+        full = variants.get("sstw_full_method")
+        control = variants.get("without_velocity_constraint")
+        if full is None or control is None:
+            continue
+        full_score = float(full.get("S_final_conservative") or 0.0)
+        control_score = float(control.get("S_final_conservative") or 0.0)
+        rows.append({
+            "record_version": "paired_velocity_causal_evidence_v1",
+            "generation_model_id": identity[0],
+            "prompt_id": identity[1],
+            "seed_id": identity[2],
+            "attack_name": identity[3],
+            "statistical_cluster_id": full.get("statistical_cluster_id"),
+            "target_fpr": full.get("target_fpr"),
+            "paired_full_method_score": full_score,
+            "paired_without_velocity_constraint_score": control_score,
+            "paired_velocity_causal_score_gain": round(full_score - control_score, 8),
+            "paired_full_method_decision": bool(full.get("decision")),
+            "paired_without_velocity_constraint_decision": bool(control.get("decision")),
+            "paired_velocity_causal_detection_gain": (
+                int(bool(full.get("decision")))
+                - int(bool(control.get("decision")))
+            ),
+            "metric_status": "measured_formal",
+            "claim_support_status": "claim1_same_unit_velocity_constraint_causal_evidence",
+        })
+    return rows
+
+
 def _audit_three_layer_mechanism(
     scored_records: Iterable[Mapping[str, Any]],
     paired_path_records: Iterable[Mapping[str, Any]],
+    paired_velocity_records: Iterable[Mapping[str, Any]],
     *,
     target_fpr: float,
 ) -> dict[str, Any]:
@@ -366,79 +461,80 @@ def _audit_three_layer_mechanism(
         and record.get("method_variant") == "sstw_full_method"
         and record.get("split") == "test"
     ]
-    negative_accept_count = sum(bool(record.get("decision")) for record in full_test_negative)
-    positive_accept_count = sum(bool(record.get("decision")) for record in full_positive)
-    empirical_fpr = negative_accept_count / max(1, len(full_test_negative))
-    positive_tpr = positive_accept_count / max(1, len(full_positive))
-
-    def wilson_interval(successes: int, count: int) -> tuple[float | None, float | None]:
-        if count <= 0:
-            return None, None
-        z = 1.96
-        probability = successes / count
-        denominator = 1.0 + z * z / count
-        center = (probability + z * z / (2.0 * count)) / denominator
-        half_width = z * math.sqrt(
-            probability * (1.0 - probability) / count + z * z / (4.0 * count * count)
-        ) / denominator
-        return max(0.0, center - half_width), min(1.0, center + half_width)
-
-    fpr_ci_lower, fpr_ci_upper = wilson_interval(negative_accept_count, len(full_test_negative))
-    tpr_ci_lower, tpr_ci_upper = wilson_interval(positive_accept_count, len(full_positive))
+    fpr_estimate = clustered_binary_rate_interval(
+        full_test_negative,
+        outcome_field="decision",
+        purpose="claim1_heldout_fpr",
+    )
+    tpr_estimate = clustered_binary_rate_interval(
+        full_positive,
+        outcome_field="decision",
+        purpose="claim1_heldout_tpr",
+    )
     paired = list(paired_path_records)
-    gains = [float(record["paired_path_evidence_score_gain"]) for record in paired]
-    detection_gains = [float(record["paired_path_evidence_detection_gain"]) for record in paired]
-    gain_mean = sum(gains) / len(gains) if gains else 0.0
-    gain_se = pstdev(gains) / math.sqrt(len(gains)) if len(gains) > 1 else math.inf
-    gain_ci_lower = gain_mean - 1.96 * gain_se if math.isfinite(gain_se) else None
-    gain_ci_upper = gain_mean + 1.96 * gain_se if math.isfinite(gain_se) else None
-    detection_gain_mean = sum(detection_gains) / len(detection_gains) if detection_gains else 0.0
-    detection_gain_se = (
-        pstdev(detection_gains) / math.sqrt(len(detection_gains))
-        if len(detection_gains) > 1
-        else math.inf
+    path_score_gain = paired_cluster_difference_interval(
+        paired,
+        difference_field="paired_path_evidence_score_gain",
+        purpose="claim2_path_score_gain",
     )
-    detection_gain_ci_lower = (
-        detection_gain_mean - 1.96 * detection_gain_se
-        if math.isfinite(detection_gain_se)
-        else None
+    path_detection_gain = paired_cluster_difference_interval(
+        paired,
+        difference_field="paired_path_evidence_detection_gain",
+        purpose="claim2_path_detection_gain",
     )
-    detection_gain_ci_upper = (
-        detection_gain_mean + 1.96 * detection_gain_se
-        if math.isfinite(detection_gain_se)
-        else None
+    velocity_paired = list(paired_velocity_records)
+    velocity_score_gain = paired_cluster_difference_interval(
+        velocity_paired,
+        difference_field="paired_velocity_causal_score_gain",
+        purpose="claim1_velocity_score_gain",
+    )
+    velocity_detection_gain = paired_cluster_difference_interval(
+        velocity_paired,
+        difference_field="paired_velocity_causal_detection_gain",
+        purpose="claim1_velocity_detection_gain",
     )
     claim1_pass = (
         bool(full_positive)
         and bool(full_test_negative)
-        and empirical_fpr <= target_fpr
-        and tpr_ci_lower is not None
-        and tpr_ci_lower > target_fpr
+        and bool(velocity_paired)
+        and fpr_estimate.estimate <= target_fpr
+        and tpr_estimate.confidence_interval_lower > target_fpr
+        and velocity_score_gain.confidence_interval_lower > 0.0
+        and velocity_detection_gain.confidence_interval_lower > 0.0
     )
-    claim2_pass = bool(paired) and detection_gain_ci_lower is not None and detection_gain_ci_lower > 0.0
+    claim2_pass = (
+        bool(paired)
+        and path_score_gain.confidence_interval_lower > 0.0
+        and path_detection_gain.confidence_interval_lower > 0.0
+    )
     return {
         "stage_id": "sstw_three_layer_mechanism_evidence",
         "claim_1_velocity_constraint_detectable_watermark_decision": "PASS" if claim1_pass else "FAIL",
         "claim_1_heldout_positive_count": len(full_positive),
         "claim_1_heldout_negative_count": len(full_test_negative),
-        "claim_1_empirical_fpr": round(empirical_fpr, 8),
-        "claim_1_empirical_fpr_ci_95_lower": round(fpr_ci_lower, 8) if fpr_ci_lower is not None else None,
-        "claim_1_empirical_fpr_ci_95_upper": round(fpr_ci_upper, 8) if fpr_ci_upper is not None else None,
-        "claim_1_tpr_at_target_fpr": round(positive_tpr, 8),
-        "claim_1_tpr_ci_95_lower": round(tpr_ci_lower, 8) if tpr_ci_lower is not None else None,
-        "claim_1_tpr_ci_95_upper": round(tpr_ci_upper, 8) if tpr_ci_upper is not None else None,
+        "claim_1_empirical_fpr": round(fpr_estimate.estimate, 8),
+        "claim_1_empirical_fpr_ci_95_lower": round(fpr_estimate.confidence_interval_lower, 8),
+        "claim_1_empirical_fpr_ci_95_upper": round(fpr_estimate.confidence_interval_upper, 8),
+        "claim_1_fpr_statistical_cluster_count": fpr_estimate.cluster_count,
+        "claim_1_tpr_at_target_fpr": round(tpr_estimate.estimate, 8),
+        "claim_1_tpr_ci_95_lower": round(tpr_estimate.confidence_interval_lower, 8),
+        "claim_1_tpr_ci_95_upper": round(tpr_estimate.confidence_interval_upper, 8),
+        "claim_1_tpr_statistical_cluster_count": tpr_estimate.cluster_count,
+        "claim_1_velocity_causal_pair_count": len(velocity_paired),
+        "claim_1_velocity_causal_score_gain_mean": round(velocity_score_gain.estimate, 8),
+        "claim_1_velocity_causal_score_gain_ci_95_lower": round(velocity_score_gain.confidence_interval_lower, 8),
+        "claim_1_velocity_causal_score_gain_ci_95_upper": round(velocity_score_gain.confidence_interval_upper, 8),
+        "claim_1_velocity_causal_detection_gain_mean": round(velocity_detection_gain.estimate, 8),
+        "claim_1_velocity_causal_detection_gain_ci_95_lower": round(velocity_detection_gain.confidence_interval_lower, 8),
+        "claim_1_velocity_causal_detection_gain_ci_95_upper": round(velocity_detection_gain.confidence_interval_upper, 8),
         "claim_2_path_evidence_independent_gain_decision": "PASS" if claim2_pass else "FAIL",
         "claim_2_paired_comparison_count": len(paired),
-        "claim_2_paired_score_gain_mean": round(gain_mean, 8),
-        "claim_2_paired_score_gain_ci_95_lower": round(gain_ci_lower, 8) if gain_ci_lower is not None else None,
-        "claim_2_paired_score_gain_ci_95_upper": round(gain_ci_upper, 8) if gain_ci_upper is not None else None,
-        "claim_2_paired_detection_gain_mean": round(detection_gain_mean, 8),
-        "claim_2_paired_detection_gain_ci_95_lower": round(detection_gain_ci_lower, 8)
-        if detection_gain_ci_lower is not None
-        else None,
-        "claim_2_paired_detection_gain_ci_95_upper": round(detection_gain_ci_upper, 8)
-        if detection_gain_ci_upper is not None
-        else None,
+        "claim_2_paired_score_gain_mean": round(path_score_gain.estimate, 8),
+        "claim_2_paired_score_gain_ci_95_lower": round(path_score_gain.confidence_interval_lower, 8),
+        "claim_2_paired_score_gain_ci_95_upper": round(path_score_gain.confidence_interval_upper, 8),
+        "claim_2_paired_detection_gain_mean": round(path_detection_gain.estimate, 8),
+        "claim_2_paired_detection_gain_ci_95_lower": round(path_detection_gain.confidence_interval_lower, 8),
+        "claim_2_paired_detection_gain_ci_95_upper": round(path_detection_gain.confidence_interval_upper, 8),
         "claim_3_attacked_video_replay_posterior_decision": "PENDING_AUTHENTICATED_REPLAY_GATE",
         "target_fpr": target_fpr,
         "three_layer_mechanism_pre_replay_decision": "PASS" if claim1_pass and claim2_pass else "FAIL",
@@ -455,7 +551,7 @@ def run_formal_flow_evidence(
     """执行完整 Flow evidence、真实 controls 与冻结 fixed-FPR 检测。"""
 
     run_root = Path(run_root)
-    config = _read_json(config_path)
+    config = load_protocol_config_with_shared_attack_protocol(config_path)
     prompt_map = _prompt_text_by_id(_read_json(prompt_suite_path))
     generation_records = _read_jsonl(run_root / "records" / "generation_records.jsonl")
     attack_records = _read_jsonl(run_root / "records" / "runtime_attack_records.jsonl")
@@ -528,7 +624,7 @@ def run_formal_flow_evidence(
         clean_by_split[str(record.get("split") or "test")].append(record)
     for split, sources in clean_by_split.items():
         trial_count = _clean_trial_count(config, split, len(sources))
-        for source in sources:
+        for source_index, source in enumerate(sources):
             try:
                 prompt = prompt_map[str(source.get("prompt_id"))]
                 pipeline = pipelines.get(str(source.get("generation_model_id"))) or pipeline_loader(str(source.get("generation_model_id")))
@@ -540,12 +636,19 @@ def run_formal_flow_evidence(
                     prompt=prompt,
                     key_text=f"{_generation_key(source)}::clean_replay_base",
                 )
-                primary = base_replay.replay_trajectories[base_replay.primary_replay_index]
                 for method_variant in FORMAL_METHOD_VARIANTS:
                     for trial_index in range(trial_count):
                         trial_key = f"{_generation_key(source)}::clean_negative::{method_variant}::{trial_index:06d}"
                         endpoint = compute_endpoint_latent_evidence(base_replay.endpoint_latent, key_text=trial_key)
-                        path = score_replay_trajectory_for_key(primary, base_replay.primary_schedule, key_text=trial_key)
+                        hypothesis, path = evaluate_fixed_wan_replay_hypothesis_for_key(
+                            pipeline,
+                            base_replay,
+                            prompt=prompt,
+                            key_text=trial_key,
+                        )
+                        trial_reliability = math.exp(
+                            -max(0.0, float(hypothesis.candidate_cycle_relative_error))
+                        )
                         payload = {
                             **_base_record(source, sample_role="clean_negative", method_variant=method_variant),
                             "formal_flow_evidence_unit_id": build_stable_digest({
@@ -554,11 +657,22 @@ def run_formal_flow_evidence(
                                 "clean_negative_trial_index": trial_index,
                             }),
                             "clean_negative_trial_index": trial_index,
-                            "negative_family": f"clean_key_family_{trial_index % 4}",
+                            "statistical_within_cluster_trial_index": trial_index,
+                            "negative_family": f"clean_key_family_{(source_index + trial_index) % 4}",
                             "clean_negative_video_path": str(video_path),
                             **endpoint.as_dict(),
                             **path,
-                            **base_replay.replay_uncertainty.as_dict(),
+                            "replay_inversion_status": "ready",
+                            "replay_cycle_error_mean": round(hypothesis.candidate_cycle_relative_error, 8),
+                            "replay_cycle_error_maximum": round(hypothesis.candidate_cycle_relative_error, 8),
+                            "replay_null_cycle_error_mean": round(hypothesis.null_cycle_relative_error, 8),
+                            "replay_log_likelihood_ratio_mean": round(hypothesis.replay_log_likelihood_ratio, 8),
+                            "replay_log_likelihood_ratio_standard_deviation": 0.0,
+                            "replay_endpoint_ensemble_variance": 0.0,
+                            "replay_uncertainty_mean": round(1.0 - trial_reliability, 8),
+                            "replay_reliability_weight": round(trial_reliability, 8),
+                            "replay_ensemble_count": 1,
+                            "replay_trajectory_source": "clean_video_fixed_key_independent_inversion_candidate_key_hypothesis",
                             **base_replay.endpoint_metadata,
                             "formal_flow_evidence_level": FORMAL_FLOW_EVIDENCE_LEVEL,
                             "formal_flow_detector_input_contract": FORMAL_FLOW_DETECTOR_INPUT_CONTRACT,
@@ -567,7 +681,7 @@ def run_formal_flow_evidence(
                                 endpoint.projection,
                                 float(path.get("S_path_inv") or 0.0),
                             ), 8),
-                            "time_grid_reliability": round(_time_grid_reliability(base_replay), 8),
+                            "time_grid_reliability": round(trial_reliability, 8),
                             "flow_phase": 0.5,
                             "trajectory_trace_used_for_score": False,
                             "metric_status": "measured_formal",
@@ -591,9 +705,11 @@ def run_formal_flow_evidence(
         target_fpr=float(config["target_fpr"]),
     )
     paired_path_records = _paired_path_gain_records(scored_records, calibrations)
+    paired_velocity_records = _paired_velocity_causal_records(scored_records)
     mechanism_audit = _audit_three_layer_mechanism(
         scored_records,
         paired_path_records,
+        paired_velocity_records,
         target_fpr=float(config["target_fpr"]),
     )
     positive_records = [record for record in scored_records if record.get("sample_role") == "attacked_positive"]
@@ -605,6 +721,31 @@ def run_formal_flow_evidence(
         if record.get("method_variant") == "sstw_full_method"
         and record.get("replay_control_execution_status") == "measured_formal"
     ]
+    posterior_calibration_failures = [
+        {
+            "method_variant": record.get("method_variant"),
+            "posterior_calibration_brier_score": record.get("posterior_calibration_brier_score"),
+            "posterior_calibration_expected_calibration_error": record.get(
+                "posterior_calibration_expected_calibration_error"
+            ),
+            "posterior_calibration_group_count": record.get("posterior_calibration_group_count"),
+        }
+        for record in threshold_records
+        if float(
+            record["posterior_calibration_brier_score"]
+            if record.get("posterior_calibration_brier_score") is not None
+            else math.inf
+        )
+        > float(config.get("maximum_posterior_brier_score", 0.25))
+        or float(
+            record["posterior_calibration_expected_calibration_error"]
+            if record.get("posterior_calibration_expected_calibration_error") is not None
+            else math.inf
+        )
+        > float(config.get("maximum_posterior_expected_calibration_error", 0.1))
+        or int(record.get("posterior_calibration_group_count") or 0)
+        < int(config.get("minimum_posterior_calibration_group_count", 2))
+    ]
     audit = {
         "stage_id": "formal_flow_evidence_runner",
         "formal_flow_evidence_decision": "PASS" if (
@@ -613,6 +754,7 @@ def run_formal_flow_evidence(
             and not failure_records
             and required_variants.issubset(observed_variants)
             and bool(claim3_records)
+            and not posterior_calibration_failures
             and mechanism_audit["three_layer_mechanism_pre_replay_decision"] == "PASS"
         ) else "FAIL",
         "formal_flow_evidence_record_count": len(scored_records),
@@ -623,6 +765,10 @@ def run_formal_flow_evidence(
         "formal_flow_missing_method_variants": sorted(required_variants - observed_variants),
         "formal_flow_threshold_record_count": len(threshold_records),
         "claim3_real_replay_record_count": len(claim3_records),
+        "posterior_probability_calibration_decision": (
+            "PASS" if not posterior_calibration_failures else "FAIL"
+        ),
+        "posterior_probability_calibration_failures": posterior_calibration_failures,
         "claim_1_velocity_constraint_detectable_watermark_decision": mechanism_audit["claim_1_velocity_constraint_detectable_watermark_decision"],
         "claim_2_path_evidence_independent_gain_decision": mechanism_audit["claim_2_path_evidence_independent_gain_decision"],
         "target_fpr": float(config["target_fpr"]),
@@ -634,6 +780,10 @@ def run_formal_flow_evidence(
     write_jsonl(run_root / "records" / "runtime_detection_records.jsonl", positive_records)
     write_jsonl(run_root / "records" / "sstw_clean_negative_score_records.jsonl", negative_records)
     write_jsonl(run_root / "records" / "paired_path_evidence_gain_records.jsonl", paired_path_records)
+    write_jsonl(
+        run_root / "records" / "paired_velocity_causal_evidence_records.jsonl",
+        paired_velocity_records,
+    )
     write_jsonl(run_root / "thresholds" / "formal_flow_detector_thresholds.jsonl", threshold_records)
     write_csv(run_root / "tables" / "formal_flow_detection_table.csv", scored_records)
     write_csv(run_root / "tables" / "runtime_detection_table.csv", positive_records)
@@ -649,6 +799,10 @@ def run_formal_flow_evidence(
     write_json(run_root / "artifacts" / "formal_flow_evidence_decision.json", audit)
     write_json(run_root / "artifacts" / "three_layer_mechanism_evidence_decision.json", mechanism_audit)
     write_csv(run_root / "tables" / "paired_path_evidence_gain_table.csv", paired_path_records)
+    write_csv(
+        run_root / "tables" / "paired_velocity_causal_evidence_table.csv",
+        paired_velocity_records,
+    )
     report = (
         "# Formal Flow Evidence and Runtime Detection Report\n\n"
         "该报告由攻击后视频的 Wan VAE endpoint、key-conditioned model velocity replay、"

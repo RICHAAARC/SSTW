@@ -22,7 +22,7 @@ data_split_and_leakage_guard_passed = true
 modern_external_baseline_records_ready = true
 internal_ablation_matrix_ready = true
 flow_specific_adaptive_attack_gate_passed = true
-replay_and_authenticated_sketch_gate_ready_or_claim3_downgraded = true
+replay_and_authenticated_sketch_gate_passed = true
 paper_fixed_fpr_0_001_protocol_ready = true
 statistical_confidence_interval_decision_passed = true
 artifact_rebuild_dry_run_passed = true
@@ -231,8 +231,8 @@ pilot_paper_gate 与 full_paper_result_checker 工程入口已实现, 但 full_p
 | 项目 | 当前标注 |
 |---|---|
 | 完成状态 | checker 工程入口已实现, full_paper 真实结果仍等待前置门禁与大规模运行 |
-| 主要差距项 | 历史 small-scale 机制 pilot 已解除, pilot_paper gate 已要求 baseline comparison 与内部消融覆盖同批 trace, 但 probe_paper、pilot_paper 真实结果、probe_paper、现代外部 baseline 正式主表对比、full-scale 内部消融、adaptive attack、replay/sketch、FPR=0.001 和 full_paper_result_checker 仍未闭合。 |
-| 下一步构建方向 | 先完成 probe_paper 小样本论文闭合验证, 同步推进现代外部 baseline adapter、内部消融、adaptive attack、replay/sketch 和 CI reporter。 |
+| 主要差距项 | 真实工程路径已实现; 仍需在独立 GPU 运行目录依次生成 probe_paper、pilot_paper 和 full_paper 的真实 governed 结果。仓库内不得预写正式实验结论。 |
+| 下一步构建方向 | 先运行 probe_paper 的完整三层协议并核验 FPR=0.1 结论, 再按 transition decision 扩展样本规模和统计强度。 |
 | full_paper 影响 | 本阶段未通过时, 禁止生成 full_paper 论文结果包。 |
 
 ### 3.1 2026-06-23 最新阶段边界

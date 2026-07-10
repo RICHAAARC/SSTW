@@ -12,12 +12,12 @@ from external_baseline.registry import get_adapter
 from external_baseline.runtime_trace_io import comparable_detection_records, read_jsonl, safe_float
 from external_baseline.score_semantics import official_score_formal_comparison_summary
 from external_baseline.source_intake import build_execution_manifest, write_source_intake_artifacts
-from main.core.digest import build_stable_digest
-from main.core.progress import ProgressReporter
-from main.external_baselines.baseline_registry import audit_external_baseline_records, build_external_baseline_records
-from main.protocol.flow_evidence_fields import with_flow_evidence_protocol_defaults, with_flow_evidence_protocol_defaults_many
-from main.protocol.record_writer import write_json, write_jsonl
-from main.protocol.table_builder import write_csv
+from runtime.core.digest import build_stable_digest
+from runtime.core.progress import ProgressReporter
+from external_baseline.baseline_registry import audit_external_baseline_records, build_external_baseline_records
+from evaluation.protocol.flow_evidence_fields import with_flow_evidence_protocol_defaults, with_flow_evidence_protocol_defaults_many
+from evaluation.protocol.record_writer import write_json, write_jsonl
+from evaluation.protocol.table_builder import write_csv
 
 
 DEFAULT_EXTERNAL_BASELINE_CONFIG = "configs/external_baselines/external_baselines.json"

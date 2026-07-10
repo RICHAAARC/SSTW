@@ -25,9 +25,9 @@ from external_baseline.official_eval_adapters.common import (
     validate_complete_official_bundle_baseline_identity,
     validate_clean_negative_payload,
 )
-from main.core.digest import build_stable_digest
-from main.core.progress import ProgressReporter
-from main.protocol.flow_evidence_fields import with_flow_evidence_protocol_defaults
+from runtime.core.digest import build_stable_digest
+from runtime.core.progress import ProgressReporter
+from evaluation.protocol.flow_evidence_fields import with_flow_evidence_protocol_defaults
 
 
 @dataclass(frozen=True)

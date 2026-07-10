@@ -13,7 +13,7 @@ from external_baseline.videoshield_official_runtime import (
     build_default_videoshield_official_config_from_env,
     run_videoshield_official_runtime,
 )
-from main.protocol.record_writer import write_jsonl
+from evaluation.protocol.record_writer import write_jsonl
 
 
 def _write_fake_videoshield_source(source_dir: Path) -> None:

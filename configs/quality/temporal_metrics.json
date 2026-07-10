@@ -1,7 +1,0 @@
-{
-  "temporal_metric_status": "enabled",
-  "metrics": [
-    "temporal_flicker_score",
-    "motion_consistency_score_placeholder"
-  ]
-}

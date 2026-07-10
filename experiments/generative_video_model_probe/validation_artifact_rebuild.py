@@ -7,9 +7,9 @@ import json
 from pathlib import Path
 from typing import Any
 
-from main.protocol.flow_evidence_fields import with_flow_evidence_protocol_defaults
-from main.protocol.record_writer import write_json, write_jsonl
-from main.protocol.table_builder import write_csv
+from evaluation.protocol.flow_evidence_fields import with_flow_evidence_protocol_defaults
+from evaluation.protocol.record_writer import write_json, write_jsonl
+from evaluation.protocol.table_builder import write_csv
 from experiments.generative_video_model_probe.paper_result_artifact_builders import (
     PAPER_RESULT_ARTIFACT_RELPATHS,
 )
@@ -34,7 +34,6 @@ REQUIRED_REBUILD_INPUTS = (
     "records/replay_uncertainty_records.jsonl",
     "records/wrong_sampler_replay_records.jsonl",
     "records/wrong_prompt_replay_records.jsonl",
-    "records/claim3_downgrade_records.jsonl",
     "records/statistical_confidence_interval_records.jsonl",
     "records/low_fpr_formal_statistics_records.jsonl",
     "artifacts/generative_video_colab_runtime_decision.json",
@@ -51,7 +50,6 @@ REQUIRED_REBUILD_INPUTS = (
     "artifacts/validation_internal_ablation_decision.json",
     "artifacts/adaptive_attack_decision.json",
     "artifacts/replay_and_sketch_gate_decision.json",
-    "artifacts/claim3_downgrade_decision.json",
     "artifacts/statistical_confidence_interval_decision.json",
     "artifacts/low_fpr_formal_statistics_decision.json",
 )
@@ -71,7 +69,6 @@ REQUIRED_REBUILD_OUTPUTS = (
     "tables/formal_internal_ablation_summary_table.csv",
     "tables/adaptive_attack_table.csv",
     "tables/replay_verification_table.csv",
-    "tables/claim3_downgrade_table.csv",
     "tables/statistical_confidence_interval_table.csv",
     "tables/low_fpr_formal_statistics_table.csv",
     "reports/external_baseline_comparison_report.md",
@@ -84,7 +81,6 @@ REQUIRED_REBUILD_OUTPUTS = (
     "reports/validation_internal_ablation_report.md",
     "reports/adaptive_attack_report.md",
     "reports/replay_and_sketch_gate_report.md",
-    "reports/claim3_downgrade_report.md",
     "reports/statistical_confidence_interval_report.md",
     "reports/low_fpr_formal_statistics_report.md",
     *PAPER_RESULT_ARTIFACT_RELPATHS,

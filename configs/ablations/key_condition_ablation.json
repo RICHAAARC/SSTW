@@ -1,8 +1,0 @@
-{
-  "ablation_family": "key_condition",
-  "variants": [
-    "key_conditioned_state_space_inference",
-    "key_conditioned_state_space_without_key_condition",
-    "key_agnostic_state_space_model"
-  ]
-}

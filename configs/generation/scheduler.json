@@ -1,6 +1,0 @@
-{
-  "guidance_scale": 3.5,
-  "num_inference_steps": 20,
-  "scheduler_id": "candidate_scheduler",
-  "trajectory_time_grid_id": "generation_time_grid"
-}

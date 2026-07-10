@@ -14,7 +14,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from main.protocol.package_naming import build_package_batch_id, current_short_commit, current_utc_time_for_filename
+from evaluation.protocol.package_naming import build_package_batch_id, current_short_commit, current_utc_time_for_filename
 from scripts.package_results.drive_package_paths import (
     DEFAULT_DRIVE_PROJECT_ROOT,
     archive_run_root_for_stage,
@@ -115,7 +115,6 @@ def package_generative_video_colab_run(
     formal_internal_ablation_decision_path = run_root_path / "artifacts" / "formal_internal_ablation_summary_decision.json"
     adaptive_attack_decision_path = run_root_path / "artifacts" / "adaptive_attack_decision.json"
     replay_and_sketch_decision_path = run_root_path / "artifacts" / "replay_and_sketch_gate_decision.json"
-    claim3_downgrade_decision_path = run_root_path / "artifacts" / "claim3_downgrade_decision.json"
     confidence_interval_decision_path = run_root_path / "artifacts" / "statistical_confidence_interval_decision.json"
     low_fpr_formal_statistics_decision_path = run_root_path / "artifacts" / "low_fpr_formal_statistics_decision.json"
     pilot_paper_decision_path = run_root_path / "artifacts" / "pilot_paper_gate_decision.json"
@@ -148,7 +147,6 @@ def package_generative_video_colab_run(
     formal_internal_ablation_decision = _read_json_if_exists(formal_internal_ablation_decision_path)
     adaptive_attack_decision = _read_json_if_exists(adaptive_attack_decision_path)
     replay_and_sketch_decision = _read_json_if_exists(replay_and_sketch_decision_path)
-    claim3_downgrade_decision = _read_json_if_exists(claim3_downgrade_decision_path)
     confidence_interval_decision = _read_json_if_exists(confidence_interval_decision_path)
     low_fpr_formal_statistics_decision = _read_json_if_exists(low_fpr_formal_statistics_decision_path)
     pilot_paper_decision = _read_json_if_exists(pilot_paper_decision_path)
@@ -231,10 +229,8 @@ def package_generative_video_colab_run(
             "wrong_sampler_replay_rejected_count": replay_and_sketch_decision.get("wrong_sampler_replay_rejected_count"),
             "wrong_prompt_replay_rejected_count": replay_and_sketch_decision.get("wrong_prompt_replay_rejected_count"),
             "replay_and_sketch_claim3_full_support_allowed": replay_and_sketch_decision.get("claim3_full_support_allowed"),
-            "claim3_downgrade_decision": claim3_downgrade_decision.get("claim3_downgrade_decision"),
-            "claim3_downgraded": claim3_downgrade_decision.get("claim3_downgraded"),
-            "claim3_full_support_allowed": claim3_downgrade_decision.get("claim3_full_support_allowed"),
-            "replay_or_sketch_status": claim3_downgrade_decision.get("replay_or_sketch_status"),
+            "claim3_full_support_allowed": replay_and_sketch_decision.get("claim3_full_support_allowed"),
+            "replay_or_sketch_status": replay_and_sketch_decision.get("replay_or_sketch_status"),
             "statistical_confidence_interval_decision": confidence_interval_decision.get("statistical_confidence_interval_decision"),
             "statistical_confidence_interval_total_count": confidence_interval_decision.get("ci_total_count"),
             "low_fpr_formal_statistics_decision": low_fpr_formal_statistics_decision.get("low_fpr_formal_statistics_decision"),

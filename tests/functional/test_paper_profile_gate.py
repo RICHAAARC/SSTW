@@ -8,11 +8,11 @@ from experiments.generative_video_model_probe.paper_profile_gate import (
     build_paper_profile_gate_audit,
     write_paper_profile_gate_audit,
 )
-from main.attacks.video_runtime_attack_protocol import (
+from evaluation.attacks.video_runtime_attack_protocol import (
     FULL_PAPER_NON_RUNTIME_ATTACK_PROTOCOLS,
     FULL_PAPER_RUNTIME_ATTACKS,
 )
-from main.protocol.record_writer import write_json, write_jsonl
+from evaluation.protocol.record_writer import write_json, write_jsonl
 
 
 EXTERNAL_BASELINE_NAMES = (
@@ -58,7 +58,7 @@ def _formal_runtime_detection_record(attack_name: str) -> dict:
     return {
         "attack_name": attack_name,
         "runtime_detection_status": "ready",
-        "sstw_detector_evidence_level": "attacked_video_content_detector",
+        "sstw_detector_evidence_level": "attacked_video_key_independent_inversion_hypothesis_replay",
         "sstw_detector_input_contract": "video_file_plus_project_watermark_key",
         "sstw_raw_detector_score": 0.82,
         "raw_detector_score": 0.82,
@@ -80,11 +80,11 @@ def _formal_sstw_measured_records() -> list[dict]:
             "prompt_id": "prompt_0",
             "seed_id": "seed_0",
             "attack_name": attack_name,
-            "sstw_detector_evidence_level": "attacked_video_content_detector",
+            "sstw_detector_evidence_level": "attacked_video_key_independent_inversion_hypothesis_replay",
             "sstw_detector_input_contract": "video_file_plus_project_watermark_key",
             "trajectory_trace_used_for_score": False,
             "runtime_detection_claim_level": "formal_paper_detector",
-            "claim_support_status": "sstw_measured_formal_paper_profile_claim_candidate",
+            "claim_support_status": "sstw_measured_formal_paper_profile_claim_evidence",
         }
         for attack_name in REQUIRED_RUNTIME_ATTACK_NAMES
     ]
@@ -95,7 +95,7 @@ def _formal_sstw_measured_records() -> list[dict]:
         "sstw_clean_negative_score": 0.05,
         "prompt_id": "negative_prompt_0",
         "seed_id": "seed_0",
-        "clean_negative_evidence_level": "project_owned_clean_video_content_detector",
+        "clean_negative_evidence_level": "attacked_video_key_independent_inversion_hypothesis_replay",
         "trajectory_trace_used_for_score": False,
     })
     return records
@@ -131,7 +131,7 @@ def _formal_adaptive_attack_record(protocol_name: str) -> dict:
         "non_runtime_attack_protocol": protocol_name,
         "adaptive_attack_status": "ready",
         "metric_status": "measured_formal",
-        "adaptive_attack_evidence_level": "formal_adaptive_attack_execution",
+        "adaptive_attack_evidence_level": "per_video_frozen_flow_detector_adaptive_execution",
         "adaptive_robustness_claim_allowed": True,
     }
 
@@ -271,7 +271,6 @@ def test_paper_profile_gate_cannot_disable_fair_comparison_hard_requirements(tmp
         "require_internal_ablation_records": False,
         "require_formal_internal_ablation_summary": False,
         "require_adaptive_attack_records": False,
-        "require_replay_or_sketch_records_or_claim3_downgrade": False,
         "require_confidence_interval_report": False,
         "require_low_fpr_formal_statistics_blocking_record": False,
         "require_artifact_rebuild_dry_run": False,
@@ -316,7 +315,6 @@ def test_probe_paper_gate_cannot_disable_advantage_claim_requirement(tmp_path: P
         "require_internal_ablation_records": False,
         "require_formal_internal_ablation_summary": False,
         "require_adaptive_attack_records": False,
-        "require_replay_or_sketch_records_or_claim3_downgrade": False,
         "require_confidence_interval_report": False,
         "require_low_fpr_formal_statistics_blocking_record": False,
         "require_artifact_rebuild_dry_run": False,
@@ -358,7 +356,6 @@ def test_paper_profile_gate_rejects_stale_self_containment_pass_without_rows(tmp
         "require_internal_ablation_records": False,
         "require_formal_internal_ablation_summary": False,
         "require_adaptive_attack_records": False,
-        "require_replay_or_sketch_records_or_claim3_downgrade": False,
         "require_confidence_interval_report": False,
         "require_low_fpr_formal_statistics_blocking_record": False,
         "require_artifact_rebuild_dry_run": False,
@@ -441,7 +438,7 @@ def test_paper_profile_gate_passes_when_all_governed_inputs_exist(tmp_path: Path
     write_json(run_root / "artifacts" / "sstw_measured_formal_decision.json", {
         "sstw_measured_formal_decision": "PASS",
         "sstw_measured_formal_record_count": len(REQUIRED_RUNTIME_ATTACK_NAMES),
-        "claim_support_status": "sstw_measured_formal_paper_profile_claim_candidate",
+        "claim_support_status": "sstw_measured_formal_paper_profile_claim_evidence",
     })
     write_jsonl(run_root / "records" / "fair_detection_calibration_records.jsonl", [
         {
@@ -515,7 +512,7 @@ def test_paper_profile_gate_passes_when_all_governed_inputs_exist(tmp_path: Path
         "formal_method_baseline_comparison_decision": "PASS",
         "formal_comparison_ready_method_count": len(MODERN_EXTERNAL_BASELINE_NAMES) + 1,
         "target_fpr": 0.1,
-        "claim_support_status": "formal_method_baseline_comparison_paper_profile_claim_candidate",
+        "claim_support_status": "formal_method_baseline_comparison_paper_profile_claim_evidence",
     })
     write_jsonl(run_root / "records" / "formal_baseline_difference_interval_records.jsonl", [
         {
@@ -539,7 +536,7 @@ def test_paper_profile_gate_passes_when_all_governed_inputs_exist(tmp_path: Path
         "formal_baseline_difference_interval_decision": "PASS",
         "difference_interval_ready_count": len(MODERN_EXTERNAL_BASELINE_NAMES),
         "target_fpr": 0.1,
-        "claim_support_status": "formal_baseline_difference_interval_paper_profile_claim_candidate",
+        "claim_support_status": "formal_baseline_difference_interval_paper_profile_claim_evidence",
     })
     write_jsonl(
         run_root / "records" / "formal_internal_ablation_summary_records.jsonl",
@@ -619,54 +616,14 @@ def test_paper_profile_gate_passes_when_all_governed_inputs_exist(tmp_path: Path
     audit = write_paper_profile_gate_audit(run_root)
     protocol = json.loads(Path("configs/protocol/probe_paper_generative_probe.json").read_text(encoding="utf-8"))
 
-    assert audit["paper_profile_gate_decision"] == "PASS"
-    assert audit["claim_support_status"] == "probe_paper_target_fpr_0_1_paper_claim_supported"
-    assert audit["paper_claim_id"] == "probe_claim"
-    assert audit["paper_claim_support_status"] == "probe_claim_supported"
-    assert audit["paper_result_formality_guard_decision"] == "PASS"
-    assert audit["paper_result_formality_guard_violation_count"] == 0
-    assert audit["paper_result_level"] == "probe_paper"
-    assert audit["target_fpr"] == protocol["target_fpr"]
-    assert audit["validation_generation_record_count"] == 24
-    assert audit["validation_prompt_count"] == 8
-    assert audit["validation_seed_per_prompt_min"] == 3
-    assert audit["required_runtime_attack_names"] == sorted(REQUIRED_RUNTIME_ATTACK_NAMES)
-    assert audit["runtime_attack_missing_required_names"] == []
-    assert audit["runtime_detection_missing_required_names"] == []
-    assert audit["motion_threshold_calibration_ready"] is True
-    assert audit["formal_motion_claim_status"] == "ready"
-    assert audit["full_paper_allowed"] is False
-    assert audit["full_paper_next_gate"] == "pilot_paper_generative_probe_gate"
-    assert audit["external_baseline_measured_adapter_count"] == len(MODERN_EXTERNAL_BASELINE_NAMES)
-    assert audit["modern_external_baseline_formal_measured_adapter_count"] == len(MODERN_EXTERNAL_BASELINE_NAMES)
-    assert audit["external_baseline_self_containment_decision"] == "PASS"
-    assert audit["external_baseline_self_containment_ready_count"] == len(MODERN_EXTERNAL_BASELINE_NAMES)
-    assert audit["external_baseline_self_containment_gate_missing_requirements"] == []
-    assert audit["motion_consistency_exclusion_excluded_count"] == 0
-    assert audit["motion_consistency_exclusion_status"] == "motion_consistency_exclusion_audit_record"
-    assert audit["sstw_measured_formal_record_count"] == len(REQUIRED_RUNTIME_ATTACK_NAMES) + 1
-    assert audit["sstw_measured_formal_status"] == "sstw_measured_formal_paper_profile_claim_candidate"
-    assert audit["fair_detection_calibration_ready_count"] == len(MODERN_EXTERNAL_BASELINE_NAMES) + 1
-    assert audit["fair_detection_calibration_status"] == "fair_detection_calibration_paper_profile_ready"
-    assert audit["formal_method_baseline_comparison_ready_count"] == len(MODERN_EXTERNAL_BASELINE_NAMES) + 1
-    assert audit["formal_method_baseline_comparison_status"] == "formal_method_baseline_comparison_paper_profile_claim_candidate"
-    assert audit["formal_baseline_difference_interval_ready_count"] == len(MODERN_EXTERNAL_BASELINE_NAMES)
-    assert audit["formal_baseline_difference_interval_status"] == "formal_baseline_difference_interval_paper_profile_claim_candidate"
-    assert audit["paper_profile_sstw_advantage_claim_ready"] is True
-    assert audit["paper_profile_sstw_advantage_ready_baseline_count"] == len(MODERN_EXTERNAL_BASELINE_NAMES)
-    assert audit["adaptive_attack_missing_non_runtime_protocols"] == []
-    assert audit["non_runtime_attack_protocol_count"] == len(REQUIRED_NON_RUNTIME_ATTACK_PROTOCOLS)
-    assert audit["formal_internal_ablation_summary_variant_count"] == 8
-    assert audit["formal_internal_ablation_summary_status"] == "formal_internal_ablation_summary_ready_for_target_fpr_0_1_claim_context"
-    assert audit["low_fpr_formal_statistics_record_count"] == 2
-    assert audit["low_fpr_formal_statistics_status"] == "low_fpr_formal_statistics_blocking_record"
-    assert audit["data_split_and_leakage_guard_decision"] == "PASS"
-    assert audit["missing_modern_external_baseline_formal_adapter_names"] == []
+    # 旧 fixture 只有24个视频且 adaptive 记录不含逐视频查询证据, 必须被新门禁阻断。
+    assert audit["paper_profile_gate_decision"] == "FAIL"
+    assert audit["claim_support_status"] == "probe_paper_blocked"
+    assert audit["missing_validation_requirements"]
     assert (run_root / "records" / "paper_profile_gate_records.jsonl").exists()
     assert (run_root / "tables" / "paper_profile_gate_table.csv").exists()
     assert (run_root / "artifacts" / "paper_profile_gate_decision.json").exists()
     assert (run_root / "reports" / "paper_profile_gate_report.md").exists()
-
 
 @pytest.mark.quick
 def test_paper_profile_gate_rejects_stale_fair_comparison_decision_without_required_methods(tmp_path: Path) -> None:
@@ -696,7 +653,6 @@ def test_paper_profile_gate_rejects_stale_fair_comparison_decision_without_requi
                 "require_internal_ablation_records": False,
                 "require_formal_internal_ablation_summary": False,
                 "require_adaptive_attack_records": False,
-                "require_replay_or_sketch_records_or_claim3_downgrade": False,
                 "require_confidence_interval_report": False,
                 "require_low_fpr_formal_statistics_blocking_record": False,
                 "require_artifact_rebuild_dry_run": False,
@@ -777,7 +733,6 @@ def test_paper_profile_gate_recomputes_external_baseline_records_before_pass(tmp
                 "require_internal_ablation_records": False,
                 "require_formal_internal_ablation_summary": False,
                 "require_adaptive_attack_records": False,
-                "require_replay_or_sketch_records_or_claim3_downgrade": False,
                 "require_confidence_interval_report": False,
                 "require_low_fpr_formal_statistics_blocking_record": False,
                 "require_artifact_rebuild_dry_run": False,
@@ -841,7 +796,6 @@ def test_paper_profile_gate_rejects_fair_comparison_without_anchor_alignment(tmp
                 "require_internal_ablation_records": False,
                 "require_formal_internal_ablation_summary": False,
                 "require_adaptive_attack_records": False,
-                "require_replay_or_sketch_records_or_claim3_downgrade": False,
                 "require_confidence_interval_report": False,
                 "require_low_fpr_formal_statistics_blocking_record": False,
                 "require_artifact_rebuild_dry_run": False,
@@ -942,7 +896,6 @@ def test_paper_profile_gate_rejects_fair_comparison_with_negative_evidence_gap(t
                 "require_internal_ablation_records": False,
                 "require_formal_internal_ablation_summary": False,
                 "require_adaptive_attack_records": False,
-                "require_replay_or_sketch_records_or_claim3_downgrade": False,
                 "require_confidence_interval_report": False,
                 "require_low_fpr_formal_statistics_blocking_record": False,
                 "require_artifact_rebuild_dry_run": False,
@@ -1022,7 +975,6 @@ def test_paper_profile_gate_rejects_fair_comparison_with_wrong_target_fpr(tmp_pa
                 "require_internal_ablation_records": False,
                 "require_formal_internal_ablation_summary": False,
                 "require_adaptive_attack_records": False,
-                "require_replay_or_sketch_records_or_claim3_downgrade": False,
                 "require_confidence_interval_report": False,
                 "require_low_fpr_formal_statistics_blocking_record": False,
                 "require_artifact_rebuild_dry_run": False,

@@ -1,178 +1,218 @@
-"""执行 paper profile 的 non-runtime / adaptive attack 正式记录生成。
-
-完整论文机制从正式 Flow evidence 中选择真实重压缩、跨样本 copy/collusion、
-key/prompt/sampler replay controls 和黑盒查询优化结果。历史非 paper 配置仍保留
-轻量视频内容检测路径, 但该路径不能进入完整 paper mechanism。
-"""
+"""逐视频执行完整论文 non-runtime 与 adaptive attack 协议。"""
 
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
+from collections import defaultdict
 from pathlib import Path
-from statistics import mean
-from typing import Any, Iterable, Mapping
+from typing import Any, Callable, Mapping
 
-from experiments.generative_video_model_probe.formal_motion_claim_filter import (
-    select_motion_claim_generation_records,
+from evaluation.attacks.adaptive_video_optimizer import (
+    optimize_adaptive_attack_for_video,
+    write_cross_video_blend,
 )
-from main.attacks.video_runtime_attack_protocol import (
+from evaluation.attacks.video_runtime_attack_protocol import (
     load_protocol_config_with_shared_attack_protocol,
     required_non_runtime_attack_protocols_from_config,
 )
-from main.core.digest import build_stable_digest
-from main.core.progress import ProgressReporter
-from main.methods.state_space_watermark.video_content_detector import (
-    FORMAL_VIDEO_DETECTOR_INPUT_CONTRACT,
-    FORMAL_VIDEO_DETECTOR_SCORE_SEMANTICS,
-    build_sstw_detector_key,
-    score_video_content,
+from evaluation.protocol.flow_evidence_fields import with_flow_evidence_protocol_defaults
+from evaluation.protocol.record_writer import write_json, write_jsonl
+from evaluation.protocol.table_builder import write_csv
+from experiments.generative_video_model_probe.formal_flow_evidence_runner import (
+    _load_pipeline,
+    _prompt_text_by_id,
+    build_flow_evidence_payload,
 )
-from main.protocol.flow_evidence_fields import with_flow_evidence_protocol_defaults
-from main.protocol.record_writer import write_json, write_jsonl
-from main.protocol.table_builder import write_csv
+from main.methods.state_space_watermark.formal_detector import (
+    apply_frozen_flow_detector,
+    frozen_flow_detector_calibration_from_dict,
+)
+from main.methods.state_space_watermark.wan_flow_replay_backend import (
+    run_wan_attacked_video_replay,
+)
+from runtime.core.digest import build_stable_digest
+from runtime.core.progress import ProgressReporter
 
 
 DEFAULT_PROTOCOL_CONFIG = "configs/protocol/probe_paper_generative_probe.json"
-FORMAL_ADAPTIVE_ATTACK_EVIDENCE_LEVEL = "formal_adaptive_attack_execution"
+FORMAL_ADAPTIVE_ATTACK_EVIDENCE_LEVEL = "per_video_frozen_flow_detector_adaptive_execution"
 
-PREFERRED_RUNTIME_VIDEO_BY_PROTOCOL: dict[str, tuple[str, ...]] = {
+ADAPTIVE_SEARCH_PROTOCOLS: dict[str, tuple[str, tuple[str, ...]]] = {
     "generative_recompression_or_regeneration_attack": (
-        "platform_transcode_runtime",
-        "h264_crf28_runtime",
-        "h265_crf28_runtime",
+        "minimize_detector_score",
+        ("h264_crf28_runtime", "h265_crf28_runtime", "jpeg_frame_compression_runtime"),
+    ),
+    "endpoint_preserving_path_perturbation_attack": (
+        "minimize_path_with_fixed_endpoint",
+        ("frame_swap_adjacent_runtime", "frame_drop_uniform_runtime", "speed_change_runtime", "frame_average_runtime"),
+    ),
+    "detector_probing_with_public_negatives": (
+        "minimize_detector_score",
+        ("brightness_contrast_runtime", "color_jitter_runtime", "gaussian_blur_runtime", "jpeg_frame_compression_runtime"),
     ),
     "watermark_removal_optimization_attack": (
-        "denoise_runtime",
-        "gaussian_blur_runtime",
-        "median_blur_runtime",
+        "minimize_detector_score",
+        ("denoise_runtime", "gaussian_blur_runtime", "median_blur_runtime", "gaussian_noise_runtime", "jpeg_frame_compression_runtime"),
     ),
     "adversarial_detector_evasion_attack": (
-        "compression_noise_combined_runtime",
-        "brightness_contrast_runtime",
-        "color_jitter_runtime",
-    ),
-    "collusion_multi_sample_attack": (
-        "frame_average_runtime",
-        "frame_duplicate_runtime",
+        "minimize_detector_score",
+        ("compression_noise_combined_runtime", "compression_crop_combined_runtime", "compression_color_jitter_combined_runtime", "crop_rotation_combined_runtime"),
     ),
 }
 
-KEY_TRANSFORMATION_BY_PROTOCOL: dict[str, str] = {
-    "endpoint_preserving_path_perturbation_attack": "endpoint_path_perturbed_key",
-    "flow_time_grid_mismatch_attack": "flow_time_grid_mismatch_key",
-    "wrong_sampler_replay_attack": "wrong_sampler_replay_key",
-    "wrong_prompt_replay_attack": "wrong_prompt_replay_key",
-    "wrong_key_attack": "wrong_key_detector_rescore",
-    "detector_probing_with_public_negatives": "detector_probe_public_negative_key",
-    "watermark_spoofing_or_copy_attack": "watermark_copy_or_spoof_key",
+CONTROL_FIELDS = {
+    "flow_time_grid_mismatch_attack": ("time_grid_reliability", "one_minus_reliability"),
+    "wrong_sampler_replay_attack": ("wrong_sampler_replay_log_likelihood_ratio", "direct"),
+    "wrong_prompt_replay_attack": ("wrong_prompt_replay_log_likelihood_ratio", "direct"),
+    "wrong_key_attack": ("wrong_key_replay_log_likelihood_ratio", "direct"),
 }
 
 
-def _read_jsonl(path: Path) -> list[dict[str, Any]]:
-    """读取 JSONL records, 文件不存在时返回空列表。"""
+def _read_json(path: str | Path) -> dict[str, Any]:
+    payload = json.loads(Path(path).read_text(encoding="utf-8-sig"))
+    if not isinstance(payload, dict):
+        raise TypeError(f"JSON 顶层必须是对象: {path}")
+    return payload
 
+
+def _read_jsonl(path: str | Path) -> list[dict[str, Any]]:
+    path = Path(path)
     if not path.exists():
         return []
-    return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
+    return [json.loads(line) for line in path.read_text(encoding="utf-8-sig").splitlines() if line.strip()]
 
 
-def _sha256_file(path: Path) -> str:
-    """计算视频文件摘要, 用于证明 adaptive 记录确实绑定了落盘视频。"""
-
-    digest = hashlib.sha256()
-    with path.open("rb") as handle:
-        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
-
-
-def _safe_float(value: Any) -> float | None:
-    """把可选数值转成 float。"""
-
-    try:
-        if value is None or value == "":
-            return None
-        return float(value)
-    except (TypeError, ValueError):
-        return None
+def _resolve_video(run_root: Path, raw_path: Any, fallback_dir: str) -> Path:
+    path = Path(str(raw_path or ""))
+    if path.exists():
+        return path
+    candidate = run_root / fallback_dir / path.name
+    if candidate.exists():
+        return candidate
+    raise FileNotFoundError(f"adaptive attack 输入视频不存在: {raw_path}")
 
 
-def _load_protocol_context(config_path: str | Path) -> dict[str, Any]:
-    """读取 paper profile 和 required non-runtime 协议。"""
-
-    path = Path(config_path)
-    config = load_protocol_config_with_shared_attack_protocol(path)
-    if "target_fpr" not in config:
-        raise KeyError(f"protocol config 缺少 target_fpr: {path}")
+def _profile_context(config_path: str | Path) -> dict[str, Any]:
+    config = load_protocol_config_with_shared_attack_protocol(config_path)
     return {
-        "paper_result_level": str(config.get("paper_result_level") or "probe_paper"),
+        "config": config,
+        "paper_result_level": str(config["paper_result_level"]),
         "target_fpr": float(config["target_fpr"]),
-        "protocol_config_path": str(path),
-        "required_non_runtime_attack_protocols": list(required_non_runtime_attack_protocols_from_config(config)),
-        "require_complete_paper_mechanism_contract": bool(
-            config.get("require_complete_paper_mechanism_contract", False)
-        ),
+        "required_protocols": tuple(required_non_runtime_attack_protocols_from_config(config)),
+        "query_budget": int(config.get("adaptive_attack_query_budget_per_video") or 5),
+        "minimum_quality_psnr": float(config.get("adaptive_attack_minimum_quality_psnr") or 24.0),
+        "endpoint_tolerance": float(config.get("adaptive_attack_endpoint_tolerance") or 0.08),
     }
 
 
-def _complete_flow_adaptive_record(
-    protocol_name: str,
+def _calibration(run_root: Path) -> Any:
+    rows = _read_jsonl(run_root / "thresholds" / "formal_flow_detector_thresholds.jsonl")
+    row = next((item for item in rows if item.get("method_variant") == "sstw_full_method"), None)
+    if row is None:
+        raise RuntimeError("缺少 sstw_full_method 冻结概率后验 threshold artifact")
+    if row.get("threshold_source_split") != "calibration" or row.get("test_time_threshold_update_blocked") is not True:
+        raise RuntimeError("adaptive attack 只能使用 calibration split 冻结的检测器")
+    return frozen_flow_detector_calibration_from_dict(row)
+
+
+def _one_source_per_video(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """每个独立生成视频只选择一个固定输入, 避免把 runtime attack 重复当新视频。"""
+
+    grouped: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    for row in rows:
+        grouped[str(row.get("statistical_cluster_id") or row.get("trajectory_trace_id"))].append(row)
+    preference = {"h264_crf18_runtime": 0, "h264_crf23_runtime": 1, "platform_transcode_runtime": 2}
+    return [
+        min(group, key=lambda row: (preference.get(str(row.get("attack_name")), 100), str(row.get("attack_name"))))
+        for _cluster, group in sorted(grouped.items())
+    ]
+
+
+def _build_scorer(
+    pipeline: Any,
+    calibration: Any,
+    *,
+    prompt: str,
+    key_text: str,
+) -> Callable[[Path], Mapping[str, Any]]:
+    """把真实视频映射为同一个冻结 Flow 后验, 查询期间不重新拟合。"""
+
+    def score(video_path: Path) -> Mapping[str, Any]:
+        replay = run_wan_attacked_video_replay(
+            pipeline,
+            video_path,
+            prompt=prompt,
+            key_text=key_text,
+        )
+        evidence = build_flow_evidence_payload(
+            replay,
+            key_text=key_text,
+            method_variant="sstw_full_method",
+        )
+        return {
+            **evidence,
+            **apply_frozen_flow_detector(evidence, calibration),
+        }
+
+    return score
+
+
+def _base_record(
+    protocol: str,
     source: Mapping[str, Any],
     context: Mapping[str, Any],
-    *,
-    backend: str,
-    query_count: int,
-    score: float,
 ) -> dict[str, Any]:
-    """把真实 Flow replay、跨样本视频或离散查询优化结果转成正式 adaptive record。"""
-
-    payload = {
-        "record_version": "formal_flow_adaptive_attack_execution_v2",
+    return {
+        "record_version": "formal_per_video_adaptive_attack_v1",
         "paper_result_level": context["paper_result_level"],
         "target_fpr": context["target_fpr"],
-        "non_runtime_attack_protocol": protocol_name,
-        "adaptive_attack_name": protocol_name,
-        "adaptive_attack_family": _adaptive_family(protocol_name),
+        "non_runtime_attack_protocol": protocol,
+        "adaptive_attack_name": protocol,
         "generation_model_id": source.get("generation_model_id"),
         "prompt_id": source.get("prompt_id"),
         "seed_id": source.get("seed_id"),
         "trajectory_trace_id": source.get("trajectory_trace_id"),
+        "statistical_cluster_id": source.get("statistical_cluster_id"),
+        "statistical_independent_unit": "source_video_prompt_seed",
         "split": source.get("split"),
-        "method_variant": source.get("method_variant"),
-        "adaptive_attack_input_video_path": source.get("attacked_video_path") or source.get("clean_negative_video_path"),
-        "adaptive_attack_input_video_sha256": source.get("attacked_video_sha256"),
-        "adaptive_attack_execution_backend": backend,
-        "adaptive_attack_query_count": int(query_count),
-        "adaptive_attack_score": round(float(score), 8),
-        "adaptive_attack_score_semantics": "sstw_frozen_flow_detector_or_replay_control_score",
-        "adaptive_attack_score_orientation": "higher_is_more_watermarked",
-        "adaptive_attack_detected_by_sstw": bool(source.get("decision")),
+        "method_variant": "sstw_full_method",
         "adaptive_attack_status": "ready",
         "metric_status": "measured_formal",
         "adaptive_attack_evidence_level": FORMAL_ADAPTIVE_ATTACK_EVIDENCE_LEVEL,
+        "adaptive_attack_score_orientation": "higher_is_more_watermarked",
+        "test_time_threshold_update_blocked": True,
         "adaptive_robustness_claim_allowed": True,
-        "sstw_detector_input_contract": source.get("sstw_detector_input_contract"),
-        "formal_flow_evidence_unit_id": source.get("formal_flow_evidence_unit_id"),
-        "claim_support_status": "formal_flow_adaptive_attack_execution_ready",
+        "claim_support_status": "per_video_adaptive_attack_measured_formal",
     }
+
+
+def _finalize_record(payload: dict[str, Any]) -> dict[str, Any]:
     digest = build_stable_digest(payload)
     return with_flow_evidence_protocol_defaults(
         {"formal_adaptive_attack_execution_record_id": f"formal_adaptive_attack_{digest[:16]}", **payload},
-        trajectory_source_level="formal_flow_adaptive_attack_execution",
-        flow_state_admissibility_status=str(source.get("flow_state_admissibility_status") or "control_protocol"),
-        claim_support_status="formal_flow_adaptive_attack_execution_ready",
+        trajectory_source_level=FORMAL_ADAPTIVE_ATTACK_EVIDENCE_LEVEL,
+        flow_state_admissibility_status="frozen_detector_applied",
+        claim_support_status="per_video_adaptive_attack_measured_formal",
     )
 
 
-def _build_complete_flow_adaptive_records(
-    run_root: Path,
-    context: Mapping[str, Any],
-) -> list[dict[str, Any]]:
-    """从真实 Flow evidence 构建11个 non-runtime/adaptive 协议结果。"""
+def run_formal_adaptive_attack_execution(
+    run_root: str | Path,
+    config_path: str | Path = DEFAULT_PROTOCOL_CONFIG,
+    prompt_suite_path: str | Path | None = None,
+    *,
+    pipeline_loader: Callable[[str], Any] = _load_pipeline,
+) -> dict[str, Any]:
+    """对 held-out test 的每个独立视频执行全部预注册协议。"""
 
-    evidence = _read_jsonl(run_root / "records" / "formal_flow_evidence_records.jsonl")
+    if prompt_suite_path is None:
+        raise ValueError("正式 adaptive attack 必须提供 prompt suite")
+    root = Path(run_root)
+    context = _profile_context(config_path)
+    calibration = _calibration(root)
+    prompt_map = _prompt_text_by_id(_read_json(prompt_suite_path))
+    evidence = _read_jsonl(root / "records" / "formal_flow_evidence_records.jsonl")
     positives = [
         row for row in evidence
         if row.get("sample_role") == "attacked_positive"
@@ -180,398 +220,215 @@ def _build_complete_flow_adaptive_records(
         and row.get("split") == "test"
         and row.get("metric_status") == "measured_formal"
     ]
-    negatives = [
+    clean = [
         row for row in evidence
         if row.get("sample_role") == "clean_negative"
         and row.get("method_variant") == "sstw_full_method"
         and row.get("split") == "test"
-        and row.get("metric_status") == "measured_formal"
     ]
-    if not positives:
-        return []
-
-    def score(row: Mapping[str, Any]) -> float:
-        return float(row.get("S_final_conservative") or row.get("sstw_score") or 0.0)
-
-    def attack_row(*names: str) -> dict[str, Any] | None:
-        candidates = [row for row in positives if row.get("attack_name") in set(names)]
-        return min(candidates, key=score) if candidates else None
-
-    selected: dict[str, tuple[dict[str, Any] | None, str, int, float]] = {}
-    recompression = attack_row("platform_transcode_runtime", "h264_crf28_runtime", "h265_crf28_runtime")
-    selected["generative_recompression_or_regeneration_attack"] = (
-        recompression,
-        "formal_video_recompression_then_wan_flow_redetection",
-        1,
-        score(recompression or {}),
-    )
-
-    endpoint_ranked = sorted(positives, key=lambda row: float(row.get("endpoint_score") or 0.0), reverse=True)
-    endpoint_preserving_pool = endpoint_ranked[: max(1, len(endpoint_ranked) // 4)]
-    endpoint_path = min(endpoint_preserving_pool, key=lambda row: float(row.get("S_path_inv") or 0.0))
-    selected["endpoint_preserving_path_perturbation_attack"] = (
-        endpoint_path,
-        "endpoint_preserving_candidate_search_over_real_attacked_videos",
-        len(positives),
-        score(endpoint_path),
-    )
-
-    replay_source = min(positives, key=lambda row: float(row.get("time_grid_reliability") or 0.0))
-    selected["flow_time_grid_mismatch_attack"] = (
-        replay_source,
-        "multi_time_grid_replay_reliability_control",
-        len(positives),
-        1.0 - float(replay_source.get("time_grid_reliability") or 0.0),
-    )
-    for protocol_name, field_name, backend in (
-        ("wrong_sampler_replay_attack", "wrong_sampler_control_margin", "wrong_scheduler_shift_and_step_grid_replay"),
-        ("wrong_prompt_replay_attack", "wrong_prompt_control_margin", "wrong_prompt_model_velocity_replay"),
-        ("wrong_key_attack", "wrong_key_control_margin", "wrong_key_conditioned_velocity_replay"),
-    ):
-        control_source = min(positives, key=lambda row: float(row.get(field_name) or 0.0))
-        selected[protocol_name] = (
-            control_source,
-            backend,
-            len(positives),
-            -float(control_source.get(field_name) or 0.0),
-        )
-
-    probe_source = max(negatives, key=score) if negatives else None
-    selected["detector_probing_with_public_negatives"] = (
-        probe_source,
-        "public_clean_negative_key_trial_threshold_probing",
-        len(negatives),
-        score(probe_source or {}),
-    )
-    removal = min(positives, key=score)
-    selected["watermark_removal_optimization_attack"] = (
-        removal,
-        "black_box_discrete_attack_search_minimizing_frozen_flow_score",
-        len(positives),
-        score(removal),
-    )
-    spoof = attack_row("watermark_spoofing_or_copy_attack")
-    selected["watermark_spoofing_or_copy_attack"] = (
-        spoof,
-        "paired_watermarked_clean_residual_copy_then_flow_redetection",
-        1,
-        score(spoof or {}),
-    )
-    collusion = attack_row("collusion_multi_sample_attack")
-    selected["collusion_multi_sample_attack"] = (
-        collusion,
-        "different_key_multi_sample_frame_collusion_then_flow_redetection",
-        1,
-        score(collusion or {}),
-    )
-    selected["adversarial_detector_evasion_attack"] = (
-        removal,
-        "black_box_query_evasion_over_formal_attack_candidate_set",
-        len(positives),
-        score(removal),
-    )
-
-    records: list[dict[str, Any]] = []
-    required = [str(value) for value in context["required_non_runtime_attack_protocols"]]
-    for protocol_name in required:
-        source, backend, query_count, adaptive_score = selected.get(protocol_name, (None, "missing_backend", 0, 0.0))
-        if source is None:
-            continue
-        records.append(_complete_flow_adaptive_record(
-            protocol_name,
-            source,
-            context,
-            backend=backend,
-            query_count=query_count,
-            score=adaptive_score,
-        ))
-    return records
-
-
-def _identity_key(record: Mapping[str, Any]) -> tuple[str, str, str, str]:
-    """构造 generation、runtime attack 和 adaptive records 的视频身份键。"""
-
-    return (
-        str(record.get("generation_model_id") or ""),
-        str(record.get("prompt_id") or ""),
-        str(record.get("seed_id") or ""),
-        str(record.get("trajectory_trace_id") or ""),
-    )
-
-
-def _resolve_generation_video_path(run_root: Path, record: Mapping[str, Any]) -> Path:
-    """解析 generation record 的视频路径。"""
-
-    path = Path(str(record.get("video_path") or ""))
-    if path.exists():
-        return path
-    return run_root / "videos" / path.name
-
-
-def _runtime_attack_records_by_key(run_root: Path) -> dict[tuple[str, str, str, str], list[dict[str, Any]]]:
-    """按生成单元索引已完成的 runtime attack 记录。"""
-
-    grouped: dict[tuple[str, str, str, str], list[dict[str, Any]]] = {}
-    for record in _read_jsonl(run_root / "records" / "runtime_attack_records.jsonl"):
-        if record.get("attack_runtime_status") != "ready":
-            continue
-        grouped.setdefault(_identity_key(record), []).append(record)
-    return grouped
-
-
-def _select_video_for_protocol(
-    run_root: Path,
-    protocol_name: str,
-    generation_record: Mapping[str, Any],
-    attack_records: Iterable[Mapping[str, Any]],
-) -> tuple[Path, str, str]:
-    """为 non-runtime / adaptive 协议选择实际要检测的视频文件。
-
-    对需要视频扰动的协议, 优先复用已经由 runtime attack 阶段产生的正式视频文件。
-    对 key、prompt、sampler 或 detector probing 类协议, 使用 source generation
-    视频并改变检测 key 或检测上下文。
-    """
-
-    preferred_attacks = PREFERRED_RUNTIME_VIDEO_BY_PROTOCOL.get(protocol_name, ())
-    by_attack = {
-        str(record.get("attack_name") or ""): record
-        for record in attack_records
-        if record.get("attacked_video_path")
-    }
-    for attack_name in preferred_attacks:
-        record = by_attack.get(attack_name)
-        if record:
-            path = Path(str(record.get("attacked_video_path") or ""))
-            if path.exists():
-                return path, "runtime_transformed_video", attack_name
-    return _resolve_generation_video_path(run_root, generation_record), "source_generation_video", "none"
-
-
-def _detector_key_for_protocol(protocol_name: str, generation_record: Mapping[str, Any]) -> tuple[str, str]:
-    """构造 adaptive 协议使用的检测 key。"""
-
-    base_key = build_sstw_detector_key(dict(generation_record))
-    transformation = KEY_TRANSFORMATION_BY_PROTOCOL.get(protocol_name, "matched_key_video_rescore")
-    if transformation == "matched_key_video_rescore":
-        return base_key, transformation
-    return f"{base_key}::{transformation}", transformation
-
-
-def _formal_adaptive_record(
-    *,
-    run_root: Path,
-    context: Mapping[str, Any],
-    protocol_name: str,
-    generation_record: Mapping[str, Any],
-    attack_records: Iterable[Mapping[str, Any]],
-) -> dict[str, Any]:
-    """执行单个 generation 单元上的一个 adaptive 协议并返回正式记录。"""
-
-    video_path, video_source_kind, source_attack_name = _select_video_for_protocol(
-        run_root,
-        protocol_name,
-        generation_record,
-        attack_records,
-    )
-    detector_key, key_transformation = _detector_key_for_protocol(protocol_name, generation_record)
-    if not video_path.exists():
-        raise FileNotFoundError(f"adaptive_attack_input_video_missing:{video_path}")
-    result = score_video_content(video_path, detector_key=detector_key)
-    score = round(float(result.score), 6)
-    payload = {
-        "record_version": "formal_adaptive_attack_execution_v1",
-        "paper_result_level": context["paper_result_level"],
-        "target_fpr": context["target_fpr"],
-        "non_runtime_attack_protocol": protocol_name,
-        "adaptive_attack_name": protocol_name,
-        "adaptive_attack_family": _adaptive_family(protocol_name),
-        "generation_model_id": generation_record.get("generation_model_id"),
-        "prompt_id": generation_record.get("prompt_id"),
-        "seed_id": generation_record.get("seed_id"),
-        "trajectory_trace_id": generation_record.get("trajectory_trace_id"),
-        "split": generation_record.get("split"),
-        "protocol_split": generation_record.get("protocol_split"),
-        "colab_runtime_profile": generation_record.get("colab_runtime_profile"),
-        "adaptive_attack_input_video_path": str(video_path),
-        "adaptive_attack_input_video_sha256": _sha256_file(video_path),
-        "adaptive_attack_video_source_kind": video_source_kind,
-        "adaptive_attack_source_runtime_attack_name": source_attack_name,
-        "adaptive_attack_detector_key_transformation": key_transformation,
-        "adaptive_attack_score": score,
-        "adaptive_attack_score_semantics": FORMAL_VIDEO_DETECTOR_SCORE_SEMANTICS,
-        "adaptive_attack_score_orientation": "higher_is_more_watermarked",
-        "adaptive_attack_detected_by_sstw": score >= 0.5,
-        "adaptive_attack_status": "ready",
-        "metric_status": "measured_formal",
-        "adaptive_attack_evidence_level": FORMAL_ADAPTIVE_ATTACK_EVIDENCE_LEVEL,
-        "adaptive_robustness_claim_allowed": True,
-        "sstw_detector_input_contract": FORMAL_VIDEO_DETECTOR_INPUT_CONTRACT,
-        "sstw_detector_key_digest": result.detector_key_digest,
-        "sstw_content_feature_count": result.content_feature_count,
-        "sstw_detector_sampled_frame_count": result.sampled_frame_count,
-        "claim_support_status": "formal_adaptive_attack_execution_ready",
-    }
-    digest = build_stable_digest(payload)
-    return with_flow_evidence_protocol_defaults(
-        {
-            "formal_adaptive_attack_execution_record_id": f"formal_adaptive_attack_{digest[:16]}",
-            **payload,
-        },
-        trajectory_source_level=FORMAL_ADAPTIVE_ATTACK_EVIDENCE_LEVEL,
-        flow_state_admissibility_status="formal_adaptive_attack_execution_ready",
-        claim_support_status="formal_adaptive_attack_execution_ready",
-    )
-
-
-def _adaptive_family(protocol_name: str) -> str:
-    """把协议映射到论文表格中的攻击族。"""
-
-    if protocol_name in {"wrong_sampler_replay_attack", "wrong_prompt_replay_attack"}:
-        return "replay_signature_mismatch"
-    if protocol_name == "flow_time_grid_mismatch_attack":
-        return "time_grid_or_scheduler_mismatch"
-    if protocol_name == "wrong_key_attack":
-        return "key_mismatch_attack"
-    if protocol_name == "generative_recompression_or_regeneration_attack":
-        return "generative_recompression_or_regeneration"
-    if protocol_name == "detector_probing_with_public_negatives":
-        return "detector_threshold_probing"
-    if protocol_name == "watermark_removal_optimization_attack":
-        return "watermark_removal_optimization"
-    if protocol_name == "watermark_spoofing_or_copy_attack":
-        return "watermark_spoofing_or_copy"
-    if protocol_name == "collusion_multi_sample_attack":
-        return "collusion_multi_sample"
-    if protocol_name == "adversarial_detector_evasion_attack":
-        return "adversarial_detector_evasion"
-    return "endpoint_preserving_path_attack"
-
-
-def build_formal_adaptive_attack_execution_records(
-    run_root: str | Path,
-    config_path: str | Path = DEFAULT_PROTOCOL_CONFIG,
-) -> list[dict[str, Any]]:
-    """从真实视频文件执行 11 个 non-runtime / adaptive 协议记录。"""
-
-    run_root = Path(run_root)
-    context = _load_protocol_context(config_path)
-    if context["require_complete_paper_mechanism_contract"]:
-        return _build_complete_flow_adaptive_records(run_root, context)
-    generation_records = [
-        record
-        for record in _read_jsonl(run_root / "records" / "generation_records.jsonl")
-        if record.get("generation_status") == "success"
-        and str(record.get("sample_role") or record.get("generation_sample_role") or "").lower() != "clean_negative"
+    public_calibration_negatives = [
+        row for row in evidence
+        if row.get("sample_role") == "clean_negative"
+        and row.get("method_variant") == "sstw_full_method"
+        and row.get("split") == "calibration"
     ]
-    formal_metric_records = _read_jsonl(run_root / "records" / "formal_quality_motion_semantic_records.jsonl")
-    selection = select_motion_claim_generation_records(generation_records, formal_metric_records)
-    attack_by_key = _runtime_attack_records_by_key(run_root)
-    protocols = [str(item) for item in context["required_non_runtime_attack_protocols"] if str(item)]
-    total = len(selection.eligible_generation_records) * len(protocols)
-    progress = ProgressReporter("formal_adaptive_attack_execution", total, "adaptive_attack_event")
+    sources = _one_source_per_video(positives)
+    if not sources:
+        raise RuntimeError("缺少 held-out test full-method 视频, 无法执行 adaptive attack")
+    models = sorted({str(row["generation_model_id"]) for row in sources})
+    pipelines = {model_id: pipeline_loader(model_id) for model_id in models}
     records: list[dict[str, Any]] = []
+    query_rows: list[dict[str, Any]] = []
+    failure_rows: list[dict[str, Any]] = []
+    progress = ProgressReporter(
+        "formal_per_video_adaptive_attack",
+        len(sources) * len(context["required_protocols"]),
+        "video_protocol",
+    )
     progress_index = 0
-    for generation_record in selection.eligible_generation_records:
-        source_attack_records = attack_by_key.get(_identity_key(generation_record), [])
-        for protocol_name in protocols:
+    for source_index, source in enumerate(sources):
+        model_id = str(source["generation_model_id"])
+        prompt = prompt_map[str(source["prompt_id"])]
+        key_text = f"{model_id}::{source.get('prompt_id')}::{source.get('seed_id')}"
+        pipeline = pipelines[model_id]
+        scorer = _build_scorer(pipeline, calibration, prompt=prompt, key_text=key_text)
+        source_video = _resolve_video(root, source.get("attacked_video_path"), "attacked_videos")
+        for protocol in context["required_protocols"]:
             progress_index += 1
-            progress.update(
-                progress_index,
-                f"prompt={generation_record.get('prompt_id')} seed={generation_record.get('seed_id')} protocol={protocol_name}",
-            )
-            records.append(_formal_adaptive_record(
-                run_root=run_root,
-                context=context,
-                protocol_name=protocol_name,
-                generation_record=generation_record,
-                attack_records=source_attack_records,
-            ))
-    progress.finish(f"ready={len(records)}")
-    return records
-
-
-def audit_formal_adaptive_attack_execution_records(
-    records: list[dict[str, Any]],
-    config_path: str | Path = DEFAULT_PROTOCOL_CONFIG,
-) -> dict[str, Any]:
-    """审计自动执行的 adaptive attack 正式记录是否覆盖配置要求。"""
-
-    context = _load_protocol_context(config_path)
-    required_protocols = {str(item) for item in context["required_non_runtime_attack_protocols"] if str(item)}
-    ready_records = [
-        record
-        for record in records
-        if record.get("metric_status") == "measured_formal"
-        and record.get("adaptive_attack_status") == "ready"
-        and record.get("adaptive_attack_evidence_level") == FORMAL_ADAPTIVE_ATTACK_EVIDENCE_LEVEL
-    ]
-    observed_protocols = {
-        str(record.get("non_runtime_attack_protocol") or "")
-        for record in ready_records
-        if record.get("non_runtime_attack_protocol")
-    }
-    missing_protocols = sorted(required_protocols - observed_protocols)
-    scores = [
-        value
-        for value in (_safe_float(record.get("adaptive_attack_score")) for record in ready_records)
-        if value is not None
-    ]
-    decision = "PASS" if ready_records and not missing_protocols else "FAIL"
-    return {
+            progress.update(progress_index, f"video={source_index} protocol={protocol}")
+            base = _base_record(protocol, source, context)
+            base["adaptive_attack_input_video_path"] = str(source_video)
+            base["adaptive_attack_input_video_sha256"] = source.get("attacked_video_sha256")
+            try:
+                if protocol in ADAPTIVE_SEARCH_PROTOCOLS:
+                    objective, candidate_names = ADAPTIVE_SEARCH_PROTOCOLS[protocol]
+                    public_probe_summary: dict[str, Any] = {}
+                    if protocol == "detector_probing_with_public_negatives":
+                        if not public_calibration_negatives:
+                            raise RuntimeError("detector probing 缺少 calibration public negative")
+                        public_row = public_calibration_negatives[
+                            source_index % len(public_calibration_negatives)
+                        ]
+                        public_model_id = str(public_row["generation_model_id"])
+                        public_prompt = prompt_map[str(public_row["prompt_id"])]
+                        public_trial_index = int(public_row.get("clean_negative_trial_index") or 0)
+                        public_key = (
+                            f"{public_model_id}::{public_row.get('prompt_id')}::{public_row.get('seed_id')}"
+                            f"::clean_negative::sstw_full_method::{public_trial_index:06d}"
+                        )
+                        public_scorer = _build_scorer(
+                            pipelines[public_model_id],
+                            calibration,
+                            prompt=public_prompt,
+                            key_text=public_key,
+                        )
+                        public_video = _resolve_video(
+                            root,
+                            public_row.get("clean_negative_video_path"),
+                            "videos",
+                        )
+                        public_result = optimize_adaptive_attack_for_video(
+                            public_video,
+                            root / "adaptive_public_negative_probes" / str(source.get("statistical_cluster_id")),
+                            candidate_attack_names=candidate_names,
+                            scorer=public_scorer,
+                            objective="minimize_detector_score",
+                            endpoint_reference=float(public_row["endpoint_score"]),
+                            endpoint_tolerance=context["endpoint_tolerance"],
+                            minimum_quality_psnr=context["minimum_quality_psnr"],
+                            query_budget=context["query_budget"],
+                        )
+                        candidate_names = tuple(
+                            row.attack_name
+                            for row in sorted(
+                                public_result.candidates,
+                                key=lambda row: (row.detector_score, row.candidate_index),
+                            )
+                        )
+                        public_probe_summary = {
+                            "adaptive_attack_public_negative_probe_count": len(public_result.candidates),
+                            "adaptive_attack_public_negative_cluster_id": public_row.get("statistical_cluster_id"),
+                            "adaptive_attack_public_negative_candidate_records": [
+                                row.as_dict() for row in public_result.candidates
+                            ],
+                            "adaptive_attack_public_negative_informed_order": list(candidate_names),
+                        }
+                    result = optimize_adaptive_attack_for_video(
+                        source_video,
+                        root / "adaptive_attacked_videos" / str(source.get("statistical_cluster_id")) / protocol,
+                        candidate_attack_names=candidate_names,
+                        scorer=scorer,
+                        objective=objective,
+                        endpoint_reference=float(source["endpoint_score"]),
+                        endpoint_tolerance=context["endpoint_tolerance"],
+                        minimum_quality_psnr=context["minimum_quality_psnr"],
+                        query_budget=context["query_budget"],
+                    )
+                    selected = result.selected
+                    payload = {
+                        **base,
+                        **result.as_dict(),
+                        **public_probe_summary,
+                        "adaptive_attack_execution_backend": "actual_video_candidate_generation_and_frozen_flow_queries",
+                        "adaptive_attack_score": selected.detector_score,
+                        "adaptive_attack_path_score": selected.path_score,
+                        "adaptive_attack_endpoint_score": selected.endpoint_score,
+                        "adaptive_attack_detected_by_sstw": selected.decision,
+                        "adaptive_attack_score_semantics": "frozen_calibrated_flow_probability_posterior",
+                    }
+                    for candidate in result.candidates:
+                        query_rows.append({
+                            **{key: base.get(key) for key in ("paper_result_level", "non_runtime_attack_protocol", "generation_model_id", "prompt_id", "seed_id", "statistical_cluster_id")},
+                            **candidate.as_dict(),
+                        })
+                elif protocol in CONTROL_FIELDS:
+                    field_name, transform = CONTROL_FIELDS[protocol]
+                    value = float(source[field_name])
+                    score = 1.0 - value if transform == "one_minus_reliability" else value
+                    payload = {
+                        **base,
+                        "adaptive_attack_execution_backend": "per_video_precomputed_key_independent_replay_control",
+                        "adaptive_attack_query_count": 1,
+                        "adaptive_attack_score": score,
+                        "adaptive_attack_score_semantics": field_name,
+                        "adaptive_attack_detected_by_sstw": False,
+                        "adaptive_attack_output_video_path": str(source_video),
+                        "adaptive_attack_output_video_sha256": source.get("attacked_video_sha256"),
+                    }
+                elif protocol in {"watermark_spoofing_or_copy_attack", "collusion_multi_sample_attack"}:
+                    if protocol == "watermark_spoofing_or_copy_attack":
+                        if not clean:
+                            raise RuntimeError("copy/spoof attack 缺少 held-out clean recipient video")
+                        primary = _resolve_video(root, clean[source_index % len(clean)].get("clean_negative_video_path"), "videos")
+                        secondary = source_video
+                        weight = 0.15
+                    else:
+                        peer = sources[(source_index + 1) % len(sources)]
+                        if peer.get("statistical_cluster_id") == source.get("statistical_cluster_id"):
+                            raise RuntimeError("collusion attack 至少需要2个独立视频簇")
+                        primary = source_video
+                        secondary = _resolve_video(root, peer.get("attacked_video_path"), "attacked_videos")
+                        weight = 0.5
+                    output_path = root / "adaptive_attacked_videos" / str(source.get("statistical_cluster_id")) / protocol / "cross_video_blend.mp4"
+                    blend = write_cross_video_blend(primary, secondary, output_path, secondary_weight=weight)
+                    score_payload = dict(scorer(output_path))
+                    payload = {
+                        **base,
+                        **blend,
+                        "adaptive_attack_execution_backend": "actual_cross_video_frame_blend_then_frozen_flow_query",
+                        "adaptive_attack_query_count": 1,
+                        "adaptive_attack_score": float(score_payload["S_final_conservative"]),
+                        "adaptive_attack_path_score": float(score_payload["S_path_inv"]),
+                        "adaptive_attack_endpoint_score": float(score_payload["endpoint_score"]),
+                        "adaptive_attack_detected_by_sstw": bool(score_payload["decision"]),
+                        "adaptive_attack_score_semantics": "frozen_calibrated_flow_probability_posterior",
+                    }
+                else:
+                    raise RuntimeError(f"未实现的 formal non-runtime protocol: {protocol}")
+                records.append(_finalize_record(payload))
+            except Exception as exc:  # pragma: no cover - 依赖真实 GPU、codec 与视频文件
+                failure_rows.append({
+                    **base,
+                    "adaptive_attack_status": "failed",
+                    "metric_status": "missing",
+                    "adaptive_robustness_claim_allowed": False,
+                    "adaptive_attack_failure_reason": str(exc),
+                })
+    expected_count = len(sources) * len(context["required_protocols"])
+    audit = {
         "stage_id": "formal_adaptive_attack_execution",
-        "formal_adaptive_attack_execution_decision": decision,
+        "formal_adaptive_attack_execution_decision": "PASS" if len(records) == expected_count and not failure_rows else "FAIL",
         "paper_result_level": context["paper_result_level"],
-        "target_fpr": context["target_fpr"],
+        "independent_video_count": len(sources),
+        "required_non_runtime_attack_protocols": list(context["required_protocols"]),
         "formal_adaptive_attack_execution_record_count": len(records),
-        "formal_adaptive_attack_execution_ready_count": len(ready_records),
-        "required_non_runtime_attack_protocols": sorted(required_protocols),
-        "observed_non_runtime_attack_protocols": sorted(observed_protocols),
-        "missing_non_runtime_attack_protocols": missing_protocols,
-        "adaptive_attack_score_mean": round(mean(scores), 6) if scores else None,
-        "claim_support_status": (
-            "formal_adaptive_attack_execution_ready"
-            if decision == "PASS"
-            else "formal_adaptive_attack_execution_blocked"
-        ),
+        "formal_adaptive_attack_expected_record_count": expected_count,
+        "formal_adaptive_attack_query_record_count": len(query_rows),
+        "formal_adaptive_attack_failure_count": len(failure_rows),
+        "per_video_adaptive_attack_optimization": True,
+        "test_time_threshold_update_blocked": True,
+        "adaptive_robustness_claim_allowed": len(records) == expected_count and not failure_rows,
     }
-
-
-def run_formal_adaptive_attack_execution(
-    run_root: str | Path,
-    config_path: str | Path = DEFAULT_PROTOCOL_CONFIG,
-) -> dict[str, Any]:
-    """执行 adaptive attack 正式记录生成并写出 governed artifacts。"""
-
-    run_root = Path(run_root)
-    records = build_formal_adaptive_attack_execution_records(run_root, config_path)
-    audit = audit_formal_adaptive_attack_execution_records(records, config_path)
-    write_jsonl(run_root / "records" / "formal_adaptive_attack_execution_records.jsonl", records)
-    write_csv(run_root / "tables" / "formal_adaptive_attack_execution_table.csv", records)
-    write_json(run_root / "artifacts" / "formal_adaptive_attack_execution_decision.json", audit)
-    report = (
-        "# Formal Adaptive Attack Execution Report\n\n"
-        "该报告记录 11 个 non-runtime / adaptive 协议的正式执行结果。完整 paper profile "
-        "只接受 Wan Flow 重检测、真实 replay controls、跨样本视频变换或显式黑盒查询搜索证据。\n\n"
-        f"- formal_adaptive_attack_execution_decision: {audit['formal_adaptive_attack_execution_decision']}\n"
-        f"- paper_result_level: {audit['paper_result_level']}\n"
-        f"- target_fpr: {audit['target_fpr']}\n"
-        f"- formal_adaptive_attack_execution_record_count: {audit['formal_adaptive_attack_execution_record_count']}\n"
-        f"- observed_non_runtime_attack_protocols: {', '.join(audit['observed_non_runtime_attack_protocols']) if audit['observed_non_runtime_attack_protocols'] else 'none'}\n"
-        f"- missing_non_runtime_attack_protocols: {', '.join(audit['missing_non_runtime_attack_protocols']) if audit['missing_non_runtime_attack_protocols'] else 'none'}\n"
-        f"- claim_support_status: {audit['claim_support_status']}\n"
-    )
-    report_path = run_root / "reports" / "formal_adaptive_attack_execution_report.md"
-    report_path.parent.mkdir(parents=True, exist_ok=True)
-    report_path.write_text(report, encoding="utf-8")
+    write_jsonl(root / "records" / "formal_adaptive_attack_execution_records.jsonl", records)
+    write_jsonl(root / "records" / "formal_adaptive_attack_query_records.jsonl", query_rows)
+    write_jsonl(root / "records" / "formal_adaptive_attack_failure_records.jsonl", failure_rows)
+    write_csv(root / "tables" / "formal_adaptive_attack_execution_table.csv", records)
+    write_csv(root / "tables" / "formal_adaptive_attack_query_table.csv", query_rows)
+    write_json(root / "artifacts" / "formal_adaptive_attack_execution_decision.json", audit)
     return audit
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="执行 paper profile non-runtime / adaptive attack 正式协议。")
+    parser = argparse.ArgumentParser(description="逐视频执行完整论文 adaptive attack 优化。")
     parser.add_argument("--run-root", required=True)
     parser.add_argument("--config-path", default=DEFAULT_PROTOCOL_CONFIG)
+    parser.add_argument("--prompt-suite-path", required=True)
     args = parser.parse_args()
-    payload = run_formal_adaptive_attack_execution(args.run_root, args.config_path)
+    payload = run_formal_adaptive_attack_execution(
+        args.run_root,
+        args.config_path,
+        args.prompt_suite_path,
+    )
     print(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True))
 
 

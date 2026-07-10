@@ -19,13 +19,13 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from main.protocol.package_naming import current_short_commit, current_utc_time_for_filename
-from paper_workflow.colab_utils.modern_external_baseline_formal_reference import (
+from evaluation.protocol.package_naming import current_short_commit, current_utc_time_for_filename
+from workflows.modern_external_baseline_reference import (
     MODERN_EXTERNAL_BASELINE_BUILD_ORDER,
     run_default_modern_external_baseline_formal_reference_plan,
 )
-from paper_workflow.colab_utils.stage_package_sync import prepare_colab_stage_layout
-from paper_workflow.notebook_utils import generative_video_model_probe_workflow as probe_workflow
+from workflows.stage_package_sync import prepare_colab_stage_layout
+from workflows import generative_video_paper as probe_workflow
 
 
 SERVER_PIPELINES = (

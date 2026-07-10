@@ -19,8 +19,8 @@ from experiments.generative_video_model_probe.validation_artifact_rebuild import
 )
 from experiments.generative_video_model_probe.validation_internal_ablation import run_validation_internal_ablation
 from experiments.generative_video_model_probe.formal_internal_ablation_summary import run_formal_internal_ablation_summary
-from main.attacks.video_runtime_attack_protocol import FULL_PAPER_RUNTIME_ATTACKS
-from main.protocol.record_writer import read_jsonl, write_json, write_jsonl
+from evaluation.attacks.video_runtime_attack_protocol import FULL_PAPER_RUNTIME_ATTACKS
+from evaluation.protocol.record_writer import read_jsonl, write_json, write_jsonl
 
 
 REQUIRED_RUNTIME_ATTACK_NAMES = FULL_PAPER_RUNTIME_ATTACKS
@@ -132,7 +132,7 @@ def test_validation_internal_ablation_writes_formal_records(tmp_path: Path) -> N
             "seed_id": "seed_a",
             "attack_name": "video_compression_runtime",
             "method_variant": variant_name,
-            "sstw_detector_evidence_level": "attacked_video_content_detector",
+            "sstw_detector_evidence_level": "attacked_video_key_independent_inversion_hypothesis_replay",
             "trajectory_trace_used_for_score": False,
             "runtime_detection_claim_level": "formal_paper_detector",
             "sstw_raw_detector_score": score,
@@ -189,7 +189,7 @@ def test_pilot_paper_internal_ablation_writes_same_profile_records(tmp_path: Pat
             "seed_id": "seed_pilot_paper",
             "attack_name": "video_compression_runtime",
             "method_variant": variant_name,
-            "sstw_detector_evidence_level": "attacked_video_content_detector",
+            "sstw_detector_evidence_level": "attacked_video_key_independent_inversion_hypothesis_replay",
             "trajectory_trace_used_for_score": False,
             "runtime_detection_claim_level": "formal_paper_detector",
             "sstw_raw_detector_score": score,
@@ -206,8 +206,8 @@ def test_pilot_paper_internal_ablation_writes_same_profile_records(tmp_path: Pat
 
 
 @pytest.mark.quick
-def test_statistical_confidence_interval_reporter_writes_wilson_interval(tmp_path: Path) -> None:
-    """统计 CI reporter 必须基于 measured_formal 公平校准 records 写出 Wilson 区间。"""
+def test_statistical_confidence_interval_reporter_writes_clustered_intervals(tmp_path: Path) -> None:
+    """统计 CI reporter 必须写出视频簇 bootstrap TPR 与 exact FPR 区间。"""
     run_root = tmp_path / "run"
     write_jsonl(run_root / "records" / "fair_detection_calibration_records.jsonl", [
         {
@@ -217,6 +217,20 @@ def test_statistical_confidence_interval_reporter_writes_wilson_interval(tmp_pat
             "metric_status": "measured_formal",
             "attacked_positive_score_count": 3,
             "detected_positive_count_at_target_fpr": 2,
+            "positive_detection_units_at_target_fpr": [
+                {
+                    "comparison_anchor_key": f"prompt_{index}::seed_a::attack_a",
+                    "detected_at_target_fpr": index < 2,
+                }
+                for index in range(3)
+            ],
+            "negative_detection_units_at_target_fpr": [
+                {
+                    "statistical_cluster_id": f"negative_{index}::seed_a",
+                    "false_positive_at_target_fpr": False,
+                }
+                for index in range(30)
+            ],
         },
     ])
 
@@ -230,7 +244,9 @@ def test_statistical_confidence_interval_reporter_writes_wilson_interval(tmp_pat
     assert records[0]["target_fpr"] == protocol["target_fpr"]
     assert audit["ci_total_count"] == 3
     assert audit["ci_success_count"] == 2
-    assert 0 <= audit["ci_wilson_lower"] <= audit["ci_wilson_upper"] <= 1
+    assert 0 <= audit["ci_cluster_bootstrap_lower"] <= audit["ci_cluster_bootstrap_upper"] <= 1
+    assert audit["heldout_fpr_confidence_bound_available"] is True
+    assert len(records) == 2
     assert records[0]["paper_low_fpr_ci_status"] == "formal_target_fpr_ci_ready"
     assert (run_root / "tables" / "statistical_confidence_interval_table.csv").exists()
     assert (run_root / "reports" / "statistical_confidence_interval_report.md").exists()
@@ -243,8 +259,8 @@ def test_sstw_measured_formal_result_writes_project_method_records(tmp_path: Pat
     write_jsonl(run_root / "records" / "runtime_detection_records.jsonl", [
         {
             "runtime_detection_status": "ready",
-            "runtime_detection_evidence_level": "attacked_video_content_detector",
-            "sstw_detector_evidence_level": "attacked_video_content_detector",
+            "runtime_detection_evidence_level": "attacked_video_key_independent_inversion_hypothesis_replay",
+            "sstw_detector_evidence_level": "attacked_video_key_independent_inversion_hypothesis_replay",
             "trajectory_trace_used_for_score": False,
             "runtime_detection_claim_level": "formal_paper_detector",
             "generation_model_id": "wan21",
@@ -278,7 +294,7 @@ def test_sstw_measured_formal_result_writes_project_method_records(tmp_path: Pat
             "seed_id": "seed_a",
             "trajectory_trace_id": f"negative_trace_{index}",
             "trajectory_trace_used_for_score": False,
-            "clean_negative_evidence_level": "project_owned_clean_video_content_detector",
+            "clean_negative_evidence_level": "attacked_video_key_independent_inversion_hypothesis_replay",
             "clean_negative_video_path": f"videos/negative_{index}.mp4",
             "sstw_clean_negative_score": 0.05 + index * 0.001,
         }
@@ -299,8 +315,8 @@ def test_sstw_measured_formal_result_writes_project_method_records(tmp_path: Pat
     assert records[0]["method_id"] == "sstw_key_conditioned_flow_trajectory"
     assert records[0]["method_role"] == "proposed_method"
     assert records[0]["comparison_scope"] == "paper_protocol_formal_adapter"
-    assert records[0]["claim_support_status"] == "sstw_measured_formal_paper_profile_claim_candidate"
-    assert records[0]["sstw_detection_score_field"] == "sstw_raw_detector_score"
+    assert records[0]["claim_support_status"] == "sstw_measured_formal_paper_profile_claim_evidence"
+    assert records[0]["sstw_detection_score_field"] == "S_final_conservative"
     assert any(record.get("sample_role") == "clean_negative" for record in records)
     assert (run_root / "tables" / "sstw_measured_formal_table.csv").exists()
     assert (run_root / "artifacts" / "sstw_measured_formal_decision.json").exists()
@@ -768,7 +784,7 @@ def test_formal_method_baseline_comparison_rejects_unaligned_prompt_seed_attack_
             "sstw_score": 0.84,
             "sstw_raw_detector_score": 0.84,
             "raw_detector_score": 0.84,
-            "sstw_detector_evidence_level": "attacked_video_content_detector",
+            "sstw_detector_evidence_level": "attacked_video_key_independent_inversion_hypothesis_replay",
             "sstw_detector_input_contract": "video_file_plus_project_watermark_key",
             "trajectory_trace_used_for_score": False,
             "runtime_detection_claim_level": "formal_paper_detector",
@@ -785,7 +801,7 @@ def test_formal_method_baseline_comparison_rejects_unaligned_prompt_seed_attack_
             "seed_id": "seed_a",
             "sstw_score": 0.05 + index * 0.001,
             "sstw_clean_negative_score": 0.05 + index * 0.001,
-            "clean_negative_evidence_level": "project_owned_clean_video_content_detector",
+            "clean_negative_evidence_level": "attacked_video_key_independent_inversion_hypothesis_replay",
             "trajectory_trace_used_for_score": False,
         }
         for index in range(10)

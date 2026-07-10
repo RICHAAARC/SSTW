@@ -8,27 +8,19 @@ from pathlib import Path
 from statistics import mean
 from typing import Any
 
-from main.core.digest import build_stable_digest
-from main.methods.state_space_watermark.video_content_detector import (
-    FORMAL_CLEAN_NEGATIVE_EVIDENCE_LEVEL,
-    FORMAL_VIDEO_DETECTOR_EVIDENCE_LEVEL,
-    FORMAL_VIDEO_DETECTOR_SCORE_SEMANTICS,
-)
-from main.protocol.flow_evidence_fields import with_flow_evidence_protocol_defaults
-from main.protocol.record_writer import write_json, write_jsonl
-from main.protocol.table_builder import write_csv
+from runtime.core.digest import build_stable_digest
+from evaluation.attacks.video_runtime_attack_protocol import load_protocol_config_with_shared_attack_protocol
+from evaluation.protocol.flow_evidence_fields import with_flow_evidence_protocol_defaults
+from evaluation.protocol.record_writer import write_json, write_jsonl
+from evaluation.protocol.table_builder import write_csv
 
 
 DEFAULT_PROTOCOL_CONFIG = "configs/protocol/probe_paper_generative_probe.json"
 SSTW_METHOD_ID = "sstw_key_conditioned_flow_trajectory"
-FORMAL_SSTW_DETECTOR_EVIDENCE_LEVELS = {
-    FORMAL_VIDEO_DETECTOR_EVIDENCE_LEVEL,
-    "attacked_video_wan_vae_model_velocity_replay",
-}
-FORMAL_SSTW_CLEAN_NEGATIVE_EVIDENCE_LEVELS = {
-    FORMAL_CLEAN_NEGATIVE_EVIDENCE_LEVEL,
-    "attacked_video_wan_vae_model_velocity_replay",
-}
+FORMAL_FLOW_EVIDENCE_LEVEL = "attacked_video_key_independent_inversion_hypothesis_replay"
+FORMAL_FLOW_SCORE_SEMANTICS = "calibrated_probability_posterior_with_fixed_fpr_threshold"
+FORMAL_SSTW_DETECTOR_EVIDENCE_LEVELS = {FORMAL_FLOW_EVIDENCE_LEVEL}
+FORMAL_SSTW_CLEAN_NEGATIVE_EVIDENCE_LEVELS = {FORMAL_FLOW_EVIDENCE_LEVEL}
 
 
 def _read_json(path: Path) -> dict[str, Any]:
@@ -51,7 +43,7 @@ def _read_jsonl(path: Path) -> list[dict[str, Any]]:
 def _load_profile_context(config_path: str | Path) -> dict[str, Any]:
     """从 protocol config 读取 SSTW formal 结果的 profile 语义。"""
     config_path = Path(config_path)
-    config = _read_json(config_path)
+    config = load_protocol_config_with_shared_attack_protocol(config_path)
     if "target_fpr" not in config:
         raise KeyError(f"protocol config 缺少 target_fpr: {config_path}")
     return {
@@ -75,7 +67,7 @@ def _safe_float(value: object) -> float | None:
 
 def _score_from_runtime_detection(record: dict[str, Any]) -> tuple[float | None, str]:
     """从 runtime detection record 中选择 SSTW 正式转写分数。"""
-    for field_name in ("sstw_raw_detector_score", "raw_detector_score"):
+    for field_name in ("S_final_conservative", "sstw_raw_detector_score", "raw_detector_score"):
         value = _safe_float(record.get(field_name))
         if value is not None:
             return round(value, 6), field_name
@@ -146,7 +138,7 @@ def build_sstw_measured_formal_records(
     generation -> attack -> detection 链路转成与 external baseline 对齐的
     `metric_status: measured_formal` 记录形状。当 protocol config 启用
     `allow_effect_size_claims` 且 target_fpr 为0.1 时, probe_paper 产物用于支撑
-    fpr=0.1 论文设定下的小样本结论候选, 但不能外推到 pilot_paper 或 full_paper 的更低 FPR。
+    fpr=0.1 论文设定下的FPR=0.1 条件下的完整结论, 但不能外推到 pilot_paper 或 full_paper 的更低 FPR。
     """
     run_root = Path(run_root)
     profile_context = _load_profile_context(config_path)
@@ -156,7 +148,7 @@ def build_sstw_measured_formal_records(
         control_records = _read_jsonl(run_root / "records" / "controlled_negative_records.jsonl")
     formal_records: list[dict[str, Any]] = []
     claim_support_status = (
-        "sstw_measured_formal_paper_profile_claim_candidate"
+        "sstw_measured_formal_paper_profile_claim_evidence"
         if profile_context["allow_effect_size_claims"]
         else "sstw_measured_formal_paper_profile_only"
     )
@@ -186,7 +178,7 @@ def build_sstw_measured_formal_records(
             "sstw_raw_detector_score": score,
             "raw_detector_score": score,
             "sstw_detected": bool(detection_record.get("attacked_video_detectable")),
-            "sstw_score_semantics": FORMAL_VIDEO_DETECTOR_SCORE_SEMANTICS,
+            "sstw_score_semantics": FORMAL_FLOW_SCORE_SEMANTICS,
             "sstw_score_orientation": "higher_is_more_watermarked",
             "sstw_detection_score_field": score_field,
             "runtime_detection_evidence_level": detection_record.get("runtime_detection_evidence_level"),
@@ -207,7 +199,7 @@ def build_sstw_measured_formal_records(
             "sstw_measured_formal_status": "ready",
             "claim_support_status": claim_support_status,
             **payload,
-        }, trajectory_source_level="project_owned_sstw_video_content_detector", claim_support_status=claim_support_status))
+        }, trajectory_source_level=FORMAL_FLOW_EVIDENCE_LEVEL, claim_support_status=claim_support_status))
     for index, control_record in enumerate(control_records):
         if str(control_record.get("sample_role") or "").lower() != "clean_negative":
             continue
@@ -241,8 +233,8 @@ def build_sstw_measured_formal_records(
             "raw_detector_score": score,
             "sstw_clean_negative_score": score,
             "clean_negative_score": score,
-            "sstw_score_semantics": FORMAL_VIDEO_DETECTOR_SCORE_SEMANTICS,
-            "sstw_clean_negative_score_semantics": FORMAL_VIDEO_DETECTOR_SCORE_SEMANTICS,
+            "sstw_score_semantics": FORMAL_FLOW_SCORE_SEMANTICS,
+            "sstw_clean_negative_score_semantics": FORMAL_FLOW_SCORE_SEMANTICS,
             "sstw_score_orientation": "higher_is_more_watermarked",
             "sstw_detection_score_field": score_field,
             "clean_negative_evidence_level": control_record.get("clean_negative_evidence_level"),
@@ -263,7 +255,7 @@ def build_sstw_measured_formal_records(
             "sstw_measured_formal_status": "ready",
             "claim_support_status": claim_support_status,
             **payload,
-        }, trajectory_source_level="project_owned_sstw_clean_video_content_detector", claim_support_status=claim_support_status))
+        }, trajectory_source_level=FORMAL_FLOW_EVIDENCE_LEVEL, claim_support_status=claim_support_status))
     if formal_records:
         all_fields = sorted({field for record in formal_records for field in record})
         for record in formal_records:
@@ -351,7 +343,7 @@ def run_sstw_measured_formal_result(
         "# SSTW Measured Formal Result Report\n\n"
         "该报告把本项目 SSTW generation -> attack -> detection 链路转写为与 external baseline "
         "同层级的 measured_formal 记录。paper_profile 在 target_fpr=0.1 配置下用于支撑 "
-        "fpr=0.1 论文设定的小样本结论候选, 但不能外推到 pilot_paper 或 full_paper 的更低 FPR。\n\n"
+        "fpr=0.1 论文设定的FPR=0.1 条件下的完整结论, 但不能外推到 pilot_paper 或 full_paper 的更低 FPR。\n\n"
         f"- sstw_measured_formal_decision: {audit['sstw_measured_formal_decision']}\n"
         f"- paper_result_level: {audit['paper_result_level']}\n"
         f"- target_fpr: {audit['target_fpr']}\n"

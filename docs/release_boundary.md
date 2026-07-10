@@ -1,89 +1,56 @@
-# Release Boundary
+# 发布边界
 
-## 与 extraction profile 的关系
+## 与抽离 profile 的关系
 
-本文件说明发布边界原则, `docs/extraction_profiles.md` 定义可执行的抽离 profile。发布包不应默认等同于开发仓库。
+本文件说明发布原则，`docs/extraction_profiles.md` 定义可执行的抽离 profile。开发仓库、最小方法包和实验重建包具有不同职责，不能把整个开发仓库直接作为最小方法实现。
 
-## 发布包类型
+## `minimal_method_package`
 
-### `minimal_method_package`
-
-该包是最小论文方法代码附件, 只保留核心方法、核心协议和最小配置。
-
-默认包含:
+该包是最小论文方法实现，只保留可独立理解和复用的 SSTW 核心原语：
 
 ```text
-main/core/
 main/methods/
-main/protocol/
-configs/
+configs/methods/
 README.md
 pyproject.toml
 ```
 
-默认排除:
+它不包含 runner、攻击流程、统计、baseline、Notebook、治理工具或正式实验输出。`main/` 不得依赖任何外层目录。
 
-```text
-main/analysis/
-main/cli/
-experiments/
-scripts/
-paper_workflow/
-.codex/
-tools/harness/
-tests/constraints/
-audit_reports/
-outputs/
-```
+## `paper_artifact_rebuild_package`
 
-### `paper_artifact_rebuild_package`
-
-该包用于重建论文所需 tables、figures、reports 和 manifests。它可以包含 artifact builders 和轻量功能测试, 但不包含外层治理实现。
-
-默认包含:
+该包用于在普通 GPU 服务器执行实验并从 governed records 重建 tables、figures、reports 与 manifests。默认包含：
 
 ```text
 main/
+runtime/
+evaluation/
+external_baseline/
 configs/
 experiments/
+workflows/
 scripts/
-docs/中必要的复现和 schema 文档
+必要的 docs/
 tests/functional/
 README.md
 pyproject.toml
 ```
 
-默认排除:
+该包明确排除：
 
 ```text
 .codex/
 tools/harness/
+paper_workflow/
 audit_reports/
 outputs/
 tests/constraints/
 tests/integration/
-paper_workflow/
+私有密钥、私有数据与本地绝对路径配置
 ```
 
-## 默认进入论文发布包
+`paper_workflow/` 只是 Colab / Notebook 最外层入口，服务器复现不依赖它。
 
-- `main/`
-- `configs/`
-- `scripts/` 中必要的复现脚本
-- `docs/` 中的方法、复现、数据准备和模型准备文档
-- `tests/` 中可公开的复现测试
-- 必要的 `experiments/` paper protocol
+## 正式输出边界
 
-## 默认不进入论文发布包
-
-- `.codex/`
-- `tools/harness/`
-- `audit_reports/`
-- `outputs/`
-- 本地 Notebook 缓存
-- 私有数据或本地绝对路径配置
-- 未经治理的临时实验结果
-
-## 说明
-
-该边界适用于论文代码开源前的最小发布抽取。内部治理材料可以保留在开发仓库, 但发布包应优先服务审稿复现和读者理解。
+正式实验输出必须写入独立本地或远程运行目录，由 records 和 manifests 驱动重建。仓库内不得提交真实大规模结果、最终论文表图、私有认证密钥或未经治理的临时输出。

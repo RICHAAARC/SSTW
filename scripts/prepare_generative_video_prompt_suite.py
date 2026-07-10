@@ -7,7 +7,7 @@ import json
 from hashlib import sha256
 from pathlib import Path
 
-from main.attacks.video_runtime_attack_protocol import (
+from evaluation.attacks.video_runtime_attack_protocol import (
     load_protocol_config_with_shared_attack_protocol,
     required_runtime_attack_names_from_config,
 )
@@ -34,6 +34,37 @@ def _required_float(config: dict, field_name: str, config_path: str | Path) -> f
     if field_name not in config:
         raise KeyError(f"protocol config 缺少必填字段 {field_name}: {config_path}")
     return float(config[field_name])
+
+
+def _required_int(config: dict, field_name: str, config_path: str | Path) -> int:
+    """从 protocol config 读取必填正整数字段."""
+
+    if field_name not in config:
+        raise KeyError(f"protocol config 缺少必填字段 {field_name}: {config_path}")
+    value = int(config[field_name])
+    if value <= 0:
+        raise ValueError(f"protocol config 字段 {field_name} 必须为正整数: {config_path}")
+    return value
+
+
+def _validate_profile_item_counts(
+    profile: str,
+    prompt_items: list[dict],
+    seed_items: list[dict],
+    *,
+    prompt_count: int,
+    seed_count: int,
+    calibration_seed_count: int,
+    test_seed_count: int,
+) -> None:
+    """阻断静态 prompt/seed 清单与 profile config 的数量漂移."""
+
+    observed_calibration = sum(item.get("split") == "calibration" for item in seed_items)
+    observed_test = sum(item.get("split") == "test" for item in seed_items)
+    observed = (len(prompt_items), len(seed_items), observed_calibration, observed_test)
+    expected = (prompt_count, seed_count, calibration_seed_count, test_seed_count)
+    if observed != expected:
+        raise ValueError(f"{profile} prompt/seed 清单与 protocol config 漂移: observed={observed}, expected={expected}")
 
 
 PROMPT_ITEMS = [
@@ -366,10 +397,31 @@ PILOT_PAPER_PROMPT_ITEMS = [
 ]
 
 
+# pilot_paper 的 FPR=0.01 单侧 95% 上界需要至少300个独立 held-out
+# negative videos。这里把25个基础运动场景扩展为50个审阅可追溯场景, 再配合
+# 6个 calibration seed 和6个 test seed, 形成每个 split 300个独立视频。
+_PILOT_PAPER_BASE_PROMPT_ITEMS = tuple(PILOT_PAPER_PROMPT_ITEMS)
+PILOT_PAPER_PROMPT_ITEMS = list(_PILOT_PAPER_BASE_PROMPT_ITEMS) + [
+    {
+        **_PILOT_PAPER_BASE_PROMPT_ITEMS[index % len(_PILOT_PAPER_BASE_PROMPT_ITEMS)],
+        "prompt_id": f"pilot_paper_statistical_variant_{index + 1:02d}",
+        "prompt_text": (
+            f"{_PILOT_PAPER_BASE_PROMPT_ITEMS[index % len(_PILOT_PAPER_BASE_PROMPT_ITEMS)]['prompt_text']} "
+            f"Statistical scene variant {index + 1:02d}, neutral background, fixed exposure."
+        ),
+        "motion_pattern_id": (
+            f"{_PILOT_PAPER_BASE_PROMPT_ITEMS[index % len(_PILOT_PAPER_BASE_PROMPT_ITEMS)]['motion_pattern_id']}"
+            f"_statistical_variant_{index + 1:02d}"
+        ),
+    }
+    for index in range(25)
+]
+
+
 def _build_full_paper_prompts() -> list[dict]:
     """构造 full_paper 专用 prompt 列表。
 
-    该函数属于项目特定写法。full_paper 需要 125 个 prompt, 同时必须与 probe_paper
+    该函数属于项目特定写法。full_paper 需要200个 prompt, 同时必须与 probe_paper
     和 pilot_paper 保持同构运动类别。这里以 pilot_paper 的代表性运动 prompt 为
     锚点, 通过稳定场景修饰生成唯一 prompt, 避免 Notebook 维护长列表。
     """
@@ -382,7 +434,7 @@ def _build_full_paper_prompts() -> list[dict]:
         "with a neutral background and large foreground motion occupying most of the frame",
     ]
     prompts: list[dict] = []
-    for index in range(125):
+    for index in range(200):
         base = PILOT_PAPER_PROMPT_ITEMS[index % len(PILOT_PAPER_PROMPT_ITEMS)]
         modifier = scene_modifiers[index % len(scene_modifiers)]
         prompts.append({
@@ -407,7 +459,7 @@ PROBE_PAPER_PROMPT_ITEMS = [
         "prompt_suite_role": "probe_paper",
         "split": "probe_paper",
     }
-    for index in range(5)
+    for index in range(10)
 ]
 
 SEED_ITEMS = [
@@ -417,16 +469,40 @@ SEED_ITEMS = [
 ]
 
 PROBE_PAPER_SEED_ITEMS = [
-    {"seed_id": "seed_probe_paper_calib_a", "seed_value": 1201, "prompt_suite_role": "probe_paper", "split": "calibration"},
-    {"seed_id": "seed_probe_paper_test_a", "seed_value": 1302, "prompt_suite_role": "probe_paper", "split": "test"},
+    {
+        "seed_id": f"seed_probe_paper_calib_{index + 1:02d}",
+        "seed_value": 1201 + index * 37,
+        "prompt_suite_role": "probe_paper",
+        "split": "calibration",
+    }
+    for index in range(3)
+] + [
+    {
+        "seed_id": f"seed_probe_paper_test_{index + 1:02d}",
+        "seed_value": 2201 + index * 37,
+        "prompt_suite_role": "probe_paper",
+        "split": "test",
+    }
+    for index in range(3)
 ]
 
 
 PILOT_PAPER_SEED_ITEMS = [
-    {"seed_id": "seed_pilot_paper_calib_a", "seed_value": 1401, "prompt_suite_role": "pilot_paper", "split": "calibration"},
-    {"seed_id": "seed_pilot_paper_calib_b", "seed_value": 1502, "prompt_suite_role": "pilot_paper", "split": "calibration"},
-    {"seed_id": "seed_pilot_paper_test_a", "seed_value": 1805, "prompt_suite_role": "pilot_paper", "split": "test"},
-    {"seed_id": "seed_pilot_paper_test_b", "seed_value": 1906, "prompt_suite_role": "pilot_paper", "split": "test"},
+    {
+        "seed_id": f"seed_pilot_paper_calib_{index + 1:02d}",
+        "seed_value": 1401 + index * 41,
+        "prompt_suite_role": "pilot_paper",
+        "split": "calibration",
+    }
+    for index in range(6)
+] + [
+    {
+        "seed_id": f"seed_pilot_paper_test_{index + 1:02d}",
+        "seed_value": 2401 + index * 41,
+        "prompt_suite_role": "pilot_paper",
+        "split": "test",
+    }
+    for index in range(6)
 ]
 
 
@@ -437,7 +513,7 @@ FULL_PAPER_SEED_ITEMS = [
         "prompt_suite_role": "full_paper",
         "split": "calibration",
     }
-    for index in range(4)
+    for index in range(15)
 ] + [
     {
         "seed_id": f"seed_full_paper_test_{index + 1:02d}",
@@ -445,7 +521,7 @@ FULL_PAPER_SEED_ITEMS = [
         "prompt_suite_role": "full_paper",
         "split": "test",
     }
-    for index in range(4)
+    for index in range(15)
 ]
 
 MOTION_CALIBRATION_SEED_ITEMS = [
@@ -541,21 +617,70 @@ def build_prompt_suite(
     pilot_paper_config = _read_json(pilot_paper_config_path)
     probe_paper_config = _read_json(probe_paper_config_path)
     full_paper_config = _read_json(full_paper_config_path)
-    probe_paper_prompt_count = int(probe_paper_config.get("minimum_prompt_count", len(PROBE_PAPER_PROMPT_ITEMS)))
-    probe_paper_seed_count = int(probe_paper_config.get("minimum_seed_per_prompt", len(PROBE_PAPER_SEED_ITEMS)))
-    probe_paper_calibration_seed_count = int(probe_paper_config.get("minimum_calibration_seed_per_prompt", 1))
-    probe_paper_test_seed_count = int(probe_paper_config.get("minimum_test_seed_per_prompt", 1))
-    pilot_paper_prompt_count = int(pilot_paper_config.get("minimum_prompt_count", len(PILOT_PAPER_PROMPT_ITEMS)))
-    pilot_paper_seed_count = int(pilot_paper_config.get("minimum_seed_per_prompt", len(PILOT_PAPER_SEED_ITEMS)))
-    pilot_paper_calibration_seed_count = int(pilot_paper_config.get("minimum_calibration_seed_per_prompt", 0))
-    pilot_paper_test_seed_count = int(pilot_paper_config.get("minimum_test_seed_per_prompt", 0))
+    probe_paper_prompt_count = _required_int(probe_paper_config, "minimum_prompt_count", probe_paper_config_path)
+    probe_paper_seed_count = _required_int(probe_paper_config, "minimum_seed_per_prompt", probe_paper_config_path)
+    probe_paper_calibration_seed_count = _required_int(
+        probe_paper_config, "minimum_calibration_seed_per_prompt", probe_paper_config_path
+    )
+    probe_paper_test_seed_count = _required_int(
+        probe_paper_config, "minimum_test_seed_per_prompt", probe_paper_config_path
+    )
+    pilot_paper_prompt_count = _required_int(pilot_paper_config, "minimum_prompt_count", pilot_paper_config_path)
+    pilot_paper_seed_count = _required_int(pilot_paper_config, "minimum_seed_per_prompt", pilot_paper_config_path)
+    pilot_paper_calibration_seed_count = _required_int(
+        pilot_paper_config, "minimum_calibration_seed_per_prompt", pilot_paper_config_path
+    )
+    pilot_paper_test_seed_count = _required_int(
+        pilot_paper_config, "minimum_test_seed_per_prompt", pilot_paper_config_path
+    )
+    full_paper_prompt_count = _required_int(full_paper_config, "minimum_prompt_count", full_paper_config_path)
+    full_paper_seed_count = _required_int(full_paper_config, "minimum_seed_per_prompt", full_paper_config_path)
+    full_paper_calibration_seed_count = _required_int(
+        full_paper_config, "minimum_calibration_seed_per_prompt", full_paper_config_path
+    )
+    full_paper_test_seed_count = _required_int(
+        full_paper_config, "minimum_test_seed_per_prompt", full_paper_config_path
+    )
+    _validate_profile_item_counts(
+        "probe_paper",
+        PROBE_PAPER_PROMPT_ITEMS,
+        PROBE_PAPER_SEED_ITEMS,
+        prompt_count=probe_paper_prompt_count,
+        seed_count=probe_paper_seed_count,
+        calibration_seed_count=probe_paper_calibration_seed_count,
+        test_seed_count=probe_paper_test_seed_count,
+    )
+    _validate_profile_item_counts(
+        "pilot_paper",
+        PILOT_PAPER_PROMPT_ITEMS,
+        PILOT_PAPER_SEED_ITEMS,
+        prompt_count=pilot_paper_prompt_count,
+        seed_count=pilot_paper_seed_count,
+        calibration_seed_count=pilot_paper_calibration_seed_count,
+        test_seed_count=pilot_paper_test_seed_count,
+    )
+    _validate_profile_item_counts(
+        "full_paper",
+        FULL_PAPER_PROMPT_ITEMS,
+        FULL_PAPER_SEED_ITEMS,
+        prompt_count=full_paper_prompt_count,
+        seed_count=full_paper_seed_count,
+        calibration_seed_count=full_paper_calibration_seed_count,
+        test_seed_count=full_paper_test_seed_count,
+    )
+    probe_paper_runtime_attack_names = required_runtime_attack_names_from_config(probe_paper_config)
     pilot_paper_runtime_attack_names = required_runtime_attack_names_from_config(pilot_paper_config)
     pilot_paper_runtime_attack_count = len(pilot_paper_runtime_attack_names)
-    pilot_paper_negative_family_count = 4
-    full_paper_prompt_count = len(FULL_PAPER_PROMPT_ITEMS)
-    full_paper_seed_count = len(FULL_PAPER_SEED_ITEMS)
-    full_paper_calibration_seed_count = sum(1 for item in FULL_PAPER_SEED_ITEMS if item.get("split") == "calibration")
-    full_paper_test_seed_count = sum(1 for item in FULL_PAPER_SEED_ITEMS if item.get("split") == "test")
+    probe_paper_runtime_attack_count = len(probe_paper_runtime_attack_names)
+    probe_paper_negative_family_count = _required_int(
+        probe_paper_config, "minimum_negative_family_count", probe_paper_config_path
+    )
+    pilot_paper_negative_family_count = _required_int(
+        pilot_paper_config, "minimum_negative_family_count", pilot_paper_config_path
+    )
+    full_paper_negative_family_count = _required_int(
+        full_paper_config, "minimum_negative_family_count", full_paper_config_path
+    )
     full_paper_runtime_attack_names = required_runtime_attack_names_from_config(full_paper_config)
     full_paper_runtime_attack_count = len(full_paper_runtime_attack_names)
     suite = {
@@ -576,10 +701,10 @@ def build_prompt_suite(
             "target_generation_video_count": pilot_paper_prompt_count * pilot_paper_seed_count,
             "target_calibration_unique_video_count": int(pilot_paper_config.get("minimum_calibration_unique_video_count", 0)),
             "target_test_unique_video_count": int(pilot_paper_config.get("minimum_test_unique_video_count", 0)),
-            "target_runtime_attack_count": pilot_paper_runtime_attack_count,
-            "target_runtime_attack_names": list(pilot_paper_runtime_attack_names),
+            "target_runtime_attack_count": probe_paper_runtime_attack_count,
+            "target_runtime_attack_names": list(probe_paper_runtime_attack_names),
             "target_test_attacked_positive_event_count": int(pilot_paper_config.get("minimum_heldout_attacked_positive_event_count", 0)),
-            "target_negative_family_count": pilot_paper_negative_family_count,
+            "target_negative_family_count": probe_paper_negative_family_count,
             "target_calibration_negative_event_count": int(pilot_paper_config.get("minimum_calibration_negative_event_count", 0)),
             "target_heldout_test_negative_event_count": int(pilot_paper_config.get("minimum_heldout_test_negative_event_count", 0)),
             "threshold_protocol": pilot_paper_config.get("threshold_protocol", "calibration_split_to_frozen_threshold_to_heldout_test_split"),
@@ -621,11 +746,16 @@ def build_prompt_suite(
             "calibration_seed_count": full_paper_calibration_seed_count,
             "test_seed_count": full_paper_test_seed_count,
             "target_generation_video_count": full_paper_prompt_count * full_paper_seed_count,
-            "target_calibration_unique_video_count": full_paper_prompt_count * full_paper_calibration_seed_count,
-            "target_test_unique_video_count": full_paper_prompt_count * full_paper_test_seed_count,
+            "target_calibration_unique_video_count": _required_int(
+                full_paper_config, "minimum_calibration_unique_video_count", full_paper_config_path
+            ),
+            "target_test_unique_video_count": _required_int(
+                full_paper_config, "minimum_test_unique_video_count", full_paper_config_path
+            ),
             "target_runtime_attack_count": full_paper_runtime_attack_count,
             "target_runtime_attack_names": list(full_paper_runtime_attack_names),
-            "target_test_attacked_positive_event_count": full_paper_prompt_count * full_paper_seed_count * full_paper_runtime_attack_count,
+            "target_test_attacked_positive_event_count": int(full_paper_config.get("minimum_heldout_attacked_positive_event_count", 0)),
+            "target_negative_family_count": full_paper_negative_family_count,
             "target_calibration_negative_event_count": int(full_paper_config.get("minimum_calibration_negative_event_count", 0)),
             "target_heldout_test_negative_event_count": int(full_paper_config.get("minimum_heldout_test_negative_event_count", 0)),
             "threshold_protocol": full_paper_config.get("threshold_protocol", "calibration_split_to_frozen_threshold_to_heldout_test_split"),

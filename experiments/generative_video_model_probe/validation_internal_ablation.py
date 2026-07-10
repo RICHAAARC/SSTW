@@ -13,19 +13,16 @@ from pathlib import Path
 from statistics import mean
 from typing import Any
 
-from main.protocol.flow_evidence_fields import with_flow_evidence_protocol_defaults
-from main.protocol.record_writer import write_json, write_jsonl
-from main.protocol.table_builder import write_csv
+from evaluation.protocol.flow_evidence_fields import with_flow_evidence_protocol_defaults
+from evaluation.protocol.record_writer import write_json, write_jsonl
+from evaluation.protocol.table_builder import write_csv
 
 
 FULL_METHOD_VARIANT = "sstw_full_method"
 FORMAL_INTERNAL_ABLATION_EVIDENCE_LEVEL = "formal_component_removal_video_detector"
 FORMAL_INTERNAL_ABLATION_CLAIM_STATUS = "formal_internal_ablation_variant_measured"
-FORMAL_DETECTOR_EVIDENCE_LEVEL = "attacked_video_content_detector"
-FORMAL_DETECTOR_EVIDENCE_LEVELS = {
-    FORMAL_DETECTOR_EVIDENCE_LEVEL,
-    "attacked_video_wan_vae_model_velocity_replay",
-}
+FORMAL_DETECTOR_EVIDENCE_LEVEL = "attacked_video_key_independent_inversion_hypothesis_replay"
+FORMAL_DETECTOR_EVIDENCE_LEVELS = {FORMAL_DETECTOR_EVIDENCE_LEVEL}
 VALIDATION_ABLATION_VARIANTS = (
     {
         "method_variant": FULL_METHOD_VARIANT,
@@ -185,7 +182,7 @@ def build_validation_internal_ablation_records(run_root: str | Path) -> list[dic
             "ablation_expected_effect": "measured_score_change_under_real_component_removal",
             "formal_internal_ablation_evidence_level": FORMAL_INTERNAL_ABLATION_EVIDENCE_LEVEL,
             "formal_internal_ablation_score": round(score, 6),
-            "formal_internal_ablation_score_semantics": "sstw_key_conditioned_video_content_detector_score",
+            "formal_internal_ablation_score_semantics": "calibrated_probability_posterior_with_fixed_fpr_threshold",
             "metric_status": "measured_formal",
             "ablation_status": "ready",
             "ablation_failure_reason": "none",

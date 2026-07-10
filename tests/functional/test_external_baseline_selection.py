@@ -10,9 +10,9 @@ import sys
 
 import pytest
 
-from main.external_baselines.baseline_registry import audit_external_baseline_records, build_external_baseline_records
-from main.external_baselines.explicit_dtw_temporal_alignment import compute_dtw_alignment_cost
-from main.external_baselines.frame_matching_temporal_registration import compute_registration_cost, match_frames
+from external_baseline.baseline_registry import audit_external_baseline_records, build_external_baseline_records
+from external_baseline.explicit_dtw_temporal_alignment import compute_dtw_alignment_cost
+from external_baseline.frame_matching_temporal_registration import compute_registration_cost, match_frames
 from experiments.generative_video_model_probe.external_baseline_runner import (
     audit_external_baseline_comparison_records,
     build_external_baseline_comparison_table_rows,
@@ -34,7 +34,7 @@ from external_baseline.videoseal_official_runtime import (
     inspect_videoseal_official_runtime_layout,
     videoseal_official_source_cwd,
 )
-from main.protocol.record_writer import read_jsonl, write_jsonl
+from evaluation.protocol.record_writer import read_jsonl, write_jsonl
 from external_baseline.source_intake import build_execution_manifest, build_source_intake_manifest, write_source_intake_artifacts
 
 

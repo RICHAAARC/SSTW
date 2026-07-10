@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from paper_workflow.colab_utils.modern_external_baseline_formal_reference import (
+from workflows.modern_external_baseline_reference import (
     run_default_modern_external_baseline_formal_reference_plan,
 )
 

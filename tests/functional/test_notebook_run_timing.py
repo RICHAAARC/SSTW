@@ -8,11 +8,11 @@ import zipfile
 
 import pytest
 
-from paper_workflow.colab_utils.notebook_run_timing import (
+from workflows.run_timing import (
     initialize_notebook_runtime_session,
     start_notebook_run_timer,
 )
-from paper_workflow.colab_utils.stage_package_sync import publish_colab_stage_package
+from workflows.stage_package_sync import publish_colab_stage_package
 
 
 @pytest.mark.quick

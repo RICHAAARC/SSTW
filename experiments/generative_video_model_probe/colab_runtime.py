@@ -11,9 +11,8 @@ from hashlib import sha256
 from pathlib import Path
 from typing import Any
 
-from main.external_baselines.baseline_registry import audit_external_baseline_records
+from external_baseline.baseline_registry import audit_external_baseline_records
 from experiments.generative_video_model_probe.external_baseline_runner import run_external_baseline_status
-from main.generation.sampling_constraint_adapter import apply_latent_sampling_constraint
 from main.methods.state_space_watermark.endpoint_latent_detector import compute_endpoint_latent_evidence
 from main.methods.state_space_watermark.authenticated_trajectory_sketch import (
     build_authenticated_trajectory_sketch_payload,
@@ -21,19 +20,19 @@ from main.methods.state_space_watermark.authenticated_trajectory_sketch import (
 )
 from main.methods.state_space_watermark.flow_velocity_runtime import FlowVelocityConstraintRuntime
 from main.methods.state_space_watermark.path_observation import aggregate_path_observations
-from main.protocol.flow_evidence_fields import (
+from evaluation.protocol.flow_evidence_fields import (
     with_flow_evidence_protocol_defaults,
     with_flow_evidence_protocol_defaults_many,
 )
-from main.core.progress import (
+from runtime.core.progress import (
     ProgressReporter,
     configure_noisy_library_progress,
     configure_pipeline_progress_bar,
     emit_progress_event,
     suppress_third_party_progress_output,
 )
-from main.protocol.record_writer import write_json, write_jsonl
-from main.protocol.table_builder import write_csv
+from evaluation.protocol.record_writer import write_json, write_jsonl
+from evaluation.protocol.table_builder import write_csv
 
 
 WAN21_PRIMARY_MODEL_ID = "Wan-AI/Wan2.1-T2V-1.3B-Diffusers"
@@ -50,30 +49,10 @@ PAPER_FORMAL_METHOD_VARIANTS = (
     "without_flow_state_admissibility",
     "generic_ssm_baseline",
 )
-PAPER_INTERNAL_ABLATION_SOURCE_LIMITS = {
-    "probe_paper": 5,
-    "pilot_paper": 50,
-    "full_paper": 500,
-}
-
-FORMAL_TRAJECTORY_TRACE_FIELD_RENAMES = {
-    "flow_velocity_proxy_available": "callback_latent_displacement_available",
-    "flow_velocity_proxy_source": "callback_latent_displacement_source",
-    "flow_velocity_proxy_norm_before_constraint": "callback_latent_displacement_norm_before_constraint",
-    "flow_velocity_proxy_norm_after_constraint": "callback_latent_displacement_norm_after_constraint",
-    "flow_velocity_alignment_before_constraint": "callback_latent_displacement_alignment_before_constraint",
-    "flow_velocity_alignment_after_constraint": "callback_latent_displacement_alignment_after_constraint",
-    "flow_velocity_alignment_gain": "callback_latent_displacement_alignment_gain",
-}
-
-
 PROFILE_SETTINGS = {
-    "smoke": {"prompt_limit": 1, "seed_limit": 1, "num_inference_steps": 8, "num_frames": 33, "height": 320, "width": 512, "run_cross_model": False},
-    "recommended": {"prompt_limit": 2, "seed_limit": 2, "num_inference_steps": 16, "num_frames": 49, "height": 320, "width": 512, "run_cross_model": True},
-    "pilot": {"prompt_limit": 8, "seed_limit": 2, "num_inference_steps": 16, "num_frames": 49, "height": 320, "width": 512, "run_cross_model": False},
     "pilot_paper": {
-        "prompt_limit": 25,
-        "seed_limit": 4,
+        "prompt_limit": None,
+        "seed_limit": None,
         "num_inference_steps": 16,
         "num_frames": 49,
         "height": 320,
@@ -83,8 +62,8 @@ PROFILE_SETTINGS = {
         "seed_suite_roles": ["pilot_paper"],
     },
     "probe_paper": {
-        "prompt_limit": 5,
-        "seed_limit": 2,
+        "prompt_limit": None,
+        "seed_limit": None,
         "num_inference_steps": 16,
         "num_frames": 49,
         "height": 320,
@@ -104,7 +83,6 @@ PROFILE_SETTINGS = {
         "prompt_suite_roles": ["full_paper"],
         "seed_suite_roles": ["full_paper"],
     },
-    "extended": {"prompt_limit": 3, "seed_limit": 3, "num_inference_steps": 24, "num_frames": 65, "height": 384, "width": 640, "run_cross_model": True},
     "motion_calibration": {
         "prompt_limit": None,
         "seed_limit": None,
@@ -125,22 +103,6 @@ PROFILE_SETTINGS = {
 
 def _read_json(path: str | Path) -> dict:
     return json.loads(Path(path).read_text(encoding="utf-8"))
-
-
-def _load_default_sampling_constraint_configs() -> tuple[dict[str, Any], dict[str, Any]]:
-    """读取 SSTW sampling-time 嵌入所需的共享配置。"""
-
-    constraint_config = _read_json("configs/generation/sampling_constraint.json")
-    schedule_bundle = _read_json("configs/generation/lambda_schedules.json")
-    default_schedule_id = str(schedule_bundle["default_schedule_id"])
-    schedules = {
-        str(item["lambda_schedule_id"]): item
-        for item in schedule_bundle.get("schedules", [])
-        if item.get("lambda_schedule_id")
-    }
-    if default_schedule_id not in schedules:
-        raise KeyError(f"缺少默认 lambda schedule: {default_schedule_id}")
-    return constraint_config, schedules[default_schedule_id]
 
 
 def _select_dtype(torch_module: Any) -> Any:
@@ -228,23 +190,12 @@ def _sha256_file(path: Path) -> str:
 
 
 def _formalize_paper_trajectory_record(record: dict[str, Any], profile: str) -> dict[str, Any]:
-    """把 paper profile 的 trajectory trace 字段转换为正式论文包字段。
+    """保持真实 scheduler velocity 记录原样, 禁止把代理字段改名后进入正式包。"""
 
-    sampling constraint adapter 内部仍可在工程探针中记录 callback 位移的历史字段,
-    但 `probe_paper`、`pilot_paper` 和 `full_paper` 的正式结果包不能包含
-    proxy / placeholder / fallback 语义。这里把 paper profile 输出统一改写为
-    “callback latent displacement” 证据, 明确它是采样 callback 暴露的相邻
-    latent 状态位移, 而不是伪称模型内部完整 velocity field。
-    """
-
-    if profile not in PAPER_RESULT_PROFILES:
-        return record
-    normalized: dict[str, Any] = {}
-    for key, value in record.items():
-        normalized[FORMAL_TRAJECTORY_TRACE_FIELD_RENAMES.get(key, key)] = value
-    if "callback_latent_displacement_available" in normalized:
-        normalized["callback_latent_displacement_evidence_level"] = "adjacent_callback_latent_state_displacement"
-    return normalized
+    forbidden = [key for key in record if "proxy" in key or "placeholder" in key]
+    if forbidden:
+        raise ValueError(f"正式 trajectory record 包含禁止字段: {forbidden}")
+    return dict(record)
 
 
 def _select_profile_items(items: list[dict], limit: int | None, allowed_roles: list[str] | None = None) -> list[dict]:
@@ -307,22 +258,21 @@ def _build_generation_plan(prompt_suite: dict, profile: str, model_id: str, cros
 
 
 def _build_internal_ablation_generation_plan(main_plan: list[dict], profile: str) -> list[dict]:
-    """在独立子集上展开 component-removal 变体, 不污染主结果样本数。
+    """在全部独立视频上展开 component-removal 变体, 不污染主方法样本数.
 
-    主计划仍保持每个 prompt/seed 一条 full-method positive 和一条 clean negative。
-    内部消融按5/50/500个 held-out source 等比例扩展, 从而让三个 paper profile
-    机制完全一致, 仅改变样本数量和统计功效。
+    主计划仍保持每个 prompt/seed 一条 full-method positive 和一条 clean negative.
+    内部消融完整复用相同 prompt/seed/split 身份, 从而既能拟合每个变体的冻结
+    后验, 又能在 held-out 视频上进行同源配对因果比较.
     """
 
     if profile not in PAPER_RESULT_PROFILES:
         return []
-    source_limit = PAPER_INTERNAL_ABLATION_SOURCE_LIMITS[profile]
-    sources = [
+    candidates = [
         item for item in main_plan
         if item.get("sample_role") == "attacked_positive_source"
         and item.get("method_variant") == "sstw_full_method"
-        and item.get("split") == "test"
-    ][:source_limit]
+    ]
+    sources = [item for item in candidates if item.get("split") in {"calibration", "test"}]
     records: list[dict] = []
     for source in sources:
         for method_variant in PAPER_FORMAL_METHOD_VARIANTS:
@@ -354,7 +304,6 @@ def run_colab_probe(output_root: str | Path, prompt_suite_path: str | Path, prof
     output_root = Path(output_root)
     prompt_suite = _read_json(prompt_suite_path)
     settings = PROFILE_SETTINGS[profile]
-    constraint_config, schedule_config = _load_default_sampling_constraint_configs()
     dtype = _select_dtype(torch)
     hf_token_status = "provided" if os.environ.get("HF_TOKEN") else "not_provided"
     main_plan = _build_generation_plan(prompt_suite, profile, model_id, cross_model_id)
@@ -382,48 +331,9 @@ def run_colab_probe(output_root: str | Path, prompt_suite_path: str | Path, prof
         generator = torch.Generator(device="cuda").manual_seed(int(item["seed_value"]))
         trace_id = f"trace_{index:04d}_{item['sample_role']}_{item['method_variant']}"
         step_stats: list[dict] = []
-        previous_latents: Any | None = None
         applied_step_count = 0
         path_summary: dict[str, Any] = {}
         endpoint_summary: dict[str, Any] = {}
-
-        def capture_step(pipe_instance: Any, step_index: int, timestep: Any, callback_kwargs: dict) -> dict:  # pragma: no cover - Colab GPU path
-            nonlocal previous_latents
-            nonlocal applied_step_count
-            latents = callback_kwargs.get("latents")
-            constraint_record: dict[str, Any] = {
-                "sampling_constraint_enabled": False,
-                "constraint_apply_status": "not_available",
-                "constraint_apply_reason": "latents_not_available",
-            }
-            if latents is not None:
-                constrained_latents, constraint_record = apply_latent_sampling_constraint(
-                    latents,
-                    int(step_index),
-                    int(settings["num_inference_steps"]),
-                    constraint_config,
-                    schedule_config,
-                    str(item["method_variant"]),
-                    f"{item['generation_model_id']}::{item['prompt_id']}::{item['seed_id']}",
-                    previous_latents=previous_latents,
-                )
-                previous_latents = constrained_latents.detach().clone()
-                callback_kwargs["latents"] = constrained_latents
-                latents = constrained_latents
-                if constraint_record.get("constraint_apply_status") == "applied":
-                    applied_step_count += 1
-            stats = _tensor_stats(latents) if latents is not None else {"latent_norm": None, "latent_mean": None, "latent_std": None}
-            step_stats.append({
-                "trajectory_trace_id": trace_id,
-                "trajectory_step_index": int(step_index),
-                "trajectory_timestep": float(timestep) if hasattr(timestep, "__float__") else str(timestep),
-                "sample_role": item["sample_role"],
-                "method_variant": item["method_variant"],
-                "watermark_embedding_status": item["watermark_embedding_status"],
-                **constraint_record,
-                **stats,
-            })
-            return callback_kwargs
 
         video_path = output_root / "videos" / (
             f"{item['generation_model_id'].replace('/', '_')}_{item['prompt_id']}_{item['seed_id']}_"
@@ -431,46 +341,13 @@ def run_colab_probe(output_root: str | Path, prompt_suite_path: str | Path, prof
         )
         started = time.time()
         try:
-            if profile in PAPER_RESULT_PROFILES:
-                key_text = f"{item['generation_model_id']}::{item['prompt_id']}::{item['seed_id']}"
-                with FlowVelocityConstraintRuntime(
-                    pipe.scheduler,
-                    key_text=key_text,
-                    total_steps=int(settings["num_inference_steps"]),
-                    method_variant=str(item["method_variant"]),
-                ) as velocity_runtime:
-                    with suppress_third_party_progress_output("wan21_runtime_single_video_generation"):
-                        result = pipe(
-                            prompt=item["prompt_text"],
-                            negative_prompt=item.get("prompt_negative_text"),
-                            width=settings["width"],
-                            height=settings["height"],
-                            num_frames=settings["num_frames"],
-                            num_inference_steps=settings["num_inference_steps"],
-                            guidance_scale=5.0,
-                            generator=generator,
-                        )
-                step_stats = [
-                    {
-                        "trajectory_trace_id": trace_id,
-                        "sample_role": item["sample_role"],
-                        "method_variant": item["method_variant"],
-                        "watermark_embedding_status": item["watermark_embedding_status"],
-                        **record,
-                    }
-                    for record in velocity_runtime.step_records
-                ]
-                applied_step_count = sum(
-                    record.get("velocity_field_constraint_status") == "applied"
-                    for record in step_stats
-                )
-                path_summary = aggregate_path_observations(step_stats)
-                if velocity_runtime.endpoint_latent is not None:
-                    endpoint_summary = compute_endpoint_latent_evidence(
-                        velocity_runtime.endpoint_latent,
-                        key_text=key_text,
-                    ).as_dict()
-            else:
+            key_text = f"{item['generation_model_id']}::{item['prompt_id']}::{item['seed_id']}"
+            with FlowVelocityConstraintRuntime(
+                pipe.scheduler,
+                key_text=key_text,
+                total_steps=int(settings["num_inference_steps"]),
+                method_variant=str(item["method_variant"]),
+            ) as velocity_runtime:
                 with suppress_third_party_progress_output("wan21_runtime_single_video_generation"):
                     result = pipe(
                         prompt=item["prompt_text"],
@@ -479,10 +356,29 @@ def run_colab_probe(output_root: str | Path, prompt_suite_path: str | Path, prof
                         height=settings["height"],
                         num_frames=settings["num_frames"],
                         num_inference_steps=settings["num_inference_steps"],
+                        guidance_scale=5.0,
                         generator=generator,
-                        callback_on_step_end=capture_step,
-                        callback_on_step_end_tensor_inputs=["latents"],
                     )
+            step_stats = [
+                {
+                    "trajectory_trace_id": trace_id,
+                    "sample_role": item["sample_role"],
+                    "method_variant": item["method_variant"],
+                    "watermark_embedding_status": item["watermark_embedding_status"],
+                    **record,
+                }
+                for record in velocity_runtime.step_records
+            ]
+            applied_step_count = sum(
+                record.get("velocity_field_constraint_status") == "applied"
+                for record in step_stats
+            )
+            path_summary = aggregate_path_observations(step_stats)
+            if velocity_runtime.endpoint_latent is not None:
+                endpoint_summary = compute_endpoint_latent_evidence(
+                    velocity_runtime.endpoint_latent,
+                    key_text=key_text,
+                ).as_dict()
             frames = result.frames[0]
             _export_video(frames, video_path, fps=8)
             generation_status = "success"
@@ -564,8 +460,8 @@ def run_colab_probe(output_root: str | Path, prompt_suite_path: str | Path, prof
             "generation_sample_role": item["sample_role"],
             "method_variant": item["method_variant"],
             "watermark_embedding_status": item["watermark_embedding_status"],
-            "sampling_constraint_config_id": constraint_config.get("sampling_constraint_config_id"),
-            "lambda_schedule_id": schedule_config.get("lambda_schedule_id"),
+            "velocity_constraint_config_id": "flow_velocity_constraint_default",
+            "flow_phase_schedule_id": "sin_squared_middle_flow_phase",
             "sampling_constraint_applied_step_count": applied_step_count,
             "formal_generation_watermark_embedding_level": (
                 "clean_unwatermarked_reference"
@@ -589,13 +485,7 @@ def run_colab_probe(output_root: str | Path, prompt_suite_path: str | Path, prof
             "seed_id": item["seed_id"],
             "scheduler_id": _scheduler_id_for_model(item["generation_model_id"]),
             "trajectory_scheduler_id": _scheduler_id_for_model(item["generation_model_id"]),
-            "trajectory_time_grid_id": (
-                "wan_flow_scheduler_runtime_step_grid"
-                if profile in PAPER_RESULT_PROFILES
-                else "flow_matching_callback_on_step_end_grid"
-                if _model_family_from_id(item["generation_model_id"]) == "diffusers_wan21_flow_matching_dit"
-                else "callback_on_step_end_grid"
-            ),
+            "trajectory_time_grid_id": "wan_flow_scheduler_runtime_step_grid",
             "num_inference_steps": settings["num_inference_steps"],
             "guidance_scale": 5.0,
             "video_length_frames": settings["num_frames"],

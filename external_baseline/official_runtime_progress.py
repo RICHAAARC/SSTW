@@ -16,7 +16,7 @@ import threading
 import time
 from typing import Any, Callable, Mapping
 
-from main.core.progress import emit_progress_event
+from runtime.core.progress import emit_progress_event
 
 
 def _heartbeat_seconds_from_env() -> float:

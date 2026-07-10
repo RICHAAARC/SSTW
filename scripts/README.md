@@ -7,7 +7,7 @@
 `run_generative_video_server_workflow.py` 用于在普通 GPU 服务器上执行与 Colab
 Notebook 等价的 workflow。Notebook 只作为 Colab 入口; 该脚本复用
 `configs/paper_workflow/generative_video_notebook_workflows.json` 中的 stage plan
-和 `paper_workflow/notebook_utils/generative_video_model_probe_workflow.py` 中的命令构造逻辑。
+和 `workflows/generative_video_paper.py` 中的命令构造逻辑。
 
 典型 probe_paper 全流程:
 

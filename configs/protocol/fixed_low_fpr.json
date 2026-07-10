@@ -1,8 +1,0 @@
-{
-  "target_fpr": 0.01,
-  "target_fpr_tolerance_rule": "max_two_x_target_or_one_over_attacked_negative",
-  "calibration_negative_roles": [
-    "clean_negative",
-    "attacked_negative"
-  ]
-}

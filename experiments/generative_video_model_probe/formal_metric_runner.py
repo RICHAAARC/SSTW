@@ -6,12 +6,12 @@ import argparse
 import json
 from pathlib import Path
 
-from main.analysis.semantic_video_metrics import DEFAULT_CLIP_MODEL_ID, DEFAULT_SEMANTIC_THRESHOLD, compute_clip_text_video_similarity
-from main.analysis.video_file_metrics import compute_video_file_metrics
-from main.core.progress import ProgressReporter
-from main.protocol.flow_evidence_fields import with_flow_evidence_protocol_defaults
-from main.protocol.record_writer import write_json, write_jsonl
-from main.protocol.table_builder import write_csv
+from evaluation.metrics.semantic_video_metrics import DEFAULT_CLIP_MODEL_ID, DEFAULT_SEMANTIC_THRESHOLD, compute_clip_text_video_similarity
+from evaluation.metrics.video_file_metrics import compute_video_file_metrics
+from runtime.core.progress import ProgressReporter
+from evaluation.protocol.flow_evidence_fields import with_flow_evidence_protocol_defaults
+from evaluation.protocol.record_writer import write_json, write_jsonl
+from evaluation.protocol.table_builder import write_csv
 
 
 def _read_json(path: Path) -> dict:

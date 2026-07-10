@@ -32,25 +32,29 @@ def run_audit(root: str | Path) -> dict:
             [{"path": "main", "reason": "missing_main_package"}],
             ["main"],
         )
-    for path in main_root.rglob("*.py"):
-        relative = path.relative_to(root_path)
-        if should_skip_path(relative):
+    for source_root_name in FORBIDDEN_IMPORT_PREFIXES_BY_ROOT:
+        source_root = root_path / source_root_name
+        if not source_root.exists():
             continue
-        checked_paths.append(str(relative))
-        boundary_root = get_boundary_root(relative)
-        if boundary_root is None:
-            continue
-        forbidden_prefixes = FORBIDDEN_IMPORT_PREFIXES_BY_ROOT[boundary_root]
-        for module_name in extract_imported_modules(path):
-            if is_forbidden_import(module_name, forbidden_prefixes):
-                violations.append(
-                    {
-                        "path": str(relative),
-                        "reason": "forbidden_import_for_extraction_boundary",
-                        "imported_module": module_name,
-                        "boundary_root": boundary_root,
-                    }
-                )
+        for path in source_root.rglob("*.py"):
+            relative = path.relative_to(root_path)
+            if should_skip_path(relative):
+                continue
+            checked_paths.append(str(relative))
+            boundary_root = get_boundary_root(relative)
+            if boundary_root is None:
+                continue
+            forbidden_prefixes = FORBIDDEN_IMPORT_PREFIXES_BY_ROOT[boundary_root]
+            for module_name in extract_imported_modules(path):
+                if is_forbidden_import(module_name, forbidden_prefixes):
+                    violations.append(
+                        {
+                            "path": str(relative),
+                            "reason": "forbidden_import_for_extraction_boundary",
+                            "imported_module": module_name,
+                            "boundary_root": boundary_root,
+                        }
+                    )
     return build_report("audit_dependency_boundaries", "fail" if violations else "pass", violations, checked_paths)
 
 

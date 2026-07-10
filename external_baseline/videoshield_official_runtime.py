@@ -29,8 +29,8 @@ from external_baseline.official_runtime_progress import emit_official_reference_
 from external_baseline.runtime_trace_io import build_comparison_unit_id, comparable_detection_records
 from external_baseline.score_semantics import official_score_formal_comparison_summary
 from external_baseline.video_tensor_io import read_video_tchw_uint8, write_video_tchw
-from main.attacks.video_runtime_attack_protocol import apply_runtime_attack_to_frames
-from main.core.progress import (
+from evaluation.attacks.video_runtime_attack_protocol import apply_runtime_attack_to_frames
+from runtime.core.progress import (
     ProgressReporter,
     configure_noisy_library_progress,
     configure_pipeline_progress_bar,

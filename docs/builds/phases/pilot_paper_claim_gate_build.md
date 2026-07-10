@@ -18,7 +18,7 @@ calibration split
 
 ## 2. 数据集构造要求
 
-当前仓库只保留 `pilot_paper` 作为 paper 级小样本正式 profile。运行入口为:
+当前仓库保留 `probe_paper`、`pilot_paper` 和 `full_paper` 三个同构正式 profile。运行入口为:
 
 ```text
 PROFILE = pilot_paper
@@ -30,16 +30,16 @@ PROFILE = pilot_paper
 paper_result_level: pilot_paper
 paper_protocol_level: paper_grade_protocol
 paper_protocol_difference_from_full_paper: sample_scale_and_target_fpr_only
-prompt_count: 25
-seed_per_prompt: 4
-calibration_seed_per_prompt: 2
-test_seed_per_prompt: 2
-target_generation_video_count: 100
+prompt_count: 50
+seed_per_prompt: 12
+calibration_seed_per_prompt: 6
+test_seed_per_prompt: 6
+target_generation_video_count: 600
 target_runtime_attack_count: 46
 target_negative_family_count: 4
-target_calibration_negative_event_count: 5000
-target_heldout_test_negative_event_count: 5000
-target_heldout_attacked_positive_event_count: 2300
+minimum_calibration_negative_event_count: 300
+minimum_heldout_test_negative_event_count: 300
+minimum_heldout_attacked_positive_event_count: 13800
 threshold_protocol: calibration_split_to_frozen_threshold_to_heldout_test_split
 ```
 
@@ -77,7 +77,7 @@ wam_frame
 configs/protocol/pilot_paper_generative_probe.json
 experiments/generative_video_model_probe/pilot_paper_gate.py
 experiments/generative_video_model_probe/colab_runtime.py PROFILE = pilot_paper
-paper_workflow/notebook_utils/generative_video_model_probe_workflow.py::build_pilot_paper_gate_command
+workflows/generative_video_paper.py::build_pilot_paper_gate_command
 paper_workflow/colab_notebooks/generative_video_generation_colab.ipynb -> paper_workflow/colab_notebooks/generative_video_quality_scoring_colab.ipynb -> paper_workflow/colab_notebooks/runtime_attack_colab.ipynb -> paper_workflow/colab_notebooks/runtime_detection_colab.ipynb
 scripts/package_results/generative_video_drive_packager.py
 ```

@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from main.protocol.record_writer import write_json, write_jsonl
+from evaluation.protocol.record_writer import write_json, write_jsonl
 from scripts.check_results.generative_video_colab_result_checker import check_generative_video_colab_results
 
 

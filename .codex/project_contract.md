@@ -24,11 +24,15 @@
 
 ## Core Directory Rules
 
-1. `main/` 保存论文方法、核心协议、核心评估、表格重建和 CLI 复现能力。
-2. `experiments/` 保存阶段性实验 runner、ablation、baseline 或 paper protocol。
-3. `paper_workflow/` 保存 Notebook / Colab workflow 入口和 session helper。
-4. `scripts/` 保存数据准备、结果检查、结果打包和 release 辅助命令。
-5. `tools/harness/` 保存外层治理审计, 不得被 `main/` 反向依赖。
+1. `main/` 只保存可独立抽离的 SSTW 论文核心方法, 不保存 runner、表格、攻击流程或 Notebook helper。
+2. `runtime/` 保存模型加载之外的通用运行时基础设施, 可以依赖 `main/`。
+3. `evaluation/` 保存攻击、指标、统计和结果协议, 可以依赖 `main/` 与 `runtime/`。
+4. `external_baseline/` 保存官方 baseline 适配层, 不得被 `main/` 反向依赖。
+5. `experiments/` 保存真实 GPU runner、ablation 和 paper protocol, 可以依赖上述内层。
+6. `workflows/` 保存可脱离 Notebook 在 GPU 服务器执行的阶段编排。
+7. `scripts/` 保存服务器 CLI、数据准备、结果检查、打包和 release 辅助命令。
+8. `paper_workflow/` 只保存 Notebook / Colab 入口薄包装, 是最外层。
+9. `tools/harness/` 保存外层治理审计, 不得被任何运行内层反向依赖。
 6. `.codex/` 和 `docs/` 保存协作契约与人类可读治理规则。
 7. `tests/` 按运行成本和验证目标分层。
 8. `audit_reports/` 和 `outputs/` 是本地运行输出目录, 默认不提交。
@@ -37,9 +41,9 @@
 
 1. Notebook 是论文实验的入口和远程执行包装, 不是正式协议逻辑的唯一实现。
 2. Notebook 不得直接手写正式 records、thresholds、tables、figures 或 reports。
-3. Notebook 应调用 `main/`、`experiments/` 或 `scripts/` 中的 repository modules。
-4. Notebook 专用 helper 放在 `paper_workflow/notebook_utils/`。
-5. 跨 Notebook 共享的 Colab 或 session helper 放在 `paper_workflow/colab_utils/`。
+3. Notebook 只调用 `workflows/` 的规范入口, 不直接实现方法、检测、统计或产物重建。
+4. 同一 workflow 必须可由 `scripts/run_generative_video_server_workflow.py` 在普通 GPU 服务器执行。
+5. Notebook 专用鉴权和挂载薄包装放在 `paper_workflow/`, 内层不得导入该目录。
 
 ## Paper Artifact Governance
 

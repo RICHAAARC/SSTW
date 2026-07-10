@@ -6,9 +6,9 @@ import csv
 
 import pytest
 
-from main.analysis.artifact_manifest import build_artifact_manifest
-from main.core.records import ExperimentRecord, validate_record
-from main.protocol.table_builder import write_csv
+from evaluation.metrics.artifact_manifest import build_artifact_manifest
+from runtime.core.records import ExperimentRecord, validate_record
+from evaluation.protocol.table_builder import write_csv
 
 
 @pytest.mark.quick

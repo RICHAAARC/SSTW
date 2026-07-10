@@ -4,13 +4,17 @@ from __future__ import annotations
 
 import argparse
 import json
-import math
 from pathlib import Path
 from typing import Any
 
-from main.protocol.flow_evidence_fields import with_flow_evidence_protocol_defaults
-from main.protocol.record_writer import write_json, write_jsonl
-from main.protocol.table_builder import write_csv
+from evaluation.statistics.clustered_inference import (
+    clustered_mean_interval,
+    one_sided_binomial_upper_bound,
+)
+from evaluation.attacks.video_runtime_attack_protocol import load_protocol_config_with_shared_attack_protocol
+from evaluation.protocol.flow_evidence_fields import with_flow_evidence_protocol_defaults
+from evaluation.protocol.record_writer import write_json, write_jsonl
+from evaluation.protocol.table_builder import write_csv
 
 
 DEFAULT_PROTOCOL_CONFIG = "configs/protocol/probe_paper_generative_probe.json"
@@ -35,7 +39,7 @@ def _read_jsonl(path: Path) -> list[dict]:
 
 def _load_profile_context(config_path: str | Path) -> dict[str, Any]:
     """从 protocol config 读取当前 CI 报告所属的 profile 语义。"""
-    config = _read_json(Path(config_path))
+    config = load_protocol_config_with_shared_attack_protocol(config_path)
     if "target_fpr" not in config:
         raise KeyError(f"protocol config 缺少 target_fpr: {config_path}")
     return {
@@ -52,18 +56,32 @@ def _format_fpr(value: float | None) -> str:
     return f"{float(value):g}"
 
 
-def _wilson_interval(success_count: int, total_count: int, z_value: float = 1.96) -> tuple[float | None, float | None]:
-    """计算二项比例 Wilson 区间。
+def _cluster_values(source: dict[str, Any]) -> dict[str, list[float]]:
+    """把同一 prompt/seed 下的不同攻击视为簇内重复测量。"""
 
-    该函数属于通用统计写法。它只基于当前 records 的计数, 不访问阈值或最终论文 claim。
-    """
-    if total_count <= 0:
-        return None, None
-    phat = success_count / total_count
-    denominator = 1.0 + z_value * z_value / total_count
-    center = (phat + z_value * z_value / (2.0 * total_count)) / denominator
-    spread = z_value * math.sqrt((phat * (1.0 - phat) + z_value * z_value / (4.0 * total_count)) / total_count) / denominator
-    return round(max(0.0, center - spread), 6), round(min(1.0, center + spread), 6)
+    grouped: dict[str, list[float]] = {}
+    for unit in source.get("positive_detection_units_at_target_fpr") or []:
+        if not isinstance(unit, dict):
+            continue
+        anchor = str(unit.get("comparison_anchor_key") or "")
+        parts = anchor.split("::")
+        if len(parts) < 2:
+            continue
+        cluster_id = "::".join(parts[:2])
+        grouped.setdefault(cluster_id, []).append(
+            float(bool(unit.get("detected_at_target_fpr")))
+        )
+    return grouped
+
+
+def _negative_cluster_outcomes(source: dict[str, Any]) -> list[bool]:
+    """读取 fair calibration 已按视频最大分数聚合的 held-out FPR 单元。"""
+
+    return [
+        bool(unit.get("false_positive_at_target_fpr"))
+        for unit in source.get("negative_detection_units_at_target_fpr") or []
+        if isinstance(unit, dict) and unit.get("statistical_cluster_id")
+    ]
 
 
 def build_statistical_confidence_interval_records(
@@ -80,28 +98,61 @@ def build_statistical_confidence_interval_records(
     ]
     rows: list[dict] = []
     for source in fair_records:
-        total_count = int(source.get("attacked_positive_score_count") or 0)
+        clustered = clustered_mean_interval(
+            _cluster_values(source),
+            purpose=f"paper_profile_tpr:{source.get('method_id')}",
+        )
+        total_count = clustered.observation_count
         success_count = int(source.get("detected_positive_count_at_target_fpr") or 0)
-        lower, upper = _wilson_interval(success_count, total_count)
-        rate = round(success_count / total_count, 6) if total_count else None
-        claim_status = "formal_ci_from_fair_detection_calibration" if total_count and lower is not None and upper is not None else "formal_ci_blocked"
+        claim_status = "formal_cluster_bootstrap_ci_from_fair_detection_calibration"
         rows.append(with_flow_evidence_protocol_defaults({
-            "record_version": "formal_statistical_confidence_interval_v1",
+            "record_version": "formal_statistical_confidence_interval_v2",
             "statistical_confidence_interval_family": "tpr_at_target_fpr",
             "method_id": source.get("method_id"),
             "method_role": source.get("method_role"),
             **profile_context,
             "ci_success_count": success_count,
             "ci_total_count": total_count,
-            "ci_point_estimate": rate,
-            "ci_wilson_lower": lower,
-            "ci_wilson_upper": upper,
+            "ci_point_estimate": round(clustered.estimate, 6),
+            "ci_cluster_bootstrap_lower": round(clustered.confidence_interval_lower, 6),
+            "ci_cluster_bootstrap_upper": round(clustered.confidence_interval_upper, 6),
+            "ci_statistical_cluster_count": clustered.cluster_count,
+            "ci_bootstrap_resample_count": clustered.bootstrap_resample_count,
             "ci_confidence_level": 0.95,
             "ci_evidence_level": "fair_detection_calibration_measured_formal",
-            "cluster_by_video_interval_status": "available_from_prompt_seed_attack_anchor_bootstrap",
+            "cluster_by_video_interval_status": "source_video_cluster_bootstrap_complete",
             "paper_low_fpr_ci_status": "formal_target_fpr_ci_ready",
             "claim_support_status": claim_status,
         }, trajectory_source_level="fair_detection_calibration_records", claim_support_status=claim_status))
+        negative_outcomes = _negative_cluster_outcomes(source)
+        false_positive_count = sum(negative_outcomes)
+        heldout_negative_count = len(negative_outcomes)
+        fpr_upper = one_sided_binomial_upper_bound(
+            false_positive_count,
+            heldout_negative_count,
+        ) if heldout_negative_count else None
+        fpr_claim_status = (
+            "formal_heldout_fpr_exact_interval_ready"
+            if fpr_upper is not None
+            else "formal_heldout_fpr_exact_interval_missing"
+        )
+        rows.append(with_flow_evidence_protocol_defaults({
+            "record_version": "formal_statistical_confidence_interval_v2",
+            "statistical_confidence_interval_family": "heldout_fpr_at_frozen_threshold",
+            "method_id": source.get("method_id"),
+            "method_role": source.get("method_role"),
+            **profile_context,
+            "ci_success_count": false_positive_count,
+            "ci_total_count": heldout_negative_count,
+            "ci_point_estimate": round(false_positive_count / heldout_negative_count, 8) if heldout_negative_count else None,
+            "ci_one_sided_exact_upper": round(fpr_upper, 8) if fpr_upper is not None else None,
+            "ci_statistical_cluster_count": heldout_negative_count,
+            "ci_confidence_level": 0.95,
+            "ci_evidence_level": "fair_detection_calibration_measured_formal",
+            "cluster_by_video_interval_status": "source_video_exact_binomial_complete" if fpr_upper is not None else "missing",
+            "paper_low_fpr_ci_status": "formal_target_fpr_ci_ready" if fpr_upper is not None else "missing",
+            "claim_support_status": fpr_claim_status,
+        }, trajectory_source_level="fair_detection_calibration_records", claim_support_status=fpr_claim_status))
     return rows
 
 
@@ -111,18 +162,36 @@ def audit_statistical_confidence_interval_records(records: list[dict]) -> dict[s
         record
         for record in records
         if int(record.get("ci_total_count") or 0) > 0
-        and record.get("ci_wilson_lower") is not None
-        and record.get("ci_wilson_upper") is not None
+        and (
+            (
+                record.get("statistical_confidence_interval_family") == "tpr_at_target_fpr"
+                and record.get("ci_cluster_bootstrap_lower") is not None
+                and record.get("ci_cluster_bootstrap_upper") is not None
+            )
+            or (
+                record.get("statistical_confidence_interval_family") == "heldout_fpr_at_frozen_threshold"
+                and record.get("ci_one_sided_exact_upper") is not None
+            )
+        )
         and record.get("ci_evidence_level") == "fair_detection_calibration_measured_formal"
     ]
     record = ready_records[0] if ready_records else (records[0] if records else {})
-    total_count = sum(int(row.get("ci_total_count") or 0) for row in ready_records)
-    success_count = sum(int(row.get("ci_success_count") or 0) for row in ready_records)
-    decision = "PASS" if ready_records and len(ready_records) == len(records) else "FAIL"
+    tpr_records = [row for row in ready_records if row.get("statistical_confidence_interval_family") == "tpr_at_target_fpr"]
+    fpr_records = [row for row in ready_records if row.get("statistical_confidence_interval_family") == "heldout_fpr_at_frozen_threshold"]
+    total_count = sum(int(row.get("ci_total_count") or 0) for row in tpr_records)
+    success_count = sum(int(row.get("ci_success_count") or 0) for row in tpr_records)
+    target_fpr = float(record.get("target_fpr") or 0.0)
+    maximum_fpr_upper = max((float(row["ci_one_sided_exact_upper"]) for row in fpr_records), default=None)
+    fpr_point_closed = bool(fpr_records) and all(
+        float(row.get("ci_point_estimate") or 0.0) <= target_fpr
+        for row in fpr_records
+    )
+    confidence_bound_available = maximum_fpr_upper is not None
+    decision = "PASS" if ready_records and len(ready_records) == len(records) and fpr_point_closed and confidence_bound_available else "FAIL"
     return {
         "stage_id": "statistical_confidence_interval_reporter",
         "statistical_confidence_interval_decision": decision,
-        "claim_support_status": "formal_ci_from_fair_detection_calibration" if decision == "PASS" else "formal_ci_blocked",
+        "claim_support_status": "formal_cluster_bootstrap_ci_from_fair_detection_calibration" if decision == "PASS" else "formal_ci_blocked",
         "ci_record_count": len(records),
         "paper_result_level": record.get("paper_result_level"),
         "target_fpr": record.get("target_fpr"),
@@ -130,8 +199,16 @@ def audit_statistical_confidence_interval_records(records: list[dict]) -> dict[s
         "ci_total_count": total_count,
         "ci_success_count": success_count,
         "ci_point_estimate": round(success_count / total_count, 6) if total_count else None,
-        "ci_wilson_lower": record.get("ci_wilson_lower"),
-        "ci_wilson_upper": record.get("ci_wilson_upper"),
+        "ci_cluster_bootstrap_lower": record.get("ci_cluster_bootstrap_lower"),
+        "ci_cluster_bootstrap_upper": record.get("ci_cluster_bootstrap_upper"),
+        "ci_statistical_cluster_count": record.get("ci_statistical_cluster_count"),
+        "heldout_fpr_ci_record_count": len(fpr_records),
+        "heldout_fpr_one_sided_exact_upper_maximum": maximum_fpr_upper,
+        "heldout_fpr_point_target_closed": fpr_point_closed,
+        "heldout_fpr_confidence_bound_available": confidence_bound_available,
+        "heldout_fpr_confidence_upper_within_target": (
+            maximum_fpr_upper <= target_fpr if maximum_fpr_upper is not None else False
+        ),
         "paper_low_fpr_ci_status": record.get("paper_low_fpr_ci_status", "missing"),
         "cluster_by_video_interval_status": record.get("cluster_by_video_interval_status", "missing"),
     }
@@ -152,7 +229,7 @@ def run_statistical_confidence_interval_reporter(
     report = (
         "# Statistical Confidence Interval Report\n\n"
         "该报告基于 fair_detection_calibration_records 中的 measured_formal TPR@target FPR "
-        "计算 Wilson 区间。"
+        "按 source-video cluster 计算配对 bootstrap 区间。"
         f"当前 profile 的 target_fpr={target_fpr_text}, 该数值来自 protocol config。"
         "本报告不会自动替代更低 FPR profile 的正式大规模统计报告。\n\n"
         f"- statistical_confidence_interval_decision: {audit['statistical_confidence_interval_decision']}\n"
@@ -160,8 +237,8 @@ def run_statistical_confidence_interval_reporter(
         f"- target_fpr: {target_fpr_text}\n"
         f"- ci_total_count: {audit['ci_total_count']}\n"
         f"- ci_point_estimate: {audit['ci_point_estimate']}\n"
-        f"- ci_wilson_lower: {audit['ci_wilson_lower']}\n"
-        f"- ci_wilson_upper: {audit['ci_wilson_upper']}\n"
+        f"- ci_cluster_bootstrap_lower: {audit['ci_cluster_bootstrap_lower']}\n"
+        f"- ci_cluster_bootstrap_upper: {audit['ci_cluster_bootstrap_upper']}\n"
         f"- claim_support_status: {audit['claim_support_status']}\n"
     )
     report_path = run_root / "reports" / "statistical_confidence_interval_report.md"

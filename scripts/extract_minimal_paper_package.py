@@ -23,10 +23,8 @@ PROFILES = {
     "minimal_method_package": ExtractionProfile(
         profile_name="minimal_method_package",
         include_paths=(
-            "main/core",
             "main/methods",
-            "main/protocol",
-            "configs",
+            "configs/methods",
             "README.md",
             "pyproject.toml",
         ),
@@ -47,8 +45,12 @@ PROFILES = {
         profile_name="paper_artifact_rebuild_package",
         include_paths=(
             "main",
+            "runtime",
+            "evaluation",
+            "external_baseline",
             "configs",
             "experiments",
+            "workflows",
             "scripts",
             "docs/artifact_rebuild.md",
             "docs/field_registry.md",

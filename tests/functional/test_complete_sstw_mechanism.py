@@ -5,10 +5,8 @@ import pytest
 import torch
 
 from experiments.generative_video_model_probe.replay_and_sketch_gate import run_replay_and_sketch_gate
-from experiments.generative_video_model_probe.formal_adaptive_attack_executor import (
-    run_formal_adaptive_attack_execution,
-)
-from main.attacks.video_runtime_attack_protocol import FULL_PAPER_NON_RUNTIME_ATTACK_PROTOCOLS
+from evaluation.attacks.adaptive_video_optimizer import optimize_adaptive_attack_for_video
+from evaluation.attacks.video_runtime_attack_protocol import FULL_PAPER_NON_RUNTIME_ATTACK_PROTOCOLS
 from main.methods.state_space_watermark.authenticated_trajectory_sketch import (
     build_authenticated_trajectory_sketch_payload,
     sign_authenticated_trajectory_sketch,
@@ -25,13 +23,14 @@ from main.methods.state_space_watermark.path_observation import compute_path_ste
 from main.methods.state_space_watermark.replay_inversion import (
     FlowSchedulePoint,
     run_flow_inversion_and_replay,
+    run_key_independent_inversion_hypothesis,
 )
 from main.methods.state_space_watermark.velocity_field_constraint import apply_velocity_field_constraint
-from main.protocol.paper_mechanism_contract import (
+from evaluation.protocol.paper_mechanism_contract import (
     audit_paper_profile_mechanism_contract,
     load_paper_mechanism_contract,
 )
-from main.protocol.record_writer import write_json, write_jsonl
+from evaluation.protocol.record_writer import write_json, write_jsonl
 
 
 @pytest.mark.quick
@@ -159,6 +158,40 @@ def test_linear_flow_inversion_and_replay_closes_cycle() -> None:
 
 
 @pytest.mark.quick
+def test_candidate_key_cannot_change_fixed_inversion_observation() -> None:
+    """不同候选 key 只能改变 forward hypothesis, 不能改变 reverse path。"""
+
+    endpoint = torch.ones((1, 1, 2, 2, 2), dtype=torch.float32)
+    schedule = [
+        FlowSchedulePoint(timestep=2.0, sigma=1.0),
+        FlowSchedulePoint(timestep=1.0, sigma=0.5),
+        FlowSchedulePoint(timestep=0.0, sigma=0.0),
+    ]
+
+    def base_velocity(state, _timestep, _index):
+        return torch.zeros_like(state)
+
+    def candidate_a(state, _timestep, _index):
+        return torch.full_like(state, 0.1)
+
+    def candidate_b(state, _timestep, _index):
+        return torch.full_like(state, -0.2)
+
+    replay_a = run_key_independent_inversion_hypothesis(
+        endpoint, schedule, base_velocity, candidate_a
+    )
+    replay_b = run_key_independent_inversion_hypothesis(
+        endpoint, schedule, base_velocity, candidate_b
+    )
+
+    assert all(
+        torch.equal(left, right)
+        for left, right in zip(replay_a.reverse_states, replay_b.reverse_states)
+    )
+    assert not torch.equal(replay_a.forward_states[-1], replay_b.forward_states[-1])
+
+
+@pytest.mark.quick
 def test_authenticated_trajectory_sketch_rejects_tampering() -> None:
     """HMAC sketch 必须绑定 prompt、seed、模型、sampler、时间网格和路径观测。"""
 
@@ -193,6 +226,8 @@ def test_fixed_fpr_calibration_never_exceeds_calibration_budget() -> None:
 
     negatives = [
         {
+            "sample_role": "clean_negative",
+            "statistical_cluster_id": f"negative-{index}",
             "endpoint_score": index / 20.0,
             "S_velocity": index / 40.0,
             "S_path_inv": index / 30.0,
@@ -203,8 +238,20 @@ def test_fixed_fpr_calibration_never_exceeds_calibration_budget() -> None:
         }
         for index in range(20)
     ]
+    positives = [
+        {
+            **negatives[index],
+            "sample_role": "attacked_positive",
+            "statistical_cluster_id": f"positive-{index}",
+            "endpoint_score": 0.95,
+            "S_velocity": 0.9,
+            "S_path_inv": 0.9,
+            "replay_log_likelihood_ratio_mean": 1.0,
+        }
+        for index in range(10)
+    ]
     calibration = fit_flow_evidence_calibration(
-        negatives,
+        negatives + positives,
         method_variant="without_flow_state_admissibility",
         target_fpr=0.1,
     )
@@ -279,7 +326,7 @@ def test_full_claim3_gate_requires_real_replay_controls_and_hmac(
         "attack_name": "codec-attack",
         "split": "test",
         "replay_inversion_status": "ready",
-        "formal_flow_evidence_level": "attacked_video_wan_vae_model_velocity_replay",
+        "formal_flow_evidence_level": "attacked_video_key_independent_inversion_hypothesis_replay",
         "replay_trajectory_source": "attacked_video_endpoint_model_velocity_inversion",
         "replay_uncertainty_mean": 0.1,
         "replay_reliability_weight": 0.9,
@@ -292,7 +339,13 @@ def test_full_claim3_gate_requires_real_replay_controls_and_hmac(
         "wrong_sampler_control_margin": 0.1,
         "flow_state_admissibility_status": "pass",
         "flow_posterior_confidence": 0.9,
+        "flow_watermark_posterior_probability": 0.9,
+        "flow_watermark_posterior_log_odds": 2.197,
         "flow_state_posterior_entropy": 0.1,
+        "replay_log_likelihood_ratio_mean": 0.5,
+        "flow_detector_score_source": "group_cross_fitted_calibrated_probability_posterior",
+        "threshold_source_split": "calibration",
+        "test_time_threshold_update_blocked": True,
         "S_final_conservative": 0.8,
     }])
     write_json(run_root / "artifacts" / "three_layer_mechanism_evidence_decision.json", {
@@ -304,7 +357,7 @@ def test_full_claim3_gate_requires_real_replay_controls_and_hmac(
 
     assert audit["replay_and_sketch_gate_decision"] == "PASS"
     assert audit["claim3_full_support_allowed"] is True
-    assert audit["replay_and_sketch_evidence_level"] == "attacked_video_wan_vae_model_velocity_replay_with_hmac_sketch"
+    assert audit["replay_and_sketch_evidence_level"] == "attacked_video_key_independent_inversion_hypothesis_replay_with_hmac_sketch"
     complete = json.loads(
         (run_root / "artifacts" / "complete_paper_mechanism_claim_decision.json").read_text(encoding="utf-8")
     )
@@ -312,60 +365,38 @@ def test_full_claim3_gate_requires_real_replay_controls_and_hmac(
 
 
 @pytest.mark.quick
-def test_complete_adaptive_protocol_consumes_formal_flow_evidence(tmp_path: Path) -> None:
-    """完整 profile 的11个 adaptive 协议必须来自 Flow evidence 或真实跨样本视频。"""
+def test_adaptive_optimizer_generates_and_queries_candidates_per_video(tmp_path: Path) -> None:
+    """adaptive optimizer 必须生成新视频并逐候选调用冻结 scorer。"""
 
-    run_root = tmp_path / "run"
-    common = {
-        "sample_role": "attacked_positive",
-        "method_variant": "sstw_full_method",
-        "split": "test",
-        "metric_status": "measured_formal",
-        "generation_model_id": "wan-model",
-        "prompt_id": "prompt-a",
-        "seed_id": "seed-a",
-        "trajectory_trace_id": "trace-a",
-        "S_final_conservative": 0.7,
-        "endpoint_score": 0.8,
-        "S_path_inv": 0.5,
-        "time_grid_reliability": 0.9,
-        "wrong_key_control_margin": 0.2,
-        "wrong_prompt_control_margin": 0.2,
-        "wrong_sampler_control_margin": 0.2,
-        "decision": True,
-        "formal_flow_evidence_unit_id": "unit-a",
-        "sstw_detector_input_contract": "formal-flow-contract",
-    }
-    write_jsonl(run_root / "records" / "formal_flow_evidence_records.jsonl", [
-        {**common, "attack_name": "platform_transcode_runtime"},
-        {**common, "attack_name": "gaussian_blur_runtime", "S_final_conservative": 0.2},
-        {**common, "attack_name": "watermark_spoofing_or_copy_attack"},
-        {**common, "attack_name": "collusion_multi_sample_attack"},
-        {
-            **common,
-            "sample_role": "clean_negative",
-            "attack_name": None,
-            "clean_negative_video_path": "clean.mp4",
-            "S_final_conservative": 0.1,
-        },
-    ])
-    config_path = tmp_path / "protocol.json"
-    config_path.write_text(json.dumps({
-        "paper_result_level": "probe_paper",
-        "target_fpr": 0.1,
-        "require_complete_paper_mechanism_contract": True,
-        "required_non_runtime_attack_protocols": list(FULL_PAPER_NON_RUNTIME_ATTACK_PROTOCOLS),
-    }), encoding="utf-8")
+    import imageio.v3 as iio
+    import numpy as np
 
-    audit = run_formal_adaptive_attack_execution(run_root, config_path)
-    records = [
-        json.loads(line)
-        for line in (run_root / "records" / "formal_adaptive_attack_execution_records.jsonl")
-        .read_text(encoding="utf-8")
-        .splitlines()
-    ]
+    source = tmp_path / "source.mp4"
+    frames = [np.full((24, 32, 3), 80 + index, dtype=np.uint8) for index in range(6)]
+    iio.imwrite(source, frames, fps=8)
+    queried: list[Path] = []
 
-    assert audit["formal_adaptive_attack_execution_decision"] == "PASS"
-    assert len(records) == len(FULL_PAPER_NON_RUNTIME_ATTACK_PROTOCOLS)
-    assert all(record["adaptive_attack_execution_backend"] for record in records)
-    assert all(record["adaptive_attack_evidence_level"] == "formal_adaptive_attack_execution" for record in records)
+    def scorer(path: Path) -> dict[str, object]:
+        queried.append(path)
+        score = 0.2 if "gaussian_blur" in path.name else 0.5
+        return {
+            "S_final_conservative": score,
+            "endpoint_score": 0.8,
+            "S_path_inv": score,
+            "decision": score >= 0.4,
+        }
+
+    result = optimize_adaptive_attack_for_video(
+        source,
+        tmp_path / "candidates",
+        candidate_attack_names=("gaussian_blur_runtime", "brightness_contrast_runtime"),
+        scorer=scorer,
+        objective="minimize_detector_score",
+        endpoint_reference=0.8,
+        minimum_quality_psnr=10.0,
+    )
+
+    assert len(queried) == 2
+    assert result.selected.attack_name == "gaussian_blur_runtime"
+    assert Path(result.selected.video_path).exists()
+    assert result.selected.video_sha256

@@ -2,9 +2,8 @@ from pathlib import Path
 
 import pytest
 
-from experiments.generative_video_model_probe.claim3_downgrade import write_claim3_downgrade_outputs
 from experiments.generative_video_model_probe.replay_and_sketch_gate import run_replay_and_sketch_gate
-from main.protocol.record_writer import read_jsonl, write_jsonl
+from evaluation.protocol.record_writer import read_jsonl, write_jsonl
 
 
 @pytest.mark.quick
@@ -62,10 +61,7 @@ def test_replay_and_sketch_gate_writes_owner_side_diagnostic_records(tmp_path: P
     assert (run_root / "artifacts" / "replay_and_sketch_gate_decision.json").exists()
     assert (run_root / "reports" / "replay_and_sketch_gate_report.md").exists()
 
-    claim3_audit = write_claim3_downgrade_outputs(run_root)
-    assert claim3_audit["claim3_downgraded"] is True
-    assert claim3_audit["claim3_full_support_allowed"] is False
-    assert claim3_audit["replay_or_sketch_status"] == "replay_and_sketch_gate_passed_owner_side_diagnostic"
+
 
 
 @pytest.mark.quick

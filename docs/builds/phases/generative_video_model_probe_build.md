@@ -98,7 +98,7 @@ modern external baseline measured_formal records
 internal ablation matrix records
 flow-specific adaptive attack records
 wrong sampler / wrong prompt / wrong time grid replay records
-replay/sketch gate records 或受治理 Claim-3 downgrade records
+完整 replay/authenticated sketch gate records
 negative family records
 fixed-FPR confidence interval report
 paper profile tables / figures / reports
@@ -246,7 +246,7 @@ usage: frozen_engineering_motion_threshold_for_small_scale_pilot
 ```text
 experiments/generative_video_model_probe/attack_runner.py
 experiments/generative_video_model_probe/detection_runner.py
-paper_workflow/notebook_utils/generative_video_model_probe_workflow.py
+workflows/generative_video_paper.py
 paper_workflow/colab_notebooks/generative_video_generation_colab.ipynb -> generative_video_quality_scoring_colab.ipynb -> runtime_attack_colab.ipynb -> runtime_detection_colab.ipynb
 scripts/package_results/generative_video_drive_packager.py
 ```
@@ -419,9 +419,11 @@ validation_claim_audit_ready
 同时, Colab 入口已新增 `PROFILE = probe_paper` 运行配置:
 
 ```text
-prompt_count: 8
-seed_per_prompt: 3
-expected_generation_count: 24
+prompt_count: 10
+seed_per_prompt: 6
+calibration_seed_per_prompt: 3
+test_seed_per_prompt: 3
+expected_generation_count: 60
 profile_name: probe_paper
 ```
 
@@ -459,9 +461,9 @@ reports/validation_artifact_rebuild_dry_run_report.md
 该实现的边界是:
 
 ```text
-validation_internal_ablation: 使用 runtime detection proxy 生成 probe_paper 或 pilot_paper 同批 trace 的消融矩阵; probe_paper 结果只用于工程稳定性, pilot_paper 结果用于小样本论文级协议预演, 二者都不替代 full_paper 大规模正式消融。
-statistical_confidence_interval: 只计算 validation runtime detection proxy 的 Wilson 区间, 不替代 FPR=0.001 大规模统计。
-validation_artifact_rebuild: 只检查 validation 产物是否具备 records -> tables / reports 重建闭环, 不生成 full_paper package。
+validation_internal_ablation: 只汇总各 method_variant 真实生成视频上的正式检测记录, 不从 full-method 分数派生替代分数。
+statistical_confidence_interval: 以 source video 为簇计算 bootstrap 区间, 并报告 held-out FPR 的单侧精确上界。
+validation_artifact_rebuild: 检查 records -> tables / reports 的可重建闭环; 各 profile 使用同一重建规则。
 ```
 
 Colab workflow 已按以下顺序接入:
@@ -524,69 +526,57 @@ claim_boundary: proxy comparison only until modern baseline adapters produce mea
 
 该步骤必须位于 runtime detection 之后, 因为 adapter 需要读取真实 attacked video detection 链路产生的 governed records。该步骤必须位于 probe_paper gate 和 pilot_paper gate 之前: probe_paper gate 需要检查 `validation_external_baseline_comparison_records_ready`, pilot_paper gate 需要检查同批 held-out test trace 的 `pilot_paper_external_baseline_comparison_ready`。
 
-## 2026-06-24 probe_paper hard-blocker runner workflow 接入
+## 正式 adaptive attack 与 replay/sketch 硬阻断接入
 
-当前 probe_paper notebook workflow 已接入两个硬阻断 runner:
+当前三个 paper profile 共用以下真实执行入口：
 
 ```text
+experiments.generative_video_model_probe.formal_adaptive_attack_executor
 experiments.generative_video_model_probe.adaptive_attack_runner
-experiments.generative_video_model_probe.claim3_downgrade
+experiments.generative_video_model_probe.formal_flow_evidence_runner
+experiments.generative_video_model_probe.replay_and_sketch_gate
 ```
 
-运行顺序为:
+运行顺序为：
 
 ```text
 runtime detection
-external_baseline adapter comparison
-small_scale_mechanism_pilot_check
-validation_internal_ablation
-adaptive_attack validation proxy
-Claim-3 downgrade gate
-statistical_confidence_interval
-validation_artifact_rebuild_dry_run
-paper_profile_gate
+external baseline formal comparison
+formal internal ablation
+per-video formal adaptive attack execution
+fixed-path replay and authenticated sketch gate
+cluster-aware statistical confidence interval
+artifact rebuild dry run
+paper profile gate
 package
 ```
 
-其中 adaptive attack runner 只提供 validation proxy records, 不支撑 full_paper adaptive robustness claim。Claim-3 downgrade gate 只允许 probe_paper 合规继续, 不替代最终必须实现的 replay/sketch gate。
+adaptive attack executor 对每个独立 held-out source video 生成真实候选视频、查询冻结 Flow detector、记录质量约束与查询预算。replay runner 从攻击后视频执行固定 key-independent inversion、null/candidate forward hypothesis、认证 sketch 和错误 key/prompt/sampler/time-grid control。两者都必须写出 `measured_formal` 或等价受治理证据，不能由 validation proxy、手工分数或占位记录替代。
 
-新增落盘产物包括:
+新增或更新的正式产物包括：
 
 ```text
-records/adaptive_attack_records.jsonl
+records/formal_adaptive_attack_execution_records.jsonl
+records/formal_adaptive_attack_query_records.jsonl
 tables/adaptive_attack_table.csv
 artifacts/adaptive_attack_decision.json
 reports/adaptive_attack_report.md
-records/claim3_downgrade_records.jsonl
-tables/claim3_downgrade_table.csv
-artifacts/claim3_downgrade_decision.json
-reports/claim3_downgrade_report.md
+records/trajectory_sketch_verification_records.jsonl
+records/replay_uncertainty_records.jsonl
+records/wrong_key_replay_records.jsonl
+records/wrong_sampler_replay_records.jsonl
+records/wrong_prompt_replay_records.jsonl
+records/wrong_time_grid_replay_records.jsonl
+tables/replay_verification_table.csv
+artifacts/replay_and_sketch_gate_decision.json
+reports/replay_and_sketch_gate_report.md
 ```
 
-## 2026-06-24 replay/sketch gate validation proxy 接入
-
-probe_paper workflow 已新增 replay/sketch gate 步骤, 位于 adaptive attack proxy 与 Claim-3 downgrade gate 之间:
-
-```text
-runtime detection
-external_baseline adapter comparison
-small_scale_mechanism_pilot_check
-validation_internal_ablation
-adaptive_attack validation proxy
-replay/sketch gate validation proxy
-Claim-3 downgrade gate
-statistical_confidence_interval
-validation_artifact_rebuild_dry_run
-paper_profile_gate
-package
-```
-
-新增步骤写出 trajectory sketch verification、replay uncertainty、wrong sampler replay 和 wrong prompt replay 四类 governed records。`validation_artifact_rebuild_dry_run` 与 Google Drive package manifest 已纳入该步骤产物。当前该步骤只解除 probe_paper 工程入口缺口, 不解除 full_paper Claim-3 强支持阻塞。
-
+任一必需 artifact、错误控制、后验校准或固定 FPR 判定缺失时，当前 paper profile 必须失败。`probe_paper` 不提供 Claim-3 降级路径。
 
 ## 2026-06-24 pilot_paper FPR=0.01 工程入口
 
-当前 `generative_video_model_probe` 已新增 `probe_paper` 与 `pilot_paper` 语义层级。`probe_paper` 用于在 probe_paper 通过并生成 probe_paper_to_pilot_paper_transition_decision 后执行 FPR=10% 小样本论文闭合验证; `pilot_paper` 用于在 probe_paper 通过并生成 probe_paper_to_pilot_paper_transition_decision 后执行 FPR=1% 小规模论文级结果包。二者都不是 workflow-only pilot, 而是受门禁约束的 paper profile。
+`probe_paper` 直接执行 FPR=10% 的完整三层论文闭合; PASS 并生成 `probe_paper_to_pilot_paper_transition_decision` 后, `pilot_paper` 执行 FPR=1% 的同构论文协议。二者都不是 workflow-only pilot。
 
 该阶段协议为:
 
@@ -613,16 +603,16 @@ Google Drive package manifest pilot_paper summary
 paper_result_level: pilot_paper
 paper_protocol_level: paper_grade_protocol
 paper_protocol_difference_from_full_paper: sample_scale_and_target_fpr_only
-prompt_count: 25
-seed_per_prompt: 4
-calibration_seed_per_prompt: 2
-test_seed_per_prompt: 2
-unique_video_count: 100
-calibration_unique_video_count: 50
-test_unique_video_count: 50
-expected_calibration_negative_event_count: 5000
-expected_heldout_test_negative_event_count: 5000
-expected_heldout_attacked_positive_event_count: 2300
+prompt_count: 50
+seed_per_prompt: 12
+calibration_seed_per_prompt: 6
+test_seed_per_prompt: 6
+unique_video_count: 600
+calibration_unique_video_count: 300
+test_unique_video_count: 300
+minimum_calibration_negative_event_count: 300
+minimum_heldout_test_negative_event_count: 300
+minimum_heldout_attacked_positive_event_count: 13800
 target_fpr: 0.01
 threshold_protocol: calibration_split_to_frozen_threshold_to_heldout_test_split
 ```
@@ -653,7 +643,7 @@ pilot_paper_external_baseline_trace_count_min >= 50
 pilot_paper_internal_ablation_trace_count_min >= 50
 ```
 
-这一实现属于项目特定 gate 设计: 它强制 `probe_paper` 先闭合对比链路和消融链路, 再由 `probe_paper` 证明 FPR=10% 小样本论文闭合, 最后才允许 `pilot_paper` 输出 pilot 级 fixed-FPR 论文主张。显式 DTW 与 frame matching 仍只是同步 control proxy, 现代视频水印 baseline 的正式 adapter 必须在 `probe_paper` 通过前基于项目内 clone / build / run / adapt / record 产出 `measured_formal` records。
+这一实现属于项目特定 gate 设计: 它强制 `probe_paper` 在同一次 profile 运行中闭合对比、消融与 FPR=10% 三层结论, 然后才允许 `pilot_paper` 输出 pilot 级 fixed-FPR 论文主张。显式 DTW 与 frame matching 仍只是同步 control proxy, 现代视频水印 baseline 的正式 adapter 必须在 `probe_paper` 通过前基于项目内 clone / build / run / adapt / record 产出 `measured_formal` records。
 
 
 ### 2.12 现代视频水印 baseline 正式 adapter 要求
@@ -692,7 +682,7 @@ motion_threshold_calibration_colab.ipynb: 只运行 motion calibration split 并
 generative_video_generation_colab.ipynb、generative_video_quality_scoring_colab.ipynb、runtime_attack_colab.ipynb、runtime_detection_colab.ipynb: 按拆分阶段运行 Wan2.1 生成、formal metrics、motion threshold 复用、attack 和 detection
 5 个主实验 modern external baseline formal reference Notebook: 分别运行对应 baseline 的官方流程并生成项目内 official bundle, 不默认调用全量 runner 转写 measured_formal records
 formal_comparison_scoring_colab.ipynb: 恢复 5 个主实验 official reference 阶段包后运行全量 external baseline comparison、self-containment、公平校准和差值区间统计
-paper_evidence_postprocess_colab.ipynb: 恢复 runtime、motion threshold 和 formal comparison scoring 阶段包后运行 formal internal ablation、formal adaptive attack 证据整理、replay/sketch 或 Claim-3 downgrade、CI、低 FPR 阻断记录和数据切分泄漏检查
+paper_evidence_postprocess_colab.ipynb: 恢复 runtime、motion threshold 和 formal comparison scoring 阶段包后运行 formal internal ablation、逐视频 formal adaptive attack、固定路径 replay/authenticated sketch gate、CI、低 FPR 阻断记录和数据切分泄漏检查
 paper_gate_and_package_colab.ipynb: 恢复 runtime、motion threshold、formal comparison scoring 和 paper evidence postprocess 阶段包后只运行最终 gate、transition、artifact rebuild dry run、figure/package manifest 和 package
 ```
 

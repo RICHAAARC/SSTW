@@ -2,8 +2,8 @@ from pathlib import Path
 
 import pytest
 
-from main.protocol.paper_result_formality_guard import build_paper_result_formality_guard
-from main.protocol.record_writer import write_json, write_jsonl
+from evaluation.protocol.paper_result_formality_guard import build_paper_result_formality_guard
+from evaluation.protocol.record_writer import write_json, write_jsonl
 
 
 @pytest.mark.quick

@@ -635,12 +635,9 @@ Notebook 与 repository module 的跨边界数据
 | adaptive_attack_score_mean | metric | none | true | false | false | Formal adaptive attack measured score 的平均值, 由 formal_adaptive_attack_execution records 聚合。 |
 | adaptive_robustness_claim_allowed | governance | none | true | false | false | 是否允许 adaptive robustness 强 claim。 |
 | adaptive_attack_evidence_level | governance | none | true | false | false | Adaptive attack evidence 等级。 |
-| replay_or_sketch_status | governance | none | true | false | false | Replay/sketch readiness status or explicit Claim-3 downgrade status. |
-| claim3_downgrade_decision | governance | none | true | false | false | Claim-3 降级门禁决策。 |
-| claim3_downgraded | governance | none | true | false | false | 是否已经显式将 Claim-3 降级。 |
+| replay_or_sketch_status | governance | none | true | false | false | Replay/sketch 完整证据就绪状态; 正式 profile 不接受 Claim-3 降级状态。 |
 | claim3_original_scope | claim | none | true | false | false | Claim-3 原始强主张范围。 |
 | claim3_allowed_scope | claim | none | true | false | false | 当前证据允许的 Claim-3 范围。 |
-| claim3_downgrade_reason | governance | none | true | false | false | Claim-3 降级或未降级的原因。 |
 | claim3_full_support_allowed | governance | none | true | false | false | 是否允许把 Claim-3 写成强 supported claim。 |
 | claim3_missing_replay_requirement_count | metric | none | true | false | false | Claim-3 replay/sketch 缺失要求数量。 |
 | claim3_missing_replay_requirements | governance | none | true | false | false | Claim-3 replay/sketch 缺失要求列表。 |
@@ -1022,7 +1019,6 @@ Notebook 与 repository module 的跨边界数据
 | require_real_adaptive_attack_records | protocol | none | true | false | false | gate 是否要求真实 adaptive attack records 已落盘。 |
 | require_real_world_attack_records | protocol | none | true | false | false | gate 是否要求真实平台、screen recording 或真实转码类 attack records 已落盘。 |
 | require_adaptive_attack_records | protocol | none | true | false | false | gate 是否要求 adaptive attack 相关 records 已落盘。 |
-| require_replay_or_sketch_records_or_claim3_downgrade | protocol | none | true | false | false | gate 是否要求 replay / authenticated sketch records 已闭合, 或 Claim-3 已显式降级。 |
 | require_confidence_interval_report | protocol | none | true | false | false | gate 是否要求置信区间报告已生成。 |
 | require_claim_audit_report | protocol | none | true | false | false | gate 是否要求 claim audit 报告已生成。 |
 | require_artifact_rebuild_report | protocol | none | true | false | false | gate 是否要求 artifact rebuild 报告已生成。 |
@@ -1037,8 +1033,8 @@ Notebook 与 repository module 的跨边界数据
 | minimum_pilot_paper_internal_ablation_trace_count | protocol | none | true | false | false | pilot_paper internal ablation 每个必需变体要求覆盖的 held-out trace 最小数量。 |
 | minimum_internal_ablation_variant_count | protocol | none | true | false | false | pilot_paper gate 要求的内部消融变体最小数量。 |
 | minimum_modern_external_baseline_formal_adapter_count | protocol | none | true | false | false | pilot_paper gate 要求的现代视频水印 measured_formal adapter 最小数量。 |
-| pilot_paper_external_baseline_comparison_ready | governance | none | true | true | false | pilot_paper gate 中 external_baseline comparison 是否满足完整协议预演要求。 |
-| pilot_paper_internal_ablation_matrix_ready | governance | none | true | true | false | pilot_paper gate 中 internal ablation matrix 是否满足完整协议预演要求。 |
+| pilot_paper_external_baseline_comparison_ready | governance | none | true | true | false | pilot_paper gate 中 external_baseline comparison 是否满足完整论文协议要求。 |
+| pilot_paper_internal_ablation_matrix_ready | governance | none | true | true | false | pilot_paper gate 中 internal ablation matrix 是否满足完整论文协议要求。 |
 | pilot_paper_external_baseline_trace_count | metric | none | true | true | false | pilot_paper held-out trace 中已有任一 measured external_baseline comparison 的数量。 |
 | pilot_paper_external_baseline_trace_count_min | metric | none | true | true | false | pilot_paper held-out trace 中每个必需 external_baseline adapter 的最小覆盖数量。 |
 | pilot_paper_external_baseline_trace_counts | metric | none | true | false | false | pilot_paper held-out trace 中各必需 external_baseline adapter 的覆盖数量映射。 |
@@ -1050,7 +1046,7 @@ Notebook 与 repository module 的跨边界数据
 | next_allowed_action | governance | none | true | false | false | 当前 gate 后允许执行的下一步动作。 |
 | next_forbidden_action | governance | none | true | false | false | 当前 gate 后明确禁止执行的动作。 |
 | pilot_paper_claim_support_status | claim | none | true | true | false | package manifest 中记录的 pilot_paper claim 支撑状态摘要。 |
-| probe_paper_claim_support_status | governance | none | true | true | false | package manifest 或下游 gate 中记录的 probe-paper handoff 状态摘要; 当前 probe_paper 只支持 target_fpr=0.1 小样本论文闭合结论候选, 不支持 pilot_paper 或 full_paper 结论外推。 |
+| probe_paper_claim_support_status | governance | none | true | true | false | package manifest 或下游 gate 中记录的 probe-paper handoff 状态摘要; probe_paper 通过后支持 target_fpr=0.1 下的完整三层论文结论, 但不支持向 pilot_paper 或 full_paper 的更低 FPR 外推。 |
 | paper_gate_preflight_layer | protocol | none | true | false | false | 当前 workflow profile 是否处于 paper gate 预检层; probe_paper 在 target_fpr=0.1 小样本论文闭合语义下必须为 true。 |
 | pilot_paper_result_level | governance | none | true | true | false | package manifest 中记录的 pilot_paper 结果级别。 |
 | pilot_paper_protocol_level | governance | none | true | true | false | package manifest 中记录的 pilot_paper 协议级别。 |
@@ -1351,12 +1347,12 @@ Notebook 与 repository module 的跨边界数据
 | probe_paper_fair_detection_calibration_ready_count | metric | none | true | true | false | probe_paper gate 中已通过 clean negative 公平校准的方法数量。 |
 | probe_paper_formal_method_baseline_comparison_ready_count | metric | none | true | true | false | probe_paper gate 中同协议 method-baseline 比较已 ready 的方法数量。 |
 | probe_paper_formal_baseline_difference_interval_ready_count | metric | none | true | true | false | probe_paper gate 中 SSTW 相对 baseline 差值区间已 ready 的 baseline 数量。 |
-| require_probe_paper_sstw_advantage_claim_ready | protocol | none | true | false | false | 共享 gate 是否要求 SSTW 相对 5 个现代 baseline 的 target_fpr=0.1 优势证据 ready; probe_paper 默认 false, probe_paper 必须 true。 |
-| probe_paper_sstw_advantage_claim_ready | governance | none | true | true | false | 共享 paper profile/probe gate 中 SSTW target_fpr=0.1 优势证据是否满足论文主张候选标准; 当前正式消费层为 probe_paper。 |
+| require_probe_paper_sstw_advantage_claim_ready | protocol | none | true | false | false | 共享 gate 是否要求 SSTW 相对 5 个现代 baseline 的 target_fpr=0.1 优势证据 ready; probe_paper 正式配置必须为 true。 |
+| probe_paper_sstw_advantage_claim_ready | governance | none | true | true | false | 共享 paper profile/probe gate 中 SSTW target_fpr=0.1 优势证据是否满足完整论文主张标准; 当前正式消费层为 probe_paper。 |
 | probe_paper_sstw_advantage_ready_baseline_count | metric | none | true | true | false | 共享 paper profile/probe gate 中 SSTW 优势差值和置信区间已 ready 的现代 baseline 数量。 |
 | probe_paper_sstw_advantage_missing_baseline_names | governance | none | true | false | false | 共享 paper profile/probe gate 中尚未满足 SSTW 优势证据标准的现代 baseline 名称集合。 |
-| probe_paper_sstw_advantage_blocking_reasons | governance | none | true | false | false | 共享 paper profile/probe gate 阻断 SSTW target_fpr=0.1 优势主张候选的原因列表。 |
-| probe_paper_sstw_advantage_claim_status | claim | none | true | true | false | 共享 paper profile/probe gate 对 SSTW target_fpr=0.1 优势主张候选的 claim 支撑状态; 当前只有 probe_paper 可以把它升级为论文闭合证据。 |
+| probe_paper_sstw_advantage_blocking_reasons | governance | none | true | false | false | 共享 paper profile/probe gate 阻断 SSTW target_fpr=0.1 完整优势主张的原因列表。 |
+| probe_paper_sstw_advantage_claim_status | claim | none | true | true | false | 共享 paper profile/probe gate 对 SSTW target_fpr=0.1 完整优势主张的 claim 支撑状态; 当前只有 probe_paper 可以把它升级为论文闭合证据。 |
 | minimum_sstw_advantage_baseline_count | protocol | none | true | false | false | probe_paper gate 要求 SSTW 优势证据覆盖的现代 baseline 最小数量。 |
 | minimum_sstw_tpr_at_target_fpr_difference | protocol | none | true | false | false | probe_paper gate 要求 SSTW 相对 baseline 的 TPR@target FPR 差值下限。 |
 | require_sstw_advantage_ci_lower_above_zero | protocol | none | true | false | false | probe_paper gate 是否要求 SSTW 相对 baseline 的差值置信区间下界大于0。 |
@@ -1588,7 +1584,7 @@ Notebook 与 repository module 的跨边界数据
 | formal_comparison_external_baseline_environment_status | governance | none | true | false | false | formal comparison scoring 阶段 external baseline 环境预检状态说明。 |
 
 | probe_paper_gate_decision | governance | none | true | true | false | probe_paper 小样本 fpr=0.1 论文闭合门禁判定; PASS 后必须再通过 probe_paper_to_pilot_paper_transition_decision 才能进入 pilot_paper。 |
-| probe_paper_to_pilot_paper_transition_decision | governance | none | true | true | false | probe_paper -> pilot_paper 的轻量跳转判定, 防止 probe_paper 直接进入 pilot_paper。 |
+| probe_paper_to_pilot_paper_transition_decision | governance | none | true | true | false | probe_paper -> pilot_paper 的轻量跳转判定, 防止未通过显式 transition 就进入 pilot_paper。 |
 | probe_paper_claim_support_status | claim | none | true | false | false | pilot_paper gate 读取到的 probe_paper claim 支撑状态。 |
 | probe_paper_gate_fairness_missing_requirements | governance | none | true | false | false | pilot_paper gate 复核 probe_paper gate 时发现的缺失或不合规项。 |
 | probe_paper_transition_fairness_missing_requirements | governance | none | true | false | false | pilot_paper gate 复核 probe_paper -> pilot_paper 跳转时发现的缺失或不合规项。 |
@@ -1602,7 +1598,6 @@ Notebook 与 repository module 的跨边界数据
 | admissibility_thresholds | metric | none | true | false | false | 完整论文机制中 `admissibility_thresholds` 的受治理记录字段。 |
 | audited_profile_count | metric | none | true | false | false | 完整论文机制中 `audited_profile_count` 的受治理记录字段。 |
 | calibration_negative_count | metric | none | true | false | false | 完整论文机制中 `calibration_negative_count` 的受治理记录字段。 |
-| claim3_downgrade_allowed | governance | none | true | false | false | 当前 paper profile 是否允许降低 Claim-3 主张强度, 完整机制固定为 false。 |
 | claim3_real_replay_record_count | metric | none | true | false | false | 完整论文机制中 `claim3_real_replay_record_count` 的受治理记录字段。 |
 | claim_1_empirical_fpr | metric | none | true | true | false | 完整论文机制中 `claim_1_empirical_fpr` 的受治理记录字段。 |
 | claim_1_heldout_negative_count | metric | none | true | true | false | 完整论文机制中 `claim_1_heldout_negative_count` 的受治理记录字段。 |
@@ -1813,3 +1808,67 @@ Notebook 与 repository module 的跨边界数据
 | minimum_replay_reliability_mean | metric | none | true | true | false | Claim-3 门禁要求的 replay reliability 均值下界。 |
 | flow_replay_posterior_records_ready | metric | none | true | true | false | 真实 replay posterior 字段覆盖是否完整。 |
 | replay_reliability_mean_ready | metric | none | true | true | false | replay reliability 均值是否达到 Claim-3 契约。 |
+
+## 审稿证据索引字段
+
+| 字段名 | 类别 | 后缀要求 | 必需 | 可空 | 可支持主张 | 说明 |
+| --- | --- | --- | --- | --- | --- | --- |
+| reviewer_evidence_index_decision | governance | none | true | false | true | 当前 paper profile 的三层主张是否均映射到存在且可校验的 governed artifacts。 |
+| reviewer_evidence_index_required | protocol | none | true | false | true | 正式 paper profile 是否必须在最终 gate 后生成审稿证据索引。 |
+| indexed_claim_count | metric | none | true | false | false | 审稿证据索引覆盖的主张数量。 |
+| indexed_artifact_count | metric | none | true | false | false | 审稿证据索引覆盖的 artifact 数量。 |
+| failed_claim_ids | governance | none | true | false | false | 未通过完整机制门禁的 claim ID 列表。 |
+| missing_evidence_paths | governance | none | true | false | false | 声明为必需但没有实际文件的 artifact 相对路径。 |
+| evidence_rows | artifact | none | true | false | true | claim、artifact 路径、存在状态和内容摘要组成的索引行。 |
+| claim_decision_field | governance | none | true | false | true | 审稿证据行对应的完整机制 claim decision 字段名。 |
+| claim_decision | governance | none | true | false | true | 审稿证据行对应的 Claim-1、Claim-2 或 Claim-3 判定值。 |
+| evidence_exists | governance | none | true | false | true | 对应 evidence_path 是否为实际文件。 |
+| evidence_sha256 | artifact | none | true | true | true | governed artifact 的 SHA-256 内容摘要。 |
+| evidence_source | governance | none | true | false | true | 证据来源类型，正式索引固定为 governed_artifact。 |
+| profile_gate_path | artifact | none | true | true | true | 当前 profile 最终 gate decision 的相对路径。 |
+| profile_gate_passed | governance | none | true | false | true | 当前 profile 最终 gate 是否已经通过。 |
+
+## 完整论文机制新增字段
+
+| 字段名 | 类别 | 后缀要求 | 必需 | 可空 | 可支持主张 | 说明 |
+| --- | --- | --- | --- | --- | --- | --- |
+| paper_profile_common_contract_path | protocol | none | true | false | true | 三个正式 profile 共用机制契约的路径。 |
+| paper_profile_common_contract_id | protocol | none | true | false | true | 三个正式 profile 共用机制契约标识。 |
+| paper_profile_common_contract_status | governance | none | true | false | true | profile 公共机制字段逐项一致性状态。 |
+| require_replay_and_sketch_full_support | governance | none | true | false | true | 正式 profile 是否强制 Claim-3 replay 与认证 sketch 完整支持。 |
+| require_cluster_aware_statistics | governance | none | true | false | true | 是否强制以 source video 为统计簇。 |
+| require_claim1_velocity_causal_gain | governance | none | true | false | true | 是否强制 Claim-1 无速度约束因果对照。 |
+| require_calibrated_probability_posterior | governance | none | true | false | true | 是否强制使用校准概率后验。 |
+| require_per_video_adaptive_attack_optimization | governance | none | true | false | true | 是否强制逐视频执行 adaptive attack 搜索。 |
+| require_heldout_fpr_confidence_upper_bound | governance | none | true | false | true | 是否要求报告 held-out FPR 单侧置信上界。 |
+| statistical_cluster_id | protocol | none | true | false | true | source video prompt-seed 独立统计簇标识。 |
+| statistical_independent_unit | protocol | none | true | false | true | 明确统计独立单元的语义。 |
+| statistical_within_cluster_trial_index | protocol | none | true | false | true | 同一视频内 key trial 的重复测量序号。 |
+| replay_log_likelihood_ratio | metric | none | true | false | true | 候选 key forward 相对 null forward 的循环误差对数似然比。 |
+| replay_log_likelihood_ratio_mean | metric | none | true | false | true | 多时间网格 replay 对数似然比均值。 |
+| replay_log_likelihood_ratio_standard_deviation | metric | none | true | false | true | 多时间网格 replay 对数似然比标准差。 |
+| replay_null_cycle_error_mean | metric | none | true | false | true | null forward hypothesis 循环误差均值。 |
+| flow_watermark_posterior_probability | metric | none | true | false | true | class-balanced calibration reference prior 下的水印概率后验。 |
+| flow_watermark_posterior_log_odds | metric | none | true | false | true | 水印概率后验的 log odds。 |
+| posterior_model_type | method | none | true | false | true | 冻结后验模型类型。 |
+| posterior_reference_prior | method | none | true | false | true | 概率后验校准使用的 reference prior。 |
+| posterior_probability_semantics | method | none | true | false | true | 后验概率的统计语义。 |
+| posterior_feature_names | method | none | true | false | true | 冻结概率后验的有序特征名。 |
+| posterior_feature_means | method | none | true | false | true | calibration split 拟合的特征均值。 |
+| posterior_feature_scales | method | none | true | false | true | calibration split 拟合的特征标准差。 |
+| posterior_coefficients | method | none | true | false | true | 冻结 logistic 后验系数。 |
+| posterior_platt_slope | method | none | true | false | true | 冻结 Platt calibration 斜率。 |
+| posterior_platt_intercept | method | none | true | false | true | 冻结 Platt calibration 截距。 |
+| posterior_calibration_brier_score | metric | none | true | false | true | 分组交叉拟合后验的 class-balanced Brier score。 |
+| posterior_calibration_expected_calibration_error | metric | none | true | false | true | 分组交叉拟合后验的 ECE。 |
+| posterior_calibration_group_count | metric | none | true | false | true | 后验 calibration 使用的独立视频簇数量。 |
+| paired_velocity_causal_score_gain | metric | none | true | false | true | 同 prompt-seed-attack 下完整方法相对无速度约束的分数差。 |
+| paired_velocity_causal_detection_gain | metric | none | true | false | true | 同 prompt-seed-attack 下完整方法相对无速度约束的检测判定差。 |
+| claim_1_velocity_causal_score_gain_ci_95_lower | metric | none | true | false | true | Claim-1 速度约束因果分数增益簇 bootstrap 下界。 |
+| ci_one_sided_exact_upper | metric | none | true | false | true | 按独立 source video 计算的 FPR exact 单侧上界。 |
+| ci_statistical_cluster_count | metric | none | true | false | true | 置信区间使用的独立视频簇数量。 |
+| adaptive_attack_candidate_records | artifact | none | true | false | true | 单视频 adaptive 搜索的候选视频与查询日志。 |
+| adaptive_attack_output_video_sha256 | artifact | none | true | false | true | adaptive attack 输出视频文件 SHA-256。 |
+| adaptive_attack_output_quality_psnr | metric | none | true | false | true | adaptive 输出相对输入视频的 PSNR 质量约束。 |
+| adaptive_attack_endpoint_tolerance | protocol | none | true | false | true | endpoint-preserving 搜索允许的 endpoint 分数偏差。 |
+| per_video_adaptive_attack_optimization | governance | none | true | false | true | adaptive 记录是否由逐视频候选生成与查询形成。 |

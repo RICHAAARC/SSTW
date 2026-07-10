@@ -12,9 +12,10 @@ import json
 from pathlib import Path
 from typing import Any
 
-from main.protocol.flow_evidence_fields import with_flow_evidence_protocol_defaults
-from main.protocol.record_writer import write_json, write_jsonl
-from main.protocol.table_builder import write_csv
+from evaluation.protocol.flow_evidence_fields import with_flow_evidence_protocol_defaults
+from evaluation.attacks.video_runtime_attack_protocol import load_protocol_config_with_shared_attack_protocol
+from evaluation.protocol.record_writer import write_json, write_jsonl
+from evaluation.protocol.table_builder import write_csv
 
 
 DEFAULT_VALIDATION_CONFIG = "configs/protocol/probe_paper_generative_probe.json"
@@ -138,12 +139,12 @@ def build_low_fpr_formal_statistics_records(
     """构建低 FPR 正式统计 records。"""
 
     run_root = Path(run_root)
-    current_config = _read_json(Path(config_path))
+    current_config = load_protocol_config_with_shared_attack_protocol(config_path)
     if "target_fpr" not in current_config:
         raise KeyError(f"protocol config 缺少 target_fpr: {config_path}")
-    probe_config = _read_json(Path(probe_config_path))
-    pilot_config = _read_json(Path(pilot_config_path))
-    full_config = _read_json(Path(full_config_path))
+    probe_config = load_protocol_config_with_shared_attack_protocol(probe_config_path)
+    pilot_config = load_protocol_config_with_shared_attack_protocol(pilot_config_path)
+    full_config = load_protocol_config_with_shared_attack_protocol(full_config_path)
     current_profile = str(current_config.get("paper_result_level") or "probe_paper")
     current_target_fpr = float(current_config["target_fpr"])
     observed_negative_count = _negative_event_count(run_root)

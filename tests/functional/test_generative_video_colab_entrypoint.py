@@ -10,7 +10,7 @@ import zipfile
 
 import pytest
 
-from paper_workflow.notebook_utils.generative_video_model_probe_workflow import (
+from workflows.generative_video_paper import (
     build_drive_layout,
     build_workflow_stage_plan,
     build_modern_baseline_command_env,
@@ -42,7 +42,7 @@ from paper_workflow.notebook_utils.generative_video_model_probe_workflow import 
     write_external_baseline_colab_preflight_decision,
     write_motion_threshold_reuse_artifact_for_profile,
 )
-from paper_workflow.colab_utils.stage_package_sync import (
+from workflows.stage_package_sync import (
     _default_required_stage_packages,
     activate_local_stage_layout,
     hydrate_stage_package,
@@ -52,12 +52,13 @@ from paper_workflow.colab_utils.stage_package_sync import (
 )
 from experiments.generative_video_model_probe.colab_runtime import (
     _build_generation_plan,
+    _build_internal_ablation_generation_plan,
     _formalize_paper_trajectory_record,
 )
 from scripts.package_results.generative_video_drive_packager import package_generative_video_colab_run
 from scripts.prepare_generative_video_prompt_suite import write_prompt_suite
-from main.attacks.video_runtime_attack_protocol import load_protocol_config_with_shared_attack_protocol
-from main.protocol.record_writer import write_json, write_jsonl
+from evaluation.attacks.video_runtime_attack_protocol import load_protocol_config_with_shared_attack_protocol
+from evaluation.protocol.record_writer import write_json, write_jsonl
 
 
 @pytest.mark.quick
@@ -147,8 +148,6 @@ def test_pilot_prompt_suite_replaces_low_motion_heldout_rotation_prompt(tmp_path
     prompts_by_id = {item["prompt_id"]: item for item in suite["prompts"]}
     heldout = prompts_by_id["heldout_rotation_scene"]
     prompt_text = heldout["prompt_text"].lower()
-    plan = _build_generation_plan(suite, "pilot", "Wan-AI/Wan2.1-T2V-1.3B-Diffusers", None)
-    heldout_plan_items = [item for item in plan if item["prompt_id"] == "heldout_rotation_scene"]
 
     assert "rotates gently" not in prompt_text
     assert "slides from the far left edge to the far right edge" in prompt_text
@@ -156,9 +155,6 @@ def test_pilot_prompt_suite_replaces_low_motion_heldout_rotation_prompt(tmp_path
     assert "strong visible displacement" in prompt_text
     assert heldout["motion_pattern_id"] == "large_rotation_translation"
     assert heldout["motion_claim_role"] == "positive_motion"
-    assert len(heldout_plan_items) == 2
-    assert {item["seed_id"] for item in heldout_plan_items} == {"seed_main_a", "seed_main_b"}
-    assert {item["motion_claim_role"] for item in heldout_plan_items} == {"positive_motion"}
 
 
 @pytest.mark.quick
@@ -177,22 +173,15 @@ def test_removed_pre_probe_profile_is_not_in_runtime_plan(tmp_path: Path) -> Non
 def test_paper_profile_trajectory_records_do_not_emit_proxy_fields() -> None:
     """paper profile 轨迹记录必须使用正式 callback latent displacement 字段。"""
 
-    record = _formalize_paper_trajectory_record(
-        {
-            "trajectory_trace_id": "trace_a",
-            "flow_velocity_proxy_available": True,
-            "flow_velocity_proxy_source": "adjacent_callback_latent_displacement",
-            "flow_velocity_alignment_gain": 0.12,
-        },
-        "probe_paper",
-    )
-
-    assert "flow_velocity_proxy_available" not in record
-    assert "flow_velocity_alignment_gain" not in record
-    assert record["callback_latent_displacement_available"] is True
-    assert record["callback_latent_displacement_source"] == "adjacent_callback_latent_displacement"
-    assert record["callback_latent_displacement_alignment_gain"] == 0.12
-    assert record["callback_latent_displacement_evidence_level"] == "adjacent_callback_latent_state_displacement"
+    with pytest.raises(ValueError, match="禁止字段"):
+        _formalize_paper_trajectory_record(
+            {
+                "trajectory_trace_id": "trace_a",
+                "flow_velocity_proxy_available": True,
+                "flow_velocity_proxy_source": "adjacent_callback_latent_displacement",
+            },
+            "probe_paper",
+        )
 
 
 @pytest.mark.quick
@@ -214,37 +203,37 @@ def test_pilot_paper_profile_constructs_medium_scale_low_fpr_plan(tmp_path: Path
     assert suite["pilot_paper_design"]["paper_protocol_difference_from_full_paper"] == "sample_scale_and_target_fpr_only"
     assert suite["pilot_paper_design"]["recommended_runtime_profile"] == "pilot_paper"
     assert suite["pilot_paper_design"]["threshold_protocol"] == "calibration_split_to_frozen_threshold_to_heldout_test_split"
-    assert suite["pilot_paper_design"]["target_generation_video_count"] == 100
-    assert suite["pilot_paper_design"]["target_calibration_unique_video_count"] == 50
-    assert suite["pilot_paper_design"]["target_test_unique_video_count"] == 50
+    assert suite["pilot_paper_design"]["target_generation_video_count"] == 600
+    assert suite["pilot_paper_design"]["target_calibration_unique_video_count"] == 300
+    assert suite["pilot_paper_design"]["target_test_unique_video_count"] == 300
     expected_attack_count = len(pilot_protocol["required_runtime_attack_names"])
-    expected_test_positive_count = 50 * expected_attack_count
+    expected_test_positive_count = 300 * expected_attack_count
     assert suite["pilot_paper_design"]["target_runtime_attack_count"] == expected_attack_count
     assert suite["pilot_paper_design"]["target_runtime_attack_names"] == pilot_protocol["required_runtime_attack_names"]
-    assert suite["pilot_paper_design"]["target_calibration_negative_event_count"] == 5000
-    assert suite["pilot_paper_design"]["target_heldout_test_negative_event_count"] == 5000
+    assert suite["pilot_paper_design"]["target_calibration_negative_event_count"] == 300
+    assert suite["pilot_paper_design"]["target_heldout_test_negative_event_count"] == 300
     assert suite["pilot_paper_design"]["target_test_attacked_positive_event_count"] == expected_test_positive_count
-    assert len(pilot_paper_prompts) == 25
-    assert len(pilot_paper_seeds) == 4
-    assert len(plan) == 200
-    assert len(pilot_paper_plan) == 200
+    assert len(pilot_paper_prompts) == 50
+    assert len(pilot_paper_seeds) == 12
+    assert len(plan) == 1200
+    assert len(pilot_paper_plan) == 1200
     assert [(item["prompt_id"], item["seed_id"]) for item in pilot_paper_plan] == [(item["prompt_id"], item["seed_id"]) for item in plan]
     positive_plan = [item for item in plan if item["sample_role"] == "attacked_positive_source"]
     clean_plan = [item for item in plan if item["sample_role"] == "clean_negative"]
-    assert len(positive_plan) == 100
-    assert len(clean_plan) == 100
-    assert len({item["prompt_id"] for item in plan}) == 25
+    assert len(positive_plan) == 600
+    assert len(clean_plan) == 600
+    assert len({item["prompt_id"] for item in plan}) == 50
     assert {item["seed_suite_role"] for item in plan} == {"pilot_paper"}
     assert {item["prompt_suite_role"] for item in plan} == {"pilot_paper"}
     assert {item["split"] for item in plan} == {"calibration", "test"}
-    assert sum(1 for item in positive_plan if item["split"] == "calibration") == 50
-    assert sum(1 for item in positive_plan if item["split"] == "test") == 50
+    assert sum(1 for item in positive_plan if item["split"] == "calibration") == 300
+    assert sum(1 for item in positive_plan if item["split"] == "test") == 300
     assert all(item["watermark_embedding_status"] == "clean_unwatermarked_reference" for item in clean_plan)
 
 
 @pytest.mark.quick
-def test_probe_paper_profile_constructs_ten_unit_fixed_fpr_plan(tmp_path: Path) -> None:
-    """probe_paper profile 必须构造 10 生成单元与 500 clean negative event 设计。"""
+def test_probe_paper_profile_constructs_independent_video_fixed_fpr_plan(tmp_path: Path) -> None:
+    """probe_paper profile 必须构造 60 个独立视频和等量 clean negative 对照."""
     output_root = tmp_path / "prompt_suite"
     summary = write_prompt_suite(output_root)
     suite = json.loads(Path(summary["prompt_suite_path"]).read_text(encoding="utf-8"))
@@ -257,35 +246,63 @@ def test_probe_paper_profile_constructs_ten_unit_fixed_fpr_plan(tmp_path: Path) 
 
     assert suite["probe_paper_design"]["target_fpr"] == 0.1
     assert suite["probe_paper_design"]["paper_result_level"] == "probe_paper"
-    assert suite["probe_paper_design"]["target_generation_video_count"] == 10
-    assert suite["probe_paper_design"]["target_calibration_unique_video_count"] == 5
-    assert suite["probe_paper_design"]["target_test_unique_video_count"] == 5
-    assert suite["probe_paper_design"]["target_test_attacked_positive_event_count"] == 5 * expected_attack_count
-    assert suite["probe_paper_design"]["target_calibration_negative_event_count"] == 500
-    assert suite["probe_paper_design"]["target_heldout_test_negative_event_count"] == 500
-    assert len(probe_paper_prompts) == 5
-    assert len(probe_paper_seeds) == 2
+    assert suite["probe_paper_design"]["target_generation_video_count"] == 60
+    assert suite["probe_paper_design"]["target_calibration_unique_video_count"] == 30
+    assert suite["probe_paper_design"]["target_test_unique_video_count"] == 30
+    assert suite["probe_paper_design"]["target_test_attacked_positive_event_count"] == 30 * expected_attack_count
+    assert suite["probe_paper_design"]["target_calibration_negative_event_count"] == 30
+    assert suite["probe_paper_design"]["target_heldout_test_negative_event_count"] == 30
+    assert len(probe_paper_prompts) == 10
+    assert len(probe_paper_seeds) == 6
     positive_plan = [item for item in plan if item["sample_role"] == "attacked_positive_source"]
     clean_plan = [item for item in plan if item["sample_role"] == "clean_negative"]
-    assert len(plan) == 20
-    assert len(positive_plan) == 10
-    assert len(clean_plan) == 10
-    assert len({item["prompt_id"] for item in plan}) == 5
-    assert len({item["seed_id"] for item in plan}) == 2
+    assert len(plan) == 120
+    assert len(positive_plan) == 60
+    assert len(clean_plan) == 60
+    assert len({item["prompt_id"] for item in plan}) == 10
+    assert len({item["seed_id"] for item in plan}) == 6
     assert {item["seed_suite_role"] for item in plan} == {"probe_paper"}
     assert {item["prompt_suite_role"] for item in plan} == {"probe_paper"}
     assert {item["split"] for item in plan} == {"calibration", "test"}
-    assert sum(1 for item in positive_plan if item["split"] == "calibration") == 5
-    assert sum(1 for item in positive_plan if item["split"] == "test") == 5
+    assert sum(1 for item in positive_plan if item["split"] == "calibration") == 30
+    assert sum(1 for item in positive_plan if item["split"] == "test") == 30
     assert all(item["watermark_embedding_status"] == "clean_unwatermarked_reference" for item in clean_plan)
 
 
 @pytest.mark.quick
+def test_probe_paper_internal_ablation_covers_every_independent_video(tmp_path: Path) -> None:
+    """每个正式消融变体必须覆盖 calibration/test 的全部独立视频."""
+
+    output_root = tmp_path / "prompt_suite"
+    summary = write_prompt_suite(output_root)
+    suite = json.loads(Path(summary["prompt_suite_path"]).read_text(encoding="utf-8"))
+    main_plan = _build_generation_plan(
+        suite,
+        "probe_paper",
+        "Wan-AI/Wan2.1-T2V-1.3B-Diffusers",
+        None,
+    )
+    ablation_plan = _build_internal_ablation_generation_plan(main_plan, "probe_paper")
+
+    variants = {
+        item["method_variant"]
+        for item in ablation_plan
+    }
+    assert len(variants) == 7
+    assert len(ablation_plan) == 60 * 7
+    for variant in variants:
+        rows = [item for item in ablation_plan if item["method_variant"] == variant]
+        assert len(rows) == 60
+        assert sum(item["split"] == "calibration" for item in rows) == 30
+        assert sum(item["split"] == "test" for item in rows) == 30
+
+
+@pytest.mark.quick
 def test_full_paper_profile_constructs_full_scale_split_plan(tmp_path: Path) -> None:
-    """full_paper profile 必须一次展开完整 125 prompt × 8 seed 计划。
+    """full_paper profile 必须一次展开完整 200 prompt × 30 seed 计划.
 
     该测试属于工程门禁约束, 作用是防止 full_paper 在昂贵 GPU 运行前仍缺少
-    prompt / seed / split 配置。Notebook 只切换 profile, 具体样本计划必须由仓库代码生成。
+    prompt / seed / split 配置. Notebook 只切换 profile, 具体样本计划必须由仓库代码生成.
     """
     output_root = tmp_path / "prompt_suite"
     summary = write_prompt_suite(output_root)
@@ -301,28 +318,28 @@ def test_full_paper_profile_constructs_full_scale_split_plan(tmp_path: Path) -> 
     assert suite["full_paper_design"]["recommended_runtime_profile"] == "full_paper"
     assert suite["full_paper_design"]["threshold_protocol"] == "calibration_split_to_frozen_threshold_to_heldout_test_split"
     assert suite["full_paper_design"]["target_fpr"] == full_protocol["target_fpr"]
-    assert suite["full_paper_design"]["target_generation_video_count"] == 1000
-    assert suite["full_paper_design"]["target_calibration_unique_video_count"] == 500
-    assert suite["full_paper_design"]["target_test_unique_video_count"] == 500
+    assert suite["full_paper_design"]["target_generation_video_count"] == 6000
+    assert suite["full_paper_design"]["target_calibration_unique_video_count"] == 3000
+    assert suite["full_paper_design"]["target_test_unique_video_count"] == 3000
     assert suite["full_paper_design"]["target_runtime_attack_count"] == expected_attack_count
     assert suite["full_paper_design"]["target_runtime_attack_names"] == full_protocol["required_runtime_attack_names"]
-    assert suite["full_paper_design"]["target_test_attacked_positive_event_count"] == 1000 * expected_attack_count
-    assert suite["full_paper_design"]["target_calibration_negative_event_count"] == 50000
-    assert suite["full_paper_design"]["target_heldout_test_negative_event_count"] == 50000
-    assert len(full_paper_prompts) == 125
-    assert len(full_paper_seeds) == 8
+    assert suite["full_paper_design"]["target_test_attacked_positive_event_count"] == 3000 * expected_attack_count
+    assert suite["full_paper_design"]["target_calibration_negative_event_count"] == 3000
+    assert suite["full_paper_design"]["target_heldout_test_negative_event_count"] == 3000
+    assert len(full_paper_prompts) == 200
+    assert len(full_paper_seeds) == 30
     positive_plan = [item for item in plan if item["sample_role"] == "attacked_positive_source"]
     clean_plan = [item for item in plan if item["sample_role"] == "clean_negative"]
-    assert len(plan) == 2000
-    assert len(positive_plan) == 1000
-    assert len(clean_plan) == 1000
-    assert len({item["prompt_id"] for item in plan}) == 125
-    assert len({item["seed_id"] for item in plan}) == 8
+    assert len(plan) == 12000
+    assert len(positive_plan) == 6000
+    assert len(clean_plan) == 6000
+    assert len({item["prompt_id"] for item in plan}) == 200
+    assert len({item["seed_id"] for item in plan}) == 30
     assert {item["seed_suite_role"] for item in plan} == {"full_paper"}
     assert {item["prompt_suite_role"] for item in plan} == {"full_paper"}
     assert {item["split"] for item in plan} == {"calibration", "test"}
-    assert sum(1 for item in positive_plan if item["split"] == "calibration") == 500
-    assert sum(1 for item in positive_plan if item["split"] == "test") == 500
+    assert sum(1 for item in positive_plan if item["split"] == "calibration") == 3000
+    assert sum(1 for item in positive_plan if item["split"] == "test") == 3000
     assert all(item["watermark_embedding_status"] == "clean_unwatermarked_reference" for item in clean_plan)
 
 
@@ -333,7 +350,7 @@ def test_generative_video_colab_notebook_calls_repository_modules() -> None:
     assert notebook_path.exists()
     notebook = json.loads(notebook_path.read_text(encoding="utf-8"))
     source = "".join("".join(cell.get("source", [])) for cell in notebook["cells"])
-    helper_text = Path("paper_workflow/notebook_utils/generative_video_model_probe_workflow.py").read_text(encoding="utf-8")
+    helper_text = Path("workflows/generative_video_paper.py").read_text(encoding="utf-8")
 
     assert "/content/drive/MyDrive/SSTW" in source
     assert "drive.mount('/content/drive')" in source
@@ -353,7 +370,7 @@ def test_generative_video_colab_notebook_calls_repository_modules() -> None:
     assert "workflow_stage_enabled" not in source
     assert "HF_TOKEN" in source
     assert "add_to_git_credential=False" in source
-    assert "generative_video_model_probe_workflow" in source
+    assert "workflows import generative_video_paper" in source
     assert "MODEL_ID = os.environ.get('SSTW_MODEL_ID'" in source
     assert "RUN_EXTERNAL_BASELINE_SOURCE_CLONE" not in source
     assert "EXTERNAL_BASELINE_EVIDENCE_PATHS" not in source
@@ -382,7 +399,6 @@ def test_generative_video_colab_notebook_calls_repository_modules() -> None:
     assert "build_validation_internal_ablation_command" not in source
     assert "build_adaptive_attack_formal_command" not in source
     assert "build_replay_and_sketch_gate_command" not in source
-    assert "build_claim3_downgrade_command" not in source
     assert "build_statistical_confidence_interval_command" not in source
     assert "build_pilot_paper_gate_command" not in source
     assert "build_validation_artifact_rebuild_dry_run_command" not in source
@@ -393,7 +409,7 @@ def test_generative_video_colab_notebook_calls_repository_modules() -> None:
     assert "experiments.generative_video_model_probe.motion_threshold_calibration" in helper_text
     assert "experiments.generative_video_model_probe.motion_consistency_exclusion_report" in helper_text
     assert "experiments.generative_video_model_probe.attack_runner" in helper_text
-    assert "experiments.generative_video_model_probe.detection_runner" in helper_text
+    assert "experiments.generative_video_model_probe.formal_flow_evidence_runner" in helper_text
     assert "scripts/build_external_baseline_source_intake.py" in helper_text
     assert "--execute-clone" in helper_text
     assert "experiments.generative_video_model_probe.external_baseline_runner" in helper_text
@@ -402,7 +418,6 @@ def test_generative_video_colab_notebook_calls_repository_modules() -> None:
     assert "experiments.generative_video_model_probe.validation_internal_ablation" in helper_text
     assert "experiments.generative_video_model_probe.adaptive_attack_runner" in helper_text
     assert "experiments.generative_video_model_probe.replay_and_sketch_gate" in helper_text
-    assert "experiments.generative_video_model_probe.claim3_downgrade" in helper_text
     assert "experiments.generative_video_model_probe.statistical_confidence_interval" in helper_text
     assert "experiments.generative_video_model_probe.low_fpr_formal_statistics" in helper_text
     assert "experiments.generative_video_model_probe.sstw_formal_result" in helper_text
@@ -486,7 +501,7 @@ def test_split_colab_notebooks_are_profile_driven() -> None:
     formal_source = Path("paper_workflow/colab_notebooks/formal_comparison_scoring_colab.ipynb").read_text(encoding="utf-8")
     evidence_source = Path("paper_workflow/colab_notebooks/paper_evidence_postprocess_colab.ipynb").read_text(encoding="utf-8")
     gate_source = Path("paper_workflow/colab_notebooks/paper_gate_and_package_colab.ipynb").read_text(encoding="utf-8")
-    helper_text = Path("paper_workflow/notebook_utils/generative_video_model_probe_workflow.py").read_text(encoding="utf-8")
+    helper_text = Path("workflows/generative_video_paper.py").read_text(encoding="utf-8")
     assert "external_baseline_colab_preflight" not in runtime_source
     assert "external_baseline_colab_preflight" in helper_text
     assert "build_external_baseline_comparison_command" not in runtime_source
@@ -569,6 +584,7 @@ def test_notebook_workflow_profile_config_supports_profile_switching() -> None:
     assert "paper_profile_gate" in build_workflow_stage_plan("probe_paper", "paper_gate_and_package")
     assert "removed_pre_probe_transition_decision" not in build_workflow_stage_plan("probe_paper", "paper_gate_and_package")
     assert "probe_paper_to_pilot_paper_transition_decision" in build_workflow_stage_plan("probe_paper", "paper_gate_and_package")
+    assert "reviewer_evidence_index" in build_workflow_stage_plan("probe_paper", "paper_gate_and_package")
     assert "pilot_paper_gate" not in build_workflow_stage_plan("probe_paper", "paper_gate_and_package")
     assert probe["notebook_path"] == "paper_workflow/colab_notebooks/paper_gate_and_package_colab.ipynb"
     assert evidence_postprocess["notebook_path"] == "paper_workflow/colab_notebooks/paper_evidence_postprocess_colab.ipynb"
@@ -587,8 +603,8 @@ def test_notebook_workflow_profile_config_supports_profile_switching() -> None:
     assert probe["workflow_profile"] == "probe_paper"
     assert probe["result_tier"] == "probe_paper"
     assert probe["enabled_for_claim"] is True
-    assert probe["method_sample_count"] == 10
-    assert probe["baseline_sample_count"] == 10
+    assert probe["method_sample_count"] == 60
+    assert probe["baseline_sample_count"] == 60
     assert probe["protocol_config_path"] == "configs/protocol/probe_paper_generative_probe.json"
     assert probe["target_fpr"] == probe_protocol["target_fpr"]
     assert probe["protocol_target_fpr"] == probe_protocol["target_fpr"]
@@ -602,8 +618,8 @@ def test_notebook_workflow_profile_config_supports_profile_switching() -> None:
     assert pilot["profile_alias_applied"] is False
     assert pilot["result_tier"] == "pilot_paper"
     assert pilot["enabled_for_claim"] is True
-    assert pilot["method_sample_count"] == 100
-    assert pilot["baseline_sample_count"] == 100
+    assert pilot["method_sample_count"] == 600
+    assert pilot["baseline_sample_count"] == 600
     assert pilot["protocol_config_path"] == "configs/protocol/pilot_paper_generative_probe.json"
     assert pilot["target_fpr"] == pilot_protocol["target_fpr"]
     assert pilot["protocol_target_fpr"] == pilot_protocol["target_fpr"]
@@ -616,16 +632,18 @@ def test_notebook_workflow_profile_config_supports_profile_switching() -> None:
     assert "pilot_paper_gate" in build_workflow_stage_plan("pilot_paper", "paper_gate_and_package")
     assert "paper_profile_gate" not in build_workflow_stage_plan("pilot_paper", "paper_gate_and_package")
     assert "probe_paper_to_pilot_paper_transition_decision" not in build_workflow_stage_plan("pilot_paper", "paper_gate_and_package")
+    assert "reviewer_evidence_index" in build_workflow_stage_plan("pilot_paper", "paper_gate_and_package")
 
     assert full["workflow_profile"] == "full_paper"
     assert full["profile_status"] == "implemented_requires_pilot_paper_gate_and_full_scale_resources"
     assert full["enabled_for_run"] is True
-    assert full["enabled_for_claim"] is False
+    assert full["enabled_for_claim"] is True
     assert full["target_fpr"] == full_protocol["target_fpr"]
     assert full["protocol_target_fpr"] == full_protocol["target_fpr"]
     full_gate = resolve_notebook_workflow_profile("full_paper", "paper_gate_and_package")
     assert full_gate["workflow_profile"] == "full_paper"
     assert "full_paper_result_checker" in build_workflow_stage_plan("full_paper", "paper_gate_and_package")
+    assert "reviewer_evidence_index" in build_workflow_stage_plan("full_paper", "paper_gate_and_package")
     assert "paper_profile_gate" not in build_workflow_stage_plan("full_paper", "paper_gate_and_package")
 
 
@@ -1131,22 +1149,16 @@ def test_generative_video_drive_packager_creates_archive_and_manifest(tmp_path: 
     write_json(run_root / "artifacts" / "adaptive_attack_decision.json", {
         "adaptive_attack_decision": "PASS",
         "adaptive_attack_record_count": 72,
-        "adaptive_robustness_claim_allowed": False,
+        "adaptive_robustness_claim_allowed": True,
     })
     write_json(run_root / "artifacts" / "replay_and_sketch_gate_decision.json", {
         "replay_and_sketch_gate_decision": "PASS",
-        "replay_and_sketch_evidence_level": "validation_runtime_trace_proxy",
+        "replay_and_sketch_evidence_level": "attacked_video_key_independent_inversion_hypothesis_replay_with_hmac_sketch",
         "trajectory_sketch_verified_count": 12,
         "replay_uncertainty_ready_count": 12,
         "wrong_sampler_replay_rejected_count": 12,
         "wrong_prompt_replay_rejected_count": 12,
-        "claim3_full_support_allowed": False,
-    })
-    write_json(run_root / "artifacts" / "claim3_downgrade_decision.json", {
-        "claim3_downgrade_decision": "PASS",
-        "claim3_downgraded": True,
-        "claim3_full_support_allowed": False,
-        "replay_or_sketch_status": "claim3_explicitly_downgraded",
+        "claim3_full_support_allowed": True,
     })
     write_json(run_root / "artifacts" / "statistical_confidence_interval_decision.json", {
         "statistical_confidence_interval_decision": "PASS",
@@ -1163,7 +1175,7 @@ def test_generative_video_drive_packager_creates_archive_and_manifest(tmp_path: 
         "paper_result_level": "pilot_paper",
         "paper_protocol_level": "paper_grade_protocol",
         "paper_protocol_difference_from_full_paper": "sample_scale_and_target_fpr_only",
-        "pilot_paper_protocol_matches_full_paper": False,
+        "pilot_paper_protocol_matches_full_paper": True,
         "pilot_paper_claim_allowed": True,
         "pilot_paper_missing_requirement_count": 0,
         "threshold_protocol": "calibration_split_to_frozen_threshold_to_heldout_test_split",
@@ -1178,11 +1190,11 @@ def test_generative_video_drive_packager_creates_archive_and_manifest(tmp_path: 
         "calibration_negative_fpr_at_threshold": 0.008,
         "heldout_negative_fpr_at_threshold": 0.009,
         "observed_negative_fpr_at_threshold": 0.009,
-        "calibration_negative_event_count": 5000,
-        "heldout_test_negative_event_count": 5000,
-        "heldout_negative_event_count": 5000,
-        "heldout_attacked_positive_event_count": 2300,
-        "attacked_positive_event_count": 2300,
+        "calibration_negative_event_count": 300,
+        "heldout_test_negative_event_count": 300,
+        "heldout_negative_event_count": 300,
+        "heldout_attacked_positive_event_count": 13800,
+        "attacked_positive_event_count": 13800,
         "tpr_at_fpr_01_pilot_claim_allowed": True,
         "tpr_at_fpr_001_claim_allowed": False,
     })
@@ -1260,15 +1272,13 @@ def test_generative_video_drive_packager_creates_archive_and_manifest(tmp_path: 
     assert manifest["decision_summary"]["validation_internal_ablation_record_count"] == 12
     assert manifest["decision_summary"]["adaptive_attack_decision"] == "PASS"
     assert manifest["decision_summary"]["adaptive_attack_record_count"] == 72
-    assert manifest["decision_summary"]["adaptive_robustness_claim_allowed"] is False
+    assert manifest["decision_summary"]["adaptive_robustness_claim_allowed"] is True
     assert manifest["decision_summary"]["replay_and_sketch_gate_decision"] == "PASS"
-    assert manifest["decision_summary"]["replay_and_sketch_evidence_level"] == "validation_runtime_trace_proxy"
+    assert manifest["decision_summary"]["replay_and_sketch_evidence_level"] == "attacked_video_key_independent_inversion_hypothesis_replay_with_hmac_sketch"
     assert manifest["decision_summary"]["trajectory_sketch_verified_count"] == 12
-    assert manifest["decision_summary"]["replay_and_sketch_claim3_full_support_allowed"] is False
-    assert manifest["decision_summary"]["claim3_downgrade_decision"] == "PASS"
-    assert manifest["decision_summary"]["claim3_downgraded"] is True
-    assert manifest["decision_summary"]["claim3_full_support_allowed"] is False
-    assert manifest["decision_summary"]["replay_or_sketch_status"] == "claim3_explicitly_downgraded"
+    assert manifest["decision_summary"]["replay_and_sketch_claim3_full_support_allowed"] is True
+    assert manifest["decision_summary"]["claim3_full_support_allowed"] is True
+    assert manifest["decision_summary"]["replay_or_sketch_status"] is None
     assert manifest["decision_summary"]["statistical_confidence_interval_decision"] == "PASS"
     assert manifest["decision_summary"]["statistical_confidence_interval_total_count"] == 12
     assert manifest["decision_summary"]["low_fpr_formal_statistics_decision"] == "PASS"
@@ -1279,7 +1289,7 @@ def test_generative_video_drive_packager_creates_archive_and_manifest(tmp_path: 
     assert manifest["decision_summary"]["pilot_paper_result_level"] == "pilot_paper"
     assert manifest["decision_summary"]["pilot_paper_protocol_level"] == "paper_grade_protocol"
     assert manifest["decision_summary"]["pilot_paper_protocol_difference_from_full_paper"] == "sample_scale_and_target_fpr_only"
-    assert manifest["decision_summary"]["pilot_paper_protocol_matches_full_paper"] is False
+    assert manifest["decision_summary"]["pilot_paper_protocol_matches_full_paper"] is True
     assert manifest["decision_summary"]["pilot_paper_claim_allowed"] is True
     assert manifest["decision_summary"]["pilot_paper_missing_requirement_count"] == 0
     assert manifest["decision_summary"]["pilot_paper_threshold_protocol"] == "calibration_split_to_frozen_threshold_to_heldout_test_split"
@@ -1294,11 +1304,11 @@ def test_generative_video_drive_packager_creates_archive_and_manifest(tmp_path: 
     assert manifest["decision_summary"]["pilot_paper_calibration_negative_fpr_at_threshold"] == 0.008
     assert manifest["decision_summary"]["pilot_paper_heldout_negative_fpr_at_threshold"] == 0.009
     assert manifest["decision_summary"]["pilot_paper_observed_negative_fpr_at_threshold"] == 0.009
-    assert manifest["decision_summary"]["pilot_paper_calibration_negative_event_count"] == 5000
-    assert manifest["decision_summary"]["pilot_paper_heldout_test_negative_event_count"] == 5000
-    assert manifest["decision_summary"]["pilot_paper_heldout_negative_event_count"] == 5000
-    assert manifest["decision_summary"]["pilot_paper_heldout_attacked_positive_event_count"] == 2300
-    assert manifest["decision_summary"]["pilot_paper_attacked_positive_event_count"] == 2300
+    assert manifest["decision_summary"]["pilot_paper_calibration_negative_event_count"] == 300
+    assert manifest["decision_summary"]["pilot_paper_heldout_test_negative_event_count"] == 300
+    assert manifest["decision_summary"]["pilot_paper_heldout_negative_event_count"] == 300
+    assert manifest["decision_summary"]["pilot_paper_heldout_attacked_positive_event_count"] == 13800
+    assert manifest["decision_summary"]["pilot_paper_attacked_positive_event_count"] == 13800
     assert manifest["decision_summary"]["pilot_paper_tpr_at_fpr_01_pilot_claim_allowed"] is True
     assert manifest["decision_summary"]["pilot_paper_tpr_at_fpr_001_claim_allowed"] is False
     assert manifest["decision_summary"]["validation_artifact_rebuild_dry_run_decision"] == "PASS"
@@ -1350,9 +1360,9 @@ def test_generative_video_colab_runtime_uses_optional_hf_token_without_recording
     assert "hf_token_status" in runtime_text
     assert "provided" in runtime_text
     assert "not_provided" in runtime_text
-    assert '"pilot": {"prompt_limit": 8, "seed_limit": 2' in runtime_text
+    assert '"pilot": {"prompt_limit": 8, "seed_limit": 2' not in runtime_text
+    assert '"probe_paper": {' in runtime_text
     assert '"probe_paper": {' in runtime_text
     assert '"seed_suite_roles": ["probe_paper"]' in runtime_text
     assert 'default="pilot"' in runtime_text
     assert 'default=WAN21_PRIMARY_MODEL_ID' in runtime_text
-

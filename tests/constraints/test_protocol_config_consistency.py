@@ -7,11 +7,10 @@ from pathlib import Path
 
 import pytest
 
-from main.attacks.video_runtime_attack_protocol import load_protocol_config_with_shared_attack_protocol
+from evaluation.attacks.video_runtime_attack_protocol import load_protocol_config_with_shared_attack_protocol
 
 
 PAPER_PROFILE_PROTOCOL_CONFIGS = (
-    Path("configs/protocol/probe_paper_generative_probe.json"),
     Path("configs/protocol/probe_paper_generative_probe.json"),
     Path("configs/protocol/pilot_paper_generative_probe.json"),
     Path("configs/protocol/full_paper_generative_probe.json"),
@@ -33,7 +32,8 @@ PAPER_PROFILE_ARTIFACT_REQUIREMENT_FIELDS = (
     "require_paper_result_artifact_skeleton",
     "require_real_adaptive_attack_records",
     "require_real_world_attack_records",
-    "require_replay_or_sketch_records_or_claim3_downgrade",
+    "require_replay_and_sketch_full_support",
+    "reviewer_evidence_index_required",
     "require_sstw_measured_formal_records",
     "require_statistical_confidence_interval_decision",
     "require_video_quality_metric_records",
@@ -134,3 +134,74 @@ def test_probe_pilot_full_require_same_paper_artifact_outputs() -> None:
             })
 
     assert mismatches == []
+
+
+@pytest.mark.constraint
+def test_paper_profiles_match_the_same_common_mechanism_contract() -> None:
+    """三个正式 profile 的机制字段必须逐项等于公共契约。"""
+
+    contract_path = Path("configs/protocol/paper_profile_common_contract.json")
+    contract = json.loads(contract_path.read_text(encoding="utf-8"))
+    for config_path in PAPER_PROFILE_PROTOCOL_CONFIGS:
+        config = json.loads(config_path.read_text(encoding="utf-8"))
+        assert config["paper_profile_common_contract_path"] == contract_path.as_posix()
+        assert {
+            key: config.get(key)
+            for key in contract
+        } == contract
+
+
+@pytest.mark.constraint
+def test_formal_workflow_contains_no_claim3_alternative_branch() -> None:
+    """正式配置与工作流不得重新引入 Claim-3 替代分支。"""
+
+    governed_paths = [
+        Path("configs/protocol/paper_profile_common_contract.json"),
+        Path("configs/protocol/probe_paper_generative_probe.json"),
+        Path("configs/protocol/pilot_paper_generative_probe.json"),
+        Path("configs/protocol/full_paper_generative_probe.json"),
+        Path("configs/paper_workflow/generative_video_notebook_workflows.json"),
+        Path("workflows/generative_video_paper.py"),
+    ]
+    forbidden_token = "claim3_" + "downgrade"
+    assert all(forbidden_token not in path.read_text(encoding="utf-8") for path in governed_paths)
+
+
+@pytest.mark.constraint
+def test_profile_negative_video_counts_support_their_fpr_scale() -> None:
+    """低 FPR 样本量必须按独立视频计算, 不能依靠 key trial 扩增。"""
+
+    import math
+
+    for config_path in PAPER_PROFILE_PROTOCOL_CONFIGS:
+        config = json.loads(config_path.read_text(encoding="utf-8"))
+        target_fpr = float(config["target_fpr"])
+        required_for_zero_false_positives = math.ceil(
+            math.log(0.05) / math.log(1.0 - target_fpr)
+        )
+        assert int(config["minimum_calibration_unique_video_count"]) >= required_for_zero_false_positives
+        assert int(config["minimum_test_unique_video_count"]) >= required_for_zero_false_positives
+        assert int(config["minimum_heldout_test_negative_event_count"]) == int(
+            config["minimum_test_unique_video_count"]
+        )
+
+
+@pytest.mark.constraint
+def test_workflow_profile_counts_are_derived_from_protocol_scale() -> None:
+    """工作流摘要数量必须与规范 protocol config 完全一致, 防止双配置漂移."""
+
+    workflow = json.loads(
+        Path("configs/paper_workflow/generative_video_notebook_workflows.json").read_text(encoding="utf-8")
+    )
+    profiles = workflow["workflow_profiles"]
+    for config_path in PAPER_PROFILE_PROTOCOL_CONFIGS:
+        config = json.loads(config_path.read_text(encoding="utf-8"))
+        profile_name = str(config["paper_result_level"])
+        profile = profiles[profile_name]
+        total = int(config["minimum_prompt_count"]) * int(config["minimum_seed_per_prompt"])
+        assert int(config["minimum_unique_video_count"]) == total
+        assert int(profile["method_sample_count"]) == total
+        assert int(profile["baseline_sample_count"]) == total
+        assert int(profile["minimum_clean_negative_count"]) == int(config["minimum_clean_negative_count"])
+        assert float(profile["target_fpr"]) == float(config["target_fpr"])
+        assert profile["enabled_for_claim"] is True

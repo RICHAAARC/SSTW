@@ -27,8 +27,8 @@ from external_baseline.videoseal_official_runtime import (
     ensure_videoseal_official_runtime_layout,
     videoseal_official_source_cwd,
 )
-from main.attacks.video_runtime_attack_protocol import apply_runtime_attack_to_video_tensor
-from main.core.progress import (
+from evaluation.attacks.video_runtime_attack_protocol import apply_runtime_attack_to_video_tensor
+from runtime.core.progress import (
     ProgressReporter,
     configure_noisy_library_progress,
     emit_progress_event,

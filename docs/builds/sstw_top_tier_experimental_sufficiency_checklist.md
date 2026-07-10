@@ -29,7 +29,7 @@ external_baseline_evidence_sufficient
 internal_ablation_evidence_sufficient
 adaptive_attack_evidence_sufficient
 quality_and_utility_evidence_sufficient
-replay_or_claim3_downgrade_evidence_sufficient
+replay_and_authenticated_sketch_evidence_sufficient
 artifact_rebuild_evidence_sufficient
 reproducibility_evidence_sufficient
 ```
@@ -43,12 +43,11 @@ reproducibility_evidence_sufficient
 | 层级 | 目标 FPR | 样本规模 | 主要作用 | 是否允许支撑效果主张 |
 |---|---:|---|---|---|
 | `method_mechanism_validation` | 不固定 | 最小机制样本 | 验证 SSTW 方法机制、状态空间证据、轨迹观测和基础 runner 是否可运行。 | 否 |
-| `probe_paper` | `0.10` | 小样本 | 首个 paper profile, 必须产出与论文协议同构的 records、tables、figures、reports、manifests、baseline、消融、attack、CI 和 artifact rebuild 文件, 用于判断 FPR=10% 小样本论文闭合是否成立并提前发现 pilot_paper / full_paper 的阻断。 | 仅支持 FPR=10% 小样本结论候选 |
-| `probe_paper` | `0.10` | 小样本论文闭合协议 | 使用 pilot_paper 级样本结构和同构 attack / baseline / 消融 / 图表协议, 在 FPR=10% 下验证论文结论是否能够闭合。 | 仅允许 FPR=10% 小样本论文闭合主张 |
+| `probe_paper` | `0.10` | 小样本 | 首个 paper profile, 必须产出与论文协议同构的 records、tables、figures、reports、manifests、baseline、消融、attack、CI 和 artifact rebuild 文件, 用于判断 FPR=10% 小样本论文闭合是否成立并提前发现 pilot_paper / full_paper 的阻断。 | 形成 FPR=10% 条件下的完整三层论文结论, 但不得外推到更低 FPR |
 | `pilot_paper` | `0.01` | 小规模论文协议 | 以较小成本产出 FPR=1% 级别的代表性 paper 协议结果, 检查真实模型、baseline、消融和 fixed-FPR 统计是否具备扩展到 full_paper 的可报告性。 | 仅允许 pilot 级主张 |
 | `full_paper` | `0.001` | 正式规模论文协议 | 产出 FPR=0.1% 级别正式论文主结果, 包含主表、主图、CI、claim audit、artifact rebuild 和 reviewer evidence index。 | 是 |
 
-`probe_paper` 是进入 `pilot_paper` 和后续 `full_paper` 流程的硬门禁。它通过只说明论文协议产物链路已经小样本跑通, 不说明 SSTW 的效果已经达到投稿主张。进入 `probe_paper` 必须在 `probe_paper` PASS 后生成 `probe_paper_to_pilot_paper_transition_decision`; 进入 `pilot_paper` 还必须在 `probe_paper` PASS 后生成 `probe_paper_to_pilot_paper_transition_decision`。`probe_paper` 都是 `full_paper` 的必要条件但不是充分条件; `full_paper` 仍需要 `pilot_paper_gate`、`pilot_paper_to_full_paper_transition_decision`、`full_paper_result_checker`、CI、claim audit、artifact rebuild 和 submission freeze 相关检查通过。
+`probe_paper` 是第一个完整 paper profile。PASS 表示在预注册的 FPR=0.1、60 个独立视频和较宽置信区间下, Claim-1、Claim-2 与 Claim-3 已形成闭合结论。生成 `probe_paper_to_pilot_paper_transition_decision` 后才能进入 `pilot_paper`; 该结论不得外推到更低 FPR, `full_paper` 仍需后续 profile 的独立运行和门禁。
 
 主干门禁只保留:
 
@@ -213,12 +212,12 @@ adversarial_detector_evasion_attack
 
 当前工程协议采用同构 attack 要求:
 
-- `probe_paper`: 使用与 paper profile 相同的 46 个 runtime attack 和 11 个 non-runtime / adaptive 协议, 用于 FPR=10% 小样本论文闭合和公平比较门禁。
-- `probe_paper`: 使用 10 个生成单元和 500 个 clean negative event, 在 target_fpr=0.1 下判断小样本论文结论是否可闭合。
-- `pilot_paper`: 使用 100 个生成单元和 5000 个 clean negative event, 以 target_fpr=0.01 暴露 official baseline 适配、fixed-FPR 统计和 attack 覆盖缺口。
-- `full_paper`: 使用同一 attack manifest, 但扩展到 1000 个生成单元和 50000 个 clean negative event, target_fpr=0.001。此层级才可支撑顶会 / 顶刊级正式完整鲁棒性讨论。
+- `probe_paper`: 10 个 prompt × 6 个 seed = 60 个独立视频, calibration/test 各 30 个视频, target_fpr=0.1。
+- `pilot_paper`: 50 个 prompt × 12 个 seed = 600 个独立视频, calibration/test 各 300 个视频, target_fpr=0.01。
+- `full_paper`: 200 个 prompt × 30 个 seed = 6000 个独立视频, calibration/test 各 3000 个视频, target_fpr=0.001。
 
-`probe_paper`、`probe_paper`、`pilot_paper` 和 `full_paper` 的 runtime attack manifest 都必须从 protocol config 读取, 不应由 Notebook 手工缩减。若需要临时调试, 只能使用 helper 或 dry-run profile, 其产物不得进入 paper gate。
+
+`probe_paper`、`pilot_paper` 和 `full_paper` 的 runtime attack manifest 都必须从 protocol config 读取, 不应由 Notebook 手工缩减。若需要临时调试, 只能使用 helper 或 dry-run profile, 其产物不得进入 paper gate。
 
 如果 flow-specific adaptive attack 未完成, 必须降级 adaptive robustness claim, 不能把普通视频攻击结果写成 Flow-specific robustness。
 
@@ -266,7 +265,7 @@ run_command_recorded
 | 只有 TPR@FPR=0.01, 没有 TPR@FPR=0.001 | 降级低 FPR claim |
 | 只有 event count, 没有 unique video count | 降级统计可信度 claim |
 | 只有后处理攻击, 没有 Flow-specific adaptive attack | 降级 robustness claim |
-| replay/sketch 未闭合 | 降级 Claim-3 |
+| replay/sketch 未闭合 | 当前 paper profile 失败, 不允许发布三层主张 |
 | 表格不可重建 | 不允许 submission freeze |
 | claim audit 失败 | 不允许 submission freeze |
 

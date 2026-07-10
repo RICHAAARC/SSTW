@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from main.protocol.flow_evidence_fields import (
+from evaluation.protocol.flow_evidence_fields import (
     conservative_flow_score,
     flow_evidence_protocol_defaults,
     with_flow_evidence_protocol_defaults,

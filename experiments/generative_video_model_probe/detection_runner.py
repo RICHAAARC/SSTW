@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import math
 from pathlib import Path
 from statistics import mean
 from typing import Any
@@ -17,6 +18,8 @@ from main.methods.state_space_watermark.video_content_detector import (
     FORMAL_VIDEO_DETECTOR_INPUT_CONTRACT,
     FORMAL_VIDEO_DETECTOR_SCORE_SEMANTICS,
     build_sstw_detector_key,
+    extract_video_content_features,
+    score_video_features,
     score_video_content,
 )
 from main.protocol.record_writer import write_json, write_jsonl
@@ -138,72 +141,180 @@ def _is_clean_negative_generation_record(record: dict[str, Any]) -> bool:
     )
 
 
-def build_sstw_clean_negative_score_records(run_root: str | Path) -> list[dict[str, Any]]:
+def _load_clean_negative_context(config_path: str | Path | None) -> dict[str, int]:
+    """读取 clean negative 事件规模要求。
+
+    通用工程写法是让检测 runner 直接读取 protocol config, 而不是在 Notebook
+    cell 中硬写不同 profile 的样本数量。这样 `probe_paper`、`pilot_paper` 和
+    `full_paper` 只需要切换 workflow profile 即可复用同一执行路径。
+    """
+
+    defaults = {
+        "minimum_clean_negative_count": 0,
+        "minimum_calibration_negative_event_count": 0,
+        "minimum_heldout_test_negative_event_count": 0,
+    }
+    if not config_path:
+        return defaults
+    path = Path(config_path)
+    if not path.exists():
+        return defaults
+    payload = json.loads(path.read_text(encoding="utf-8-sig"))
+    return {
+        "minimum_clean_negative_count": int(payload.get("minimum_clean_negative_count") or 0),
+        "minimum_calibration_negative_event_count": int(payload.get("minimum_calibration_negative_event_count") or 0),
+        "minimum_heldout_test_negative_event_count": int(payload.get("minimum_heldout_test_negative_event_count") or 0),
+    }
+
+
+def _clean_negative_required_events_for_split(context: dict[str, int], split_name: str, clean_video_count: int) -> int:
+    """返回某个 split 至少需要的 clean negative event 数。"""
+
+    if split_name == "calibration":
+        configured = context.get("minimum_calibration_negative_event_count", 0)
+    elif split_name == "test":
+        configured = context.get("minimum_heldout_test_negative_event_count", 0)
+    else:
+        configured = 0
+    if configured:
+        return configured
+    total = int(context.get("minimum_clean_negative_count") or 0)
+    if total and clean_video_count:
+        return max(clean_video_count, math.ceil(total / 2))
+    return clean_video_count
+
+
+def _clean_negative_key_trial_count(context: dict[str, int], split_name: str, clean_video_count: int) -> int:
+    """计算每个 clean video 需要派生多少个正式 key trial。"""
+
+    if clean_video_count <= 0:
+        return 0
+    required = _clean_negative_required_events_for_split(context, split_name, clean_video_count)
+    return max(1, math.ceil(required / clean_video_count))
+
+
+def _clean_negative_detector_key(generation_record: dict[str, Any], trial_index: int) -> str:
+    """为 clean negative event 派生独立 detector key。
+
+    这些 key trial 仍然读取真实 clean video 文件并使用 SSTW 正式视频内容检测器。
+    它们的作用是扩大 unwatermarked negative 分布, 用于 fixed-FPR 阈值估计。
+    """
+
+    base_key = build_sstw_detector_key(generation_record)
+    return f"{base_key}::clean_negative_key_trial::{trial_index:04d}"
+
+
+def build_sstw_clean_negative_score_records(
+    run_root: str | Path,
+    config_path: str | Path | None = None,
+) -> list[dict[str, Any]]:
     """从 clean generation videos 构建 SSTW clean negative detector records。"""
 
     run_root = Path(run_root)
+    context = _load_clean_negative_context(config_path)
     generation_records = [
         record
         for record in _read_jsonl(run_root / "records" / "generation_records.jsonl")
         if record.get("generation_status") == "success" and _is_clean_negative_generation_record(record)
     ]
     records: list[dict[str, Any]] = []
-    progress = ProgressReporter("sstw_clean_negative_video_detector", len(generation_records), "clean_video")
-    for index, generation_record in enumerate(generation_records):
-        progress.update(index + 1, f"prompt={generation_record.get('prompt_id')} seed={generation_record.get('seed_id')}")
+    split_video_counts: dict[str, int] = {}
+    for generation_record in generation_records:
+        split_name = str(generation_record.get("split") or generation_record.get("protocol_split") or "main")
+        split_video_counts[split_name] = split_video_counts.get(split_name, 0) + 1
+    total_trials = sum(
+        _clean_negative_key_trial_count(context, split_name, count) * count
+        for split_name, count in split_video_counts.items()
+    )
+    progress = ProgressReporter("sstw_clean_negative_video_detector", total_trials, "clean_negative_event")
+    progress_index = 0
+    for video_index, generation_record in enumerate(generation_records):
         video_path = Path(str(generation_record.get("video_path") or ""))
         if not video_path.exists() and video_path.name:
             video_path = run_root / "videos" / video_path.name
-        record = with_flow_evidence_protocol_defaults({
-            "record_version": "sstw_clean_negative_score_v1",
-            "generation_model_id": generation_record.get("generation_model_id"),
-            "prompt_id": generation_record.get("prompt_id"),
-            "seed_id": generation_record.get("seed_id"),
-            "trajectory_trace_id": generation_record.get("trajectory_trace_id"),
-            "split": generation_record.get("split"),
-            "protocol_split": generation_record.get("protocol_split"),
-            "colab_runtime_profile": generation_record.get("colab_runtime_profile"),
-            "sample_role": "clean_negative",
-            "method_variant": "sstw_clean_unwatermarked_reference",
-            "clean_negative_video_path": str(video_path),
-            "clean_negative_evidence_level": FORMAL_CLEAN_NEGATIVE_EVIDENCE_LEVEL,
-            "sstw_detector_input_contract": FORMAL_VIDEO_DETECTOR_INPUT_CONTRACT,
-            "trajectory_trace_used_for_score": False,
-            "metric_status": "missing",
-            "clean_negative_status": "failed",
-            "clean_negative_failure_reason": "not_run",
-            "claim_support_status": "sstw_clean_negative_video_detector_blocked",
-        }, trajectory_source_level="project_owned_sstw_clean_video_content_detector", claim_support_status="sstw_clean_negative_video_detector_blocked")
+        split_name = str(generation_record.get("split") or generation_record.get("protocol_split") or "main")
+        key_trial_count = _clean_negative_key_trial_count(context, split_name, split_video_counts.get(split_name, 0))
         try:
             if not video_path.exists():
                 raise FileNotFoundError("clean_negative_video_not_found")
-            detector_key = build_sstw_detector_key(generation_record)
-            result = score_video_content(video_path, detector_key=detector_key)
-            score = round(_clip(result.score), 6)
-            record.update({
-                "metric_status": "measured_formal",
-                "clean_negative_status": "ready",
-                "clean_negative_failure_reason": "none",
-                "sstw_clean_negative_score": score,
-                "clean_negative_score": score,
-                "sstw_raw_detector_score": score,
-                "raw_detector_score": score,
-                "sstw_score": score,
-                "sstw_clean_negative_score_semantics": FORMAL_VIDEO_DETECTOR_SCORE_SEMANTICS,
-                "sstw_score_semantics": FORMAL_VIDEO_DETECTOR_SCORE_SEMANTICS,
-                "sstw_score_orientation": "higher_is_more_watermarked",
-                "sstw_detector_key_digest": result.detector_key_digest,
-                "sstw_content_feature_count": result.content_feature_count,
-                "sstw_detector_sampled_frame_count": result.sampled_frame_count,
-                "claim_support_status": "sstw_clean_negative_video_detector_ready",
-            })
+            features, sampled_frame_count = extract_video_content_features(video_path)
+            for trial_index in range(key_trial_count):
+                progress_index += 1
+                progress.update(
+                    progress_index,
+                    (
+                        f"prompt={generation_record.get('prompt_id')} "
+                        f"seed={generation_record.get('seed_id')} split={split_name} "
+                        f"trial={trial_index + 1}/{key_trial_count}"
+                    ),
+                )
+                detector_key = _clean_negative_detector_key(generation_record, trial_index)
+                result = score_video_features(features, detector_key=detector_key, sampled_frame_count=sampled_frame_count)
+                score = round(_clip(result.score), 6)
+                control_name = f"clean_negative_key_trial_{split_name}_{trial_index:04d}"
+                records.append(with_flow_evidence_protocol_defaults({
+                    "record_version": "sstw_clean_negative_score_v1",
+                    "generation_model_id": generation_record.get("generation_model_id"),
+                    "prompt_id": generation_record.get("prompt_id"),
+                    "seed_id": generation_record.get("seed_id"),
+                    "trajectory_trace_id": generation_record.get("trajectory_trace_id"),
+                    "split": generation_record.get("split"),
+                    "protocol_split": generation_record.get("protocol_split"),
+                    "colab_runtime_profile": generation_record.get("colab_runtime_profile"),
+                    "sample_role": "clean_negative",
+                    "method_variant": "sstw_clean_unwatermarked_reference",
+                    "clean_negative_video_path": str(video_path),
+                    "clean_negative_video_sha256": _sha256_file(video_path),
+                    "clean_negative_evidence_level": FORMAL_CLEAN_NEGATIVE_EVIDENCE_LEVEL,
+                    "clean_negative_event_source": "same_prompt_seed_clean_video_key_trial",
+                    "clean_negative_key_trial_index": trial_index,
+                    "clean_negative_key_trial_count_for_video": key_trial_count,
+                    "clean_negative_source_video_index": video_index,
+                    "clean_negative_unit_id": (
+                        f"sstw_clean_{generation_record.get('prompt_id')}_"
+                        f"{generation_record.get('seed_id')}_{split_name}_{trial_index:04d}"
+                    ),
+                    "negative_family": control_name,
+                    "control_name": control_name,
+                    "sstw_detector_input_contract": FORMAL_VIDEO_DETECTOR_INPUT_CONTRACT,
+                    "trajectory_trace_used_for_score": False,
+                    "metric_status": "measured_formal",
+                    "clean_negative_status": "ready",
+                    "clean_negative_failure_reason": "none",
+                    "sstw_clean_negative_score": score,
+                    "clean_negative_score": score,
+                    "sstw_raw_detector_score": score,
+                    "raw_detector_score": score,
+                    "sstw_score": score,
+                    "sstw_clean_negative_score_semantics": FORMAL_VIDEO_DETECTOR_SCORE_SEMANTICS,
+                    "sstw_score_semantics": FORMAL_VIDEO_DETECTOR_SCORE_SEMANTICS,
+                    "sstw_score_orientation": "higher_is_more_watermarked",
+                    "sstw_detector_key_digest": result.detector_key_digest,
+                    "sstw_content_feature_count": result.content_feature_count,
+                    "sstw_detector_sampled_frame_count": result.sampled_frame_count,
+                    "claim_support_status": "sstw_clean_negative_video_detector_ready",
+                }, trajectory_source_level="project_owned_sstw_clean_video_content_detector", claim_support_status="sstw_clean_negative_video_detector_ready"))
         except Exception as exc:  # pragma: no cover - 依赖实际视频文件和编解码后端
-            record.update({
+            progress_index += max(1, key_trial_count)
+            records.append(with_flow_evidence_protocol_defaults({
+                "record_version": "sstw_clean_negative_score_v1",
+                "generation_model_id": generation_record.get("generation_model_id"),
+                "prompt_id": generation_record.get("prompt_id"),
+                "seed_id": generation_record.get("seed_id"),
+                "trajectory_trace_id": generation_record.get("trajectory_trace_id"),
+                "split": generation_record.get("split"),
+                "protocol_split": generation_record.get("protocol_split"),
+                "colab_runtime_profile": generation_record.get("colab_runtime_profile"),
+                "sample_role": "clean_negative",
+                "method_variant": "sstw_clean_unwatermarked_reference",
+                "clean_negative_video_path": str(video_path),
+                "clean_negative_evidence_level": FORMAL_CLEAN_NEGATIVE_EVIDENCE_LEVEL,
+                "trajectory_trace_used_for_score": False,
                 "metric_status": "missing",
                 "clean_negative_status": "failed",
                 "clean_negative_failure_reason": str(exc),
-            })
-        records.append(record)
+                "claim_support_status": "sstw_clean_negative_video_detector_blocked",
+            }, trajectory_source_level="project_owned_sstw_clean_video_content_detector", claim_support_status="sstw_clean_negative_video_detector_blocked"))
     ready_count = sum(1 for record in records if record.get("clean_negative_status") == "ready")
     progress.finish(f"ready={ready_count} failed={len(records) - ready_count}")
     return records
@@ -294,7 +405,12 @@ def build_runtime_detection_records(run_root: str | Path) -> list[dict]:
     return records
 
 
-def audit_runtime_detection_records(records: list[dict]) -> dict:
+def audit_runtime_detection_records(
+    records: list[dict],
+    clean_negative_records: list[dict] | None = None,
+    *,
+    clean_negative_required: bool = False,
+) -> dict:
     """审计 runtime detection records 是否完成正式视频内容检测闭环。"""
     ready_records = [record for record in records if record.get("runtime_detection_status") == "ready"]
     detectable_records = [record for record in ready_records if record.get("attacked_video_detectable") is True]
@@ -308,9 +424,28 @@ def audit_runtime_detection_records(records: list[dict]) -> dict:
     attack_names = {str(record.get("attack_name")) for record in ready_records if record.get("attack_name")}
     score_values = [float(record["sstw_raw_detector_score"]) for record in ready_records if record.get("sstw_raw_detector_score") is not None]
     missing_formal_count = len(ready_records) - len(formal_records)
+    clean_negative_records = list(clean_negative_records or [])
+    clean_negative_ready_records = [
+        record
+        for record in clean_negative_records
+        if record.get("metric_status") == "measured_formal"
+        and record.get("clean_negative_status") == "ready"
+        and record.get("clean_negative_evidence_level") == FORMAL_CLEAN_NEGATIVE_EVIDENCE_LEVEL
+    ]
+    clean_negative_missing_count = len(clean_negative_records) - len(clean_negative_ready_records)
+    clean_negative_requirement_met = (
+        not clean_negative_required
+        or (bool(clean_negative_records) and clean_negative_missing_count == 0)
+    )
+    decision_passed = (
+        bool(records)
+        and len(ready_records) == len(records)
+        and missing_formal_count == 0
+        and clean_negative_requirement_met
+    )
     return {
         "stage_id": "generative_video_runtime_detection_runner",
-        "runtime_detection_decision": "PASS" if records and len(ready_records) == len(records) and missing_formal_count == 0 else "FAIL",
+        "runtime_detection_decision": "PASS" if decision_passed else "FAIL",
         "runtime_detection_record_count": len(records),
         "runtime_detection_ready_count": len(ready_records),
         "runtime_detection_detectable_count": len(detectable_records),
@@ -319,16 +454,27 @@ def audit_runtime_detection_records(records: list[dict]) -> dict:
         "runtime_detection_evidence_level": FORMAL_VIDEO_DETECTOR_EVIDENCE_LEVEL,
         "runtime_detection_formal_detector_ready_count": len(formal_records),
         "runtime_detection_formal_detector_missing_count": missing_formal_count,
-        "claim_support_status": "sstw_formal_video_detector_ready" if missing_formal_count == 0 and ready_records else "sstw_formal_video_detector_blocked",
+        "sstw_clean_negative_record_count": len(clean_negative_records),
+        "sstw_clean_negative_ready_count": len(clean_negative_ready_records),
+        "sstw_clean_negative_missing_count": clean_negative_missing_count,
+        "sstw_clean_negative_required": clean_negative_required,
+        "sstw_clean_negative_requirement_met": clean_negative_requirement_met,
+        "claim_support_status": "sstw_formal_video_detector_ready" if decision_passed else "sstw_formal_video_detector_blocked",
     }
 
 
-def run_runtime_detection(run_root: str | Path) -> dict:
+def run_runtime_detection(run_root: str | Path, config_path: str | Path | None = None) -> dict:
     """执行 runtime attacked video detection 并写出 governed artifacts。"""
     run_root = Path(run_root)
     records = build_runtime_detection_records(run_root)
-    clean_negative_records = build_sstw_clean_negative_score_records(run_root)
-    audit = audit_runtime_detection_records(records)
+    clean_negative_records = build_sstw_clean_negative_score_records(run_root, config_path=config_path)
+    clean_context = _load_clean_negative_context(config_path)
+    clean_negative_required = any(value > 0 for value in clean_context.values())
+    audit = audit_runtime_detection_records(
+        records,
+        clean_negative_records,
+        clean_negative_required=clean_negative_required,
+    )
     write_jsonl(run_root / "records" / "runtime_detection_records.jsonl", records)
     write_jsonl(run_root / "records" / "sstw_clean_negative_score_records.jsonl", clean_negative_records)
     write_csv(run_root / "tables" / "runtime_detection_table.csv", records)
@@ -343,6 +489,8 @@ def run_runtime_detection(run_root: str | Path) -> dict:
         f"- runtime_detection_ready_count: {audit['runtime_detection_ready_count']}\n"
         f"- runtime_detection_formal_detector_ready_count: {audit['runtime_detection_formal_detector_ready_count']}\n"
         f"- runtime_detection_detectable_count: {audit['runtime_detection_detectable_count']}\n"
+        f"- sstw_clean_negative_ready_count: {audit['sstw_clean_negative_ready_count']}\n"
+        f"- sstw_clean_negative_required: {str(audit['sstw_clean_negative_required']).lower()}\n"
         f"- runtime_detection_score_mean: {audit['runtime_detection_score_mean']}\n"
         f"- claim_support_status: {audit['claim_support_status']}\n"
     )
@@ -355,8 +503,9 @@ def run_runtime_detection(run_root: str | Path) -> dict:
 def main() -> None:
     parser = argparse.ArgumentParser(description="对 runtime attacked videos 执行 SSTW 正式视频内容检测。")
     parser.add_argument("--run-root", required=True)
+    parser.add_argument("--config-path", default="")
     args = parser.parse_args()
-    payload = run_runtime_detection(args.run_root)
+    payload = run_runtime_detection(args.run_root, config_path=args.config_path or None)
     print(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True))
 
 

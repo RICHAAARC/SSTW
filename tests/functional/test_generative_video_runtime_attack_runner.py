@@ -9,7 +9,13 @@ from pathlib import Path
 import pytest
 
 from experiments.generative_video_model_probe.attack_runner import run_runtime_attacks
-from experiments.generative_video_model_probe.detection_runner import run_runtime_detection
+from experiments.generative_video_model_probe.detection_runner import (
+    build_sstw_clean_negative_score_records,
+    run_runtime_detection,
+)
+from experiments.generative_video_model_probe.formal_adaptive_attack_executor import (
+    run_formal_adaptive_attack_execution,
+)
 from main.attacks.video_runtime_attack_protocol import (
     FULL_PAPER_NON_RUNTIME_ATTACK_PROTOCOLS,
     FULL_PAPER_RUNTIME_ATTACKS,
@@ -123,6 +129,136 @@ def test_runtime_detection_runner_scores_attacked_videos(tmp_path: Path) -> None
     assert (run_root / "tables" / "runtime_detection_table.csv").exists()
     assert (run_root / "artifacts" / "runtime_detection_decision.json").exists()
     assert (run_root / "reports" / "runtime_detection_report.md").exists()
+
+
+@pytest.mark.quick
+def test_runtime_detection_requires_clean_negative_when_protocol_config_demands_it(tmp_path: Path) -> None:
+    """paper profile 配置要求 clean negative 时, runtime detection 不能在缺失 clean negative 下放行。"""
+
+    run_root = tmp_path / "generative_video_runtime"
+    video_path = run_root / "videos" / "tiny.mp4"
+    _write_tiny_video(video_path)
+    digest = hashlib.sha256(video_path.read_bytes()).hexdigest()
+    write_jsonl(run_root / "records" / "generation_records.jsonl", [{
+        "generation_model_id": "model",
+        "prompt_id": "prompt",
+        "seed_id": "seed",
+        "generation_status": "success",
+        "video_path": str(video_path),
+        "video_sha256": digest,
+        "trajectory_trace_id": "trace_0000",
+    }])
+    config_path = tmp_path / "paper_protocol.json"
+    config_path.write_text(json.dumps({
+        "minimum_clean_negative_count": 4,
+        "minimum_calibration_negative_event_count": 2,
+        "minimum_heldout_test_negative_event_count": 2,
+    }), encoding="utf-8")
+
+    run_runtime_attacks(run_root, attack_names=SMOKE_RUNTIME_ATTACKS)
+    detection_summary = run_runtime_detection(run_root, config_path=config_path)
+
+    assert detection_summary["runtime_detection_decision"] == "FAIL"
+    assert detection_summary["sstw_clean_negative_required"] is True
+    assert detection_summary["sstw_clean_negative_record_count"] == 0
+    assert detection_summary["sstw_clean_negative_requirement_met"] is False
+
+
+@pytest.mark.quick
+def test_clean_negative_score_builder_expands_formal_key_trials(tmp_path: Path) -> None:
+    """clean negative 必须从真实 clean video 扩展出 fixed-FPR 校准事件。"""
+    run_root = tmp_path / "generative_video_runtime"
+    calibration_video = run_root / "videos" / "clean_calibration.mp4"
+    test_video = run_root / "videos" / "clean_test.mp4"
+    _write_tiny_video(calibration_video)
+    _write_tiny_video(test_video)
+    write_jsonl(run_root / "records" / "generation_records.jsonl", [
+        {
+            "generation_model_id": "model",
+            "prompt_id": "prompt_a",
+            "seed_id": "seed_calib",
+            "generation_status": "success",
+            "video_path": str(calibration_video),
+            "trajectory_trace_id": "trace_clean_calib",
+            "sample_role": "clean_negative",
+            "watermark_embedding_status": "clean_unwatermarked_reference",
+            "split": "calibration",
+        },
+        {
+            "generation_model_id": "model",
+            "prompt_id": "prompt_a",
+            "seed_id": "seed_test",
+            "generation_status": "success",
+            "video_path": str(test_video),
+            "trajectory_trace_id": "trace_clean_test",
+            "sample_role": "clean_negative",
+            "watermark_embedding_status": "clean_unwatermarked_reference",
+            "split": "test",
+        },
+    ])
+    config_path = tmp_path / "protocol.json"
+    config_path.write_text(json.dumps({
+        "minimum_clean_negative_count": 8,
+        "minimum_calibration_negative_event_count": 4,
+        "minimum_heldout_test_negative_event_count": 4,
+    }), encoding="utf-8")
+
+    records = build_sstw_clean_negative_score_records(run_root, config_path=config_path)
+
+    assert len(records) == 8
+    assert sum(1 for record in records if record["split"] == "calibration") == 4
+    assert sum(1 for record in records if record["split"] == "test") == 4
+    assert all(record["metric_status"] == "measured_formal" for record in records)
+    assert all(record["clean_negative_evidence_level"] == "project_owned_clean_video_content_detector" for record in records)
+    assert all(record["trajectory_trace_used_for_score"] is False for record in records)
+    assert len({record["clean_negative_unit_id"] for record in records}) == 8
+
+
+@pytest.mark.quick
+def test_formal_adaptive_attack_executor_writes_measured_records(tmp_path: Path) -> None:
+    """non-runtime / adaptive 协议必须由真实视频文件重新检测后进入正式记录。"""
+    run_root = tmp_path / "generative_video_runtime"
+    video_path = run_root / "videos" / "positive.mp4"
+    _write_tiny_video(video_path)
+    write_jsonl(run_root / "records" / "generation_records.jsonl", [{
+        "generation_model_id": "model",
+        "prompt_id": "prompt",
+        "seed_id": "seed",
+        "generation_status": "success",
+        "video_path": str(video_path),
+        "trajectory_trace_id": "trace_positive",
+        "sample_role": "attacked_positive_source",
+        "watermark_embedding_status": "sampling_time_key_conditioned_latent_constraint",
+        "split": "test",
+    }])
+    config_path = tmp_path / "protocol.json"
+    config_path.write_text(json.dumps({
+        "paper_result_level": "probe_paper",
+        "target_fpr": 0.1,
+        "required_non_runtime_attack_protocols": [
+            "wrong_key_attack",
+            "detector_probing_with_public_negatives",
+        ],
+    }), encoding="utf-8")
+
+    summary = run_formal_adaptive_attack_execution(run_root, config_path)
+    records = [
+        json.loads(line)
+        for line in (run_root / "records" / "formal_adaptive_attack_execution_records.jsonl")
+        .read_text(encoding="utf-8")
+        .splitlines()
+    ]
+
+    assert summary["formal_adaptive_attack_execution_decision"] == "PASS"
+    assert summary["formal_adaptive_attack_execution_record_count"] == 2
+    assert {record["non_runtime_attack_protocol"] for record in records} == {
+        "wrong_key_attack",
+        "detector_probing_with_public_negatives",
+    }
+    assert all(record["metric_status"] == "measured_formal" for record in records)
+    assert all(record["adaptive_attack_evidence_level"] == "formal_adaptive_attack_execution" for record in records)
+    assert all(Path(record["adaptive_attack_input_video_path"]).exists() for record in records)
+    assert (run_root / "artifacts" / "formal_adaptive_attack_execution_decision.json").exists()
 
 
 @pytest.mark.quick

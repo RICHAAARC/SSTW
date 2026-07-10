@@ -189,6 +189,7 @@ def _paper_profile_generation_records(generation_records: list[dict], paper_prof
         record for record in generation_records
         if record.get("generation_status") == "success"
         and record.get("colab_runtime_profile") in paper_profile_names
+        and str(record.get("sample_role") or record.get("generation_sample_role") or "").lower() != "clean_negative"
     ]
 
 

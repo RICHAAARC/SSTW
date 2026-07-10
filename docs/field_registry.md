@@ -791,6 +791,14 @@ Notebook 与 repository module 的跨边界数据
 | latent_norm_after_constraint | metric | none | true | false | false | Latent norm after sampling-time callback update. |
 | latent_constraint_delta_norm | metric | none | true | false | false | Norm of the explicit sampling-time constraint delta vector applied in callback. |
 | flow_matching_backbone_claim_status | claim | none | true | true | false | Claim boundary status for Wan2.1 Flow Matching backbone evidence. |
+| callback_latent_displacement_available | governance | none | true | false | false | Whether adjacent callback latent state displacement is available in paper-profile trajectory traces. |
+| callback_latent_displacement_source | protocol | none | true | false | false | Source used to derive adjacent callback latent displacement records. |
+| callback_latent_displacement_evidence_level | protocol | none | true | false | false | Evidence level for callback latent displacement records in formal paper profiles. |
+| callback_latent_displacement_norm_before_constraint | metric | none | true | false | false | Adjacent callback latent displacement norm before sampling-time callback update. |
+| callback_latent_displacement_norm_after_constraint | metric | none | true | false | false | Adjacent callback latent displacement norm after sampling-time callback update. |
+| callback_latent_displacement_alignment_before_constraint | metric | none | true | false | false | Alignment between adjacent callback latent displacement and keyed constraint direction before callback update. |
+| callback_latent_displacement_alignment_after_constraint | metric | none | true | false | false | Alignment between adjacent callback latent displacement and keyed constraint direction after callback update. |
+| callback_latent_displacement_alignment_gain | metric | none | true | false | false | Alignment gain showing whether callback latent state displacement participates in watermark synchronization. |
 | flow_velocity_proxy_available | governance | none | true | false | false | Whether adjacent callback latent displacement is available as a flow velocity proxy. |
 | flow_velocity_proxy_source | protocol | none | true | false | false | Source used to derive flow velocity proxy records. |
 | flow_velocity_proxy_norm_before_constraint | metric | none | true | false | false | Flow velocity proxy norm before sampling-time callback update. |
@@ -905,6 +913,29 @@ Notebook 与 repository module 的跨边界数据
 | paper_result_formality_guard_scanned_file_count | metric | none | true | false | false | 三层正式结果包正式性门禁扫描的结构化文件数量。 |
 | paper_result_formality_guard_blocking_terms | governance | none | true | false | false | 三层正式结果包正式性门禁发现的阻断标记类别。 |
 | paper_result_formality_guard_violations | governance | none | true | false | false | 三层正式结果包正式性门禁发现的具体阻断位置列表。 |
+| clean_negative_pair_role | protocol | none | true | false | false | clean negative 视频与同 prompt / seed 水印视频之间的配对方式。 |
+| clean_negative_event_source | protocol | none | true | false | false | clean negative 分数事件来源, 例如同 prompt / seed clean video 的正式 key trial。 |
+| clean_negative_key_trial_index | metric | none | true | false | false | 单个 clean video 上的正式 detector key trial 序号。 |
+| clean_negative_key_trial_count_for_video | metric | none | true | false | false | 单个 clean video 为满足 fixed-FPR 校准所展开的 key trial 数量。 |
+| clean_negative_source_video_index | metric | none | true | false | false | clean negative 视频在当前 run_root clean 视频集合中的序号。 |
+| clean_negative_video_sha256 | artifact | none | true | false | false | clean negative 视频文件的 SHA-256 摘要。 |
+| sstw_clean_negative_record_count | metric | none | true | false | false | SSTW clean negative detector records 总数。 |
+| sstw_clean_negative_ready_count | metric | none | true | false | false | 具备 measured_formal 状态的 SSTW clean negative detector records 数量。 |
+| sstw_clean_negative_missing_count | metric | none | true | false | false | 未达到正式 clean negative 检测条件的 SSTW clean negative records 数量。 |
+| sstw_clean_negative_required | governance | none | true | false | false | 当前 runtime detection 阶段是否按 paper profile 配置要求 clean negative records。 |
+| sstw_clean_negative_requirement_met | governance | none | true | false | false | 当前 runtime detection 阶段的 clean negative 正式检测要求是否满足。 |
+| formal_adaptive_attack_execution_decision | governance | none | true | false | false | 11 个 non-runtime / adaptive 协议是否完成正式视频文件重检测执行。 |
+| formal_adaptive_attack_execution_record_count | metric | none | true | false | false | formal adaptive attack execution records 总数。 |
+| formal_adaptive_attack_execution_ready_count | metric | none | true | false | false | 具备 measured_formal 状态的 formal adaptive attack execution records 数量。 |
+| formal_adaptive_attack_execution_record_id | artifact | none | true | false | false | 单条 formal adaptive attack execution record 的稳定 ID。 |
+| adaptive_attack_input_video_path | artifact | none | true | false | false | adaptive attack 正式执行所读取的视频文件路径。 |
+| adaptive_attack_input_video_sha256 | artifact | none | true | false | false | adaptive attack 正式执行所读取视频文件的 SHA-256 摘要。 |
+| adaptive_attack_video_source_kind | protocol | none | true | false | false | adaptive attack 使用 source generation video 或 runtime transformed video 的来源类别。 |
+| adaptive_attack_source_runtime_attack_name | protocol | none | true | false | false | adaptive attack 复用 runtime transformed video 时对应的 runtime attack 名称。 |
+| adaptive_attack_detector_key_transformation | protocol | none | true | false | false | adaptive attack 对检测 key 或检测上下文施加的协议级变换。 |
+| adaptive_attack_score_semantics | metric | none | true | false | false | adaptive attack score 的分数语义。 |
+| adaptive_attack_score_orientation | metric | none | true | false | false | adaptive attack score 的方向, 正式比较要求 higher_is_more_watermarked。 |
+| adaptive_attack_detected_by_sstw | metric | none | true | false | false | adaptive attack 输入视频在 SSTW 正式检测器默认判定阈值下是否为 positive。 |
 | field_path | governance | none | true | false | false | 结构化 artifact 内部的字段路径, 用于定位正式性门禁发现的问题字段。 |
 | violation_kind | governance | none | true | false | false | 正式性门禁发现的违规类型。 |
 | observed_value_preview | governance | none | true | false | false | 正式性门禁记录的短值预览, 用于定位问题但不作为论文指标。 |

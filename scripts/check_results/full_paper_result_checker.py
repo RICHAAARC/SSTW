@@ -94,6 +94,7 @@ def _full_generation_records(run_root: Path) -> list[dict[str, Any]]:
         for record in _read_jsonl(run_root / "records" / "generation_records.jsonl")
         if record.get("generation_status") == "success"
         and record.get("colab_runtime_profile") == "full_paper"
+        and str(record.get("sample_role") or record.get("generation_sample_role") or "").lower() != "clean_negative"
     ]
 
 

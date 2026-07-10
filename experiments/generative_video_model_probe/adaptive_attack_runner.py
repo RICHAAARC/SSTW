@@ -25,7 +25,6 @@ FORMAL_ADAPTIVE_ATTACK_READY_STATUS = "formal_adaptive_attack_measured_ready"
 FORMAL_ADAPTIVE_ATTACK_BLOCKED_STATUS = "formal_adaptive_attack_missing_execution"
 FORMAL_ADAPTIVE_ATTACK_INPUT_FILENAMES = (
     "formal_adaptive_attack_execution_records.jsonl",
-    "formal_adaptive_attack_input_records.jsonl",
 )
 
 

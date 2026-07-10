@@ -30,6 +30,18 @@ from main.protocol.table_builder import write_csv
 
 WAN21_PRIMARY_MODEL_ID = "Wan-AI/Wan2.1-T2V-1.3B-Diffusers"
 
+PAPER_RESULT_PROFILES = {"probe_paper", "pilot_paper", "full_paper"}
+
+FORMAL_TRAJECTORY_TRACE_FIELD_RENAMES = {
+    "flow_velocity_proxy_available": "callback_latent_displacement_available",
+    "flow_velocity_proxy_source": "callback_latent_displacement_source",
+    "flow_velocity_proxy_norm_before_constraint": "callback_latent_displacement_norm_before_constraint",
+    "flow_velocity_proxy_norm_after_constraint": "callback_latent_displacement_norm_after_constraint",
+    "flow_velocity_alignment_before_constraint": "callback_latent_displacement_alignment_before_constraint",
+    "flow_velocity_alignment_after_constraint": "callback_latent_displacement_alignment_after_constraint",
+    "flow_velocity_alignment_gain": "callback_latent_displacement_alignment_gain",
+}
+
 
 PROFILE_SETTINGS = {
     "smoke": {"prompt_limit": 1, "seed_limit": 1, "num_inference_steps": 8, "num_frames": 33, "height": 320, "width": 512, "run_cross_model": False},
@@ -191,6 +203,26 @@ def _sha256_file(path: Path) -> str:
     return digest.hexdigest()
 
 
+def _formalize_paper_trajectory_record(record: dict[str, Any], profile: str) -> dict[str, Any]:
+    """把 paper profile 的 trajectory trace 字段转换为正式论文包字段。
+
+    sampling constraint adapter 内部仍可在工程探针中记录 callback 位移的历史字段,
+    但 `probe_paper`、`pilot_paper` 和 `full_paper` 的正式结果包不能包含
+    proxy / placeholder / fallback 语义。这里把 paper profile 输出统一改写为
+    “callback latent displacement” 证据, 明确它是采样 callback 暴露的相邻
+    latent 状态位移, 而不是伪称模型内部完整 velocity field。
+    """
+
+    if profile not in PAPER_RESULT_PROFILES:
+        return record
+    normalized: dict[str, Any] = {}
+    for key, value in record.items():
+        normalized[FORMAL_TRAJECTORY_TRACE_FIELD_RENAMES.get(key, key)] = value
+    if "callback_latent_displacement_available" in normalized:
+        normalized["callback_latent_displacement_evidence_level"] = "adjacent_callback_latent_state_displacement"
+    return normalized
+
+
 def _select_profile_items(items: list[dict], limit: int | None, allowed_roles: list[str] | None = None) -> list[dict]:
     """根据 profile 选择 prompt 或 seed。
 
@@ -211,17 +243,27 @@ def _build_generation_plan(prompt_suite: dict, profile: str, model_id: str, cros
     if settings["run_cross_model"] and cross_model_id:
         model_items.append({"generation_model_id": cross_model_id, "cross_model_role": "cross_model_validation_model"})
     plan = []
+    include_clean_negative_references = profile in {"probe_paper", "pilot_paper", "full_paper"}
     for model_item in model_items:
         for prompt in prompts:
             for seed in seeds:
                 item = {**model_item, **prompt, **seed}
                 item["prompt_suite_role"] = prompt.get("prompt_suite_role")
-                item["seed_suite_role"] = seed.get("prompt_suite_role")
+                item["seed_suite_role"] = seed.get("seed_suite_role") or seed.get("prompt_suite_role")
                 item["sample_role"] = "attacked_positive_source"
                 item["generation_sample_role"] = "attacked_positive_source"
                 item["method_variant"] = "key_conditioned_state_space_with_trajectory"
                 item["watermark_embedding_status"] = "sampling_time_key_conditioned_latent_constraint"
                 plan.append(item)
+                if not include_clean_negative_references:
+                    continue
+                clean_item = dict(item)
+                clean_item["sample_role"] = "clean_negative"
+                clean_item["generation_sample_role"] = "clean_negative"
+                clean_item["method_variant"] = "sstw_clean_unwatermarked_reference"
+                clean_item["watermark_embedding_status"] = "clean_unwatermarked_reference"
+                clean_item["clean_negative_pair_role"] = "same_prompt_seed_unwatermarked_reference"
+                plan.append(clean_item)
     return plan
 
 
@@ -383,7 +425,7 @@ def run_colab_probe(output_root: str | Path, prompt_suite_path: str | Path, prof
             "trajectory_trace_id": trace_id,
             "trajectory_num_steps": len(step_stats),
         })
-        trajectory_records.extend(step_stats)
+        trajectory_records.extend(_formalize_paper_trajectory_record(record, profile) for record in step_stats)
         quality_records.append({
             "generation_model_id": item["generation_model_id"],
             "prompt_id": item["prompt_id"],

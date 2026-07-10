@@ -82,6 +82,7 @@ def test_server_workflow_cli_dry_run_exposes_split_stage_plans(tmp_path: Path) -
     assert evidence_payload["pipeline"] == "paper_evidence_postprocess"
     assert "motion_consistency_exclusion_report" in evidence_stage_names
     assert "validation_internal_ablation" in evidence_stage_names
+    assert "formal_adaptive_attack_execution" in evidence_stage_names
     assert "formal_internal_ablation_summary" in evidence_stage_names
     assert "low_fpr_formal_statistics" in evidence_stage_names
     assert "paper_profile_gate" not in evidence_stage_names

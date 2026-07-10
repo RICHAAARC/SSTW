@@ -154,12 +154,47 @@ def score_video_content(
     if not frames:
         raise RuntimeError("video_has_no_decodable_frames")
     features = _video_features(frames)
+    return score_video_features(features, detector_key=detector_key, sampled_frame_count=len(frames))
+
+
+def score_video_features(
+    features: list[float],
+    *,
+    detector_key: str,
+    sampled_frame_count: int,
+) -> VideoContentDetectorResult:
+    """使用已解码的视频特征执行 key-conditioned 检测。
+
+    该函数属于通用复用写法。full_paper 需要大量 clean negative key trial;
+    如果每个 trial 都重新解码同一个视频, 会把 Colab / GPU 服务器时间浪费在
+    重复 I/O 上。因此这里把“视频解码与特征提取”和“不同 key 下的正式检测”
+    分离, 同时保持分数语义与 `score_video_content` 完全一致。
+    """
+
+    if not features:
+        raise RuntimeError("video_features_missing")
     score = _key_projection_score(features, detector_key)
     return VideoContentDetectorResult(
         score=score,
-        frame_count=len(frames),
-        sampled_frame_count=len(frames),
+        frame_count=sampled_frame_count,
+        sampled_frame_count=sampled_frame_count,
         content_feature_count=len(features),
         detector_key_digest=hashlib.sha256(detector_key.encode("utf-8")).hexdigest()[:16],
         detector_status="ready",
     )
+
+
+def extract_video_content_features(
+    video_path: str | Path,
+    *,
+    max_frames: int = 32,
+) -> tuple[list[float], int]:
+    """读取视频并返回正式检测所需的低频时空特征。"""
+
+    path = Path(video_path)
+    if not path.exists():
+        raise FileNotFoundError(f"video_not_found:{path}")
+    frames = _read_video_frames(path, max_frames=max_frames)
+    if not frames:
+        raise RuntimeError("video_has_no_decodable_frames")
+    return _video_features(frames), len(frames)

@@ -1202,6 +1202,8 @@ def build_runtime_detection_command(layout: dict[str, str]) -> list[str]:
         "experiments.generative_video_model_probe.detection_runner",
         "--run-root",
         layout["drive_run_root"],
+        "--config-path",
+        layout["protocol_config_path"],
     ]
 
 
@@ -1401,6 +1403,19 @@ def build_adaptive_attack_formal_command(layout: dict[str, str]) -> list[str]:
         "experiments.generative_video_model_probe.adaptive_attack_runner",
         "--run-root",
         layout["drive_run_root"],
+    ]
+
+
+def build_formal_adaptive_attack_execution_command(layout: dict[str, str]) -> list[str]:
+    """构造 11 个 non-runtime / adaptive 协议的正式执行命令。"""
+    return [
+        sys.executable,
+        "-m",
+        "experiments.generative_video_model_probe.formal_adaptive_attack_executor",
+        "--run-root",
+        layout["drive_run_root"],
+        "--config-path",
+        layout["protocol_config_path"],
     ]
 
 
@@ -1841,6 +1856,7 @@ def build_configured_colab_stage_command(
         "external_baseline_self_containment_decision": build_external_baseline_self_containment_decision_command,
         "motion_consistency_exclusion_report": build_motion_consistency_exclusion_report_command,
         "validation_internal_ablation": build_validation_internal_ablation_command,
+        "formal_adaptive_attack_execution": build_formal_adaptive_attack_execution_command,
         "adaptive_attack_formal": build_adaptive_attack_formal_command,
         "replay_and_sketch_gate": build_replay_and_sketch_gate_command,
         "claim3_downgrade_gate": build_claim3_downgrade_command,

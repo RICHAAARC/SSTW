@@ -1,7 +1,7 @@
 """论文结果包正式性门禁。
 
 该模块提供三层 paper profile 共用的轻量审计逻辑。它只读取已经落盘的
-records、artifacts、thresholds、manifests 和 tables, 不运行实验, 不补造结果。
+records、artifacts、thresholds、manifests、tables、figures 和 reports, 不运行实验, 不补造结果。
 其职责是防止 proxy、placeholder 或 fallback 证据进入 `probe_paper`、
 `pilot_paper` 和 `full_paper` 的正式结果包。
 """
@@ -61,15 +61,10 @@ EXCLUDED_SCAN_FILE_NAMES = {
     "full_paper_result_decision.json",
     "full_paper_result_checker_records.jsonl",
     "full_paper_result_checker_table.csv",
-    "external_baseline_records.jsonl",
-    "external_baseline_intake_manifest.json",
-    "external_baseline_source_inspection.json",
-    "external_baseline_clone_results.json",
-    "external_baseline_execution_manifest.json",
 }
 
-SCAN_DIR_NAMES = ("records", "artifacts", "thresholds", "manifests", "tables")
-SCAN_SUFFIXES = (".json", ".jsonl", ".csv")
+SCAN_DIR_NAMES = ("records", "artifacts", "thresholds", "manifests", "tables", "figures", "reports")
+SCAN_SUFFIXES = (".json", ".jsonl", ".csv", ".md")
 FORMALITY_SCAN_ARTIFACT_NAMES = {
     "runtime_attack_decision.json",
     "runtime_detection_decision.json",
@@ -92,7 +87,18 @@ FORMALITY_SCAN_ARTIFACT_NAMES = {
     "artifact_rebuild_dry_run_decision.json",
     "motion_consistency_exclusion_decision.json",
     "motion_threshold_calibration_decision.json",
+    "formal_adaptive_attack_execution_decision.json",
 }
+
+GOVERNANCE_POLICY_FIELD_TOKENS = (
+    "prohibited",
+    "forbidden",
+    "rejected",
+    "blocked_terms",
+    "fail_closed_policy",
+    "ban_rule",
+    "fallback_rule",
+)
 
 
 @dataclass(frozen=True)
@@ -156,6 +162,13 @@ def _contains_banned_term(value: str) -> str | None:
     return None
 
 
+def _is_governance_policy_field_path(field_path: str) -> bool:
+    """判断字段路径是否属于禁用来源清单或 fail-closed 策略描述。"""
+
+    lowered_path = field_path.lower()
+    return any(token in lowered_path for token in GOVERNANCE_POLICY_FIELD_TOKENS)
+
+
 def _violation(
     *,
     relative_path: str,
@@ -199,7 +212,7 @@ def _scan_mapping(
                 ))
             continue
         banned_key_term = _contains_banned_term(key_text)
-        if banned_key_term:
+        if banned_key_term and not _is_governance_policy_field_path(child_path):
             violations.append(_violation(
                 relative_path=relative_path,
                 field_path=child_path,
@@ -234,6 +247,8 @@ def _scan_string(
 
     term = _contains_banned_term(value)
     if not term:
+        return []
+    if _is_governance_policy_field_path(field_path):
         return []
     return [_violation(
         relative_path=relative_path,
@@ -305,6 +320,16 @@ def _scan_csv_file(path: Path, *, run_root: Path) -> list[FormalityViolation]:
     return violations
 
 
+def _scan_markdown_file(path: Path, *, run_root: Path) -> list[FormalityViolation]:
+    """扫描 Markdown 报告正文。"""
+
+    relative_path = path.relative_to(run_root).as_posix()
+    violations: list[FormalityViolation] = []
+    for line_index, line in enumerate(path.read_text(encoding="utf-8-sig").splitlines(), start=1):
+        violations.extend(_scan_string(line, relative_path=relative_path, field_path=f"line[{line_index}]"))
+    return violations
+
+
 def _iter_scan_files(run_root: Path) -> list[Path]:
     """枚举正式结果包需要扫描的结构化文件。"""
 
@@ -319,10 +344,6 @@ def _iter_scan_files(run_root: Path) -> list[Path]:
             if path.name in EXCLUDED_SCAN_FILE_NAMES:
                 continue
             if path.suffix.lower() in SCAN_SUFFIXES:
-                if dirname == "artifacts" and path.name not in FORMALITY_SCAN_ARTIFACT_NAMES:
-                    continue
-                if dirname == "manifests":
-                    continue
                 files.append(path)
     return sorted(files)
 
@@ -337,6 +358,8 @@ def _scan_file(path: Path, *, run_root: Path) -> list[FormalityViolation]:
         return _scan_jsonl_file(path, run_root=run_root)
     if suffix == ".csv":
         return _scan_csv_file(path, run_root=run_root)
+    if suffix == ".md":
+        return _scan_markdown_file(path, run_root=run_root)
     return []
 
 

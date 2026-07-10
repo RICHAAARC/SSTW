@@ -50,7 +50,10 @@ from paper_workflow.colab_utils.stage_package_sync import (
     publish_colab_stage_package,
     stage_package_id_for_notebook,
 )
-from experiments.generative_video_model_probe.colab_runtime import _build_generation_plan
+from experiments.generative_video_model_probe.colab_runtime import (
+    _build_generation_plan,
+    _formalize_paper_trajectory_record,
+)
 from scripts.package_results.generative_video_drive_packager import package_generative_video_colab_run
 from scripts.prepare_generative_video_prompt_suite import write_prompt_suite
 from main.attacks.video_runtime_attack_protocol import load_protocol_config_with_shared_attack_protocol
@@ -171,6 +174,28 @@ def test_removed_pre_probe_profile_is_not_in_runtime_plan(tmp_path: Path) -> Non
 
 
 @pytest.mark.quick
+def test_paper_profile_trajectory_records_do_not_emit_proxy_fields() -> None:
+    """paper profile 轨迹记录必须使用正式 callback latent displacement 字段。"""
+
+    record = _formalize_paper_trajectory_record(
+        {
+            "trajectory_trace_id": "trace_a",
+            "flow_velocity_proxy_available": True,
+            "flow_velocity_proxy_source": "adjacent_callback_latent_displacement",
+            "flow_velocity_alignment_gain": 0.12,
+        },
+        "probe_paper",
+    )
+
+    assert "flow_velocity_proxy_available" not in record
+    assert "flow_velocity_alignment_gain" not in record
+    assert record["callback_latent_displacement_available"] is True
+    assert record["callback_latent_displacement_source"] == "adjacent_callback_latent_displacement"
+    assert record["callback_latent_displacement_alignment_gain"] == 0.12
+    assert record["callback_latent_displacement_evidence_level"] == "adjacent_callback_latent_state_displacement"
+
+
+@pytest.mark.quick
 def test_pilot_paper_profile_constructs_medium_scale_low_fpr_plan(tmp_path: Path) -> None:
     """pilot_paper profile 必须构造 calibration/test split 低 FPR 数据集。"""
     output_root = tmp_path / "prompt_suite"
@@ -201,15 +226,20 @@ def test_pilot_paper_profile_constructs_medium_scale_low_fpr_plan(tmp_path: Path
     assert suite["pilot_paper_design"]["target_test_attacked_positive_event_count"] == expected_test_positive_count
     assert len(pilot_paper_prompts) == 25
     assert len(pilot_paper_seeds) == 4
-    assert len(plan) == 100
-    assert len(pilot_paper_plan) == 100
+    assert len(plan) == 200
+    assert len(pilot_paper_plan) == 200
     assert [(item["prompt_id"], item["seed_id"]) for item in pilot_paper_plan] == [(item["prompt_id"], item["seed_id"]) for item in plan]
+    positive_plan = [item for item in plan if item["sample_role"] == "attacked_positive_source"]
+    clean_plan = [item for item in plan if item["sample_role"] == "clean_negative"]
+    assert len(positive_plan) == 100
+    assert len(clean_plan) == 100
     assert len({item["prompt_id"] for item in plan}) == 25
     assert {item["seed_suite_role"] for item in plan} == {"pilot_paper"}
     assert {item["prompt_suite_role"] for item in plan} == {"pilot_paper"}
     assert {item["split"] for item in plan} == {"calibration", "test"}
-    assert sum(1 for item in plan if item["split"] == "calibration") == 50
-    assert sum(1 for item in plan if item["split"] == "test") == 50
+    assert sum(1 for item in positive_plan if item["split"] == "calibration") == 50
+    assert sum(1 for item in positive_plan if item["split"] == "test") == 50
+    assert all(item["watermark_embedding_status"] == "clean_unwatermarked_reference" for item in clean_plan)
 
 
 @pytest.mark.quick
@@ -235,14 +265,19 @@ def test_probe_paper_profile_constructs_ten_unit_fixed_fpr_plan(tmp_path: Path) 
     assert suite["probe_paper_design"]["target_heldout_test_negative_event_count"] == 500
     assert len(probe_paper_prompts) == 5
     assert len(probe_paper_seeds) == 2
-    assert len(plan) == 10
+    positive_plan = [item for item in plan if item["sample_role"] == "attacked_positive_source"]
+    clean_plan = [item for item in plan if item["sample_role"] == "clean_negative"]
+    assert len(plan) == 20
+    assert len(positive_plan) == 10
+    assert len(clean_plan) == 10
     assert len({item["prompt_id"] for item in plan}) == 5
     assert len({item["seed_id"] for item in plan}) == 2
     assert {item["seed_suite_role"] for item in plan} == {"probe_paper"}
     assert {item["prompt_suite_role"] for item in plan} == {"probe_paper"}
     assert {item["split"] for item in plan} == {"calibration", "test"}
-    assert sum(1 for item in plan if item["split"] == "calibration") == 5
-    assert sum(1 for item in plan if item["split"] == "test") == 5
+    assert sum(1 for item in positive_plan if item["split"] == "calibration") == 5
+    assert sum(1 for item in positive_plan if item["split"] == "test") == 5
+    assert all(item["watermark_embedding_status"] == "clean_unwatermarked_reference" for item in clean_plan)
 
 
 @pytest.mark.quick
@@ -276,14 +311,19 @@ def test_full_paper_profile_constructs_full_scale_split_plan(tmp_path: Path) -> 
     assert suite["full_paper_design"]["target_heldout_test_negative_event_count"] == 50000
     assert len(full_paper_prompts) == 125
     assert len(full_paper_seeds) == 8
-    assert len(plan) == 1000
+    positive_plan = [item for item in plan if item["sample_role"] == "attacked_positive_source"]
+    clean_plan = [item for item in plan if item["sample_role"] == "clean_negative"]
+    assert len(plan) == 2000
+    assert len(positive_plan) == 1000
+    assert len(clean_plan) == 1000
     assert len({item["prompt_id"] for item in plan}) == 125
     assert len({item["seed_id"] for item in plan}) == 8
     assert {item["seed_suite_role"] for item in plan} == {"full_paper"}
     assert {item["prompt_suite_role"] for item in plan} == {"full_paper"}
     assert {item["split"] for item in plan} == {"calibration", "test"}
-    assert sum(1 for item in plan if item["split"] == "calibration") == 500
-    assert sum(1 for item in plan if item["split"] == "test") == 500
+    assert sum(1 for item in positive_plan if item["split"] == "calibration") == 500
+    assert sum(1 for item in positive_plan if item["split"] == "test") == 500
+    assert all(item["watermark_embedding_status"] == "clean_unwatermarked_reference" for item in clean_plan)
 
 
 @pytest.mark.quick
@@ -518,6 +558,7 @@ def test_notebook_workflow_profile_config_supports_profile_switching() -> None:
 
     assert "motion_threshold_reuse_check" in build_workflow_stage_plan("probe_paper", "paper_evidence_postprocess")
     assert "validation_internal_ablation" in build_workflow_stage_plan("probe_paper", "paper_evidence_postprocess")
+    assert "formal_adaptive_attack_execution" in build_workflow_stage_plan("probe_paper", "paper_evidence_postprocess")
     assert "adaptive_attack_formal" in build_workflow_stage_plan("probe_paper", "paper_evidence_postprocess")
     assert "motion_threshold_reuse_check" not in build_workflow_stage_plan("probe_paper", "paper_gate_and_package")
     assert "validation_internal_ablation" not in build_workflow_stage_plan("probe_paper", "paper_gate_and_package")
@@ -568,6 +609,7 @@ def test_notebook_workflow_profile_config_supports_profile_switching() -> None:
     assert pilot["protocol_target_fpr"] == pilot_protocol["target_fpr"]
     assert "motion_threshold_reuse_check" in build_workflow_stage_plan("pilot_paper", "paper_evidence_postprocess")
     assert "validation_internal_ablation" in build_workflow_stage_plan("pilot_paper", "paper_evidence_postprocess")
+    assert "formal_adaptive_attack_execution" in build_workflow_stage_plan("pilot_paper", "paper_evidence_postprocess")
     assert "motion_threshold_reuse_check" not in build_workflow_stage_plan("pilot_paper", "paper_gate_and_package")
     assert "external_baseline_comparison" not in build_workflow_stage_plan("pilot_paper", "paper_gate_and_package")
     assert "external_baseline_comparison" in build_workflow_stage_plan("pilot_paper", "formal_comparison_scoring")

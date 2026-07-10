@@ -25,6 +25,7 @@ PROFILES = {
         include_paths=(
             "main/methods",
             "configs/methods",
+            "configs/protocol/shared_generative_video_attack_protocol.json",
             "README.md",
             "pyproject.toml",
         ),
@@ -34,7 +35,7 @@ PROFILES = {
             "tests",
             "experiments",
             "scripts",
-            "paper_workflow",
+            "/paper_workflow",
             "audit_reports",
             "outputs",
             "__pycache__",
@@ -68,7 +69,7 @@ PROFILES = {
             "tests/constraints",
             "tests/integration",
             "tests/helpers",
-            "paper_workflow",
+            "/paper_workflow",
             "audit_reports",
             "outputs",
             "__pycache__",
@@ -83,7 +84,12 @@ def should_skip(relative_path: Path, exclude_parts: Iterable[str]) -> bool:
     normalized = relative_path.as_posix()
     parts = set(relative_path.parts)
     for excluded in exclude_parts:
+        root_only = excluded.startswith("/")
         excluded_normalized = excluded.strip("/").replace("\\", "/")
+        if root_only:
+            if normalized == excluded_normalized or normalized.startswith(f"{excluded_normalized}/"):
+                return True
+            continue
         if excluded_normalized in parts or normalized == excluded_normalized or normalized.startswith(f"{excluded_normalized}/"):
             return True
     return False

@@ -33,6 +33,9 @@ from evaluation.attacks.video_runtime_attack_protocol import (
 )
 from evaluation.protocol.flow_evidence_fields import with_flow_evidence_protocol_defaults
 from evaluation.protocol.paper_result_formality_guard import build_paper_result_formality_guard
+from evaluation.protocol.paper_profile_evidence_closure import (
+    build_paper_profile_evidence_closure_audit,
+)
 from evaluation.protocol.record_writer import write_json, write_jsonl
 from evaluation.protocol.table_builder import write_csv
 
@@ -852,6 +855,7 @@ def build_pilot_paper_gate_audit(
         paper_result_level=str(config["paper_result_level"]),
         target_fpr=float(config["target_fpr"]),
     )
+    evidence_closure = build_paper_profile_evidence_closure_audit(run_root, config_path)
 
     requirement_checks = {
         "paper_result_formality_guard_passed": formality_guard["paper_result_formality_guard_decision"] == "PASS",
@@ -887,6 +891,9 @@ def build_pilot_paper_gate_audit(
         "pilot_paper_formal_method_baseline_comparison_ready": (not config["require_formal_method_baseline_comparison"]) or formal_method_comparison_ready,
         "pilot_paper_formal_baseline_difference_interval_ready": (not config["require_formal_baseline_difference_interval"]) or formal_difference_interval_ready,
         "pilot_paper_internal_ablation_matrix_ready": (not config["require_internal_ablation_matrix_ready"]) or internal_ablation_ready,
+        "paper_profile_common_evidence_closure_ready": (
+            evidence_closure["paper_profile_evidence_closure_decision"] == "PASS"
+        ),
     }
     missing = list(dict.fromkeys(
         [name for name, passed in requirement_checks.items() if not passed] + hard_config_missing
@@ -930,6 +937,7 @@ def build_pilot_paper_gate_audit(
         "pilot_paper_missing_requirement_count": len(missing),
         "pilot_paper_hard_required_config_missing": hard_config_missing,
         "pilot_paper_hard_required_config_missing_count": len(hard_config_missing),
+        **evidence_closure,
         "pilot_profile_names": sorted(profile_names),
         "threshold_protocol": config["threshold_protocol"],
         **probe_paper_summary,

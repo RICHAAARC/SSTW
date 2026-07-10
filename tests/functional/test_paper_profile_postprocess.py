@@ -253,6 +253,44 @@ def test_statistical_confidence_interval_reporter_writes_clustered_intervals(tmp
 
 
 @pytest.mark.quick
+def test_statistical_confidence_interval_blocks_point_fpr_when_upper_bound_exceeds_target(
+    tmp_path: Path,
+) -> None:
+    """点估计低于目标 FPR 但置信上界越界时, 正式结论必须阻断。"""
+
+    run_root = tmp_path / "run"
+    write_jsonl(run_root / "records" / "fair_detection_calibration_records.jsonl", [
+        {
+            "method_id": "sstw_key_conditioned_flow_trajectory",
+            "method_role": "proposed_method",
+            "fair_comparison_status": "ready",
+            "metric_status": "measured_formal",
+            "detected_positive_count_at_target_fpr": 2,
+            "positive_detection_units_at_target_fpr": [
+                {
+                    "comparison_anchor_key": f"prompt_{index}::seed_a::attack_a",
+                    "detected_at_target_fpr": index < 2,
+                }
+                for index in range(3)
+            ],
+            "negative_detection_units_at_target_fpr": [
+                {
+                    "statistical_cluster_id": f"negative_{index}::seed_a",
+                    "false_positive_at_target_fpr": index == 0,
+                }
+                for index in range(30)
+            ],
+        },
+    ])
+
+    audit = run_statistical_confidence_interval_reporter(run_root)
+
+    assert audit["heldout_fpr_point_target_closed"] is True
+    assert audit["heldout_fpr_confidence_upper_within_target"] is False
+    assert audit["statistical_confidence_interval_decision"] == "FAIL"
+
+
+@pytest.mark.quick
 def test_sstw_measured_formal_result_writes_project_method_records(tmp_path: Path) -> None:
     """SSTW 本方法必须转写为与 external baseline 对齐的 measured_formal records。"""
     run_root = tmp_path / "run"

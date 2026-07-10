@@ -11,6 +11,7 @@ from evaluation.protocol.flow_evidence_fields import with_flow_evidence_protocol
 from evaluation.protocol.record_writer import write_json, write_jsonl
 from evaluation.protocol.table_builder import write_csv
 from experiments.generative_video_model_probe.paper_result_artifact_builders import (
+    COMPLETE_MECHANISM_ARTIFACT_RELPATHS,
     PAPER_RESULT_ARTIFACT_RELPATHS,
 )
 
@@ -30,7 +31,12 @@ REQUIRED_REBUILD_INPUTS = (
     "records/formal_internal_ablation_summary_records.jsonl",
     "records/validation_internal_ablation_records.jsonl",
     "records/adaptive_attack_records.jsonl",
+    "records/formal_adaptive_attack_execution_records.jsonl",
+    "records/formal_adaptive_attack_query_records.jsonl",
     "records/trajectory_sketch_verification_records.jsonl",
+    "records/formal_flow_evidence_records.jsonl",
+    "records/paired_path_evidence_gain_records.jsonl",
+    "records/paired_velocity_causal_evidence_records.jsonl",
     "records/replay_uncertainty_records.jsonl",
     "records/wrong_sampler_replay_records.jsonl",
     "records/wrong_prompt_replay_records.jsonl",
@@ -43,15 +49,18 @@ REQUIRED_REBUILD_INPUTS = (
     "artifacts/sstw_measured_formal_decision.json",
     "artifacts/external_baseline_status_decision.json",
     "artifacts/external_baseline_comparison_decision.json",
+    "artifacts/external_baseline_self_containment_decision.json",
     "artifacts/fair_detection_calibration_decision.json",
     "artifacts/formal_method_baseline_comparison_decision.json",
     "artifacts/formal_baseline_difference_interval_decision.json",
     "artifacts/formal_internal_ablation_summary_decision.json",
     "artifacts/validation_internal_ablation_decision.json",
     "artifacts/adaptive_attack_decision.json",
+    "artifacts/formal_adaptive_attack_execution_decision.json",
     "artifacts/replay_and_sketch_gate_decision.json",
     "artifacts/statistical_confidence_interval_decision.json",
     "artifacts/low_fpr_formal_statistics_decision.json",
+    "artifacts/data_split_and_leakage_guard_decision.json",
 )
 
 REQUIRED_REBUILD_OUTPUTS = (
@@ -68,6 +77,8 @@ REQUIRED_REBUILD_OUTPUTS = (
     "tables/formal_baseline_difference_interval_table.csv",
     "tables/formal_internal_ablation_summary_table.csv",
     "tables/adaptive_attack_table.csv",
+    "tables/formal_adaptive_attack_execution_table.csv",
+    "tables/formal_adaptive_attack_query_table.csv",
     "tables/replay_verification_table.csv",
     "tables/statistical_confidence_interval_table.csv",
     "tables/low_fpr_formal_statistics_table.csv",
@@ -83,6 +94,7 @@ REQUIRED_REBUILD_OUTPUTS = (
     "reports/replay_and_sketch_gate_report.md",
     "reports/statistical_confidence_interval_report.md",
     "reports/low_fpr_formal_statistics_report.md",
+    *COMPLETE_MECHANISM_ARTIFACT_RELPATHS,
     *PAPER_RESULT_ARTIFACT_RELPATHS,
 )
 

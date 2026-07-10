@@ -19,6 +19,9 @@ from evaluation.attacks.video_runtime_attack_protocol import (
 )
 from evaluation.protocol.flow_evidence_fields import with_flow_evidence_protocol_defaults
 from evaluation.protocol.paper_result_formality_guard import build_paper_result_formality_guard
+from evaluation.protocol.paper_profile_evidence_closure import (
+    build_paper_profile_evidence_closure_audit,
+)
 from evaluation.protocol.record_writer import write_json, write_jsonl
 from evaluation.protocol.table_builder import write_csv
 
@@ -231,6 +234,7 @@ def build_full_paper_result_checker_audit(
         paper_result_level=str(config.get("paper_result_level") or "full_paper"),
         target_fpr=target_fpr,
     )
+    evidence_closure = build_paper_profile_evidence_closure_audit(run_root, config_path)
 
     checks = {
         "paper_result_formality_guard_passed": formality_guard["paper_result_formality_guard_decision"] == "PASS",
@@ -263,6 +267,9 @@ def build_full_paper_result_checker_audit(
         "artifact_rebuild_dry_run_passed": (not bool(config.get("require_artifact_rebuild_dry_run", True)))
         or _decision_pass(artifact_rebuild, "validation_artifact_rebuild_dry_run_decision", "artifact_rebuild_dry_run_decision"),
         "data_split_and_leakage_guard_passed": data_guard.get("data_split_and_leakage_guard_decision") == "PASS",
+        "paper_profile_common_evidence_closure_ready": (
+            evidence_closure["paper_profile_evidence_closure_decision"] == "PASS"
+        ),
     }
     missing = [name for name, passed in checks.items() if not passed]
     decision = "PASS" if not missing else "FAIL"
@@ -290,6 +297,7 @@ def build_full_paper_result_checker_audit(
         "submission_freeze_allowed": False,
         "missing_full_paper_requirements": missing,
         "full_paper_missing_requirement_count": len(missing),
+        **evidence_closure,
         "full_paper_generation_record_count": len(generation_records),
         "full_paper_prompt_count": prompt_count,
         "full_paper_seed_per_prompt_min": seed_per_prompt_min,

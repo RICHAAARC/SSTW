@@ -1872,3 +1872,42 @@ Notebook 与 repository module 的跨边界数据
 | adaptive_attack_output_quality_psnr | metric | none | true | false | true | adaptive 输出相对输入视频的 PSNR 质量约束。 |
 | adaptive_attack_endpoint_tolerance | protocol | none | true | false | true | endpoint-preserving 搜索允许的 endpoint 分数偏差。 |
 | per_video_adaptive_attack_optimization | governance | none | true | false | true | adaptive 记录是否由逐视频候选生成与查询形成。 |
+
+## 正式 profile 公共证据闭合字段
+
+| 字段名 | 类别 | 后缀要求 | 必需 | 可空 | 可支持主张 | 说明 |
+| --- | --- | --- | --- | --- | --- | --- |
+| paper_profile_evidence_closure_decision | governance | none | true | false | true | 当前正式 profile 是否通过与另外两个层级相同的公共论文证据门禁。 |
+| paper_profile_evidence_closure_checks | governance | none | true | false | true | 已启用公共条件及其布尔判定的映射。 |
+| paper_profile_evidence_closure_required_check_count | metric | none | true | false | false | 当前 profile 实际启用的公共证据条件数量。 |
+| paper_profile_evidence_closure_missing_requirements | governance | none | true | false | true | 未通过的公共证据条件名称列表。 |
+| paper_profile_evidence_closure_missing_requirement_count | metric | none | true | false | false | 未通过公共证据条件的数量。 |
+| post_gate_requirements | governance | none | true | false | false | 因依赖 profile gate 本身而必须在 gate 后验证的条件列表。 |
+| common_profile_contract_matched | governance | none | true | false | true | 正式 profile 配置是否与公共机制契约逐字段一致。 |
+| complete_paper_mechanism_claim_passed | governance | none | true | false | true | 三层主张的统一完整机制 decision 是否通过。 |
+| claim_1_velocity_constraint_full_support_passed | governance | none | true | false | true | Claim-1 是否同时通过因果配对、Flow 证据与完整机制判定。 |
+| claim_2_path_evidence_full_support_passed | governance | none | true | false | true | Claim-2 是否同时通过路径独立增益、Flow 证据与完整机制判定。 |
+| claim_3_replay_posterior_full_support_passed | governance | none | true | false | true | Claim-3 是否通过 replay/sketch 门禁且未使用降级语义。 |
+| calibrated_probability_posterior_passed | governance | none | true | false | true | replay 后验是否通过正式 Flow evidence 与概率校准审计。 |
+| per_video_adaptive_attack_optimization_passed | governance | none | true | false | true | adaptive attack 是否逐视频执行并允许正式鲁棒性结论。 |
+| statistical_confidence_interval_passed | governance | none | true | false | true | 当前目标 FPR 的正式置信区间 artifact 是否通过。 |
+| heldout_fpr_confidence_upper_within_target | governance | none | true | false | true | held-out FPR 的95%单侧置信上界是否不高于目标 FPR。 |
+| low_fpr_formal_statistics_passed | governance | none | true | false | true | 当前 profile 的低 FPR 阻断统计是否允许当前层级结论。 |
+| low_fpr_curve_passed | governance | none | true | false | true | 当前目标 FPR 的 governed 曲线点是否就绪。 |
+| formal_internal_ablation_summary_passed | governance | none | true | false | true | 完整内部消融汇总是否通过。 |
+| internal_ablation_matrix_passed | governance | none | true | false | true | 组件移除与匹配对照矩阵是否通过。 |
+| video_quality_metrics_passed | governance | none | true | false | true | 当前 profile 的视频质量指标 artifact 是否通过。 |
+| efficiency_metrics_passed | governance | none | true | false | false | 当前 profile 的运行效率指标 artifact 是否通过。 |
+| real_adaptive_attack_records_passed | governance | none | true | false | true | 真实 adaptive attack 汇总是否通过。 |
+| real_world_attack_records_passed | governance | none | true | false | true | 真实世界攻击汇总是否通过。 |
+| paper_result_artifact_skeleton_passed | governance | none | true | false | true | 论文结果 records、tables、figures 与 reports 骨架是否完整。 |
+| artifact_rebuild_dry_run_passed | governance | none | true | false | true | governed artifacts 的可重建性检查是否通过。 |
+| data_split_and_leakage_guard_passed | governance | none | true | false | true | calibration、held-out test 与身份键隔离是否通过。 |
+| fair_detection_calibration_passed | governance | none | true | false | true | 所有方法是否按各自 clean negative 在同一 FPR 下冻结阈值。 |
+| formal_method_baseline_comparison_passed | governance | none | true | false | true | SSTW 与外部 baseline 的正式比较是否通过。 |
+| formal_baseline_difference_interval_passed | governance | none | true | false | true | 相对 baseline 的差值区间是否通过。 |
+| external_baseline_self_containment_passed | governance | none | true | false | true | baseline 分数是否由仓库内官方运行路径生成。 |
+| external_baseline_comparison_passed | governance | none | true | false | true | 必需的现代外部 baseline 是否具有正式结果。 |
+| sstw_measured_formal_records_passed | governance | none | true | false | true | SSTW 正式检测记录是否由真实攻击视频产生。 |
+| motion_threshold_calibration_passed | governance | none | true | false | true | 运动一致性阈值是否仅由 calibration split 冻结。 |
+| adaptive_attack_protocol_passed | governance | none | true | false | true | adaptive 与 non-runtime 协议聚合门禁是否通过。 |

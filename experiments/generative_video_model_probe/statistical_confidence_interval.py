@@ -187,7 +187,16 @@ def audit_statistical_confidence_interval_records(records: list[dict]) -> dict[s
         for row in fpr_records
     )
     confidence_bound_available = maximum_fpr_upper is not None
-    decision = "PASS" if ready_records and len(ready_records) == len(records) and fpr_point_closed and confidence_bound_available else "FAIL"
+    confidence_upper_within_target = bool(
+        maximum_fpr_upper is not None and maximum_fpr_upper <= target_fpr
+    )
+    decision = "PASS" if (
+        ready_records
+        and len(ready_records) == len(records)
+        and fpr_point_closed
+        and confidence_bound_available
+        and confidence_upper_within_target
+    ) else "FAIL"
     return {
         "stage_id": "statistical_confidence_interval_reporter",
         "statistical_confidence_interval_decision": decision,
@@ -206,9 +215,7 @@ def audit_statistical_confidence_interval_records(records: list[dict]) -> dict[s
         "heldout_fpr_one_sided_exact_upper_maximum": maximum_fpr_upper,
         "heldout_fpr_point_target_closed": fpr_point_closed,
         "heldout_fpr_confidence_bound_available": confidence_bound_available,
-        "heldout_fpr_confidence_upper_within_target": (
-            maximum_fpr_upper <= target_fpr if maximum_fpr_upper is not None else False
-        ),
+        "heldout_fpr_confidence_upper_within_target": confidence_upper_within_target,
         "paper_low_fpr_ci_status": record.get("paper_low_fpr_ci_status", "missing"),
         "cluster_by_video_interval_status": record.get("cluster_by_video_interval_status", "missing"),
     }

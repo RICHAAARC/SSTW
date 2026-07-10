@@ -36,3 +36,19 @@ def test_minimal_method_package_dry_run_excludes_governance_layer(tmp_path: Path
     assert all(not path.startswith("tests/") for path in copied_files)
     assert all(not path.startswith("experiments/") for path in copied_files)
     assert all(not path.startswith("paper_workflow/") for path in copied_files)
+    assert "configs/protocol/shared_generative_video_attack_protocol.json" in copied_files
+
+
+@pytest.mark.constraint
+def test_paper_artifact_rebuild_package_keeps_workflow_configs(tmp_path: Path) -> None:
+    """服务器重建包必须保留 configs 下的 workflow 配置, 但排除 Notebook 外层。"""
+
+    manifest = extract_profile(
+        Path.cwd(),
+        tmp_path / "paper_artifact_rebuild_package",
+        "paper_artifact_rebuild_package",
+        dry_run=True,
+    )
+    copied_files = manifest["copied_files"]
+    assert "configs/paper_workflow/generative_video_notebook_workflows.json" in copied_files
+    assert all(not path.startswith("paper_workflow/") for path in copied_files)

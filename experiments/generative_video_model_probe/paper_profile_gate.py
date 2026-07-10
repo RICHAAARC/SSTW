@@ -31,6 +31,9 @@ from evaluation.protocol.paper_mechanism_contract import (
     audit_paper_profile_mechanism_contract,
     load_paper_mechanism_contract,
 )
+from evaluation.protocol.paper_profile_evidence_closure import (
+    build_paper_profile_evidence_closure_audit,
+)
 from evaluation.protocol.table_builder import write_csv
 
 
@@ -986,6 +989,7 @@ def build_paper_profile_gate_audit(
         paper_result_level=str(config["paper_result_level"]),
         target_fpr=float(config["target_fpr"]),
     )
+    evidence_closure = build_paper_profile_evidence_closure_audit(run_root, config_path)
 
     requirement_checks = {
         "paper_result_formality_guard_passed": formality_guard["paper_result_formality_guard_decision"] == "PASS",
@@ -1027,6 +1031,9 @@ def build_paper_profile_gate_audit(
         "validation_low_fpr_formal_statistics_blocking_record_ready": (not config["require_low_fpr_formal_statistics_blocking_record"]) or low_fpr_ready,
         "validation_paper_result_artifact_skeleton_ready": (not config["require_paper_result_artifact_skeleton"]) or paper_skeleton_ready,
         "validation_artifact_rebuild_dry_run_ready": (not config["require_artifact_rebuild_dry_run"]) or artifact_rebuild_ready,
+        "paper_profile_common_evidence_closure_ready": (
+            evidence_closure["paper_profile_evidence_closure_decision"] == "PASS"
+        ),
     }
     missing_requirements = list(dict.fromkeys(
         [name for name, passed in requirement_checks.items() if not passed] + hard_config_missing
@@ -1066,6 +1073,7 @@ def build_paper_profile_gate_audit(
         "validation_missing_requirement_count": len(missing_requirements),
         "paper_profile_hard_required_config_missing": hard_config_missing,
         "paper_profile_hard_required_config_missing_count": len(hard_config_missing),
+        **evidence_closure,
         "paper_profile_names": sorted(paper_profile_names),
         "generation_record_count": len(generation_records),
         "validation_generation_record_count": len(validation_generation_records),

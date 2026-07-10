@@ -1,3 +1,30 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "sstw-flow-trajectory-watermark"
+version = "0.1.0"
+description = "状态空间同步 Flow Matching 轨迹水印核心方法与论文评测运行时"
+requires-python = ">=3.10"
+dependencies = [
+    "numpy>=1.26",
+]
+
+[project.optional-dependencies]
+method-runtime = [
+    "torch>=2.4",
+    "diffusers>=0.35",
+    "transformers>=4.49",
+]
+video-evaluation = [
+    "imageio>=2.36",
+    "imageio-ffmpeg>=0.5",
+]
+
+[tool.setuptools.packages.find]
+include = ["main*"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]

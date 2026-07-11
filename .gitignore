@@ -10,3 +10,6 @@ release_packages/
 acl.txt
 external_baseline/__write_test.tmp
 .local/
+# GitNexus 会为 Claude 客户端生成兼容入口; 本项目只维护 AGENTS.md 与 .codex/skills。
+.claude/
+CLAUDE.md

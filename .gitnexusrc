@@ -1,0 +1,6 @@
+{
+  "analyze": {
+    "defaultBranch": "main",
+    "indexOnly": true
+  }
+}

@@ -215,7 +215,7 @@ def _internal_ablation_profile_evidence_ready(
 
     profile = str(config.get("paper_result_level") or "")
     minimum_trace_count = _safe_int(
-        config.get(f"minimum_{profile}_internal_ablation_trace_count")
+        config.get("minimum_internal_ablation_trace_count")
     )
     required_variants = {
         str(value)
@@ -550,6 +550,16 @@ def build_paper_profile_evidence_closure_audit(
         "video_quality_metrics_passed",
         _required(config, "require_video_quality_metric_records"),
         _decision_passed(quality, "video_quality_metric_decision")
+        and _target_fpr_matches(quality, target_fpr),
+    )
+    add(
+        "baseline_matched_video_quality_passed",
+        _required(config, "require_baseline_matched_video_quality_metrics"),
+        quality.get("baseline_matched_video_quality_ready") is True
+        and quality.get("sstw_paired_video_quality_ready") is True
+        and quality.get("video_quality_comparison_protocol")
+        == config.get("video_quality_comparison_protocol")
+        and not quality.get("video_quality_missing_method_ids")
         and _target_fpr_matches(quality, target_fpr),
     )
     add(

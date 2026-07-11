@@ -11,6 +11,7 @@ from runtime.core.digest import build_stable_digest
 
 RUNTIME_DETECTION_RECORD_PATH = Path("records/runtime_detection_records.jsonl")
 TRAJECTORY_TRACE_RECORD_PATH = Path("records/trajectory_trace.jsonl")
+GENERATION_RECORD_PATH = Path("records/generation_records.jsonl")
 
 
 def read_jsonl(path: str | Path) -> list[dict[str, Any]]:
@@ -153,10 +154,61 @@ def build_comparison_unit_id(baseline_name: str, detection_record: Mapping[str, 
 
 
 def comparable_detection_records(run_root: str | Path) -> list[dict[str, Any]]:
-    """读取可进入 external baseline comparison 的 runtime detection records。"""
+    """读取可进入 external baseline comparison 的 runtime detection records。
+
+    正式 baseline 必须从同模型、prompt、seed 的 clean reference 构造自己的
+    水印视频，不能把 SSTW watermarked source 当作 baseline 输入。内部消融和
+    跨模型支持集也不得重复扩增主 baseline 比较单元。
+    """
+
     root = Path(run_root)
     records = read_jsonl(root / RUNTIME_DETECTION_RECORD_PATH)
-    return [record for record in records if record.get("runtime_detection_status") == "ready"]
+    generation_records = read_jsonl(root / GENERATION_RECORD_PATH)
+    clean_by_identity = {
+        (
+            str(record.get("generation_model_id") or ""),
+            str(record.get("prompt_id") or ""),
+            str(record.get("seed_id") or ""),
+        ): record
+        for record in generation_records
+        if record.get("generation_status") == "success"
+        and record.get("sample_role") == "clean_negative"
+    }
+    comparable: list[dict[str, Any]] = []
+    for raw_record in records:
+        if raw_record.get("runtime_detection_status") != "ready":
+            continue
+        record = dict(raw_record)
+        formal = record.get("runtime_detection_claim_level") == "formal_paper_detector"
+        if formal:
+            if record.get("method_variant") != "sstw_full_method":
+                continue
+            if record.get("cross_model_role") == "cross_model_validation_model":
+                continue
+            identity = (
+                str(record.get("generation_model_id") or ""),
+                str(record.get("prompt_id") or ""),
+                str(record.get("seed_id") or ""),
+            )
+            clean = clean_by_identity.get(identity)
+            clean_path = str(clean.get("video_path") or "") if clean else ""
+            record.update({
+                "source_video_path": clean_path,
+                "baseline_clean_reference_video_path": clean_path,
+                "baseline_clean_reference_trajectory_trace_id": (
+                    clean.get("trajectory_trace_id") if clean else None
+                ),
+                "baseline_clean_reference_status": (
+                    "matched_same_model_prompt_seed_clean_reference"
+                    if clean_path
+                    else "missing_same_model_prompt_seed_clean_reference"
+                ),
+                "baseline_input_source_policy": (
+                    "baseline_embeds_own_watermark_into_clean_reference"
+                ),
+            })
+        comparable.append(record)
+    return comparable
 
 
 def load_trace_groups(run_root: str | Path) -> dict[str, list[dict[str, Any]]]:

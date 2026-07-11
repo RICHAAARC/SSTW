@@ -508,7 +508,7 @@
     "attack_name",
     "output_json_path"
   ],
-  "runnability_audit_note": "当前主实验必跑现代 external baseline 为 VideoSeal、VideoShield、VidSig、REVMark 与 WAM-frame 共 5 个; WAM-frame 明确标注为图像水印逐帧适配视频 baseline。",
+  "runnability_audit_note": "当前主实验必跑现代 external baseline 为 VideoSeal、VideoShield、VidSig、VideoMark 与 WAM-frame 共5个; REVMark 仅作为可选附录方法, WAM-frame 明确标注为图像水印逐帧适配视频 baseline。",
   "source_verification_method": "GitHub repository inspection and git ls-remote --heads for configured branch HEAD commits",
   "verified_at_utc": "2026-06-25T00:00:00Z"
 }

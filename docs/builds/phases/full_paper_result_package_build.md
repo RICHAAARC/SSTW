@@ -1,12 +1,12 @@
-# full_paper_result_checker 分阶段构建流程
+# full_paper 公共门禁与结果包分阶段构建流程
 
-本文档记录 `full_paper_result_checker` 的构建流程与当前完成情况。该阶段是论文结果包产出前的正式结果充分性阻断 gate, 目标是保证 full_paper 在大规模 `TPR@FPR=0.001` 条件下运行时不会因为前序协议、数据、baseline、消融或攻击缺口产生阻断。
+本文档记录 full_paper 公共参数化 gate 的构建流程与当前完成情况。当前唯一门禁实现为 `experiments/generative_video_model_probe/paper_profile_gate.py`; `scripts/check_results/full_paper_result_checker.py` 只保存旧 API、CLI、文件名与字段别名。full_paper 与 probe/pilot 检查相同的机制、baseline、攻击和三层主张, 差异仅为 `FPR=0.001` 与更大的样本统计规模。
 
 ## 1. 本阶段构建流程
 
 ### 1.1 阶段目标
 
-在启动 full_paper 之前, 前序 transition decision 必须确认 dataset manifest、baseline manifest、ablation manifest、attack manifest、threshold protocol 和 artifact rebuild protocol 已经冻结。`full_paper_result_checker` 本身在 full_paper 真实结果落盘后运行, 只读取 records、tables、figures、reports 和 manifests, 不补造任何结果。
+在启动 full_paper 之前, 前序 transition decision 必须确认 dataset manifest、baseline manifest、ablation manifest、attack manifest、threshold protocol 和 artifact rebuild protocol 已经冻结。公共 `paper_profile_gate` 在 full_paper 真实结果落盘后运行, 只读取 records、tables、figures、reports 和 manifests, 不补造任何结果; transition 只负责外层运行许可, 不参与 claim PASS 判定。
 
 ### 1.2 进入条件
 
@@ -223,7 +223,7 @@ internal ablation 已接入 pilot_paper gate, full-scale records 尚未完成
 flow_specific_adaptive_attack_gate 尚未完成
 replay_and_authenticated_sketch_gate 尚未闭合
 paper-level FPR=0.001 大规模阈值协议尚未运行
-pilot_paper_gate 与 full_paper_result_checker 工程入口已实现, 但 full_paper 真实 GPU 结果尚未生成
+公共 paper_profile_gate 与两类兼容入口已实现, 但 full_paper 真实 GPU 结果尚未生成
 ```
 
 ## 3. 当前查漏补缺状态

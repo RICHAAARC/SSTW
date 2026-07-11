@@ -288,6 +288,45 @@ def test_pilot_to_full_transition_can_consume_sibling_probe_paper_run_root(tmp_p
     assert audit["pilot_paper_to_full_paper_transition_decision"] == "PASS"
 
 
+@pytest.mark.quick
+def test_full_to_submission_transition_consumes_shared_parameterized_gate(
+    tmp_path: Path,
+) -> None:
+    """full_paper 跳转必须消费公共 gate 写出的 profile 专属兼容 artifact。"""
+
+    run_root = tmp_path / "runs" / "generative_video_model_probe" / "full_paper"
+    write_json(
+        run_root / "artifacts" / "full_paper_gate_decision.json",
+        {
+            "paper_profile_gate_decision": "PASS",
+            "full_paper_gate_decision": "PASS",
+            "full_paper_claim_allowed": True,
+            "paper_claim_id": "full_claim",
+            "paper_claim_level": "full_paper",
+            "paper_claim_support_status": "full_claim_supported",
+            "paper_result_formality_guard_decision": "PASS",
+        },
+    )
+    write_json(
+        run_root
+        / "artifacts"
+        / "pilot_paper_to_full_paper_transition_decision.json",
+        {"pilot_paper_to_full_paper_transition_decision": "PASS"},
+    )
+    _write_completed_profile_package(run_root, "full_paper")
+
+    audit = write_stage_transition_decision(
+        run_root,
+        "full_paper_to_submission_freeze",
+    )
+
+    assert audit["full_paper_to_submission_freeze_transition_decision"] == "PASS"
+    assert audit["submission_freeze_allowed"] is True
+    assert Path(audit["source_gate_decision_path"]).name == (
+        "full_paper_gate_decision.json"
+    )
+
+
 def _write_self_contained_external_baseline_fixture(run_root: Path) -> None:
     """构造 5 个主实验现代 baseline 的自包含 measured_formal fixture。"""
     score_records = []
@@ -1109,9 +1148,10 @@ def test_profile_package_prefers_current_later_stage_over_restored_upstream_gate
     assert write_paper_profile_gate_figure(run_root)["paper_result_level"] == "pilot_paper"
 
     write_json(
-        run_root / "artifacts" / "full_paper_result_checker_decision.json",
+        run_root / "artifacts" / "full_paper_gate_decision.json",
         {
-            "full_paper_result_checker_decision": "PASS",
+            "paper_profile_gate_decision": "PASS",
+            "full_paper_gate_decision": "PASS",
             "paper_result_level": "full_paper",
         },
     )

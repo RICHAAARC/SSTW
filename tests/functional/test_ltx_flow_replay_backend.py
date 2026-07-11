@@ -244,7 +244,7 @@ def test_adaptive_attack_loads_model_specific_frozen_calibrations(
     )
     monkeypatch.setattr(
         "experiments.generative_video_model_probe.formal_adaptive_attack_executor."
-        "frozen_flow_detector_calibration_from_dict",
+        "frozen_flow_detector_calibration_from_governed_artifact",
         lambda row: f"calibration::{row['generation_model_id']}",
     )
 

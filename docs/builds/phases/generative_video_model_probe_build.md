@@ -591,7 +591,8 @@ calibration split
 
 ```text
 configs/protocol/pilot_paper_generative_probe.json
-experiments/generative_video_model_probe/pilot_paper_gate.py
+experiments/generative_video_model_probe/paper_profile_gate.py
+experiments/generative_video_model_probe/pilot_paper_gate.py  # 仅保留旧 CLI/API 兼容转发
 colab_runtime PROFILE = pilot_paper
 notebook workflow build_pilot_paper_gate_command
 Google Drive package manifest pilot_paper summary
@@ -698,6 +699,6 @@ SSTW_WORKFLOW_PROFILE=probe_paper
 SSTW_WORKFLOW_PROFILE=pilot_paper
 ```
 
-不应在 Notebook 中复制新的 Google Drive 目录、样本上限或 profile 分支。未来 `full_paper` 已在配置中登记, 但状态为 `design_registered_not_ready`, 当前不允许真实运行或支撑 claim。
+不应在 Notebook 中复制新的 Google Drive 目录、样本上限或 profile 分支。`full_paper` 与前两档共用同一个可执行 workflow 和完整证据合同; 它与前两档只在目标 FPR、样本规模和统计功效上不同。阶段 gate 可以约束结论冻结顺序, 但不得把 `full_paper` 降级为仅登记、不可真实运行的入口。
 
 `motion_threshold_artifact_run_root_relative` 指向独立 calibration run_root。该设计允许 `probe_paper` 与 `pilot_paper` 使用各自隔离的 evaluation run_root, 同时复用同一个已冻结 motion threshold artifact, 防止把 calibration 输出与 evaluation 输出混写。

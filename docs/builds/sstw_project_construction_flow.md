@@ -5,6 +5,9 @@
 > 不属于 `probe_paper`、`pilot_paper` 或 `full_paper` 的可执行正式阶段。正式阶段
 > 只接受真实 velocity constraint、key 无关固定 inversion、校准概率后验、逐视频
 > adaptive attack 和三层完整门禁; 历史替代路径不得进入 PASS。
+> 三个正式 profile 统一调用 `paper_profile_gate.py`; 文中旧
+> `pilot_paper_gate`、`full_paper_result_checker` 名称仅表示 profile-specific
+> 文件别名或历史兼容入口, 不代表存在第二套结论要求。
 
 ## 0. 文档定位
 
@@ -313,7 +316,7 @@ submission_package_freeze
 
 `mechanism_validation` 聚合以下机制前置与实现 phase: `synthetic_state_inference_sanity`、`real_video_latent_transfer_check`、`state_space_inference_formalization`、`trajectory_observation_core_probe`、`flow_model_adapter_preflight`、`sampling_time_constraint_probe`、`motion_threshold_calibration`、`small_scale_mechanism_pilot_check` 和真实生成式视频模型实现包。`small_scale_mechanism_pilot_check` 只属于机制层检查, 不能单独放行 `pilot_paper` 或 `full_paper`; `generative_video_model_probe` 只表示真实生成式视频模型实验的实现 package。
 
-`probe_paper` 是 `target_fpr=0.1` 的小样本论文闭合层。它必须使用 `configs/protocol/probe_paper_generative_probe.json` 中 `target_fpr=0.1` 指定的口径跑通与论文协议同构的全部产物链路, 并在 FPR=10% 口径下判断 SSTW 是否成立以及是否相对 5 个现代 external baseline 具备优势证据。`replay_and_authenticated_sketch_gate`、`flow_specific_adaptive_attack_gate`、external baseline、internal ablation、CI reporter、artifact rebuild 和 claim audit 都必须在 `probe_paper` 中形成可落盘、可检查、可失败闭环, 不得推迟到 `pilot_paper` 或 `full_paper` 后再补。`probe_paper` 必须能在小样本规模上产出 paper 相关的全部 governed artifact 类型: generation / detection records、主方法 measured_formal 结果、完整外部 baseline 对比、内部消融、46 个 runtime attack、11 个 non-runtime/adaptive 协议、完整 replay/authenticated sketch gate、fixed-FPR CI、tables、figures、reports、package manifest 和 claim audit。只有 `probe_paper` 通过并生成 `probe_paper_to_pilot_paper_transition_decision` 后, 才允许进入 `pilot_paper`; 不得直接进入 `full_paper`。`pilot_paper` 使用代表性 paper 协议执行 FPR=1% 中等规模结果运行并报告 pilot 级 `TPR@FPR=0.01`。`full_paper` 必须等待 `pilot_paper`、`pilot_paper_to_full_paper_transition_decision`、`full_paper_result_checker`、CI、claim audit、artifact rebuild 和 submission freeze 相关门禁通过。
+`probe_paper` 是 `target_fpr=0.1` 的小样本论文闭合层。它必须使用 `configs/protocol/probe_paper_generative_probe.json` 中 `target_fpr=0.1` 指定的口径跑通与论文协议同构的全部产物链路, 并在 FPR=10% 口径下判断 SSTW 是否成立以及是否相对 5 个现代 external baseline 具备优势证据。`replay_and_authenticated_sketch_gate`、`flow_specific_adaptive_attack_gate`、external baseline、internal ablation、CI reporter、artifact rebuild 和 claim audit 都必须在 `probe_paper` 中形成可落盘、可检查、可失败闭环, 不得推迟到 `pilot_paper` 或 `full_paper` 后再补。`probe_paper` 必须能在小样本规模上产出 paper 相关的全部 governed artifact 类型: generation / detection records、主方法 measured_formal 结果、完整外部 baseline 对比、内部消融、46 个 runtime attack、11 个 non-runtime/adaptive 协议、完整 replay/authenticated sketch gate、fixed-FPR CI、tables、figures、reports、package manifest 和 claim audit。三个正式 profile 统一调用参数化 `paper_profile_gate`, 结论合同完全相同, 只允许目标 FPR、样本数量和统计功效不同。只有 `probe_paper` 通过并生成 `probe_paper_to_pilot_paper_transition_decision` 后, 才允许进入 `pilot_paper`; 不得直接进入 `full_paper`。`pilot_paper` 使用同一论文协议执行 FPR=1% 中等规模结果运行并报告 `TPR@FPR=0.01`。`full_paper` 必须等待 `pilot_paper_to_full_paper_transition_decision`, 再由同一参数化 gate 在 FPR=0.001 与 full 样本规模下闭合, 最后执行 submission freeze 相关门禁。
 
 核心原则是:
 
@@ -321,7 +324,7 @@ submission_package_freeze
 先闭合协议, 再闭合状态推断;
 先验证路径证据, 再接入真实 Flow sampler;
 先验证 Flow 模型接口能记录轨迹, 再验证 velocity constraint 进入采样过程;
-先在 mechanism_validation 中完成机制前置检查, 再让 probe_paper 以 FPR=10% 小样本论文闭合全部 paper 产物链路并验证三层主张, 然后通过 probe_paper_to_pilot_paper_transition_decision 进入 pilot_paper; full_paper 仍需 pilot_paper、pilot_paper_to_full_paper_transition_decision 和 full_paper_result_checker 通过;
+先在 mechanism_validation 中完成机制前置检查, 再让 probe_paper 以 FPR=10% 小样本论文闭合全部 paper 产物链路并验证三层主张, 然后通过 probe_paper_to_pilot_paper_transition_decision 进入 pilot_paper; pilot_paper 与 full_paper 继续调用同一参数化 paper_profile_gate, 并由各自外层 transition decision 控制阶段推进;
 先控制 negative tail, 再写论文主张;
 所有 supported claims 必须由 frozen records 自动重建。
 ```
@@ -413,9 +416,9 @@ baseline 专用 Notebook 产生的 official bundle 为输入, 由
 必须区分以下 3 个状态, 避免形成“full_paper 必须先运行, 但又要等 full_paper_result_checker 先通过”的循环表述:
 
 ```text
-full_paper_run_allowed: 只表示允许启动 full_paper 规模结果生产, 需要 paper_profile_gate、probe_paper_gate、probe_paper_to_pilot_paper_transition_decision、pilot_paper_gate、pilot_paper_to_full_paper_transition_decision 和 full_paper 运行前置门禁通过。
-full_paper_claim_allowed: 只表示允许把 full_paper 结果写成正式论文 claim, 需要 full_paper records 生成后由 full_paper_result_checker 判定 PASS。
-submission_freeze_allowed: 只表示允许冻结投稿包, 需要 full_paper_result_checker、reviewer_evidence_index_builder、full_paper_to_submission_freeze_transition_decision、claim audit 和 artifact rebuild 全部通过。
+full_paper_run_allowed: 只表示允许启动 full_paper 规模结果生产, 需要 probe_paper 与 pilot_paper 的公共 gate、对应阶段 package 和两个上游 transition decision 通过。
+full_paper_claim_allowed: 只表示允许把 full_paper 结果写成正式论文 claim, 需要 full_paper records 生成后由参数化 paper_profile_gate 在 FPR=0.001 下判定 PASS。
+submission_freeze_allowed: 只表示允许冻结投稿包, 需要 full_paper 公共 gate、reviewer_evidence_index_builder、full_paper_to_submission_freeze_transition_decision、claim audit 和 artifact rebuild 全部通过。
 ```
 
 `configs/protocol/full_paper_generative_probe.json` 是正式规模论文协议配置的唯一入口。该配置至少必须固定:
@@ -439,8 +442,8 @@ minimum_heldout_negative_event_count_per_family >= 12500
 minimum_attack_event_count_per_attack >= 1000
 minimum_modern_external_baseline_formal_adapter_count >= 5
 minimum_external_baseline_measured_adapter_count >= 5
-minimum_full_paper_external_baseline_trace_count >= 500
-minimum_full_paper_internal_ablation_trace_count >= 500
+minimum_external_baseline_trace_count >= 500
+minimum_internal_ablation_trace_count >= 500
 minimum_internal_ablation_variant_count >= 8
 require_paper_profile_gate_passed == false
 require_probe_paper_gate_passed == true

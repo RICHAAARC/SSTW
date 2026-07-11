@@ -22,6 +22,7 @@ from main.methods.state_space_watermark.path_observation import (
 )
 from main.methods.state_space_watermark.replay_inversion import (
     FlowSchedulePoint,
+    ReplayGaussianLikelihoodConfig,
     ReplayTrajectory,
     ReplayUncertainty,
     estimate_replay_uncertainty,
@@ -48,6 +49,7 @@ class WanFlowReplayResult:
     endpoint_latent: Any
     primary_schedule: tuple[FlowSchedulePoint, ...]
     primary_replay_index: int
+    replay_likelihood_config: ReplayGaussianLikelihoodConfig
 
 
 def build_flow_schedule_points(scheduler: Any, *, num_inference_steps: int, device: Any) -> list[FlowSchedulePoint]:
@@ -181,6 +183,7 @@ def _path_evidence_from_replay(
     key_text: str,
     tubelet_config: FlowTubeletKeyCodeConfig,
     schedule: Sequence[FlowSchedulePoint],
+    likelihood_config: ReplayGaussianLikelihoodConfig,
 ) -> dict[str, float | int | None]:
     """在 key 无关固定反演路径上计算候选 key 投影证据。"""
 
@@ -209,6 +212,7 @@ def _path_evidence_from_replay(
         step_record["replay_reliability_weight"] = replay_step_reliability_weight(
             trajectory,
             step_index + 1,
+            config=likelihood_config,
         )
         records.append(step_record)
     return aggregate_path_observations(records)
@@ -220,6 +224,7 @@ def score_replay_trajectory_for_key(
     *,
     key_text: str,
     tubelet_config: FlowTubeletKeyCodeConfig | None = None,
+    likelihood_config: ReplayGaussianLikelihoodConfig,
 ) -> dict[str, float | int | None]:
     """在不重复模型推理的情况下为另一把 key 重算 replay 路径证据。
 
@@ -253,6 +258,7 @@ def score_replay_trajectory_for_key(
         step_record["replay_reliability_weight"] = replay_step_reliability_weight(
             trajectory,
             step_index + 1,
+            config=likelihood_config,
         )
         records.append(step_record)
     return aggregate_path_observations(records)
@@ -289,12 +295,14 @@ def evaluate_fixed_wan_replay_hypothesis_for_key(
         replay.primary_schedule,
         fixed,
         keyed_velocity,
+        likelihood_config=replay.replay_likelihood_config,
     )
     return hypothesis, score_replay_trajectory_for_key(
         hypothesis,
         replay.primary_schedule,
         key_text=key_text,
         tubelet_config=tubelet_config,
+        likelihood_config=replay.replay_likelihood_config,
     )
 
 
@@ -310,6 +318,7 @@ def run_wan_control_replay(
     negative_prompt: str | None = None,
     guidance_scale: float = 5.0,
     tubelet_config: FlowTubeletKeyCodeConfig | None = None,
+    likelihood_config: ReplayGaussianLikelihoodConfig,
 ) -> tuple[ReplayTrajectory, tuple[FlowSchedulePoint, ...], dict[str, float | int | None]]:
     """使用显式 prompt 或 scheduler 执行一个可审计的 replay control。
 
@@ -342,6 +351,7 @@ def run_wan_control_replay(
             schedule,
             fixed_trajectory,
             keyed_velocity,
+            likelihood_config=likelihood_config,
         )
         if fixed_trajectory is not None
         else run_key_independent_inversion_hypothesis(
@@ -349,6 +359,7 @@ def run_wan_control_replay(
             schedule,
             velocity,
             keyed_velocity,
+            likelihood_config=likelihood_config,
         )
     )
     path_evidence = _path_evidence_from_replay(
@@ -356,6 +367,7 @@ def run_wan_control_replay(
         key_text=key_text,
         tubelet_config=tubelet_config,
         schedule=schedule,
+        likelihood_config=likelihood_config,
     )
     return trajectory, tuple(schedule), path_evidence
 
@@ -370,6 +382,7 @@ def run_wan_attacked_video_replay(
     guidance_scale: float = 5.0,
     replay_step_counts: Sequence[int] = (16, 20, 24),
     tubelet_config: FlowTubeletKeyCodeConfig | None = None,
+    likelihood_config: ReplayGaussianLikelihoodConfig,
 ) -> WanFlowReplayResult:
     """从攻击后视频执行多时间网格 Wan inversion/replay 并返回正式证据。"""
 
@@ -408,6 +421,7 @@ def run_wan_attacked_video_replay(
             schedule,
             base_velocity,
             keyed_velocity,
+            likelihood_config=likelihood_config,
         ))
     uncertainty = estimate_replay_uncertainty(replay_rows)
     # 主网格固定为预注册列表的中间项, 禁止按结果挑选最有利网格。
@@ -417,6 +431,7 @@ def run_wan_attacked_video_replay(
         key_text=key_text,
         tubelet_config=tubelet_config,
         schedule=schedules[primary_index],
+        likelihood_config=likelihood_config,
     )
     return WanFlowReplayResult(
         endpoint_evidence=endpoint_evidence,
@@ -428,4 +443,5 @@ def run_wan_attacked_video_replay(
         endpoint_latent=endpoint_latent,
         primary_schedule=tuple(schedules[primary_index]),
         primary_replay_index=primary_index,
+        replay_likelihood_config=likelihood_config,
     )

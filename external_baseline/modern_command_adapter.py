@@ -339,6 +339,18 @@ def _measured_formal_record_from_payload(
         "negative_family": detection_record.get("negative_family"),
         "source_video_path": detection_record.get("source_video_path"),
         "attacked_video_path": detection_record.get("attacked_video_path"),
+        "baseline_clean_reference_video_path": detection_record.get(
+            "baseline_clean_reference_video_path"
+        ),
+        "baseline_clean_reference_trajectory_trace_id": detection_record.get(
+            "baseline_clean_reference_trajectory_trace_id"
+        ),
+        "baseline_clean_reference_status": detection_record.get(
+            "baseline_clean_reference_status"
+        ),
+        "baseline_input_source_policy": detection_record.get(
+            "baseline_input_source_policy"
+        ),
         "external_baseline_source_video_path": payload.get("external_baseline_source_video_path", payload.get("baseline_source_video_path")),
         "external_baseline_attacked_video_path": payload.get("external_baseline_attacked_video_path", payload.get("baseline_attacked_video_path")),
         "external_baseline_generation_model_id": payload.get("external_baseline_generation_model_id"),

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import inspect
 import json
 import math
 import os
@@ -19,7 +20,11 @@ from evaluation.statistics.clustered_inference import (
 )
 from evaluation.attacks.video_runtime_attack_protocol import load_protocol_config_with_shared_attack_protocol
 
-from experiments.generative_video_model_probe.colab_runtime import _load_video_generation_pipeline, _select_dtype
+from experiments.generative_video_model_probe.colab_runtime import (
+    _load_video_generation_pipeline,
+    _select_dtype,
+    validate_generation_model_provenance,
+)
 from runtime.core.digest import build_stable_digest
 from main.methods.state_space_watermark.endpoint_latent_detector import compute_endpoint_latent_evidence
 from main.methods.state_space_watermark.flow_tubelet_key_code import (
@@ -28,7 +33,9 @@ from main.methods.state_space_watermark.flow_tubelet_key_code import (
 from main.methods.state_space_watermark.path_observation import compute_path_step_observation
 from main.methods.state_space_watermark.replay_inversion import (
     REPLAY_GAUSSIAN_LIKELIHOOD_MODEL_ID,
+    ReplayGaussianLikelihoodConfig,
     ReplayTrajectory,
+    fit_replay_gaussian_likelihood_config,
     gaussian_replay_residual_likelihood,
     replay_step_reliability_weight,
 )
@@ -43,6 +50,7 @@ from experiments.generative_video_model_probe.formal_method_variants import (
     GENERATION_METHOD_VARIANTS,
     apply_frozen_flow_detector,
     fit_flow_evidence_calibration,
+    frozen_flow_detector_calibration_artifact,
 )
 from main.methods.state_space_watermark.flow_state_posterior import (
     FLOW_STATE_POSTERIOR_MODEL_TYPE,
@@ -86,6 +94,8 @@ def _run_attacked_video_replay_for_model(
     *,
     prompt: str,
     key_text: str,
+    likelihood_config: ReplayGaussianLikelihoodConfig,
+    replay_step_counts: tuple[int, ...] = (16, 20, 24),
 ) -> WanFlowReplayResult | LTXFlowReplayResult:
     """按 pipeline 家族分派真实 attacked-video replay, 不允许回退到代理分数。"""
 
@@ -95,12 +105,16 @@ def _run_attacked_video_replay_for_model(
             video_path,
             prompt=prompt,
             key_text=key_text,
+            likelihood_config=likelihood_config,
+            replay_step_counts=replay_step_counts,
         )
     return run_wan_attacked_video_replay(
         pipeline,
         video_path,
         prompt=prompt,
         key_text=key_text,
+        likelihood_config=likelihood_config,
+        replay_step_counts=replay_step_counts,
     )
 
 
@@ -138,6 +152,7 @@ def _run_control_replay_for_model(
             num_inference_steps=num_inference_steps,
             scheduler=scheduler,
             fixed_trajectory=fixed_trajectory,
+            likelihood_config=replay.replay_likelihood_config,
         )
     return run_wan_control_replay(
         pipeline,
@@ -147,6 +162,7 @@ def _run_control_replay_for_model(
         num_inference_steps=num_inference_steps,
         scheduler=scheduler,
         fixed_trajectory=fixed_trajectory,
+        likelihood_config=replay.replay_likelihood_config,
     )
 
 
@@ -369,10 +385,12 @@ def build_flow_state_observation_sequence(
             active.forward_states[step_index + 1],
             active.null_forward_states[step_index + 1],
             states[step_index + 1],
+            config=replay.replay_likelihood_config,
         )
         local_replay_reliability = replay_step_reliability_weight(
             active,
             step_index + 1,
+            config=replay.replay_likelihood_config,
         )
         step_replay_reliability = max(
             0.0,
@@ -646,6 +664,10 @@ def _controlled_negative_records_from_positive(
     identity_fields = (
         "generation_model_id",
         "generation_model_family",
+        "generation_model_requested_revision",
+        "generation_model_commit_or_hash",
+        "generation_model_revision_source",
+        "generation_model_revision_resolution_status",
         "cross_model_role",
         "prompt_id",
         "seed_id",
@@ -767,6 +789,18 @@ def _base_record(source: Mapping[str, Any], *, sample_role: str, method_variant:
     statistical_cluster_id = build_stable_digest({
         "generation_model_id": source.get("generation_model_id"),
         "generation_model_family": source.get("generation_model_family"),
+        "generation_model_requested_revision": source.get(
+            "generation_model_requested_revision"
+        ),
+        "generation_model_commit_or_hash": source.get(
+            "generation_model_commit_or_hash"
+        ),
+        "generation_model_revision_source": source.get(
+            "generation_model_revision_source"
+        ),
+        "generation_model_revision_resolution_status": source.get(
+            "generation_model_revision_resolution_status"
+        ),
         "cross_model_role": source.get("cross_model_role"),
         "prompt_id": source.get("prompt_id"),
         "seed_id": source.get("seed_id"),
@@ -805,14 +839,41 @@ def _base_record(source: Mapping[str, Any], *, sample_role: str, method_variant:
     }
 
 
-def _load_pipeline(model_id: str) -> Any:
-    """在 CUDA 上加载与生成阶段相同的 Wan pipeline。"""
+def _load_pipeline(model_id: str, *, revision: str | None = None) -> Any:
+    """在 CUDA 上加载与生成记录同一不可变 revision 的 pipeline。"""
 
     import torch
 
     if not torch.cuda.is_available():
         raise RuntimeError("正式 Flow replay 需要可用 CUDA GPU")
-    return _load_video_generation_pipeline(model_id, _select_dtype(torch))
+    return _load_video_generation_pipeline(
+        model_id,
+        _select_dtype(torch),
+        revision=revision,
+    )
+
+
+def _invoke_pipeline_loader(
+    pipeline_loader: Any,
+    *,
+    model_id: str,
+    revision: str,
+) -> Any:
+    """调用可注入 loader, 默认运行时必须消费冻结 revision。
+
+    轻量测试使用的单参数 loader 不加载真实模型, 因而保留兼容入口; 真实默认
+    loader 和任何声明 `revision` 参数的服务器实现都会收到不可变 commit。
+    """
+
+    parameters = inspect.signature(pipeline_loader).parameters.values()
+    supports_revision = any(
+        parameter.name == "revision"
+        or parameter.kind == inspect.Parameter.VAR_KEYWORD
+        for parameter in parameters
+    )
+    if supports_revision:
+        return pipeline_loader(model_id, revision=revision)
+    return pipeline_loader(model_id)
 
 
 def _score_records_with_frozen_calibration(
@@ -943,7 +1004,7 @@ def _score_records_with_frozen_calibration(
                     *DETECTOR_ONLY_METHOD_VARIANTS,
                 }
             ),
-            **calibration.as_dict(),
+            **frozen_flow_detector_calibration_artifact(calibration),
         }
         for (model_id, variant), calibration in calibrations.items()
     ]
@@ -1528,6 +1589,25 @@ def _state_space_posterior_mechanism_failures(
                 record.get("replay_likelihood_model_id")
                 == REPLAY_GAUSSIAN_LIKELIHOOD_MODEL_ID
             ),
+            "replay_likelihood_fitted_from_calibration_clean_videos": (
+                record.get("replay_likelihood_calibration_protocol")
+                == "calibration_clean_video_null_residual_cluster_equal_mle"
+                and int(record.get("replay_likelihood_calibration_cluster_count") or 0)
+                >= 2
+                and math.isfinite(float(
+                    record.get(
+                        "replay_relative_observation_noise_standard_deviation"
+                    )
+                    or math.nan
+                ))
+                and float(
+                    record.get(
+                        "replay_relative_observation_noise_standard_deviation"
+                    )
+                    or 0.0
+                )
+                > 0.0
+            ),
             "state_space_posterior_score_source_ready": (
                 record.get("flow_detector_score_source")
                 == FLOW_STATE_POSTERIOR_SCORE_SOURCE
@@ -1569,6 +1649,167 @@ def _negative_family_cluster_counts(
     return {family: len(cluster_ids) for family, cluster_ids in groups.items()}
 
 
+REPLAY_LIKELIHOOD_CALIBRATION_SOURCE_SPLIT = "calibration"
+REPLAY_LIKELIHOOD_BOOTSTRAP_MODEL_ID = (
+    "replay_noise_calibration_bootstrap_discarded_not_claim_evidence"
+)
+
+
+def _replay_likelihood_calibration_cluster_id(source: Mapping[str, Any]) -> str:
+    """为 clean-video 噪声拟合构造独立视频簇标识。
+
+    优先复用生成阶段认证的 trajectory trace。旧记录缺少该字段时，使用模型、
+    prompt 与 seed 的稳定摘要作为同一生成视频的簇标识，绝不把多个时间网格当成
+    多个独立样本。
+    """
+
+    trace_id = str(source.get("trajectory_trace_id") or "").strip()
+    if trace_id:
+        return trace_id
+    required_identity = {
+        "generation_model_id": source.get("generation_model_id"),
+        "prompt_id": source.get("prompt_id"),
+        "seed": source.get("seed"),
+        "split": source.get("split"),
+    }
+    if any(value in {None, ""} for value in required_identity.values()):
+        raise ValueError("replay 噪声 calibration 记录缺少可构造独立视频簇的身份字段")
+    return build_stable_digest(required_identity)
+
+
+def _fit_model_specific_replay_likelihood_configs(
+    run_root: Path,
+    clean_records: Iterable[Mapping[str, Any]],
+    prompt_map: Mapping[str, str],
+    pipelines: Mapping[str, Any],
+    *,
+    minimum_clean_video_cluster_count: int,
+    calibration_replay_step_count: int,
+) -> tuple[dict[str, ReplayGaussianLikelihoodConfig], list[dict[str, Any]]]:
+    """仅用 calibration clean videos 拟合逐模型 replay 高斯噪声。
+
+    噪声拟合只运行预注册主网格20步，用于取得与候选 key 无关的 null residual。
+    bootstrap 方差不参与状态积分，且其候选似然会被完整丢弃。正式三网格 replay
+    随后使用冻结配置独立运行，因此既不长期缓存 GPU states，也不把 bootstrap
+    概率写入 claim evidence。
+    """
+
+    bootstrap_config = ReplayGaussianLikelihoodConfig(
+        relative_observation_noise_standard_deviation=1.0,
+        likelihood_model_id=REPLAY_LIKELIHOOD_BOOTSTRAP_MODEL_ID,
+        calibration_protocol=(
+            "bootstrap_only_for_key_independent_reverse_and_null_states_discarded"
+        ),
+        calibration_cluster_count=0,
+    )
+    calibration_step_count = int(calibration_replay_step_count)
+    if calibration_step_count < 2:
+        raise ValueError("replay 噪声 calibration step count 必须至少为2")
+    variances_by_model: dict[str, list[float]] = defaultdict(list)
+    cluster_ids_by_model: dict[str, list[str]] = defaultdict(list)
+    model_roles: dict[str, set[str]] = defaultdict(set)
+    for source in clean_records:
+        if str(source.get("split") or "") != REPLAY_LIKELIHOOD_CALIBRATION_SOURCE_SPLIT:
+            continue
+        model_id = str(source.get("generation_model_id") or "").strip()
+        if model_id not in pipelines:
+            raise RuntimeError(f"replay 噪声 calibration 缺少已冻结模型 pipeline: {model_id}")
+        prompt_id = str(source.get("prompt_id") or "")
+        if prompt_id not in prompt_map:
+            raise RuntimeError(f"replay 噪声 calibration 缺少 prompt 文本: {prompt_id}")
+        video_path = _resolve_video_path(
+            run_root,
+            source.get("video_path"),
+            fallback_dir="videos",
+        )
+        calibration_key_text = _generation_key(
+            source,
+            extra_context={
+                "negative_role": "replay_noise_calibration_bootstrap",
+            },
+        )
+        replay = _run_attacked_video_replay_for_model(
+            pipelines[model_id],
+            video_path,
+            prompt=prompt_map[prompt_id],
+            key_text=calibration_key_text,
+            likelihood_config=bootstrap_config,
+            replay_step_counts=(calibration_step_count,),
+        )
+        endpoint_energy = float(
+            replay.endpoint_latent.detach().float().pow(2).mean().item()
+        )
+        if not math.isfinite(endpoint_energy) or endpoint_energy <= 0.0:
+            raise RuntimeError("replay 噪声 calibration 的 observed endpoint energy 非有限正数")
+        cluster_id = _replay_likelihood_calibration_cluster_id(source)
+        for trajectory in replay.replay_trajectories:
+            normalized_variance = (
+                float(trajectory.null_residual_mean_squared_error) / endpoint_energy
+            )
+            variances_by_model[model_id].append(normalized_variance)
+            cluster_ids_by_model[model_id].append(cluster_id)
+        model_roles[model_id].add(str(source.get("cross_model_role") or "primary_model"))
+
+    required_models = set(pipelines)
+    observed_models = set(variances_by_model)
+    if observed_models != required_models:
+        missing = sorted(required_models - observed_models)
+        raise RuntimeError(
+            "replay 噪声 calibration 未覆盖所有正式生成模型: " + ", ".join(missing)
+        )
+
+    fitted: dict[str, ReplayGaussianLikelihoodConfig] = {}
+    records: list[dict[str, Any]] = []
+    minimum_count = max(2, int(minimum_clean_video_cluster_count))
+    for model_id in sorted(required_models):
+        config = fit_replay_gaussian_likelihood_config(
+            variances_by_model[model_id],
+            cluster_ids_by_model[model_id],
+        )
+        if config.calibration_cluster_count < minimum_count:
+            raise RuntimeError(
+                "replay 噪声 calibration 的独立 clean-video 簇不足: "
+                f"{model_id}={config.calibration_cluster_count}, required={minimum_count}"
+            )
+        fitted[model_id] = config
+        role_values = sorted(model_roles[model_id])
+        record = {
+            "replay_likelihood_calibration_record_id": build_stable_digest({
+                "generation_model_id": model_id,
+                "source_split": REPLAY_LIKELIHOOD_CALIBRATION_SOURCE_SPLIT,
+                **config.as_dict(),
+            }),
+            "generation_model_id": model_id,
+            "cross_model_role": (
+                role_values[0] if len(role_values) == 1 else "mixed_model_role_invalid"
+            ),
+            "replay_likelihood_calibration_source_split": (
+                REPLAY_LIKELIHOOD_CALIBRATION_SOURCE_SPLIT
+            ),
+            "replay_likelihood_calibration_clean_video_cluster_count": (
+                config.calibration_cluster_count
+            ),
+            "replay_likelihood_calibration_null_residual_observation_count": len(
+                variances_by_model[model_id]
+            ),
+            "replay_likelihood_calibration_step_counts": [
+                calibration_step_count
+            ],
+            "replay_likelihood_calibration_grid_policy": (
+                "single_preregistered_primary_grid_for_noise_fit"
+            ),
+            **config.as_dict(),
+            "replay_likelihood_calibration_status": (
+                "fitted_from_model_specific_calibration_clean_videos"
+            ),
+            "test_time_likelihood_update_blocked": True,
+        }
+        if len(role_values) != 1:
+            raise RuntimeError(f"同一模型的 replay 噪声 calibration 混用了角色: {model_id}")
+        records.append(record)
+    return fitted, records
+
+
 def run_formal_flow_evidence(
     run_root: str | Path,
     prompt_suite_path: str | Path,
@@ -1589,8 +1830,50 @@ def run_formal_flow_evidence(
     ready_attacks = [record for record in attack_records if record.get("attack_runtime_status") == "ready"]
     if not ready_attacks:
         raise RuntimeError("缺少 ready runtime attack records, 不能执行正式 Flow replay")
-    models = sorted({str(record.get("generation_model_id")) for record in ready_attacks if record.get("generation_model_id")})
-    pipelines = {model_id: pipeline_loader(model_id) for model_id in models}
+    if str(config.get("paper_result_level") or "") in {
+        "probe_paper",
+        "pilot_paper",
+        "full_paper",
+    }:
+        for record in [*successful_generation, *ready_attacks]:
+            validate_generation_model_provenance(record)
+    model_revisions: dict[str, str] = {}
+    for record in [*ready_attacks, *clean_records]:
+        model_id = str(record.get("generation_model_id") or "")
+        if not model_id:
+            continue
+        revision = validate_generation_model_provenance(record)
+        previous = model_revisions.setdefault(model_id, revision)
+        if previous != revision:
+            raise RuntimeError(
+                f"同一 generation model ID 混用了多个不可变 revision: {model_id}"
+            )
+    pipelines = {
+        model_id: _invoke_pipeline_loader(
+            pipeline_loader,
+            model_id=model_id,
+            revision=revision,
+        )
+        for model_id, revision in sorted(model_revisions.items())
+    }
+    (
+        replay_likelihood_configs,
+        replay_likelihood_calibration_records,
+    ) = _fit_model_specific_replay_likelihood_configs(
+        run_root,
+        clean_records,
+        prompt_map,
+        pipelines,
+        minimum_clean_video_cluster_count=int(
+            config.get(
+                "minimum_replay_likelihood_calibration_clean_video_cluster_count",
+                2,
+            )
+        ),
+        calibration_replay_step_count=int(
+            config.get("replay_likelihood_calibration_step_count", 20)
+        ),
+    )
     all_prompts = list(dict.fromkeys(prompt_map.values()))
     evidence_records: list[dict[str, Any]] = []
     failure_records: list[dict[str, Any]] = []
@@ -1610,6 +1893,9 @@ def run_formal_flow_evidence(
                 video_path,
                 prompt=prompt,
                 key_text=key_text,
+                likelihood_config=replay_likelihood_configs[
+                    str(source.get("generation_model_id"))
+                ],
             )
             control_payload = (
                 _control_payload(
@@ -1670,8 +1956,14 @@ def run_formal_flow_evidence(
         for source in sources:
             try:
                 prompt = prompt_map[str(source.get("prompt_id"))]
-                pipeline = pipelines.get(str(source.get("generation_model_id"))) or pipeline_loader(str(source.get("generation_model_id")))
-                pipelines[str(source.get("generation_model_id"))] = pipeline
+                source_model_id = str(source.get("generation_model_id"))
+                source_revision = validate_generation_model_provenance(source)
+                pipeline = pipelines.get(source_model_id) or _invoke_pipeline_loader(
+                    pipeline_loader,
+                    model_id=source_model_id,
+                    revision=source_revision,
+                )
+                pipelines[source_model_id] = pipeline
                 video_path = _resolve_video_path(run_root, source.get("video_path"), fallback_dir="videos")
                 base_replay = _run_attacked_video_replay_for_model(
                     pipeline,
@@ -1681,6 +1973,9 @@ def run_formal_flow_evidence(
                         source,
                         extra_context={"negative_role": "clean_replay_base"},
                     ),
+                    likelihood_config=replay_likelihood_configs[
+                        source_model_id
+                    ],
                 )
                 # 这里只为真实生成机制变体构造独立 candidate-key 负假设。
                 # 检测器专用消融必须在评分阶段复用 full-method 的同一 replay、
@@ -1763,6 +2058,7 @@ def run_formal_flow_evidence(
                                 8,
                             ),
                             "replay_likelihood_model_id": hypothesis.replay_likelihood_model_id,
+                            **base_replay.replay_likelihood_config.as_dict(),
                             "flow_state_observation_sequence": state_sequence,
                             "flow_state_observation_sequence_status": (
                                 "measured_from_fixed_replay_path"
@@ -1851,6 +2147,21 @@ def run_formal_flow_evidence(
         != WATERMARK_KEY_DERIVATION_ID
         or not str(record.get("watermark_key_id") or "").strip()
     ]
+    generation_model_provenance_failures: list[dict[str, Any]] = []
+    for record in scored_records:
+        try:
+            validate_generation_model_provenance(record)
+        except (KeyError, TypeError, ValueError) as exc:
+            generation_model_provenance_failures.append({
+                "formal_flow_evidence_unit_id": record.get(
+                    "formal_flow_evidence_unit_id"
+                ),
+                "generation_model_id": record.get("generation_model_id"),
+                "generation_model_commit_or_hash": record.get(
+                    "generation_model_commit_or_hash"
+                ),
+                "generation_model_provenance_failure_reason": str(exc),
+            })
     posterior_calibration_failures = [
         {
             "method_variant": record.get("method_variant"),
@@ -1896,6 +2207,55 @@ def run_formal_flow_evidence(
         scored_records,
         threshold_records,
     )
+    minimum_replay_calibration_clusters = max(
+        2,
+        int(
+            config.get(
+                "minimum_replay_likelihood_calibration_clean_video_cluster_count",
+                2,
+            )
+        ),
+    )
+    replay_likelihood_calibration_failures = [
+        {
+            "generation_model_id": record.get("generation_model_id"),
+            "replay_likelihood_calibration_status": record.get(
+                "replay_likelihood_calibration_status"
+            ),
+            "replay_likelihood_calibration_clean_video_cluster_count": record.get(
+                "replay_likelihood_calibration_clean_video_cluster_count"
+            ),
+        }
+        for record in replay_likelihood_calibration_records
+        if record.get("replay_likelihood_model_id")
+        != REPLAY_GAUSSIAN_LIKELIHOOD_MODEL_ID
+        or record.get("replay_likelihood_calibration_protocol")
+        != "calibration_clean_video_null_residual_cluster_equal_mle"
+        or record.get("replay_likelihood_calibration_source_split")
+        != REPLAY_LIKELIHOOD_CALIBRATION_SOURCE_SPLIT
+        or record.get("replay_likelihood_calibration_status")
+        != "fitted_from_model_specific_calibration_clean_videos"
+        or record.get("test_time_likelihood_update_blocked") is not True
+        or record.get("replay_likelihood_calibration_grid_policy")
+        != "single_preregistered_primary_grid_for_noise_fit"
+        or record.get("replay_likelihood_calibration_step_counts")
+        != [int(config.get("replay_likelihood_calibration_step_count", 20))]
+        or int(
+            record.get("replay_likelihood_calibration_clean_video_cluster_count")
+            or 0
+        )
+        < minimum_replay_calibration_clusters
+    ]
+    calibrated_model_ids = {
+        str(record.get("generation_model_id") or "")
+        for record in replay_likelihood_calibration_records
+    }
+    if calibrated_model_ids != set(pipelines):
+        replay_likelihood_calibration_failures.append({
+            "failure_scope": "generation_model_coverage",
+            "missing_generation_model_ids": sorted(set(pipelines) - calibrated_model_ids),
+            "unexpected_generation_model_ids": sorted(calibrated_model_ids - set(pipelines)),
+        })
     formal_flow_evidence_pass = (
         bool(positive_records)
         and bool(negative_records)
@@ -1903,8 +2263,10 @@ def run_formal_flow_evidence(
         and required_variants.issubset(observed_variants)
         and bool(claim3_records)
         and not watermark_key_derivation_failures
+        and not generation_model_provenance_failures
         and not posterior_calibration_failures
         and not state_space_posterior_mechanism_failures
+        and not replay_likelihood_calibration_failures
         and negative_family_mechanism_pass
         and mechanism_audit["three_layer_mechanism_pre_replay_decision"] == "PASS"
         and cross_model_audit["cross_model_generalization_decision"] in {"PASS", "NOT_CONFIGURED"}
@@ -1936,6 +2298,12 @@ def run_formal_flow_evidence(
             "PASS" if not watermark_key_derivation_failures else "FAIL"
         ),
         "watermark_key_derivation_failures": watermark_key_derivation_failures,
+        "generation_model_provenance_decision": (
+            "PASS" if not generation_model_provenance_failures else "FAIL"
+        ),
+        "generation_model_provenance_failures": (
+            generation_model_provenance_failures
+        ),
         "posterior_probability_calibration_decision": (
             "PASS" if not posterior_calibration_failures else "FAIL"
         ),
@@ -1945,6 +2313,15 @@ def run_formal_flow_evidence(
         ),
         "state_space_posterior_mechanism_failures": (
             state_space_posterior_mechanism_failures
+        ),
+        "replay_likelihood_calibration_decision": (
+            "PASS" if not replay_likelihood_calibration_failures else "FAIL"
+        ),
+        "replay_likelihood_calibration_record_count": len(
+            replay_likelihood_calibration_records
+        ),
+        "replay_likelihood_calibration_failures": (
+            replay_likelihood_calibration_failures
         ),
         "claim_1_velocity_constraint_detectable_watermark_decision": mechanism_audit["claim_1_velocity_constraint_detectable_watermark_decision"],
         "claim_2_path_evidence_independent_gain_decision": mechanism_audit["claim_2_path_evidence_independent_gain_decision"],
@@ -1969,6 +2346,12 @@ def run_formal_flow_evidence(
         paired_velocity_records,
     )
     write_jsonl(run_root / "thresholds" / "formal_flow_detector_thresholds.jsonl", threshold_records)
+    write_jsonl(
+        run_root
+        / "thresholds"
+        / "replay_gaussian_likelihood_calibrations.jsonl",
+        replay_likelihood_calibration_records,
+    )
     write_csv(run_root / "tables" / "formal_flow_detection_table.csv", scored_records)
     write_csv(run_root / "tables" / "runtime_detection_table.csv", positive_records)
     write_csv(run_root / "tables" / "sstw_clean_negative_score_table.csv", negative_records)
@@ -2002,6 +2385,7 @@ def run_formal_flow_evidence(
         f"- claim_1_decision: {audit['claim_1_velocity_constraint_detectable_watermark_decision']}\n"
         f"- claim_2_decision: {audit['claim_2_path_evidence_independent_gain_decision']}\n"
         f"- claim3_real_replay_record_count: {audit['claim3_real_replay_record_count']}\n"
+        f"- replay_likelihood_calibration_decision: {audit['replay_likelihood_calibration_decision']}\n"
         f"- cross_model_generalization_decision: {audit['cross_model_generalization_decision']}\n"
     )
     for report_name in ("formal_flow_evidence_report.md", "runtime_detection_report.md"):

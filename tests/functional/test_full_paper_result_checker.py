@@ -1,4 +1,4 @@
-"""验证 full_paper result checker 的轻量工程门禁。"""
+"""验证 full_paper 旧 checker 只复用公共 profile gate。"""
 
 from __future__ import annotations
 
@@ -7,137 +7,91 @@ from pathlib import Path
 
 import pytest
 
-from evaluation.protocol.record_writer import write_json, write_jsonl
-from scripts.check_results.full_paper_result_checker import build_full_paper_result_checker_audit
+from experiments.generative_video_model_probe.paper_profile_gate import (
+    build_paper_profile_gate_audit,
+)
+from scripts.check_results.full_paper_result_checker import (
+    build_full_paper_result_checker_audit,
+    write_full_paper_result_checker_audit,
+)
 
 
-def _write_pass_decision(path: Path, decision_field: str, target_fpr: float | None = None) -> None:
-    """写入 checker 所需的轻量 PASS decision fixture。"""
-
-    payload = {decision_field: "PASS"}
-    if target_fpr is not None:
-        payload["target_fpr"] = target_fpr
-    if decision_field == "low_fpr_formal_statistics_decision":
-        payload["current_profile_low_fpr_claim_allowed"] = True
-    write_json(path, payload)
-
-
-@pytest.mark.quick
-def test_full_paper_result_checker_validates_split_and_per_attack_coverage(tmp_path: Path) -> None:
-    """full_paper checker 必须检查 split、样本网格和每个 attack 的事件覆盖。"""
-
-    run_root = tmp_path / "run"
-    config_path = tmp_path / "full_paper_config.json"
-    target_fpr = 0.001
-    config = {
-        "paper_result_level": "full_paper",
-        "target_fpr": target_fpr,
-        "minimum_prompt_count": 2,
-        "minimum_seed_per_prompt": 2,
-        "minimum_calibration_seed_per_prompt": 1,
-        "minimum_test_seed_per_prompt": 1,
-        "minimum_unique_video_count": 4,
-        "minimum_calibration_unique_video_count": 2,
-        "minimum_test_unique_video_count": 2,
-        "minimum_attack_event_count_per_attack": 4,
-        "minimum_heldout_attacked_positive_event_count": 8,
-        "minimum_clean_negative_count": 4,
-        "minimum_heldout_test_negative_event_count": 4,
-        "required_runtime_attack_names": ["attack_a", "attack_b"],
-        "required_modern_external_baseline_adapter_names": ["baseline_a"],
-    }
-    config_path.write_text(json.dumps(config, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-
-    generation_records = []
-    for prompt_index in range(2):
-        for seed_index, split in enumerate(("calibration", "test")):
-            generation_records.append({
-                "generation_status": "success",
-                "colab_runtime_profile": "full_paper",
-                "generation_model_id": "model",
-                "prompt_id": f"prompt_{prompt_index}",
-                "seed_id": f"seed_{seed_index}",
-                "trajectory_trace_id": f"trace_{prompt_index}_{seed_index}",
-                "split": split,
-            })
-    write_jsonl(run_root / "records" / "generation_records.jsonl", generation_records)
-
-    attack_records = []
-    detection_records = []
-    for record in generation_records:
-        for attack_name in ("attack_a", "attack_b"):
-            base = {
-                "generation_model_id": record["generation_model_id"],
-                "prompt_id": record["prompt_id"],
-                "seed_id": record["seed_id"],
-                "trajectory_trace_id": record["trajectory_trace_id"],
-                "attack_name": attack_name,
-            }
-            attack_records.append({**base, "attack_runtime_status": "ready"})
-            detection_records.append({**base, "runtime_detection_status": "ready"})
-    write_jsonl(run_root / "records" / "runtime_attack_records.jsonl", attack_records)
-    write_jsonl(run_root / "records" / "runtime_detection_records.jsonl", detection_records)
-
-    write_json(run_root / "artifacts" / "runtime_attack_decision.json", {
-        "runtime_attack_decision": "PASS",
-        "runtime_attack_ready_count": len(attack_records),
-        "runtime_attack_missing_required_names": [],
-    })
-    write_json(run_root / "artifacts" / "runtime_detection_decision.json", {
-        "runtime_detection_decision": "PASS",
-        "runtime_detection_ready_count": len(detection_records),
-        "runtime_detection_missing_required_names": [],
-    })
-    write_json(run_root / "artifacts" / "pilot_paper_to_full_paper_transition_decision.json", {
-        "pilot_paper_to_full_paper_transition_decision": "PASS",
-    })
-    _write_pass_decision(run_root / "artifacts" / "fair_detection_calibration_decision.json", "fair_detection_calibration_decision", target_fpr)
-    _write_pass_decision(run_root / "artifacts" / "formal_method_baseline_comparison_decision.json", "formal_method_baseline_comparison_decision", target_fpr)
-    _write_pass_decision(run_root / "artifacts" / "formal_baseline_difference_interval_decision.json", "formal_baseline_difference_interval_decision", target_fpr)
-    _write_pass_decision(run_root / "artifacts" / "external_baseline_self_containment_decision.json", "external_baseline_self_containment_decision")
-    _write_pass_decision(run_root / "artifacts" / "data_split_and_leakage_guard_decision.json", "data_split_and_leakage_guard_decision")
-    _write_pass_decision(run_root / "artifacts" / "low_fpr_formal_statistics_decision.json", "low_fpr_formal_statistics_decision")
-    _write_pass_decision(run_root / "artifacts" / "paper_result_artifact_skeleton_decision.json", "paper_result_artifact_skeleton_decision", target_fpr)
-    _write_pass_decision(run_root / "artifacts" / "statistical_confidence_interval_decision.json", "statistical_confidence_interval_decision")
-    _write_pass_decision(run_root / "artifacts" / "validation_artifact_rebuild_dry_run_decision.json", "validation_artifact_rebuild_dry_run_decision")
-
-    audit = build_full_paper_result_checker_audit(run_root, config_path)
-
-    assert audit["full_paper_result_checker_decision"] == "PASS"
-    assert audit["paper_claim_id"] == "full_claim"
-    assert audit["paper_claim_support_status"] == "full_claim_supported"
-    assert audit["paper_result_formality_guard_decision"] == "PASS"
-    assert audit["paper_result_formality_guard_violation_count"] == 0
-    assert audit["full_paper_prompt_count"] == 2
-    assert audit["full_paper_seed_per_prompt_min"] == 2
-    assert audit["full_paper_calibration_unique_video_count"] == 2
-    assert audit["full_paper_test_unique_video_count"] == 2
-    assert audit["full_paper_runtime_attack_event_count_per_attack_min"] == 4
-    assert audit["full_paper_runtime_detection_event_count_per_attack_min"] == 4
+FULL_CONFIG = Path("configs/protocol/full_paper_generative_probe.json")
+PILOT_CONFIG = Path("configs/protocol/pilot_paper_generative_probe.json")
 
 
 @pytest.mark.quick
-def test_full_paper_result_checker_rejects_proxy_result_records(tmp_path: Path) -> None:
-    """full_paper checker 必须统一调用正式性门禁, 阻断 proxy 结果进入 full_claim。"""
+def test_full_checker_is_public_gate_with_legacy_aliases(tmp_path: Path) -> None:
+    """旧 checker 只能增加字段别名, 不得改变公共 gate 的任何结论。"""
 
-    run_root = tmp_path / "run"
-    config_path = tmp_path / "full_paper_config.json"
-    config_path.write_text(json.dumps({
-        "paper_result_level": "full_paper",
-        "target_fpr": 0.001,
-        "required_runtime_attack_names": [],
-    }, ensure_ascii=False), encoding="utf-8")
-    write_jsonl(run_root / "records" / "formal_method_baseline_comparison_records.jsonl", [
-        {
-            "method_id": "explicit_control",
-            "metric_status": "measured_proxy",
+    compatibility = build_full_paper_result_checker_audit(tmp_path, FULL_CONFIG)
+    public = build_paper_profile_gate_audit(tmp_path, FULL_CONFIG)
+
+    assert {
+        key: value
+        for key, value in compatibility.items()
+        if key
+        not in {
+            "full_paper_result_checker_decision",
+            "full_paper_result_decision",
         }
-    ])
+    } == public
+    assert compatibility["paper_result_level"] == "full_paper"
+    assert compatibility["target_fpr"] == pytest.approx(0.001)
+    assert compatibility["full_paper_result_checker_decision"] == (
+        public["paper_profile_gate_decision"]
+    )
+    assert compatibility["full_paper_result_decision"] == (
+        public["paper_profile_gate_decision"]
+    )
 
-    audit = build_full_paper_result_checker_audit(run_root, config_path)
 
-    assert audit["full_paper_result_checker_decision"] == "FAIL"
-    assert audit["paper_claim_id"] == "full_claim"
-    assert audit["paper_claim_support_status"] == "full_claim_blocked"
-    assert audit["paper_result_formality_guard_decision"] == "FAIL"
-    assert "paper_result_formality_guard_passed" in audit["missing_full_paper_requirements"]
+@pytest.mark.quick
+def test_full_checker_rejects_non_full_profile_config(tmp_path: Path) -> None:
+    """旧 checker 名称不得成为 pilot 结果冒充 full_paper 的旁路。"""
+
+    with pytest.raises(ValueError, match="只接受 full_paper"):
+        build_full_paper_result_checker_audit(tmp_path, PILOT_CONFIG)
+
+
+@pytest.mark.quick
+def test_full_checker_writer_preserves_legacy_files_without_parallel_logic(
+    tmp_path: Path,
+) -> None:
+    """旧消费者需要的文件应与公共 full gate 决策完全一致。"""
+
+    audit = write_full_paper_result_checker_audit(tmp_path, FULL_CONFIG)
+    public = json.loads(
+        (tmp_path / "artifacts" / "full_paper_gate_decision.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    legacy = json.loads(
+        (
+            tmp_path
+            / "artifacts"
+            / "full_paper_result_checker_decision.json"
+        ).read_text(encoding="utf-8")
+    )
+
+    assert audit == legacy
+    assert legacy["paper_profile_gate_decision"] == public[
+        "paper_profile_gate_decision"
+    ]
+    assert (tmp_path / "records" / "full_paper_result_checker_records.jsonl").is_file()
+    assert (tmp_path / "artifacts" / "full_paper_result_decision.json").is_file()
+    assert (tmp_path / "reports" / "full_paper_result_checker_report.md").is_file()
+
+
+@pytest.mark.quick
+def test_full_checker_compatibility_module_remains_thin() -> None:
+    """full 兼容层不得重新引入独立的样本、攻击或 proxy 审计实现。"""
+
+    source = Path("scripts/check_results/full_paper_result_checker.py").read_text(
+        encoding="utf-8"
+    )
+
+    assert "build_paper_profile_gate_audit" in source
+    assert "write_paper_profile_gate_audit" in source
+    assert "required_runtime_attack_names_from_config" not in source
+    assert len(source.splitlines()) < 140

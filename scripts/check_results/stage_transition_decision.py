@@ -53,11 +53,14 @@ TRANSITION_SPECS: dict[str, dict[str, Any]] = {
         "decision_field": "full_paper_to_submission_freeze_transition_decision",
         "source_stage": "full_paper",
         "target_stage": "submission_freeze",
-        "source_gate_path": "artifacts/full_paper_result_checker_decision.json",
+        "source_gate_path": "artifacts/full_paper_gate_decision.json",
         "alternate_source_gate_paths": (
+            "artifacts/full_paper_result_checker_decision.json",
             "artifacts/full_paper_result_decision.json",
         ),
         "source_gate_fields": (
+            "full_paper_gate_decision",
+            "paper_profile_gate_decision",
             "full_paper_result_checker_decision",
             "full_paper_result_decision",
         ),

@@ -16,6 +16,8 @@ method-runtime = [
     "torch>=2.4",
     "diffusers>=0.35",
     "transformers>=4.49",
+    "imageio>=2.36",
+    "imageio-ffmpeg>=0.5",
 ]
 video-evaluation = [
     "imageio>=2.36",

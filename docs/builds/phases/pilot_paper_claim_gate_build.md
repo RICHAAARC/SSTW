@@ -75,7 +75,8 @@ wam_frame
 
 ```text
 configs/protocol/pilot_paper_generative_probe.json
-experiments/generative_video_model_probe/pilot_paper_gate.py
+experiments/generative_video_model_probe/paper_profile_gate.py
+experiments/generative_video_model_probe/pilot_paper_gate.py  # 仅保留旧 CLI/API 兼容转发
 experiments/generative_video_model_probe/colab_runtime.py PROFILE = pilot_paper
 workflows/generative_video_paper.py::build_pilot_paper_gate_command
 paper_workflow/colab_notebooks/generative_video_generation_colab.ipynb -> paper_workflow/colab_notebooks/generative_video_quality_scoring_colab.ipynb -> paper_workflow/colab_notebooks/runtime_attack_colab.ipynb -> paper_workflow/colab_notebooks/runtime_detection_colab.ipynb

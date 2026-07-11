@@ -22,6 +22,7 @@ from evaluation.attacks.video_runtime_attack_protocol import (
     required_runtime_attack_names_from_config,
     target_fpr_levels_from_config,
 )
+from evaluation.metrics.video_file_metrics import compute_paired_video_quality_metrics
 from evaluation.protocol.flow_evidence_fields import with_flow_evidence_protocol_defaults
 from evaluation.protocol.record_writer import write_json, write_jsonl
 from evaluation.protocol.table_builder import write_csv
@@ -73,6 +74,7 @@ COMPLETE_MECHANISM_ARTIFACT_RELPATHS = (
     "records/paired_velocity_causal_evidence_records.jsonl",
     "records/wrong_key_replay_records.jsonl",
     "thresholds/formal_flow_detector_thresholds.jsonl",
+    "thresholds/replay_gaussian_likelihood_calibrations.jsonl",
     "tables/formal_flow_detection_table.csv",
     "tables/paired_path_evidence_gain_table.csv",
     "tables/paired_velocity_causal_evidence_table.csv",
@@ -153,6 +155,21 @@ def _load_protocol_context(config_path: str | Path) -> dict[str, Any]:
         "require_complete_paper_mechanism_contract": bool(
             config.get("require_complete_paper_mechanism_contract", False)
         ),
+        "require_baseline_matched_video_quality_metrics": bool(
+            config.get("require_baseline_matched_video_quality_metrics", False)
+        ),
+        "required_modern_external_baseline_adapter_names": [
+            str(value)
+            for value in config.get(
+                "required_modern_external_baseline_adapter_names",
+                [],
+            )
+            if str(value)
+        ],
+        "video_quality_comparison_protocol": str(
+            config.get("video_quality_comparison_protocol")
+            or "same_clean_reference_to_method_own_watermarked_source_paired_metrics"
+        ),
     }
 
 
@@ -171,74 +188,378 @@ def _target_fpr_matches(record: Mapping[str, Any], target_fpr: float) -> bool:
     return value is not None and abs(value - float(target_fpr)) <= 1e-12
 
 
+def _resolve_quality_video_path(
+    run_root: Path,
+    raw_path: Any,
+    *,
+    allow_run_video_basename_fallback: bool = False,
+) -> Path | None:
+    """解析质量计算使用的视频路径, 不允许用不存在的路径继续聚合。
+
+    通用工程写法是优先使用 record 中的原始路径。项目特定写法是兼容 Colab
+    绝对路径同步到服务器后仅保留在本地阶段工作区的情况。回退只按明确的
+    `videos/`、`artifacts/` 或 official bundle 相对后缀执行, 不递归搜索并误配同名视频。
+    """
+
+    text = str(raw_path or "").strip()
+    if not text:
+        return None
+    direct = Path(text)
+    candidates = [direct]
+    if not direct.is_absolute():
+        candidates.append(run_root / direct)
+    if allow_run_video_basename_fallback:
+        candidates.append(run_root / "videos" / direct.name)
+    normalized_parts = list(direct.parts)
+    for anchor in (
+        "videos",
+        "artifacts",
+        "external_baseline_official_result_bundles",
+    ):
+        matching_indices = [
+            index
+            for index, part in enumerate(normalized_parts)
+            if str(part).lower() == anchor.lower()
+        ]
+        if not matching_indices:
+            continue
+        suffix = Path(*normalized_parts[matching_indices[-1]:])
+        if anchor in {"videos", "artifacts"}:
+            candidates.append(run_root / suffix)
+        else:
+            # 阶段 zip 会把 official bundle 恢复到本地项目工作区, 它与
+            # `runs/<run_id>` 是同级树, 因此只尝试 run root 的祖先目录。
+            candidates.extend(parent / suffix for parent in run_root.parents)
+    for candidate in candidates:
+        if candidate.is_file():
+            return candidate
+    return None
+
+
+def _fair_quality_robustness_by_method(
+    run_root: Path,
+    target_fpr: float,
+) -> dict[str, dict[str, Any]]:
+    """读取同一 target FPR 下每个方法唯一的公平鲁棒性记录。"""
+
+    by_method: dict[str, list[dict[str, Any]]] = {}
+    for record in _fair_rows_for_current_target(run_root, target_fpr):
+        method_id = str(record.get("method_id") or "")
+        if method_id:
+            by_method.setdefault(method_id, []).append(record)
+    return {
+        method_id: rows[0]
+        for method_id, rows in by_method.items()
+        if len(rows) == 1
+    }
+
+
+def _quality_record_payload(
+    *,
+    method_id: str,
+    method_role: str,
+    source_kind: str,
+    source_record_count: int,
+    unit_metrics: list[Mapping[str, Any]],
+    failure_reasons: list[str],
+    robustness_record: Mapping[str, Any] | None,
+    context: Mapping[str, Any],
+) -> dict[str, Any]:
+    """把逐视频配对质量结果聚合为单个方法级论文记录。"""
+
+    ready_units = [
+        item
+        for item in unit_metrics
+        if item.get("paired_video_quality_status") == "ready"
+        and all(
+            _safe_float(item.get(field_name)) is not None
+            for field_name in (
+                "paired_watermark_psnr",
+                "paired_watermark_ssim",
+                "paired_temporal_delta_error",
+            )
+        )
+    ]
+    robustness_ready = bool(
+        robustness_record
+        and robustness_record.get("fair_comparison_status") == "ready"
+        and all(
+            _safe_float(robustness_record.get(field_name)) is not None
+            for field_name in (
+                "tpr_at_target_fpr",
+                "tpr_ci_lower",
+                "tpr_ci_upper",
+            )
+        )
+    )
+    normalized_failures = sorted({str(value) for value in failure_reasons if str(value)})
+    if not robustness_ready:
+        normalized_failures.append("fair_robustness_record_missing_or_not_unique")
+    status = (
+        "ready"
+        if source_record_count > 0
+        and unit_metrics
+        and len(ready_units) == len(unit_metrics)
+        and not normalized_failures
+        and robustness_ready
+        else "blocked"
+    )
+    claim_status = _claim_status_for_current_profile(context, status)
+    return with_flow_evidence_protocol_defaults({
+        "record_version": "paper_video_quality_metric_v2",
+        "paper_result_level": context["paper_result_level"],
+        "target_fpr": context["target_fpr"],
+        "method_id": method_id,
+        "method_role": method_role,
+        "quality_metric_scope": "method_watermark_embedding_quality",
+        "quality_metric_source_kind": source_kind,
+        "quality_metric_source_record_count": source_record_count,
+        "paired_quality_unit_count": len(unit_metrics),
+        "paired_quality_ready_count": len(ready_units),
+        "paired_quality_blocked_count": len(unit_metrics) - len(ready_units),
+        "mean_paired_watermark_psnr": _mean_optional(
+            item.get("paired_watermark_psnr") for item in ready_units
+        ),
+        "mean_paired_watermark_ssim": _mean_optional(
+            item.get("paired_watermark_ssim") for item in ready_units
+        ),
+        "mean_paired_temporal_delta_error": _mean_optional(
+            item.get("paired_temporal_delta_error") for item in ready_units
+        ),
+        "robustness_tpr_at_target_fpr": (
+            _safe_float(robustness_record.get("tpr_at_target_fpr"))
+            if robustness_record
+            else None
+        ),
+        "robustness_tpr_ci_lower": (
+            _safe_float(robustness_record.get("tpr_ci_lower"))
+            if robustness_record
+            else None
+        ),
+        "robustness_tpr_ci_upper": (
+            _safe_float(robustness_record.get("tpr_ci_upper"))
+            if robustness_record
+            else None
+        ),
+        "video_quality_comparison_protocol": context["video_quality_comparison_protocol"],
+        "quality_metric_failure_reasons": sorted(set(normalized_failures)),
+        "video_quality_metric_status": status,
+        "metric_status": "measured_formal" if status == "ready" else "missing",
+        "claim_support_status": claim_status,
+    }, trajectory_source_level="paper_paired_quality_from_method_own_watermarked_videos", claim_support_status=claim_status)
+
+
+def _sstw_paired_quality_record(
+    formal_records: list[dict[str, Any]],
+    robustness_record: Mapping[str, Any] | None,
+    context: Mapping[str, Any],
+) -> dict[str, Any]:
+    """聚合 SSTW 完整方法已经计算完成的 clean-reference 配对质量。"""
+
+    scoped = [
+        record
+        for record in formal_records
+        if record.get("method_variant") == "sstw_full_method"
+        and record.get("paired_video_quality_required") is True
+    ]
+    unit_metrics: list[dict[str, Any]] = []
+    failures: list[str] = []
+    for record in scoped:
+        unit_metrics.append({
+            field_name: record.get(field_name)
+            for field_name in (
+                "paired_video_quality_status",
+                "paired_watermark_psnr",
+                "paired_watermark_ssim",
+                "paired_temporal_delta_error",
+            )
+        })
+        if record.get("formal_metric_result_used_for_claim") is not True:
+            failures.append("sstw_formal_quality_motion_semantic_record_not_ready")
+        if record.get("paired_video_quality_status") != "ready":
+            failures.append("sstw_paired_video_quality_not_ready")
+    if not scoped:
+        failures.append("sstw_paired_quality_records_missing")
+    return _quality_record_payload(
+        method_id=SSTW_METHOD_ID,
+        method_role="proposed_method",
+        source_kind="sstw_formal_quality_motion_semantic_records",
+        source_record_count=len(scoped),
+        unit_metrics=unit_metrics,
+        failure_reasons=failures,
+        robustness_record=robustness_record,
+        context=context,
+    )
+
+
+def _baseline_paired_quality_record(
+    run_root: Path,
+    baseline_id: str,
+    score_records: list[dict[str, Any]],
+    robustness_record: Mapping[str, Any] | None,
+    context: Mapping[str, Any],
+) -> dict[str, Any]:
+    """用 baseline 自身 watermarked source 与匹配 clean reference 计算质量。
+
+    同一 watermarked source 会在多个 attack score record 中重复出现。该函数先按
+    模型、prompt、seed 和两条视频路径去重, 再执行一次配对度量, 避免把攻击数量
+    错误当成独立质量样本。
+    """
+
+    scoped = [
+        record
+        for record in score_records
+        if record.get("external_baseline_name") == baseline_id
+        and record.get("metric_status") == "measured_formal"
+        and record.get("external_baseline_result_used_for_claim") is True
+    ]
+    failures: list[str] = []
+    unique_pairs: dict[tuple[str, ...], tuple[Path, Path]] = {}
+    identities_to_paths: dict[tuple[str, str, str], set[tuple[str, str]]] = {}
+    for record in scoped:
+        reference_status = str(record.get("baseline_clean_reference_status") or "")
+        input_policy = str(record.get("baseline_input_source_policy") or "")
+        reference_raw = (
+            record.get("baseline_clean_reference_video_path")
+            or record.get("source_video_path")
+        )
+        source_raw = record.get("external_baseline_source_video_path")
+        reference_path = _resolve_quality_video_path(
+            run_root,
+            reference_raw,
+            allow_run_video_basename_fallback=True,
+        )
+        source_path = _resolve_quality_video_path(run_root, source_raw)
+        if reference_status != "matched_same_model_prompt_seed_clean_reference":
+            failures.append("baseline_clean_reference_identity_not_matched")
+        if input_policy != "baseline_embeds_own_watermark_into_clean_reference":
+            failures.append("baseline_input_source_policy_invalid")
+        if reference_path is None:
+            failures.append("baseline_clean_reference_video_missing")
+        if source_path is None:
+            failures.append("baseline_watermarked_source_video_missing")
+        if reference_path is None or source_path is None:
+            continue
+        identity = (
+            str(record.get("generation_model_id") or ""),
+            str(record.get("prompt_id") or ""),
+            str(record.get("seed_id") or ""),
+        )
+        path_pair = (str(reference_path.resolve()), str(source_path.resolve()))
+        identities_to_paths.setdefault(identity, set()).add(path_pair)
+        unique_pairs[(*identity, *path_pair)] = (reference_path, source_path)
+    if not scoped:
+        failures.append("required_baseline_measured_formal_records_missing")
+    if any(len(path_pairs) != 1 for path_pairs in identities_to_paths.values()):
+        failures.append("baseline_identity_maps_to_multiple_watermarked_sources")
+    unit_metrics = [
+        compute_paired_video_quality_metrics(reference_path, source_path)
+        for reference_path, source_path in unique_pairs.values()
+    ]
+    for metrics in unit_metrics:
+        if metrics.get("paired_video_quality_status") != "ready":
+            failures.append(
+                "baseline_paired_video_quality_"
+                + str(metrics.get("paired_video_quality_status") or "unknown")
+            )
+    return _quality_record_payload(
+        method_id=baseline_id,
+        method_role="modern_external_baseline",
+        source_kind="external_baseline_score_records_matched_source_pairs",
+        source_record_count=len(scoped),
+        unit_metrics=unit_metrics,
+        failure_reasons=failures,
+        robustness_record=robustness_record,
+        context=context,
+    )
+
+
 def build_video_quality_metric_records(run_root: str | Path, context: Mapping[str, Any]) -> list[dict[str, Any]]:
-    """从正式视频质量 records 构建论文质量指标汇总 records。"""
+    """构建 SSTW 与全部正式 baseline 的同口径配对质量汇总 records。"""
 
     run_root = Path(run_root)
-    formal_records = [
-        record
-        for record in _read_jsonl(
-            run_root / "records" / "formal_quality_motion_semantic_records.jsonl"
+    formal_records = _read_jsonl(
+        run_root / "records" / "formal_quality_motion_semantic_records.jsonl"
+    )
+    external_records = _read_jsonl(
+        run_root / "records" / "external_baseline_score_records.jsonl"
+    )
+    robustness_by_method = _fair_quality_robustness_by_method(
+        run_root,
+        float(context["target_fpr"]),
+    )
+    records = [
+        _sstw_paired_quality_record(
+            formal_records,
+            robustness_by_method.get(SSTW_METHOD_ID),
+            context,
         )
-        if record.get("method_variant") == "sstw_full_method"
     ]
-    records: list[dict[str, Any]] = []
-    scopes = sorted({str(item.get("motion_claim_role") or "unspecified") for item in formal_records})
-    for role in scopes:
-        scoped = [item for item in formal_records if str(item.get("motion_claim_role") or "unspecified") == role]
-        ready_count = sum(1 for item in scoped if item.get("formal_metric_result_used_for_claim") is True)
-        required_metric_fields = (
-            "mean_brightness",
-            "mean_contrast",
-            "motion_delta_score",
-            "temporal_flicker_score",
-            "semantic_consistency_score",
-        )
-        complete_metric_count = sum(
-            all(item.get(field_name) is not None for field_name in required_metric_fields)
-            for item in scoped
-        )
-        status = (
-            "ready"
-            if scoped
-            and ready_count == len(scoped)
-            and complete_metric_count == len(scoped)
-            else "blocked"
-        )
-        claim_status = _claim_status_for_current_profile(context, status)
-        records.append(with_flow_evidence_protocol_defaults({
-            "record_version": "paper_video_quality_metric_v1",
-            "paper_result_level": context["paper_result_level"],
-            "target_fpr": context["target_fpr"],
-            "quality_metric_scope": role,
-            "quality_metric_source_record_count": len(scoped),
-            "formal_metric_ready_count": ready_count,
-            "formal_metric_blocked_count": len(scoped) - ready_count,
-            "formal_metric_complete_value_count": complete_metric_count,
-            "mean_brightness": _mean_optional(item.get("mean_brightness") for item in scoped),
-            "mean_contrast": _mean_optional(item.get("mean_contrast") for item in scoped),
-            "mean_motion_delta": _mean_optional(item.get("motion_delta_score") for item in scoped),
-            "mean_temporal_flicker": _mean_optional(item.get("temporal_flicker_score") for item in scoped),
-            "mean_semantic_consistency_score": _mean_optional(item.get("semantic_consistency_score") for item in scoped),
-            "video_quality_metric_status": status,
-            "metric_status": "measured_formal" if status == "ready" else "missing",
-            "claim_support_status": claim_status,
-        }, trajectory_source_level="paper_quality_metrics_from_formal_video_records", claim_support_status=claim_status))
+    for baseline_id in context.get("required_modern_external_baseline_adapter_names", []):
+        records.append(_baseline_paired_quality_record(
+            run_root,
+            str(baseline_id),
+            external_records,
+            robustness_by_method.get(str(baseline_id)),
+            context,
+        ))
     return records
 
 
 def audit_video_quality_metric_records(records: list[dict[str, Any]], context: Mapping[str, Any]) -> dict[str, Any]:
-    """审计视频质量指标派生产物是否可用于构图。"""
+    """审计 SSTW 与5个 baseline 是否都具备匹配配对质量。"""
 
-    ready_count = sum(1 for item in records if item.get("video_quality_metric_status") == "ready")
-    decision = "PASS" if records and ready_count == len(records) else "FAIL"
+    required_baselines = {
+        str(value)
+        for value in context.get("required_modern_external_baseline_adapter_names", [])
+        if str(value)
+    }
+    required_methods = {SSTW_METHOD_ID, *required_baselines}
+    ready_methods = {
+        str(item.get("method_id"))
+        for item in records
+        if item.get("video_quality_metric_status") == "ready"
+    }
+    observed_methods = {
+        str(item.get("method_id"))
+        for item in records
+        if item.get("method_id")
+    }
+    sstw_ready = SSTW_METHOD_ID in ready_methods
+    baseline_ready_methods = ready_methods & required_baselines
+    baseline_ready = bool(required_baselines) and baseline_ready_methods == required_baselines
+    protocol_matches = all(
+        item.get("video_quality_comparison_protocol")
+        == context.get("video_quality_comparison_protocol")
+        for item in records
+    )
+    decision = (
+        "PASS"
+        if records
+        and observed_methods == required_methods
+        and ready_methods == required_methods
+        and sstw_ready
+        and baseline_ready
+        and protocol_matches
+        else "FAIL"
+    )
     return {
         "stage_id": "video_quality_metric_builder",
         "paper_result_level": context["paper_result_level"],
         "target_fpr": context["target_fpr"],
+        "video_quality_comparison_protocol": context["video_quality_comparison_protocol"],
         "video_quality_metric_decision": decision,
         "video_quality_metric_record_count": len(records),
-        "video_quality_metric_ready_count": ready_count,
+        "video_quality_metric_ready_count": len(ready_methods),
+        "video_quality_required_method_ids": sorted(required_methods),
+        "video_quality_ready_method_ids": sorted(ready_methods),
+        "video_quality_missing_method_ids": sorted(required_methods - ready_methods),
+        "sstw_paired_video_quality_ready": sstw_ready,
+        "baseline_matched_video_quality_ready": baseline_ready,
+        "baseline_matched_video_quality_ready_method_ids": sorted(baseline_ready_methods),
+        "baseline_matched_video_quality_missing_method_ids": sorted(
+            required_baselines - baseline_ready_methods
+        ),
         "claim_support_status": _claim_status_for_current_profile(context, "ready" if decision == "PASS" else "blocked"),
     }
 
@@ -524,6 +845,7 @@ def _write_figure(
     color: str | None,
     context: Mapping[str, Any],
     source_paths: list[str],
+    alternate_encodings: list[Mapping[str, str]] | None = None,
 ) -> dict[str, Any]:
     """写出统一的轻量 figure manifest。"""
 
@@ -538,6 +860,7 @@ def _write_figure(
         "target_fpr": context["target_fpr"],
         "source_artifact_paths": source_paths,
         "encoding": encoding,
+        "alternate_encodings": [dict(item) for item in (alternate_encodings or [])],
         "figure_rows": rows,
         "claim_support_status": "paper_figure_manifest_from_governed_records",
     }
@@ -565,6 +888,80 @@ def _present_relpaths(run_root: Path, required_relpaths: Iterable[str] = PAPER_R
     return [relpath for relpath in required_relpaths if (run_root / relpath).exists()]
 
 
+def run_video_quality_metric_artifact_builder(
+    run_root: str | Path,
+    config_path: str | Path = DEFAULT_PROTOCOL_CONFIG,
+    *,
+    reuse_ready_records: bool = False,
+) -> dict[str, Any]:
+    """构建跨方法配对质量产物, 并返回 fail-closed decision。
+
+    正式 workflow 在 baseline 证据包仍处于本地工作区时执行本函数。后续论文
+    后处理阶段只复用已经通过审计的 governed records, 从而不需要再次恢复包含
+    全部攻击视频的5个大型 baseline 包。
+    """
+
+    root = Path(run_root)
+    context = _load_protocol_context(config_path)
+    records_path = root / "records" / "video_quality_metric_records.jsonl"
+    existing_records = _read_jsonl(records_path) if reuse_ready_records else []
+    existing_audit = (
+        audit_video_quality_metric_records(existing_records, context)
+        if existing_records
+        else {}
+    )
+    if existing_audit.get("video_quality_metric_decision") == "PASS":
+        quality_records = existing_records
+        quality_audit = existing_audit
+    else:
+        quality_records = build_video_quality_metric_records(root, context)
+        quality_audit = audit_video_quality_metric_records(quality_records, context)
+    write_jsonl(records_path, quality_records)
+    write_csv(root / "tables" / "video_quality_metric_table.csv", quality_records)
+    write_json(root / "artifacts" / "video_quality_metric_decision.json", quality_audit)
+    _write_markdown_report(
+        root / "reports" / "video_quality_metric_report.md",
+        "Video Quality Metric Report",
+        quality_audit,
+    )
+    _write_figure(
+        root / "figures" / "video_quality_robustness_tradeoff_figure.json",
+        figure_id="video_quality_robustness_tradeoff_figure",
+        title="Paired video quality versus fixed-FPR robustness trade-off",
+        rows=[
+            {
+                "method_id": item.get("method_id"),
+                "method_role": item.get("method_role"),
+                "mean_paired_watermark_psnr": item.get("mean_paired_watermark_psnr"),
+                "mean_paired_watermark_ssim": item.get("mean_paired_watermark_ssim"),
+                "mean_paired_temporal_delta_error": item.get("mean_paired_temporal_delta_error"),
+                "robustness_tpr_at_target_fpr": item.get("robustness_tpr_at_target_fpr"),
+                "robustness_tpr_ci_lower": item.get("robustness_tpr_ci_lower"),
+                "robustness_tpr_ci_upper": item.get("robustness_tpr_ci_upper"),
+            }
+            for item in quality_records
+            if item.get("video_quality_metric_status") == "ready"
+        ],
+        x="mean_paired_watermark_psnr",
+        y="robustness_tpr_at_target_fpr",
+        color="method_id",
+        context=context,
+        source_paths=[
+            "records/video_quality_metric_records.jsonl",
+            "records/formal_quality_motion_semantic_records.jsonl",
+            "records/external_baseline_score_records.jsonl",
+            "records/fair_detection_calibration_records.jsonl",
+        ],
+        alternate_encodings=[{
+            "panel_id": "paired_ssim_vs_fixed_fpr_robustness",
+            "x": "mean_paired_watermark_ssim",
+            "y": "robustness_tpr_at_target_fpr",
+            "color": "method_id",
+        }],
+    )
+    return quality_audit
+
+
 def run_paper_result_artifact_builders(
     run_root: str | Path,
     config_path: str | Path = DEFAULT_PROTOCOL_CONFIG,
@@ -574,12 +971,11 @@ def run_paper_result_artifact_builders(
     run_root = Path(run_root)
     context = _load_protocol_context(config_path)
 
-    quality_records = build_video_quality_metric_records(run_root, context)
-    quality_audit = audit_video_quality_metric_records(quality_records, context)
-    write_jsonl(run_root / "records" / "video_quality_metric_records.jsonl", quality_records)
-    write_csv(run_root / "tables" / "video_quality_metric_table.csv", quality_records)
-    write_json(run_root / "artifacts" / "video_quality_metric_decision.json", quality_audit)
-    _write_markdown_report(run_root / "reports" / "video_quality_metric_report.md", "Video Quality Metric Report", quality_audit)
+    quality_audit = run_video_quality_metric_artifact_builder(
+        run_root,
+        config_path,
+        reuse_ready_records=True,
+    )
 
     low_fpr_records = build_low_fpr_curve_records(run_root, context)
     low_fpr_audit = audit_low_fpr_curve_records(low_fpr_records, context)
@@ -609,24 +1005,6 @@ def run_paper_result_artifact_builders(
     write_json(run_root / "artifacts" / "real_world_attack_decision.json", real_world_audit)
     _write_markdown_report(run_root / "reports" / "real_world_attack_report.md", "Real World Attack Report", real_world_audit)
 
-    _write_figure(
-        run_root / "figures" / "video_quality_robustness_tradeoff_figure.json",
-        figure_id="video_quality_robustness_tradeoff_figure",
-        title="Video quality versus robustness trade-off",
-        rows=[
-            {
-                "quality_metric_scope": item.get("quality_metric_scope"),
-                "mean_semantic_consistency_score": item.get("mean_semantic_consistency_score"),
-                "formal_metric_ready_count": item.get("formal_metric_ready_count"),
-            }
-            for item in quality_records
-        ],
-        x="mean_semantic_consistency_score",
-        y="formal_metric_ready_count",
-        color="quality_metric_scope",
-        context=context,
-        source_paths=["records/video_quality_metric_records.jsonl", "records/formal_quality_motion_semantic_records.jsonl"],
-    )
     _write_figure(
         run_root / "figures" / "low_fpr_curve_figure.json",
         figure_id="low_fpr_curve_figure",
@@ -713,8 +1091,20 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="构建论文级结果图表和补充实验产物。")
     parser.add_argument("--run-root", required=True)
     parser.add_argument("--config-path", default=DEFAULT_PROTOCOL_CONFIG)
+    parser.add_argument(
+        "--quality-only",
+        action="store_true",
+        help="仅在 baseline 视频仍可访问的正式比较阶段构建跨方法配对质量产物。",
+    )
     args = parser.parse_args()
-    payload = run_paper_result_artifact_builders(args.run_root, args.config_path)
+    if args.quality_only:
+        payload = run_video_quality_metric_artifact_builder(
+            args.run_root,
+            args.config_path,
+            reuse_ready_records=False,
+        )
+    else:
+        payload = run_paper_result_artifact_builders(args.run_root, args.config_path)
     print(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True))
 
 

@@ -36,6 +36,7 @@
     20,
     24
   ],
+  "replay_likelihood_calibration_step_count": 20,
   "required_claims": [
     {
       "claim_id": "claim_1_velocity_constraint_detectable_watermark",
@@ -65,6 +66,7 @@
       "required_evidence": [
         "attacked_video_vae_endpoint",
         "key_independent_prompt_conditioned_model_velocity_inversion",
+        "model_specific_calibration_clean_video_replay_noise_fit",
         "null_vs_candidate_forward_log_likelihood_ratio",
         "multi_time_grid_replay_uncertainty",
         "dual_hypothesis_state_space_marginal_likelihood_probability_posterior",
@@ -89,12 +91,13 @@
     "shared_runtime_and_adaptive_attack_protocol",
     "modern_external_baseline_comparison",
     "video_quality_motion_semantic_metrics",
+    "matched_reference_cross_method_video_quality_metrics",
     "confidence_intervals_and_low_fpr_statistics",
     "claim_audit_and_rebuild_manifest",
     "key_independent_replay_hypothesis_testing",
     "group_cross_fitted_probability_calibration",
     "dual_hypothesis_linear_gaussian_state_space_filtering_smoothing",
-    "gaussian_replay_residual_likelihood",
+    "calibration_fitted_gaussian_replay_residual_likelihood",
     "measured_flow_state_observation_sequence",
     "controlled_random_seed_velocity_intervention",
     "real_semantic_negative_hypothesis_families",

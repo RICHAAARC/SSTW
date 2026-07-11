@@ -321,7 +321,7 @@ def _write_config(path: Path, profile: str, target_fpr: float) -> None:
                 "minimum_sstw_advantage_baseline_count": len(MODERN_BASELINES),
                 "minimum_sstw_tpr_at_target_fpr_difference": 0.0,
                 "require_sstw_advantage_ci_lower_above_zero": True,
-                f"minimum_{profile}_internal_ablation_trace_count": 2,
+                "minimum_internal_ablation_trace_count": 2,
                 "required_internal_ablation_variants": [
                     "sstw_full_method",
                     "endpoint_only_control",

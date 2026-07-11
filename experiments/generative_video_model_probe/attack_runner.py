@@ -172,6 +172,18 @@ def build_runtime_attack_records(
                 "generation_model_family": generation_record.get(
                     "generation_model_family"
                 ),
+                "generation_model_requested_revision": generation_record.get(
+                    "generation_model_requested_revision"
+                ),
+                "generation_model_commit_or_hash": generation_record.get(
+                    "generation_model_commit_or_hash"
+                ),
+                "generation_model_revision_source": generation_record.get(
+                    "generation_model_revision_source"
+                ),
+                "generation_model_revision_resolution_status": generation_record.get(
+                    "generation_model_revision_resolution_status"
+                ),
                 "cross_model_role": generation_record.get("cross_model_role"),
                 "prompt_id": generation_record.get("prompt_id"),
                 "seed_id": generation_record.get("seed_id"),
@@ -312,6 +324,19 @@ def build_cross_sample_adaptive_video_records(run_root: str | Path) -> list[dict
             record = {
                 "record_version": "cross_sample_adaptive_video_attack_v1",
                 "generation_model_id": source.get("generation_model_id"),
+                "generation_model_family": source.get("generation_model_family"),
+                "generation_model_requested_revision": source.get(
+                    "generation_model_requested_revision"
+                ),
+                "generation_model_commit_or_hash": source.get(
+                    "generation_model_commit_or_hash"
+                ),
+                "generation_model_revision_source": source.get(
+                    "generation_model_revision_source"
+                ),
+                "generation_model_revision_resolution_status": source.get(
+                    "generation_model_revision_resolution_status"
+                ),
                 "prompt_id": source.get("prompt_id"),
                 "seed_id": source.get("seed_id"),
                 "watermark_key_derivation_id": source.get(

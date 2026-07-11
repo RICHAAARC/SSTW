@@ -325,4 +325,4 @@ SSTW_WORKFLOW_PROFILE=probe_paper
 SSTW_WORKFLOW_PROFILE=pilot_paper
 ```
 
-`full_paper` profile 当前只登记协议入口, 不允许在未通过 probe_paper、pilot_paper 和后续 full_paper checker 前作为可运行 claim profile 使用。
+`full_paper` 与 `probe_paper`、`pilot_paper` 使用同一方法、攻击、baseline 和证据闭合流程, 可以由同一个服务器 workflow 真实运行。阶段推进仍要求先完成前级 gate, 但该前置条件只治理论文结论冻结顺序, 不得把 `full_paper` 改写为仅登记而不可执行的弱入口。

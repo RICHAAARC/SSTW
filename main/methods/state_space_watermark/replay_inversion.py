@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from math import exp, log, pi
+from math import exp, isfinite, log, pi, sqrt
 from statistics import mean, pstdev
 from typing import Any, Callable, Iterable, Sequence
 
@@ -11,7 +11,7 @@ from typing import Any, Callable, Iterable, Sequence
 VelocityFunction = Callable[[Any, Any, int], Any]
 
 REPLAY_GAUSSIAN_LIKELIHOOD_MODEL_ID = (
-    "endpoint_energy_scaled_isotropic_gaussian_per_latent_dimension"
+    "calibration_fitted_endpoint_relative_isotropic_gaussian_per_latent_dimension"
 )
 
 
@@ -39,6 +39,9 @@ class ReplayTrajectory:
     candidate_log_likelihood_per_dimension: float
     null_log_likelihood_per_dimension: float
     replay_likelihood_model_id: str
+    replay_likelihood_calibration_protocol: str
+    replay_likelihood_calibration_cluster_count: int
+    relative_observation_noise_standard_deviation: float
     reverse_step_count: int
     forward_step_count: int
 
@@ -58,6 +61,9 @@ class ReplayUncertainty:
     candidate_log_likelihood_per_dimension_mean: float
     null_log_likelihood_per_dimension_mean: float
     replay_likelihood_model_id: str
+    replay_likelihood_calibration_protocol: str
+    replay_likelihood_calibration_cluster_count: int
+    relative_observation_noise_standard_deviation: float
 
     def as_dict(self) -> dict[str, float | int | str]:
         """转换为正式 replay records 字段。"""
@@ -90,16 +96,96 @@ class ReplayUncertainty:
                 8,
             ),
             "replay_likelihood_model_id": self.replay_likelihood_model_id,
+            "replay_likelihood_calibration_protocol": (
+                self.replay_likelihood_calibration_protocol
+            ),
+            "replay_likelihood_calibration_cluster_count": (
+                self.replay_likelihood_calibration_cluster_count
+            ),
+            "replay_relative_observation_noise_standard_deviation": round(
+                self.relative_observation_noise_standard_deviation,
+                10,
+            ),
         }
 
 
 @dataclass(frozen=True)
 class ReplayGaussianLikelihoodConfig:
-    """定义 endpoint replay 残差的各向同性高斯观测模型。"""
+    """定义 endpoint replay 残差的各向同性高斯观测模型。
 
-    relative_observation_noise_standard_deviation: float = 0.05
+    正式论文路径必须显式传入由 calibration clean videos 拟合的相对标准差。
+    核心 API 不提供固定经验默认值，防止调用方无意中把预设常数写成概率模型。
+    """
+
+    relative_observation_noise_standard_deviation: float
     minimum_observation_noise_variance: float = 1e-8
     likelihood_model_id: str = REPLAY_GAUSSIAN_LIKELIHOOD_MODEL_ID
+    calibration_protocol: str = "explicit_likelihood_configuration"
+    calibration_cluster_count: int = 0
+
+    def as_dict(self) -> dict[str, float | int | str]:
+        """返回可冻结到 governed artifact 的噪声模型参数。"""
+
+        return {
+            "replay_likelihood_model_id": self.likelihood_model_id,
+            "replay_likelihood_calibration_protocol": self.calibration_protocol,
+            "replay_likelihood_calibration_cluster_count": (
+                self.calibration_cluster_count
+            ),
+            "replay_relative_observation_noise_standard_deviation": (
+                self.relative_observation_noise_standard_deviation
+            ),
+            "replay_minimum_observation_noise_variance": (
+                self.minimum_observation_noise_variance
+            ),
+        }
+
+
+def fit_replay_gaussian_likelihood_config(
+    normalized_null_residual_variances: Sequence[float],
+    cluster_ids: Sequence[str],
+    *,
+    minimum_observation_noise_variance: float = 1e-8,
+) -> ReplayGaussianLikelihoodConfig:
+    """用 calibration clean-video null residual 拟合相对高斯噪声。
+
+    每个输入值等于 `null residual MSE / observed endpoint energy`。同一视频的
+    多时间网格先在簇内求均值，再让每个视频簇等权参与最大似然方差估计。
+    这一结构可迁移到其他 replay 模型，且不会让网格数量扩增统计样本量。
+    """
+
+    if len(normalized_null_residual_variances) != len(cluster_ids):
+        raise ValueError("replay 噪声样本与视频簇标识长度不一致")
+    grouped: dict[str, list[float]] = {}
+    for raw_value, raw_cluster_id in zip(
+        normalized_null_residual_variances,
+        cluster_ids,
+    ):
+        cluster_id = str(raw_cluster_id).strip()
+        value = float(raw_value)
+        if not cluster_id:
+            raise ValueError("replay 噪声 calibration 缺少视频簇标识")
+        if not isfinite(value) or value <= 0.0:
+            raise ValueError("replay 归一化 null residual variance 必须为有限正数")
+        grouped.setdefault(cluster_id, []).append(value)
+    if len(grouped) < 2:
+        raise ValueError("replay 噪声 calibration 至少需要2个独立 clean-video 簇")
+    cluster_equal_variance = mean(
+        mean(values)
+        for values in grouped.values()
+    )
+    relative_std = sqrt(max(cluster_equal_variance, 1e-12))
+    return ReplayGaussianLikelihoodConfig(
+        relative_observation_noise_standard_deviation=relative_std,
+        minimum_observation_noise_variance=float(
+            minimum_observation_noise_variance
+        ),
+        likelihood_model_id=REPLAY_GAUSSIAN_LIKELIHOOD_MODEL_ID,
+        calibration_protocol=(
+            "calibration_clean_video_null_residual_cluster_equal_mle"
+        ),
+        calibration_cluster_count=len(grouped),
+    )
 
 
 @dataclass(frozen=True)
@@ -120,7 +206,7 @@ def gaussian_replay_residual_likelihood(
     null_endpoint: Any,
     observed_endpoint: Any,
     *,
-    config: ReplayGaussianLikelihoodConfig | None = None,
+    config: ReplayGaussianLikelihoodConfig,
 ) -> ReplayGaussianLikelihood:
     """按预注册高斯残差模型计算候选相对 null 的逐维真实 LLR。
 
@@ -129,7 +215,6 @@ def gaussian_replay_residual_likelihood(
     因而 LLR 是两个明确概率模型的对数似然差，而不是误差比改名。
     """
 
-    config = config or ReplayGaussianLikelihoodConfig()
     relative_std = float(config.relative_observation_noise_standard_deviation)
     if relative_std <= 0.0:
         raise ValueError("replay 相对观测噪声标准差必须为正数")
@@ -160,6 +245,8 @@ def gaussian_replay_residual_likelihood(
 def replay_step_reliability_weight(
     trajectory: ReplayTrajectory,
     state_index: int,
+    *,
+    config: ReplayGaussianLikelihoodConfig | None = None,
 ) -> float:
     """根据单步候选 replay 残差返回可复用的路径积分可靠性权重。
 
@@ -180,6 +267,18 @@ def replay_step_reliability_weight(
         trajectory.forward_states[index],
         trajectory.null_forward_states[index],
         trajectory.reverse_states[index],
+        config=config or ReplayGaussianLikelihoodConfig(
+            relative_observation_noise_standard_deviation=(
+                trajectory.relative_observation_noise_standard_deviation
+            ),
+            likelihood_model_id=trajectory.replay_likelihood_model_id,
+            calibration_protocol=(
+                trajectory.replay_likelihood_calibration_protocol
+            ),
+            calibration_cluster_count=(
+                trajectory.replay_likelihood_calibration_cluster_count
+            ),
+        ),
     )
     normalized_residual = (
         likelihood.candidate_residual_mean_squared_error
@@ -244,6 +343,8 @@ def run_key_independent_inversion_hypothesis(
     schedule: Sequence[FlowSchedulePoint],
     inversion_velocity_function: VelocityFunction,
     candidate_velocity_function: VelocityFunction,
+    *,
+    likelihood_config: ReplayGaussianLikelihoodConfig,
 ) -> ReplayTrajectory:
     """在同一固定初态上比较 null 与候选 key 的 forward hypothesis。
 
@@ -273,6 +374,7 @@ def run_key_independent_inversion_hypothesis(
         candidate_forward_states[-1],
         null_forward_states[-1],
         endpoint_latent,
+        config=likelihood_config,
     )
     return ReplayTrajectory(
         reverse_states=tuple(reverse_states),
@@ -291,6 +393,15 @@ def run_key_independent_inversion_hypothesis(
         ),
         null_log_likelihood_per_dimension=likelihood.null_log_likelihood_per_dimension,
         replay_likelihood_model_id=likelihood.likelihood_model_id,
+        replay_likelihood_calibration_protocol=(
+            likelihood_config.calibration_protocol
+        ),
+        replay_likelihood_calibration_cluster_count=(
+            likelihood_config.calibration_cluster_count
+        ),
+        relative_observation_noise_standard_deviation=(
+            likelihood_config.relative_observation_noise_standard_deviation
+        ),
         reverse_step_count=len(reverse_states) - 1,
         forward_step_count=len(candidate_forward_states) - 1,
     )
@@ -301,6 +412,8 @@ def evaluate_candidate_on_fixed_inversion(
     schedule: Sequence[FlowSchedulePoint],
     fixed_trajectory: ReplayTrajectory,
     candidate_velocity_function: VelocityFunction,
+    *,
+    likelihood_config: ReplayGaussianLikelihoodConfig,
 ) -> ReplayTrajectory:
     """在已有 key 无关反演路径上只执行新的候选 forward hypothesis。
 
@@ -322,6 +435,7 @@ def evaluate_candidate_on_fixed_inversion(
         candidate_forward_states[-1],
         fixed_trajectory.null_forward_states[-1],
         endpoint_latent,
+        config=likelihood_config,
     )
     return ReplayTrajectory(
         reverse_states=fixed_trajectory.reverse_states,
@@ -340,6 +454,15 @@ def evaluate_candidate_on_fixed_inversion(
         ),
         null_log_likelihood_per_dimension=likelihood.null_log_likelihood_per_dimension,
         replay_likelihood_model_id=likelihood.likelihood_model_id,
+        replay_likelihood_calibration_protocol=(
+            likelihood_config.calibration_protocol
+        ),
+        replay_likelihood_calibration_cluster_count=(
+            likelihood_config.calibration_cluster_count
+        ),
+        relative_observation_noise_standard_deviation=(
+            likelihood_config.relative_observation_noise_standard_deviation
+        ),
         reverse_step_count=fixed_trajectory.reverse_step_count,
         forward_step_count=len(candidate_forward_states) - 1,
     )
@@ -353,6 +476,17 @@ def estimate_replay_uncertainty(replays: Iterable[ReplayTrajectory]) -> ReplayUn
     rows = list(replays)
     if not rows:
         raise ValueError("replay uncertainty 至少需要一次 replay")
+    likelihood_signatures = {
+        (
+            row.replay_likelihood_model_id,
+            row.replay_likelihood_calibration_protocol,
+            row.replay_likelihood_calibration_cluster_count,
+            row.relative_observation_noise_standard_deviation,
+        )
+        for row in rows
+    }
+    if len(likelihood_signatures) != 1:
+        raise ValueError("多网格 replay 必须共享同一个冻结高斯噪声模型")
     errors = [float(row.candidate_cycle_relative_error) for row in rows]
     null_errors = [float(row.null_cycle_relative_error) for row in rows]
     likelihood_ratios = [float(row.replay_log_likelihood_ratio) for row in rows]
@@ -391,4 +525,13 @@ def estimate_replay_uncertainty(replays: Iterable[ReplayTrajectory]) -> ReplayUn
         candidate_log_likelihood_per_dimension_mean=mean(candidate_log_likelihoods),
         null_log_likelihood_per_dimension_mean=mean(null_log_likelihoods),
         replay_likelihood_model_id=rows[0].replay_likelihood_model_id,
+        replay_likelihood_calibration_protocol=(
+            rows[0].replay_likelihood_calibration_protocol
+        ),
+        replay_likelihood_calibration_cluster_count=(
+            rows[0].replay_likelihood_calibration_cluster_count
+        ),
+        relative_observation_noise_standard_deviation=(
+            rows[0].relative_observation_noise_standard_deviation
+        ),
     )

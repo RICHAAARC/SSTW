@@ -99,6 +99,18 @@ def _state_space_detection_record_ready(record: dict[str, Any]) -> bool:
         and record.get("flow_state_log_likelihood_ratio") is not None
         and record.get("replay_likelihood_model_id")
         == REPLAY_GAUSSIAN_LIKELIHOOD_MODEL_ID
+        and record.get("replay_likelihood_calibration_protocol")
+        == "calibration_clean_video_null_residual_cluster_equal_mle"
+        and int(record.get("replay_likelihood_calibration_cluster_count") or 0)
+        >= 2
+        and (
+            _safe_float(
+                record.get(
+                    "replay_relative_observation_noise_standard_deviation"
+                )
+            )
+            or 0.0
+        ) > 0.0
     )
 
 
@@ -120,6 +132,15 @@ def _state_space_provenance_fields(record: dict[str, Any]) -> dict[str, Any]:
             "flow_state_log_likelihood_ratio"
         ),
         "replay_likelihood_model_id": record.get("replay_likelihood_model_id"),
+        "replay_likelihood_calibration_protocol": record.get(
+            "replay_likelihood_calibration_protocol"
+        ),
+        "replay_likelihood_calibration_cluster_count": record.get(
+            "replay_likelihood_calibration_cluster_count"
+        ),
+        "replay_relative_observation_noise_standard_deviation": record.get(
+            "replay_relative_observation_noise_standard_deviation"
+        ),
     }
 
 

@@ -18,8 +18,9 @@ from main.methods.state_space_watermark.formal_detector import (
     FrozenFlowDetectorCalibration,
     FlowDetectorMechanismConfig,
     apply_frozen_flow_detector as apply_core_frozen_flow_detector,
-    fit_flow_evidence_calibration as fit_core_flow_evidence_calibration,
-    observation_sequence_from_flow_evidence_record,
+    fit_flow_detector_calibration as fit_core_flow_detector_calibration,
+    flow_evidence_observation_sequence_from_mappings,
+    frozen_flow_detector_calibration_from_dict,
 )
 
 
@@ -260,12 +261,14 @@ def observation_sequence_for_method_variant(
 ) -> list[Any]:
     """返回实验变换后的核心状态空间观测，供验证变换语义复用。"""
 
-    return observation_sequence_from_flow_evidence_record(
-        transform_flow_evidence_record_for_method_variant(
-            record,
-            method_variant=method_variant,
-        )
+    transformed = transform_flow_evidence_record_for_method_variant(
+        record,
+        method_variant=method_variant,
     )
+    raw_sequence = transformed.get("flow_state_observation_sequence")
+    if not isinstance(raw_sequence, list):
+        raise TypeError("governed flow evidence record 的 phase 序列必须为列表")
+    return flow_evidence_observation_sequence_from_mappings(raw_sequence)
 
 
 def fit_flow_evidence_calibration(
@@ -274,17 +277,58 @@ def fit_flow_evidence_calibration(
     method_variant: str,
     target_fpr: float,
 ) -> FrozenFlowDetectorCalibration:
-    """拟合一个外层实验变体的核心状态空间检测器。"""
+    """验证 governed calibration records 并调用纯核心拟合 API。
+
+    该函数属于项目特定的实验适配层。这里负责解释数据分区、样本角色和
+    统计簇；`main/` 只接收已经提取好的观测序列、二元标签与簇标识。
+    """
 
     definition = formal_method_variant_definition(method_variant)
-    return fit_core_flow_evidence_calibration(
+    rows = [dict(record) for record in calibration_records]
+    invalid_splits = sorted({
+        str(row.get("split") or "missing")
+        for row in rows
+        if row.get("split") != "calibration"
+    })
+    if invalid_splits:
+        raise ValueError(
+            "概率后验与 fixed-FPR 阈值只能使用 calibration split, "
+            f"收到: {invalid_splits}"
+        )
+    allowed_sample_roles = {
+        "attacked_positive",
+        "clean_negative",
+        "controlled_negative",
+    }
+    invalid_sample_roles = sorted({
+        str(row.get("sample_role") or "missing")
+        for row in rows
+        if row.get("sample_role") not in allowed_sample_roles
+    })
+    if invalid_sample_roles:
+        raise ValueError(
+            "概率后验 calibration 包含未知 sample_role: "
+            f"{invalid_sample_roles}"
+        )
+    cluster_ids: list[str] = []
+    for row in rows:
+        cluster_id = row.get("statistical_cluster_id")
+        if not cluster_id:
+            raise KeyError("正式 calibration record 缺少 statistical_cluster_id")
+        cluster_ids.append(str(cluster_id))
+    return fit_core_flow_detector_calibration(
         [
-            transform_flow_evidence_record_for_method_variant(
+            observation_sequence_for_method_variant(
                 record,
                 method_variant=method_variant,
             )
-            for record in calibration_records
+            for record in rows
         ],
+        [
+            1 if row.get("sample_role") == "attacked_positive" else 0
+            for row in rows
+        ],
+        cluster_ids,
         target_fpr=target_fpr,
         mechanism_config=definition.detector_mechanism,
         detector_configuration_id=method_variant,
@@ -295,13 +339,43 @@ def apply_frozen_flow_detector(
     record: Mapping[str, Any],
     calibration: FrozenFlowDetectorCalibration,
 ) -> dict[str, Any]:
-    """按冻结 calibration 的实验配置变换 held-out 记录并执行核心检测。"""
+    """适配 governed record, 并补充正式实验所需的来源字段。"""
 
     method_variant = calibration.detector_configuration_id
-    return apply_core_frozen_flow_detector(
-        transform_flow_evidence_record_for_method_variant(
+    core_decision = apply_core_frozen_flow_detector(
+        observation_sequence_for_method_variant(
             record,
             method_variant=method_variant,
         ),
         calibration,
     )
+    return {
+        **core_decision,
+        "threshold_source_split": "calibration",
+        "test_time_threshold_update_blocked": True,
+        "metric_status": "measured_formal",
+    }
+
+
+def frozen_flow_detector_calibration_artifact(
+    calibration: FrozenFlowDetectorCalibration,
+) -> dict[str, Any]:
+    """把纯核心 calibration 转写为受治理的正式阈值 artifact。"""
+
+    return {
+        **calibration.as_dict(),
+        "threshold_source_split": "calibration",
+        "test_time_threshold_update_blocked": True,
+    }
+
+
+def frozen_flow_detector_calibration_from_governed_artifact(
+    payload: Mapping[str, Any],
+) -> FrozenFlowDetectorCalibration:
+    """验证正式阈值来源后, 重建只读核心检测器。"""
+
+    if payload.get("threshold_source_split") != "calibration":
+        raise ValueError("正式阈值 artifact 必须来自 calibration split")
+    if payload.get("test_time_threshold_update_blocked") is not True:
+        raise ValueError("正式阈值 artifact 必须禁止测试时更新")
+    return frozen_flow_detector_calibration_from_dict(payload)

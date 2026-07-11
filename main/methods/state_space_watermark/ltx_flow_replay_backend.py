@@ -24,6 +24,7 @@ from main.methods.state_space_watermark.path_observation import (
 )
 from main.methods.state_space_watermark.replay_inversion import (
     FlowSchedulePoint,
+    ReplayGaussianLikelihoodConfig,
     ReplayTrajectory,
     ReplayUncertainty,
     estimate_replay_uncertainty,
@@ -52,6 +53,7 @@ class LTXFlowReplayResult:
     latent_layout: PackedTokenFlowLatentLayout
     primary_schedule: tuple[FlowSchedulePoint, ...]
     primary_replay_index: int
+    replay_likelihood_config: ReplayGaussianLikelihoodConfig
 
 
 def build_ltx_latent_layout(
@@ -329,6 +331,7 @@ def score_ltx_replay_trajectory_for_key(
     latent_layout: PackedTokenFlowLatentLayout,
     key_text: str,
     tubelet_config: FlowTubeletKeyCodeConfig | None = None,
+    likelihood_config: ReplayGaussianLikelihoodConfig,
 ) -> dict[str, float | int | None]:
     """在固定 LTX packed replay 路径上计算候选 key 的路径投影。"""
 
@@ -359,6 +362,7 @@ def score_ltx_replay_trajectory_for_key(
         step_record["replay_reliability_weight"] = replay_step_reliability_weight(
             trajectory,
             step_index + 1,
+            config=likelihood_config,
         )
         records.append(step_record)
     return aggregate_path_observations(records)
@@ -413,6 +417,7 @@ def evaluate_fixed_ltx_replay_hypothesis_for_key(
         replay.primary_schedule,
         fixed,
         keyed_velocity,
+        likelihood_config=replay.replay_likelihood_config,
     )
     return hypothesis, score_ltx_replay_trajectory_for_key(
         hypothesis,
@@ -420,6 +425,7 @@ def evaluate_fixed_ltx_replay_hypothesis_for_key(
         latent_layout=replay.latent_layout,
         key_text=key_text,
         tubelet_config=tubelet_config,
+        likelihood_config=replay.replay_likelihood_config,
     )
 
 
@@ -437,6 +443,7 @@ def run_ltx_control_replay(
     guidance_scale: float = 3.0,
     frame_rate: int = 8,
     tubelet_config: FlowTubeletKeyCodeConfig | None = None,
+    likelihood_config: ReplayGaussianLikelihoodConfig,
 ) -> tuple[ReplayTrajectory, tuple[FlowSchedulePoint, ...], dict[str, float | int | None]]:
     """使用显式 prompt 或 scheduler 执行一个可审计的 LTX replay control。
 
@@ -471,6 +478,7 @@ def run_ltx_control_replay(
             schedule,
             fixed_trajectory,
             keyed_velocity,
+            likelihood_config=likelihood_config,
         )
         if fixed_trajectory is not None
         else run_key_independent_inversion_hypothesis(
@@ -478,6 +486,7 @@ def run_ltx_control_replay(
             schedule,
             velocity,
             keyed_velocity,
+            likelihood_config=likelihood_config,
         )
     )
     path_evidence = score_ltx_replay_trajectory_for_key(
@@ -486,6 +495,7 @@ def run_ltx_control_replay(
         latent_layout=latent_layout,
         key_text=key_text,
         tubelet_config=tubelet_config,
+        likelihood_config=likelihood_config,
     )
     return trajectory, tuple(schedule), path_evidence
 
@@ -501,6 +511,7 @@ def run_ltx_attacked_video_replay(
     frame_rate: int = 8,
     replay_step_counts: Sequence[int] = (16, 20, 24),
     tubelet_config: FlowTubeletKeyCodeConfig | None = None,
+    likelihood_config: ReplayGaussianLikelihoodConfig,
 ) -> LTXFlowReplayResult:
     """从攻击后视频执行多时间网格 LTX inversion/replay 并返回正式证据。"""
 
@@ -543,6 +554,7 @@ def run_ltx_attacked_video_replay(
             schedule,
             base_velocity,
             keyed_velocity,
+            likelihood_config=likelihood_config,
         ))
     uncertainty = estimate_replay_uncertainty(replays)
     primary_index = len(replays) // 2
@@ -552,6 +564,7 @@ def run_ltx_attacked_video_replay(
         latent_layout=layout,
         key_text=key_text,
         tubelet_config=tubelet_config,
+        likelihood_config=likelihood_config,
     )
     return LTXFlowReplayResult(
         endpoint_evidence=endpoint_evidence,
@@ -565,4 +578,5 @@ def run_ltx_attacked_video_replay(
         latent_layout=layout,
         primary_schedule=tuple(schedules[primary_index]),
         primary_replay_index=primary_index,
+        replay_likelihood_config=likelihood_config,
     )

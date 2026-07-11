@@ -8,6 +8,11 @@ from pathlib import Path
 import pytest
 
 from evaluation.attacks.video_runtime_attack_protocol import load_protocol_config_with_shared_attack_protocol
+from evaluation.protocol.paper_profile_contract import (
+    COMMON_CONTRACT_PATH_FIELD,
+    PAPER_PROFILE_ONLY_FIELD_CATEGORIES,
+    PAPER_PROFILE_ONLY_FIELDS,
+)
 
 
 PAPER_PROFILE_PROTOCOL_CONFIGS = (
@@ -37,6 +42,7 @@ PAPER_PROFILE_ARTIFACT_REQUIREMENT_FIELDS = (
     "require_sstw_measured_formal_records",
     "require_statistical_confidence_interval_decision",
     "require_video_quality_metric_records",
+    "require_baseline_matched_video_quality_metrics",
 )
 
 
@@ -142,6 +148,16 @@ def test_paper_profiles_match_the_same_common_mechanism_contract() -> None:
 
     contract_path = Path("configs/protocol/paper_profile_common_contract.json")
     contract = json.loads(contract_path.read_text(encoding="utf-8"))
+    core_method = json.loads(
+        Path("configs/methods/sstw_core_method.json").read_text(encoding="utf-8")
+    )
+    replay_likelihood = core_method["replay_likelihood"]
+    assert contract[
+        "minimum_replay_likelihood_calibration_clean_video_cluster_count"
+    ] == replay_likelihood["minimum_calibration_clean_video_cluster_count"]
+    assert contract["replay_likelihood_calibration_step_count"] == (
+        replay_likelihood["calibration_replay_step_count"]
+    )
     for config_path in PAPER_PROFILE_PROTOCOL_CONFIGS:
         config = json.loads(config_path.read_text(encoding="utf-8"))
         assert config["paper_profile_common_contract_path"] == contract_path.as_posix()
@@ -149,6 +165,98 @@ def test_paper_profiles_match_the_same_common_mechanism_contract() -> None:
             key: config.get(key)
             for key in contract
         } == contract
+
+
+@pytest.mark.constraint
+def test_every_profile_only_field_has_an_explicit_non_mechanism_category() -> None:
+    """公共契约之外的字段必须进入显式允许列表, 不能使用宽泛前缀绕过。"""
+
+    contract = json.loads(
+        Path("configs/protocol/paper_profile_common_contract.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    categorized = set().union(*PAPER_PROFILE_ONLY_FIELD_CATEGORIES.values())
+    assert categorized == set(PAPER_PROFILE_ONLY_FIELDS)
+    for config_path in PAPER_PROFILE_PROTOCOL_CONFIGS:
+        config = json.loads(config_path.read_text(encoding="utf-8"))
+        profile_only = (
+            set(config) - set(contract) - {COMMON_CONTRACT_PATH_FIELD}
+        )
+        assert profile_only <= set(PAPER_PROFILE_ONLY_FIELDS)
+
+
+@pytest.mark.constraint
+def test_unregistered_profile_evidence_key_is_rejected_fail_closed(
+    tmp_path: Path,
+) -> None:
+    """新增机制或证据键未登记时必须在加载阶段失败。"""
+
+    source = json.loads(PAPER_PROFILE_PROTOCOL_CONFIGS[0].read_text(encoding="utf-8"))
+    source["require_unregistered_claim_evidence"] = True
+    config_path = tmp_path / "probe_paper_unregistered_evidence.json"
+    config_path.write_text(
+        json.dumps(source, ensure_ascii=False),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="未登记的层级差异字段"):
+        load_protocol_config_with_shared_attack_protocol(config_path)
+
+
+@pytest.mark.constraint
+def test_profile_target_fpr_cannot_drift_within_the_allowed_scale_category(
+    tmp_path: Path,
+) -> None:
+    """profile-only 字段虽允许变化, 但每个正式层级的目标 FPR 仍必须冻结。"""
+
+    source = json.loads(PAPER_PROFILE_PROTOCOL_CONFIGS[0].read_text(encoding="utf-8"))
+    source["target_fpr"] = 0.2
+    config_path = tmp_path / "probe_paper_wrong_fpr.json"
+    config_path.write_text(json.dumps(source, ensure_ascii=False), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="target_fpr 必须为"):
+        load_protocol_config_with_shared_attack_protocol(config_path)
+
+
+@pytest.mark.constraint
+def test_three_formal_profiles_use_one_parameterized_gate_entrypoint() -> None:
+    """三档 profile 必须运行同一 gate, profile 专属旧 gate 不得进入 stage plan。"""
+
+    workflow = json.loads(
+        Path("configs/paper_workflow/generative_video_notebook_workflows.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    stage_plan = workflow["notebook_roles"]["paper_gate_and_package"]["stage_plan"]
+    assert stage_plan.count("paper_profile_gate") == 1
+    assert "pilot_paper_gate" not in stage_plan
+    assert "full_paper_result_checker" not in stage_plan
+    for profile_name in ("probe_paper", "pilot_paper", "full_paper"):
+        profile = workflow["workflow_profiles"][profile_name]
+        assert profile["profile_gate_entrypoint"] == (
+            "experiments.generative_video_model_probe.paper_profile_gate"
+        )
+        assert profile["profile_gate_contract"] == (
+            "shared_parameterized_gate_target_fpr_and_sample_scale_only"
+        )
+        assert "paper_profile_gate" not in profile["disabled_stage_names"]
+
+    from workflows.generative_video_paper import build_workflow_stage_plan
+
+    expected_transition = {
+        "probe_paper": "probe_paper_to_pilot_paper_transition_decision",
+        "pilot_paper": "pilot_paper_to_full_paper_transition_decision",
+        "full_paper": "full_paper_to_submission_freeze_transition_decision",
+    }
+    for profile_name, transition_name in expected_transition.items():
+        resolved_plan = build_workflow_stage_plan(
+            profile_name,
+            "paper_gate_and_package",
+        )
+        assert "paper_profile_gate" in resolved_plan
+        assert transition_name in resolved_plan
+        assert sum(name.endswith("transition_decision") for name in resolved_plan) == 1
 
 
 @pytest.mark.constraint
@@ -252,6 +360,6 @@ def test_internal_ablation_video_reuse_policy_is_profile_invariant() -> None:
             "detector_only_reuses_full_method_video_generation_variants_use_independent_videos"
         )
         assert config["require_internal_ablation_video_reuse_policy"] is True
-        assert int(config[f"minimum_{profile}_internal_ablation_trace_count"]) == int(
+        assert int(config["minimum_internal_ablation_trace_count"]) == int(
             config["minimum_test_unique_video_count"]
         )

@@ -54,6 +54,10 @@ pyproject.toml
 
 默认排除 `runtime/`、`evaluation/`、`external_baseline/`、`experiments/`、`workflows/`、`scripts/`、`paper_workflow/`、治理工具、测试和运行输出。
 
+抽离后使用 `pip install -e ".[method-runtime]"` 安装核心运行依赖。该 extra
+必须覆盖 `main/methods/` 的所有第三方运行时导入，包括视频 endpoint 解码所需的
+`imageio` 与 `imageio-ffmpeg`; 外层 `video-evaluation` extra 不承担这一职责。
+
 ## 依赖方向
 
 允许的方向为：

@@ -34,12 +34,15 @@ from main.methods.state_space_watermark.formal_detector import (
     FLOW_STATE_POSTERIOR_SCORE_SOURCE,
     _fit_admissibility_thresholds,
     _fit_calibrated_posterior_model,
-    observation_sequence_from_flow_evidence_record,
+    apply_frozen_flow_detector as apply_core_frozen_flow_detector,
+    fit_flow_detector_calibration,
+    flow_evidence_observation_sequence_from_mappings,
 )
 from experiments.generative_video_model_probe.formal_method_variants import (
     FORMAL_METHOD_VARIANTS,
     apply_frozen_flow_detector,
     fit_flow_evidence_calibration,
+    frozen_flow_detector_calibration_artifact,
     observation_sequence_for_method_variant,
 )
 from main.methods.state_space_watermark.path_observation import compute_path_step_observation
@@ -65,7 +68,16 @@ from evaluation.protocol.paper_mechanism_contract import (
     audit_paper_profile_mechanism_contract,
     load_paper_mechanism_contract,
 )
+
+
 from evaluation.protocol.record_writer import write_json, write_jsonl
+
+
+TEST_REPLAY_LIKELIHOOD_CONFIG = ReplayGaussianLikelihoodConfig(
+    relative_observation_noise_standard_deviation=0.05,
+    calibration_protocol="test_fixture_explicit_likelihood_configuration",
+    calibration_cluster_count=2,
+)
 
 
 @pytest.mark.quick
@@ -279,6 +291,7 @@ def test_linear_flow_inversion_and_replay_closes_cycle() -> None:
         schedule,
         constant_velocity,
         constant_velocity,
+        likelihood_config=TEST_REPLAY_LIKELIHOOD_CONFIG,
     )
 
     assert replay.reverse_step_count == 2
@@ -294,7 +307,12 @@ def test_replay_llr_is_gaussian_residual_likelihood_not_error_ratio() -> None:
     candidate = observed + 0.01
     null = observed + 0.10
 
-    likelihood = gaussian_replay_residual_likelihood(candidate, null, observed)
+    likelihood = gaussian_replay_residual_likelihood(
+        candidate,
+        null,
+        observed,
+        config=TEST_REPLAY_LIKELIHOOD_CONFIG,
+    )
 
     expected = 0.5 * (
         likelihood.null_residual_mean_squared_error
@@ -304,7 +322,7 @@ def test_replay_llr_is_gaussian_residual_likelihood_not_error_ratio() -> None:
     assert likelihood.log_likelihood_ratio_per_dimension > 0.0
     assert likelihood.candidate_log_likelihood_per_dimension > likelihood.null_log_likelihood_per_dimension
     assert likelihood.likelihood_model_id == (
-        "endpoint_energy_scaled_isotropic_gaussian_per_latent_dimension"
+        "calibration_fitted_endpoint_relative_isotropic_gaussian_per_latent_dimension"
     )
 
 
@@ -331,6 +349,51 @@ def _state_sequence(level: float, *, increasing: bool) -> list[dict[str, float]]
             "key_agnostic_path_energy": 0.5,
         })
     return rows
+
+
+def _core_observation_sequence(record: dict[str, object]) -> list[object]:
+    """从测试记录中提取 phase 列表, 再调用纯核心观测转换 API。"""
+
+    raw_sequence = record.get("flow_state_observation_sequence")
+    phase_mappings = raw_sequence if isinstance(raw_sequence, list) else []
+    return flow_evidence_observation_sequence_from_mappings(phase_mappings)
+
+
+@pytest.mark.quick
+def test_core_detector_api_accepts_only_observations_labels_and_clusters() -> None:
+    """核心检测器不应理解论文 split、样本角色或正式记录状态。"""
+
+    negative_sequences = [
+        flow_evidence_observation_sequence_from_mappings(
+            _state_sequence(0.2 + index * 0.001, increasing=False)
+        )
+        for index in range(4)
+    ]
+    positive_sequences = [
+        flow_evidence_observation_sequence_from_mappings(
+            _state_sequence(0.8 + index * 0.001, increasing=True)
+        )
+        for index in range(4)
+    ]
+    calibration = fit_flow_detector_calibration(
+        [*negative_sequences, *positive_sequences],
+        [0] * len(negative_sequences) + [1] * len(positive_sequences),
+        [
+            *(f"core-negative-{index}" for index in range(len(negative_sequences))),
+            *(f"core-positive-{index}" for index in range(len(positive_sequences))),
+        ],
+        target_fpr=0.1,
+    )
+
+    decision = apply_core_frozen_flow_detector(positive_sequences[0], calibration)
+    artifact = calibration.as_dict()
+
+    assert isinstance(decision["decision"], bool)
+    assert "metric_status" not in decision
+    assert "threshold_source_split" not in decision
+    assert "test_time_threshold_update_blocked" not in decision
+    assert "threshold_source_split" not in artifact
+    assert "test_time_threshold_update_blocked" not in artifact
 
 
 @pytest.mark.quick
@@ -423,13 +486,18 @@ def test_formal_state_space_gate_rejects_single_step_or_unmeasured_posterior() -
         "flow_state_observation_sequence_status": "measured_from_fixed_replay_path",
         "flow_state_observation_step_count": 5,
         "replay_likelihood_model_id": (
-            "endpoint_energy_scaled_isotropic_gaussian_per_latent_dimension"
+            "calibration_fitted_endpoint_relative_isotropic_gaussian_per_latent_dimension"
         ),
+        "replay_likelihood_calibration_protocol": (
+            "calibration_clean_video_null_residual_cluster_equal_mle"
+        ),
+        "replay_likelihood_calibration_cluster_count": 2,
+        "replay_relative_observation_noise_standard_deviation": 0.05,
     }
     threshold_record = {
         "generation_model_id": "test-flow-model",
         "method_variant": "sstw_full_method",
-        **calibration.as_dict(),
+        **frozen_flow_detector_calibration_artifact(calibration),
     }
 
     assert _state_space_posterior_mechanism_failures(
@@ -458,9 +526,9 @@ def test_core_detector_rejects_missing_or_single_phase_observation() -> None:
     """核心检测器本身必须拒绝聚合替代值, 不能只依赖外层门禁补救。"""
 
     with pytest.raises(ValueError, match="至少2个真实 phase"):
-        observation_sequence_from_flow_evidence_record({"endpoint_score": 0.8})
+        _core_observation_sequence({"endpoint_score": 0.8})
     with pytest.raises(ValueError, match="至少2个真实 phase"):
-        observation_sequence_from_flow_evidence_record(
+        _core_observation_sequence(
             {"flow_state_observation_sequence": _state_sequence(0.8, increasing=True)[:1]}
         )
 
@@ -483,7 +551,7 @@ def test_flow_observation_preserves_explicit_zero_and_rejects_nonfinite_values()
         "replay_log_likelihood_ratio": 0.0,
         "replay_log_likelihood_ratio_mean": 2.0,
     }
-    observation = observation_sequence_from_flow_evidence_record({
+    observation = _core_observation_sequence({
         "flow_state_observation_sequence": [phase, dict(phase)],
     })[0]
 
@@ -495,7 +563,7 @@ def test_flow_observation_preserves_explicit_zero_and_rejects_nonfinite_values()
     assert observation.replay_log_likelihood_ratio == 0.0
 
     with pytest.raises(ValueError, match="有限数值"):
-        observation_sequence_from_flow_evidence_record({
+        _core_observation_sequence({
             "flow_state_observation_sequence": [
                 {**phase, "endpoint_score": float("nan")},
                 phase,
@@ -505,23 +573,27 @@ def test_flow_observation_preserves_explicit_zero_and_rejects_nonfinite_values()
 
 @pytest.mark.quick
 def test_replay_gaussian_likelihood_configuration_matches_method_contract() -> None:
-    """核心 replay 概率模型默认值必须与受治理方法契约完全一致。"""
+    """核心 replay 概率模型必须要求显式加载 calibration 拟合值。"""
 
     core_method = json.loads(
         Path("configs/methods/sstw_core_method.json").read_text(
             encoding="utf-8"
         )
     )
-    config = ReplayGaussianLikelihoodConfig()
     replay_config = core_method["replay_likelihood"]
 
-    assert config.likelihood_model_id == replay_config["model_id"]
-    assert config.minimum_observation_noise_variance == pytest.approx(
+    assert TEST_REPLAY_LIKELIHOOD_CONFIG.likelihood_model_id == replay_config["model_id"]
+    assert TEST_REPLAY_LIKELIHOOD_CONFIG.minimum_observation_noise_variance == pytest.approx(
         replay_config["minimum_observation_noise_variance"]
     )
-    assert config.relative_observation_noise_standard_deviation == pytest.approx(
-        replay_config["relative_observation_noise_standard_deviation"]
+    assert replay_config["calibration_protocol"] == (
+        "calibration_clean_video_null_residual_cluster_equal_mle"
     )
+    assert replay_config["calibration_replay_step_count"] == 20
+    assert replay_config["relative_observation_noise_standard_deviation_source"] == (
+        "frozen_model_specific_calibration_artifact"
+    )
+    assert "relative_observation_noise_standard_deviation" not in replay_config
 
 
 @pytest.mark.quick
@@ -874,7 +946,7 @@ def test_outer_fold_admissibility_thresholds_exclude_validation_video_clusters()
     labels = [0] * 8 + [1] * 8
     groups = [str(record["statistical_cluster_id"]) for record in records]
     base_sequences = [
-        observation_sequence_from_flow_evidence_record(record)
+        _core_observation_sequence(record)
         for record in records
     ]
     mutated_records = [dict(record) for record in records]
@@ -892,7 +964,7 @@ def test_outer_fold_admissibility_thresholds_exclude_validation_video_clusters()
             ],
         }
     mutated_sequences = [
-        observation_sequence_from_flow_evidence_record(record)
+        _core_observation_sequence(record)
         for record in mutated_records
     ]
 
@@ -913,7 +985,7 @@ def test_outer_fold_admissibility_thresholds_exclude_validation_video_clusters()
 def test_positive_entropy_admissibility_ignores_negative_hypotheses_in_mixed_cluster() -> None:
     """正类熵上限只能汇总同簇正假设, 不能混入重复的负假设。"""
 
-    sequence = observation_sequence_from_flow_evidence_record({
+    sequence = _core_observation_sequence({
         "flow_state_observation_sequence": _state_sequence(0.8, increasing=True),
     })
     thresholds = _fit_admissibility_thresholds(
@@ -970,10 +1042,18 @@ def test_candidate_key_cannot_change_fixed_inversion_observation() -> None:
         return torch.full_like(state, -0.2)
 
     replay_a = run_key_independent_inversion_hypothesis(
-        endpoint, schedule, base_velocity, candidate_a
+        endpoint,
+        schedule,
+        base_velocity,
+        candidate_a,
+        likelihood_config=TEST_REPLAY_LIKELIHOOD_CONFIG,
     )
     replay_b = run_key_independent_inversion_hypothesis(
-        endpoint, schedule, base_velocity, candidate_b
+        endpoint,
+        schedule,
+        base_velocity,
+        candidate_b,
+        likelihood_config=TEST_REPLAY_LIKELIHOOD_CONFIG,
     )
 
     assert all(
@@ -1138,7 +1218,10 @@ def test_full_claim3_gate_requires_real_replay_controls_and_hmac(
         "flow_state_filtering_status": "kalman_filter_ready",
         "flow_state_smoothing_status": "rauch_tung_striebel_smoother_ready",
         "replay_log_likelihood_ratio_mean": 0.5,
-        "replay_likelihood_model_id": "endpoint_energy_scaled_isotropic_gaussian_per_latent_dimension",
+        "replay_likelihood_model_id": "calibration_fitted_endpoint_relative_isotropic_gaussian_per_latent_dimension",
+        "replay_likelihood_calibration_protocol": "calibration_clean_video_null_residual_cluster_equal_mle",
+        "replay_likelihood_calibration_cluster_count": 2,
+        "replay_relative_observation_noise_standard_deviation": 0.05,
         "replay_control_fixed_reverse_path_reused": True,
         "flow_detector_score_source": FLOW_STATE_POSTERIOR_SCORE_SOURCE,
         "threshold_source_split": "calibration",

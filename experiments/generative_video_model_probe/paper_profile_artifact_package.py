@@ -51,6 +51,7 @@ def _gate_decision_for_current_profile(run_root: Path) -> tuple[str, Path, dict[
     """
 
     for candidate in (
+        run_root / "artifacts" / "full_paper_gate_decision.json",
         run_root / "artifacts" / "full_paper_result_checker_decision.json",
         run_root / "artifacts" / "pilot_paper_gate_decision.json",
         run_root / "artifacts" / "probe_paper_gate_decision.json",
@@ -79,10 +80,10 @@ def _paper_profile_gate_package_relpaths(profile: str) -> tuple[str, ...]:
             "reports/pilot_paper_gate_report.md",
         ),
         "full_paper": (
-            "records/full_paper_result_checker_records.jsonl",
-            "tables/full_paper_result_checker_table.csv",
-            "artifacts/full_paper_result_checker_decision.json",
-            "reports/full_paper_result_checker_report.md",
+            "records/full_paper_gate_records.jsonl",
+            "tables/full_paper_gate_table.csv",
+            "artifacts/full_paper_gate_decision.json",
+            "reports/full_paper_gate_report.md",
         ),
     }
     gate_relpaths = (
@@ -243,6 +244,8 @@ def build_paper_profile_package_manifest(run_root: str | Path) -> dict[str, Any]
         "probe_paper": ("probe_paper_gate_decision", "paper_profile_gate_decision"),
         "pilot_paper": ("pilot_paper_gate_decision",),
         "full_paper": (
+            "full_paper_gate_decision",
+            "paper_profile_gate_decision",
             "full_paper_result_checker_decision",
             "full_paper_result_decision",
         ),

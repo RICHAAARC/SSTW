@@ -5,8 +5,10 @@ from __future__ import annotations
 import pytest
 
 from evaluation.attacks.adaptive_video_optimizer import (
+    ADAPTIVE_TWO_COORDINATE_SEARCH_PROTOCOL,
     AdaptiveVideoCandidate,
     _next_bounded_parameter,
+    _next_two_coordinate_parameters,
     _parameterized_attack_frames,
 )
 from experiments.generative_video_model_probe.formal_adaptive_attack_executor import (
@@ -39,6 +41,44 @@ def _candidate(parameter: float, score: float) -> AdaptiveVideoCandidate:
     )
 
 
+def _two_coordinate_candidate(
+    candidate_index: int,
+    coordinates: tuple[float, float],
+    score: float,
+    *,
+    admissible: bool = True,
+) -> AdaptiveVideoCandidate:
+    """构造带完整二维搜索来源的反馈候选。"""
+
+    return AdaptiveVideoCandidate(
+        candidate_index=candidate_index,
+        attack_name="two_coordinate_test",
+        video_path=f"candidate_{candidate_index}.mp4",
+        video_sha256="a" * 64,
+        decoded_frame_count=4,
+        quality_psnr=40.0 if admissible else 10.0,
+        detector_score=score,
+        detector_score_source="frozen_test_detector",
+        frozen_final_score_threshold=0.5,
+        threshold_source_split="calibration",
+        test_time_threshold_update_blocked=True,
+        endpoint_score=0.7,
+        path_score=score,
+        decision=score >= 0.5,
+        admissible=admissible,
+        attack_parameters={
+            "attack_strength": float(sum(coordinates) / 2.0),
+            "adaptive_search_coordinate_1_value": coordinates[0],
+            "adaptive_search_coordinate_2_value": coordinates[1],
+        },
+        adaptive_search_protocol=ADAPTIVE_TWO_COORDINATE_SEARCH_PROTOCOL,
+        adaptive_search_coordinate_1_name="coordinate_1",
+        adaptive_search_coordinate_1_value=coordinates[0],
+        adaptive_search_coordinate_2_name="coordinate_2",
+        adaptive_search_coordinate_2_value=coordinates[1],
+    )
+
+
 @pytest.mark.quick
 def test_bounded_search_uses_previous_detector_scores() -> None:
     """第三次查询必须围绕当前 detector 最优参数细化, 不能读取固定攻击列表。"""
@@ -55,26 +95,115 @@ def test_bounded_search_uses_previous_detector_scores() -> None:
 
 
 @pytest.mark.quick
-def test_parameterized_evasion_changes_real_frames_continuously() -> None:
-    """不同连续强度必须产生不同真实视频帧和显式参数。"""
+@pytest.mark.parametrize(
+    ("attack_family", "first_parameter", "second_parameter"),
+    [
+        (
+            "endpoint_path_perturbation",
+            "temporal_blend_alpha",
+            "temporal_offset_frames",
+        ),
+        ("public_detector_probe", "brightness_factor", "contrast_factor"),
+        ("watermark_removal", "gaussian_blur_radius", "quantization_step"),
+        ("detector_evasion", "crop_ratio", "noise_sigma"),
+    ],
+)
+def test_each_attack_family_exposes_two_independent_native_parameters(
+    attack_family: str,
+    first_parameter: str,
+    second_parameter: str,
+) -> None:
+    """固定任一坐标时, 另一个坐标只能改变其对应的原生攻击参数。"""
 
     import numpy as np
 
-    frames = [np.full((16, 16, 3), 128, dtype=np.uint8) for _ in range(4)]
-    weak, weak_parameters = _parameterized_attack_frames(
+    frames = [
+        np.full((16, 16, 3), 40 + 30 * index, dtype=np.uint8)
+        for index in range(4)
+    ]
+    _, base_parameters = _parameterized_attack_frames(
         frames,
-        attack_family="detector_evasion",
-        strength=0.2,
+        attack_family=attack_family,
+        strength=0.1,
+        parameter_coordinates=(0.1, 0.1),
     )
-    strong, strong_parameters = _parameterized_attack_frames(
+    _, only_second_changed = _parameterized_attack_frames(
         frames,
-        attack_family="detector_evasion",
-        strength=0.8,
+        attack_family=attack_family,
+        strength=0.5,
+        parameter_coordinates=(0.1, 0.9),
+    )
+    _, only_first_changed = _parameterized_attack_frames(
+        frames,
+        attack_family=attack_family,
+        strength=0.5,
+        parameter_coordinates=(0.9, 0.1),
     )
 
-    assert weak_parameters["crop_ratio"] > strong_parameters["crop_ratio"]
-    assert weak_parameters["noise_sigma"] < strong_parameters["noise_sigma"]
-    assert not np.array_equal(weak[0], strong[0])
+    assert base_parameters[first_parameter] == pytest.approx(
+        only_second_changed[first_parameter]
+    )
+    assert base_parameters[second_parameter] != only_second_changed[second_parameter]
+    assert base_parameters[first_parameter] != only_first_changed[first_parameter]
+    assert base_parameters[second_parameter] == pytest.approx(
+        only_first_changed[second_parameter]
+    )
+
+
+@pytest.mark.quick
+def test_two_coordinate_refinement_changes_with_detector_feedback() -> None:
+    """第4次查询必须随前三次冻结检测器分数改变, 并记录反馈父候选。"""
+
+    coordinates = [(0.0, 0.0), (1.0, 0.0), (0.0, 1.0)]
+    first_coordinate_best = [
+        _two_coordinate_candidate(0, coordinates[0], 0.8),
+        _two_coordinate_candidate(1, coordinates[1], 0.1),
+        _two_coordinate_candidate(2, coordinates[2], 0.5),
+    ]
+    second_coordinate_best = [
+        _two_coordinate_candidate(0, coordinates[0], 0.8),
+        _two_coordinate_candidate(1, coordinates[1], 0.5),
+        _two_coordinate_candidate(2, coordinates[2], 0.1),
+    ]
+
+    first_proposal, first_phase, first_parent = _next_two_coordinate_parameters(
+        first_coordinate_best,
+        coordinates,
+        objective="minimize_detector_score",
+        initial_strength=None,
+    )
+    second_proposal, second_phase, second_parent = _next_two_coordinate_parameters(
+        second_coordinate_best,
+        coordinates,
+        objective="minimize_detector_score",
+        initial_strength=None,
+    )
+
+    assert first_proposal != second_proposal
+    assert first_parent == 1
+    assert second_parent == 2
+    assert first_phase == second_phase == "detector_feedback_pattern_refinement"
+
+
+@pytest.mark.quick
+def test_two_coordinate_refinement_filters_inadmissible_low_score() -> None:
+    """低分但不满足质量约束的候选不得成为后续搜索父候选。"""
+
+    coordinates = [(0.0, 0.0), (1.0, 0.0), (0.0, 1.0)]
+    candidates = [
+        _two_coordinate_candidate(0, coordinates[0], 0.8),
+        _two_coordinate_candidate(1, coordinates[1], 0.01, admissible=False),
+        _two_coordinate_candidate(2, coordinates[2], 0.3),
+    ]
+
+    _, _, parent = _next_two_coordinate_parameters(
+        candidates,
+        coordinates,
+        objective="minimize_detector_score",
+        initial_strength=None,
+    )
+
+    assert parent == 2
 
 
 @pytest.mark.quick
@@ -83,6 +212,8 @@ def test_adaptive_evidence_requires_true_vae_and_public_feedback_queries() -> No
 
     def candidates(*, vae: bool) -> list[dict]:
         rows = []
+        coordinate_pairs = ((0.0, 0.0), (1.0, 0.0), (0.0, 1.0))
+        query_phases = ("base_point", "coordinate_1_probe", "coordinate_2_probe")
         for index, strength in enumerate((0.0, 1.0, 0.5)):
             parameters = {"attack_strength": strength}
             if vae:
@@ -97,10 +228,20 @@ def test_adaptive_evidence_requires_true_vae_and_public_feedback_queries() -> No
                     "model_vae_source_frame_count": 8,
                     "model_vae_output_frame_count": 8,
                 })
-            rows.append({
+            row = {
                 "candidate_index": index,
                 "attack_parameters": parameters,
-            })
+            }
+            if not vae:
+                row.update({
+                    "adaptive_search_protocol": (
+                        ADAPTIVE_TWO_COORDINATE_SEARCH_PROTOCOL
+                    ),
+                    "adaptive_search_query_phase": query_phases[index],
+                    "adaptive_search_coordinate_1_value": coordinate_pairs[index][0],
+                    "adaptive_search_coordinate_2_value": coordinate_pairs[index][1],
+                })
+            rows.append(row)
         return rows
 
     regeneration = {
@@ -108,7 +249,7 @@ def test_adaptive_evidence_requires_true_vae_and_public_feedback_queries() -> No
             "generative_recompression_or_regeneration_attack"
         ),
         "adaptive_attack_optimizer_type": (
-            "sequential_detector_feedback_bounded_parameter_search"
+            "sequential_detector_feedback_one_coordinate_model_vae_search"
         ),
         "adaptive_attack_query_count": 3,
         "adaptive_attack_selected_parameters": {"attack_strength": 0.5},
@@ -117,8 +258,9 @@ def test_adaptive_evidence_requires_true_vae_and_public_feedback_queries() -> No
     public_probe = {
         "non_runtime_attack_protocol": "detector_probing_with_public_negatives",
         "adaptive_attack_optimizer_type": (
-            "sequential_detector_feedback_bounded_parameter_search"
+            "sequential_detector_feedback_two_coordinate_pattern_search"
         ),
+        "adaptive_search_protocol": ADAPTIVE_TWO_COORDINATE_SEARCH_PROTOCOL,
         "adaptive_attack_query_count": 3,
         "adaptive_attack_selected_parameters": {"attack_strength": 0.5},
         "adaptive_attack_candidate_records": candidates(vae=False),

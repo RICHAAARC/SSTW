@@ -40,8 +40,13 @@ def _formal_sstw_state_fields() -> dict[str, object]:
         "flow_state_smoothing_status": "rauch_tung_striebel_smoother_ready",
         "flow_state_log_likelihood_ratio": 1.0,
         "replay_likelihood_model_id": (
-            "endpoint_energy_scaled_isotropic_gaussian_per_latent_dimension"
+            "calibration_fitted_endpoint_relative_isotropic_gaussian_per_latent_dimension"
         ),
+        "replay_likelihood_calibration_protocol": (
+            "calibration_clean_video_null_residual_cluster_equal_mle"
+        ),
+        "replay_likelihood_calibration_cluster_count": 2,
+        "replay_relative_observation_noise_standard_deviation": 0.05,
     }
 
 

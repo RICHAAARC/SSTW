@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import os
 from collections import defaultdict
 from pathlib import Path
@@ -47,6 +48,9 @@ REPLAY_RECORD_TABLE_FIELDS = (
     "replay_uncertainty_mean",
     "replay_log_likelihood_ratio_mean",
     "replay_likelihood_model_id",
+    "replay_likelihood_calibration_protocol",
+    "replay_likelihood_calibration_cluster_count",
+    "replay_relative_observation_noise_standard_deviation",
     "replay_control_fixed_reverse_path_reused",
     "replay_scheduler_id",
     "replay_time_grid_id",
@@ -73,6 +77,16 @@ def _read_jsonl(path: Path) -> list[dict]:
     if not path.exists():
         return []
     return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
+
+
+def _is_positive_finite_number(value: Any) -> bool:
+    """判断治理记录中的数值是否为有限正数, 非法文本直接返回 False。"""
+
+    try:
+        numeric = float(value)
+    except (TypeError, ValueError):
+        return False
+    return math.isfinite(numeric) and numeric > 0.0
 
 
 def _read_json(path: Path) -> dict[str, Any]:
@@ -165,6 +179,15 @@ def _build_full_claim3_records(run_root: Path) -> dict[str, list[dict[str, Any]]
             "flow_detector_score_source": evidence.get("flow_detector_score_source"),
             "replay_log_likelihood_ratio_mean": evidence.get("replay_log_likelihood_ratio_mean"),
             "replay_likelihood_model_id": evidence.get("replay_likelihood_model_id"),
+            "replay_likelihood_calibration_protocol": evidence.get(
+                "replay_likelihood_calibration_protocol"
+            ),
+            "replay_likelihood_calibration_cluster_count": evidence.get(
+                "replay_likelihood_calibration_cluster_count"
+            ),
+            "replay_relative_observation_noise_standard_deviation": evidence.get(
+                "replay_relative_observation_noise_standard_deviation"
+            ),
             "replay_control_fixed_reverse_path_reused": evidence.get(
                 "replay_control_fixed_reverse_path_reused"
             ),
@@ -481,6 +504,16 @@ def audit_replay_and_sketch_records(record_groups: dict[str, list[dict[str, Any]
             and record.get("replay_log_likelihood_ratio_mean") is not None
             and record.get("replay_likelihood_model_id")
             == REPLAY_GAUSSIAN_LIKELIHOOD_MODEL_ID
+            and record.get("replay_likelihood_calibration_protocol")
+            == "calibration_clean_video_null_residual_cluster_equal_mle"
+            and int(
+                record.get("replay_likelihood_calibration_cluster_count") or 0
+            ) >= 2
+            and _is_positive_finite_number(
+                record.get(
+                    "replay_relative_observation_noise_standard_deviation"
+                )
+            )
             and record.get("replay_control_fixed_reverse_path_reused") is True
             and record.get("flow_detector_score_source")
             == FLOW_STATE_POSTERIOR_SCORE_SOURCE

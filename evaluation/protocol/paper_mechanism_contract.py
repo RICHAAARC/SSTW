@@ -20,6 +20,7 @@ REQUIRED_COMPLETE_RESULT_FLAGS = (
     "require_adaptive_attack_records",
     "require_real_adaptive_attack_records",
     "require_video_quality_metric_records",
+    "require_baseline_matched_video_quality_metrics",
     "require_confidence_interval_report",
     "require_data_split_and_leakage_guard",
     "require_claim_audit_report",

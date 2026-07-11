@@ -5,6 +5,7 @@ import pytest
 
 from experiments.generative_video_model_probe.external_baseline_runner import run_external_baseline_status
 from experiments.generative_video_model_probe.paper_profile_gate import (
+    _primary_claim_method_records,
     build_paper_profile_gate_audit,
     write_paper_profile_gate_audit,
 )
@@ -220,6 +221,63 @@ def test_paper_profile_gate_blocks_empty_run(tmp_path: Path) -> None:
     assert "paper_profile_formal_internal_ablation_ready" in audit["missing_validation_requirements"]
     assert "validation_low_fpr_formal_statistics_blocking_record_ready" in audit["missing_validation_requirements"]
     assert "validation_motion_consistency_exclusion_report_ready" in audit["missing_validation_requirements"]
+
+
+@pytest.mark.quick
+def test_common_gate_parameterizes_all_formal_profiles_without_changing_claim_checks(
+    tmp_path: Path,
+) -> None:
+    """三档 profile 必须由同一入口执行同构 claim 与样本统计门禁。"""
+
+    audits = {}
+    for profile in ("probe_paper", "pilot_paper", "full_paper"):
+        audits[profile] = build_paper_profile_gate_audit(
+            tmp_path / profile,
+            Path("configs/protocol") / f"{profile}_generative_probe.json",
+        )
+        audit = audits[profile]
+        assert audit["paper_profile_gate_decision"] == "FAIL"
+        assert audit[f"{profile}_gate_decision"] == "FAIL"
+        assert audit[f"{profile}_claim_allowed"] is False
+        assert "paper_profile_generation_unique_video_count_ready" in audit[
+            "missing_validation_requirements"
+        ]
+        assert "calibration_negative_video_cluster_count_ready" in audit[
+            "missing_validation_requirements"
+        ]
+        assert "heldout_attack_event_coverage_ready" in audit[
+            "missing_validation_requirements"
+        ]
+
+    closure_check_names = {
+        profile: set(audit["paper_profile_evidence_closure_checks"])
+        for profile, audit in audits.items()
+    }
+    assert closure_check_names["probe_paper"] == closure_check_names["pilot_paper"]
+    assert closure_check_names["probe_paper"] == closure_check_names["full_paper"]
+    assert audits["probe_paper"]["target_fpr"] == pytest.approx(0.1)
+    assert audits["pilot_paper"]["target_fpr"] == pytest.approx(0.01)
+    assert audits["full_paper"]["target_fpr"] == pytest.approx(0.001)
+    assert audits["probe_paper"]["minimum_unique_video_count"] == 60
+    assert audits["pilot_paper"]["minimum_unique_video_count"] == 600
+    assert audits["full_paper"]["minimum_unique_video_count"] == 6000
+
+
+@pytest.mark.quick
+def test_common_gate_statistical_unit_excludes_ablation_and_cross_model_rows() -> None:
+    """样本规模只能由主模型 full-method 行贡献, 不能被支持性实验扩增。"""
+
+    records = [
+        {"trajectory_trace_id": "main", "method_variant": "sstw_full_method"},
+        {"trajectory_trace_id": "ablation", "method_variant": "endpoint_only_control"},
+        {
+            "trajectory_trace_id": "cross",
+            "method_variant": "sstw_full_method",
+            "cross_model_role": "cross_model_validation_model",
+        },
+    ]
+
+    assert _primary_claim_method_records(records) == [records[0]]
 
 
 @pytest.mark.quick

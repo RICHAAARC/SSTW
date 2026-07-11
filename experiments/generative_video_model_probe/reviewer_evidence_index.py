@@ -81,6 +81,7 @@ def _current_profile_gate(run_root: Path) -> tuple[str, str, dict[str, Any]]:
     """按正式阶段顺序读取当前 profile 的最终门禁."""
 
     candidates = (
+        ("full_paper", "artifacts/full_paper_gate_decision.json"),
         ("full_paper", "artifacts/full_paper_result_checker_decision.json"),
         ("pilot_paper", "artifacts/pilot_paper_gate_decision.json"),
         ("probe_paper", "artifacts/probe_paper_gate_decision.json"),
@@ -98,7 +99,12 @@ def _profile_gate_passed(profile: str, gate: Mapping[str, Any]) -> bool:
     fields = {
         "probe_paper": ("probe_paper_gate_decision", "paper_profile_gate_decision"),
         "pilot_paper": ("pilot_paper_gate_decision",),
-        "full_paper": ("full_paper_result_checker_decision", "full_paper_result_decision"),
+        "full_paper": (
+            "full_paper_gate_decision",
+            "paper_profile_gate_decision",
+            "full_paper_result_checker_decision",
+            "full_paper_result_decision",
+        ),
     }.get(profile, ())
     return any(gate.get(field) == "PASS" for field in fields)
 

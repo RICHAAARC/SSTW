@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any, Callable, Mapping
 
 from evaluation.attacks.adaptive_video_optimizer import (
+    ADAPTIVE_TWO_COORDINATE_SEARCH_PROTOCOL,
     optimize_bounded_parameter_attack_for_video,
     optimize_model_vae_regeneration_attack_for_video,
     write_cross_video_blend,
@@ -27,18 +28,28 @@ from evaluation.statistics.clustered_inference import (
 )
 from experiments.generative_video_model_probe.formal_flow_evidence_runner import (
     _generation_key,
+    _invoke_pipeline_loader,
     _load_pipeline,
     _prompt_text_by_id,
     _run_attacked_video_replay_for_model,
     build_flow_evidence_payload,
 )
+from experiments.generative_video_model_probe.colab_runtime import (
+    validate_generation_model_provenance,
+)
 from main.methods.state_space_watermark.formal_detector import (
     FLOW_STATE_POSTERIOR_SCORE_SOURCE,
+)
+from experiments.generative_video_model_probe.formal_method_variants import (
     apply_frozen_flow_detector,
-    frozen_flow_detector_calibration_from_dict,
+    frozen_flow_detector_calibration_from_governed_artifact,
 )
 from runtime.core.digest import build_stable_digest
 from runtime.core.progress import ProgressReporter
+from main.methods.state_space_watermark.replay_inversion import (
+    REPLAY_GAUSSIAN_LIKELIHOOD_MODEL_ID,
+    ReplayGaussianLikelihoodConfig,
+)
 
 
 DEFAULT_PROTOCOL_CONFIG = "configs/protocol/probe_paper_generative_probe.json"
@@ -160,8 +171,64 @@ def _calibrations_by_model(run_root: Path) -> dict[str, Any]:
         model_id = str(row.get("generation_model_id") or "")
         if not model_id or model_id in calibrations:
             raise RuntimeError("adaptive attack 的模型专属冻结检测器标识缺失或重复")
-        calibrations[model_id] = frozen_flow_detector_calibration_from_dict(row)
+        calibrations[model_id] = (
+            frozen_flow_detector_calibration_from_governed_artifact(row)
+        )
     return calibrations
+
+
+def _replay_likelihood_configs_by_model(
+    run_root: Path,
+) -> dict[str, ReplayGaussianLikelihoodConfig]:
+    """加载逐模型冻结 replay 噪声模型，禁止 adaptive 查询期重新估计。"""
+
+    rows = _read_jsonl(
+        run_root
+        / "thresholds"
+        / "replay_gaussian_likelihood_calibrations.jsonl"
+    )
+    if not rows:
+        raise RuntimeError("缺少逐模型 replay 高斯噪声 calibration artifact")
+    configs: dict[str, ReplayGaussianLikelihoodConfig] = {}
+    for row in rows:
+        model_id = str(row.get("generation_model_id") or "").strip()
+        if not model_id or model_id in configs:
+            raise RuntimeError("replay 噪声 calibration 的模型标识缺失或重复")
+        if (
+            row.get("replay_likelihood_model_id")
+            != REPLAY_GAUSSIAN_LIKELIHOOD_MODEL_ID
+            or row.get("replay_likelihood_calibration_protocol")
+            != "calibration_clean_video_null_residual_cluster_equal_mle"
+            or row.get("replay_likelihood_calibration_source_split") != "calibration"
+            or row.get("replay_likelihood_calibration_status")
+            != "fitted_from_model_specific_calibration_clean_videos"
+            or row.get("test_time_likelihood_update_blocked") is not True
+            or int(row.get("replay_likelihood_calibration_cluster_count") or 0) < 2
+            or row.get("replay_likelihood_calibration_grid_policy")
+            != "single_preregistered_primary_grid_for_noise_fit"
+            or not isinstance(
+                row.get("replay_likelihood_calibration_step_counts"), list
+            )
+            or len(row["replay_likelihood_calibration_step_counts"]) != 1
+            or int(row["replay_likelihood_calibration_step_counts"][0]) < 2
+        ):
+            raise RuntimeError(f"replay 噪声 calibration artifact 不满足冻结协议: {model_id}")
+        configs[model_id] = ReplayGaussianLikelihoodConfig(
+            relative_observation_noise_standard_deviation=float(
+                row["replay_relative_observation_noise_standard_deviation"]
+            ),
+            minimum_observation_noise_variance=float(
+                row["replay_minimum_observation_noise_variance"]
+            ),
+            likelihood_model_id=str(row["replay_likelihood_model_id"]),
+            calibration_protocol=str(
+                row["replay_likelihood_calibration_protocol"]
+            ),
+            calibration_cluster_count=int(
+                row["replay_likelihood_calibration_cluster_count"]
+            ),
+        )
+    return configs
 
 
 def _one_source_per_video(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -192,6 +259,7 @@ def _disjoint_collusion_peer_index(source_index: int, source_count: int) -> int:
 def _build_scorer(
     pipeline: Any,
     calibration: Any,
+    likelihood_config: ReplayGaussianLikelihoodConfig,
     *,
     prompt: str,
     key_text: str,
@@ -204,6 +272,7 @@ def _build_scorer(
             video_path,
             prompt=prompt,
             key_text=key_text,
+            likelihood_config=likelihood_config,
         )
         evidence = build_flow_evidence_payload(
             replay,
@@ -230,6 +299,19 @@ def _base_record(
         "non_runtime_attack_protocol": protocol,
         "adaptive_attack_name": protocol,
         "generation_model_id": source.get("generation_model_id"),
+        "generation_model_family": source.get("generation_model_family"),
+        "generation_model_requested_revision": source.get(
+            "generation_model_requested_revision"
+        ),
+        "generation_model_commit_or_hash": source.get(
+            "generation_model_commit_or_hash"
+        ),
+        "generation_model_revision_source": source.get(
+            "generation_model_revision_source"
+        ),
+        "generation_model_revision_resolution_status": source.get(
+            "generation_model_revision_resolution_status"
+        ),
         "prompt_id": source.get("prompt_id"),
         "seed_id": source.get("seed_id"),
         "trajectory_trace_id": source.get("trajectory_trace_id"),
@@ -269,20 +351,75 @@ def audit_adaptive_optimizer_evidence(
         for row in records
         if row.get("non_runtime_attack_protocol") in ADAPTIVE_SEARCH_PROTOCOLS
     ]
+
+    def common_search_evidence_ready(row: Mapping[str, Any]) -> bool:
+        candidates = row.get("adaptive_attack_candidate_records")
+        return bool(
+            int(row.get("adaptive_attack_query_count") or 0) == int(query_budget)
+            and isinstance(row.get("adaptive_attack_selected_parameters"), Mapping)
+            and isinstance(candidates, list)
+            and len(candidates) == int(query_budget)
+            and len({
+                round(
+                    float(candidate["attack_parameters"]["attack_strength"]),
+                    12,
+                )
+                for candidate in candidates
+                if isinstance(candidate.get("attack_parameters"), Mapping)
+                and candidate["attack_parameters"].get("attack_strength") is not None
+            })
+            == int(query_budget)
+        )
+
+    def two_coordinate_search_evidence_ready(row: Mapping[str, Any]) -> bool:
+        candidates = row.get("adaptive_attack_candidate_records")
+        if not isinstance(candidates, list):
+            return False
+        coordinate_pairs = {
+            (
+                round(float(candidate["adaptive_search_coordinate_1_value"]), 12),
+                round(float(candidate["adaptive_search_coordinate_2_value"]), 12),
+            )
+            for candidate in candidates
+            if candidate.get("adaptive_search_coordinate_1_value") is not None
+            and candidate.get("adaptive_search_coordinate_2_value") is not None
+        }
+        expected_initial_phases = (
+            "base_point",
+            "coordinate_1_probe",
+            "coordinate_2_probe",
+        )
+        initial_phases_ready = tuple(
+            candidate.get("adaptive_search_query_phase")
+            for candidate in candidates[:3]
+        ) == expected_initial_phases
+        feedback_rows = candidates[3:]
+        feedback_ready = all(
+            candidate.get("adaptive_search_query_phase")
+            == "detector_feedback_pattern_refinement"
+            and candidate.get("adaptive_search_feedback_parent_candidate_index")
+            is not None
+            for candidate in feedback_rows
+        )
+        return bool(
+            row.get("adaptive_attack_optimizer_type")
+            == "sequential_detector_feedback_two_coordinate_pattern_search"
+            and row.get("adaptive_search_protocol")
+            == ADAPTIVE_TWO_COORDINATE_SEARCH_PROTOCOL
+            and len(coordinate_pairs) == int(query_budget)
+            and initial_phases_ready
+            and feedback_ready
+        )
+
     search_ready = bool(search_rows) and all(
-        row.get("adaptive_attack_optimizer_type")
-        == "sequential_detector_feedback_bounded_parameter_search"
-        and int(row.get("adaptive_attack_query_count") or 0) == int(query_budget)
-        and isinstance(row.get("adaptive_attack_selected_parameters"), Mapping)
-        and isinstance(row.get("adaptive_attack_candidate_records"), list)
-        and len(row["adaptive_attack_candidate_records"]) == int(query_budget)
-        and len({
-            round(float(candidate["attack_parameters"]["attack_strength"]), 12)
-            for candidate in row["adaptive_attack_candidate_records"]
-            if isinstance(candidate.get("attack_parameters"), Mapping)
-            and candidate["attack_parameters"].get("attack_strength") is not None
-        })
-        == int(query_budget)
+        common_search_evidence_ready(row)
+        and (
+            row.get("adaptive_attack_optimizer_type")
+            == "sequential_detector_feedback_one_coordinate_model_vae_search"
+            if row.get("non_runtime_attack_protocol")
+            == "generative_recompression_or_regeneration_attack"
+            else two_coordinate_search_evidence_ready(row)
+        )
         for row in search_rows
     )
     regeneration_rows = [
@@ -353,6 +490,7 @@ def run_formal_adaptive_attack_execution(
     root = Path(run_root)
     context = _profile_context(config_path)
     calibrations = _calibrations_by_model(root)
+    replay_likelihood_configs = _replay_likelihood_configs_by_model(root)
     prompt_map = _prompt_text_by_id(_read_json(prompt_suite_path))
     evidence = _read_jsonl(root / "records" / "formal_flow_evidence_records.jsonl")
     positives = [
@@ -399,7 +537,29 @@ def run_formal_adaptive_attack_execution(
         raise RuntimeError(
             f"adaptive attack 缺少模型专属冻结检测器: {missing_calibration_models}"
         )
-    pipelines = {model_id: pipeline_loader(model_id) for model_id in models}
+    missing_replay_likelihood_models = sorted(
+        set(models) - set(replay_likelihood_configs)
+    )
+    if missing_replay_likelihood_models:
+        raise RuntimeError(
+            "adaptive attack 缺少模型专属冻结 replay 噪声模型: "
+            f"{missing_replay_likelihood_models}"
+        )
+    model_revisions: dict[str, str] = {}
+    for source in sources:
+        model_id = str(source["generation_model_id"])
+        revision = validate_generation_model_provenance(source)
+        previous = model_revisions.setdefault(model_id, revision)
+        if previous != revision:
+            raise RuntimeError(f"adaptive attack 同一模型混用了多个 revision: {model_id}")
+    pipelines = {
+        model_id: _invoke_pipeline_loader(
+            pipeline_loader,
+            model_id=model_id,
+            revision=model_revisions[model_id],
+        )
+        for model_id in models
+    }
     records: list[dict[str, Any]] = []
     query_rows: list[dict[str, Any]] = []
     failure_rows: list[dict[str, Any]] = []
@@ -417,6 +577,7 @@ def run_formal_adaptive_attack_execution(
         scorer = _build_scorer(
             pipeline,
             calibrations[model_id],
+            replay_likelihood_configs[model_id],
             prompt=prompt,
             key_text=key_text,
         )
@@ -442,7 +603,18 @@ def run_formal_adaptive_attack_execution(
                         if public_model_id not in calibrations:
                             raise RuntimeError("public negative 缺少模型专属冻结检测器")
                         if public_model_id not in pipelines:
-                            pipelines[public_model_id] = pipeline_loader(public_model_id)
+                            public_revision = validate_generation_model_provenance(
+                                public_row
+                            )
+                            pipelines[public_model_id] = _invoke_pipeline_loader(
+                                pipeline_loader,
+                                model_id=public_model_id,
+                                revision=public_revision,
+                            )
+                        if public_model_id not in replay_likelihood_configs:
+                            raise RuntimeError(
+                                "public negative 缺少模型专属冻结 replay 噪声模型"
+                            )
                         public_prompt = prompt_map[str(public_row["prompt_id"])]
                         public_trial_index = int(public_row.get("clean_negative_trial_index") or 0)
                         public_key = _generation_key(
@@ -456,6 +628,7 @@ def run_formal_adaptive_attack_execution(
                         public_scorer = _build_scorer(
                             pipelines[public_model_id],
                             calibrations[public_model_id],
+                            replay_likelihood_configs[public_model_id],
                             prompt=public_prompt,
                             key_text=public_key,
                         )
@@ -527,6 +700,12 @@ def run_formal_adaptive_attack_execution(
                         execution_backend = (
                             "model_vae_encode_perturb_decode_bounded_black_box_search"
                         )
+                        optimizer_type = (
+                            "sequential_detector_feedback_one_coordinate_model_vae_search"
+                        )
+                        search_policy = (
+                            "boundary_seed_then_detector_feedback_interval_refinement"
+                        )
                     else:
                         result = optimize_bounded_parameter_attack_for_video(
                             source_video,
@@ -541,7 +720,13 @@ def run_formal_adaptive_attack_execution(
                             initial_strength=public_informed_strength,
                         )
                         execution_backend = (
-                            "detector_feedback_bounded_continuous_parameter_search"
+                            "detector_feedback_two_coordinate_continuous_pattern_search"
+                        )
+                        optimizer_type = (
+                            "sequential_detector_feedback_two_coordinate_pattern_search"
+                        )
+                        search_policy = (
+                            "base_and_axis_probes_then_detector_feedback_pattern_refinement"
                         )
                     selected = result.selected
                     payload = {
@@ -549,12 +734,8 @@ def run_formal_adaptive_attack_execution(
                         **result.as_dict(),
                         **public_probe_summary,
                         "adaptive_attack_execution_backend": execution_backend,
-                        "adaptive_attack_optimizer_type": (
-                            "sequential_detector_feedback_bounded_parameter_search"
-                        ),
-                        "adaptive_parameter_search_policy": (
-                            "boundary_seed_then_detector_feedback_interval_refinement"
-                        ),
+                        "adaptive_attack_optimizer_type": optimizer_type,
+                        "adaptive_parameter_search_policy": search_policy,
                         "adaptive_attack_score": selected.detector_score,
                         "adaptive_attack_path_score": selected.path_score,
                         "adaptive_attack_endpoint_score": selected.endpoint_score,
@@ -689,6 +870,18 @@ def run_formal_adaptive_attack_execution(
                         "path_score": float(score_payload["S_path_inv"]),
                         "decision": bool(score_payload["decision"]),
                         "admissible": True,
+                        "replay_likelihood_model_id": score_payload.get(
+                            "replay_likelihood_model_id"
+                        ),
+                        "replay_likelihood_calibration_protocol": score_payload.get(
+                            "replay_likelihood_calibration_protocol"
+                        ),
+                        "replay_likelihood_calibration_cluster_count": score_payload.get(
+                            "replay_likelihood_calibration_cluster_count"
+                        ),
+                        "replay_relative_observation_noise_standard_deviation": score_payload.get(
+                            "replay_relative_observation_noise_standard_deviation"
+                        ),
                     })
                     payload = {
                         **base,
@@ -734,6 +927,16 @@ def run_formal_adaptive_attack_execution(
         and query.get("frozen_final_score_threshold") is not None
         and query.get("threshold_source_split") == "calibration"
         and query.get("test_time_threshold_update_blocked") is True
+        and query.get("replay_likelihood_model_id")
+        == REPLAY_GAUSSIAN_LIKELIHOOD_MODEL_ID
+        and query.get("replay_likelihood_calibration_protocol")
+        == "calibration_clean_video_null_residual_cluster_equal_mle"
+        and int(query.get("replay_likelihood_calibration_cluster_count") or 0) >= 2
+        and float(
+            query.get("replay_relative_observation_noise_standard_deviation")
+            or 0.0
+        )
+        > 0.0
         for query in query_rows
     )
     optimizer_evidence = audit_adaptive_optimizer_evidence(

@@ -486,7 +486,8 @@ def test_generative_video_colab_notebook_calls_repository_modules() -> None:
     assert "experiments.generative_video_model_probe.formal_method_baseline_comparison" in helper_text
     assert "experiments.generative_video_model_probe.formal_baseline_difference_interval" in helper_text
     assert "experiments.generative_video_model_probe.formal_internal_ablation_summary" in helper_text
-    assert "experiments.generative_video_model_probe.pilot_paper_gate" in helper_text
+    assert "experiments.generative_video_model_probe.pilot_paper_gate" not in helper_text
+    assert "scripts.check_results.full_paper_result_checker" not in helper_text
     assert "experiments.generative_video_model_probe.validation_artifact_rebuild" in helper_text
     assert "experiments.generative_video_model_probe.paper_profile_gate" in helper_text
     assert "scripts/package_results/generative_video_drive_packager.py" in helper_text
@@ -643,6 +644,11 @@ def test_notebook_workflow_profile_config_supports_profile_switching() -> None:
     assert "external_baseline_comparison" not in build_workflow_stage_plan("probe_paper", "paper_gate_and_package")
     assert "external_baseline_comparison" in build_workflow_stage_plan("probe_paper", "formal_comparison_scoring")
     assert "fair_detection_calibration" in build_workflow_stage_plan("probe_paper", "formal_comparison_scoring")
+    formal_stage_plan = build_workflow_stage_plan("probe_paper", "formal_comparison_scoring")
+    assert "cross_method_video_quality_metrics" in formal_stage_plan
+    assert formal_stage_plan.index("fair_detection_calibration") < formal_stage_plan.index(
+        "cross_method_video_quality_metrics"
+    )
     assert "paper_profile_gate" in build_workflow_stage_plan("probe_paper", "paper_gate_and_package")
     assert "removed_pre_probe_transition_decision" not in build_workflow_stage_plan("probe_paper", "paper_gate_and_package")
     assert "probe_paper_to_pilot_paper_transition_decision" in build_workflow_stage_plan("probe_paper", "paper_gate_and_package")
@@ -691,22 +697,25 @@ def test_notebook_workflow_profile_config_supports_profile_switching() -> None:
     assert "motion_threshold_reuse_check" not in build_workflow_stage_plan("pilot_paper", "paper_gate_and_package")
     assert "external_baseline_comparison" not in build_workflow_stage_plan("pilot_paper", "paper_gate_and_package")
     assert "external_baseline_comparison" in build_workflow_stage_plan("pilot_paper", "formal_comparison_scoring")
-    assert "pilot_paper_gate" in build_workflow_stage_plan("pilot_paper", "paper_gate_and_package")
-    assert "paper_profile_gate" not in build_workflow_stage_plan("pilot_paper", "paper_gate_and_package")
+    assert "paper_profile_gate" in build_workflow_stage_plan("pilot_paper", "paper_gate_and_package")
+    assert "pilot_paper_gate" not in build_workflow_stage_plan("pilot_paper", "paper_gate_and_package")
     assert "probe_paper_to_pilot_paper_transition_decision" not in build_workflow_stage_plan("pilot_paper", "paper_gate_and_package")
     assert "reviewer_evidence_index" in build_workflow_stage_plan("pilot_paper", "paper_gate_and_package")
 
     assert full["workflow_profile"] == "full_paper"
-    assert full["profile_status"] == "implemented_requires_pilot_paper_gate_and_full_scale_resources"
+    assert full["profile_status"] == (
+        "implemented_requires_pilot_paper_transition_and_full_scale_resources"
+    )
     assert full["enabled_for_run"] is True
     assert full["enabled_for_claim"] is True
     assert full["target_fpr"] == full_protocol["target_fpr"]
     assert full["protocol_target_fpr"] == full_protocol["target_fpr"]
     full_gate = resolve_notebook_workflow_profile("full_paper", "paper_gate_and_package")
     assert full_gate["workflow_profile"] == "full_paper"
-    assert "full_paper_result_checker" in build_workflow_stage_plan("full_paper", "paper_gate_and_package")
+    assert "paper_profile_gate" in build_workflow_stage_plan("full_paper", "paper_gate_and_package")
+    assert "full_paper_result_checker" not in build_workflow_stage_plan("full_paper", "paper_gate_and_package")
     assert "reviewer_evidence_index" in build_workflow_stage_plan("full_paper", "paper_gate_and_package")
-    assert "paper_profile_gate" not in build_workflow_stage_plan("full_paper", "paper_gate_and_package")
+    assert "paper_profile_gate" in build_workflow_stage_plan("full_paper", "paper_gate_and_package")
 
 
 @pytest.mark.quick
@@ -991,6 +1000,7 @@ def test_profile_specific_commands_pass_protocol_config_path(tmp_path: Path) -> 
         assert command[command.index("--config-path") + 1] == "configs/protocol/probe_paper_generative_probe.json"
     assert "--config-path" in pilot_command
     assert pilot_command[pilot_command.index("--config-path") + 1] == "configs/protocol/pilot_paper_generative_probe.json"
+    assert pilot_command == build_paper_profile_gate_command(pilot_layout)
     assert "--config-path" in probe_gate_command
     assert probe_gate_command[probe_gate_command.index("--config-path") + 1] == "configs/protocol/probe_paper_generative_probe.json"
 

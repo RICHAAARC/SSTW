@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import ast
 import json
 import os
 from pathlib import Path
@@ -13,6 +14,31 @@ import pytest
 from scripts.extract_minimal_paper_package import extract_profile
 from tools.harness.audits.audit_dependency_boundaries import run_audit as run_dependency_boundary_audit
 from tools.harness.audits.audit_release_extraction_contract import run_audit as run_release_extraction_audit
+
+
+@pytest.mark.constraint
+def test_core_detector_does_not_interpret_formal_record_fields() -> None:
+    """核心检测器只能消费观测、二元标签和簇标识, 不能理解论文记录角色。"""
+
+    source_path = Path("main/methods/state_space_watermark/formal_detector.py")
+    tree = ast.parse(source_path.read_text(encoding="utf-8"))
+    exact_string_constants = {
+        node.value
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Constant) and isinstance(node.value, str)
+    }
+    outer_record_fields_and_values = {
+        "split",
+        "sample_role",
+        "attacked_positive",
+        "clean_negative",
+        "controlled_negative",
+        "metric_status",
+        "threshold_source_split",
+        "test_time_threshold_update_blocked",
+    }
+
+    assert exact_string_constants.isdisjoint(outer_record_fields_and_values)
 
 
 @pytest.mark.constraint

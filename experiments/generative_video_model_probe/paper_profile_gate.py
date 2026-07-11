@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+from collections import Counter
 from pathlib import Path
 from typing import Any
 
@@ -15,6 +16,7 @@ from experiments.generative_video_model_probe.sstw_formal_result import (
 )
 from experiments.generative_video_model_probe.formal_motion_claim_filter import (
     FORMAL_MOTION_CLAIM_READY_STATUSES,
+    record_identity_key,
     select_motion_claim_generation_records,
 )
 from evaluation.attacks.video_runtime_attack_protocol import (
@@ -62,10 +64,8 @@ HARD_REQUIRED_PAPER_PROFILE_CONFIG_FLAGS = (
     "require_formal_method_baseline_comparison",
     "require_formal_baseline_difference_interval",
     "require_data_split_and_leakage_guard",
-)
-HARD_REQUIRED_PROBE_PAPER_CONFIG_FLAGS = (
-    *HARD_REQUIRED_PAPER_PROFILE_CONFIG_FLAGS,
     "require_sstw_advantage_claim_ready",
+    "require_baseline_matched_video_quality_metrics",
 )
 
 
@@ -110,12 +110,18 @@ def _load_config(config_path: str | Path = DEFAULT_PAPER_PROFILE_CONFIG) -> dict
         mechanism_contract = load_paper_mechanism_contract(mechanism_contract_path)
         mechanism_contract_audit = audit_paper_profile_mechanism_contract([config], mechanism_contract).as_dict()
     return {
-        "paper_profile_names": config.get(
-            "paper_profile_names",
-            config.get("probe_profile_names", [paper_result_level]),
-        ),
+        "paper_profile_names": config.get("paper_profile_names", [paper_result_level]),
         "target_fpr": _required_float(config, "target_fpr", path),
         "paper_result_level": paper_result_level,
+        "paper_protocol_level": config.get("paper_protocol_level"),
+        "paper_profile_mechanism_difference_policy": config.get(
+            "paper_profile_mechanism_difference_policy"
+        ),
+        "threshold_protocol": config.get("threshold_protocol"),
+        "threshold_source_split": config.get("threshold_source_split"),
+        "test_time_threshold_update_blocked": config.get(
+            "test_time_threshold_update_blocked"
+        ),
         "stage_id": config.get("stage_id", "paper_profile_generative_probe_gate"),
         "minimum_prompt_count": int(config.get("minimum_prompt_count", DEFAULT_MINIMUM_PROMPT_COUNT)),
         "minimum_seed_per_prompt": int(config.get("minimum_seed_per_prompt", DEFAULT_MINIMUM_SEED_PER_PROMPT)),
@@ -125,6 +131,46 @@ def _load_config(config_path: str | Path = DEFAULT_PAPER_PROFILE_CONFIG) -> dict
         "minimum_non_runtime_attack_protocol_count": int(config.get("minimum_non_runtime_attack_protocol_count", max(DEFAULT_MINIMUM_NON_RUNTIME_ATTACK_PROTOCOL_COUNT, len(required_non_runtime_attack_protocols)))),
         "runtime_attack_protocol_audit": audit_runtime_attack_protocol_config(config),
         "minimum_clean_negative_count": int(config.get("minimum_clean_negative_count", 0)),
+        "minimum_unique_video_count": int(config.get("minimum_unique_video_count", 0)),
+        "minimum_calibration_seed_per_prompt": int(
+            config.get("minimum_calibration_seed_per_prompt", 0)
+        ),
+        "minimum_test_seed_per_prompt": int(
+            config.get("minimum_test_seed_per_prompt", 0)
+        ),
+        "minimum_calibration_unique_video_count": int(
+            config.get("minimum_calibration_unique_video_count", 0)
+        ),
+        "minimum_test_unique_video_count": int(
+            config.get("minimum_test_unique_video_count", 0)
+        ),
+        "minimum_calibration_negative_event_count": int(
+            config.get("minimum_calibration_negative_event_count", 0)
+        ),
+        "minimum_heldout_test_negative_event_count": int(
+            config.get("minimum_heldout_test_negative_event_count", 0)
+        ),
+        "minimum_heldout_attacked_positive_event_count": int(
+            config.get("minimum_heldout_attacked_positive_event_count", 0)
+        ),
+        "minimum_negative_family_count": int(
+            config.get("minimum_negative_family_count", 0)
+        ),
+        "minimum_calibration_negative_event_count_per_family": int(
+            config.get("minimum_calibration_negative_event_count_per_family", 0)
+        ),
+        "minimum_heldout_negative_event_count_per_family": int(
+            config.get("minimum_heldout_negative_event_count_per_family", 0)
+        ),
+        "minimum_attack_event_count_per_attack": int(
+            config.get("minimum_attack_event_count_per_attack", 0)
+        ),
+        "minimum_external_baseline_trace_count": int(
+            config.get("minimum_external_baseline_trace_count", 0)
+        ),
+        "minimum_internal_ablation_trace_count": int(
+            config.get("minimum_internal_ablation_trace_count", 0)
+        ),
         "require_external_baseline_status_records": bool(config.get("require_external_baseline_status_records", True)),
         "require_external_baseline_comparison_records": bool(config.get("require_external_baseline_comparison_records", True)),
         "require_external_baseline_self_containment_decision": bool(config.get("require_external_baseline_self_containment_decision", True)),
@@ -156,6 +202,9 @@ def _load_config(config_path: str | Path = DEFAULT_PAPER_PROFILE_CONFIG) -> dict
         "minimum_sstw_advantage_baseline_count": int(config.get("minimum_sstw_advantage_baseline_count", DEFAULT_MINIMUM_MODERN_EXTERNAL_BASELINE_FORMAL_ADAPTER_COUNT)),
         "minimum_sstw_tpr_at_target_fpr_difference": float(config.get("minimum_sstw_tpr_at_target_fpr_difference", 0.0)),
         "require_sstw_advantage_ci_lower_above_zero": bool(config.get("require_sstw_advantage_ci_lower_above_zero", True)),
+        "require_baseline_matched_video_quality_metrics": bool(
+            config.get("require_baseline_matched_video_quality_metrics", True)
+        ),
     }
 
 
@@ -167,14 +216,9 @@ def _hard_required_config_missing(config: dict[str, Any]) -> list[str]:
     公平 FPR 校准、同协议比较、差值区间、数据切分防泄漏和 SSTW 优势 claim ready
     都能生成。该检查属于项目特定门禁硬化, 用于防止通过配置关闭核心证据链。
     """
-    required_flags = (
-        HARD_REQUIRED_PROBE_PAPER_CONFIG_FLAGS
-        if str(config.get("paper_result_level")) == "probe_paper"
-        else HARD_REQUIRED_PAPER_PROFILE_CONFIG_FLAGS
-    )
     return [
         f"{field_name}_must_be_true"
-        for field_name in required_flags
+        for field_name in HARD_REQUIRED_PAPER_PROFILE_CONFIG_FLAGS
         if config.get(field_name) is not True
     ]
 
@@ -208,6 +252,245 @@ def _paper_profile_generation_records(generation_records: list[dict], paper_prof
         and record.get("colab_runtime_profile") in paper_profile_names
         and str(record.get("sample_role") or record.get("generation_sample_role") or "").lower() != "clean_negative"
     ]
+
+
+def _primary_claim_method_records(records: list[dict]) -> list[dict]:
+    """保留主模型 full-method 行, 防止消融和跨模型样本扩增统计单位。"""
+
+    return [
+        record
+        for record in records
+        if str(record.get("method_variant") or "sstw_full_method")
+        == "sstw_full_method"
+        and record.get("cross_model_role") != "cross_model_validation_model"
+    ]
+
+
+def _records_by_split(records: list[dict], split_names: set[str]) -> list[dict]:
+    """按规范 split 名筛选 records, 供三个正式 profile 共同复用。"""
+
+    return [
+        record
+        for record in records
+        if str(record.get("split") or "").lower() in split_names
+    ]
+
+
+def _identity_count(records: list[dict]) -> int:
+    """按独立生成视频身份计数, 禁止把攻击事件或 key trial 当作样本。"""
+
+    return len({record_identity_key(record) for record in records})
+
+
+def _statistical_cluster_id(record: dict) -> str:
+    """读取 detector 写出的独立视频簇标识, 缺失时使用生成身份键。"""
+
+    explicit = str(record.get("statistical_cluster_id") or "")
+    if explicit:
+        return explicit
+    return "::".join(record_identity_key(record))
+
+
+def _negative_family_cluster_counts(records: list[dict]) -> Counter[str]:
+    """按 source-video cluster 统计每个真实负假设族, 避免 trial 伪重复。"""
+
+    clusters: dict[str, set[str]] = {}
+    for record in records:
+        family = str(record.get("negative_family") or "").strip()
+        if family and family not in {"none", "not_applicable", "not_evaluated"}:
+            clusters.setdefault(family, set()).add(_statistical_cluster_id(record))
+    return Counter({family: len(ids) for family, ids in clusters.items()})
+
+
+def _positive_attack_event_counts(records: list[dict]) -> Counter[str]:
+    """统计 held-out attacked-positive 在每个正式 attack 下的事件覆盖。"""
+
+    return Counter(
+        str(record.get("attack_name"))
+        for record in records
+        if record.get("attack_name")
+        and str(record.get("attack_name")) != "no_attack"
+    )
+
+
+def _external_baseline_trace_coverage(
+    records: list[dict],
+    required_baseline_names: list[str],
+    heldout_trace_ids: set[str],
+) -> tuple[int, dict[str, int]]:
+    """计算每个正式 baseline 的 held-out 独立 trace 覆盖下界。"""
+
+    required = {str(name) for name in required_baseline_names if str(name)}
+    traces: dict[str, set[str]] = {name: set() for name in required}
+    for record in records:
+        baseline = str(
+            record.get("baseline_method_id")
+            or record.get("external_baseline_name")
+            or record.get("method_id")
+            or ""
+        )
+        if baseline not in required:
+            continue
+        if record.get("metric_status") != "measured_formal":
+            continue
+        trace_id = str(
+            record.get("trajectory_trace_id")
+            or record.get("statistical_cluster_id")
+            or "::".join(record_identity_key(record))
+        )
+        if trace_id and trace_id in heldout_trace_ids:
+            traces[baseline].add(trace_id)
+    counts = {name: len(trace_ids) for name, trace_ids in sorted(traces.items())}
+    return min(counts.values(), default=0), counts
+
+
+def _paper_profile_scale_evidence(
+    generation_records: list[dict],
+    measured_records: list[dict],
+    baseline_records: list[dict],
+    config: dict[str, Any],
+) -> tuple[dict[str, bool], dict[str, Any]]:
+    """统一核验 profile 仅允许变化的样本规模与统计功效参数。
+
+    该函数属于项目特定写法。三档 profile 调用完全相同的检查代码, 只有传入的
+    target FPR 和最小计数不同。正式负样本按 source-video cluster 计数, 正样本
+    按 held-out attack event 计数, 从而避免以多假设 trial 或重复攻击制造样本量。
+    """
+
+    target_fpr = float(config["target_fpr"])
+    calibration_generation = _records_by_split(generation_records, {"calibration"})
+    heldout_generation = _records_by_split(
+        generation_records,
+        {"test", "heldout", "heldout_test"},
+    )
+    formal_rows = _primary_claim_method_records([
+        record
+        for record in measured_records
+        if record.get("metric_status") == "measured_formal"
+        and _target_fpr_matches(record, target_fpr)
+    ])
+    negative_rows = [
+        record
+        for record in formal_rows
+        if str(record.get("sample_role") or "").lower()
+        in {"clean_negative", "controlled_negative"}
+    ]
+    positive_rows = [
+        record
+        for record in formal_rows
+        if str(record.get("sample_role") or "").lower() == "attacked_positive"
+    ]
+    calibration_negative = _records_by_split(negative_rows, {"calibration"})
+    heldout_negative = _records_by_split(
+        negative_rows,
+        {"test", "heldout", "heldout_test"},
+    )
+    heldout_positive = _records_by_split(
+        positive_rows,
+        {"test", "heldout", "heldout_test"},
+    )
+    calibration_negative_count = len(
+        {_statistical_cluster_id(record) for record in calibration_negative}
+    )
+    heldout_negative_count = len(
+        {_statistical_cluster_id(record) for record in heldout_negative}
+    )
+    calibration_family_counts = _negative_family_cluster_counts(
+        calibration_negative
+    )
+    heldout_family_counts = _negative_family_cluster_counts(heldout_negative)
+    attack_counts = _positive_attack_event_counts(heldout_positive)
+    required_attacks = {
+        str(name) for name in config["required_runtime_attack_names"] if str(name)
+    }
+    external_trace_min, external_trace_counts = _external_baseline_trace_coverage(
+        baseline_records,
+        config["required_modern_external_baseline_adapter_names"],
+        {
+            str(record.get("trajectory_trace_id"))
+            for record in heldout_generation
+            if record.get("trajectory_trace_id")
+        },
+    )
+    checks = {
+        "paper_profile_generation_unique_video_count_ready": (
+            _identity_count(generation_records)
+            >= config["minimum_unique_video_count"]
+        ),
+        "paper_profile_calibration_split_ready": (
+            _seed_per_prompt_min(calibration_generation)
+            >= config["minimum_calibration_seed_per_prompt"]
+            and _identity_count(calibration_generation)
+            >= config["minimum_calibration_unique_video_count"]
+        ),
+        "paper_profile_heldout_test_split_ready": (
+            _seed_per_prompt_min(heldout_generation)
+            >= config["minimum_test_seed_per_prompt"]
+            and _identity_count(heldout_generation)
+            >= config["minimum_test_unique_video_count"]
+        ),
+        "calibration_negative_video_cluster_count_ready": (
+            calibration_negative_count
+            >= config["minimum_calibration_negative_event_count"]
+        ),
+        "heldout_negative_video_cluster_count_ready": (
+            heldout_negative_count
+            >= config["minimum_heldout_test_negative_event_count"]
+        ),
+        "heldout_attacked_positive_event_count_ready": (
+            len(heldout_positive)
+            >= config["minimum_heldout_attacked_positive_event_count"]
+        ),
+        "calibration_negative_family_coverage_ready": (
+            len(calibration_family_counts) >= config["minimum_negative_family_count"]
+            and min(calibration_family_counts.values(), default=0)
+            >= config["minimum_calibration_negative_event_count_per_family"]
+        ),
+        "heldout_negative_family_coverage_ready": (
+            len(heldout_family_counts) >= config["minimum_negative_family_count"]
+            and min(heldout_family_counts.values(), default=0)
+            >= config["minimum_heldout_negative_event_count_per_family"]
+        ),
+        "heldout_attack_event_coverage_ready": (
+            set(attack_counts) >= required_attacks
+            and min(
+                (attack_counts.get(name, 0) for name in required_attacks),
+                default=0,
+            )
+            >= config["minimum_attack_event_count_per_attack"]
+        ),
+        "external_baseline_trace_coverage_ready": (
+            external_trace_min >= config["minimum_external_baseline_trace_count"]
+        ),
+    }
+    summary = {
+        "paper_profile_unique_video_count": _identity_count(generation_records),
+        "paper_profile_calibration_unique_video_count": _identity_count(
+            calibration_generation
+        ),
+        "paper_profile_heldout_test_unique_video_count": _identity_count(
+            heldout_generation
+        ),
+        "paper_profile_calibration_seed_per_prompt_min": _seed_per_prompt_min(
+            calibration_generation
+        ),
+        "paper_profile_test_seed_per_prompt_min": _seed_per_prompt_min(
+            heldout_generation
+        ),
+        "calibration_negative_video_cluster_count": calibration_negative_count,
+        "heldout_negative_video_cluster_count": heldout_negative_count,
+        "heldout_attacked_positive_event_count": len(heldout_positive),
+        "calibration_negative_family_cluster_counts": dict(
+            sorted(calibration_family_counts.items())
+        ),
+        "heldout_negative_family_cluster_counts": dict(
+            sorted(heldout_family_counts.items())
+        ),
+        "heldout_attack_event_counts": dict(sorted(attack_counts.items())),
+        "external_baseline_trace_count_min": external_trace_min,
+        "external_baseline_trace_counts": external_trace_counts,
+    }
+    return checks, summary
 
 
 
@@ -437,7 +720,7 @@ def _paper_profile_sstw_advantage_claim_ready(
         and not blocked_reasons
     )
     status = (
-        "paper_profile_target_fpr_0_1_sstw_advantage_claim_supported"
+        "paper_profile_target_fpr_sstw_advantage_claim_supported"
         if ready
         else "paper_profile_sstw_advantage_claim_blocked"
     )
@@ -873,10 +1156,22 @@ def build_paper_profile_gate_audit(
     hard_config_missing = _hard_required_config_missing(config)
 
     generation_records = _read_jsonl(run_root / "records" / "generation_records.jsonl")
-    validation_generation_records = _paper_profile_generation_records(generation_records, paper_profile_names)
+    profile_generation_records = _paper_profile_generation_records(
+        generation_records,
+        paper_profile_names,
+    )
+    validation_generation_records = _primary_claim_method_records(
+        profile_generation_records
+    )
     runtime_attack_records = _read_jsonl(run_root / "records" / "runtime_attack_records.jsonl")
     runtime_detection_records = _read_jsonl(run_root / "records" / "runtime_detection_records.jsonl")
     external_baseline_records = _read_jsonl(run_root / "records" / "external_baseline_records.jsonl")
+    external_baseline_score_records = _read_jsonl(
+        run_root / "records" / "external_baseline_score_records.jsonl"
+    )
+    sstw_measured_formal_records = _read_jsonl(
+        run_root / "records" / "sstw_measured_formal_records.jsonl"
+    )
     formal_metric_records = _read_jsonl(run_root / "records" / "formal_quality_motion_semantic_records.jsonl")
 
     runtime_attack_decision = _read_json(run_root / "artifacts" / "runtime_attack_decision.json")
@@ -992,6 +1287,12 @@ def build_paper_profile_gate_audit(
         target_fpr=float(config["target_fpr"]),
     )
     evidence_closure = build_paper_profile_evidence_closure_audit(run_root, config_path)
+    scale_checks, scale_summary = _paper_profile_scale_evidence(
+        validation_generation_records,
+        sstw_measured_formal_records,
+        external_baseline_score_records,
+        config,
+    )
 
     requirement_checks = {
         "paper_result_formality_guard_passed": formality_guard["paper_result_formality_guard_decision"] == "PASS",
@@ -1036,6 +1337,7 @@ def build_paper_profile_gate_audit(
         "paper_profile_common_evidence_closure_ready": (
             evidence_closure["paper_profile_evidence_closure_decision"] == "PASS"
         ),
+        **scale_checks,
     }
     missing_requirements = list(dict.fromkeys(
         [name for name, passed in requirement_checks.items() if not passed] + hard_config_missing
@@ -1045,7 +1347,9 @@ def build_paper_profile_gate_audit(
     if gate_decision == "PASS" and paper_result_level == "probe_paper":
         claim_support_status = "probe_paper_target_fpr_0_1_paper_claim_supported"
     elif gate_decision == "PASS":
-        claim_support_status = "paper_profile_full_protocol_handoff_ready"
+        claim_support_status = (
+            f"{paper_result_level}_target_fpr_paper_claim_supported"
+        )
     else:
         claim_support_status = f"{paper_result_level}_blocked"
     profile_gate_field = f"{paper_result_level}_gate_decision"
@@ -1070,12 +1374,24 @@ def build_paper_profile_gate_audit(
         "paper_result_formality_guard_blocking_terms": formality_guard["paper_result_formality_guard_blocking_terms"],
         "paper_result_formality_guard_violations": formality_guard["paper_result_formality_guard_violations"],
         "paper_result_level": config["paper_result_level"],
+        "paper_protocol_level": config["paper_protocol_level"],
+        "paper_profile_mechanism_difference_policy": config[
+            "paper_profile_mechanism_difference_policy"
+        ],
+        "threshold_protocol": config["threshold_protocol"],
+        "threshold_source_split": config["threshold_source_split"],
+        "test_time_threshold_update_blocked": config[
+            "test_time_threshold_update_blocked"
+        ],
         "target_fpr": config["target_fpr"],
+        f"{paper_result_level}_claim_allowed": gate_decision == "PASS",
+        "target_fpr_claim_allowed": gate_decision == "PASS",
         "missing_validation_requirements": missing_requirements,
         "validation_missing_requirement_count": len(missing_requirements),
         "paper_profile_hard_required_config_missing": hard_config_missing,
         "paper_profile_hard_required_config_missing_count": len(hard_config_missing),
         **evidence_closure,
+        **scale_summary,
         "paper_profile_names": sorted(paper_profile_names),
         "generation_record_count": len(generation_records),
         "validation_generation_record_count": len(validation_generation_records),
@@ -1083,6 +1399,35 @@ def build_paper_profile_gate_audit(
         "validation_seed_per_prompt_min": seed_per_prompt_min,
         "minimum_prompt_count": config["minimum_prompt_count"],
         "minimum_seed_per_prompt": config["minimum_seed_per_prompt"],
+        "minimum_unique_video_count": config["minimum_unique_video_count"],
+        "minimum_calibration_seed_per_prompt": config[
+            "minimum_calibration_seed_per_prompt"
+        ],
+        "minimum_test_seed_per_prompt": config["minimum_test_seed_per_prompt"],
+        "minimum_calibration_unique_video_count": config[
+            "minimum_calibration_unique_video_count"
+        ],
+        "minimum_test_unique_video_count": config[
+            "minimum_test_unique_video_count"
+        ],
+        "minimum_calibration_negative_event_count": config[
+            "minimum_calibration_negative_event_count"
+        ],
+        "minimum_heldout_test_negative_event_count": config[
+            "minimum_heldout_test_negative_event_count"
+        ],
+        "minimum_heldout_attacked_positive_event_count": config[
+            "minimum_heldout_attacked_positive_event_count"
+        ],
+        "minimum_attack_event_count_per_attack": config[
+            "minimum_attack_event_count_per_attack"
+        ],
+        "minimum_external_baseline_trace_count": config[
+            "minimum_external_baseline_trace_count"
+        ],
+        "minimum_internal_ablation_trace_count": config[
+            "minimum_internal_ablation_trace_count"
+        ],
         "motion_threshold_calibration_decision": motion_threshold_decision.get("motion_threshold_calibration_decision"),
         "motion_threshold_calibration_ready": motion_threshold_ready,
         "motion_threshold_id": motion_threshold_decision.get("motion_threshold_id"),
@@ -1164,10 +1509,16 @@ def build_paper_profile_gate_audit(
         "paper_result_artifact_skeleton_status": paper_skeleton_status,
         "artifact_rebuild_status": artifact_rebuild_status,
         "full_paper_allowed": False,
+        "profile_stage_transition_control": (
+            "workflow_profile_transition_stage_required"
+            if gate_decision == "PASS"
+            else "complete_missing_validation_requirements"
+        ),
+        # 保留旧字段只为兼容既有结果消费者, 其值不再编码 profile 专属跳转。
         "full_paper_next_gate": (
-            "pilot_paper_generative_probe_gate"
-            if gate_decision == "PASS" and paper_result_level == "probe_paper"
-            else ("probe_paper_generative_probe_gate" if gate_decision == "PASS" else "complete_missing_validation_requirements")
+            "workflow_profile_transition_stage_required"
+            if gate_decision == "PASS"
+            else "complete_missing_validation_requirements"
         ),
     }
 
@@ -1202,12 +1553,13 @@ def write_paper_profile_gate_audit(
     else:
         report_scope = (
             "该报告由已落盘的 governed records 与 decision artifacts 自动生成。它只判断 paper_profile "
-            "是否已经作为当前 paper profile 的小样本论文协议闭合检查完成闭环。该层级使用当前 protocol config "
+            "是否已经按当前 profile 的样本规模和统计功效完成完整论文协议闭环。该层级使用当前 protocol config "
             f"指定的 target_fpr={target_fpr_text} "
             "验证 records、tables、figures、reports、manifests、baseline、clean negative 公平校准、消融、46 个 runtime attack、"
-            "11 个 non-runtime/adaptive 协议、CI 和 artifact rebuild 是否能够完整产出。"
+            "11 个 non-runtime/adaptive 协议、三层主张、CI 和 artifact rebuild 是否能够完整产出。"
+            "该入口与 probe_paper 共用完全相同的结论检查, 差异仅来自 target FPR、样本数量和统计功效。"
             "该共享报告本身不定义阶段跳转; 具体跳转必须由 profile-specific transition decision 控制, "
-            "也不能外推到 pilot_paper 的 FPR=0.01 或 full_paper 的 FPR=0.001。\n\n"
+            "也不能把当前 profile 的数值结论外推到其他目标 FPR。\n\n"
         )
     report = (
         "# Paper Profile Generative Probe Gate Report\n\n"
@@ -1225,6 +1577,13 @@ def write_paper_profile_gate_audit(
         f"- validation_generation_record_count: {audit['validation_generation_record_count']}\n"
         f"- validation_prompt_count: {audit['validation_prompt_count']}\n"
         f"- validation_seed_per_prompt_min: {audit['validation_seed_per_prompt_min']}\n"
+        f"- paper_profile_unique_video_count: {audit['paper_profile_unique_video_count']}\n"
+        f"- paper_profile_calibration_unique_video_count: {audit['paper_profile_calibration_unique_video_count']}\n"
+        f"- paper_profile_heldout_test_unique_video_count: {audit['paper_profile_heldout_test_unique_video_count']}\n"
+        f"- calibration_negative_video_cluster_count: {audit['calibration_negative_video_cluster_count']}\n"
+        f"- heldout_negative_video_cluster_count: {audit['heldout_negative_video_cluster_count']}\n"
+        f"- heldout_attacked_positive_event_count: {audit['heldout_attacked_positive_event_count']}\n"
+        f"- external_baseline_trace_count_min: {audit['external_baseline_trace_count_min']}\n"
         f"- runtime_attack_protocol_decision: {audit['runtime_attack_protocol_decision']}\n"
         f"- required_runtime_attack_names: {', '.join(audit['required_runtime_attack_names'])}\n"
         f"- runtime_attack_missing_required_names: {', '.join(audit['runtime_attack_missing_required_names']) if audit['runtime_attack_missing_required_names'] else 'none'}\n"

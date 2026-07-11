@@ -22,9 +22,12 @@
     "minimum_owner_secret_byte_count": 32
   },
   "replay_likelihood": {
-    "model_id": "endpoint_energy_scaled_isotropic_gaussian_per_latent_dimension",
+    "model_id": "calibration_fitted_endpoint_relative_isotropic_gaussian_per_latent_dimension",
+    "calibration_protocol": "calibration_clean_video_null_residual_cluster_equal_mle",
+    "calibration_replay_step_count": 20,
+    "minimum_calibration_clean_video_cluster_count": 2,
     "minimum_observation_noise_variance": 1e-08,
-    "relative_observation_noise_standard_deviation": 0.05
+    "relative_observation_noise_standard_deviation_source": "frozen_model_specific_calibration_artifact"
   },
   "flow_state_posterior": {
     "model_type": "dual_hypothesis_linear_gaussian_state_space_filter_rts_smoother_with_group_cross_fitted_platt_calibration",

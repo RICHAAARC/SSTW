@@ -744,14 +744,17 @@ motion_consistency_exclusion_decision.json
 data_split_and_leakage_guard_decision.json
 validation_artifact_rebuild_dry_run_decision.json
 paper_profile_gate_decision.json
-probe_paper_to_pilot_paper_transition_decision.json
+<workflow_profile>_gate_decision.json
+<workflow_profile>_to_<next_profile>_transition_decision.json
 ```
 
-在 probe-paper 中, `pilot_paper_gate_decision.json` 不应作为当前 gate 的核心判定。
-`paper_profile_gate_decision.json == PASS` 后只能生成
-`probe_paper_to_pilot_paper_transition_decision.json`, 然后进入 `pilot_paper`;
-不能直接进入 `full_paper`。切换到 `pilot_paper` 后, 才需要重点检查
-`pilot_paper_gate_decision.json`。
+`probe_paper`、`pilot_paper` 和 `full_paper` 均调用同一个参数化
+`paper_profile_gate`。该入口会同时写出共享 decision 与当前 profile 专属的兼容
+decision, 三档结论检查完全相同, 只从 protocol config 读取不同的目标 FPR、样本量
+和统计功效。profile 专属的后续 transition 仍由 workflow 外层 stage plan 控制:
+`probe_paper` 只能进入 `pilot_paper`, `pilot_paper` 只能进入 `full_paper`,
+`full_paper` 只能进入 submission freeze。旧 `pilot_paper_gate` 与
+`full_paper_result_checker` 模块只保留历史结果兼容, 不再属于 Notebook 主运行计划。
 
 probe-paper 还应生成以下派生产物:
 

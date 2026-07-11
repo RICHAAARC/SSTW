@@ -10,6 +10,31 @@ from typing import Any, Callable, Mapping, Sequence
 from evaluation.attacks.video_runtime_attack_protocol import apply_runtime_attack_to_frames
 
 
+ADAPTIVE_TWO_COORDINATE_SEARCH_PROTOCOL = (
+    "two_coordinate_detector_feedback_pattern_search_v1"
+)
+
+
+_ATTACK_FAMILY_COORDINATE_NAMES: dict[str, tuple[str, str]] = {
+    "endpoint_path_perturbation": (
+        "normalized_temporal_blend_strength",
+        "normalized_temporal_offset_strength",
+    ),
+    "public_detector_probe": (
+        "normalized_brightness_strength",
+        "normalized_contrast_strength",
+    ),
+    "watermark_removal": (
+        "normalized_gaussian_blur_strength",
+        "normalized_quantization_strength",
+    ),
+    "detector_evasion": (
+        "normalized_crop_strength",
+        "normalized_noise_strength",
+    ),
+}
+
+
 @dataclass(frozen=True)
 class AdaptiveVideoCandidate:
     """保存一次真实候选视频查询及其质量、endpoint 与检测结果。"""
@@ -30,11 +55,34 @@ class AdaptiveVideoCandidate:
     decision: bool
     admissible: bool
     attack_parameters: Mapping[str, float | int | str]
+    replay_likelihood_model_id: str | None = None
+    replay_likelihood_calibration_protocol: str | None = None
+    replay_likelihood_calibration_cluster_count: int = 0
+    replay_relative_observation_noise_standard_deviation: float | None = None
+    adaptive_search_protocol: str | None = None
+    adaptive_search_query_phase: str | None = None
+    adaptive_search_coordinate_1_name: str | None = None
+    adaptive_search_coordinate_1_value: float | None = None
+    adaptive_search_coordinate_2_name: str | None = None
+    adaptive_search_coordinate_2_value: float | None = None
+    adaptive_search_feedback_parent_candidate_index: int | None = None
 
     def as_dict(self) -> dict[str, Any]:
         """转换为可写入 governed query log 的字段。"""
 
-        return dict(self.__dict__)
+        payload = dict(self.__dict__)
+        for field_name in (
+            "adaptive_search_protocol",
+            "adaptive_search_query_phase",
+            "adaptive_search_coordinate_1_name",
+            "adaptive_search_coordinate_1_value",
+            "adaptive_search_coordinate_2_name",
+            "adaptive_search_coordinate_2_value",
+            "adaptive_search_feedback_parent_candidate_index",
+        ):
+            if payload.get(field_name) is None:
+                payload.pop(field_name, None)
+        return payload
 
 
 @dataclass(frozen=True)
@@ -48,11 +96,12 @@ class AdaptiveVideoOptimizationResult:
     endpoint_tolerance: float
     minimum_quality_psnr: float
     query_budget: int
+    adaptive_search_protocol: str | None = None
 
     def as_dict(self) -> dict[str, Any]:
         """转换为正式 adaptive execution record 可复用的摘要。"""
 
-        return {
+        payload = {
             "adaptive_attack_objective": self.objective,
             "adaptive_attack_query_count": len(self.candidates),
             "adaptive_attack_query_budget": self.query_budget,
@@ -68,7 +117,28 @@ class AdaptiveVideoOptimizationResult:
             "adaptive_attack_endpoint_tolerance": self.endpoint_tolerance,
             "adaptive_attack_minimum_quality_psnr": self.minimum_quality_psnr,
             "adaptive_attack_candidate_records": [row.as_dict() for row in self.candidates],
+            "adaptive_attack_replay_likelihood_model_id": (
+                self.selected.replay_likelihood_model_id
+            ),
+            "adaptive_attack_replay_likelihood_calibration_protocol": (
+                self.selected.replay_likelihood_calibration_protocol
+            ),
+            "adaptive_attack_replay_likelihood_calibration_cluster_count": (
+                self.selected.replay_likelihood_calibration_cluster_count
+            ),
+            "adaptive_attack_replay_relative_observation_noise_standard_deviation": (
+                self.selected.replay_relative_observation_noise_standard_deviation
+            ),
         }
+        if self.adaptive_search_protocol is not None:
+            payload.update({
+                "adaptive_search_protocol": self.adaptive_search_protocol,
+                "adaptive_search_coordinate_names": [
+                    self.selected.adaptive_search_coordinate_1_name,
+                    self.selected.adaptive_search_coordinate_2_name,
+                ],
+            })
+        return payload
 
 
 def _read_video(path: Path) -> list[Any]:
@@ -148,6 +218,13 @@ def _candidate_from_score(
     endpoint_tolerance: float,
     minimum_quality_psnr: float,
     attack_parameters: Mapping[str, float | int | str],
+    adaptive_search_protocol: str | None = None,
+    adaptive_search_query_phase: str | None = None,
+    adaptive_search_coordinate_1_name: str | None = None,
+    adaptive_search_coordinate_1_value: float | None = None,
+    adaptive_search_coordinate_2_name: str | None = None,
+    adaptive_search_coordinate_2_value: float | None = None,
+    adaptive_search_feedback_parent_candidate_index: int | None = None,
 ) -> AdaptiveVideoCandidate:
     """把一次真实文件查询转换为统一候选记录。"""
 
@@ -193,6 +270,44 @@ def _candidate_from_score(
             )
         ),
         attack_parameters=dict(attack_parameters),
+        replay_likelihood_model_id=(
+            str(score["replay_likelihood_model_id"])
+            if score.get("replay_likelihood_model_id") is not None
+            else None
+        ),
+        replay_likelihood_calibration_protocol=(
+            str(score["replay_likelihood_calibration_protocol"])
+            if score.get("replay_likelihood_calibration_protocol") is not None
+            else None
+        ),
+        replay_likelihood_calibration_cluster_count=int(
+            score.get("replay_likelihood_calibration_cluster_count") or 0
+        ),
+        replay_relative_observation_noise_standard_deviation=(
+            float(score["replay_relative_observation_noise_standard_deviation"])
+            if score.get("replay_relative_observation_noise_standard_deviation")
+            is not None
+            else None
+        ),
+        adaptive_search_protocol=adaptive_search_protocol,
+        adaptive_search_query_phase=adaptive_search_query_phase,
+        adaptive_search_coordinate_1_name=adaptive_search_coordinate_1_name,
+        adaptive_search_coordinate_1_value=(
+            float(adaptive_search_coordinate_1_value)
+            if adaptive_search_coordinate_1_value is not None
+            else None
+        ),
+        adaptive_search_coordinate_2_name=adaptive_search_coordinate_2_name,
+        adaptive_search_coordinate_2_value=(
+            float(adaptive_search_coordinate_2_value)
+            if adaptive_search_coordinate_2_value is not None
+            else None
+        ),
+        adaptive_search_feedback_parent_candidate_index=(
+            int(adaptive_search_feedback_parent_candidate_index)
+            if adaptive_search_feedback_parent_candidate_index is not None
+            else None
+        ),
     )
 
 
@@ -262,32 +377,172 @@ def _next_bounded_parameter(
     raise RuntimeError("adaptive bounded search 已耗尽可区分参数")
 
 
+def _bounded_coordinate(value: float) -> float:
+    """把搜索坐标限制到预注册的单位正方形。"""
+
+    return max(0.0, min(1.0, float(value)))
+
+
+def _legacy_attack_strength(coordinates: tuple[float, float]) -> float:
+    """把二维坐标压缩为兼容旧记录的单个强度字段。
+
+    `attack_strength` 不再驱动两个原生参数, 仅作为旧统计代码需要的标量摘要。
+    这里使用无理数权重, 可避免常用二进制有理网格上的两个不同坐标被压成
+    同一个值。正式复现实验应以两个显式坐标字段为准。
+    """
+
+    square_root_two = 2.0**0.5
+    first, second = coordinates
+    return float((square_root_two * first + second) / (square_root_two + 1.0))
+
+
+def _initial_two_coordinate_seeds(
+    initial_strength: float | None,
+) -> tuple[tuple[float, float], tuple[float, float], tuple[float, float]]:
+    """返回基点和两个独立坐标探针, 共消耗3次冻结检测器查询。"""
+
+    base = _bounded_coordinate(initial_strength if initial_strength is not None else 0.0)
+    coordinate_target = 1.0 if base < 0.5 else 0.0
+    return (
+        (base, base),
+        (coordinate_target, base),
+        (base, coordinate_target),
+    )
+
+
+def _candidate_search_coordinates(
+    candidate: AdaptiveVideoCandidate,
+) -> tuple[float, float]:
+    """从候选记录读取已真实执行的两个归一化搜索坐标。"""
+
+    if (
+        candidate.adaptive_search_coordinate_1_value is not None
+        and candidate.adaptive_search_coordinate_2_value is not None
+    ):
+        return (
+            _bounded_coordinate(candidate.adaptive_search_coordinate_1_value),
+            _bounded_coordinate(candidate.adaptive_search_coordinate_2_value),
+        )
+    parameters = candidate.attack_parameters
+    if (
+        parameters.get("adaptive_search_coordinate_1_value") is not None
+        and parameters.get("adaptive_search_coordinate_2_value") is not None
+    ):
+        return (
+            _bounded_coordinate(float(parameters["adaptive_search_coordinate_1_value"])),
+            _bounded_coordinate(float(parameters["adaptive_search_coordinate_2_value"])),
+        )
+    raise ValueError("二维 adaptive candidate 缺少可审计搜索坐标")
+
+
+def _next_two_coordinate_parameters(
+    candidates: Sequence[AdaptiveVideoCandidate],
+    queried_coordinates: Sequence[tuple[float, float]],
+    *,
+    objective: str,
+    initial_strength: float | None,
+) -> tuple[tuple[float, float], str, int | None]:
+    """选择下一组二维攻击参数及其反馈父候选。
+
+    前3次查询固定为基点、坐标1探针和坐标2探针。之后每次先按
+    admissibility 过滤, 再使用此前冻结检测器分数选出 incumbent, 最后只沿
+    一个坐标执行有界 pattern refinement。由此, 后续查询同时依赖检测器输出
+    与质量/endpoint 可接受性, 而不是由预制强度列表决定。
+    """
+
+    seeds = _initial_two_coordinate_seeds(initial_strength)
+    query_index = len(queried_coordinates)
+    if query_index < len(seeds):
+        phases = ("base_point", "coordinate_1_probe", "coordinate_2_probe")
+        return seeds[query_index], phases[query_index], None
+    if len(candidates) != query_index:
+        raise ValueError("二维 adaptive 搜索要求每个已查询坐标都有 detector 结果")
+
+    admissible = [candidate for candidate in candidates if candidate.admissible]
+    ranked = sorted(
+        admissible or list(candidates),
+        key=lambda row: _candidate_order_key(row, objective),
+    )
+    if not ranked:
+        raise RuntimeError("二维 adaptive 搜索缺少可用于反馈更新的候选")
+
+    queried = {
+        (round(float(first), 12), round(float(second), 12))
+        for first, second in queried_coordinates
+    }
+    # 每两次自适应查询缩小一次坐标步长。正式5次查询时先执行0.5尺度的
+    # 两次反馈更新, 更高预算可继续在同一协议下局部细化。
+    adaptive_query_index = query_index - len(seeds)
+    primary_step = 0.5 / (2.0 ** (adaptive_query_index // 2))
+    step_sizes = [primary_step / (2.0**level) for level in range(12)]
+
+    for parent in ranked:
+        anchor = _candidate_search_coordinates(parent)
+        for step in step_sizes:
+            # 先优化坐标2, 再优化坐标1。是否接受某个方向仍由 incumbent
+            # 的 detector 分数决定; 已查询方向会被跳过, 从而形成序贯细化。
+            for coordinate_index in (1, 0):
+                current = anchor[coordinate_index]
+                directions = (1.0, -1.0) if current <= 0.5 else (-1.0, 1.0)
+                for direction in directions:
+                    proposal = list(anchor)
+                    proposal[coordinate_index] = _bounded_coordinate(
+                        current + direction * step
+                    )
+                    coordinates = (float(proposal[0]), float(proposal[1]))
+                    key = (round(coordinates[0], 12), round(coordinates[1], 12))
+                    if key not in queried and coordinates != anchor:
+                        return (
+                            coordinates,
+                            "detector_feedback_pattern_refinement",
+                            int(parent.candidate_index),
+                        )
+    raise RuntimeError("二维 adaptive 搜索已耗尽可区分坐标")
+
+
 def _parameterized_attack_frames(
     source_frames: Sequence[Any],
     *,
     attack_family: str,
     strength: float,
+    parameter_coordinates: Sequence[float] | None = None,
 ) -> tuple[list[Any], dict[str, Any]]:
-    """按连续强度生成 detector-aware 视频攻击候选。"""
+    """按两个独立连续坐标生成 detector-aware 视频攻击候选。
+
+    `strength` 仅保留给旧调用者。正式二维优化会传入
+    `parameter_coordinates`, 并分别控制攻击族的两个原生参数。
+    """
 
     import numpy as np
     from PIL import Image, ImageEnhance, ImageFilter
 
-    value = max(0.0, min(1.0, float(strength)))
+    if parameter_coordinates is None:
+        first_value = second_value = _bounded_coordinate(strength)
+    else:
+        if len(parameter_coordinates) != 2:
+            raise ValueError("parameter_coordinates 必须恰好包含两个归一化坐标")
+        first_value = _bounded_coordinate(float(parameter_coordinates[0]))
+        second_value = _bounded_coordinate(float(parameter_coordinates[1]))
     frames = [np.asarray(frame)[..., :3].astype(np.uint8) for frame in source_frames]
     if attack_family == "endpoint_path_perturbation":
-        alpha = 0.05 + 0.45 * value
+        alpha = 0.05 + 0.45 * first_value
+        temporal_offset_frames = 1 + int(round(2.0 * second_value))
         attacked = []
         for index, frame in enumerate(frames):
-            neighbour = frames[min(index + 1, len(frames) - 1)]
+            neighbour = frames[
+                min(index + temporal_offset_frames, len(frames) - 1)
+            ]
             attacked.append(
                 np.clip((1.0 - alpha) * frame + alpha * neighbour, 0, 255)
                 .astype(np.uint8)
             )
-        return attacked, {"temporal_blend_alpha": alpha}
+        return attacked, {
+            "temporal_blend_alpha": alpha,
+            "temporal_offset_frames": temporal_offset_frames,
+        }
     if attack_family == "public_detector_probe":
-        brightness = 1.0 + 0.16 * value
-        contrast = 1.0 + 0.20 * value
+        brightness = 1.0 + 0.16 * first_value
+        contrast = 1.0 + 0.20 * second_value
         attacked = [
             np.asarray(
                 ImageEnhance.Contrast(
@@ -301,8 +556,8 @@ def _parameterized_attack_frames(
             "contrast_factor": contrast,
         }
     if attack_family == "watermark_removal":
-        radius = 0.25 + 2.75 * value
-        quantization_step = max(1, int(round(1 + 15 * value)))
+        radius = 0.25 + 2.75 * first_value
+        quantization_step = max(1, int(round(1 + 15 * second_value)))
         attacked = []
         for frame in frames:
             filtered = np.asarray(
@@ -316,9 +571,10 @@ def _parameterized_attack_frames(
             "quantization_step": quantization_step,
         }
     if attack_family == "detector_evasion":
-        crop_ratio = 1.0 - 0.24 * value
-        noise_sigma = 1.0 + 7.0 * value
-        generator = np.random.default_rng(17_071 + int(round(value * 1_000_000)))
+        crop_ratio = 1.0 - 0.24 * first_value
+        noise_sigma = 1.0 + 7.0 * second_value
+        # 固定噪声方向只让第二坐标改变噪声幅度, 避免把随机方向混入反馈。
+        generator = np.random.default_rng(17_071)
         attacked = []
         for frame in frames:
             height, width = frame.shape[:2]
@@ -352,51 +608,45 @@ def optimize_bounded_parameter_attack_for_video(
     query_budget: int = 5,
     initial_strength: float | None = None,
 ) -> AdaptiveVideoOptimizationResult:
-    """用冻结检测器反馈逐次优化一个连续攻击强度参数。"""
+    """用冻结检测器反馈逐次优化两个独立原生攻击参数。
+
+    该函数保持原调用 API。`initial_strength` 只用于设置二维基点; 两个坐标
+    探针及其后的 detector-feedback pattern refinement 均在函数内部完成。
+    """
 
     if objective not in {"minimize_detector_score", "minimize_path_with_fixed_endpoint"}:
         raise ValueError(f"未注册的 adaptive objective: {objective}")
     budget = int(query_budget)
     if budget < 3:
-        raise ValueError("连续 adaptive optimization 至少需要3次查询")
+        raise ValueError("二维 adaptive optimization 至少需要3次查询")
+    if attack_family not in _ATTACK_FAMILY_COORDINATE_NAMES:
+        raise ValueError(f"未注册的 parameterized adaptive attack family: {attack_family}")
     source_path = Path(source_video_path)
     source_frames = _read_video(source_path)
     destination = Path(output_dir)
     candidates: list[AdaptiveVideoCandidate] = []
-    parameters: list[float] = []
+    coordinates_by_query: list[tuple[float, float]] = []
+    coordinate_names = _ATTACK_FAMILY_COORDINATE_NAMES[attack_family]
     for index in range(budget):
-        seeded_parameters = (
-            [max(0.0, min(1.0, float(initial_strength))), 0.0, 1.0]
-            if initial_strength is not None
-            else []
-        )
-        unqueried_seed = next(
-            (
-                value
-                for value in seeded_parameters
-                if round(value, 12)
-                not in {round(parameter, 12) for parameter in parameters}
-            ),
-            None,
-        )
-        if unqueried_seed is not None:
-            strength = unqueried_seed
-        else:
-            strength = _next_bounded_parameter(
+        coordinates, query_phase, feedback_parent_index = (
+            _next_two_coordinate_parameters(
                 candidates,
-                parameters,
+                coordinates_by_query,
                 objective=objective,
-                lower_bound=0.0,
-                upper_bound=1.0,
+                initial_strength=initial_strength,
             )
-        parameters.append(strength)
+        )
+        coordinates_by_query.append(coordinates)
+        strength = _legacy_attack_strength(coordinates)
         attacked_frames, family_parameters = _parameterized_attack_frames(
             source_frames,
             attack_family=attack_family,
             strength=strength,
+            parameter_coordinates=coordinates,
         )
         candidate_path = destination / (
-            f"candidate_{index:03d}_{attack_family}_{strength:.6f}.mp4"
+            f"candidate_{index:03d}_{attack_family}_"
+            f"{coordinates[0]:.6f}_{coordinates[1]:.6f}.mp4"
         )
         _write_video(candidate_path, attacked_frames, {})
         decoded = _read_video(candidate_path)
@@ -414,8 +664,33 @@ def optimize_bounded_parameter_attack_for_video(
             minimum_quality_psnr=minimum_quality_psnr,
             attack_parameters={
                 "attack_strength": strength,
+                "attack_strength_semantics": (
+                    "sqrt2_weighted_mean_legacy_summary_not_search_control"
+                ),
+                "adaptive_search_protocol": ADAPTIVE_TWO_COORDINATE_SEARCH_PROTOCOL,
+                "adaptive_search_query_phase": query_phase,
+                "adaptive_search_coordinate_1_name": coordinate_names[0],
+                "adaptive_search_coordinate_1_value": coordinates[0],
+                "adaptive_search_coordinate_2_name": coordinate_names[1],
+                "adaptive_search_coordinate_2_value": coordinates[1],
+                **(
+                    {
+                        "adaptive_search_feedback_parent_candidate_index": (
+                            feedback_parent_index
+                        )
+                    }
+                    if feedback_parent_index is not None
+                    else {}
+                ),
                 **family_parameters,
             },
+            adaptive_search_protocol=ADAPTIVE_TWO_COORDINATE_SEARCH_PROTOCOL,
+            adaptive_search_query_phase=query_phase,
+            adaptive_search_coordinate_1_name=coordinate_names[0],
+            adaptive_search_coordinate_1_value=coordinates[0],
+            adaptive_search_coordinate_2_name=coordinate_names[1],
+            adaptive_search_coordinate_2_value=coordinates[1],
+            adaptive_search_feedback_parent_candidate_index=feedback_parent_index,
         ))
     feasible = [row for row in candidates if row.admissible]
     if not feasible:
@@ -429,6 +704,7 @@ def optimize_bounded_parameter_attack_for_video(
         endpoint_tolerance=float(endpoint_tolerance),
         minimum_quality_psnr=float(minimum_quality_psnr),
         query_budget=budget,
+        adaptive_search_protocol=ADAPTIVE_TWO_COORDINATE_SEARCH_PROTOCOL,
     )
 
 

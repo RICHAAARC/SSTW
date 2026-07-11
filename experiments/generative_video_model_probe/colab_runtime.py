@@ -5,11 +5,12 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import secrets
 import time
 from hashlib import sha256
 from pathlib import Path
-from typing import Any
+from typing import Any, Mapping
 
 from external_baseline.baseline_registry import audit_external_baseline_records
 from experiments.generative_video_model_probe.external_baseline_runner import run_external_baseline_status
@@ -48,6 +49,25 @@ from evaluation.protocol.table_builder import write_csv
 
 WAN21_PRIMARY_MODEL_ID = "Wan-AI/Wan2.1-T2V-1.3B-Diffusers"
 LTX_VIDEO_CROSS_MODEL_ID = "Lightricks/LTX-Video"
+
+REGISTERED_GENERATION_MODEL_FAMILIES: dict[str, dict[str, str]] = {
+    WAN21_PRIMARY_MODEL_ID: {
+        "generation_model_family": "diffusers_wan21_flow_matching_dit",
+        "pipeline_class_name": "WanPipeline",
+        "scheduler_id": "wan21_flow_matching_pipeline_default_scheduler",
+        "trajectory_time_grid_id": "wan_flow_scheduler_runtime_step_grid",
+    },
+    LTX_VIDEO_CROSS_MODEL_ID: {
+        "generation_model_family": "diffusers_ltx_video",
+        "pipeline_class_name": "LTXPipeline",
+        "scheduler_id": "ltx_pipeline_default_scheduler",
+        "trajectory_time_grid_id": (
+            "ltx_sequence_length_shifted_flow_scheduler_runtime_step_grid"
+        ),
+    },
+}
+
+_HUGGINGFACE_COMMIT_PATTERN = re.compile(r"^[0-9a-fA-F]{40,64}$")
 
 PAPER_RESULT_PROFILES = {"probe_paper", "pilot_paper", "full_paper"}
 
@@ -134,23 +154,126 @@ def _tensor_stats(value: Any) -> dict:
 
 
 def _model_family_from_id(model_id: str) -> str:
-    """根据模型 ID 判断当前生成模型家族。"""
-    normalized = model_id.lower()
-    if "wan2.1" in normalized or "wan2_1" in normalized or "wan-ai" in normalized:
-        return "diffusers_wan21_flow_matching_dit"
-    if "ltx" in normalized:
-        return "diffusers_ltx_video"
-    return "diffusers_video_generation"
+    """返回显式注册的生成模型家族, 未知 ID 必须立即失败。"""
+
+    normalized = str(model_id).strip()
+    try:
+        return REGISTERED_GENERATION_MODEL_FAMILIES[normalized][
+            "generation_model_family"
+        ]
+    except KeyError as exc:
+        registered = ", ".join(sorted(REGISTERED_GENERATION_MODEL_FAMILIES))
+        raise ValueError(
+            f"未注册的 generation model ID: {normalized!r}; 仅允许: {registered}"
+        ) from exc
+
+
+def _registered_generation_model(model_id: str) -> dict[str, str]:
+    """读取一个不可变副本, 供 pipeline、scheduler 和时间网格共同复用。"""
+
+    _model_family_from_id(model_id)
+    return dict(REGISTERED_GENERATION_MODEL_FAMILIES[str(model_id).strip()])
+
+
+def _resolve_generation_model_commit(
+    model_id: str,
+    *,
+    requested_revision: str | None,
+    hf_token: str | None,
+) -> tuple[str, str]:
+    """把配置 revision 解析为 Hugging Face 不可变 commit。
+
+    正式生成始终把解析后的 commit 传给 `from_pretrained`, 防止生成与 replay
+    在不同时间解析到不同模型内容。只有显式给出的不可变 commit 可以在 Hub
+    元数据暂时不可用时离线使用; branch 或 tag 无法证明不可变性, 因而失败。
+    """
+
+    _registered_generation_model(model_id)
+    configured_revision = str(requested_revision or "").strip() or None
+    try:
+        from huggingface_hub import model_info
+
+        info = model_info(
+            model_id,
+            revision=configured_revision,
+            token=hf_token,
+        )
+        resolved_commit = str(getattr(info, "sha", "") or "").strip()
+    except Exception as exc:
+        if configured_revision and _HUGGINGFACE_COMMIT_PATTERN.fullmatch(
+            configured_revision
+        ):
+            return configured_revision.lower(), "configured_immutable_commit_offline"
+        raise RuntimeError(
+            f"无法把 generation model revision 解析为不可变 commit: {model_id}"
+        ) from exc
+    if not _HUGGINGFACE_COMMIT_PATTERN.fullmatch(resolved_commit):
+        raise RuntimeError(
+            f"Hugging Face 未返回合法 generation model commit: {model_id}"
+        )
+    source = (
+        "configured_revision_huggingface_resolved_commit"
+        if configured_revision
+        else "huggingface_default_revision_resolved_commit"
+    )
+    return resolved_commit.lower(), source
+
+
+def _generation_model_provenance_from_pipeline(
+    pipeline: Any,
+    *,
+    expected_model_id: str,
+) -> dict[str, str | None]:
+    """读取 pipeline 加载时冻结的模型 provenance, 缺失时拒绝写正式记录。"""
+
+    provenance = getattr(pipeline, "_sstw_generation_model_provenance", None)
+    if not isinstance(provenance, dict):
+        raise RuntimeError("生成 pipeline 缺少 SSTW 冻结模型 provenance")
+    if provenance.get("generation_model_id") != expected_model_id:
+        raise RuntimeError("生成 pipeline provenance 与请求的 generation model ID 不一致")
+    commit = str(provenance.get("generation_model_commit_or_hash") or "")
+    if not _HUGGINGFACE_COMMIT_PATTERN.fullmatch(commit):
+        raise RuntimeError("生成 pipeline provenance 缺少不可变 commit")
+    return dict(provenance)
+
+
+def validate_generation_model_provenance(record: Mapping[str, Any]) -> str:
+    """校验正式 record 的模型家族和不可变 revision, 并返回 commit。"""
+
+    model_id = str(record.get("generation_model_id") or "").strip()
+    expected_family = _model_family_from_id(model_id)
+    observed_family = str(record.get("generation_model_family") or "").strip()
+    if observed_family != expected_family:
+        raise ValueError(
+            f"generation model family 与注册表不一致: {model_id}"
+        )
+    commit = str(record.get("generation_model_commit_or_hash") or "").strip()
+    if not _HUGGINGFACE_COMMIT_PATTERN.fullmatch(commit):
+        raise ValueError(f"正式 generation record 缺少不可变模型 commit: {model_id}")
+    if record.get("generation_model_revision_resolution_status") != "resolved_and_frozen":
+        raise ValueError(f"generation model revision 尚未冻结: {model_id}")
+    allowed_sources = {
+        "configured_revision_huggingface_resolved_commit",
+        "huggingface_default_revision_resolved_commit",
+        "configured_immutable_commit_offline",
+    }
+    if record.get("generation_model_revision_source") not in allowed_sources:
+        raise ValueError(f"generation model revision 来源不受支持: {model_id}")
+    return commit.lower()
 
 
 def _scheduler_id_for_model(model_id: str) -> str:
     """根据模型家族登记 pipeline 默认 scheduler 语义。"""
-    if _model_family_from_id(model_id) == "diffusers_wan21_flow_matching_dit":
-        return "wan21_flow_matching_pipeline_default_scheduler"
-    return "ltx_pipeline_default_scheduler"
+
+    return _registered_generation_model(model_id)["scheduler_id"]
 
 
-def _load_video_generation_pipeline(model_id: str, torch_dtype: Any) -> Any:
+def _load_video_generation_pipeline(
+    model_id: str,
+    torch_dtype: Any,
+    *,
+    revision: str | None = None,
+) -> Any:
     """加载真实视频生成 pipeline。
 
     该函数属于 GPU runtime 路径。Wan2.1 是主结果模型, LTX-Video 是预注册的
@@ -158,19 +281,48 @@ def _load_video_generation_pipeline(model_id: str, torch_dtype: Any) -> Any:
     """
     configure_noisy_library_progress()
     hf_token = os.environ.get("HF_TOKEN") or None
+    registration = _registered_generation_model(model_id)
+    resolved_commit, revision_source = _resolve_generation_model_commit(
+        model_id,
+        requested_revision=revision,
+        hf_token=hf_token,
+    )
     emit_progress_event("video_generation_model_load", f"start | model={model_id}")
-    if _model_family_from_id(model_id) == "diffusers_wan21_flow_matching_dit":
+    if registration["pipeline_class_name"] == "WanPipeline":
         with suppress_third_party_progress_output("video_generation_model_import"):
             from diffusers import WanPipeline
 
         with suppress_third_party_progress_output("video_generation_model_load"):
-            pipe = WanPipeline.from_pretrained(model_id, torch_dtype=torch_dtype, token=hf_token)
-    else:
+            pipe = WanPipeline.from_pretrained(
+                model_id,
+                revision=resolved_commit,
+                torch_dtype=torch_dtype,
+                token=hf_token,
+            )
+    elif registration["pipeline_class_name"] == "LTXPipeline":
         with suppress_third_party_progress_output("video_generation_model_import"):
             from diffusers import LTXPipeline
 
         with suppress_third_party_progress_output("video_generation_model_load"):
-            pipe = LTXPipeline.from_pretrained(model_id, torch_dtype=torch_dtype, token=hf_token)
+            pipe = LTXPipeline.from_pretrained(
+                model_id,
+                revision=resolved_commit,
+                torch_dtype=torch_dtype,
+                token=hf_token,
+            )
+    else:  # pragma: no cover - 注册表常量已限制所有分支
+        raise RuntimeError("注册模型缺少受支持的 pipeline class")
+    setattr(
+        pipe,
+        "_sstw_generation_model_provenance",
+        {
+            "generation_model_id": model_id,
+            "generation_model_requested_revision": str(revision or "") or None,
+            "generation_model_commit_or_hash": resolved_commit,
+            "generation_model_revision_source": revision_source,
+            "generation_model_revision_resolution_status": "resolved_and_frozen",
+        },
+    )
     progress_bar_status = configure_pipeline_progress_bar(pipe)
     if hasattr(pipe, "enable_model_cpu_offload"):
         pipe.enable_model_cpu_offload()
@@ -225,9 +377,7 @@ def _generation_kwargs_for_model(model_id: str, settings: dict[str, Any]) -> dic
 def _trajectory_time_grid_id_for_model(model_id: str) -> str:
     """登记生成阶段真实使用的模型家族 Flow 时间网格。"""
 
-    if _model_family_from_id(model_id) == "diffusers_ltx_video":
-        return "ltx_sequence_length_shifted_flow_scheduler_runtime_step_grid"
-    return "wan_flow_scheduler_runtime_step_grid"
+    return _registered_generation_model(model_id)["trajectory_time_grid_id"]
 
 
 def _export_video(frames: Any, path: Path, fps: int) -> None:
@@ -388,7 +538,16 @@ def _build_internal_ablation_generation_plan(main_plan: list[dict], profile: str
     return records
 
 
-def run_colab_probe(output_root: str | Path, prompt_suite_path: str | Path, profile: str, model_id: str, cross_model_id: str | None = None) -> dict:
+def run_colab_probe(
+    output_root: str | Path,
+    prompt_suite_path: str | Path,
+    profile: str,
+    model_id: str,
+    cross_model_id: str | None = None,
+    *,
+    model_revision: str | None = None,
+    cross_model_revision: str | None = None,
+) -> dict:
     """执行真实 Colab GPU 生成测试并写出 governed records。"""
     import torch
 
@@ -412,6 +571,17 @@ def run_colab_probe(output_root: str | Path, prompt_suite_path: str | Path, prof
             "SSTW 嵌入运行要求至少32字节的所有者密钥和非空 key ID"
         )
     authentication_key = authentication_key_text.encode("utf-8")
+    _registered_generation_model(model_id)
+    if cross_model_id:
+        _registered_generation_model(cross_model_id)
+    if cross_model_id == model_id and (
+        str(model_revision or "") != str(cross_model_revision or "")
+    ):
+        raise ValueError("同一 generation model ID 不能同时请求两个不同 revision")
+    requested_revision_by_model = {
+        model_id: model_revision,
+        **({cross_model_id: cross_model_revision} if cross_model_id else {}),
+    }
     main_plan = _build_generation_plan(prompt_suite, profile, model_id, cross_model_id)
     plan = main_plan + _build_internal_ablation_generation_plan(main_plan, profile)
     progress = ProgressReporter("flow_model_runtime_generation", len(plan), "video")
@@ -432,8 +602,16 @@ def run_colab_probe(output_root: str | Path, prompt_suite_path: str | Path, prof
         )
         model_for_item = item["generation_model_id"]
         if model_for_item not in active_pipe_by_model:
-            active_pipe_by_model[model_for_item] = _load_video_generation_pipeline(model_for_item, dtype)
+            active_pipe_by_model[model_for_item] = _load_video_generation_pipeline(
+                model_for_item,
+                dtype,
+                revision=requested_revision_by_model.get(model_for_item),
+            )
         pipe = active_pipe_by_model[model_for_item]
+        model_provenance = _generation_model_provenance_from_pipeline(
+            pipe,
+            expected_model_id=model_for_item,
+        )
         latent_layout = _flow_latent_layout_for_pipeline(
             pipe,
             model_id=model_for_item,
@@ -582,8 +760,10 @@ def run_colab_probe(output_root: str | Path, prompt_suite_path: str | Path, prof
             "generation_model_id": item["generation_model_id"],
             "generation_model_name": item["generation_model_id"],
             "generation_model_family": _model_family_from_id(item["generation_model_id"]),
-            "generation_model_version": "from_pretrained_runtime_resolution",
-            "generation_model_commit_or_hash": None,
+            "generation_model_version": model_provenance[
+                "generation_model_commit_or_hash"
+            ],
+            **model_provenance,
             "generation_model_license_status": "model_card_required",
             "hf_token_status": hf_token_status,
             "gpu_name": gpu_name,
@@ -755,9 +935,19 @@ def main() -> None:
     parser.add_argument("--profile", choices=sorted(PROFILE_SETTINGS), default="pilot")
     parser.add_argument("--model-id", default=WAN21_PRIMARY_MODEL_ID)
     parser.add_argument("--cross-model-id", default=LTX_VIDEO_CROSS_MODEL_ID)
+    parser.add_argument("--model-revision", default="")
+    parser.add_argument("--cross-model-revision", default="")
     args = parser.parse_args()
     cross_model_id = args.cross_model_id or None
-    print(json.dumps(run_colab_probe(args.output_root, args.prompt_suite_path, args.profile, args.model_id, cross_model_id), ensure_ascii=False, indent=2, sort_keys=True))
+    print(json.dumps(run_colab_probe(
+        args.output_root,
+        args.prompt_suite_path,
+        args.profile,
+        args.model_id,
+        cross_model_id,
+        model_revision=args.model_revision or None,
+        cross_model_revision=args.cross_model_revision or None,
+    ), ensure_ascii=False, indent=2, sort_keys=True))
 
 
 if __name__ == "__main__":

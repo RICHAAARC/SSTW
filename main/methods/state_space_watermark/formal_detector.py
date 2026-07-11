@@ -23,6 +23,18 @@ FLOW_STATE_POSTERIOR_SCORE_SOURCE = (
     "dual_hypothesis_state_space_marginal_likelihood_calibrated_probability_posterior"
 )
 
+REQUIRED_FLOW_PHASE_OBSERVATION_FIELDS = (
+    "flow_phase",
+    "endpoint_score",
+    "velocity_score",
+    "path_score",
+    "path_endpoint_consistency",
+    "replay_log_likelihood_ratio",
+    "replay_reliability",
+    "time_grid_reliability",
+    "coverage_ratio",
+)
+
 
 @dataclass(frozen=True)
 class FlowDetectorMechanismConfig:
@@ -82,8 +94,6 @@ class FrozenFlowDetectorCalibration:
             "fixed_fpr_threshold_score_source": self.fixed_fpr_threshold_score_source,
             **self.posterior_model.as_dict(),
             "frozen_final_score_threshold": self.final_score_threshold,
-            "threshold_source_split": "calibration",
-            "test_time_threshold_update_blocked": True,
             **self.mechanism_config.as_dict(),
         }
 
@@ -171,81 +181,60 @@ def _quantile(values: Iterable[float], quantile: float) -> float:
     return rows[position]
 
 
-def _cluster_id(record: Mapping[str, Any]) -> str:
-    """读取统计独立单元, 禁止把同视频 key trial 当成独立视频。"""
-
-    value = record.get("statistical_cluster_id")
-    if not value:
-        raise KeyError("正式 calibration record 缺少 statistical_cluster_id")
-    return str(value)
-
-
 def _observation_from_mapping(
     values: Mapping[str, Any],
 ) -> FlowEvidenceObservation:
-    """把一个已由调用方规范化的 phase 映射为状态空间输入。"""
+    """把一个完整规范化 phase 映射为状态空间输入。
 
-    def numeric_value(*field_names: str, default: float) -> float:
-        """按字段优先级读取数值, 显式的0不能被后备字段覆盖。"""
+    正式后验的每个维度都具有独立机制含义, 因而缺失值不能用0、记录级
+    聚合量或其他字段静默替代。显式的数值0仍是合法实测值。
+    """
 
-        for field_name in field_names:
-            value = values.get(field_name)
-            if value is None:
-                continue
-            result = float(value)
-            if not isfinite(result):
-                raise ValueError(f"Flow phase 观测字段必须为有限数值: {field_name}")
-            return result
-        return float(default)
+    missing_fields = [
+        field_name
+        for field_name in REQUIRED_FLOW_PHASE_OBSERVATION_FIELDS
+        if field_name not in values or values.get(field_name) is None
+    ]
+    if missing_fields:
+        raise KeyError(
+            "Flow phase 观测缺少必要字段: " + ", ".join(missing_fields)
+        )
 
-    endpoint = numeric_value("endpoint_score", default=0.0)
-    velocity = numeric_value("velocity_score", "S_velocity", default=0.0)
-    path = numeric_value("path_score", "S_path_inv", default=0.0)
-    consistency = numeric_value("path_endpoint_consistency", default=0.0)
-    coverage = numeric_value(
-        "coverage_ratio",
-        "endpoint_coverage_ratio",
-        default=0.0,
-    )
-    replay_reliability = numeric_value(
-        "replay_reliability",
-        "replay_reliability_weight",
-        default=0.0,
-    )
-    grid_reliability = numeric_value(
-        "time_grid_reliability",
-        default=replay_reliability,
-    )
-    replay_log_likelihood_ratio = numeric_value(
-        "replay_log_likelihood_ratio",
-        "replay_log_likelihood_ratio_mean",
-        default=0.0,
-    )
-    flow_phase = numeric_value("flow_phase", default=0.5)
+    def numeric_value(field_name: str) -> float:
+        """读取一个已确认存在的规范字段, 并拒绝非有限数值。"""
+
+        result = float(values[field_name])
+        if not isfinite(result):
+            raise ValueError(f"Flow phase 观测字段必须为有限数值: {field_name}")
+        return result
+
     return FlowEvidenceObservation(
-        endpoint_score=endpoint,
-        velocity_score=velocity,
-        path_score=path,
-        path_endpoint_consistency=consistency,
-        replay_log_likelihood_ratio=replay_log_likelihood_ratio,
-        coverage_ratio=coverage,
-        replay_reliability=replay_reliability,
-        time_grid_reliability=grid_reliability,
-        flow_phase=flow_phase,
+        endpoint_score=numeric_value("endpoint_score"),
+        velocity_score=numeric_value("velocity_score"),
+        path_score=numeric_value("path_score"),
+        path_endpoint_consistency=numeric_value("path_endpoint_consistency"),
+        replay_log_likelihood_ratio=numeric_value("replay_log_likelihood_ratio"),
+        coverage_ratio=numeric_value("coverage_ratio"),
+        replay_reliability=numeric_value("replay_reliability"),
+        time_grid_reliability=numeric_value("time_grid_reliability"),
+        flow_phase=numeric_value("flow_phase"),
     )
 
 
-def observation_sequence_from_flow_evidence_record(
-    record: Mapping[str, Any],
+def flow_evidence_observation_sequence_from_mappings(
+    phase_mappings: Sequence[Mapping[str, Any]],
 ) -> list[FlowEvidenceObservation]:
-    """读取真实逐 phase 观测序列, 并拒绝聚合或单步替代输入。"""
+    """把规范化逐 phase 映射转换为核心观测序列。
 
-    raw_sequence = record.get("flow_state_observation_sequence")
-    if not isinstance(raw_sequence, list) or len(raw_sequence) < 2:
-        raise ValueError("flow_state_observation_sequence 必须包含至少2个真实 phase 观测")
-    if not all(isinstance(row, Mapping) for row in raw_sequence):
-        raise TypeError("flow_state_observation_sequence 每一项必须为对象")
-    return [_observation_from_mapping(row) for row in raw_sequence]
+    该函数只处理 SSTW 观测本身, 不读取外层数据分区、样本角色或统计簇字段。
+    外层 runner 应先从 governed record 提取 phase 列表, 再调用此转换函数。
+    """
+
+    if len(phase_mappings) < 2:
+        raise ValueError("核心检测器必须接收至少2个真实 phase 观测")
+    if not all(isinstance(row, Mapping) for row in phase_mappings):
+        raise TypeError("每个 phase 观测必须为映射对象")
+    return [_observation_from_mapping(row) for row in phase_mappings]
 
 
 def _balanced_weights(labels: Any, group_ids: Sequence[str] | None = None) -> Any:
@@ -927,17 +916,27 @@ def _fixed_fpr_threshold(values: Iterable[float], target_fpr: float) -> float:
     return nextafter(rows[-1], inf)
 
 
-def score_flow_evidence_record(
-    record: Mapping[str, Any],
+def score_flow_observation_sequence(
+    observation_sequence: Sequence[FlowEvidenceObservation],
     posterior_model: CalibratedFlowPosteriorModel,
     *,
     mechanism_config: FlowDetectorMechanismConfig | None = None,
 ) -> dict[str, Any]:
-    """使用冻结概率模型计算一个 comparison unit。"""
+    """使用冻结概率模型计算一个核心观测序列。
+
+    输入只包含 SSTW 的逐 phase 状态观测。样本属于哪个数据分区、承担什么
+    论文角色以及如何写入正式记录, 均由外层实验协议负责。
+    """
 
     mechanism_config = mechanism_config or FlowDetectorMechanismConfig()
-    observations = observation_sequence_from_flow_evidence_record(record)
-    posterior = infer_flow_state_posterior(observations, posterior_model)
+    if len(observation_sequence) < 2:
+        raise ValueError("核心检测器必须接收至少2个真实 phase 观测")
+    if any(
+        not isinstance(observation, FlowEvidenceObservation)
+        for observation in observation_sequence
+    ):
+        raise TypeError("核心评分只接受 FlowEvidenceObservation 序列")
+    posterior = infer_flow_state_posterior(observation_sequence, posterior_model)
     payload = posterior.as_dict()
     # 判定分数必须保留计算精度。若沿用展示字段的8位小数，靠近冻结阈值的
     # 样本可能因格式化舍入改变判定，从而破坏 fixed-FPR 的比较语义。
@@ -953,60 +952,64 @@ def score_flow_evidence_record(
     return payload
 
 
-def fit_flow_evidence_calibration(
-    calibration_records: Iterable[Mapping[str, Any]],
+def fit_flow_detector_calibration(
+    observation_sequences: Iterable[Sequence[FlowEvidenceObservation]],
+    binary_labels: Iterable[int | bool],
+    cluster_ids: Iterable[str],
     *,
     target_fpr: float,
     mechanism_config: FlowDetectorMechanismConfig | None = None,
     detector_configuration_id: str = "sstw_core",
 ) -> FrozenFlowDetectorCalibration:
-    """使用 calibration positive/negative 拟合后验, 再由 negative 冻结 FPR 阈值。"""
+    """拟合核心概率后验, 并使用负类视频簇冻结 fixed-FPR 阈值。
+
+    `binary_labels` 中1表示水印假设, 0表示非水印假设。`cluster_ids`
+    表示统计独立单元, 同一视频的重复 key trial 必须使用相同簇标识。该
+    API 不解释外层样本角色或数据分区, 因而可以在不同运行环境中复用。
+    """
 
     mechanism_config = mechanism_config or FlowDetectorMechanismConfig()
     if not 0.0 < float(target_fpr) < 1.0:
         raise ValueError("target_fpr 必须位于 (0, 1)")
-    rows = [dict(row) for row in calibration_records]
-    invalid_splits = sorted({
-        str(row.get("split") or "missing")
-        for row in rows
-        if row.get("split") != "calibration"
+    sequences = [list(sequence) for sequence in observation_sequences]
+    labels_raw = list(binary_labels)
+    groups_raw = list(cluster_ids)
+    if not sequences:
+        raise ValueError("核心 calibration 至少需要一个观测序列")
+    if len(sequences) != len(labels_raw) or len(sequences) != len(groups_raw):
+        raise ValueError("observation_sequences、binary_labels 与 cluster_ids 长度必须一致")
+    invalid_label_values = sorted({
+        repr(label)
+        for label in labels_raw
+        if label not in (0, 1, False, True)
     })
-    if invalid_splits:
-        raise ValueError(
-            "概率后验与 fixed-FPR 阈值只能使用 calibration split, "
-            f"收到: {invalid_splits}"
-        )
-    allowed_sample_roles = {
-        "attacked_positive",
-        "clean_negative",
-        "controlled_negative",
-    }
-    invalid_sample_roles = sorted({
-        str(row.get("sample_role") or "missing")
-        for row in rows
-        if row.get("sample_role") not in allowed_sample_roles
-    })
-    if invalid_sample_roles:
-        raise ValueError(
-            "概率后验 calibration 包含未知 sample_role: "
-            f"{invalid_sample_roles}"
-        )
-    labels = [1 if row.get("sample_role") == "attacked_positive" else 0 for row in rows]
+    if invalid_label_values:
+        raise ValueError(f"binary_labels 只能包含0或1, 收到: {invalid_label_values}")
+    labels = [int(label) for label in labels_raw]
+    if any(
+        not isinstance(group_id, str) or not group_id.strip()
+        for group_id in groups_raw
+    ):
+        raise ValueError("cluster_ids 必须是非空字符串")
+    groups = [str(group_id) for group_id in groups_raw]
+    if any(len(sequence) < 2 for sequence in sequences):
+        raise ValueError("每个 calibration 输入必须包含至少2个真实 phase 观测")
+    if any(
+        not isinstance(observation, FlowEvidenceObservation)
+        for sequence in sequences
+        for observation in sequence
+    ):
+        raise TypeError("核心 calibration 只接受 FlowEvidenceObservation 序列")
     positive_count = sum(labels)
     negative_count = len(labels) - positive_count
     if positive_count < 2 or negative_count < 2:
         raise ValueError("概率后验 calibration 至少需要2条 positive 和2条 negative")
-    observation_sequences = [
-        observation_sequence_from_flow_evidence_record(row)
-        for row in rows
-    ]
     fitted = _fit_calibrated_posterior_model(
-        observation_sequences,
+        sequences,
         labels,
-        [_cluster_id(row) for row in rows],
+        groups,
     )
     model = fitted.model
-    negative_rows = [row for row, label in zip(rows, labels) if label == 0]
     negative_probabilities = [
         probability
         for probability, label in zip(
@@ -1017,7 +1020,7 @@ def fit_flow_evidence_calibration(
     ]
     negative_observations = [
         observations
-        for observations, label in zip(observation_sequences, labels)
+        for observations, label in zip(sequences, labels)
         if label == 0
     ]
     negative_admissibility_thresholds = [
@@ -1029,13 +1032,14 @@ def fit_flow_evidence_calibration(
         if label == 0
     ]
     negative_scores_by_cluster: dict[str, list[float]] = {}
-    for row, observations, probability, admissibility_thresholds in zip(
-        negative_rows,
+    negative_groups = [group for group, label in zip(groups, labels) if label == 0]
+    for group, observations, probability, admissibility_thresholds in zip(
+        negative_groups,
         negative_observations,
         negative_probabilities,
         negative_admissibility_thresholds,
     ):
-        negative_scores_by_cluster.setdefault(_cluster_id(row), []).append(
+        negative_scores_by_cluster.setdefault(group, []).append(
             _cross_fitted_conservative_score(
                 observations,
                 probability,
@@ -1055,7 +1059,7 @@ def fit_flow_evidence_calibration(
         calibration_positive_count=positive_count,
         calibration_negative_cluster_count=len(negative_scores_by_cluster),
         calibration_positive_cluster_count=len({
-            _cluster_id(row) for row, label in zip(rows, labels) if label == 1
+            group for group, label in zip(groups, labels) if label == 1
         }),
         posterior_probability_calibration_protocol=(
             "nested_source_video_group_cross_fitted_state_space_llr_and_platt"
@@ -1070,13 +1074,13 @@ def fit_flow_evidence_calibration(
 
 
 def apply_frozen_flow_detector(
-    record: Mapping[str, Any],
+    observation_sequence: Sequence[FlowEvidenceObservation],
     calibration: FrozenFlowDetectorCalibration,
 ) -> dict[str, Any]:
-    """在 held-out record 上应用冻结概率后验, 不更新任何参数。"""
+    """对一个核心观测序列应用冻结后验与阈值, 不更新任何参数。"""
 
-    score_payload = score_flow_evidence_record(
-        record,
+    score_payload = score_flow_observation_sequence(
+        observation_sequence,
         calibration.posterior_model,
         mechanism_config=calibration.mechanism_config,
     )
@@ -1086,7 +1090,4 @@ def apply_frozen_flow_detector(
         "frozen_final_score_threshold": calibration.final_score_threshold,
         "target_fpr": calibration.target_fpr,
         "decision": score >= calibration.final_score_threshold,
-        "threshold_source_split": "calibration",
-        "test_time_threshold_update_blocked": True,
-        "metric_status": "measured_formal",
     }

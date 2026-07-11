@@ -1,17 +1,43 @@
 {
   "config_kind": "generative_video_notebook_workflow_config",
   "config_version": "2026_07_10_complete_claim_profiles_v1",
+  "cross_model_generalization_protocol": {
+    "claim_scope": "supportive_not_primary_fixed_fpr_closure",
+    "cross_model_family": "diffusers_ltx_video_flow_matching_dit",
+    "cross_model_role": "cross_model_validation_model",
+    "full_paper": {
+      "independent_video_count": 200,
+      "prompt_count": 20,
+      "seed_count": 10
+    },
+    "method_mechanism_requirement": "same_sstw_velocity_endpoint_path_and_replay_mechanism",
+    "pilot_paper": {
+      "independent_video_count": 60,
+      "prompt_count": 10,
+      "seed_count": 6
+    },
+    "probe_paper": {
+      "independent_video_count": 20,
+      "prompt_count": 5,
+      "seed_count": 4
+    },
+    "sample_allocation_policy": "stratified_calibration_test_subset_for_resource_bounded_generalization"
+  },
+  "default_cross_model_generation_model_id": "Lightricks/LTX-Video",
+  "default_cross_model_generation_model_revision": null,
   "default_dataset_root_relative": "datasets/generative_video_prompt_suite",
   "default_drive_project_root": "/content/drive/MyDrive/SSTW",
+  "default_main_generation_model_id": "Wan-AI/Wan2.1-T2V-1.3B-Diffusers",
+  "default_main_generation_model_revision": null,
   "default_prompt_suite_path_relative": "datasets/generative_video_prompt_suite/prompt_seed_suite.json",
   "default_workflow_profile_by_notebook_role": {
     "external_baseline_formal_scoring": "probe_paper",
-    "motion_threshold_calibration": "motion_calibration",
-    "paper_gate_and_package": "probe_paper",
     "formal_comparison_scoring": "probe_paper",
-    "paper_evidence_postprocess": "probe_paper",
     "generative_video_generation": "probe_paper",
     "generative_video_quality_scoring": "probe_paper",
+    "motion_threshold_calibration": "motion_calibration",
+    "paper_evidence_postprocess": "probe_paper",
+    "paper_gate_and_package": "probe_paper",
     "runtime_attack": "probe_paper",
     "runtime_detection": "probe_paper"
   },
@@ -53,31 +79,9 @@
         "external_baseline_comparison",
         "external_baseline_self_containment_decision",
         "fair_detection_calibration",
+        "cross_method_video_quality_metrics",
         "formal_method_baseline_comparison",
         "formal_baseline_difference_interval",
-        "quick_tests_and_harness",
-        "drive_packaging"
-      ]
-    },
-    "paper_evidence_postprocess": {
-      "allowed_workflow_profiles": [
-        "probe_paper",
-        "pilot_paper",
-        "full_paper"
-      ],
-      "notebook_path": "paper_workflow/colab_notebooks/paper_evidence_postprocess_colab.ipynb",
-      "stage_plan": [
-        "motion_threshold_reuse_check",
-        "motion_consistency_exclusion_report",
-        "validation_internal_ablation",
-        "formal_adaptive_attack_execution",
-        "adaptive_attack_formal",
-        "replay_and_sketch_gate",
-        "statistical_confidence_interval",
-        "low_fpr_formal_statistics",
-        "formal_internal_ablation_summary",
-        "paper_result_artifact_builders",
-        "data_split_and_leakage_guard",
         "quick_tests_and_harness",
         "drive_packaging"
       ]
@@ -110,6 +114,63 @@
         "drive_packaging"
       ]
     },
+    "motion_threshold_calibration": {
+      "allowed_workflow_profiles": [
+        "motion_calibration"
+      ],
+      "notebook_path": "paper_workflow/colab_notebooks/motion_threshold_calibration_colab.ipynb",
+      "stage_plan": [
+        "prepare_prompt_suite",
+        "flow_model_runtime_generation",
+        "formal_metric_scoring",
+        "motion_threshold_calibration",
+        "quick_tests_and_harness",
+        "drive_packaging"
+      ]
+    },
+    "paper_evidence_postprocess": {
+      "allowed_workflow_profiles": [
+        "probe_paper",
+        "pilot_paper",
+        "full_paper"
+      ],
+      "notebook_path": "paper_workflow/colab_notebooks/paper_evidence_postprocess_colab.ipynb",
+      "stage_plan": [
+        "motion_threshold_reuse_check",
+        "motion_consistency_exclusion_report",
+        "validation_internal_ablation",
+        "formal_adaptive_attack_execution",
+        "adaptive_attack_formal",
+        "replay_and_sketch_gate",
+        "statistical_confidence_interval",
+        "low_fpr_formal_statistics",
+        "formal_internal_ablation_summary",
+        "paper_result_artifact_builders",
+        "data_split_and_leakage_guard",
+        "quick_tests_and_harness",
+        "drive_packaging"
+      ]
+    },
+    "paper_gate_and_package": {
+      "allowed_workflow_profiles": [
+        "probe_paper",
+        "pilot_paper",
+        "full_paper"
+      ],
+      "notebook_path": "paper_workflow/colab_notebooks/paper_gate_and_package_colab.ipynb",
+      "stage_plan": [
+        "validation_artifact_rebuild_dry_run",
+        "paper_profile_gate",
+        "reviewer_evidence_index",
+        "paper_profile_gate_figure_builder",
+        "paper_profile_package_manifest_builder",
+        "probe_paper_to_pilot_paper_transition_decision",
+        "pilot_paper_to_full_paper_transition_decision",
+        "full_paper_to_submission_freeze_transition_decision",
+        "quick_tests_and_harness",
+        "drive_packaging"
+      ]
+    },
     "runtime_attack": {
       "allowed_workflow_profiles": [
         "probe_paper",
@@ -135,42 +196,6 @@
         "quick_tests_and_harness",
         "drive_packaging"
       ]
-    },
-    "motion_threshold_calibration": {
-      "allowed_workflow_profiles": [
-        "motion_calibration"
-      ],
-      "notebook_path": "paper_workflow/colab_notebooks/motion_threshold_calibration_colab.ipynb",
-      "stage_plan": [
-        "prepare_prompt_suite",
-        "flow_model_runtime_generation",
-        "formal_metric_scoring",
-        "motion_threshold_calibration",
-        "quick_tests_and_harness",
-        "drive_packaging"
-      ]
-    },
-    "paper_gate_and_package": {
-      "allowed_workflow_profiles": [
-        "probe_paper",
-        "pilot_paper",
-        "full_paper"
-      ],
-      "notebook_path": "paper_workflow/colab_notebooks/paper_gate_and_package_colab.ipynb",
-      "stage_plan": [
-        "validation_artifact_rebuild_dry_run",
-        "paper_profile_gate",
-        "pilot_paper_gate",
-        "full_paper_result_checker",
-        "reviewer_evidence_index",
-        "paper_profile_gate_figure_builder",
-        "paper_profile_package_manifest_builder",
-        "probe_paper_to_pilot_paper_transition_decision",
-        "pilot_paper_to_full_paper_transition_decision",
-        "full_paper_to_submission_freeze_transition_decision",
-        "quick_tests_and_harness",
-        "drive_packaging"
-      ]
     }
   },
   "workflow_profile_aliases": {},
@@ -180,8 +205,6 @@
       "bootstrap_iteration_count": 10000,
       "disabled_stage_names": [
         "motion_threshold_calibration",
-        "paper_profile_gate",
-        "pilot_paper_gate",
         "pilot_paper_to_full_paper_transition_decision",
         "probe_paper_to_pilot_paper_transition_decision"
       ],
@@ -194,7 +217,9 @@
       "minimum_clean_negative_count": 6000,
       "motion_threshold_artifact_run_root_relative": "runs/generative_video_model_probe/motion_calibration",
       "paper_gate_profile": true,
-      "profile_status": "implemented_requires_pilot_paper_gate_and_full_scale_resources",
+      "profile_gate_contract": "shared_parameterized_gate_target_fpr_and_sample_scale_only",
+      "profile_gate_entrypoint": "experiments.generative_video_model_probe.paper_profile_gate",
+      "profile_status": "implemented_requires_pilot_paper_transition_and_full_scale_resources",
       "profile_switching_note": "full_paper 使用三个正式层级共同的完整机制、46 个 runtime attack 与 11 个 non-runtime/adaptive 协议; 当前层级采用 200 个 prompt × 30 个 seed = 6000 个独立生成单元, calibration/test 各 3000 个视频, target_fpr=0.001。层级差异只允许是样本规模、统计功效和目标 FPR。",
       "protocol_config_path": "configs/protocol/full_paper_generative_probe.json",
       "result_tier": "full_paper",
@@ -242,10 +267,8 @@
       "baseline_sample_count": 600,
       "bootstrap_iteration_count": 5000,
       "disabled_stage_names": [
-        "motion_threshold_calibration",
-        "paper_profile_gate",
-        "full_paper_result_checker",
         "full_paper_to_submission_freeze_transition_decision",
+        "motion_threshold_calibration",
         "probe_paper_to_pilot_paper_transition_decision"
       ],
       "drive_log_dir_relative": "logs/generative_video_model_probe/pilot_paper",
@@ -257,7 +280,9 @@
       "minimum_clean_negative_count": 600,
       "motion_threshold_artifact_run_root_relative": "runs/generative_video_model_probe/motion_calibration",
       "paper_gate_profile": true,
-      "profile_status": "implemented_requires_probe_paper_gate_and_self_contained_baselines",
+      "profile_gate_contract": "shared_parameterized_gate_target_fpr_and_sample_scale_only",
+      "profile_gate_entrypoint": "experiments.generative_video_model_probe.paper_profile_gate",
+      "profile_status": "implemented_requires_probe_paper_transition_and_self_contained_baselines",
       "profile_switching_note": "pilot_paper 使用三个正式层级共同的完整机制、46 个 runtime attack 与 11 个 non-runtime/adaptive 协议; 当前层级采用 50 个 prompt × 12 个 seed = 600 个独立生成单元, calibration/test 各 300 个视频, target_fpr=0.01。层级差异只允许是样本规模、统计功效和目标 FPR。",
       "protocol_config_path": "configs/protocol/pilot_paper_generative_probe.json",
       "result_tier": "pilot_paper",
@@ -267,12 +292,11 @@
     "probe_paper": {
       "baseline_sample_count": 60,
       "bootstrap_iteration_count": 500,
+      "claim_support_status": "probe_paper_target_fpr_0_1_complete_claim_evidence",
       "disabled_stage_names": [
+        "full_paper_to_submission_freeze_transition_decision",
         "motion_threshold_calibration",
-        "pilot_paper_gate",
-        "pilot_paper_to_full_paper_transition_decision",
-        "full_paper_result_checker",
-        "full_paper_to_submission_freeze_transition_decision"
+        "pilot_paper_to_full_paper_transition_decision"
       ],
       "drive_log_dir_relative": "logs/generative_video_model_probe/probe_paper",
       "drive_package_dir_relative": "probe_paper",
@@ -282,13 +306,6 @@
       "method_sample_count": 60,
       "minimum_clean_negative_count": 60,
       "motion_threshold_artifact_run_root_relative": "runs/generative_video_model_probe/motion_calibration",
-      "paper_gate_profile": true,
-      "profile_status": "implemented_mainline_entry_requires_self_contained_baselines",
-      "profile_switching_note": "probe_paper 使用三个正式层级共同的完整机制、46 个 runtime attack 与 11 个 non-runtime/adaptive 协议; 当前层级采用 10 个 prompt × 6 个 seed = 60 个独立生成单元, calibration/test 各 30 个视频, target_fpr=0.1。层级差异只允许是样本规模、统计功效和目标 FPR。",
-      "protocol_config_path": "configs/protocol/probe_paper_generative_probe.json",
-      "result_tier": "probe_paper",
-      "runtime_profile": "probe_paper",
-      "claim_support_status": "probe_paper_target_fpr_0_1_complete_claim_evidence",
       "next_allowed_result_profiles_after_pass": [
         "pilot_paper"
       ],
@@ -296,31 +313,15 @@
         "full_paper",
         "submission_freeze"
       ],
+      "paper_gate_profile": true,
+      "profile_gate_contract": "shared_parameterized_gate_target_fpr_and_sample_scale_only",
+      "profile_gate_entrypoint": "experiments.generative_video_model_probe.paper_profile_gate",
+      "profile_status": "implemented_mainline_entry_requires_self_contained_baselines",
+      "profile_switching_note": "probe_paper 使用三个正式层级共同的完整机制、46 个 runtime attack 与 11 个 non-runtime/adaptive 协议; 当前层级采用 10 个 prompt × 6 个 seed = 60 个独立生成单元, calibration/test 各 30 个视频, target_fpr=0.1。层级差异只允许是样本规模、统计功效和目标 FPR。",
+      "protocol_config_path": "configs/protocol/probe_paper_generative_probe.json",
+      "result_tier": "probe_paper",
+      "runtime_profile": "probe_paper",
       "target_fpr": 0.1
     }
-  },
-  "default_main_generation_model_id": "Wan-AI/Wan2.1-T2V-1.3B-Diffusers",
-  "default_cross_model_generation_model_id": "Lightricks/LTX-Video",
-  "cross_model_generalization_protocol": {
-    "cross_model_family": "diffusers_ltx_video_flow_matching_dit",
-    "cross_model_role": "cross_model_validation_model",
-    "method_mechanism_requirement": "same_sstw_velocity_endpoint_path_and_replay_mechanism",
-    "sample_allocation_policy": "stratified_calibration_test_subset_for_resource_bounded_generalization",
-    "probe_paper": {
-      "prompt_count": 5,
-      "seed_count": 4,
-      "independent_video_count": 20
-    },
-    "pilot_paper": {
-      "prompt_count": 10,
-      "seed_count": 6,
-      "independent_video_count": 60
-    },
-    "full_paper": {
-      "prompt_count": 20,
-      "seed_count": 10,
-      "independent_video_count": 200
-    },
-    "claim_scope": "supportive_not_primary_fixed_fpr_closure"
   }
 }

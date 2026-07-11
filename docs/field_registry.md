@@ -241,7 +241,13 @@ Notebook 与 repository module 的跨边界数据
 | primary_sstw_tc_model_status | governance | none | true | false | false | Whether the runtime model matches the configured SSTW-TC primary model. |
 | generation_model_version | protocol | none | true | false | false | generative_video_model_probe generation model version. |
 | generation_model_role | protocol | none | true | false | false | Role assigned to a generation model in the SSTW-TC evaluation plan. |
+| generation_model_requested_revision | protocol | none | true | false | false | 生成入口显式请求的 Hugging Face revision; 未指定时为空并解析默认 revision。 |
 | generation_model_commit_or_hash | protocol | none | true | false | false | generative_video_model_probe generation model commit or hash. |
+| generation_model_revision_source | provenance | none | true | true | false | 不可变模型 commit 来自配置解析、Hub 默认 revision 解析或离线显式 commit。 |
+| generation_model_revision_resolution_status | governance | none | true | true | false | 生成与 replay 是否共同绑定到已经解析并冻结的不可变模型 commit。 |
+| generation_model_provenance_decision | governance | none | true | true | false | 正式 Flow records 的注册模型家族、不可变 commit 与冻结来源是否全部通过。 |
+| generation_model_provenance_failures | governance | none | true | false | false | 不满足正式生成模型 provenance 契约的记录及失败原因。 |
+| generation_model_provenance_failure_reason | governance | none | true | false | false | 单条正式记录的模型注册或不可变 revision 校验失败原因。 |
 | generation_model_license_status | protocol | none | true | false | false | generative_video_model_probe generation model license audit status. |
 | generation_backend_id | protocol | none | true | false | false | generative_video_model_probe generation backend identifier. |
 | generation_backend_status | protocol | none | true | false | false | generative_video_model_probe generation backend status. |
@@ -1004,8 +1010,25 @@ Notebook 与 repository module 的跨边界数据
 | minimum_heldout_negative_event_count_per_family | protocol | none | true | false | false | gate 要求的 held-out split 每个 negative family 最小事件数。 |
 | minimum_negative_event_count_per_family | protocol | none | true | false | false | gate 要求的每个 negative family 最小事件数, 用于检查 clean negative event 是否按 family 均衡覆盖。 |
 | minimum_attack_event_count_per_attack | protocol | none | true | false | false | gate 要求的每个 attack 最小 held-out positive event 数量。 |
-| minimum_full_paper_external_baseline_trace_count | protocol | none | true | false | false | full_paper formal external baseline comparison 对每个必需 baseline 的最小 held-out trace 覆盖数量。 |
-| minimum_full_paper_internal_ablation_trace_count | protocol | none | true | false | false | full_paper internal ablation 对每个必需消融变体的最小 held-out trace 覆盖数量。 |
+| minimum_external_baseline_trace_count | protocol | none | true | false | false | 当前 paper profile 对每个正式 baseline 的最小 held-out trace 覆盖数量, 该字段只允许随统计规模变化。 |
+| minimum_internal_ablation_trace_count | protocol | none | true | false | false | 当前 paper profile 对每个必需消融变体的最小 held-out trace 覆盖数量, 该字段只允许随统计规模变化。 |
+| paper_profile_names | protocol | none | true | false | false | 当前正式 profile 允许进入公共参数化 gate 的运行 profile 名称列表。 |
+| profile_gate_entrypoint | protocol | none | true | false | false | 外层 workflow 为当前 profile 选择的公共 gate Python 模块入口。 |
+| profile_gate_contract | protocol | none | true | false | false | 外层 workflow 声明三档 profile 共用参数化 gate 且仅允许 FPR 与样本统计规模变化。 |
+| profile_stage_transition_control | governance | none | true | false | false | 公共 gate 通过后仍须由外层 workflow 的 profile 专属 transition stage 决定后续阶段。 |
+| paper_profile_unique_video_count | metric | none | true | true | false | 公共 gate 按主模型 full-method 独立生成身份统计的当前 profile 视频总数。 |
+| paper_profile_calibration_unique_video_count | metric | none | true | true | false | 公共 gate 在 calibration split 中统计的独立主方法视频数量。 |
+| paper_profile_heldout_test_unique_video_count | metric | none | true | true | false | 公共 gate 在 held-out test split 中统计的独立主方法视频数量。 |
+| paper_profile_calibration_seed_per_prompt_min | metric | none | true | true | false | calibration split 中每个 prompt 覆盖 seed 数量的最小值。 |
+| paper_profile_test_seed_per_prompt_min | metric | none | true | true | false | held-out test split 中每个 prompt 覆盖 seed 数量的最小值。 |
+| calibration_negative_video_cluster_count | metric | none | true | true | false | calibration negative 按 source-video cluster 去重后的独立统计单元数量。 |
+| heldout_negative_video_cluster_count | metric | none | true | true | false | held-out negative 按 source-video cluster 去重后的独立统计单元数量。 |
+| calibration_negative_family_cluster_counts | metric | none | true | false | false | calibration split 中各真实负假设族按 source-video cluster 去重后的数量映射。 |
+| heldout_negative_family_cluster_counts | metric | none | true | false | false | held-out split 中各真实负假设族按 source-video cluster 去重后的数量映射。 |
+| heldout_attack_event_counts | metric | none | true | false | false | held-out attacked-positive 按正式 attack 名统计的事件数量映射。 |
+| external_baseline_trace_count_min | metric | none | true | true | false | 所有必需正式 baseline 在 held-out 主方法 trace 上覆盖数量的最小值。 |
+| external_baseline_trace_counts | metric | none | true | false | false | 各必需正式 baseline 在 held-out 主方法 trace 上的覆盖数量映射。 |
+| full_paper_gate_decision | governance | none | true | true | false | 公共参数化 gate 为 full_paper 写出的 profile 专属兼容决策字段。 |
 | require_external_baseline_comparison_ready | protocol | none | true | false | false | pilot_paper gate 是否要求 external_baseline adapter comparison 已完成。 |
 | require_modern_external_baseline_formal_results | protocol | none | true | false | false | pilot_paper gate 是否要求现代视频水印 baseline 使用正式 adapter measured_formal 结果。 |
 | require_internal_ablation_matrix_ready | protocol | none | true | false | false | pilot_paper gate 是否要求内部消融矩阵已完成。 |
@@ -1027,10 +1050,6 @@ Notebook 与 repository module 的跨边界数据
 | required_external_baseline_adapter_names | protocol | none | true | false | false | pilot_paper gate 要求出现的 external_baseline adapter 名称列表。 |
 | required_modern_external_baseline_adapter_names | protocol | none | true | false | false | pilot_paper gate 要求产出 measured_formal records 的现代视频水印 baseline adapter 名称列表。 |
 | required_internal_ablation_variants | protocol | none | true | false | false | pilot_paper gate 要求出现的内部消融 method variant 列表。 |
-| minimum_probe_paper_external_baseline_trace_count | protocol | none | true | false | false | probe_paper external baseline comparison 要求覆盖的 held-out trace 最小数量。 |
-| minimum_probe_paper_internal_ablation_trace_count | protocol | none | true | false | false | probe_paper internal ablation 每个必需变体要求覆盖的 held-out trace 最小数量。 |
-| minimum_pilot_paper_external_baseline_trace_count | protocol | none | true | false | false | pilot_paper external baseline comparison 要求覆盖的 held-out trace 最小数量。 |
-| minimum_pilot_paper_internal_ablation_trace_count | protocol | none | true | false | false | pilot_paper internal ablation 每个必需变体要求覆盖的 held-out trace 最小数量。 |
 | minimum_internal_ablation_variant_count | protocol | none | true | false | false | pilot_paper gate 要求的内部消融变体最小数量。 |
 | minimum_modern_external_baseline_formal_adapter_count | protocol | none | true | false | false | pilot_paper gate 要求的现代视频水印 measured_formal adapter 最小数量。 |
 | pilot_paper_external_baseline_comparison_ready | governance | none | true | true | false | pilot_paper gate 中 external_baseline comparison 是否满足完整论文协议要求。 |
@@ -1964,7 +1983,22 @@ Notebook 与 repository module 的跨边界数据
 | claim_decision_source_path | governance | none | true | false | true | 审稿证据索引读取当前主张判定的 governed artifact 路径。 |
 | replay_likelihood_model_id | method | none | true | true | false | replay 残差概率模型的固定标识, 用于阻断误差比冒充似然比。 |
 | replay_minimum_observation_noise_variance | method | none | true | false | false | replay 高斯观测模型预注册的最小方差。 |
-| replay_relative_observation_noise_standard_deviation | method | none | true | false | false | replay 高斯观测模型相对 endpoint 能量的预注册噪声标准差。 |
+| replay_relative_observation_noise_standard_deviation | method | none | true | true | false | 仅由模型特定 calibration clean-video null residual 拟合并冻结的相对 endpoint 噪声标准差。 |
+| replay_likelihood_calibration_protocol | method | none | true | true | false | replay 噪声模型的拟合协议, 正式值必须为 clean-video 簇等权最大似然拟合。 |
+| replay_likelihood_calibration_cluster_count | metric | none | true | true | false | replay 噪声模型拟合使用的独立 clean-video 簇数量, 不把多个时间网格重复计数。 |
+| replay_likelihood_calibration_record_id | identity | none | true | false | false | 模型特定 replay 噪声冻结记录的稳定摘要标识。 |
+| replay_likelihood_calibration_source_split | protocol | none | true | true | false | replay 噪声模型的数据来源, 正式路径只能是 calibration split。 |
+| replay_likelihood_calibration_clean_video_cluster_count | metric | none | true | true | false | 单个生成模型参与 replay 噪声拟合的独立 clean-video 簇数量。 |
+| replay_likelihood_calibration_null_residual_observation_count | metric | none | true | false | false | calibration clean videos 在预注册噪声拟合网格上产生的 null residual 观测总数。 |
+| replay_likelihood_calibration_step_count | protocol | none | true | true | false | 噪声拟合 bootstrap replay 使用的预注册单网格步数。 |
+| replay_likelihood_calibration_step_counts | protocol | none | true | true | false | 模型特定噪声冻结记录实际使用的 replay 步数列表。 |
+| replay_likelihood_calibration_grid_policy | protocol | none | true | true | false | 噪声拟合只使用单个预注册主网格以限制 GPU 计算与内存占用的协议。 |
+| replay_likelihood_calibration_status | governance | none | true | true | false | 模型特定 replay 噪声是否已由 calibration clean videos 真实拟合并冻结。 |
+| test_time_likelihood_update_blocked | governance | none | true | true | false | held-out test 与 adaptive 查询期间是否禁止更新 replay 噪声模型。 |
+| replay_likelihood_calibration_decision | governance | none | true | true | true | 全部正式生成模型的 replay 噪声拟合、覆盖与冻结审计结论。 |
+| replay_likelihood_calibration_record_count | metric | none | true | false | true | 正式 replay 噪声冻结记录数量。 |
+| replay_likelihood_calibration_failures | governance | none | true | false | true | replay 噪声拟合协议、样本规模或模型覆盖失败明细。 |
+| minimum_replay_likelihood_calibration_clean_video_cluster_count | protocol | none | true | true | false | 每个生成模型拟合 replay 噪声所需的最少独立 calibration clean-video 簇数量。 |
 | flow_state_observation_step_index | method | none | true | false | false | 固定 replay 路径上状态空间观测的步骤索引。 |
 | velocity_score | metric | none | true | true | false | 单个 Flow phase 的 key-conditioned 速度投影观测。 |
 | path_score | metric | none | true | true | false | 单个 Flow phase 的 key-conditioned 路径投影观测。 |
@@ -2019,6 +2053,10 @@ Notebook 与 repository module 的跨边界数据
 | claim_1_velocity_causal_detector_protocol | governance | none | true | true | false | Claim-1 两侧统一应用完整方法冻结检测器的协议标识。 |
 | detector_score_source | provenance | none | true | true | false | adaptive 候选查询所返回检测分数的明确机制来源。 |
 | adaptive_attack_query_budget | governance | none | true | true | false | 单视频单协议实际允许的冻结检测器查询上限。 |
+| adaptive_attack_replay_likelihood_model_id | method | none | true | true | false | adaptive 最优候选使用的冻结 replay 概率模型标识。 |
+| adaptive_attack_replay_likelihood_calibration_protocol | method | none | true | true | false | adaptive 最优候选使用的 replay 噪声 calibration 协议。 |
+| adaptive_attack_replay_likelihood_calibration_cluster_count | metric | none | true | true | false | adaptive 最优候选使用的冻结 replay 噪声模型独立拟合簇数量。 |
+| adaptive_attack_replay_relative_observation_noise_standard_deviation | method | none | true | true | false | adaptive 最优候选查询复用的模型特定冻结 replay 相对噪声标准差。 |
 | adaptive_query_role | governance | none | true | false | false | adaptive 查询属于 held-out 视频还是 calibration public negative。 |
 | adaptive_attack_candidate_query_count | metric | none | true | true | false | held-out 视频 adaptive 候选的真实冻结检测器查询数。 |
 | adaptive_attack_public_negative_query_count | metric | none | true | true | false | 仅用于预注册探测顺序的 calibration public negative 查询数。 |
@@ -2074,6 +2112,14 @@ Notebook 与 repository module 的跨边界数据
 | attack_parameters | method | none | true | true | false | 单次 adaptive detector 查询实际使用的连续攻击参数。 |
 | adaptive_attack_selected_parameters | method | none | true | true | false | 冻结检测器目标下最终选中候选的攻击参数。 |
 | adaptive_attack_optimizer_type | method | none | true | true | false | 逐视频 adaptive attack 使用的序贯黑盒优化算法。 |
+| adaptive_search_protocol | method | none | true | true | false | 参数化 adaptive attack 的二维 detector-feedback pattern search 协议标识。 |
+| adaptive_search_coordinate_names | method | none | true | true | false | 当前攻击族两个独立归一化搜索坐标的稳定名称。 |
+| adaptive_search_query_phase | method | none | true | true | false | 单次查询属于基点、坐标探针或 detector-feedback 细化阶段。 |
+| adaptive_search_coordinate_1_name | method | none | true | true | false | 第一个独立原生攻击参数对应的归一化坐标名称。 |
+| adaptive_search_coordinate_1_value | method | none | true | true | false | 第一个原生攻击参数的实际归一化查询坐标。 |
+| adaptive_search_coordinate_2_name | method | none | true | true | false | 第二个独立原生攻击参数对应的归一化坐标名称。 |
+| adaptive_search_coordinate_2_value | method | none | true | true | false | 第二个原生攻击参数的实际归一化查询坐标。 |
+| adaptive_search_feedback_parent_candidate_index | provenance | none | true | true | false | detector-feedback 细化查询所依据的历史最优可接受候选索引; 初始探针为空。 |
 | adaptive_attack_public_negative_informed_strength | metric | none | true | true | false | calibration public negative 查询确定的 held-out 初始攻击强度。 |
 | model_vae_regeneration_status | governance | none | true | true | false | 候选是否完成模型 VAE encode-perturb-decode 重生成。 |
 | model_vae_class | provenance | none | true | true | false | 执行生成式重压缩的官方 VAE 类名。 |
@@ -2093,6 +2139,32 @@ Notebook 与 repository module 的跨边界数据
 | formal_paired_video_quality_ready | governance | none | true | true | false | 当前记录或整体质量门禁是否具备所需配对质量指标。 |
 | formal_paired_video_quality_required_count | metric | none | true | true | false | 正式质量门禁要求配对指标的 SSTW 完整方法视频数量。 |
 | formal_paired_video_quality_ready_count | metric | none | true | true | false | 已成功获得配对质量指标的 SSTW 完整方法视频数量。 |
+| baseline_clean_reference_video_path | provenance | none | true | true | false | 正式 baseline 生成自身水印时使用的同模型、prompt、seed clean reference 路径。 |
+| baseline_clean_reference_trajectory_trace_id | provenance | none | true | false | false | 匹配 clean reference 对应的生成轨迹标识, 用于审计输入身份。 |
+| baseline_clean_reference_status | governance | none | true | true | false | baseline 输入是否成功匹配同模型、prompt、seed clean reference。 |
+| baseline_input_source_policy | protocol | none | true | true | false | 正式 baseline 必须在 clean reference 上嵌入自己的水印, 不得复用 SSTW watermarked source。 |
+| require_baseline_matched_video_quality_metrics | protocol | none | true | true | false | 当前 profile 是否要求 SSTW 与全部正式 baseline 完成同口径配对质量计算。 |
+| video_quality_comparison_protocol | protocol | none | true | true | false | 跨方法质量比较使用同源 clean reference、方法自身 watermarked source 以及配对 PSNR、SSIM、时间差分的固定协议。 |
+| quality_metric_source_kind | provenance | none | true | false | false | 方法级质量汇总所消费的 governed source record 类型。 |
+| paired_quality_unit_count | metric | none | true | true | false | 去除重复 attack 行后实际参与方法级配对质量计算的独立视频单元数。 |
+| paired_quality_ready_count | metric | none | true | true | false | 成功得到全部配对质量指标的独立视频单元数。 |
+| paired_quality_blocked_count | metric | none | true | false | false | 配对质量解码、路径或协议不满足要求的视频单元数。 |
+| mean_paired_watermark_psnr | metric | none | true | true | false | 方法自身 watermarked source 相对匹配 clean reference 的平均配对 PSNR。 |
+| mean_paired_watermark_ssim | metric | none | true | true | false | 方法自身 watermarked source 相对匹配 clean reference 的平均配对 SSIM。 |
+| mean_paired_temporal_delta_error | metric | none | true | true | false | 方法自身 watermarked source 相对匹配 clean reference 的平均时间差分误差。 |
+| robustness_tpr_at_target_fpr | metric | none | true | true | false | 与质量记录同一方法在当前固定 FPR 下的 held-out TPR。 |
+| robustness_tpr_ci_lower | metric | none | true | false | false | 当前固定 FPR 下方法鲁棒性 TPR 置信区间下界。 |
+| robustness_tpr_ci_upper | metric | none | true | false | false | 当前固定 FPR 下方法鲁棒性 TPR 置信区间上界。 |
+| quality_metric_failure_reasons | governance | none | true | false | false | 方法级配对质量被阻断的全部 fail-closed 原因。 |
+| video_quality_required_method_ids | protocol | none | true | true | false | 正式质量比较必须覆盖的 SSTW 与 baseline 方法集合。 |
+| video_quality_ready_method_ids | governance | none | true | true | false | 已完成同口径配对质量和固定 FPR 鲁棒性绑定的方法集合。 |
+| video_quality_missing_method_ids | governance | none | true | true | false | 尚未完成正式质量比较的方法集合。 |
+| sstw_paired_video_quality_ready | governance | none | true | true | false | SSTW 完整方法的配对 PSNR、SSIM 与时间差分质量是否全部就绪。 |
+| baseline_matched_video_quality_ready | governance | none | true | true | false | 5个正式 baseline 是否均以匹配 clean reference 和自身 watermarked source 完成配对质量计算。 |
+| baseline_matched_video_quality_ready_method_ids | governance | none | true | false | false | 已完成同口径配对质量计算的正式 baseline 集合。 |
+| baseline_matched_video_quality_missing_method_ids | governance | none | true | true | false | 缺少路径、视频或配对指标的正式 baseline 集合。 |
+| baseline_matched_video_quality_passed | governance | none | true | true | true | 当前 profile 的跨方法匹配配对质量公共证据门禁是否通过。 |
+| alternate_encodings | protocol | none | true | false | false | 同一 governed figure rows 的补充坐标编码, 用于并列呈现 PSNR 与 SSIM。 |
 | detector_configuration_id | provenance | none | true | false | false | 外层实验为参数化核心检测器分配的配置标识, 核心方法不根据该标识切换语义。 |
 | flow_state_admissibility_enforced | method | none | true | true | false | 冻结检测器是否执行状态证据可接受域约束。 |
 | velocity_constraint_enabled | method | none | true | true | false | 当前 scheduler 运行是否启用 SSTW 速度场弱约束。 |
@@ -2160,6 +2232,7 @@ Notebook 与 repository module 的跨边界数据
 | replay_global_reliability | metric | none | true | false | false | 多时间网格 replay uncertainty 形成的记录级全局可靠性。 |
 | path_replay_uncertainty_weighting_status | governance | none | true | true | false | 当前 phase 路径观测采用的 replay 不确定性直接加权协议。 |
 | adaptive_parameter_search_policy | method | none | true | true | false | 连续攻击参数如何由先前冻结检测器查询反馈选择下一候选。 |
+| attack_strength_semantics | method | none | true | false | false | 兼容字段 attack_strength 的汇总含义, 二维搜索中该值仅作唯一性摘要而不控制原生攻击参数。 |
 | adaptive_detector_feedback_search_decision | governance | none | true | true | false | 所有逐视频连续攻击是否按查询预算完成不重复的 detector-feedback 搜索。 |
 | adaptive_model_vae_regeneration_decision | governance | none | true | true | false | 生成式攻击的每个候选是否真实执行模型 VAE encode-perturb-decode。 |
 | adaptive_public_negative_probe_decision | governance | none | true | true | false | public-negative 探测是否独立完成并只向 held-out 搜索传递攻击参数。 |

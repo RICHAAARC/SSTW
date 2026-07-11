@@ -1126,7 +1126,14 @@ def build_prompt_suite_command(layout: dict[str, str]) -> list[str]:
     return [sys.executable, "scripts/prepare_generative_video_prompt_suite.py", "--output-root", layout["drive_dataset_root"]]
 
 
-def build_colab_runtime_command(layout: dict[str, str], profile: str, model_id: str, cross_model_id: str = "") -> list[str]:
+def build_colab_runtime_command(
+    layout: dict[str, str],
+    profile: str,
+    model_id: str,
+    cross_model_id: str = "",
+    model_revision: str = "",
+    cross_model_revision: str = "",
+) -> list[str]:
     """构造 generative_video_model_probe Colab GPU 运行命令。"""
     command = [
         sys.executable,
@@ -1143,6 +1150,10 @@ def build_colab_runtime_command(layout: dict[str, str], profile: str, model_id: 
     ]
     if cross_model_id:
         command.extend(["--cross-model-id", cross_model_id])
+    if model_revision:
+        command.extend(["--model-revision", model_revision])
+    if cross_model_revision:
+        command.extend(["--cross-model-revision", cross_model_revision])
     return command
 
 
@@ -1263,7 +1274,8 @@ def build_external_baseline_official_bundle_generation_command(
     """构造现代 baseline official bundle 自动生成命令。
 
     该命令只对仓库能真实调用官方 API 或项目内官方流程运行器的 baseline 生成 bundle。
-    当前可自动尝试 VideoSeal、VideoShield、VidSig、REVMark 与 WAM-frame。其它需要未公开训练 extractor、
+    当前主实验自动闭合 VideoSeal、VideoShield、VidSig、VideoMark 与 WAM-frame;
+    REVMark 仅作为可选附录方法。其它需要未公开训练 extractor、
     PRC key、maintained info 或超出当前 GPU 资源的 baseline 会写入计划和阻断说明,
     不会被伪造成 measured_formal。
     """
@@ -1539,32 +1551,31 @@ def build_paper_result_artifact_builders_command(layout: dict[str, str]) -> list
     ]
 
 
-def build_pilot_paper_gate_command(layout: dict[str, str]) -> list[str]:
-    """构建当前 profile 的 fixed-FPR gate 命令, fixed-FPR 口径来自 protocol config。"""
+def build_cross_method_video_quality_metrics_command(layout: dict[str, str]) -> list[str]:
+    """在正式 baseline 视频仍可访问时构造同口径配对质量命令。"""
+
     return [
         sys.executable,
         "-m",
-        "experiments.generative_video_model_probe.pilot_paper_gate",
+        "experiments.generative_video_model_probe.paper_result_artifact_builders",
         "--run-root",
         layout["drive_run_root"],
         "--config-path",
         layout["protocol_config_path"],
-        "--write-outputs",
+        "--quality-only",
     ]
+
+
+def build_pilot_paper_gate_command(layout: dict[str, str]) -> list[str]:
+    """兼容旧调用名, 实际统一转发到参数化 paper profile gate。"""
+
+    return build_paper_profile_gate_command(layout)
 
 
 def build_full_paper_result_checker_command(layout: dict[str, str]) -> list[str]:
-    """构造 full_paper 结果充分性检查命令。"""
-    return [
-        sys.executable,
-        "-m",
-        "scripts.check_results.full_paper_result_checker",
-        "--run-root",
-        layout["drive_run_root"],
-        "--config-path",
-        layout["protocol_config_path"],
-        "--write-outputs",
-    ]
+    """兼容旧调用名, 实际统一转发到参数化 paper profile gate。"""
+
+    return build_paper_profile_gate_command(layout)
 
 
 def build_validation_artifact_rebuild_dry_run_command(layout: dict[str, str]) -> list[str]:
@@ -1867,6 +1878,7 @@ def build_configured_colab_stage_command(
         "statistical_confidence_interval": build_statistical_confidence_interval_command,
         "low_fpr_formal_statistics": build_low_fpr_formal_statistics_command,
         "paper_result_artifact_builders": build_paper_result_artifact_builders_command,
+        "cross_method_video_quality_metrics": build_cross_method_video_quality_metrics_command,
         "sstw_measured_formal_result": build_sstw_measured_formal_result_command,
         "fair_detection_calibration": build_fair_detection_calibration_command,
         "formal_method_baseline_comparison": build_formal_method_baseline_comparison_command,
@@ -1899,11 +1911,25 @@ def build_configured_colab_stage_command(
             else workflow_config.get("default_cross_model_generation_model_id")
             or ""
         )
+        model_revision = str(
+            options["model_revision"]
+            if options.get("model_revision")
+            else workflow_config.get("default_main_generation_model_revision")
+            or ""
+        )
+        cross_model_revision = str(
+            options["cross_model_revision"]
+            if options.get("cross_model_revision")
+            else workflow_config.get("default_cross_model_generation_model_revision")
+            or ""
+        )
         return build_colab_runtime_command(
             layout,
             runtime_profile,
             model_id,
             cross_model_id,
+            model_revision,
+            cross_model_revision,
         )
     if stage_name == "formal_metric_scoring":
         return build_formal_metric_command(

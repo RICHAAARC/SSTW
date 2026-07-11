@@ -20,10 +20,17 @@ from typing import Any, Mapping
 
 from external_baseline.official_eval_adapters.common import build_official_reference_bundle_execution_status
 from external_baseline.official_runtime_progress import emit_official_reference_plan
-from external_baseline.runtime_trace_io import build_comparison_unit_id, comparable_detection_records
+from external_baseline.runtime_trace_io import (
+    SAME_SOURCE_POSTHOC_COMPARISON_DESIGN,
+    build_comparison_unit_id,
+    comparable_detection_records,
+)
 from external_baseline.score_semantics import official_score_formal_comparison_summary
 from external_baseline.video_tensor_io import read_video_tchw_uint8, write_video_tchw
-from evaluation.attacks.video_runtime_attack_protocol import apply_runtime_attack_to_video_tensor
+from evaluation.attacks.video_runtime_attack_protocol import (
+    apply_runtime_attack_to_video_file,
+    prefixed_runtime_attack_metadata,
+)
 from runtime.core.digest import build_stable_digest
 from runtime.core.progress import ProgressReporter, suppress_third_party_progress_output
 
@@ -268,16 +275,26 @@ def run_revmark_official_runtime(config: REVMarkOfficialRuntimeConfig) -> dict[s
                     residual = encoder(cover, message)
                     stego = (cover + config.embed_strength * framenorm(residual)).clamp(-1.0, 1.0)
             watermarked = _model_video_to_tchw_unit_range(stego)
-            attacked = apply_runtime_attack_to_video_tensor(watermarked, str(record.get("attack_name") or ""))
-            clean_negative_base = _model_video_to_tchw_unit_range(cover)
-            clean_negative = apply_runtime_attack_to_video_tensor(clean_negative_base, str(record.get("attack_name") or ""))
+            clean_source = _model_video_to_tchw_unit_range(cover)
             video_stem = output_json.stem
             watermarked_path = baseline_video_dir / f"{video_stem}_watermarked.mp4"
             attacked_path = baseline_video_dir / f"{video_stem}_attacked.mp4"
+            clean_source_path = baseline_video_dir / f"{video_stem}_clean_source.mp4"
             clean_negative_path = baseline_video_dir / f"{video_stem}_clean_negative.mp4"
             write_video_tchw(watermarked_path, watermarked, fps=fps)
-            write_video_tchw(attacked_path, attacked, fps=fps)
-            write_video_tchw(clean_negative_path, clean_negative, fps=fps)
+            write_video_tchw(clean_source_path, clean_source, fps=fps)
+            attack_metadata = apply_runtime_attack_to_video_file(
+                watermarked_path,
+                attacked_path,
+                str(record.get("attack_name") or ""),
+                fps=fps,
+            )
+            clean_negative_attack_metadata = apply_runtime_attack_to_video_file(
+                clean_source_path,
+                clean_negative_path,
+                str(record.get("attack_name") or ""),
+                fps=fps,
+            )
             attacked_read, attacked_info = read_video_tchw_uint8(attacked_path, empty_error="revmark_attacked_video_empty_after_reencode")
             clean_negative_read, clean_info = read_video_tchw_uint8(clean_negative_path, empty_error="revmark_clean_negative_video_empty_after_reencode")
             score = _decode_score(decoder, attacked_read, reference_bits, config=config, device=device)
@@ -304,6 +321,9 @@ def run_revmark_official_runtime(config: REVMarkOfficialRuntimeConfig) -> dict[s
                 "external_baseline_source_video_path": str(watermarked_path),
                 "external_baseline_attacked_video_path": str(attacked_path),
                 "external_baseline_generation_model_id": "revmark_official_encoder_decoder",
+                "external_baseline_comparison_design": SAME_SOURCE_POSTHOC_COMPARISON_DESIGN,
+                "external_baseline_quality_comparison_protocol": "paired_same_source_distortion",
+                "external_baseline_clean_source_video_path": str(clean_source_path),
                 "external_baseline_official_execution_mode": "revmark_official_encoder_decoder",
                 "official_result_provenance": REPOSITORY_PROVENANCE,
                 "official_adapter_baseline_id": BASELINE_ID,
@@ -324,6 +344,11 @@ def run_revmark_official_runtime(config: REVMarkOfficialRuntimeConfig) -> dict[s
                 "trajectory_trace_id": record.get("trajectory_trace_id"),
                 "source_sstw_video_path": str(source_video_path),
                 "sstw_attacked_video_path": str(record.get("attacked_video_path") or ""),
+                **attack_metadata,
+                **prefixed_runtime_attack_metadata(
+                    clean_negative_attack_metadata,
+                    prefix="clean_negative_",
+                ),
             })
             _write_json(output_json, payload)
             generated += 1

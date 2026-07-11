@@ -23,9 +23,19 @@ from evaluation.attacks.video_runtime_attack_protocol import (
     target_fpr_levels_from_config,
 )
 from evaluation.metrics.video_file_metrics import compute_paired_video_quality_metrics
+from evaluation.metrics.semantic_video_metrics import (
+    DEFAULT_CLIP_MODEL_ID,
+    DEFAULT_SEMANTIC_THRESHOLD,
+    compute_clip_text_video_similarity,
+)
 from evaluation.protocol.flow_evidence_fields import with_flow_evidence_protocol_defaults
 from evaluation.protocol.record_writer import write_json, write_jsonl
 from evaluation.protocol.table_builder import write_csv
+from external_baseline.runtime_trace_io import (
+    NATIVE_GENERATION_COMPARISON_DESIGN,
+    SAME_SOURCE_POSTHOC_COMPARISON_DESIGN,
+    baseline_comparison_design,
+)
 
 
 DEFAULT_PROTOCOL_CONFIG = "configs/protocol/probe_paper_generative_probe.json"
@@ -66,6 +76,7 @@ PAPER_RESULT_ARTIFACT_RELPATHS = (
     "artifacts/paper_result_artifact_skeleton_decision.json",
     "reports/paper_result_artifact_skeleton_report.md",
 )
+NATIVE_GENERATION_MAXIMUM_MEAN_SEMANTIC_DEGRADATION = 0.05
 
 COMPLETE_MECHANISM_ARTIFACT_RELPATHS = (
     "records/trajectory_sketch_records.jsonl",
@@ -73,19 +84,25 @@ COMPLETE_MECHANISM_ARTIFACT_RELPATHS = (
     "records/paired_path_evidence_gain_records.jsonl",
     "records/paired_velocity_causal_evidence_records.jsonl",
     "records/wrong_key_replay_records.jsonl",
+    "records/heldout_posterior_calibration_records.jsonl",
+    "records/formal_adaptive_attack_query_budget_checkpoint_records.jsonl",
     "thresholds/formal_flow_detector_thresholds.jsonl",
     "thresholds/replay_gaussian_likelihood_calibrations.jsonl",
     "tables/formal_flow_detection_table.csv",
     "tables/paired_path_evidence_gain_table.csv",
     "tables/paired_velocity_causal_evidence_table.csv",
+    "tables/heldout_posterior_calibration_table.csv",
+    "tables/formal_adaptive_attack_query_budget_checkpoint_table.csv",
     "tables/cross_model_generalization_table.csv",
     "artifacts/formal_flow_evidence_decision.json",
     "artifacts/three_layer_mechanism_evidence_decision.json",
     "artifacts/cross_model_generalization_decision.json",
     "artifacts/replay_and_sketch_gate_decision.json",
+    "artifacts/heldout_posterior_calibration_decision.json",
     "artifacts/complete_paper_mechanism_claim_decision.json",
     "reports/formal_flow_evidence_report.md",
     "reports/replay_and_sketch_gate_report.md",
+    "reports/heldout_posterior_calibration_report.md",
     "reports/complete_paper_mechanism_claim_report.md",
 )
 
@@ -236,6 +253,112 @@ def _resolve_quality_video_path(
     return None
 
 
+def _candidate_project_roots(run_root: Path) -> list[Path]:
+    """从运行目录推断 prompt suite 可能所在的项目根目录。"""
+
+    candidates = [*run_root.parents, Path("/content/drive/MyDrive/SSTW"), Path(r"G:\我的云端硬盘\SSTW")]
+    unique: list[Path] = []
+    for candidate in candidates:
+        if candidate not in unique:
+            unique.append(candidate)
+    return unique
+
+
+def _prompt_text_by_id(run_root: Path) -> dict[str, str]:
+    """读取正式 prompt 文本, 供 native-generation 语义质量评测使用。"""
+
+    manifest = _read_json(run_root / "artifacts" / "generation_manifest.json")
+    candidates = [
+        Path(str(path))
+        for path in manifest.get("input_paths", [])
+        if str(path or "").strip()
+    ]
+    for project_root in _candidate_project_roots(run_root):
+        candidates.append(
+            project_root
+            / "datasets"
+            / "generative_video_prompt_suite"
+            / "prompt_seed_suite.json"
+        )
+    prompt_suite = next((path for path in candidates if path.is_file()), None)
+    if prompt_suite is None:
+        return {}
+    payload = _read_json(prompt_suite)
+    return {
+        str(row.get("prompt_id")): str(row.get("prompt_text"))
+        for row in payload.get("prompts", [])
+        if isinstance(row, Mapping)
+        and str(row.get("prompt_id") or "")
+        and str(row.get("prompt_text") or "")
+    }
+
+
+def _native_generation_semantic_quality_metrics(
+    *,
+    prompt_id: str,
+    prompt_text: str,
+    clean_source_path: Path,
+    watermarked_source_path: Path,
+) -> dict[str, Any]:
+    """用真实 CLIP 文本-视频分数评价 native-generation baseline。
+
+    native-generation 方法没有与 SSTW 共用的逐像素源视频, 因而禁止计算跨生成器
+    PSNR / SSIM。这里分别评价其官方 clean 与 watermarked 视频对同一 prompt 的
+    语义一致性, 并记录均值差。该指标不冒充逐像素失真或 FVD。
+    """
+
+    clean = compute_clip_text_video_similarity(
+        clean_source_path,
+        prompt_text,
+        model_id=DEFAULT_CLIP_MODEL_ID,
+    )
+    watermarked = compute_clip_text_video_similarity(
+        watermarked_source_path,
+        prompt_text,
+        model_id=DEFAULT_CLIP_MODEL_ID,
+    )
+    clean_score = _safe_float(clean.get("semantic_consistency_score"))
+    watermarked_score = _safe_float(watermarked.get("semantic_consistency_score"))
+    ready = (
+        clean.get("semantic_metric_status") == "ready"
+        and watermarked.get("semantic_metric_status") == "ready"
+        and clean_score is not None
+        and watermarked_score is not None
+    )
+    return {
+        "prompt_id": prompt_id,
+        "native_generation_quality_status": "ready" if ready else "blocked",
+        "native_generation_quality_failure_reason": (
+            "none"
+            if ready
+            else ";".join(
+                str(value)
+                for value in (
+                    clean.get("semantic_metric_failure_reason"),
+                    watermarked.get("semantic_metric_failure_reason"),
+                )
+                if value not in {None, "", "none"}
+            )
+            or "semantic_metric_not_ready"
+        ),
+        "native_generation_semantic_metric_name": "clip_text_video_similarity",
+        "native_generation_semantic_model_id": DEFAULT_CLIP_MODEL_ID,
+        "native_generation_clean_semantic_consistency_score": clean_score,
+        "native_generation_watermarked_semantic_consistency_score": watermarked_score,
+        "native_generation_semantic_consistency_delta": (
+            round(watermarked_score - clean_score, 8)
+            if clean_score is not None and watermarked_score is not None
+            else None
+        ),
+        "native_generation_clean_source_video_path": str(clean_source_path),
+        "native_generation_watermarked_source_video_path": str(watermarked_source_path),
+        "paired_video_quality_status": "not_applicable_native_generation",
+        "paired_watermark_psnr": None,
+        "paired_watermark_ssim": None,
+        "paired_temporal_delta_error": None,
+    }
+
+
 def _fair_quality_robustness_by_method(
     run_root: Path,
     target_fpr: float,
@@ -264,22 +387,42 @@ def _quality_record_payload(
     failure_reasons: list[str],
     robustness_record: Mapping[str, Any] | None,
     context: Mapping[str, Any],
+    quality_protocol: str,
 ) -> dict[str, Any]:
-    """把逐视频配对质量结果聚合为单个方法级论文记录。"""
+    """按方法适用的质量协议聚合逐视频结果。"""
 
-    ready_units = [
-        item
-        for item in unit_metrics
-        if item.get("paired_video_quality_status") == "ready"
-        and all(
-            _safe_float(item.get(field_name)) is not None
-            for field_name in (
-                "paired_watermark_psnr",
-                "paired_watermark_ssim",
-                "paired_temporal_delta_error",
+    if quality_protocol == "paired_same_source_distortion":
+        ready_units = [
+            item
+            for item in unit_metrics
+            if item.get("paired_video_quality_status") == "ready"
+            and all(
+                _safe_float(item.get(field_name)) is not None
+                for field_name in (
+                    "paired_watermark_psnr",
+                    "paired_watermark_ssim",
+                    "paired_temporal_delta_error",
+                )
             )
-        )
-    ]
+        ]
+    elif quality_protocol == "native_generation_semantic_quality":
+        ready_units = [
+            item
+            for item in unit_metrics
+            if item.get("native_generation_quality_status") == "ready"
+            and all(
+                _safe_float(item.get(field_name)) is not None
+                for field_name in (
+                    "native_generation_clean_semantic_consistency_score",
+                    "native_generation_watermarked_semantic_consistency_score",
+                    "native_generation_semantic_consistency_delta",
+                )
+            )
+            and item.get("paired_video_quality_status")
+            == "not_applicable_native_generation"
+        ]
+    else:
+        raise ValueError(f"unsupported_video_quality_protocol:{quality_protocol}")
     robustness_ready = bool(
         robustness_record
         and robustness_record.get("fair_comparison_status") == "ready"
@@ -293,6 +436,35 @@ def _quality_record_payload(
         )
     )
     normalized_failures = sorted({str(value) for value in failure_reasons if str(value)})
+    mean_clean_semantic = _mean_optional(
+        item.get("native_generation_clean_semantic_consistency_score")
+        for item in ready_units
+    )
+    mean_watermarked_semantic = _mean_optional(
+        item.get("native_generation_watermarked_semantic_consistency_score")
+        for item in ready_units
+    )
+    mean_semantic_delta = _mean_optional(
+        item.get("native_generation_semantic_consistency_delta")
+        for item in ready_units
+    )
+    if quality_protocol == "native_generation_semantic_quality" and ready_units:
+        if (
+            mean_clean_semantic is None
+            or mean_clean_semantic < DEFAULT_SEMANTIC_THRESHOLD
+        ):
+            normalized_failures.append("native_generation_clean_semantic_quality_below_minimum")
+        if (
+            mean_watermarked_semantic is None
+            or mean_watermarked_semantic < DEFAULT_SEMANTIC_THRESHOLD
+        ):
+            normalized_failures.append("native_generation_watermarked_semantic_quality_below_minimum")
+        if (
+            mean_semantic_delta is None
+            or mean_semantic_delta
+            < -NATIVE_GENERATION_MAXIMUM_MEAN_SEMANTIC_DEGRADATION
+        ):
+            normalized_failures.append("native_generation_mean_semantic_degradation_above_maximum")
     if not robustness_ready:
         normalized_failures.append("fair_robustness_record_missing_or_not_unique")
     status = (
@@ -314,9 +486,26 @@ def _quality_record_payload(
         "quality_metric_scope": "method_watermark_embedding_quality",
         "quality_metric_source_kind": source_kind,
         "quality_metric_source_record_count": source_record_count,
-        "paired_quality_unit_count": len(unit_metrics),
-        "paired_quality_ready_count": len(ready_units),
-        "paired_quality_blocked_count": len(unit_metrics) - len(ready_units),
+        "quality_evaluation_unit_count": len(unit_metrics),
+        "quality_evaluation_ready_count": len(ready_units),
+        "quality_evaluation_blocked_count": len(unit_metrics) - len(ready_units),
+        "paired_quality_unit_count": (
+            len(unit_metrics) if quality_protocol == "paired_same_source_distortion" else 0
+        ),
+        "paired_quality_ready_count": (
+            len(ready_units) if quality_protocol == "paired_same_source_distortion" else 0
+        ),
+        "paired_quality_blocked_count": (
+            len(unit_metrics) - len(ready_units)
+            if quality_protocol == "paired_same_source_distortion"
+            else 0
+        ),
+        "native_generation_semantic_quality_unit_count": (
+            len(unit_metrics) if quality_protocol == "native_generation_semantic_quality" else 0
+        ),
+        "native_generation_semantic_quality_ready_count": (
+            len(ready_units) if quality_protocol == "native_generation_semantic_quality" else 0
+        ),
         "mean_paired_watermark_psnr": _mean_optional(
             item.get("paired_watermark_psnr") for item in ready_units
         ),
@@ -325,6 +514,19 @@ def _quality_record_payload(
         ),
         "mean_paired_temporal_delta_error": _mean_optional(
             item.get("paired_temporal_delta_error") for item in ready_units
+        ),
+        "mean_native_generation_clean_semantic_consistency": mean_clean_semantic,
+        "mean_native_generation_watermarked_semantic_consistency": mean_watermarked_semantic,
+        "mean_native_generation_semantic_consistency_delta": mean_semantic_delta,
+        "native_generation_semantic_consistency_minimum": (
+            DEFAULT_SEMANTIC_THRESHOLD
+            if quality_protocol == "native_generation_semantic_quality"
+            else None
+        ),
+        "native_generation_maximum_mean_semantic_degradation": (
+            NATIVE_GENERATION_MAXIMUM_MEAN_SEMANTIC_DEGRADATION
+            if quality_protocol == "native_generation_semantic_quality"
+            else None
         ),
         "robustness_tpr_at_target_fpr": (
             _safe_float(robustness_record.get("tpr_at_target_fpr"))
@@ -341,12 +543,15 @@ def _quality_record_payload(
             if robustness_record
             else None
         ),
-        "video_quality_comparison_protocol": context["video_quality_comparison_protocol"],
+        "video_quality_comparison_protocol": quality_protocol,
+        "cross_generator_pixel_metric_prohibited": (
+            quality_protocol == "native_generation_semantic_quality"
+        ),
         "quality_metric_failure_reasons": sorted(set(normalized_failures)),
         "video_quality_metric_status": status,
         "metric_status": "measured_formal" if status == "ready" else "missing",
         "claim_support_status": claim_status,
-    }, trajectory_source_level="paper_paired_quality_from_method_own_watermarked_videos", claim_support_status=claim_status)
+    }, trajectory_source_level="paper_method_appropriate_quality_from_method_own_videos", claim_support_status=claim_status)
 
 
 def _sstw_paired_quality_record(
@@ -389,6 +594,7 @@ def _sstw_paired_quality_record(
         failure_reasons=failures,
         robustness_record=robustness_record,
         context=context,
+        quality_protocol="paired_same_source_distortion",
     )
 
 
@@ -398,13 +604,9 @@ def _baseline_paired_quality_record(
     score_records: list[dict[str, Any]],
     robustness_record: Mapping[str, Any] | None,
     context: Mapping[str, Any],
+    prompt_text_by_id: Mapping[str, str],
 ) -> dict[str, Any]:
-    """用 baseline 自身 watermarked source 与匹配 clean reference 计算质量。
-
-    同一 watermarked source 会在多个 attack score record 中重复出现。该函数先按
-    模型、prompt、seed 和两条视频路径去重, 再执行一次配对度量, 避免把攻击数量
-    错误当成独立质量样本。
-    """
+    """按 baseline 生成设计选择适用质量协议并去除 attack 重复。"""
 
     scoped = [
         record
@@ -414,14 +616,25 @@ def _baseline_paired_quality_record(
         and record.get("external_baseline_result_used_for_claim") is True
     ]
     failures: list[str] = []
-    unique_pairs: dict[tuple[str, ...], tuple[Path, Path]] = {}
+    comparison_design = baseline_comparison_design(baseline_id)
+    quality_protocol = (
+        "paired_same_source_distortion"
+        if comparison_design == SAME_SOURCE_POSTHOC_COMPARISON_DESIGN
+        else "native_generation_semantic_quality"
+    )
+    unique_pairs: dict[tuple[str, str, str], tuple[Path, Path]] = {}
     identities_to_paths: dict[tuple[str, str, str], set[tuple[str, str]]] = {}
     for record in scoped:
+        observed_design = str(record.get("external_baseline_comparison_design") or "")
+        observed_quality_protocol = str(
+            record.get("external_baseline_quality_comparison_protocol") or ""
+        )
         reference_status = str(record.get("baseline_clean_reference_status") or "")
         input_policy = str(record.get("baseline_input_source_policy") or "")
         reference_raw = (
-            record.get("baseline_clean_reference_video_path")
-            or record.get("source_video_path")
+            record.get("baseline_quality_reference_video_path")
+            or record.get("external_baseline_clean_source_video_path")
+            or record.get("baseline_clean_reference_video_path")
         )
         source_raw = record.get("external_baseline_source_video_path")
         reference_path = _resolve_quality_video_path(
@@ -430,10 +643,20 @@ def _baseline_paired_quality_record(
             allow_run_video_basename_fallback=True,
         )
         source_path = _resolve_quality_video_path(run_root, source_raw)
-        if reference_status != "matched_same_model_prompt_seed_clean_reference":
-            failures.append("baseline_clean_reference_identity_not_matched")
-        if input_policy != "baseline_embeds_own_watermark_into_clean_reference":
-            failures.append("baseline_input_source_policy_invalid")
+        if observed_design != comparison_design:
+            failures.append("baseline_comparison_design_mismatch")
+        if observed_quality_protocol != quality_protocol:
+            failures.append("baseline_quality_comparison_protocol_mismatch")
+        if comparison_design == SAME_SOURCE_POSTHOC_COMPARISON_DESIGN:
+            if reference_status != "same_source_posthoc_clean_reference":
+                failures.append("baseline_same_source_clean_reference_status_invalid")
+            if input_policy != "baseline_embeds_own_watermark_into_clean_reference":
+                failures.append("baseline_same_source_input_policy_invalid")
+        else:
+            if reference_status != "native_generation_own_model_clean_reference":
+                failures.append("baseline_native_generation_clean_reference_status_invalid")
+            if input_policy != "baseline_uses_official_native_generation_model":
+                failures.append("baseline_native_generation_input_policy_invalid")
         if reference_path is None:
             failures.append("baseline_clean_reference_video_missing")
         if source_path is None:
@@ -441,36 +664,70 @@ def _baseline_paired_quality_record(
         if reference_path is None or source_path is None:
             continue
         identity = (
-            str(record.get("generation_model_id") or ""),
+            str(
+                record.get("external_baseline_generation_model_id")
+                or record.get("generation_model_id")
+                or ""
+            ),
             str(record.get("prompt_id") or ""),
             str(record.get("seed_id") or ""),
         )
+        if not all(identity):
+            failures.append("baseline_quality_identity_incomplete")
+            continue
         path_pair = (str(reference_path.resolve()), str(source_path.resolve()))
         identities_to_paths.setdefault(identity, set()).add(path_pair)
-        unique_pairs[(*identity, *path_pair)] = (reference_path, source_path)
+        unique_pairs[identity] = (reference_path, source_path)
     if not scoped:
         failures.append("required_baseline_measured_formal_records_missing")
     if any(len(path_pairs) != 1 for path_pairs in identities_to_paths.values()):
         failures.append("baseline_identity_maps_to_multiple_watermarked_sources")
-    unit_metrics = [
-        compute_paired_video_quality_metrics(reference_path, source_path)
-        for reference_path, source_path in unique_pairs.values()
-    ]
-    for metrics in unit_metrics:
-        if metrics.get("paired_video_quality_status") != "ready":
-            failures.append(
-                "baseline_paired_video_quality_"
-                + str(metrics.get("paired_video_quality_status") or "unknown")
+    unit_metrics: list[dict[str, Any]] = []
+    for identity, (reference_path, source_path) in unique_pairs.items():
+        if comparison_design == SAME_SOURCE_POSTHOC_COMPARISON_DESIGN:
+            metrics = compute_paired_video_quality_metrics(reference_path, source_path)
+            if metrics.get("paired_video_quality_status") != "ready":
+                failures.append(
+                    "baseline_paired_video_quality_"
+                    + str(metrics.get("paired_video_quality_status") or "unknown")
+                )
+        else:
+            prompt_id = identity[1]
+            prompt_text = str(prompt_text_by_id.get(prompt_id) or "")
+            if not prompt_text:
+                failures.append("baseline_native_generation_prompt_text_missing")
+                continue
+            metrics = _native_generation_semantic_quality_metrics(
+                prompt_id=prompt_id,
+                prompt_text=prompt_text,
+                clean_source_path=reference_path,
+                watermarked_source_path=source_path,
             )
+            if metrics.get("native_generation_quality_status") != "ready":
+                failures.append(
+                    "baseline_native_generation_semantic_quality_"
+                    + str(metrics.get("native_generation_quality_status") or "unknown")
+                )
+        unit_metrics.append({
+            **metrics,
+            "quality_identity_generation_model_id": identity[0],
+            "quality_identity_prompt_id": identity[1],
+            "quality_identity_seed_id": identity[2],
+        })
     return _quality_record_payload(
         method_id=baseline_id,
         method_role="modern_external_baseline",
-        source_kind="external_baseline_score_records_matched_source_pairs",
+        source_kind=(
+            "external_baseline_same_source_posthoc_quality_pairs"
+            if comparison_design == SAME_SOURCE_POSTHOC_COMPARISON_DESIGN
+            else "external_baseline_native_generation_semantic_quality_units"
+        ),
         source_record_count=len(scoped),
         unit_metrics=unit_metrics,
         failure_reasons=failures,
         robustness_record=robustness_record,
         context=context,
+        quality_protocol=quality_protocol,
     )
 
 
@@ -488,6 +745,7 @@ def build_video_quality_metric_records(run_root: str | Path, context: Mapping[st
         run_root,
         float(context["target_fpr"]),
     )
+    prompt_texts = _prompt_text_by_id(run_root)
     records = [
         _sstw_paired_quality_record(
             formal_records,
@@ -502,12 +760,13 @@ def build_video_quality_metric_records(run_root: str | Path, context: Mapping[st
             external_records,
             robustness_by_method.get(str(baseline_id)),
             context,
+            prompt_texts,
         ))
     return records
 
 
 def audit_video_quality_metric_records(records: list[dict[str, Any]], context: Mapping[str, Any]) -> dict[str, Any]:
-    """审计 SSTW 与5个 baseline 是否都具备匹配配对质量。"""
+    """审计 SSTW 与5个 baseline 是否具备适用于各自生成设计的质量证据。"""
 
     required_baselines = {
         str(value)
@@ -530,8 +789,15 @@ def audit_video_quality_metric_records(records: list[dict[str, Any]], context: M
     baseline_ready = bool(required_baselines) and baseline_ready_methods == required_baselines
     protocol_matches = all(
         item.get("video_quality_comparison_protocol")
-        == context.get("video_quality_comparison_protocol")
+        == (
+            "paired_same_source_distortion"
+            if item.get("method_id") == SSTW_METHOD_ID
+            or baseline_comparison_design(str(item.get("method_id") or ""))
+            == SAME_SOURCE_POSTHOC_COMPARISON_DESIGN
+            else "native_generation_semantic_quality"
+        )
         for item in records
+        if item.get("method_id")
     )
     decision = (
         "PASS"
@@ -547,7 +813,7 @@ def audit_video_quality_metric_records(records: list[dict[str, Any]], context: M
         "stage_id": "video_quality_metric_builder",
         "paper_result_level": context["paper_result_level"],
         "target_fpr": context["target_fpr"],
-        "video_quality_comparison_protocol": context["video_quality_comparison_protocol"],
+        "video_quality_comparison_protocol": "method_appropriate_same_source_or_native_generation_quality",
         "video_quality_metric_decision": decision,
         "video_quality_metric_record_count": len(records),
         "video_quality_metric_ready_count": len(ready_methods),
@@ -722,6 +988,8 @@ def build_real_adaptive_attack_records(run_root: str | Path, context: Mapping[st
             item for item in scoped
             if item.get("metric_status") == "measured_formal"
             and item.get("adaptive_attack_evidence_level") == "formal_adaptive_attack_execution"
+            and item.get("adaptive_attack_execution_granularity")
+            == "per_video_frozen_flow_detector_adaptive_execution"
             and item.get("adaptive_robustness_claim_allowed") is True
         ]
         measured_count = len(formal_scoped)
@@ -788,7 +1056,14 @@ def build_real_world_attack_records(run_root: str | Path, context: Mapping[str, 
                 if (item.get("non_runtime_attack_protocol") or item.get("adaptive_attack_name")) == protocol
             ]
             source_count = len(scoped_adaptive)
-            formal_count = sum(1 for item in scoped_adaptive if item.get("adaptive_attack_evidence_level") == "formal_adaptive_attack_execution")
+            formal_count = sum(
+                1
+                for item in scoped_adaptive
+                if item.get("adaptive_attack_evidence_level")
+                == "formal_adaptive_attack_execution"
+                and item.get("adaptive_attack_execution_granularity")
+                == "per_video_frozen_flow_detector_adaptive_execution"
+            )
             status = "formal_non_runtime_ready" if formal_count == source_count and source_count else "non_formal_records_blocked"
         else:
             source_kind = "not_configured_in_current_protocol"
@@ -935,6 +1210,18 @@ def run_video_quality_metric_artifact_builder(
                 "mean_paired_watermark_psnr": item.get("mean_paired_watermark_psnr"),
                 "mean_paired_watermark_ssim": item.get("mean_paired_watermark_ssim"),
                 "mean_paired_temporal_delta_error": item.get("mean_paired_temporal_delta_error"),
+                "mean_native_generation_clean_semantic_consistency": item.get(
+                    "mean_native_generation_clean_semantic_consistency"
+                ),
+                "mean_native_generation_watermarked_semantic_consistency": item.get(
+                    "mean_native_generation_watermarked_semantic_consistency"
+                ),
+                "mean_native_generation_semantic_consistency_delta": item.get(
+                    "mean_native_generation_semantic_consistency_delta"
+                ),
+                "video_quality_comparison_protocol": item.get(
+                    "video_quality_comparison_protocol"
+                ),
                 "robustness_tpr_at_target_fpr": item.get("robustness_tpr_at_target_fpr"),
                 "robustness_tpr_ci_lower": item.get("robustness_tpr_ci_lower"),
                 "robustness_tpr_ci_upper": item.get("robustness_tpr_ci_upper"),
@@ -952,12 +1239,22 @@ def run_video_quality_metric_artifact_builder(
             "records/external_baseline_score_records.jsonl",
             "records/fair_detection_calibration_records.jsonl",
         ],
-        alternate_encodings=[{
-            "panel_id": "paired_ssim_vs_fixed_fpr_robustness",
-            "x": "mean_paired_watermark_ssim",
-            "y": "robustness_tpr_at_target_fpr",
-            "color": "method_id",
-        }],
+        alternate_encodings=[
+            {
+                "panel_id": "paired_ssim_vs_fixed_fpr_robustness",
+                "x": "mean_paired_watermark_ssim",
+                "y": "robustness_tpr_at_target_fpr",
+                "color": "method_id",
+                "quality_protocol": "paired_same_source_distortion",
+            },
+            {
+                "panel_id": "native_generation_semantic_quality_vs_fixed_fpr_robustness",
+                "x": "mean_native_generation_watermarked_semantic_consistency",
+                "y": "robustness_tpr_at_target_fpr",
+                "color": "method_id",
+                "quality_protocol": "native_generation_semantic_quality",
+            },
+        ],
     )
     return quality_audit
 

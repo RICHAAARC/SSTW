@@ -8,7 +8,13 @@
     "endpoint_target_margin": 0.01,
     "endpoint_control_minimum": 0.25,
     "endpoint_control_maximum": 1.5,
-    "scheduler_velocity_sign": -1.0
+    "scheduler_velocity_sign": -1.0,
+    "flow_energy_budget_ratio": 0.000015,
+    "finite_difference_probe_ratio": 0.25,
+    "minimum_controllability_gain": 1e-08,
+    "prompt_velocity_sensitivity_gate_enabled": true,
+    "semantic_tangent_projection_enabled": true,
+    "semantic_tangent_minimum_retained_ratio": 0.05
   },
   "flow_tubelet_key_code": {
     "temporal_size": 2,

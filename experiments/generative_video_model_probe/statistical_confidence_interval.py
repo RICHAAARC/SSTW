@@ -46,6 +46,14 @@ def _load_profile_context(config_path: str | Path) -> dict[str, Any]:
         "target_fpr": float(config["target_fpr"]),
         "paper_result_level": config.get("paper_result_level", "probe_paper"),
         "target_fpr_source_config_path": str(config_path),
+        "required_runtime_attack_names": [
+            str(value)
+            for value in config.get("required_runtime_attack_names", [])
+            if str(value).strip()
+        ],
+        "minimum_sstw_worst_attack_tpr_ci_lower": float(
+            config["minimum_sstw_worst_attack_tpr_ci_lower"]
+        ),
     }
 
 
@@ -69,6 +77,28 @@ def _cluster_values(source: dict[str, Any]) -> dict[str, list[float]]:
             continue
         cluster_id = "::".join(parts[:2])
         grouped.setdefault(cluster_id, []).append(
+            float(bool(unit.get("detected_at_target_fpr")))
+        )
+    return grouped
+
+
+def _attack_cluster_values(
+    source: dict[str, Any],
+    attack_name: str,
+) -> dict[str, list[float]]:
+    """提取一个预注册攻击的逐视频检测结果，禁止由其他攻击均值补偿。"""
+
+    grouped: dict[str, list[float]] = {}
+    for unit in source.get("positive_detection_units_at_target_fpr") or []:
+        if not isinstance(unit, dict):
+            continue
+        if str(unit.get("attack_name") or "") != attack_name:
+            continue
+        prompt_id = str(unit.get("prompt_id") or "")
+        seed_id = str(unit.get("seed_id") or "")
+        if not prompt_id or not seed_id:
+            continue
+        grouped.setdefault(f"{prompt_id}::{seed_id}", []).append(
             float(bool(unit.get("detected_at_target_fpr")))
         )
     return grouped
@@ -124,6 +154,82 @@ def build_statistical_confidence_interval_records(
             "paper_low_fpr_ci_status": "formal_target_fpr_ci_ready",
             "claim_support_status": claim_status,
         }, trajectory_source_level="fair_detection_calibration_records", claim_support_status=claim_status))
+        for attack_name in profile_context["required_runtime_attack_names"]:
+            attack_cluster_values = _attack_cluster_values(source, attack_name)
+            if attack_cluster_values:
+                attack_interval = clustered_mean_interval(
+                    attack_cluster_values,
+                    purpose=(
+                        f"paper_profile_tpr_per_attack:{source.get('method_id')}::"
+                        f"{attack_name}"
+                    ),
+                )
+                attack_total_count = attack_interval.observation_count
+                attack_success_count = sum(
+                    int(value)
+                    for values in attack_cluster_values.values()
+                    for value in values
+                )
+                attack_claim_status = "formal_per_attack_cluster_bootstrap_ci_ready"
+            else:
+                attack_interval = None
+                attack_total_count = 0
+                attack_success_count = 0
+                attack_claim_status = "formal_per_attack_cluster_bootstrap_ci_missing"
+            rows.append(with_flow_evidence_protocol_defaults({
+                "record_version": "formal_statistical_confidence_interval_v2",
+                "statistical_confidence_interval_family": (
+                    "tpr_at_target_fpr_per_attack"
+                ),
+                "method_id": source.get("method_id"),
+                "method_role": source.get("method_role"),
+                "attack_name": attack_name,
+                **profile_context,
+                "ci_success_count": attack_success_count,
+                "ci_total_count": attack_total_count,
+                "ci_point_estimate": (
+                    round(attack_interval.estimate, 6)
+                    if attack_interval is not None
+                    else None
+                ),
+                "ci_cluster_bootstrap_lower": (
+                    round(attack_interval.confidence_interval_lower, 6)
+                    if attack_interval is not None
+                    else None
+                ),
+                "ci_cluster_bootstrap_upper": (
+                    round(attack_interval.confidence_interval_upper, 6)
+                    if attack_interval is not None
+                    else None
+                ),
+                "ci_statistical_cluster_count": (
+                    attack_interval.cluster_count
+                    if attack_interval is not None
+                    else 0
+                ),
+                "ci_bootstrap_resample_count": (
+                    attack_interval.bootstrap_resample_count
+                    if attack_interval is not None
+                    else 0
+                ),
+                "ci_confidence_level": 0.95,
+                "ci_evidence_level": (
+                    "fair_detection_calibration_measured_formal"
+                    if attack_interval is not None
+                    else "missing"
+                ),
+                "cluster_by_video_interval_status": (
+                    "source_video_cluster_bootstrap_complete"
+                    if attack_interval is not None
+                    else "missing"
+                ),
+                "paper_low_fpr_ci_status": (
+                    "formal_target_fpr_ci_ready"
+                    if attack_interval is not None
+                    else "missing"
+                ),
+                "claim_support_status": attack_claim_status,
+            }, trajectory_source_level="fair_detection_calibration_records", claim_support_status=attack_claim_status))
         negative_outcomes = _negative_cluster_outcomes(source)
         false_positive_count = sum(negative_outcomes)
         heldout_negative_count = len(negative_outcomes)
@@ -169,6 +275,12 @@ def audit_statistical_confidence_interval_records(records: list[dict]) -> dict[s
                 and record.get("ci_cluster_bootstrap_upper") is not None
             )
             or (
+                record.get("statistical_confidence_interval_family")
+                == "tpr_at_target_fpr_per_attack"
+                and record.get("ci_cluster_bootstrap_lower") is not None
+                and record.get("ci_cluster_bootstrap_upper") is not None
+            )
+            or (
                 record.get("statistical_confidence_interval_family") == "heldout_fpr_at_frozen_threshold"
                 and record.get("ci_one_sided_exact_upper") is not None
             )
@@ -177,6 +289,11 @@ def audit_statistical_confidence_interval_records(records: list[dict]) -> dict[s
     ]
     record = ready_records[0] if ready_records else (records[0] if records else {})
     tpr_records = [row for row in ready_records if row.get("statistical_confidence_interval_family") == "tpr_at_target_fpr"]
+    per_attack_tpr_records = [
+        row for row in ready_records
+        if row.get("statistical_confidence_interval_family")
+        == "tpr_at_target_fpr_per_attack"
+    ]
     fpr_records = [row for row in ready_records if row.get("statistical_confidence_interval_family") == "heldout_fpr_at_frozen_threshold"]
     total_count = sum(int(row.get("ci_total_count") or 0) for row in tpr_records)
     success_count = sum(int(row.get("ci_success_count") or 0) for row in tpr_records)
@@ -190,12 +307,54 @@ def audit_statistical_confidence_interval_records(records: list[dict]) -> dict[s
     confidence_upper_within_target = bool(
         maximum_fpr_upper is not None and maximum_fpr_upper <= target_fpr
     )
+    required_attacks = {
+        str(value)
+        for value in record.get("required_runtime_attack_names", [])
+        if str(value).strip()
+    }
+    method_ids = {
+        str(row.get("method_id") or "") for row in tpr_records
+    } - {""}
+    per_attack_scope_map = {
+        (str(row.get("method_id") or ""), str(row.get("attack_name") or "")): row
+        for row in per_attack_tpr_records
+    }
+    missing_per_attack_scopes = [
+        f"{method_id}::{attack_name}"
+        for method_id in sorted(method_ids)
+        for attack_name in sorted(required_attacks)
+        if (method_id, attack_name) not in per_attack_scope_map
+    ]
+    sstw_attack_rows = [
+        row for row in per_attack_tpr_records
+        if row.get("method_id") == "sstw_key_conditioned_flow_trajectory"
+    ]
+    worst_attack_row = min(
+        sstw_attack_rows,
+        key=lambda row: float(row["ci_cluster_bootstrap_lower"]),
+        default=None,
+    )
+    worst_attack_lower = (
+        float(worst_attack_row["ci_cluster_bootstrap_lower"])
+        if worst_attack_row is not None
+        else None
+    )
+    minimum_worst_attack_lower = float(
+        record.get("minimum_sstw_worst_attack_tpr_ci_lower") or 0.0
+    )
+    worst_attack_ready = bool(
+        worst_attack_lower is not None
+        and worst_attack_lower >= minimum_worst_attack_lower
+        and len(sstw_attack_rows) == len(required_attacks)
+    )
     decision = "PASS" if (
         ready_records
         and len(ready_records) == len(records)
         and fpr_point_closed
         and confidence_bound_available
         and confidence_upper_within_target
+        and not missing_per_attack_scopes
+        and worst_attack_ready
     ) else "FAIL"
     return {
         "stage_id": "statistical_confidence_interval_reporter",
@@ -212,6 +371,14 @@ def audit_statistical_confidence_interval_records(records: list[dict]) -> dict[s
         "ci_cluster_bootstrap_upper": record.get("ci_cluster_bootstrap_upper"),
         "ci_statistical_cluster_count": record.get("ci_statistical_cluster_count"),
         "heldout_fpr_ci_record_count": len(fpr_records),
+        "per_attack_tpr_ci_record_count": len(per_attack_tpr_records),
+        "per_attack_tpr_ci_missing_scopes": missing_per_attack_scopes,
+        "per_attack_tpr_ci_ready": not missing_per_attack_scopes,
+        "worst_attack_name": (
+            worst_attack_row.get("attack_name") if worst_attack_row else None
+        ),
+        "worst_attack_tpr_ci_lower": worst_attack_lower,
+        "minimum_sstw_worst_attack_tpr_ci_lower": minimum_worst_attack_lower,
         "heldout_fpr_one_sided_exact_upper_maximum": maximum_fpr_upper,
         "heldout_fpr_point_target_closed": fpr_point_closed,
         "heldout_fpr_confidence_bound_available": confidence_bound_available,

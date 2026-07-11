@@ -1,0 +1,20 @@
+--extra-index-url https://download.pytorch.org/whl/cu124
+
+# 该文件固定 SSTW 论文 GPU workflow 的公共 Python 运行环境。
+# external baseline 的官方源码依赖仍由各自受治理的 requirements 文件声明,
+# 但不得改变这里固定的 PyTorch、Diffusers 与 Transformers 主运行栈。
+accelerate==1.10.1
+av==14.2.0
+diffusers==0.35.2
+huggingface-hub==0.34.4
+imageio==2.37.0
+imageio-ffmpeg==0.6.0
+numpy==1.26.4
+opencv-python-headless==4.10.0.84
+protobuf==5.29.3
+safetensors==0.5.2
+scikit-image==0.25.2
+sentencepiece==0.2.0
+torch==2.6.0
+torchvision==0.21.0
+transformers==4.49.0

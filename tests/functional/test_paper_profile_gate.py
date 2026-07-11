@@ -5,15 +5,24 @@ import pytest
 
 from experiments.generative_video_model_probe.external_baseline_runner import run_external_baseline_status
 from experiments.generative_video_model_probe.paper_profile_gate import (
+    _confidence_interval_ready,
     _primary_claim_method_records,
     build_paper_profile_gate_audit,
     write_paper_profile_gate_audit,
+)
+from external_baseline.runtime_trace_io import (
+    NATIVE_GENERATION_COMPARISON_DESIGN,
+    SAME_SOURCE_POSTHOC_COMPARISON_DESIGN,
+    baseline_comparison_design,
 )
 from evaluation.attacks.video_runtime_attack_protocol import (
     FULL_PAPER_NON_RUNTIME_ATTACK_PROTOCOLS,
     FULL_PAPER_RUNTIME_ATTACKS,
 )
 from evaluation.protocol.record_writer import write_json, write_jsonl
+from evaluation.protocol.paper_profile_contract import (
+    allow_noncanonical_paper_profile_for_tests,
+)
 
 
 EXTERNAL_BASELINE_NAMES = (
@@ -34,7 +43,105 @@ MODERN_EXTERNAL_BASELINE_NAMES = {
 }
 REQUIRED_RUNTIME_ATTACK_NAMES = FULL_PAPER_RUNTIME_ATTACKS
 REQUIRED_NON_RUNTIME_ATTACK_PROTOCOLS = FULL_PAPER_NON_RUNTIME_ATTACK_PROTOCOLS
+
+
+def _difference_interval_fixture(baseline_id: str) -> dict:
+    """按 baseline 原生设计构造同源配对或独立两样本正式 fixture。"""
+
+    design = baseline_comparison_design(baseline_id)
+    common = {
+        "baseline_method_id": baseline_id,
+        "difference_interval_status": "ready",
+        "metric_status": "measured_formal",
+        "target_fpr": 0.1,
+        "external_baseline_comparison_design": design,
+        "unpaired_reference_anchor_count": 0,
+        "unpaired_baseline_anchor_count": 0,
+        "comparison_anchor_alignment_status": "aligned_with_sstw_reference_anchors",
+        "tpr_at_target_fpr_difference": 0.18,
+        "difference_ci_lower": 0.02,
+        "difference_ci_upper": 0.34,
+    }
+    if design == SAME_SOURCE_POSTHOC_COMPARISON_DESIGN:
+        return {
+            **common,
+            "paired_source_video_inference_used": True,
+            "paired_comparison_unit_count": len(REQUIRED_ANCHOR_KEYS),
+            "paired_comparison_anchor_keys": list(REQUIRED_ANCHOR_KEYS),
+            "paired_attack_names": list(REQUIRED_RUNTIME_ATTACK_NAMES),
+            "matched_design_anchor_count": len(REQUIRED_ANCHOR_KEYS),
+            "matched_design_anchor_keys": list(REQUIRED_ANCHOR_KEYS),
+            "matched_design_attack_names": list(REQUIRED_RUNTIME_ATTACK_NAMES),
+            "difference_interval_method": (
+                "paired_source_video_cluster_bootstrap_detection_difference"
+            ),
+        }
+    assert design == NATIVE_GENERATION_COMPARISON_DESIGN
+    return {
+        **common,
+        "paired_source_video_inference_used": False,
+        "paired_comparison_unit_count": 0,
+        "paired_comparison_anchor_keys": [],
+        "paired_attack_names": [],
+        "matched_design_anchor_count": len(REQUIRED_ANCHOR_KEYS),
+        "matched_design_anchor_keys": list(REQUIRED_ANCHOR_KEYS),
+        "matched_design_attack_names": list(REQUIRED_RUNTIME_ATTACK_NAMES),
+        "difference_interval_method": (
+            "independent_two_sample_source_video_cluster_bootstrap_detection_difference"
+        ),
+    }
 REQUIRED_ANCHOR_KEYS = tuple(f"prompt_0::seed_0::{attack_name}" for attack_name in REQUIRED_RUNTIME_ATTACK_NAMES)
+
+
+@pytest.fixture(autouse=True)
+def _allow_reduced_noncanonical_profile_fixture():
+    """仅在本模块中允许显式的轻量 profile 测试配置。"""
+
+    with allow_noncanonical_paper_profile_for_tests():
+        yield
+
+
+@pytest.mark.quick
+@pytest.mark.parametrize(
+    ("per_attack_ready", "worst_lower", "artifact_minimum"),
+    (
+        (False, 0.8, 0.5),
+        (True, 0.49, 0.5),
+        (True, 0.8, 0.4),
+    ),
+)
+def test_confidence_interval_gate_requires_per_attack_worst_case_evidence(
+    tmp_path: Path,
+    per_attack_ready: bool,
+    worst_lower: float,
+    artifact_minimum: float,
+) -> None:
+    """聚合 TPR PASS 不能替代逐攻击 CI 和冻结的最弱攻击阈值。"""
+
+    write_json(
+        tmp_path / "artifacts" / "statistical_confidence_interval_decision.json",
+        {
+            "statistical_confidence_interval_decision": "PASS",
+            "per_attack_tpr_ci_ready": per_attack_ready,
+            "worst_attack_tpr_ci_lower": worst_lower,
+            "minimum_sstw_worst_attack_tpr_ci_lower": artifact_minimum,
+            "claim_support_status": "test_ci_artifact",
+        },
+    )
+
+    (
+        ready,
+        observed_per_attack_ready,
+        worst_attack_ready,
+        observed_lower,
+        threshold_matches,
+        _,
+    ) = _confidence_interval_ready(tmp_path, 0.5)
+
+    assert ready is False
+    assert observed_per_attack_ready is per_attack_ready
+    assert observed_lower == worst_lower
+    assert worst_attack_ready is (worst_lower >= 0.5 and threshold_matches)
 
 
 def _formal_runtime_attack_record(attack_name: str) -> dict:
@@ -132,7 +239,10 @@ def _formal_adaptive_attack_record(protocol_name: str) -> dict:
         "non_runtime_attack_protocol": protocol_name,
         "adaptive_attack_status": "ready",
         "metric_status": "measured_formal",
-        "adaptive_attack_evidence_level": "per_video_frozen_flow_detector_adaptive_execution",
+        "adaptive_attack_evidence_level": "formal_adaptive_attack_execution",
+        "adaptive_attack_execution_granularity": (
+            "per_video_frozen_flow_detector_adaptive_execution"
+        ),
         "adaptive_robustness_claim_allowed": True,
     }
 
@@ -338,11 +448,17 @@ def test_paper_profile_gate_cannot_disable_fair_comparison_hard_requirements(tmp
 
     assert audit["paper_profile_gate_decision"] == "FAIL"
     assert audit["claim_support_status"] == "probe_paper_blocked"
-    assert audit["paper_profile_hard_required_config_missing_count"] == 8
+    assert audit["paper_profile_hard_required_config_missing_count"] == 10
     assert "require_fair_detection_calibration_must_be_true" in audit["missing_validation_requirements"]
     assert "require_formal_method_baseline_comparison_must_be_true" in audit["missing_validation_requirements"]
     assert "require_formal_baseline_difference_interval_must_be_true" in audit["missing_validation_requirements"]
     assert "require_sstw_measured_formal_records_must_be_true" in audit["missing_validation_requirements"]
+    assert "require_heldout_posterior_probability_evaluation_must_be_true" in audit[
+        "missing_validation_requirements"
+    ]
+    assert "require_nested_paper_profile_prompt_seed_universe_must_be_true" in audit[
+        "missing_validation_requirements"
+    ]
 
 
 @pytest.mark.quick
@@ -382,7 +498,7 @@ def test_probe_paper_gate_cannot_disable_advantage_claim_requirement(tmp_path: P
 
     assert audit["paper_profile_gate_decision"] == "FAIL"
     assert audit["claim_support_status"] == "probe_paper_blocked"
-    assert audit["paper_profile_hard_required_config_missing_count"] == 8
+    assert audit["paper_profile_hard_required_config_missing_count"] == 10
     assert "require_sstw_advantage_claim_ready_must_be_true" in audit["missing_validation_requirements"]
 
 
@@ -573,21 +689,7 @@ def test_paper_profile_gate_passes_when_all_governed_inputs_exist(tmp_path: Path
         "claim_support_status": "formal_method_baseline_comparison_paper_profile_claim_evidence",
     })
     write_jsonl(run_root / "records" / "formal_baseline_difference_interval_records.jsonl", [
-        {
-            "baseline_method_id": baseline_id,
-            "difference_interval_status": "ready",
-            "metric_status": "measured_formal",
-            "target_fpr": 0.1,
-            "paired_comparison_unit_count": len(REQUIRED_ANCHOR_KEYS),
-            "paired_comparison_anchor_keys": list(REQUIRED_ANCHOR_KEYS),
-            "paired_attack_names": list(REQUIRED_RUNTIME_ATTACK_NAMES),
-            "unpaired_reference_anchor_count": 0,
-            "unpaired_baseline_anchor_count": 0,
-            "comparison_anchor_alignment_status": "aligned_with_sstw_reference_anchors",
-            "tpr_at_target_fpr_difference": 0.18,
-            "difference_ci_lower": 0.02,
-            "difference_ci_upper": 0.34,
-        }
+        _difference_interval_fixture(baseline_id)
         for baseline_id in sorted(MODERN_EXTERNAL_BASELINE_NAMES)
     ])
     write_json(run_root / "artifacts" / "formal_baseline_difference_interval_decision.json", {
@@ -650,6 +752,9 @@ def test_paper_profile_gate_passes_when_all_governed_inputs_exist(tmp_path: Path
     })
     write_json(run_root / "artifacts" / "statistical_confidence_interval_decision.json", {
         "statistical_confidence_interval_decision": "PASS",
+        "per_attack_tpr_ci_ready": True,
+        "worst_attack_tpr_ci_lower": 0.5,
+        "minimum_sstw_worst_attack_tpr_ci_lower": 0.5,
         "claim_support_status": "validation_ci_ready",
     })
     write_jsonl(run_root / "records" / "low_fpr_formal_statistics_records.jsonl", [
@@ -682,6 +787,12 @@ def test_paper_profile_gate_passes_when_all_governed_inputs_exist(tmp_path: Path
     assert (run_root / "tables" / "paper_profile_gate_table.csv").exists()
     assert (run_root / "artifacts" / "paper_profile_gate_decision.json").exists()
     assert (run_root / "reports" / "paper_profile_gate_report.md").exists()
+    report = (run_root / "reports" / "paper_profile_gate_report.md").read_text(
+        encoding="utf-8"
+    )
+    assert "- per_attack_tpr_ci_ready: true" in report
+    assert "- worst_attack_tpr_ci_lower: 0.5" in report
+    assert "- confidence_interval_threshold_matches_profile: true" in report
 
 @pytest.mark.quick
 def test_paper_profile_gate_rejects_stale_fair_comparison_decision_without_required_methods(tmp_path: Path) -> None:

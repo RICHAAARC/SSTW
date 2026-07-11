@@ -15,8 +15,13 @@ from main.methods.state_space_watermark.endpoint_latent_detector import (
 )
 from main.methods.state_space_watermark.flow_latent_layout import PackedTokenFlowLatentLayout
 from main.methods.state_space_watermark.flow_tubelet_key_code import (
+    FlowTubeletKeyContext,
     FlowTubeletKeyCodeConfig,
     build_flow_tubelet_key_direction_like,
+    flow_phase_weight,
+)
+from main.methods.state_space_watermark.flow_velocity_runtime import (
+    normalized_flow_phase_from_sigma_interval,
 )
 from main.methods.state_space_watermark.path_observation import (
     aggregate_path_observations,
@@ -33,6 +38,7 @@ from main.methods.state_space_watermark.replay_inversion import (
     run_key_independent_inversion_hypothesis,
 )
 from main.methods.state_space_watermark.velocity_field_constraint import (
+    VelocityControlContext,
     VelocityFieldConstraintConfig,
     apply_velocity_field_constraint,
 )
@@ -54,6 +60,9 @@ class LTXFlowReplayResult:
     primary_schedule: tuple[FlowSchedulePoint, ...]
     primary_replay_index: int
     replay_likelihood_config: ReplayGaussianLikelihoodConfig
+    key_context: FlowTubeletKeyContext | None = None
+    endpoint_flow_phases: tuple[float, ...] = ()
+    endpoint_integration_weights: tuple[float, ...] = ()
 
 
 def build_ltx_latent_layout(
@@ -169,6 +178,45 @@ def build_ltx_flow_schedule_points(
     return points
 
 
+def _ltx_schedule_interval(
+    schedule: Sequence[FlowSchedulePoint],
+    step_index: int,
+) -> tuple[float, float]:
+    """返回 LTX 真实 schedule 区间的 delta-sigma 与规范 phase。"""
+
+    delta_sigma = (
+        float(schedule[step_index + 1].sigma)
+        - float(schedule[step_index].sigma)
+    )
+    if abs(delta_sigma) <= 1e-12:
+        raise ValueError("正式 LTX replay schedule 包含零宽 sigma 区间")
+    phase = normalized_flow_phase_from_sigma_interval(
+        [point.sigma for point in schedule],
+        step_index,
+    )
+    return delta_sigma, phase
+
+
+def _ltx_endpoint_integration_grid(
+    schedule: Sequence[FlowSchedulePoint],
+    tubelet_config: FlowTubeletKeyCodeConfig,
+) -> tuple[tuple[float, ...], tuple[float, ...]]:
+    """构造与 LTX generation runtime 同定义的 endpoint 积分网格。"""
+
+    phases: list[float] = []
+    weights: list[float] = []
+    for step_index in range(len(schedule) - 1):
+        delta_sigma, phase = _ltx_schedule_interval(schedule, step_index)
+        weight = abs(delta_sigma) * flow_phase_weight(phase, tubelet_config)
+        if weight <= 0.0:
+            continue
+        phases.append(phase)
+        weights.append(weight)
+    if not phases:
+        raise RuntimeError("LTX replay schedule 未覆盖 SSTW 激活 phase 窗口")
+    return tuple(phases), tuple(weights)
+
+
 class LTXPromptConditionedVelocity:
     """使用 LTX 官方 prompt encoder 与 Transformer 计算真实条件 velocity。"""
 
@@ -275,28 +323,68 @@ class LTXKeyConditionedVelocity:
         total_steps: int,
         tubelet_config: FlowTubeletKeyCodeConfig | None = None,
         velocity_config: VelocityFieldConstraintConfig | None = None,
+        key_context: FlowTubeletKeyContext | None = None,
+        schedule: Sequence[FlowSchedulePoint] | None = None,
     ) -> None:
         self.base_velocity = base_velocity
         self.key_text = key_text
         self.total_steps = int(total_steps)
         self.tubelet_config = tubelet_config or FlowTubeletKeyCodeConfig()
         self.velocity_config = velocity_config or VelocityFieldConstraintConfig()
+        self.key_context = key_context
+        self.schedule = None if schedule is None else tuple(schedule)
+        if self.schedule is not None and len(self.schedule) != self.total_steps:
+            raise ValueError("LTX keyed replay schedule 长度必须等于 total_steps")
+        if self.key_context is not None and self.schedule is None:
+            raise ValueError("正式 LTX keyed replay 缺少 Flow schedule")
         self._direction: Any | None = None
+        self._direction_metadata: dict[str, Any] = {}
+        self._cumulative_control_energy = 0.0
+        self._cumulative_reference_energy = 0.0
+        self.step_records: list[dict[str, Any]] = []
 
     def __call__(self, latent: Any, timestep: Any, step_index: int) -> Any:
         """返回 LTX base velocity 与五维 tubelet 弱约束的合成结果。"""
 
         base = self.base_velocity(latent, timestep, step_index)
+        if self.key_context is not None and self.schedule is not None:
+            delta_sigma, phase = _ltx_schedule_interval(
+                self.schedule,
+                int(step_index),
+            )
+            canonical = self.base_velocity.latent_layout.to_canonical(latent)
+            canonical_direction, direction_metadata = build_flow_tubelet_key_direction_like(
+                canonical,
+                key_text=self.key_text,
+                config=self.tubelet_config,
+                flow_phase=phase,
+                key_context=self.key_context,
+            )
+            self._direction = self.base_velocity.latent_layout.from_canonical(canonical_direction)
+            self._direction_metadata = dict(direction_metadata)
+            control_context = VelocityControlContext(
+                delta_sigma=delta_sigma,
+                cumulative_control_energy=self._cumulative_control_energy,
+                cumulative_reference_energy=self._cumulative_reference_energy,
+                remaining_step_count=len(self.schedule) - 1 - int(step_index),
+            )
+        else:
+            delta_sigma = None
+            phase = int(step_index) / max(1, self.total_steps - 2)
+            control_context = None
+            direction_metadata = dict(self._direction_metadata)
         if self._direction is None or tuple(self._direction.shape) != tuple(latent.shape):
             canonical = self.base_velocity.latent_layout.to_canonical(latent)
-            canonical_direction, _metadata = build_flow_tubelet_key_direction_like(
+            canonical_direction, direction_metadata = build_flow_tubelet_key_direction_like(
                 canonical,
                 key_text=self.key_text,
                 config=self.tubelet_config,
             )
-            self._direction = self.base_velocity.latent_layout.from_canonical(canonical_direction)
-        phase = int(step_index) / max(1, self.total_steps - 2)
-        constrained, _record = apply_velocity_field_constraint(
+            self._direction = self.base_velocity.latent_layout.from_canonical(
+                canonical_direction
+            )
+            self._direction_metadata = dict(direction_metadata)
+        constrained, record = apply_velocity_field_constraint(
             base,
             latent,
             self._direction.to(device=latent.device, dtype=latent.dtype),
@@ -304,7 +392,28 @@ class LTXKeyConditionedVelocity:
             config=self.velocity_config,
             tubelet_config=self.tubelet_config,
             endpoint_control_enabled=True,
+            control_context=control_context,
         )
+        if "endpoint_control_cumulative_energy_after" in record:
+            self._cumulative_control_energy = float(
+                record["endpoint_control_cumulative_energy_after"]
+            )
+        if "endpoint_reference_cumulative_energy_after" in record:
+            self._cumulative_reference_energy = float(
+                record["endpoint_reference_cumulative_energy_after"]
+            )
+        self.step_records.append({
+            "trajectory_step_index": int(step_index),
+            "trajectory_delta_sigma": delta_sigma,
+            **direction_metadata,
+            **record,
+            "replay_joint_context_complete": bool(
+                self.key_context is not None
+                and delta_sigma is not None
+                and direction_metadata.get("flow_tubelet_formal_context_complete") is True
+                and record.get("endpoint_control_formal_context_complete") is True
+            ),
+        })
         return constrained
 
 
@@ -314,14 +423,18 @@ def _packed_key_direction(
     latent_layout: PackedTokenFlowLatentLayout,
     key_text: str,
     tubelet_config: FlowTubeletKeyCodeConfig,
-) -> Any:
+    flow_phase: float | None = None,
+    key_context: FlowTubeletKeyContext | None = None,
+) -> tuple[Any, dict[str, Any]]:
     canonical = latent_layout.to_canonical(latent)
-    canonical_direction, _metadata = build_flow_tubelet_key_direction_like(
+    canonical_direction, metadata = build_flow_tubelet_key_direction_like(
         canonical,
         key_text=key_text,
         config=tubelet_config,
+        flow_phase=flow_phase,
+        key_context=key_context,
     )
-    return latent_layout.from_canonical(canonical_direction)
+    return latent_layout.from_canonical(canonical_direction), metadata
 
 
 def score_ltx_replay_trajectory_for_key(
@@ -332,25 +445,25 @@ def score_ltx_replay_trajectory_for_key(
     key_text: str,
     tubelet_config: FlowTubeletKeyCodeConfig | None = None,
     likelihood_config: ReplayGaussianLikelihoodConfig,
-) -> dict[str, float | int | None]:
+    key_context: FlowTubeletKeyContext | None = None,
+) -> dict[str, Any]:
     """在固定 LTX packed replay 路径上计算候选 key 的路径投影。"""
 
     tubelet_config = tubelet_config or FlowTubeletKeyCodeConfig()
     states = trajectory.reverse_states
     if len(states) != len(schedule):
         raise RuntimeError("LTX replay states 与 Flow schedule 长度不一致")
-    direction = _packed_key_direction(
-        states[0],
-        latent_layout=latent_layout,
-        key_text=key_text,
-        tubelet_config=tubelet_config,
-    )
     records: list[dict[str, Any]] = []
     for step_index in range(len(states) - 1):
-        delta_sigma = float(schedule[step_index + 1].sigma) - float(schedule[step_index].sigma)
-        if abs(delta_sigma) <= 1e-12:
-            continue
-        phase = step_index / max(1, len(states) - 2)
+        delta_sigma, phase = _ltx_schedule_interval(schedule, step_index)
+        direction, direction_metadata = _packed_key_direction(
+            states[step_index],
+            latent_layout=latent_layout,
+            key_text=key_text,
+            tubelet_config=tubelet_config,
+            flow_phase=(phase if key_context is not None else None),
+            key_context=key_context,
+        )
         velocity = (states[step_index + 1] - states[step_index]) / delta_sigma
         step_record = compute_path_step_observation(
             states[step_index],
@@ -358,14 +471,29 @@ def score_ltx_replay_trajectory_for_key(
             velocity,
             direction,
             flow_phase=phase,
+            delta_sigma=delta_sigma,
         ).as_dict()
+        step_record.update(direction_metadata)
         step_record["replay_reliability_weight"] = replay_step_reliability_weight(
             trajectory,
             step_index + 1,
             config=likelihood_config,
         )
         records.append(step_record)
-    return aggregate_path_observations(records)
+    aggregated = aggregate_path_observations(records)
+    aggregated["flow_tubelet_formal_context_complete"] = bool(
+        key_context is not None
+        and records
+        and all(
+            record.get("flow_tubelet_formal_context_complete") is True
+            for record in records
+        )
+    )
+    aggregated["replay_joint_schedule_context_complete"] = bool(
+        aggregated["flow_tubelet_formal_context_complete"]
+        and aggregated.get("path_quadrature_context_complete") is True
+    )
+    return aggregated
 
 
 def compute_ltx_endpoint_evidence_for_key(
@@ -373,13 +501,22 @@ def compute_ltx_endpoint_evidence_for_key(
     *,
     key_text: str,
     tubelet_config: FlowTubeletKeyCodeConfig | None = None,
+    key_context: FlowTubeletKeyContext | None = None,
 ) -> EndpointLatentEvidence:
     """在 LTX 五维 VAE endpoint 上计算候选 key 证据。"""
 
+    active_context = key_context or replay.key_context
     return compute_endpoint_latent_evidence(
         replay.canonical_endpoint_latent,
         key_text=key_text,
         tubelet_config=tubelet_config,
+        key_context=active_context,
+        flow_phases=(
+            replay.endpoint_flow_phases if active_context is not None else None
+        ),
+        integration_weights=(
+            replay.endpoint_integration_weights if active_context is not None else None
+        ),
     )
 
 
@@ -393,7 +530,8 @@ def evaluate_fixed_ltx_replay_hypothesis_for_key(
     guidance_scale: float = 3.0,
     frame_rate: int = 8,
     tubelet_config: FlowTubeletKeyCodeConfig | None = None,
-) -> tuple[ReplayTrajectory, dict[str, float | int | None]]:
+    key_context: FlowTubeletKeyContext | None = None,
+) -> tuple[ReplayTrajectory, dict[str, Any]]:
     """在固定 attacked-video LTX 反演观测上评估另一把候选 key。"""
 
     tubelet_config = tubelet_config or FlowTubeletKeyCodeConfig()
@@ -410,6 +548,8 @@ def evaluate_fixed_ltx_replay_hypothesis_for_key(
         key_text=key_text,
         total_steps=len(replay.primary_schedule),
         tubelet_config=tubelet_config,
+        key_context=key_context or replay.key_context,
+        schedule=replay.primary_schedule,
     )
     fixed = replay.replay_trajectories[replay.primary_replay_index]
     hypothesis = evaluate_candidate_on_fixed_inversion(
@@ -426,6 +566,7 @@ def evaluate_fixed_ltx_replay_hypothesis_for_key(
         key_text=key_text,
         tubelet_config=tubelet_config,
         likelihood_config=replay.replay_likelihood_config,
+        key_context=key_context or replay.key_context,
     )
 
 
@@ -444,7 +585,8 @@ def run_ltx_control_replay(
     frame_rate: int = 8,
     tubelet_config: FlowTubeletKeyCodeConfig | None = None,
     likelihood_config: ReplayGaussianLikelihoodConfig,
-) -> tuple[ReplayTrajectory, tuple[FlowSchedulePoint, ...], dict[str, float | int | None]]:
+    key_context: FlowTubeletKeyContext | None = None,
+) -> tuple[ReplayTrajectory, tuple[FlowSchedulePoint, ...], dict[str, Any]]:
     """使用显式 prompt 或 scheduler 执行一个可审计的 LTX replay control。
 
     传入 fixed_trajectory 时, wrong condition 只改变 forward hypothesis,
@@ -471,6 +613,8 @@ def run_ltx_control_replay(
         key_text=key_text,
         total_steps=len(schedule),
         tubelet_config=tubelet_config,
+        key_context=key_context,
+        schedule=schedule,
     )
     trajectory = (
         evaluate_candidate_on_fixed_inversion(
@@ -496,6 +640,7 @@ def run_ltx_control_replay(
         key_text=key_text,
         tubelet_config=tubelet_config,
         likelihood_config=likelihood_config,
+        key_context=key_context,
     )
     return trajectory, tuple(schedule), path_evidence
 
@@ -512,6 +657,7 @@ def run_ltx_attacked_video_replay(
     replay_step_counts: Sequence[int] = (16, 20, 24),
     tubelet_config: FlowTubeletKeyCodeConfig | None = None,
     likelihood_config: ReplayGaussianLikelihoodConfig,
+    key_context: FlowTubeletKeyContext | None = None,
 ) -> LTXFlowReplayResult:
     """从攻击后视频执行多时间网格 LTX inversion/replay 并返回正式证据。"""
 
@@ -519,11 +665,6 @@ def run_ltx_attacked_video_replay(
     endpoint_latent, canonical_endpoint, layout, metadata = encode_video_to_ltx_endpoint_latent(
         pipeline,
         video_path,
-    )
-    endpoint_evidence = compute_endpoint_latent_evidence(
-        canonical_endpoint,
-        key_text=key_text,
-        tubelet_config=tubelet_config,
     )
     base_velocity = LTXPromptConditionedVelocity(
         pipeline,
@@ -548,6 +689,8 @@ def run_ltx_attacked_video_replay(
             key_text=key_text,
             total_steps=len(schedule),
             tubelet_config=tubelet_config,
+            key_context=key_context,
+            schedule=schedule,
         )
         replays.append(run_key_independent_inversion_hypothesis(
             endpoint_latent,
@@ -558,6 +701,25 @@ def run_ltx_attacked_video_replay(
         ))
     uncertainty = estimate_replay_uncertainty(replays)
     primary_index = len(replays) // 2
+    endpoint_flow_phases: tuple[float, ...] = ()
+    endpoint_integration_weights: tuple[float, ...] = ()
+    if key_context is not None:
+        endpoint_flow_phases, endpoint_integration_weights = (
+            _ltx_endpoint_integration_grid(
+                schedules[primary_index],
+                tubelet_config,
+            )
+        )
+    endpoint_evidence = compute_endpoint_latent_evidence(
+        canonical_endpoint,
+        key_text=key_text,
+        tubelet_config=tubelet_config,
+        key_context=key_context,
+        flow_phases=(endpoint_flow_phases if key_context is not None else None),
+        integration_weights=(
+            endpoint_integration_weights if key_context is not None else None
+        ),
+    )
     path_evidence = score_ltx_replay_trajectory_for_key(
         replays[primary_index],
         schedules[primary_index],
@@ -565,6 +727,7 @@ def run_ltx_attacked_video_replay(
         key_text=key_text,
         tubelet_config=tubelet_config,
         likelihood_config=likelihood_config,
+        key_context=key_context,
     )
     return LTXFlowReplayResult(
         endpoint_evidence=endpoint_evidence,
@@ -579,4 +742,7 @@ def run_ltx_attacked_video_replay(
         primary_schedule=tuple(schedules[primary_index]),
         primary_replay_index=primary_index,
         replay_likelihood_config=likelihood_config,
+        key_context=key_context,
+        endpoint_flow_phases=endpoint_flow_phases,
+        endpoint_integration_weights=endpoint_integration_weights,
     )

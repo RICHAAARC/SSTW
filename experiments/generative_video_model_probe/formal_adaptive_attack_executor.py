@@ -10,6 +10,8 @@ from pathlib import Path
 from typing import Any, Callable, Mapping
 
 from evaluation.attacks.adaptive_video_optimizer import (
+    ADAPTIVE_QUERY_BUDGET_CHECKPOINT_PROTOCOL,
+    ADAPTIVE_SOURCE_CLUSTER_SELECTION_PROTOCOL,
     ADAPTIVE_TWO_COORDINATE_SEARCH_PROTOCOL,
     optimize_bounded_parameter_attack_for_video,
     optimize_model_vae_regeneration_attack_for_video,
@@ -27,6 +29,7 @@ from evaluation.statistics.clustered_inference import (
     one_sided_binomial_upper_bound,
 )
 from experiments.generative_video_model_probe.formal_flow_evidence_runner import (
+    _flow_key_context,
     _generation_key,
     _invoke_pipeline_loader,
     _load_pipeline,
@@ -53,7 +56,10 @@ from main.methods.state_space_watermark.replay_inversion import (
 
 
 DEFAULT_PROTOCOL_CONFIG = "configs/protocol/probe_paper_generative_probe.json"
-FORMAL_ADAPTIVE_ATTACK_EVIDENCE_LEVEL = "per_video_frozen_flow_detector_adaptive_execution"
+FORMAL_ADAPTIVE_ATTACK_EVIDENCE_LEVEL = "formal_adaptive_attack_execution"
+FORMAL_ADAPTIVE_ATTACK_EXECUTION_GRANULARITY = (
+    "per_video_frozen_flow_detector_adaptive_execution"
+)
 
 ADAPTIVE_SEARCH_PROTOCOLS: dict[str, tuple[str, str]] = {
     "generative_recompression_or_regeneration_attack": (
@@ -143,12 +149,45 @@ def _sha256_file(path: Path) -> str:
 
 def _profile_context(config_path: str | Path) -> dict[str, Any]:
     config = load_protocol_config_with_shared_attack_protocol(config_path)
+    if (
+        config.get("adaptive_attack_source_cluster_selection_protocol")
+        != ADAPTIVE_SOURCE_CLUSTER_SELECTION_PROTOCOL
+    ):
+        raise ValueError("正式 adaptive source cluster 选择协议发生漂移")
+    query_budget = int(config["adaptive_attack_query_budget_per_video"])
+    query_budget_checkpoints = tuple(
+        int(value) for value in config["adaptive_attack_query_budget_checkpoints"]
+    )
+    if (
+        query_budget_checkpoints != tuple(sorted(set(query_budget_checkpoints)))
+        or not query_budget_checkpoints
+        or query_budget_checkpoints[0] < 1
+        or query_budget_checkpoints[-1] != query_budget
+    ):
+        raise ValueError("正式 adaptive query-budget checkpoints 配置无效")
+    public_probe_budget = int(
+        config["adaptive_attack_public_negative_probe_query_budget"]
+    )
+    if public_probe_budget < 3 or public_probe_budget > query_budget:
+        raise ValueError("public-negative probe 查询预算必须位于 [3, 主攻击预算]")
     return {
         "config": config,
         "paper_result_level": str(config["paper_result_level"]),
         "target_fpr": float(config["target_fpr"]),
         "required_protocols": tuple(required_non_runtime_attack_protocols_from_config(config)),
-        "query_budget": int(config.get("adaptive_attack_query_budget_per_video") or 5),
+        "query_budget": query_budget,
+        "query_budget_checkpoints": query_budget_checkpoints,
+        "public_negative_probe_query_budget": public_probe_budget,
+        "minimum_source_video_cluster_count_per_protocol": int(
+            config[
+                "minimum_adaptive_attack_source_video_cluster_count_per_protocol"
+            ]
+        ),
+        "minimum_spoof_source_video_cluster_count": int(
+            config[
+                "minimum_independent_negative_video_count_for_fpr_upper_bound"
+            ]
+        ),
         "minimum_quality_psnr": float(config.get("adaptive_attack_minimum_quality_psnr") or 24.0),
         "endpoint_tolerance": float(config.get("adaptive_attack_endpoint_tolerance") or 0.08),
         "minimum_retention_rate": float(
@@ -236,12 +275,110 @@ def _one_source_per_video(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
     grouped: dict[str, list[dict[str, Any]]] = defaultdict(list)
     for row in rows:
-        grouped[str(row.get("statistical_cluster_id") or row.get("trajectory_trace_id"))].append(row)
+        cluster_id = str(row.get("statistical_cluster_id") or "").strip()
+        if not cluster_id:
+            raise RuntimeError("adaptive attack 正式输入缺少 source-video statistical cluster")
+        grouped[cluster_id].append(row)
     preference = {"h264_crf18_runtime": 0, "h264_crf23_runtime": 1, "platform_transcode_runtime": 2}
     return [
         min(group, key=lambda row: (preference.get(str(row.get("attack_name")), 100), str(row.get("attack_name"))))
         for _cluster, group in sorted(grouped.items())
     ]
+
+
+def _generation_spoof_source_population(
+    run_root: Path,
+    clean_rows: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """从全部 held-out full-method 生成视频构造 copy/spoof donor 总体。
+
+    高成本 runtime attack 可以按 profile 只抽取30/100/200个 source cluster,
+    但 fixed-FPR copy/spoof 误接受上界需要30/300/3000个独立 recipient。这里直接
+    使用已经真实生成的完整方法视频作为 donor, 不复用攻击分数也不合成代理记录。
+    """
+
+    clean_by_identity = {
+        (
+            str(row.get("generation_model_id") or ""),
+            str(row.get("prompt_id") or ""),
+            str(row.get("seed_id") or ""),
+        ): row
+        for row in clean_rows
+    }
+    generation_rows = _read_jsonl(
+        run_root / "records" / "generation_records.jsonl"
+    )
+    sources: list[dict[str, Any]] = []
+    for row in generation_rows:
+        if not (
+            row.get("generation_status") == "success"
+            and row.get("sample_role") == "attacked_positive_source"
+            and row.get("method_variant") == "sstw_full_method"
+            and row.get("split") == "test"
+            and row.get("cross_model_role")
+            != "cross_model_validation_model"
+            and row.get("video_path")
+            and row.get("video_sha256")
+        ):
+            continue
+        identity = (
+            str(row.get("generation_model_id") or ""),
+            str(row.get("prompt_id") or ""),
+            str(row.get("seed_id") or ""),
+        )
+        clean_row = clean_by_identity.get(identity)
+        if clean_row is None:
+            raise RuntimeError(
+                "copy/spoof donor 缺少同模型、prompt、seed 的 held-out clean recipient"
+            )
+        sources.append({
+            **row,
+            "attacked_video_path": row["video_path"],
+            "attacked_video_sha256": row["video_sha256"],
+            "source_video_sha256": row["video_sha256"],
+            "statistical_cluster_id": clean_row["statistical_cluster_id"],
+            "statistical_independent_unit": "source_video_prompt_seed",
+            "adaptive_attack_spoof_donor_source": (
+                "heldout_full_method_generation_video"
+            ),
+        })
+    return _one_source_per_video(sources)
+
+
+def _select_preregistered_source_clusters(
+    rows: list[dict[str, Any]],
+    *,
+    selected_cluster_count: int,
+) -> list[dict[str, Any]]:
+    """在读取 detector 结果前按稳定摘要选择预注册独立视频子集。
+
+    该选择仅依赖 source-video cluster 标识, 不读取攻击分数、标签或质量结果。
+    因此 probe、pilot 与 full 可以共享完全相同的攻击机制, 同时只在正式独立
+    视频数量上扩展, 避免把全部 FPR 负样本规模错误地等同于高成本 adaptive 规模。
+    """
+
+    required = int(selected_cluster_count)
+    if required <= 0:
+        raise ValueError("adaptive attack 独立 source-video cluster 数必须为正数")
+    if required > len(rows):
+        raise RuntimeError(
+            "adaptive attack 独立视频不足: "
+            f"required={required}, observed={len(rows)}"
+        )
+    ranked = sorted(
+        rows,
+        key=lambda row: (
+            build_stable_digest({
+                "selection_protocol": ADAPTIVE_SOURCE_CLUSTER_SELECTION_PROTOCOL,
+                "statistical_cluster_id": str(row["statistical_cluster_id"]),
+            }),
+            str(row["statistical_cluster_id"]),
+        ),
+    )
+    selected = ranked[:required]
+    if len({str(row["statistical_cluster_id"]) for row in selected}) != required:
+        raise RuntimeError("adaptive attack source-video cluster 选择出现重复独立单位")
+    return selected
 
 
 def _disjoint_collusion_peer_index(source_index: int, source_count: int) -> int:
@@ -266,12 +403,15 @@ def _build_scorer(
 ) -> Callable[[Path], Mapping[str, Any]]:
     """把真实视频映射为同一个冻结 Flow 后验, 查询期间不重新拟合。"""
 
+    key_context = _flow_key_context(prompt, pipeline.scheduler)
+
     def score(video_path: Path) -> Mapping[str, Any]:
         replay = _run_attacked_video_replay_for_model(
             pipeline,
             video_path,
             prompt=prompt,
             key_text=key_text,
+            key_context=key_context,
             likelihood_config=likelihood_config,
         )
         evidence = build_flow_evidence_payload(
@@ -316,13 +456,35 @@ def _base_record(
         "seed_id": source.get("seed_id"),
         "trajectory_trace_id": source.get("trajectory_trace_id"),
         "statistical_cluster_id": source.get("statistical_cluster_id"),
+        "adaptive_attack_source_statistical_cluster_id": source.get(
+            "statistical_cluster_id"
+        ),
+        "adaptive_attack_spoof_donor_source": source.get(
+            "adaptive_attack_spoof_donor_source"
+        ),
         "statistical_independent_unit": "source_video_prompt_seed",
         "split": source.get("split"),
         "method_variant": "sstw_full_method",
         "adaptive_attack_status": "ready",
         "metric_status": "measured_formal",
         "adaptive_attack_evidence_level": FORMAL_ADAPTIVE_ATTACK_EVIDENCE_LEVEL,
+        "adaptive_attack_execution_granularity": (
+            FORMAL_ADAPTIVE_ATTACK_EXECUTION_GRANULARITY
+        ),
         "adaptive_attack_score_orientation": "higher_is_more_watermarked",
+        "adaptive_attack_query_budget": context["query_budget"],
+        "adaptive_attack_query_budget_checkpoints": list(
+            context["query_budget_checkpoints"]
+        ),
+        "adaptive_attack_query_budget_checkpoint_protocol": (
+            ADAPTIVE_QUERY_BUDGET_CHECKPOINT_PROTOCOL
+        ),
+        "adaptive_attack_source_cluster_selection_protocol": (
+            ADAPTIVE_SOURCE_CLUSTER_SELECTION_PROTOCOL
+        ),
+        "minimum_adaptive_attack_source_video_cluster_count_per_protocol": (
+            context["minimum_source_video_cluster_count_per_protocol"]
+        ),
         "test_time_threshold_update_blocked": True,
         "adaptive_robustness_claim_allowed": True,
         "claim_support_status": "per_video_adaptive_attack_measured_formal",
@@ -343,8 +505,20 @@ def audit_adaptive_optimizer_evidence(
     records: list[Mapping[str, Any]],
     *,
     query_budget: int,
+    query_budget_checkpoints: tuple[int, ...] | None = None,
+    public_negative_probe_query_budget: int | None = None,
 ) -> dict[str, bool]:
     """核验 detector-feedback 搜索、public probe 与模型 VAE 重生成均为真实执行。"""
+
+    expected_checkpoints = tuple(
+        int(value) for value in (query_budget_checkpoints or (query_budget,))
+    )
+    if public_negative_probe_query_budget is None:
+        expected_public_probe_budget = int(query_budget)
+        expected_public_checkpoints = expected_checkpoints
+    else:
+        expected_public_probe_budget = int(public_negative_probe_query_budget)
+        expected_public_checkpoints = (1, expected_public_probe_budget)
 
     search_rows = [
         row
@@ -352,8 +526,119 @@ def audit_adaptive_optimizer_evidence(
         if row.get("non_runtime_attack_protocol") in ADAPTIVE_SEARCH_PROTOCOLS
     ]
 
+    def checkpoint_evidence_ready(
+        row: Mapping[str, Any],
+        *,
+        candidates_field: str,
+        checkpoints_field: str,
+        checkpoint_records_field: str,
+        objective: str,
+        checkpoints: tuple[int, ...] = expected_checkpoints,
+    ) -> bool:
+        """核验每个 checkpoint 只选择其真实查询前缀中的最优可接受候选。"""
+
+        candidates = row.get(candidates_field)
+        checkpoint_records = row.get(checkpoint_records_field)
+        if (
+            list(row.get(checkpoints_field) or []) != list(checkpoints)
+            or not isinstance(candidates, list)
+            or not isinstance(checkpoint_records, list)
+            or len(checkpoint_records) != len(checkpoints)
+        ):
+            return False
+
+        for checkpoint, checkpoint_record in zip(
+            checkpoints,
+            checkpoint_records,
+        ):
+            prefix = candidates[:checkpoint]
+            feasible = [
+                candidate for candidate in prefix
+                if candidate.get("admissible") is True
+            ]
+            if not feasible:
+                return False
+            if objective == "minimize_path_with_fixed_endpoint":
+                selected = min(
+                    feasible,
+                    key=lambda candidate: (
+                        float(candidate["path_score"]),
+                        float(candidate["detector_score"]),
+                        int(candidate["candidate_index"]),
+                    ),
+                )
+            else:
+                selected = min(
+                    feasible,
+                    key=lambda candidate: (
+                        float(candidate["detector_score"]),
+                        float(candidate["path_score"]),
+                        int(candidate["candidate_index"]),
+                    ),
+                )
+            if not (
+                checkpoint_record.get("adaptive_attack_checkpoint_selection_protocol")
+                == ADAPTIVE_QUERY_BUDGET_CHECKPOINT_PROTOCOL
+                and int(
+                    checkpoint_record.get(
+                        "adaptive_attack_query_budget_checkpoint"
+                    )
+                    or 0
+                )
+                == checkpoint
+                and int(
+                    checkpoint_record.get(
+                        "adaptive_attack_checkpoint_observed_query_count"
+                    )
+                    or 0
+                )
+                == checkpoint
+                and int(
+                    checkpoint_record.get(
+                        "adaptive_attack_checkpoint_candidate_count"
+                    )
+                    or 0
+                )
+                == checkpoint
+                and int(
+                    checkpoint_record.get(
+                        "adaptive_attack_checkpoint_admissible_candidate_count"
+                    )
+                    or 0
+                )
+                == len(feasible)
+                and checkpoint_record.get(
+                    "adaptive_attack_checkpoint_has_admissible_candidate"
+                )
+                is True
+                and int(
+                    checkpoint_record.get(
+                        "adaptive_attack_checkpoint_selected_candidate_index"
+                    )
+                    or 0
+                )
+                == int(selected["candidate_index"])
+                and checkpoint_record.get(
+                    "adaptive_attack_checkpoint_output_video_sha256"
+                )
+                == selected.get("video_sha256")
+                and float(
+                    checkpoint_record["adaptive_attack_checkpoint_detector_score"]
+                )
+                == float(selected["detector_score"])
+                and checkpoint_record.get(
+                    "adaptive_attack_checkpoint_detected_by_sstw"
+                )
+                == bool(selected["decision"])
+            ):
+                return False
+        return True
+
     def common_search_evidence_ready(row: Mapping[str, Any]) -> bool:
         candidates = row.get("adaptive_attack_candidate_records")
+        public_query_count = int(
+            row.get("adaptive_attack_public_negative_probe_count") or 0
+        )
         return bool(
             int(row.get("adaptive_attack_query_count") or 0) == int(query_budget)
             and isinstance(row.get("adaptive_attack_selected_parameters"), Mapping)
@@ -369,6 +654,23 @@ def audit_adaptive_optimizer_evidence(
                 and candidate["attack_parameters"].get("attack_strength") is not None
             })
             == int(query_budget)
+            and row.get("adaptive_attack_query_budget_checkpoint_protocol")
+            == ADAPTIVE_QUERY_BUDGET_CHECKPOINT_PROTOCOL
+            and row.get("adaptive_attack_query_accounting_protocol")
+            == "all_target_and_public_negative_frozen_detector_calls"
+            and int(
+                row.get("adaptive_attack_total_detector_query_count") or 0
+            )
+            == int(query_budget) + public_query_count
+            and checkpoint_evidence_ready(
+                row,
+                candidates_field="adaptive_attack_candidate_records",
+                checkpoints_field="adaptive_attack_query_budget_checkpoints",
+                checkpoint_records_field=(
+                    "adaptive_attack_query_budget_checkpoint_records"
+                ),
+                objective=str(row.get("adaptive_attack_objective") or ""),
+            )
         )
 
     def two_coordinate_search_evidence_ready(row: Mapping[str, Any]) -> bool:
@@ -460,19 +762,298 @@ def audit_adaptive_optimizer_evidence(
     ]
     public_probe_ready = bool(public_rows) and all(
         int(row.get("adaptive_attack_public_negative_probe_count") or 0)
-        == int(query_budget)
+        == expected_public_probe_budget
         and isinstance(
             row.get("adaptive_attack_public_negative_candidate_records"), list
         )
         and len(row["adaptive_attack_public_negative_candidate_records"])
-        == int(query_budget)
+        == expected_public_probe_budget
         and row.get("adaptive_attack_public_negative_informed_strength") is not None
+        and checkpoint_evidence_ready(
+            row,
+            candidates_field="adaptive_attack_public_negative_candidate_records",
+            checkpoints_field=(
+                "adaptive_attack_public_negative_query_budget_checkpoints"
+            ),
+            checkpoint_records_field=(
+                "adaptive_attack_public_negative_query_budget_checkpoint_records"
+            ),
+            objective="minimize_detector_score",
+            checkpoints=expected_public_checkpoints,
+        )
         for row in public_rows
     )
     return {
         "adaptive_detector_feedback_search_ready": search_ready,
         "adaptive_model_vae_regeneration_ready": regeneration_ready,
         "adaptive_public_negative_probe_ready": public_probe_ready,
+        "adaptive_query_budget_checkpoint_ready": bool(search_rows) and all(
+            checkpoint_evidence_ready(
+                row,
+                candidates_field="adaptive_attack_candidate_records",
+                checkpoints_field="adaptive_attack_query_budget_checkpoints",
+                checkpoint_records_field=(
+                    "adaptive_attack_query_budget_checkpoint_records"
+                ),
+                objective=str(row.get("adaptive_attack_objective") or ""),
+            )
+            for row in search_rows
+        ),
+    }
+
+
+def build_adaptive_query_budget_checkpoint_records(
+    records: list[Mapping[str, Any]],
+) -> list[dict[str, Any]]:
+    """把单视频嵌套 checkpoint 展开为可独立重建论文曲线的 governed records。"""
+
+    checkpoint_records: list[dict[str, Any]] = []
+    for row in records:
+        protocol = str(row.get("non_runtime_attack_protocol") or "")
+        if protocol not in ADAPTIVE_SEARCH_PROTOCOLS:
+            continue
+        source_cluster_id = str(
+            row.get("adaptive_attack_source_statistical_cluster_id") or ""
+        )
+        for checkpoint in row.get(
+            "adaptive_attack_query_budget_checkpoint_records",
+            [],
+        ):
+            payload = {
+                "record_version": "formal_adaptive_query_budget_checkpoint_v1",
+                "paper_result_level": row.get("paper_result_level"),
+                "target_fpr": row.get("target_fpr"),
+                "non_runtime_attack_protocol": protocol,
+                "generation_model_id": row.get("generation_model_id"),
+                "prompt_id": row.get("prompt_id"),
+                "seed_id": row.get("seed_id"),
+                "trajectory_trace_id": row.get("trajectory_trace_id"),
+                "statistical_cluster_id": source_cluster_id,
+                "adaptive_attack_source_statistical_cluster_id": source_cluster_id,
+                "statistical_independent_unit": "source_video_prompt_seed",
+                "adaptive_attack_checkpoint_query_role": "heldout_test_video",
+                "adaptive_attack_objective": row.get("adaptive_attack_objective"),
+                "adaptive_attack_query_budget": row.get(
+                    "adaptive_attack_query_budget"
+                ),
+                "adaptive_attack_query_budget_checkpoints": row.get(
+                    "adaptive_attack_query_budget_checkpoints"
+                ),
+                "adaptive_attack_query_budget_checkpoint_protocol": row.get(
+                    "adaptive_attack_query_budget_checkpoint_protocol"
+                ),
+                "adaptive_attack_checkpoint_public_negative_query_count": int(
+                    row.get("adaptive_attack_public_negative_probe_count") or 0
+                ),
+                "adaptive_attack_checkpoint_total_detector_query_count": (
+                    int(
+                        checkpoint.get(
+                            "adaptive_attack_query_budget_checkpoint"
+                        )
+                        or 0
+                    )
+                    + int(
+                        row.get("adaptive_attack_public_negative_probe_count")
+                        or 0
+                    )
+                ),
+                "test_time_threshold_update_blocked": row.get(
+                    "test_time_threshold_update_blocked"
+                ),
+                **dict(checkpoint),
+            }
+            checkpoint_records.append({
+                "formal_adaptive_query_budget_checkpoint_record_id": (
+                    "adaptive_checkpoint_"
+                    f"{build_stable_digest(payload)[:16]}"
+                ),
+                **payload,
+            })
+    return checkpoint_records
+
+
+def audit_adaptive_source_cluster_coverage(
+    records: list[Mapping[str, Any]],
+    checkpoint_records: list[Mapping[str, Any]],
+    *,
+    required_protocols: tuple[str, ...],
+    minimum_source_cluster_count: int,
+    minimum_spoof_source_cluster_count: int | None = None,
+    query_budget_checkpoints: tuple[int, ...],
+    expected_retention_source_cluster_ids: set[str] | None = None,
+    expected_spoof_source_cluster_ids: set[str] | None = None,
+) -> dict[str, Any]:
+    """按预注册独立单位核验协议覆盖, 并显式阻断伪重复。"""
+
+    minimum_count = int(minimum_source_cluster_count)
+    spoof_minimum = int(minimum_spoof_source_cluster_count or minimum_count)
+    expected_source_clusters = set(expected_retention_source_cluster_ids or ())
+    if not expected_source_clusters:
+        expected_source_clusters = {
+            str(row.get("adaptive_attack_source_statistical_cluster_id") or "")
+            for row in records
+            if row.get("non_runtime_attack_protocol")
+            not in {
+                "watermark_spoofing_or_copy_attack",
+                "collusion_multi_sample_attack",
+            }
+            and row.get("adaptive_attack_source_statistical_cluster_id")
+        }
+    expected_spoof_clusters = set(expected_spoof_source_cluster_ids or ())
+    if not expected_spoof_clusters:
+        expected_spoof_clusters = {
+            str(row.get("adaptive_attack_source_statistical_cluster_id") or "")
+            for row in records
+            if row.get("non_runtime_attack_protocol")
+            == "watermark_spoofing_or_copy_attack"
+            and row.get("adaptive_attack_source_statistical_cluster_id")
+        } or set(expected_source_clusters)
+    protocol_cluster_counts: dict[str, int] = {}
+    duplicate_independent_units: list[str] = []
+    incomplete_protocols: list[str] = []
+
+    for protocol in required_protocols:
+        protocol_rows = [
+            row for row in records
+            if row.get("non_runtime_attack_protocol") == protocol
+        ]
+        if protocol == "collusion_multi_sample_attack":
+            pair_ids = [
+                str(row.get("statistical_cluster_id") or "")
+                for row in protocol_rows
+            ]
+            member_ids = [
+                str(member)
+                for row in protocol_rows
+                for member in row.get(
+                    "adaptive_attack_member_statistical_cluster_ids",
+                    [],
+                )
+            ]
+            protocol_cluster_counts[protocol] = len(set(pair_ids))
+            duplicate_independent_units.extend(
+                f"{protocol}::{pair_id}"
+                for pair_id in sorted(set(pair_ids))
+                if pair_ids.count(pair_id) != 1
+            )
+            collusion_ready = (
+                len(protocol_rows) == minimum_count // 2
+                and len(pair_ids) == len(set(pair_ids))
+                and len(member_ids) == minimum_count
+                and len(member_ids) == len(set(member_ids))
+                and set(member_ids) == expected_source_clusters
+                and all(
+                    row.get("statistical_independent_unit")
+                    == "disjoint_source_video_pair"
+                    for row in protocol_rows
+                )
+            )
+            if not collusion_ready:
+                incomplete_protocols.append(protocol)
+            continue
+
+        source_ids = [
+            str(row.get("adaptive_attack_source_statistical_cluster_id") or "")
+            for row in protocol_rows
+        ]
+        protocol_cluster_counts[protocol] = len(set(source_ids))
+        duplicate_independent_units.extend(
+            f"{protocol}::{source_id}"
+            for source_id in sorted(set(source_ids))
+            if source_ids.count(source_id) != 1
+        )
+        expected_protocol_clusters = (
+            expected_spoof_clusters
+            if protocol == "watermark_spoofing_or_copy_attack"
+            else expected_source_clusters
+        )
+        expected_protocol_count = (
+            spoof_minimum
+            if protocol == "watermark_spoofing_or_copy_attack"
+            else minimum_count
+        )
+        if not (
+            len(protocol_rows) == expected_protocol_count
+            and len(source_ids) == len(set(source_ids))
+            and set(source_ids) == expected_protocol_clusters
+        ):
+            incomplete_protocols.append(protocol)
+
+    missing_checkpoint_scopes: list[str] = []
+    for protocol in ADAPTIVE_SEARCH_PROTOCOLS:
+        if protocol not in required_protocols:
+            continue
+        for checkpoint in query_budget_checkpoints:
+            scoped = [
+                row for row in checkpoint_records
+                if row.get("non_runtime_attack_protocol") == protocol
+                and int(
+                    row.get("adaptive_attack_query_budget_checkpoint") or 0
+                )
+                == int(checkpoint)
+            ]
+            cluster_ids = [
+                str(row.get("statistical_cluster_id") or "") for row in scoped
+            ]
+            if not (
+                len(scoped) == minimum_count
+                and len(cluster_ids) == len(set(cluster_ids))
+                and set(cluster_ids) == expected_source_clusters
+                and all(
+                    row.get("adaptive_attack_checkpoint_has_admissible_candidate")
+                    is True
+                    and row.get("adaptive_attack_checkpoint_output_video_sha256")
+                    for row in scoped
+                )
+            ):
+                missing_checkpoint_scopes.append(f"{protocol}::q={checkpoint}")
+
+    coverage_ready = (
+        len(expected_source_clusters) == minimum_count
+        and len(expected_spoof_clusters) == spoof_minimum
+        and expected_source_clusters <= expected_spoof_clusters
+        and not incomplete_protocols
+    )
+    uniqueness_ready = not duplicate_independent_units
+    checkpoint_ready = not missing_checkpoint_scopes
+    return {
+        "adaptive_attack_source_cluster_selection_protocol": (
+            ADAPTIVE_SOURCE_CLUSTER_SELECTION_PROTOCOL
+        ),
+        "minimum_adaptive_attack_source_video_cluster_count_per_protocol": (
+            minimum_count
+        ),
+        "minimum_adaptive_spoof_source_video_cluster_count": spoof_minimum,
+        "adaptive_attack_selected_source_video_cluster_count": len(
+            expected_source_clusters
+        ),
+        "adaptive_attack_spoof_source_video_cluster_count": len(
+            expected_spoof_clusters
+        ),
+        "adaptive_attack_protocol_independent_cluster_counts": (
+            protocol_cluster_counts
+        ),
+        "adaptive_attack_incomplete_cluster_protocols": sorted(
+            incomplete_protocols
+        ),
+        "adaptive_attack_duplicate_independent_units": sorted(
+            duplicate_independent_units
+        ),
+        "adaptive_attack_missing_query_budget_checkpoint_scopes": sorted(
+            missing_checkpoint_scopes
+        ),
+        "adaptive_attack_source_cluster_coverage_decision": (
+            "PASS" if coverage_ready else "FAIL"
+        ),
+        "adaptive_attack_independent_unit_uniqueness_decision": (
+            "PASS" if uniqueness_ready else "FAIL"
+        ),
+        "adaptive_attack_query_budget_checkpoint_coverage_decision": (
+            "PASS" if checkpoint_ready else "FAIL"
+        ),
+        "adaptive_attack_source_cluster_coverage_ready": coverage_ready,
+        "adaptive_attack_independent_unit_uniqueness_ready": uniqueness_ready,
+        "adaptive_attack_query_budget_checkpoint_coverage_ready": checkpoint_ready,
     }
 
 
@@ -515,14 +1096,36 @@ def run_formal_adaptive_attack_execution(
         and row.get("split") == "calibration"
         and row.get("cross_model_role") != "cross_model_validation_model"
     ])
-    sources = _one_source_per_video(positives)
-    if not sources:
+    source_population = _one_source_per_video(positives)
+    if not source_population:
         raise RuntimeError("缺少 held-out test full-method 视频, 无法执行 adaptive attack")
+    retention_sources = _select_preregistered_source_clusters(
+        source_population,
+        selected_cluster_count=(
+            context["minimum_source_video_cluster_count_per_protocol"]
+        ),
+    )
+    spoof_source_population = _generation_spoof_source_population(root, clean)
+    spoof_sources = _select_preregistered_source_clusters(
+        spoof_source_population,
+        selected_cluster_count=(
+            context["minimum_spoof_source_video_cluster_count"]
+        ),
+    )
+    retention_cluster_ids = {
+        str(row["statistical_cluster_id"]) for row in retention_sources
+    }
+    spoof_cluster_ids = {
+        str(row["statistical_cluster_id"]) for row in spoof_sources
+    }
+    if not retention_cluster_ids <= spoof_cluster_ids:
+        raise RuntimeError("adaptive retention 子集必须嵌套于 spoof 固定 FPR 样本")
+    sources = [*retention_sources, *spoof_sources]
     if (
         "collusion_multi_sample_attack" in context["required_protocols"]
-        and (len(sources) < 4 or len(sources) % 2 != 0)
+        and (len(retention_sources) < 4 or len(retention_sources) % 2 != 0)
     ):
-        _disjoint_collusion_peer_index(0, len(sources))
+        _disjoint_collusion_peer_index(0, len(retention_sources))
     clean_by_identity = {
         (
             str(row.get("generation_model_id") or ""),
@@ -563,13 +1166,42 @@ def run_formal_adaptive_attack_execution(
     records: list[dict[str, Any]] = []
     query_rows: list[dict[str, Any]] = []
     failure_rows: list[dict[str, Any]] = []
+    collusion_required = (
+        "collusion_multi_sample_attack" in context["required_protocols"]
+    )
+    spoof_required = (
+        "watermark_spoofing_or_copy_attack" in context["required_protocols"]
+    )
+    expected_count = (
+        len(retention_sources)
+        * (len(context["required_protocols"]) - int(spoof_required))
+        - (len(retention_sources) // 2 if collusion_required else 0)
+        + (len(spoof_sources) if spoof_required else 0)
+    )
     progress = ProgressReporter(
         "formal_per_video_adaptive_attack",
-        len(sources) * len(context["required_protocols"]),
+        expected_count,
         "video_protocol",
     )
     progress_index = 0
-    for source_index, source in enumerate(sources):
+    non_spoof_protocols = tuple(
+        protocol
+        for protocol in context["required_protocols"]
+        if protocol != "watermark_spoofing_or_copy_attack"
+    )
+    execution_source_groups = [
+        (source_index, source, non_spoof_protocols)
+        for source_index, source in enumerate(retention_sources)
+    ] + [
+        (
+            source_index,
+            source,
+            ("watermark_spoofing_or_copy_attack",),
+        )
+        for source_index, source in enumerate(spoof_sources)
+        if spoof_required
+    ]
+    for source_index, source, source_protocols in execution_source_groups:
         model_id = str(source["generation_model_id"])
         prompt = prompt_map[str(source["prompt_id"])]
         key_text = _generation_key(source)
@@ -582,7 +1214,11 @@ def run_formal_adaptive_attack_execution(
             key_text=key_text,
         )
         source_video = _resolve_video(root, source.get("attacked_video_path"), "attacked_videos")
-        for protocol in context["required_protocols"]:
+        for protocol in source_protocols:
+            # collusion 的统计单位是预注册的不重叠视频对。每对只执行并记录一次,
+            # 避免把同一对按两个成员方向重复生成后伪装成两个独立样本。
+            if protocol == "collusion_multi_sample_attack" and source_index % 2 == 1:
+                continue
             progress_index += 1
             progress.update(progress_index, f"video={source_index} protocol={protocol}")
             base = _base_record(protocol, source, context)
@@ -646,7 +1282,13 @@ def run_formal_adaptive_attack_execution(
                             endpoint_reference=float(public_row["endpoint_score"]),
                             endpoint_tolerance=context["endpoint_tolerance"],
                             minimum_quality_psnr=context["minimum_quality_psnr"],
-                            query_budget=context["query_budget"],
+                            query_budget=context[
+                                "public_negative_probe_query_budget"
+                            ],
+                            query_budget_checkpoints=(
+                                1,
+                                context["public_negative_probe_query_budget"],
+                            ),
                         )
                         for candidate in public_result.candidates:
                             query_rows.append({
@@ -679,6 +1321,17 @@ def run_formal_adaptive_attack_execution(
                                 row.as_dict() for row in public_result.candidates
                             ],
                             "adaptive_attack_public_negative_informed_strength": public_informed_strength,
+                            "adaptive_attack_public_negative_query_budget_checkpoints": list(
+                                (
+                                    1,
+                                    context[
+                                        "public_negative_probe_query_budget"
+                                    ],
+                                )
+                            ),
+                            "adaptive_attack_public_negative_query_budget_checkpoint_records": list(
+                                public_result.checkpoint_records()
+                            ),
                         }
                     adaptive_output_dir = (
                         root
@@ -696,6 +1349,9 @@ def run_formal_adaptive_attack_execution(
                             endpoint_tolerance=context["endpoint_tolerance"],
                             minimum_quality_psnr=context["minimum_quality_psnr"],
                             query_budget=context["query_budget"],
+                            query_budget_checkpoints=context[
+                                "query_budget_checkpoints"
+                            ],
                         )
                         execution_backend = (
                             "model_vae_encode_perturb_decode_bounded_black_box_search"
@@ -717,6 +1373,9 @@ def run_formal_adaptive_attack_execution(
                             endpoint_tolerance=context["endpoint_tolerance"],
                             minimum_quality_psnr=context["minimum_quality_psnr"],
                             query_budget=context["query_budget"],
+                            query_budget_checkpoints=context[
+                                "query_budget_checkpoints"
+                            ],
                             initial_strength=public_informed_strength,
                         )
                         execution_backend = (
@@ -741,6 +1400,18 @@ def run_formal_adaptive_attack_execution(
                         "adaptive_attack_endpoint_score": selected.endpoint_score,
                         "adaptive_attack_detected_by_sstw": selected.decision,
                         "adaptive_attack_score_semantics": "frozen_calibrated_flow_probability_posterior",
+                        "adaptive_attack_total_detector_query_count": (
+                            len(result.candidates)
+                            + int(
+                                public_probe_summary.get(
+                                    "adaptive_attack_public_negative_probe_count"
+                                )
+                                or 0
+                            )
+                        ),
+                        "adaptive_attack_query_accounting_protocol": (
+                            "all_target_and_public_negative_frozen_detector_calls"
+                        ),
                     }
                     for candidate in result.candidates:
                         query_rows.append({
@@ -801,9 +1472,9 @@ def run_formal_adaptive_attack_execution(
                     else:
                         peer_index = _disjoint_collusion_peer_index(
                             source_index,
-                            len(sources),
+                            len(retention_sources),
                         )
-                        peer = sources[peer_index]
+                        peer = retention_sources[peer_index]
                         if peer.get("statistical_cluster_id") == source.get("statistical_cluster_id"):
                             raise RuntimeError("collusion attack 至少需要2个独立视频簇")
                         primary = source_video
@@ -906,7 +1577,6 @@ def run_formal_adaptive_attack_execution(
                     "adaptive_robustness_claim_allowed": False,
                     "adaptive_attack_failure_reason": str(exc),
                 })
-    expected_count = len(sources) * len(context["required_protocols"])
     adaptive_candidate_records = [
         candidate
         for record in records
@@ -920,6 +1590,55 @@ def run_formal_adaptive_attack_execution(
             [],
         )
     ]
+    checkpoint_records = build_adaptive_query_budget_checkpoint_records(records)
+    cluster_coverage = audit_adaptive_source_cluster_coverage(
+        records,
+        checkpoint_records,
+        required_protocols=context["required_protocols"],
+        minimum_source_cluster_count=(
+            context["minimum_source_video_cluster_count_per_protocol"]
+        ),
+        minimum_spoof_source_cluster_count=(
+            context["minimum_spoof_source_video_cluster_count"]
+        ),
+        query_budget_checkpoints=context["query_budget_checkpoints"],
+        expected_retention_source_cluster_ids=retention_cluster_ids,
+        expected_spoof_source_cluster_ids=spoof_cluster_ids,
+    )
+    checkpoint_statistics: list[dict[str, Any]] = []
+    for protocol in sorted(ADAPTIVE_SEARCH_PROTOCOLS):
+        for checkpoint in context["query_budget_checkpoints"]:
+            scoped = [
+                row for row in checkpoint_records
+                if row.get("non_runtime_attack_protocol") == protocol
+                and int(
+                    row.get("adaptive_attack_query_budget_checkpoint") or 0
+                )
+                == int(checkpoint)
+            ]
+            if not scoped:
+                continue
+            estimate = clustered_binary_rate_interval(
+                scoped,
+                outcome_field="adaptive_attack_checkpoint_detected_by_sstw",
+                purpose=f"adaptive_query_budget::{protocol}::q={checkpoint}",
+            )
+            checkpoint_statistics.append({
+                "non_runtime_attack_protocol": protocol,
+                "adaptive_attack_query_budget_checkpoint": int(checkpoint),
+                "adaptive_attack_checkpoint_total_detector_query_count": int(
+                    scoped[0][
+                        "adaptive_attack_checkpoint_total_detector_query_count"
+                    ]
+                ),
+                **estimate.as_dict(
+                    "adaptive_attack_checkpoint_watermark_retention_rate"
+                ),
+            })
+    for query in query_rows:
+        query["adaptive_attack_query_statistical_role"] = (
+            "dependent_repeated_query_within_source_video_cluster"
+        )
     adaptive_query_provenance_ready = bool(query_rows) and all(
         query.get("video_sha256")
         and int(query.get("decoded_frame_count") or 0) > 0
@@ -942,6 +1661,10 @@ def run_formal_adaptive_attack_execution(
     optimizer_evidence = audit_adaptive_optimizer_evidence(
         records,
         query_budget=context["query_budget"],
+        query_budget_checkpoints=context["query_budget_checkpoints"],
+        public_negative_probe_query_budget=context[
+            "public_negative_probe_query_budget"
+        ],
     )
     optimizer_evidence_ready = all(optimizer_evidence.values())
     expected_query_count = sum(
@@ -955,6 +1678,15 @@ def run_formal_adaptive_attack_execution(
         and adaptive_query_provenance_ready
         and optimizer_evidence_ready
         and len(query_rows) == expected_query_count
+        and cluster_coverage[
+            "adaptive_attack_source_cluster_coverage_ready"
+        ]
+        and cluster_coverage[
+            "adaptive_attack_independent_unit_uniqueness_ready"
+        ]
+        and cluster_coverage[
+            "adaptive_attack_query_budget_checkpoint_coverage_ready"
+        ]
     )
     retention_rows_by_protocol = {
         protocol: [
@@ -1035,7 +1767,8 @@ def run_formal_adaptive_attack_execution(
             "PASS" if adaptive_execution_complete else "FAIL"
         ),
         "paper_result_level": context["paper_result_level"],
-        "independent_video_count": len(sources),
+        "independent_video_count": len(retention_sources),
+        "adaptive_spoof_independent_video_count": len(spoof_sources),
         "required_non_runtime_attack_protocols": list(context["required_protocols"]),
         "formal_adaptive_attack_execution_record_count": len(records),
         "formal_adaptive_attack_expected_record_count": expected_count,
@@ -1044,6 +1777,24 @@ def run_formal_adaptive_attack_execution(
         "formal_adaptive_attack_failure_count": len(failure_rows),
         "adaptive_attack_candidate_query_count": len(adaptive_candidate_records),
         "adaptive_attack_public_negative_query_count": len(public_probe_candidate_records),
+        "adaptive_attack_query_budget": context["query_budget"],
+        "adaptive_attack_query_budget_checkpoints": list(
+            context["query_budget_checkpoints"]
+        ),
+        "adaptive_attack_query_budget_checkpoint_protocol": (
+            ADAPTIVE_QUERY_BUDGET_CHECKPOINT_PROTOCOL
+        ),
+        "adaptive_attack_query_budget_checkpoint_record_count": len(
+            checkpoint_records
+        ),
+        "adaptive_attack_query_budget_statistics": checkpoint_statistics,
+        "adaptive_attack_source_population_cluster_count": len(
+            source_population
+        ),
+        "adaptive_attack_spoof_source_population_cluster_count": len(
+            spoof_source_population
+        ),
+        **cluster_coverage,
         "adaptive_attack_query_provenance_decision": (
             "PASS" if adaptive_query_provenance_ready else "FAIL"
         ),
@@ -1082,10 +1833,61 @@ def run_formal_adaptive_attack_execution(
     }
     write_jsonl(root / "records" / "formal_adaptive_attack_execution_records.jsonl", records)
     write_jsonl(root / "records" / "formal_adaptive_attack_query_records.jsonl", query_rows)
+    write_jsonl(
+        root
+        / "records"
+        / "formal_adaptive_attack_query_budget_checkpoint_records.jsonl",
+        checkpoint_records,
+    )
     write_jsonl(root / "records" / "formal_adaptive_attack_failure_records.jsonl", failure_rows)
     write_csv(root / "tables" / "formal_adaptive_attack_execution_table.csv", records)
     write_csv(root / "tables" / "formal_adaptive_attack_query_table.csv", query_rows)
+    write_csv(
+        root
+        / "tables"
+        / "formal_adaptive_attack_query_budget_checkpoint_table.csv",
+        checkpoint_records,
+    )
     write_json(root / "artifacts" / "formal_adaptive_attack_execution_decision.json", audit)
+    report_lines = [
+        "# 正式逐视频 Adaptive Attack 执行报告",
+        "",
+        "该报告只汇总真实候选视频生成、冻结检测器查询和预注册查询预算前缀。",
+        "较小预算 checkpoint 由同一次序贯搜索的真实前缀构建, 不使用外推或最终候选回填。",
+        "",
+        f"- 执行门禁: {audit['formal_adaptive_attack_execution_decision']}",
+        f"- 独立 source-video cluster 数: {audit['independent_video_count']}",
+        f"- 最大单视频查询预算: {audit['adaptive_attack_query_budget']}",
+        "- 预注册查询预算 checkpoint: "
+        + ", ".join(
+            str(value) for value in audit["adaptive_attack_query_budget_checkpoints"]
+        ),
+        "- source-video cluster 覆盖: "
+        + audit["adaptive_attack_source_cluster_coverage_decision"],
+        "- 独立统计单位去重: "
+        + audit["adaptive_attack_independent_unit_uniqueness_decision"],
+        "- query-budget checkpoint 覆盖: "
+        + audit["adaptive_attack_query_budget_checkpoint_coverage_decision"],
+        "",
+        "## Query-budget 曲线统计",
+        "",
+    ]
+    for row in checkpoint_statistics:
+        report_lines.append(
+            "- "
+            f"{row['non_runtime_attack_protocol']}, "
+            f"target_q={row['adaptive_attack_query_budget_checkpoint']}, "
+            "total_q="
+            f"{row['adaptive_attack_checkpoint_total_detector_query_count']}: "
+            "retention="
+            f"{row['adaptive_attack_checkpoint_watermark_retention_rate_estimate']}, "
+            "95% CI=["
+            f"{row['adaptive_attack_checkpoint_watermark_retention_rate_ci_95_lower']}, "
+            f"{row['adaptive_attack_checkpoint_watermark_retention_rate_ci_95_upper']}]"
+        )
+    report_path = root / "reports" / "formal_adaptive_attack_execution_report.md"
+    report_path.parent.mkdir(parents=True, exist_ok=True)
+    report_path.write_text("\n".join(report_lines) + "\n", encoding="utf-8")
     return audit
 
 

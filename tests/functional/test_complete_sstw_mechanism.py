@@ -71,6 +71,9 @@ from evaluation.protocol.paper_mechanism_contract import (
 
 
 from evaluation.protocol.record_writer import write_json, write_jsonl
+from evaluation.protocol.generation_record_binding import (
+    build_generation_record_binding_digest,
+)
 
 
 TEST_REPLAY_LIKELIHOOD_CONFIG = ReplayGaussianLikelihoodConfig(
@@ -326,7 +329,7 @@ def test_replay_llr_is_gaussian_residual_likelihood_not_error_ratio() -> None:
     )
 
 
-def _state_sequence(level: float, *, increasing: bool) -> list[dict[str, float]]:
+def _state_sequence(level: float, *, increasing: bool) -> list[dict[str, object]]:
     """构造轻量动态序列, 用于验证状态转移而不是 GPU 结果。"""
 
     rows = []
@@ -335,6 +338,10 @@ def _state_sequence(level: float, *, increasing: bool) -> list[dict[str, float]]
         value = level + delta
         rows.append({
             "flow_phase": step_index / 4,
+            "trajectory_delta_sigma": -0.25,
+            "flow_tubelet_key_context_digest": "f" * 64,
+            "flow_tubelet_formal_context_complete": True,
+            "path_quadrature_context_complete": True,
             "endpoint_score": value,
             "velocity_score": value - 0.05,
             "path_score": value - 0.03,
@@ -485,6 +492,11 @@ def test_formal_state_space_gate_rejects_single_step_or_unmeasured_posterior() -
         "formal_flow_evidence_unit_id": "formal-unit-a",
         "flow_state_observation_sequence_status": "measured_from_fixed_replay_path",
         "flow_state_observation_step_count": 5,
+        "flow_state_observation_formal_context_complete": True,
+        "flow_tubelet_key_context_digest": "f" * 64,
+        "flow_tubelet_formal_context_complete": True,
+        "path_quadrature_context_complete": True,
+        "endpoint_formal_context_complete": True,
         "replay_likelihood_model_id": (
             "calibration_fitted_endpoint_relative_isotropic_gaussian_per_latent_dimension"
         ),
@@ -760,7 +772,7 @@ def test_claim1_causal_pair_uses_same_detector_and_controlled_generation_state()
         "generation_model_id": "test-flow-model",
         "prompt_id": "prompt-a",
         "seed_id": "seed-a",
-        "attack_name": "codec-a",
+        "attack_name": "no_attack_generation_causal_ablation",
         "sample_role": "attacked_positive",
         "split": "test",
         "velocity_causal_pair_id": "causal-pair-a",
@@ -775,6 +787,9 @@ def test_claim1_causal_pair_uses_same_detector_and_controlled_generation_state()
         "method_variant": "sstw_full_method",
         "velocity_causal_intervention_status": "velocity_constraint_enabled",
         "generation_source_video_sha256": "full-video-digest",
+        "flow_runtime_formal_context_complete": True,
+        "generation_endpoint_control_formal_context_complete": True,
+        "generation_endpoint_quality_energy_guard_passed": True,
         "flow_state_observation_sequence": _state_sequence(0.8, increasing=True),
     }
     control = {
@@ -1157,8 +1172,42 @@ def test_full_claim3_gate_requires_real_replay_controls_and_hmac(
     """Claim-3 只有真实 replay、三类对照和 HMAC sketch 同时通过才能升级。"""
 
     run_root = tmp_path / "run"
-    authentication_key = b"claim3-secret"
+    authentication_key = b"claim3-secret-key-material-32bytes"
     monkeypatch.setenv("SSTW_TRAJECTORY_AUTHENTICATION_KEY", authentication_key.decode("utf-8"))
+    generation_record = {
+        "generation_status": "success",
+        "generation_model_id": "wan-model",
+        "generation_model_family": "diffusers_wan21_flow_matching_dit",
+        "generation_model_commit_or_hash": "a" * 40,
+        "prompt_id": "prompt-a",
+        "prompt_text_hash": "c" * 64,
+        "seed_id": "seed-a",
+        "generation_seed_random": 7,
+        "generation_generator_state_digest_random": "d" * 64,
+        "sample_role": "attacked_positive_source",
+        "method_variant": "sstw_full_method",
+        "watermark_key_derivation_id": WATERMARK_KEY_DERIVATION_ID,
+        "watermark_key_id": "owner-key-id",
+        "scheduler_id": "wan-flow-scheduler",
+        "trajectory_time_grid_id": "grid-a",
+        "num_inference_steps": 20,
+        "guidance_scale": 5.0,
+        "video_length_frames": 49,
+        "video_resolution": "512x320",
+        "fps": 8,
+        "video_sha256": "b" * 64,
+        "trajectory_trace_id": "trace-a",
+        "velocity_causal_pair_id": "pair-a",
+        "flow_tubelet_key_context_digest": "e" * 64,
+        "code_commit": "abcdef12",
+    }
+    generation_record["generation_record_digest"] = (
+        build_generation_record_binding_digest(generation_record)
+    )
+    write_jsonl(
+        run_root / "records" / "generation_records.jsonl",
+        [generation_record],
+    )
     payload = build_authenticated_trajectory_sketch_payload(
         [{
             "trajectory_step_index": 0,
@@ -1169,12 +1218,17 @@ def test_full_claim3_gate_requires_real_replay_controls_and_hmac(
             "path_velocity_consistency": 0.9,
         }],
         key_id="owner-key-id",
-        prompt_digest="prompt-digest",
+        prompt_digest="c" * 64,
         seed_id="seed-a",
         model_signature="wan-model",
         sampler_signature="FlowMatchEulerDiscreteScheduler",
         time_grid_id="grid-a",
-        generation_nonce_random="nonce-a",
+        generation_nonce_random="0123456789abcdef0123456789abcdef",
+        trajectory_trace_id="trace-a",
+        method_configuration_id="sstw_full_method",
+        video_sha256="b" * 64,
+        generation_record_digest=generation_record["generation_record_digest"],
+        code_commit="abcdef12",
     )
     signed = sign_authenticated_trajectory_sketch(payload, authentication_key=authentication_key)
     write_jsonl(run_root / "records" / "trajectory_sketch_records.jsonl", [{
@@ -1183,7 +1237,7 @@ def test_full_claim3_gate_requires_real_replay_controls_and_hmac(
         "prompt_id": "prompt-a",
         "seed_id": "seed-a",
         "method_variant": "sstw_full_method",
-        "authenticated_trajectory_sketch_status": "signed",
+        "authenticated_trajectory_sketch_status": "signed_formal_binding",
         **signed,
     }])
     write_jsonl(run_root / "records" / "formal_flow_evidence_records.jsonl", [{
@@ -1204,7 +1258,7 @@ def test_full_claim3_gate_requires_real_replay_controls_and_hmac(
         "replay_step_counts": [16, 20, 24],
         "replay_sampler_signature": "FlowMatchEulerDiscreteScheduler",
         "authenticated_generation_time_grid_id": "grid-a",
-        "replay_prompt_digest": "prompt-digest",
+        "replay_prompt_digest": "c" * 64,
         "wrong_key_control_margin": 0.2,
         "wrong_prompt_control_margin": 0.1,
         "wrong_sampler_control_margin": 0.1,
@@ -1227,11 +1281,20 @@ def test_full_claim3_gate_requires_real_replay_controls_and_hmac(
         "threshold_source_split": "calibration",
         "test_time_threshold_update_blocked": True,
         "S_final_conservative": 0.8,
+        "flow_tubelet_formal_context_complete": True,
+        "path_quadrature_context_complete": True,
+        "endpoint_formal_context_complete": True,
+        "flow_state_observation_formal_context_complete": True,
+        "replay_control_joint_context_complete": True,
     }])
     write_json(run_root / "artifacts" / "three_layer_mechanism_evidence_decision.json", {
         "claim_1_velocity_constraint_detectable_watermark_decision": "PASS",
         "claim_2_path_evidence_independent_gain_decision": "PASS",
     })
+    write_json(
+        run_root / "artifacts" / "heldout_posterior_calibration_decision.json",
+        {"heldout_posterior_calibration_decision": "PASS"},
+    )
 
     audit = run_replay_and_sketch_gate(run_root)
 

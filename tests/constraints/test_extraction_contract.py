@@ -176,6 +176,12 @@ def test_paper_artifact_rebuild_package_keeps_server_runtime_without_development
     )
     copied_files = manifest["copied_files"]
     assert "configs/paper_workflow/generative_video_notebook_workflows.json" in copied_files
+    assert "requirements/paper_runtime_lock.txt" in copied_files
+    assert "requirements/paper_runtime_environment_lock.json" in copied_files
+    assert "workflows/runtime_environment_preflight.py" in copied_files
+    assert "source_git_commit" in manifest
+    assert "source_git_tree_clean" in manifest
+    assert len(manifest["paper_runtime_environment_lock_sha256"]) == 64
     assert all(not path.startswith("paper_workflow/") for path in copied_files)
     assert all(not path.startswith("tools/") for path in copied_files)
     assert all(not path.startswith("tests/") for path in copied_files)

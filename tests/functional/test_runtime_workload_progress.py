@@ -249,8 +249,9 @@ def test_runtime_runners_use_dynamic_plan_and_record_counts_for_progress() -> No
             'ProgressReporter("formal_metric_runtime_video_scan", len(generation_records), "runtime_video")',
         ],
         "experiments/generative_video_model_probe/attack_runner.py": [
-            "total_attack_jobs = len(selection.eligible_generation_records) * len(selected_attack_names)",
-            'ProgressReporter("runtime_attack_video_transform", total_attack_jobs, "attack_video")',
+            "jobs = _select_preregistered_attack_jobs(",
+            '"runtime_attack_video_transform",',
+            "len(jobs),",
         ],
         "experiments/generative_video_model_probe/formal_adaptive_attack_executor.py": [
             'ProgressReporter(',

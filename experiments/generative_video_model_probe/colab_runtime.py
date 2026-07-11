@@ -20,6 +20,9 @@ from main.methods.state_space_watermark.authenticated_trajectory_sketch import (
     sign_authenticated_trajectory_sketch,
 )
 from main.methods.state_space_watermark.flow_velocity_runtime import FlowVelocityConstraintRuntime
+from main.methods.state_space_watermark.flow_tubelet_key_code import (
+    FlowTubeletKeyContext,
+)
 from experiments.generative_video_model_probe.formal_method_variants import (
     FORMAL_METHOD_VARIANTS,
     GENERATION_METHOD_VARIANTS,
@@ -36,6 +39,10 @@ from evaluation.protocol.flow_evidence_fields import (
     with_flow_evidence_protocol_defaults,
     with_flow_evidence_protocol_defaults_many,
 )
+from evaluation.protocol.generation_record_binding import (
+    build_generation_record_binding_digest,
+)
+from evaluation.protocol.package_naming import current_short_commit
 from runtime.core.progress import (
     ProgressReporter,
     configure_noisy_library_progress,
@@ -389,11 +396,38 @@ def _export_video(frames: Any, path: Path, fps: int) -> None:
 
 
 def _sha256_file(path: Path) -> str:
+    """计算输出视频的完整 SHA-256 摘要。"""
+
     digest = sha256()
     with path.open("rb") as handle:
         for chunk in iter(lambda: handle.read(1024 * 1024), b""):
             digest.update(chunk)
     return digest.hexdigest()
+
+
+def _scheduler_signature(scheduler: Any) -> str:
+    """冻结 scheduler 类与完整配置，供生成、replay 和 sketch 共用。"""
+
+    payload = json.dumps(
+        dict(scheduler.config),
+        ensure_ascii=False,
+        sort_keys=True,
+        default=str,
+    )
+    return (
+        f"{type(scheduler).__name__}:"
+        f"{sha256(payload.encode('utf-8')).hexdigest()}"
+    )
+
+
+def _formal_code_commit() -> str:
+    """返回可认证的 Git commit；正式运行禁止无版本工作副本。"""
+
+    repository_root = Path(__file__).resolve().parents[2]
+    commit = current_short_commit(repository_root)
+    if not re.fullmatch(r"[0-9a-fA-F]{7,64}", commit):
+        raise RuntimeError("正式生成必须在可解析 Git HEAD 的仓库副本中运行")
+    return commit.lower()
 
 
 def _formalize_paper_trajectory_record(record: dict[str, Any], profile: str) -> dict[str, Any]:
@@ -571,6 +605,7 @@ def run_colab_probe(
             "SSTW 嵌入运行要求至少32字节的所有者密钥和非空 key ID"
         )
     authentication_key = authentication_key_text.encode("utf-8")
+    code_commit = _formal_code_commit() if profile in PAPER_RESULT_PROFILES else None
     _registered_generation_model(model_id)
     if cross_model_id:
         _registered_generation_model(cross_model_id)
@@ -636,10 +671,18 @@ def run_colab_probe(
             ).encode("utf-8")
         ).hexdigest()
         trace_id = f"trace_{index:04d}_{item['sample_role']}_{item['method_variant']}"
+        prompt_digest = sha256(item["prompt_text"].encode("utf-8")).hexdigest()
+        sampler_signature = _scheduler_signature(pipe.scheduler)
+        key_context = FlowTubeletKeyContext(
+            prompt_digest=prompt_digest,
+            sampler_signature=sampler_signature,
+        )
         step_stats: list[dict] = []
         applied_step_count = 0
         path_summary: dict[str, Any] = {}
         endpoint_summary: dict[str, Any] = {}
+        velocity_runtime_metadata: dict[str, Any] = {}
+        endpoint_control_summary: dict[str, Any] = {}
 
         video_path = output_root / "videos" / (
             f"{item['generation_model_id'].replace('/', '_')}_{item['prompt_id']}_{item['seed_id']}_"
@@ -662,6 +705,7 @@ def run_colab_probe(
                     str(item["method_variant"])
                 ),
                 latent_layout=latent_layout,
+                key_context=key_context,
             ) as velocity_runtime:
                 with suppress_third_party_progress_output("flow_model_runtime_single_video_generation"):
                     result = pipe(
@@ -670,6 +714,7 @@ def run_colab_probe(
                         generator=generator,
                         **generation_kwargs,
                     )
+            velocity_runtime_metadata = velocity_runtime.key_metadata
             step_stats = [
                 {
                     "trajectory_trace_id": trace_id,
@@ -685,10 +730,67 @@ def run_colab_probe(
                 for record in step_stats
             )
             path_summary = aggregate_path_observations(step_stats)
+            endpoint_control_steps = [
+                record
+                for record in step_stats
+                if record.get("velocity_constraint_enabled") is True
+                and record.get("endpoint_control_enabled") is True
+            ]
+            endpoint_control_summary = {
+                "generation_endpoint_control_formal_context_complete": bool(
+                    endpoint_control_steps
+                    and all(
+                        record.get("endpoint_control_formal_context_complete")
+                        is True
+                        for record in endpoint_control_steps
+                    )
+                ),
+                "generation_endpoint_quality_energy_guard_passed": bool(
+                    endpoint_control_steps
+                    and all(
+                        record.get("endpoint_quality_energy_guard_passed") is True
+                        for record in endpoint_control_steps
+                    )
+                ),
+                "generation_endpoint_control_cumulative_energy_final": max(
+                    (
+                        float(
+                            record.get(
+                                "endpoint_control_cumulative_energy_after"
+                            )
+                            or 0.0
+                        )
+                        for record in endpoint_control_steps
+                    ),
+                    default=0.0,
+                ),
+                "generation_endpoint_reference_cumulative_energy_final": max(
+                    (
+                        float(
+                            record.get(
+                                "endpoint_reference_cumulative_energy_after"
+                            )
+                            or 0.0
+                        )
+                        for record in endpoint_control_steps
+                    ),
+                    default=0.0,
+                ),
+                "generation_velocity_constraint_delta_ratio_maximum": max(
+                    (
+                        float(record.get("velocity_constraint_delta_ratio") or 0.0)
+                        for record in step_stats
+                    ),
+                    default=0.0,
+                ),
+            }
             if velocity_runtime.canonical_endpoint_latent is not None:
                 endpoint_summary = compute_endpoint_latent_evidence(
                     velocity_runtime.canonical_endpoint_latent,
                     key_text=key_text,
+                    key_context=key_context,
+                    flow_phases=velocity_runtime.flow_phases,
+                    integration_weights=velocity_runtime.integration_weights,
                 ).as_dict()
                 endpoint_summary["endpoint_evidence_source"] = "generation_scheduler_endpoint_latent"
                 endpoint_summary.update(latent_layout.as_dict())
@@ -703,58 +805,8 @@ def run_colab_probe(
             video_sha256 = None
         runtime_sec = round(time.time() - started, 3)
 
-        sketch_status = "not_required_nonpaper_profile"
-        if profile in PAPER_RESULT_PROFILES:
-            if generation_status == "success" and step_stats and authentication_key and authentication_key_id:
-                sketch_payload = build_authenticated_trajectory_sketch_payload(
-                    step_stats,
-                    key_id=authentication_key_id,
-                    prompt_digest=sha256(item["prompt_text"].encode("utf-8")).hexdigest(),
-                    seed_id=str(item["seed_id"]),
-                    model_signature=str(item["generation_model_id"]),
-                    sampler_signature=(
-                        f"{type(pipe.scheduler).__name__}:"
-                        f"{sha256(json.dumps(dict(pipe.scheduler.config), sort_keys=True, default=str).encode('utf-8')).hexdigest()}"
-                    ),
-                    time_grid_id=_trajectory_time_grid_id_for_model(model_for_item),
-                    generation_nonce_random=secrets.token_hex(16),
-                )
-                signed_sketch = sign_authenticated_trajectory_sketch(
-                    sketch_payload,
-                    authentication_key=authentication_key,
-                )
-                trajectory_sketch_records.append({
-                    "record_version": "authenticated_trajectory_sketch_v1",
-                    "trajectory_trace_id": trace_id,
-                    "generation_model_id": item["generation_model_id"],
-                    "prompt_id": item["prompt_id"],
-                    "seed_id": item["seed_id"],
-                    "method_variant": item["method_variant"],
-                    "authenticated_trajectory_sketch_status": "signed",
-                    **signed_sketch,
-                })
-                sketch_status = "signed"
-            else:
-                missing_reasons = []
-                if not authentication_key:
-                    missing_reasons.append("missing_SSTW_TRAJECTORY_AUTHENTICATION_KEY")
-                if not authentication_key_id:
-                    missing_reasons.append("missing_SSTW_TRAJECTORY_AUTHENTICATION_KEY_ID")
-                if not step_stats:
-                    missing_reasons.append("missing_trajectory_steps")
-                trajectory_sketch_records.append({
-                    "record_version": "authenticated_trajectory_sketch_v1",
-                    "trajectory_trace_id": trace_id,
-                    "generation_model_id": item["generation_model_id"],
-                    "prompt_id": item["prompt_id"],
-                    "seed_id": item["seed_id"],
-                    "method_variant": item["method_variant"],
-                    "authenticated_trajectory_sketch_status": "missing",
-                    "trajectory_sketch_failure_reason": ";".join(missing_reasons) or failure_reason,
-                })
-                sketch_status = "missing"
-
-        generation_records.append({
+        generation_record = {
+            "record_version": "generative_video_generation_formal_binding_v2",
             "prompt_suite_id": prompt_suite["prompt_suite_id"],
             "colab_runtime_profile": profile,
             "generation_model_id": item["generation_model_id"],
@@ -777,6 +829,7 @@ def run_colab_probe(
             "watermark_key_derivation_id": WATERMARK_KEY_DERIVATION_ID,
             "watermark_key_id": authentication_key_id,
             "flow_phase_schedule_id": "sin_squared_middle_flow_phase",
+            "flow_sampler_signature": sampler_signature,
             "sampling_constraint_applied_step_count": applied_step_count,
             "formal_generation_watermark_embedding_level": (
                 "clean_unwatermarked_reference"
@@ -789,7 +842,7 @@ def run_colab_probe(
             ),
             "formal_method_variant_execution": item.get("formal_method_variant_execution", False),
             "prompt_id": item["prompt_id"],
-            "prompt_text_hash": sha256(item["prompt_text"].encode("utf-8")).hexdigest()[:16],
+            "prompt_text_hash": prompt_digest,
             "prompt_category": item["prompt_category"],
             "prompt_suite_role": item["prompt_suite_role"],
             "seed_suite_role": item.get("seed_suite_role"),
@@ -825,10 +878,75 @@ def run_colab_probe(
             "trajectory_capture_failure_reason": "none" if step_stats else failure_reason,
             "trajectory_trace_id": trace_id,
             "trajectory_num_steps": len(step_stats),
-            "authenticated_trajectory_sketch_status": sketch_status,
+            "code_commit": code_commit,
+            **velocity_runtime_metadata,
+            **endpoint_control_summary,
             **path_summary,
             **endpoint_summary,
+        }
+
+        sketch_status = "not_required_nonpaper_profile"
+        generation_record_digest: str | None = None
+        if profile in PAPER_RESULT_PROFILES:
+            if generation_status == "success" and step_stats:
+                generation_record_digest = build_generation_record_binding_digest(
+                    generation_record
+                )
+                sketch_payload = build_authenticated_trajectory_sketch_payload(
+                    step_stats,
+                    key_id=authentication_key_id,
+                    prompt_digest=prompt_digest,
+                    seed_id=str(item["seed_id"]),
+                    model_signature=str(item["generation_model_id"]),
+                    sampler_signature=sampler_signature,
+                    time_grid_id=_trajectory_time_grid_id_for_model(model_for_item),
+                    generation_nonce_random=secrets.token_hex(16),
+                    trajectory_trace_id=trace_id,
+                    method_configuration_id=str(item["method_variant"]),
+                    video_sha256=str(video_sha256),
+                    generation_record_digest=generation_record_digest,
+                    code_commit=str(code_commit),
+                )
+                signed_sketch = sign_authenticated_trajectory_sketch(
+                    sketch_payload,
+                    authentication_key=authentication_key,
+                )
+                trajectory_sketch_records.append({
+                    "record_version": "authenticated_trajectory_sketch_formal_v2",
+                    "trajectory_trace_id": trace_id,
+                    "generation_model_id": item["generation_model_id"],
+                    "prompt_id": item["prompt_id"],
+                    "seed_id": item["seed_id"],
+                    "method_variant": item["method_variant"],
+                    "generation_record_digest": generation_record_digest,
+                    "authenticated_trajectory_sketch_status": "signed_formal_binding",
+                    **signed_sketch,
+                })
+                sketch_status = "signed_formal_binding"
+            else:
+                missing_reasons = []
+                if generation_status != "success":
+                    missing_reasons.append("generation_failed")
+                if not step_stats:
+                    missing_reasons.append("missing_trajectory_steps")
+                trajectory_sketch_records.append({
+                    "record_version": "authenticated_trajectory_sketch_formal_v2",
+                    "trajectory_trace_id": trace_id,
+                    "generation_model_id": item["generation_model_id"],
+                    "prompt_id": item["prompt_id"],
+                    "seed_id": item["seed_id"],
+                    "method_variant": item["method_variant"],
+                    "authenticated_trajectory_sketch_status": "missing",
+                    "trajectory_sketch_failure_reason": (
+                        ";".join(missing_reasons) or failure_reason
+                    ),
+                })
+                sketch_status = "missing"
+        generation_record.update({
+            "authenticated_trajectory_sketch_status": sketch_status,
+            "generation_record_digest": generation_record_digest,
         })
+        generation_records.append(generation_record)
         trajectory_records.extend(_formalize_paper_trajectory_record(record, profile) for record in step_stats)
         quality_records.append({
             "generation_model_id": item["generation_model_id"],

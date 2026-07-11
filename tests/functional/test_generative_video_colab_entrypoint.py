@@ -62,7 +62,11 @@ from experiments.generative_video_model_probe.formal_method_variants import (
     GENERATION_METHOD_VARIANTS,
 )
 from scripts.package_results.generative_video_drive_packager import package_generative_video_colab_run
-from scripts.prepare_generative_video_prompt_suite import write_prompt_suite
+from scripts.prepare_generative_video_prompt_suite import (
+    PAPER_PROFILE_PROMPT_SEED_SAMPLING_POLICY,
+    PAPER_PROFILE_PROMPT_SEED_UNIVERSE_ID,
+    write_prompt_suite,
+)
 from evaluation.attacks.video_runtime_attack_protocol import load_protocol_config_with_shared_attack_protocol
 from evaluation.protocol.record_writer import write_json, write_jsonl
 
@@ -125,7 +129,7 @@ def test_motion_calibration_prompt_suite_uses_observability_repair_prompts(tmp_p
     suite = json.loads(Path(summary["prompt_suite_path"]).read_text(encoding="utf-8"))
     prompts_by_id = {item["prompt_id"]: item["prompt_text"].lower() for item in suite["prompts"]}
 
-    assert suite["prompt_suite_id"] == "generative_video_probe_prompt_suite_motion_observability_pilot_paper"
+    assert suite["prompt_suite_id"] == PAPER_PROFILE_PROMPT_SEED_UNIVERSE_ID
 
     # 这两个历史 prompt 在真实 Wan2.1 calibration 中分别只有 3 / 8 和 1 / 8 通过, 因此不能回退。
     assert "large red square slides" not in prompts_by_id["motion_calib_positive_motion_00"]
@@ -143,6 +147,63 @@ def test_motion_calibration_prompt_suite_uses_observability_repair_prompts(tmp_p
         assert "checkerboard" not in prompt_text
         assert "chess" not in prompt_text
         assert "clock" not in prompt_text
+
+
+@pytest.mark.quick
+def test_paper_profiles_use_one_deterministic_nested_prompt_seed_universe(
+    tmp_path: Path,
+) -> None:
+    """probe/pilot/full 只能选择同一母体的10/50/200与3/6/15嵌套前缀。"""
+
+    summary = write_prompt_suite(tmp_path / "prompt_suite")
+    suite = json.loads(Path(summary["prompt_suite_path"]).read_text(encoding="utf-8"))
+    contract = suite["paper_profile_sampling_contract"]
+    assert contract["paper_profile_prompt_seed_universe_id"] == (
+        PAPER_PROFILE_PROMPT_SEED_UNIVERSE_ID
+    )
+    assert contract["paper_profile_prompt_seed_sampling_policy"] == (
+        PAPER_PROFILE_PROMPT_SEED_SAMPLING_POLICY
+    )
+    assert contract["prompt_nesting_decision"] == "PASS"
+    assert contract["calibration_seed_nesting_decision"] == "PASS"
+    assert contract["test_seed_nesting_decision"] == "PASS"
+
+    profile_order = ("probe_paper", "pilot_paper", "full_paper")
+    prompts = {
+        profile: [
+            item["master_prompt_id"]
+            for item in suite["prompts"]
+            if item.get("prompt_suite_role") == profile
+        ]
+        for profile in profile_order
+    }
+    assert prompts["probe_paper"] == prompts["pilot_paper"][:10]
+    assert prompts["pilot_paper"] == prompts["full_paper"][:50]
+    assert [len(prompts[profile]) for profile in profile_order] == [10, 50, 200]
+    full_prompt_texts = [
+        item["prompt_text"]
+        for item in suite["prompts"]
+        if item.get("prompt_suite_role") == "full_paper"
+    ]
+    assert len(set(full_prompt_texts)) == 200
+    assert all("registered scene replication" not in text.lower() for text in full_prompt_texts)
+
+    for split, expected_counts in (
+        ("calibration", [3, 6, 15]),
+        ("test", [3, 6, 15]),
+    ):
+        seeds = {
+            profile: [
+                (item["master_seed_id"], item["seed_value"])
+                for item in suite["seeds"]
+                if item.get("prompt_suite_role") == profile
+                and item.get("split") == split
+            ]
+            for profile in profile_order
+        }
+        assert seeds["probe_paper"] == seeds["pilot_paper"][:3]
+        assert seeds["pilot_paper"] == seeds["full_paper"][:6]
+        assert [len(seeds[profile]) for profile in profile_order] == expected_counts
 
 
 @pytest.mark.quick
@@ -213,7 +274,9 @@ def test_pilot_paper_profile_constructs_medium_scale_low_fpr_plan(tmp_path: Path
     assert suite["pilot_paper_design"]["target_calibration_unique_video_count"] == 300
     assert suite["pilot_paper_design"]["target_test_unique_video_count"] == 300
     expected_attack_count = len(pilot_protocol["required_runtime_attack_names"])
-    expected_test_positive_count = 300 * expected_attack_count
+    expected_test_positive_count = int(
+        pilot_protocol["minimum_attack_event_count_per_attack"]
+    ) * expected_attack_count
     assert suite["pilot_paper_design"]["target_runtime_attack_count"] == expected_attack_count
     assert suite["pilot_paper_design"]["target_runtime_attack_names"] == pilot_protocol["required_runtime_attack_names"]
     assert suite["pilot_paper_design"]["target_calibration_negative_event_count"] == 300
@@ -385,7 +448,9 @@ def test_full_paper_profile_constructs_full_scale_split_plan(tmp_path: Path) -> 
     assert suite["full_paper_design"]["target_test_unique_video_count"] == 3000
     assert suite["full_paper_design"]["target_runtime_attack_count"] == expected_attack_count
     assert suite["full_paper_design"]["target_runtime_attack_names"] == full_protocol["required_runtime_attack_names"]
-    assert suite["full_paper_design"]["target_test_attacked_positive_event_count"] == 3000 * expected_attack_count
+    assert suite["full_paper_design"]["target_test_attacked_positive_event_count"] == int(
+        full_protocol["minimum_attack_event_count_per_attack"]
+    ) * expected_attack_count
     assert suite["full_paper_design"]["target_calibration_negative_event_count"] == 3000
     assert suite["full_paper_design"]["target_heldout_test_negative_event_count"] == 3000
     assert len(full_paper_prompts) == 200
@@ -407,100 +472,40 @@ def test_full_paper_profile_constructs_full_scale_split_plan(tmp_path: Path) -> 
 
 @pytest.mark.quick
 def test_generative_video_colab_notebook_calls_repository_modules() -> None:
-    """generation Notebook 只能作为入口, 必须通过统一 workflow profile 调用仓库模块。"""
+    """generation Notebook 必须只调用可脱离 Notebook 的服务器 CLI。"""
     notebook_path = Path("paper_workflow/colab_notebooks/generative_video_generation_colab.ipynb")
     assert notebook_path.exists()
     notebook = json.loads(notebook_path.read_text(encoding="utf-8"))
     source = "".join("".join(cell.get("source", [])) for cell in notebook["cells"])
-    helper_text = Path("workflows/generative_video_paper.py").read_text(encoding="utf-8")
 
     assert "/content/drive/MyDrive/SSTW" in source
     assert "drive.mount('/content/drive')" in source
-    assert "SSTW_WORKFLOW_PROFILE" in source
     assert "NOTEBOOK_ROLE = 'generative_video_generation'" in source
-    assert "default_workflow_profile_for_notebook_role" in source
-    assert "resolve_notebook_workflow_profile" in source
-    assert "ensure_drive_layout(" in source
-    assert "SSTW_COLAB_STAGE_IO_MODE" in source
-    assert "prepare_colab_stage_layout" in source
+    assert "SERVER_PIPELINE = 'generative_video_generation'" in source
+    assert "scripts/run_generative_video_server_workflow.py" in source
+    assert "from workflows.streaming_command import run_streaming_command" in source
+    assert "result = run_streaming_command(server_command)" in source
+    assert "%pip install --requirement requirements/paper_runtime_lock.txt" in source
+    assert "RESOLVED_REPO_COMMIT" in source
+    assert "--model-revision" in source
+    assert "--cross-model-revision" in source
+    assert "load_trajectory_authentication_from_private_drive" in source
+    assert source.index("load_trajectory_authentication_from_private_drive") < source.index(
+        "result = run_streaming_command(server_command)"
+    )
+    assert "run_configured_colab_stage_plan" not in source
+    assert "from workflows import generative_video_paper" not in source
+    assert "prepare_colab_stage_layout" not in source
     assert "publish_colab_stage_package" not in source
-    assert "publish_colab_stage_package" in helper_text
-    assert "active_local_layout" in source
-    assert "workflow_profile=WORKFLOW_PROFILE" in source
-    assert "run_configured_colab_stage_plan" in source
-    assert "stage_enabled(" not in source
-    assert "workflow_stage_enabled" not in source
-    assert "HF_TOKEN" in source
-    assert "add_to_git_credential=False" in source
-    assert "workflows import generative_video_paper" in source
-    assert "MODEL_ID = os.environ.get('SSTW_MODEL_ID'" in source
-    assert "RUN_EXTERNAL_BASELINE_SOURCE_CLONE" not in source
-    assert "EXTERNAL_BASELINE_EVIDENCE_PATHS" not in source
-    assert "REQUIRE_MODERN_BASELINE_COMMANDS_FOR_PAPER_GATE" not in source
-    assert "SSTW_EXTERNAL_BASELINE_EVIDENCE_PATHS" not in source
-    assert "build_modern_baseline_command_env" not in source
-    assert "write_modern_baseline_colab_command_config_summary" not in source
-    assert "write_external_baseline_colab_preflight_decision" not in source
-    assert "validate_modern_baseline_commands_for_profile" not in source
-    assert "build_modern_baseline_command_env" in helper_text
-    assert "write_modern_baseline_colab_command_config_summary" in helper_text
-    assert "write_external_baseline_colab_preflight_decision" in helper_text
-    assert "validate_modern_baseline_commands_for_profile" in helper_text
-    assert "external_baseline_colab_preflight_decision" in helper_text
-    assert "external_baseline_command_template_summary" in helper_text
-    assert "write_motion_threshold_reuse_artifact_for_profile" not in source
-    assert "build_formal_metric_command" not in source
-    assert "build_motion_threshold_calibration_command" not in source
-    assert "build_mechanism_postprocess_command" not in source
-    assert "build_protocol_evaluation_matrix_postprocess_command" not in source
-    assert "build_runtime_attack_command" not in source
-    assert "build_runtime_detection_command" not in source
-    assert "build_small_scale_claim_pilot_gate_command" not in source
-    assert "build_external_baseline_source_intake_command" not in source
-    assert "build_external_baseline_comparison_command" not in source
-    assert "build_validation_internal_ablation_command" not in source
-    assert "build_adaptive_attack_formal_command" not in source
-    assert "build_replay_and_sketch_gate_command" not in source
-    assert "build_statistical_confidence_interval_command" not in source
-    assert "build_pilot_paper_gate_command" not in source
-    assert "build_validation_artifact_rebuild_dry_run_command" not in source
-    assert "build_paper_profile_gate_command" not in source
-    assert "scripts/prepare_generative_video_prompt_suite.py" in helper_text
-    assert "experiments.generative_video_model_probe.colab_runtime" in helper_text
-    assert "experiments.generative_video_model_probe.formal_metric_runner" in helper_text
-    assert "experiments.generative_video_model_probe.motion_threshold_calibration" in helper_text
-    assert "experiments.generative_video_model_probe.motion_consistency_exclusion_report" in helper_text
-    assert "experiments.generative_video_model_probe.attack_runner" in helper_text
-    assert "experiments.generative_video_model_probe.formal_flow_evidence_runner" in helper_text
-    assert "scripts/build_external_baseline_source_intake.py" in helper_text
-    assert "--execute-clone" in helper_text
-    assert "experiments.generative_video_model_probe.external_baseline_runner" in helper_text
-    removed_pilot_gate_module = ".".join(["experiments", "generative_video_model_probe", "pilot_claim_gate"])
-    assert removed_pilot_gate_module not in helper_text
-    assert "experiments.generative_video_model_probe.validation_internal_ablation" in helper_text
-    assert "experiments.generative_video_model_probe.adaptive_attack_runner" in helper_text
-    assert "experiments.generative_video_model_probe.replay_and_sketch_gate" in helper_text
-    assert "experiments.generative_video_model_probe.statistical_confidence_interval" in helper_text
-    assert "experiments.generative_video_model_probe.low_fpr_formal_statistics" in helper_text
-    assert "experiments.generative_video_model_probe.sstw_formal_result" in helper_text
-    assert "experiments.generative_video_model_probe.formal_method_baseline_comparison" in helper_text
-    assert "experiments.generative_video_model_probe.formal_baseline_difference_interval" in helper_text
-    assert "experiments.generative_video_model_probe.formal_internal_ablation_summary" in helper_text
-    assert "experiments.generative_video_model_probe.pilot_paper_gate" not in helper_text
-    assert "scripts.check_results.full_paper_result_checker" not in helper_text
-    assert "experiments.generative_video_model_probe.validation_artifact_rebuild" in helper_text
-    assert "experiments.generative_video_model_probe.paper_profile_gate" in helper_text
-    assert "scripts/package_results/generative_video_drive_packager.py" in helper_text
+    assert "write_json(" not in source
+    assert "write_jsonl(" not in source
     assert "pytest -q" not in source
     assert "tools/harness/run_all_audits.py" not in source
-    assert "pytest" in helper_text
-    assert "tools/harness/run_all_audits.py" in helper_text
-    assert "pilot_paper_results" not in source
 
 
 @pytest.mark.quick
 def test_split_colab_notebooks_are_profile_driven() -> None:
-    """拆分后的 Colab Notebook 必须通过统一配置切换 profile, 不能维护独立路径硬编码。"""
+    """拆分 Notebook 只能选择 profile 和 server pipeline, 不得复制 workflow。"""
     expected_roles = {
         "motion_threshold_calibration_colab.ipynb": "motion_threshold_calibration",
         "generative_video_generation_colab.ipynb": "generative_video_generation",
@@ -513,87 +518,31 @@ def test_split_colab_notebooks_are_profile_driven() -> None:
     }
     for notebook_name, role in expected_roles.items():
         notebook_path = Path("paper_workflow/colab_notebooks") / notebook_name
-        assert notebook_path.exists()
         notebook = json.loads(notebook_path.read_text(encoding="utf-8"))
         source = "".join("".join(cell.get("source", [])) for cell in notebook["cells"])
-        first_code_cell = next(cell for cell in notebook["cells"] if cell.get("cell_type") == "code")
-        first_code_source = "".join(first_code_cell.get("source", []))
-        switch_source = "".join(notebook["cells"][2].get("source", []))
-        if role == "motion_threshold_calibration":
-            assert first_code_source.startswith("# 1. 挂载 Google Drive 并检查 GPU")
-            assert "SSTW_WORKFLOW_PROFILE_VALUE" not in source
-            assert "os.environ.pop('SSTW_WORKFLOW_PROFILE', None)" in switch_source
-            assert "motion_threshold_calibration 固定使用 motion_calibration" in switch_source
-            assert "WORKFLOW_PROFILE = probe_workflow.default_workflow_profile_for_notebook_role(NOTEBOOK_ROLE)" in source
-        else:
-            assert first_code_source.startswith("SSTW_WORKFLOW_PROFILE_VALUE = 'probe_paper'")
-            assert (
-                "SSTW_WORKFLOW_PROFILE_VALUE = globals().get('SSTW_WORKFLOW_PROFILE_VALUE', 'probe_paper')"
-                in switch_source
-            )
-            assert "os.environ['SSTW_WORKFLOW_PROFILE']" in switch_source
-            assert source.index("SSTW_WORKFLOW_PROFILE_VALUE") < source.index("resolve_notebook_workflow_profile")
-        obsolete_numbered_profile_header = "# 1.1 " + "可编辑 workflow " + "profile 切换"
-        obsolete_first_cell_hint = "修改第一个代码 cell 第一行的 " + "SSTW_WORKFLOW_PROFILE_VALUE"
-        obsolete_generic_profile_header = "可编辑 workflow " + "profile 切换"
-        assert obsolete_numbered_profile_header not in switch_source
-        assert obsolete_first_cell_hint not in switch_source
-        assert obsolete_generic_profile_header not in switch_source
+
+        assert "SSTW_WORKFLOW_PROFILE_VALUE = 'probe_paper'" in source
+        assert "WORKFLOW_PROFILE = globals().get('SSTW_WORKFLOW_PROFILE_VALUE'" in source
         assert f"NOTEBOOK_ROLE = '{role}'" in source
-        assert "SSTW_WORKFLOW_PROFILE" in source
-        assert "resolve_notebook_workflow_profile" in source
-        assert "workflow_profile=WORKFLOW_PROFILE" in source
-        assert "SSTW_COLAB_STAGE_IO_MODE" in source
-        assert "prepare_colab_stage_layout" in source
+        assert f"SERVER_PIPELINE = '{role}'" in source
+        assert "scripts/run_generative_video_server_workflow.py" in source
+        assert "result = run_streaming_command(server_command)" in source
+        assert "%pip install --requirement requirements/paper_runtime_lock.txt" in source
+        assert "drive.mount('/content/drive')" in source
+        assert "git', 'clone'" in source
+        assert "git', 'rev-parse', 'HEAD'" in source
+        assert "run_configured_colab_stage_plan" not in source
+        assert "resolve_notebook_workflow_profile" not in source
+        assert "prepare_colab_stage_layout" not in source
         assert "publish_colab_stage_package" not in source
-        assert "run_configured_colab_stage_plan" in source
-        assert "layout['drive_package_dir']" not in source
-        assert "package_dir = Path(layout['drive_package_dir'])" not in source
-        assert "stage_package_dir = Path(layout['stage_package_dir'])" not in source
+        assert "active_local_layout" not in source
+        assert "stage_enabled(" not in source
         assert "drive_stage_package_zip" not in source
         assert "stage_package_manifest_path" not in source
-        assert "active_local_layout" in source
-        assert "stage_enabled(" not in source
-        assert "drive.mount('/content/drive')" in source
-        assert "git clone" in source
         assert "tools/harness/run_all_audits.py" not in source
         assert "pilot_paper_results" not in source
         assert "full_paper_results" not in source
 
-    runtime_source = Path("paper_workflow/colab_notebooks/generative_video_generation_colab.ipynb").read_text(encoding="utf-8")
-    formal_source = Path("paper_workflow/colab_notebooks/formal_comparison_scoring_colab.ipynb").read_text(encoding="utf-8")
-    evidence_source = Path("paper_workflow/colab_notebooks/paper_evidence_postprocess_colab.ipynb").read_text(encoding="utf-8")
-    gate_source = Path("paper_workflow/colab_notebooks/paper_gate_and_package_colab.ipynb").read_text(encoding="utf-8")
-    helper_text = Path("workflows/generative_video_paper.py").read_text(encoding="utf-8")
-    assert "external_baseline_colab_preflight" not in runtime_source
-    assert "external_baseline_colab_preflight" in helper_text
-    assert "build_external_baseline_comparison_command" not in runtime_source
-    assert "apply_formal_comparison_external_baseline_environment" in formal_source
-    assert "apply_paper_gate_external_baseline_environment" not in gate_source
-    assert "build_motion_consistency_exclusion_report_command" not in gate_source
-    assert "build_external_baseline_official_result_bundle_preflight_command" not in gate_source
-    assert "build_external_baseline_comparison_command" not in gate_source
-    assert "build_external_baseline_self_containment_decision_command" not in gate_source
-    assert "build_low_fpr_formal_statistics_command" not in gate_source
-    assert "build_sstw_measured_formal_result_command" not in gate_source
-    assert "build_formal_method_baseline_comparison_command" not in gate_source
-    assert "build_formal_baseline_difference_interval_command" not in gate_source
-    assert "build_formal_internal_ablation_summary_command" not in gate_source
-    assert "build_pilot_paper_gate_command" not in gate_source
-    assert "build_paper_profile_gate_command" not in gate_source
-    assert "build_motion_consistency_exclusion_report_command" not in evidence_source
-    assert "build_paper_profile_gate_command" not in evidence_source
-    assert "build_motion_consistency_exclusion_report_command" in helper_text
-    assert "build_external_baseline_official_result_bundle_preflight_command" in helper_text
-    assert "build_external_baseline_comparison_command" in helper_text
-    assert "build_external_baseline_self_containment_decision_command" in helper_text
-    assert "build_low_fpr_formal_statistics_command" in helper_text
-    assert "build_sstw_measured_formal_result_command" in helper_text
-    assert "build_formal_method_baseline_comparison_command" in helper_text
-    assert "build_formal_baseline_difference_interval_command" in helper_text
-    assert "build_formal_internal_ablation_summary_command" in helper_text
-    assert "build_pilot_paper_gate_command" in helper_text
-    assert "build_paper_profile_gate_command" in helper_text
     assert not Path("paper_workflow/colab_notebooks/probe_paper_formal_gate_colab.ipynb").exists()
     assert not Path("paper_workflow/colab_notebooks/external_baseline_formal_scoring_colab.ipynb").exists()
     assert not list(Path("paper_workflow/colab_utils").glob("*.ipynb"))

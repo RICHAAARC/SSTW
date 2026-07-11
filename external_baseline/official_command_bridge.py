@@ -218,6 +218,15 @@ def run_bridge(args: argparse.Namespace) -> dict[str, Any]:
             official_payload.get("baseline_attacked_video_path"),
         ),
         "external_baseline_generation_model_id": official_payload.get("external_baseline_generation_model_id"),
+        "external_baseline_comparison_design": official_payload.get(
+            "external_baseline_comparison_design"
+        ),
+        "external_baseline_quality_comparison_protocol": official_payload.get(
+            "external_baseline_quality_comparison_protocol"
+        ),
+        "external_baseline_clean_source_video_path": official_payload.get(
+            "external_baseline_clean_source_video_path"
+        ),
         "official_score_extraction_policy": official_score_extraction_policy(official_payload),
         "official_reference_protocol_anchor": official_payload.get("official_reference_protocol_anchor"),
         "attack_protocol_status": official_payload.get("attack_protocol_status"),
@@ -226,6 +235,12 @@ def run_bridge(args: argparse.Namespace) -> dict[str, Any]:
         "seed_id": official_payload.get("seed_id", args.seed_id),
         "attack_name": official_payload.get("attack_name", args.attack_name),
         "trajectory_trace_id": official_payload.get("trajectory_trace_id", args.trajectory_trace_id),
+        **{
+            field_name: value
+            for field_name, value in official_payload.items()
+            if field_name.startswith("runtime_attack_")
+            or field_name.startswith("clean_negative_runtime_attack_")
+        },
         "official_bridge_status": "measured_formal_from_official_command",
         "official_bridge_baseline_id": args.baseline_id,
         "official_bridge_raw_output_json_path": str(official_output_json_path),

@@ -11,7 +11,14 @@ import subprocess
 import sys
 from typing import Any, Mapping
 
-from external_baseline.runtime_trace_io import build_comparison_unit_id, comparable_detection_records, safe_float
+from external_baseline.runtime_trace_io import (
+    NATIVE_GENERATION_COMPARISON_DESIGN,
+    SAME_SOURCE_POSTHOC_COMPARISON_DESIGN,
+    baseline_comparison_design,
+    build_comparison_unit_id,
+    comparable_detection_records,
+    safe_float,
+)
 from external_baseline.score_semantics import (
     external_clean_negative_score_formal_comparison_payload,
     normalized_score_payload,
@@ -250,6 +257,154 @@ def _official_bundle_evidence_payload(payload: Mapping[str, Any], *, baseline_id
     }
 
 
+def _validated_runtime_attack_evidence(payload: Mapping[str, Any]) -> dict[str, Any]:
+    """验证 positive 与 clean negative 均经过真实文件级攻击。
+
+    official runtime 只有在统一 executor 已核验 codec、帧变换和输出文件后才能
+    写入正式分数。该门禁拒绝仅携带 attack 名称、默认 mp4 重编码或内存张量
+    变换的 payload。
+    """
+
+    checks = {
+        "runtime_attack_implementation_level": (
+            payload.get("runtime_attack_implementation_level")
+            == "formal_runtime_video_transform"
+        ),
+        "runtime_attack_effect_verified": payload.get("runtime_attack_effect_verified") is True,
+        "runtime_attack_effect_verification_status": (
+            payload.get("runtime_attack_effect_verification_status") == "verified"
+        ),
+        "runtime_attack_decoded_effect_verified": (
+            payload.get("runtime_attack_decoded_effect_verified") is True
+        ),
+        "runtime_attack_formal_evidence_level": (
+            payload.get("runtime_attack_formal_evidence_level")
+            == "formal_runtime_video_transform_verified"
+        ),
+        "runtime_attack_proxy_free": payload.get("runtime_attack_proxy_free") is True,
+        "clean_negative_runtime_attack_effect_verified": (
+            payload.get("clean_negative_runtime_attack_effect_verified") is True
+        ),
+        "clean_negative_runtime_attack_implementation_level": (
+            payload.get("clean_negative_runtime_attack_implementation_level")
+            == "formal_runtime_video_transform"
+        ),
+        "clean_negative_runtime_attack_effect_verification_status": (
+            payload.get("clean_negative_runtime_attack_effect_verification_status")
+            == "verified"
+        ),
+        "clean_negative_runtime_attack_decoded_effect_verified": (
+            payload.get("clean_negative_runtime_attack_decoded_effect_verified") is True
+        ),
+        "clean_negative_runtime_attack_formal_evidence_level": (
+            payload.get("clean_negative_runtime_attack_formal_evidence_level")
+            == "formal_runtime_video_transform_verified"
+        ),
+        "clean_negative_runtime_attack_proxy_free": (
+            payload.get("clean_negative_runtime_attack_proxy_free") is True
+        ),
+    }
+    missing = [name for name, passed in checks.items() if not passed]
+    if missing:
+        raise RuntimeError(
+            "official_runtime_attack_effect_evidence_missing:"
+            + ",".join(missing)
+        )
+    return {
+        field_name: payload.get(field_name)
+        for field_name in (
+            "runtime_attack_implementation_level",
+            "runtime_attack_formal_evidence_level",
+            "runtime_attack_proxy_free",
+            "runtime_attack_effect_verified",
+            "runtime_attack_effect_verification_status",
+            "runtime_attack_effect_verification_basis",
+            "runtime_attack_preencode_effect_verified",
+            "runtime_attack_decoded_effect_verified",
+            "runtime_attack_decoded_output_frame_digest",
+            "runtime_attack_source_video_sha256",
+            "runtime_attack_output_video_sha256",
+            "runtime_attack_output_file_changed",
+            "runtime_attack_decoded_mean_absolute_error",
+            "runtime_attack_requested_codec",
+            "runtime_attack_observed_codec",
+            "runtime_attack_codec_verification_status",
+            "runtime_attack_requested_output_params",
+            "runtime_attack_writer_parameters_applied",
+            "clean_negative_runtime_attack_implementation_level",
+            "clean_negative_runtime_attack_formal_evidence_level",
+            "clean_negative_runtime_attack_proxy_free",
+            "clean_negative_runtime_attack_effect_verified",
+            "clean_negative_runtime_attack_effect_verification_status",
+            "clean_negative_runtime_attack_effect_verification_basis",
+            "clean_negative_runtime_attack_preencode_effect_verified",
+            "clean_negative_runtime_attack_decoded_effect_verified",
+            "clean_negative_runtime_attack_decoded_output_frame_digest",
+            "clean_negative_runtime_attack_source_video_sha256",
+            "clean_negative_runtime_attack_output_video_sha256",
+            "clean_negative_runtime_attack_output_file_changed",
+            "clean_negative_runtime_attack_decoded_mean_absolute_error",
+            "clean_negative_runtime_attack_requested_codec",
+            "clean_negative_runtime_attack_observed_codec",
+            "clean_negative_runtime_attack_codec_verification_status",
+            "clean_negative_runtime_attack_requested_output_params",
+            "clean_negative_runtime_attack_writer_parameters_applied",
+        )
+    }
+
+
+def _comparison_design_payload(
+    *,
+    baseline_id: str,
+    payload: Mapping[str, Any],
+) -> dict[str, Any]:
+    """构造不会把 native-generation 视频伪装成 same-source 配对的字段。"""
+
+    expected_design = baseline_comparison_design(baseline_id)
+    observed_design = str(
+        payload.get("external_baseline_comparison_design") or expected_design
+    )
+    if observed_design != expected_design:
+        raise RuntimeError(
+            "external_baseline_comparison_design_mismatch:"
+            f"baseline={baseline_id}:expected={expected_design}:observed={observed_design}"
+        )
+    clean_source_path = payload.get("external_baseline_clean_source_video_path")
+    if clean_source_path in {None, ""}:
+        raise RuntimeError("external_baseline_clean_source_video_path_missing")
+    if expected_design == SAME_SOURCE_POSTHOC_COMPARISON_DESIGN:
+        reference_status = "same_source_posthoc_clean_reference"
+        input_policy = "baseline_embeds_own_watermark_into_clean_reference"
+        statistical_design = "same_source_video_paired_by_prompt_seed_attack"
+        quality_protocol = "paired_same_source_distortion"
+    elif expected_design == NATIVE_GENERATION_COMPARISON_DESIGN:
+        reference_status = "native_generation_own_model_clean_reference"
+        input_policy = "baseline_uses_official_native_generation_model"
+        statistical_design = "independent_native_generation_videos_in_matched_prompt_seed_attack_blocks"
+        quality_protocol = "native_generation_semantic_quality"
+    else:  # pragma: no cover - baseline_comparison_design 已限制取值。
+        raise RuntimeError(f"unsupported_external_baseline_comparison_design:{expected_design}")
+    observed_quality_protocol = str(
+        payload.get("external_baseline_quality_comparison_protocol")
+        or quality_protocol
+    )
+    if observed_quality_protocol != quality_protocol:
+        raise RuntimeError(
+            "external_baseline_quality_comparison_protocol_mismatch:"
+            f"expected={quality_protocol}:observed={observed_quality_protocol}"
+        )
+    return {
+        "external_baseline_comparison_design": expected_design,
+        "external_baseline_quality_comparison_protocol": quality_protocol,
+        "external_baseline_clean_source_video_path": clean_source_path,
+        "baseline_quality_reference_video_path": clean_source_path,
+        "baseline_clean_reference_video_path": clean_source_path,
+        "baseline_clean_reference_status": reference_status,
+        "baseline_input_source_policy": input_policy,
+        "baseline_statistical_comparison_design": statistical_design,
+    }
+
+
 def _write_bundle_reader_evidence(
     *,
     config: ModernBaselineCommandConfig,
@@ -315,9 +470,19 @@ def _measured_formal_record_from_payload(
     validate_clean_negative_payload(payload)
     validate_official_score_extraction_payload(payload)
     validate_official_formal_comparison_eligibility(payload)
+    # 先验证 bundle 来源与方法身份, 使审计失败原因准确指向最外层证据链。
+    # 攻击效果与比较设计随后仍为强制门禁, 因而不会降低正式记录要求。
+    official_bundle_payload = _official_bundle_evidence_payload(
+        payload,
+        baseline_id=config.baseline_name,
+    )
+    runtime_attack_evidence = _validated_runtime_attack_evidence(payload)
+    comparison_design = _comparison_design_payload(
+        baseline_id=config.baseline_name,
+        payload=payload,
+    )
     score_payload = normalized_score_payload(payload)
     clean_negative_payload = _clean_negative_score_payload(payload)
-    official_bundle_payload = _official_bundle_evidence_payload(payload, baseline_id=config.baseline_name)
     score = round(float(score_payload["external_baseline_raw_detector_score"]), 6)
     method_score = safe_float(detection_record.get("S_runtime_attack_detection"), 0.0)
     score_extraction_policy = official_score_extraction_policy(payload)
@@ -339,18 +504,10 @@ def _measured_formal_record_from_payload(
         "negative_family": detection_record.get("negative_family"),
         "source_video_path": detection_record.get("source_video_path"),
         "attacked_video_path": detection_record.get("attacked_video_path"),
-        "baseline_clean_reference_video_path": detection_record.get(
-            "baseline_clean_reference_video_path"
-        ),
         "baseline_clean_reference_trajectory_trace_id": detection_record.get(
             "baseline_clean_reference_trajectory_trace_id"
         ),
-        "baseline_clean_reference_status": detection_record.get(
-            "baseline_clean_reference_status"
-        ),
-        "baseline_input_source_policy": detection_record.get(
-            "baseline_input_source_policy"
-        ),
+        **comparison_design,
         "external_baseline_source_video_path": payload.get("external_baseline_source_video_path", payload.get("baseline_source_video_path")),
         "external_baseline_attacked_video_path": payload.get("external_baseline_attacked_video_path", payload.get("baseline_attacked_video_path")),
         "external_baseline_generation_model_id": payload.get("external_baseline_generation_model_id"),
@@ -361,6 +518,7 @@ def _measured_formal_record_from_payload(
         "external_baseline_official_score_extraction_policy": score_extraction_policy,
         "external_baseline_official_reference_protocol_anchor": payload.get("official_reference_protocol_anchor"),
         "external_baseline_attack_protocol_status": payload.get("attack_protocol_status"),
+        **runtime_attack_evidence,
         **official_bundle_payload,
         "metric_status": "measured_formal",
         "external_baseline_score_status": "measured_formal",

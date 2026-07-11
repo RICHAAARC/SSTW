@@ -59,6 +59,9 @@ GEN_VIDEO_GENERATION_PACKAGE_ID = "generative_video_generation_colab"
 GEN_VIDEO_QUALITY_SCORING_PACKAGE_ID = "generative_video_quality_scoring_colab"
 RUNTIME_ATTACK_PACKAGE_ID = "runtime_attack_colab"
 RUNTIME_DETECTION_PACKAGE_ID = "runtime_detection_colab"
+RUNTIME_ENVIRONMENT_PREFLIGHT_ARTIFACT_RELPATH = (
+    "artifacts/paper_runtime_environment_preflight_decision.json"
+)
 
 GEN_VIDEO_RUNTIME_SPLIT_STAGE_PACKAGE_IDS = (
     GEN_VIDEO_GENERATION_PACKAGE_ID,
@@ -68,6 +71,7 @@ GEN_VIDEO_RUNTIME_SPLIT_STAGE_PACKAGE_IDS = (
 )
 
 GEN_VIDEO_GENERATION_PACKAGE_RELPATHS = (
+    RUNTIME_ENVIRONMENT_PREFLIGHT_ARTIFACT_RELPATH,
     "artifacts/generative_video_colab_runtime_decision.json",
     "artifacts/generation_manifest.json",
     "artifacts/notebook_runtime_report.json",
@@ -86,6 +90,7 @@ GEN_VIDEO_GENERATION_PACKAGE_RELPATHS = (
 )
 
 GEN_VIDEO_QUALITY_SCORING_PACKAGE_RELPATHS = (
+    RUNTIME_ENVIRONMENT_PREFLIGHT_ARTIFACT_RELPATH,
     "artifacts/formal_quality_motion_semantic_decision.json",
     "artifacts/motion_threshold_reuse_decision.json",
     "artifacts/notebook_runtime_report.json",
@@ -98,6 +103,7 @@ GEN_VIDEO_QUALITY_SCORING_PACKAGE_RELPATHS = (
 )
 
 RUNTIME_ATTACK_PACKAGE_RELPATHS = (
+    RUNTIME_ENVIRONMENT_PREFLIGHT_ARTIFACT_RELPATH,
     "artifacts/notebook_runtime_report.json",
     "artifacts/notebook_run_timing_manifest.json",
     "artifacts/runtime_attack_decision.json",
@@ -112,6 +118,7 @@ RUNTIME_ATTACK_PACKAGE_RELPATHS = (
 )
 
 RUNTIME_DETECTION_PACKAGE_RELPATHS = (
+    RUNTIME_ENVIRONMENT_PREFLIGHT_ARTIFACT_RELPATH,
     "artifacts/notebook_runtime_report.json",
     "artifacts/notebook_run_timing_manifest.json",
     "artifacts/runtime_detection_decision.json",
@@ -123,22 +130,27 @@ RUNTIME_DETECTION_PACKAGE_RELPATHS = (
     "records/formal_flow_evidence_failure_records.jsonl",
     "records/paired_path_evidence_gain_records.jsonl",
     "records/paired_velocity_causal_evidence_records.jsonl",
+    "records/heldout_posterior_calibration_records.jsonl",
     "thresholds/formal_flow_detector_thresholds.jsonl",
     "thresholds/replay_gaussian_likelihood_calibrations.jsonl",
     "artifacts/formal_flow_evidence_decision.json",
     "artifacts/three_layer_mechanism_evidence_decision.json",
     "artifacts/cross_model_generalization_decision.json",
+    "artifacts/heldout_posterior_calibration_decision.json",
     "tables/formal_flow_detection_table.csv",
     "tables/paired_path_evidence_gain_table.csv",
     "tables/paired_velocity_causal_evidence_table.csv",
     "tables/cross_model_generalization_table.csv",
+    "tables/heldout_posterior_calibration_table.csv",
     "reports/formal_flow_evidence_report.md",
+    "reports/heldout_posterior_calibration_report.md",
     "tables/sstw_clean_negative_score_table.csv",
     "reports/runtime_detection_report.md",
     "tables/runtime_detection_table.csv",
 )
 
 FORMAL_COMPARISON_SCORING_PACKAGE_RELPATHS = (
+    RUNTIME_ENVIRONMENT_PREFLIGHT_ARTIFACT_RELPATH,
     "artifacts/external_baseline_colab_preflight_decision.json",
     "artifacts/external_baseline_command_template_summary.json",
     "artifacts/external_baseline_official_bridge_preflight_decision.json",
@@ -185,6 +197,7 @@ FORMAL_COMPARISON_SCORING_PACKAGE_RELPATHS = (
 )
 
 PAPER_EVIDENCE_POSTPROCESS_PACKAGE_RELPATHS = (
+    RUNTIME_ENVIRONMENT_PREFLIGHT_ARTIFACT_RELPATH,
     "artifacts/adaptive_attack_decision.json",
     "artifacts/data_split_and_leakage_guard_decision.json",
     "artifacts/low_fpr_formal_statistics_decision.json",
@@ -200,6 +213,7 @@ PAPER_EVIDENCE_POSTPROCESS_PACKAGE_RELPATHS = (
     "artifacts/real_adaptive_attack_decision.json",
     "artifacts/real_world_attack_decision.json",
     "artifacts/replay_and_sketch_gate_decision.json",
+    "artifacts/heldout_posterior_calibration_decision.json",
     "artifacts/complete_paper_mechanism_claim_decision.json",
     "artifacts/stage_package_restore_decision.json",
     "artifacts/statistical_confidence_interval_decision.json",
@@ -214,9 +228,11 @@ PAPER_EVIDENCE_POSTPROCESS_PACKAGE_RELPATHS = (
     "records/notebook_stage_timing_records.jsonl",
     "records/efficiency_metric_records.jsonl",
     "records/formal_adaptive_attack_execution_records.jsonl",
+    "records/formal_adaptive_attack_query_budget_checkpoint_records.jsonl",
     "records/real_adaptive_attack_records.jsonl",
     "records/real_world_attack_records.jsonl",
     "records/replay_uncertainty_records.jsonl",
+    "records/heldout_posterior_calibration_records.jsonl",
     "records/statistical_confidence_interval_records.jsonl",
     "records/trajectory_sketch_verification_records.jsonl",
     "records/validation_internal_ablation_records.jsonl",
@@ -237,6 +253,7 @@ PAPER_EVIDENCE_POSTPROCESS_PACKAGE_RELPATHS = (
     "reports/real_adaptive_attack_report.md",
     "reports/real_world_attack_report.md",
     "reports/replay_and_sketch_gate_report.md",
+    "reports/heldout_posterior_calibration_report.md",
     "reports/complete_paper_mechanism_claim_report.md",
     "reports/statistical_confidence_interval_report.md",
     "reports/validation_internal_ablation_report.md",
@@ -249,6 +266,7 @@ PAPER_EVIDENCE_POSTPROCESS_PACKAGE_RELPATHS = (
     "tables/motion_consistency_exclusion_table.csv",
     "tables/efficiency_metric_table.csv",
     "tables/formal_adaptive_attack_execution_table.csv",
+    "tables/formal_adaptive_attack_query_budget_checkpoint_table.csv",
     "tables/real_adaptive_attack_table.csv",
     "tables/real_world_attack_table.csv",
     "tables/replay_verification_table.csv",
@@ -904,6 +922,14 @@ def _iter_package_sources(
         if baseline_id:
             baseline_token = sanitize_filename_token(baseline_id)
             run_archive_root = _archive_root_for_layout_path(layout, "drive_run_root")
+            environment_preflight_path = (
+                run_root / RUNTIME_ENVIRONMENT_PREFLIGHT_ARTIFACT_RELPATH
+            )
+            if environment_preflight_path.exists():
+                sources.append((
+                    environment_preflight_path,
+                    f"{run_archive_root}/artifacts",
+                ))
             decision_path = (
                 run_root
                 / "artifacts"

@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import argparse
+from hashlib import sha256
 import json
 from pathlib import Path
+import random
 from statistics import mean
 from typing import Any, Iterable
 
@@ -16,6 +18,11 @@ from evaluation.attacks.video_runtime_attack_protocol import (
 from evaluation.protocol.flow_evidence_fields import with_flow_evidence_protocol_defaults
 from evaluation.protocol.record_writer import write_json, write_jsonl
 from evaluation.protocol.table_builder import write_csv
+from external_baseline.runtime_trace_io import (
+    NATIVE_GENERATION_COMPARISON_DESIGN,
+    SAME_SOURCE_POSTHOC_COMPARISON_DESIGN,
+    baseline_comparison_design,
+)
 
 
 DEFAULT_PROTOCOL_CONFIG = "configs/protocol/probe_paper_generative_probe.json"
@@ -119,6 +126,84 @@ def _paired_detection_difference_interval(
     )
 
 
+def _cluster_detection_means(units: dict[str, bool]) -> dict[str, float]:
+    """把同一 source-video 设计块上的多攻击结果聚合为簇均值。"""
+
+    grouped: dict[str, list[float]] = {}
+    for key, detected in units.items():
+        parts = str(key).split("::")
+        if len(parts) < 3:
+            continue
+        cluster_id = "::".join(parts[:2])
+        grouped.setdefault(cluster_id, []).append(1.0 if detected else 0.0)
+    return {
+        cluster_id: mean(values)
+        for cluster_id, values in grouped.items()
+        if values
+    }
+
+
+def _bootstrap_seed(values: Iterable[str], purpose: str) -> int:
+    """为独立双样本 bootstrap 构造可复现且互相隔离的随机种子。"""
+
+    payload = purpose + "::" + "::".join(sorted(str(value) for value in values))
+    return int(sha256(payload.encode("utf-8")).hexdigest()[:16], 16)
+
+
+def _percentile(values: list[float], probability: float) -> float:
+    """计算确定性经验分位数。"""
+
+    ordered = sorted(float(value) for value in values)
+    if not ordered:
+        raise ValueError("bootstrap_values_empty")
+    index = max(0, min(len(ordered) - 1, round(probability * (len(ordered) - 1))))
+    return ordered[index]
+
+
+def _independent_detection_difference_interval(
+    reference_units: dict[str, bool],
+    baseline_units: dict[str, bool],
+    *,
+    baseline_id: str,
+    bootstrap_resamples: int = 5000,
+) -> tuple[float | None, float | None, float | None, int, str]:
+    """对 native-generation baseline 执行独立双样本视频簇 bootstrap。
+
+    两种方法虽然共享 prompt / seed / attack 设计块, 但生成的是不同模型、不同
+    latent 的视频。因此这里分别重采样 SSTW 与 baseline 的 source-video 簇,
+    禁止把跨生成器视频当作同一视频的配对观测。
+    """
+
+    reference_clusters = _cluster_detection_means(reference_units)
+    baseline_clusters = _cluster_detection_means(baseline_units)
+    if len(reference_clusters) < 2 or len(baseline_clusters) < 2:
+        return None, None, None, 0, "insufficient_independent_native_generation_video_clusters"
+    if bootstrap_resamples < 200:
+        raise ValueError("independent_cluster_bootstrap_requires_at_least_200_resamples")
+    reference_values = list(reference_clusters.values())
+    baseline_values = list(baseline_clusters.values())
+    estimate = mean(reference_values) - mean(baseline_values)
+    reference_rng = random.Random(
+        _bootstrap_seed(reference_clusters, f"sstw_native_generation_difference::{baseline_id}")
+    )
+    baseline_rng = random.Random(
+        _bootstrap_seed(baseline_clusters, f"baseline_native_generation_difference::{baseline_id}")
+    )
+    bootstrap_values = [
+        mean(reference_rng.choice(reference_values) for _ in reference_values)
+        - mean(baseline_rng.choice(baseline_values) for _ in baseline_values)
+        for _ in range(int(bootstrap_resamples))
+    ]
+    shared_anchor_count = len(set(reference_units) & set(baseline_units))
+    return (
+        round(estimate, 6),
+        round(_percentile(bootstrap_values, 0.025), 6),
+        round(_percentile(bootstrap_values, 0.975), 6),
+        shared_anchor_count,
+        "independent_two_sample_source_video_cluster_bootstrap_detection_difference",
+    )
+
+
 def _detection_units_by_anchor(record: dict[str, Any]) -> dict[str, bool]:
     """从 fair calibration record 中读取 anchor -> detected 映射。"""
 
@@ -203,16 +288,52 @@ def build_formal_baseline_difference_interval_records(
         baseline_tpr = _safe_float(baseline_record.get("tpr_at_target_fpr"))
         baseline_count = int(baseline_record.get("attacked_positive_score_count") or 0)
         baseline_units = _detection_units_by_anchor(baseline_record)
-        paired_delta, ci_lower, ci_upper, paired_count, interval_method = _paired_detection_difference_interval(
-            sstw_units,
-            baseline_units,
-        )
+        comparison_design = baseline_comparison_design(baseline_id)
+        if comparison_design == SAME_SOURCE_POSTHOC_COMPARISON_DESIGN:
+            paired_delta, ci_lower, ci_upper, matched_anchor_count, interval_method = (
+                _paired_detection_difference_interval(
+                    sstw_units,
+                    baseline_units,
+                )
+            )
+            source_video_pairing_status = "same_source_video_pairing_used"
+            paired_source_video_inference_used = True
+            legacy_count_semantics = "same_source_paired_comparison_unit_count"
+            paired_comparison_unit_count = matched_anchor_count
+        elif comparison_design == NATIVE_GENERATION_COMPARISON_DESIGN:
+            paired_delta, ci_lower, ci_upper, matched_anchor_count, interval_method = (
+                _independent_detection_difference_interval(
+                    sstw_units,
+                    baseline_units,
+                    baseline_id=baseline_id,
+                )
+            )
+            source_video_pairing_status = "independent_native_generation_videos_not_cross_generator_paired"
+            paired_source_video_inference_used = False
+            legacy_count_semantics = "not_applicable_native_generation_independent_inference"
+            paired_comparison_unit_count = 0
+        else:  # pragma: no cover - baseline_comparison_design 已阻断未知方法。
+            raise RuntimeError(f"unsupported_baseline_comparison_design:{comparison_design}")
         unpaired_reference_count = len(set(sstw_units) - set(baseline_units))
         unpaired_baseline_count = len(set(baseline_units) - set(sstw_units))
-        paired_anchor_keys = sorted(set(sstw_units) & set(baseline_units))
-        paired_attack_names = _attack_names_from_unit_keys(paired_anchor_keys)
+        matched_design_anchor_keys = sorted(set(sstw_units) & set(baseline_units))
+        matched_design_attack_names = _attack_names_from_unit_keys(
+            matched_design_anchor_keys
+        )
+        paired_anchor_keys = (
+            matched_design_anchor_keys
+            if paired_source_video_inference_used
+            else []
+        )
+        paired_attack_names = (
+            matched_design_attack_names
+            if paired_source_video_inference_used
+            else []
+        )
         required_attack_names = [str(item) for item in profile_context.get("required_runtime_attack_names", []) if str(item)]
-        missing_required_attack_names = sorted(set(required_attack_names) - set(paired_attack_names))
+        missing_required_attack_names = sorted(
+            set(required_attack_names) - set(matched_design_attack_names)
+        )
         anchor_alignment_status = (
             "aligned_with_sstw_reference_anchors"
             if sstw_units and not unpaired_reference_count and not unpaired_baseline_count and not missing_required_attack_names
@@ -226,7 +347,7 @@ def build_formal_baseline_difference_interval_records(
             if ci_lower is not None
             and ci_upper is not None
             and anchor_alignment_status == "aligned_with_sstw_reference_anchors"
-            else "missing_or_unaligned_paired_anchors"
+            else "missing_or_unaligned_comparison_design_anchors"
         )
         rows.append(with_flow_evidence_protocol_defaults({
             "record_version": "formal_baseline_difference_interval_v1",
@@ -234,14 +355,27 @@ def build_formal_baseline_difference_interval_records(
             "baseline_method_id": baseline_id,
             "difference_metric_name": "tpr_at_target_fpr_difference",
             "metric_status": "measured_formal" if interval_status == "ready" else "missing",
-            "comparison_scope": "fair_detection_calibration_at_target_fpr",
+            "comparison_scope": (
+                "same_source_fair_detection_calibration_at_target_fpr"
+                if paired_source_video_inference_used
+                else "native_generation_independent_fair_detection_calibration_at_target_fpr"
+            ),
+            "external_baseline_comparison_design": comparison_design,
+            "source_video_pairing_status": source_video_pairing_status,
+            "paired_source_video_inference_used": paired_source_video_inference_used,
             "reference_score_field": "tpr_at_target_fpr",
             "baseline_score_field": "tpr_at_target_fpr",
             "reference_source_fair_detection_target_fpr": raw_sstw_record.get("target_fpr") if raw_sstw_record else None,
             "baseline_source_fair_detection_target_fpr": raw_baseline_record.get("target_fpr") if raw_baseline_record else None,
             "reference_record_count": sstw_count,
             "baseline_record_count": baseline_count,
-            "paired_comparison_unit_count": paired_count,
+            "paired_comparison_unit_count": paired_comparison_unit_count,
+            "paired_comparison_unit_count_semantics": legacy_count_semantics,
+            "matched_design_anchor_count": matched_anchor_count,
+            "matched_design_anchor_keys": matched_design_anchor_keys,
+            "matched_design_attack_names": matched_design_attack_names,
+            "reference_independent_video_cluster_count": len(_cluster_detection_means(sstw_units)),
+            "baseline_independent_video_cluster_count": len(_cluster_detection_means(baseline_units)),
             "paired_comparison_anchor_keys": paired_anchor_keys,
             "paired_attack_names": paired_attack_names,
             "required_runtime_attack_names": required_attack_names,

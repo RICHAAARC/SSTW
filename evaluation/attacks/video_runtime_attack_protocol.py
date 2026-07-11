@@ -7,6 +7,7 @@
 
 from __future__ import annotations
 
+from hashlib import sha256
 import json
 from dataclasses import dataclass
 from pathlib import Path
@@ -713,6 +714,271 @@ def runtime_attack_spec(attack_name: str) -> RuntimeAttackSpec:
     return RUNTIME_ATTACK_SPECS[normalized]
 
 
+def _sha256_file(path: Path) -> str:
+    """计算视频文件摘要, 用于证明攻击输出不是输入文件的别名。"""
+
+    digest = sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _frame_sequence_digest(frames: list[Any]) -> str:
+    """按帧顺序、shape、dtype 和像素值构造稳定摘要。
+
+    该摘要同时对帧插入、删除、重排和像素变换敏感, 因而可以验证帧级攻击
+    是否在编码前真实改变了输入。它只用于完整性审计, 不作为检测分数。
+    """
+
+    import numpy as np
+
+    digest = sha256()
+    digest.update(str(len(frames)).encode("utf-8"))
+    for frame in frames:
+        array = np.ascontiguousarray(np.asarray(frame))
+        digest.update(str(tuple(int(value) for value in array.shape)).encode("utf-8"))
+        digest.update(str(array.dtype).encode("utf-8"))
+        digest.update(array.tobytes())
+    return digest.hexdigest()
+
+
+def _decoded_mean_absolute_error(source_frames: list[Any], output_frames: list[Any]) -> float | None:
+    """计算可直接对齐帧的平均绝对像素差。
+
+    时间攻击可能改变帧数, 几何攻击也可能改变可比较内容。此处只比较双方都
+    存在且 shape 一致的同索引帧; 没有可比较帧时返回 None, 由其他验真条件
+    继续判断帧数、顺序或 codec 是否真实变化。
+    """
+
+    import numpy as np
+
+    errors: list[float] = []
+    for source, output in zip(source_frames, output_frames):
+        source_array = np.asarray(source)
+        output_array = np.asarray(output)
+        if source_array.shape != output_array.shape:
+            continue
+        errors.append(
+            float(
+                np.mean(
+                    np.abs(
+                        source_array.astype(np.float32)
+                        - output_array.astype(np.float32)
+                    )
+                )
+            )
+        )
+    if not errors:
+        return None
+    return float(sum(errors) / len(errors))
+
+
+def _expected_output_codec_names(requested_codec: str) -> set[str]:
+    """把 imageio writer 名称映射为解码 metadata 中允许的 codec 名称。"""
+
+    normalized = str(requested_codec or "").strip().lower()
+    return {
+        "libx264": {"h264", "avc", "avc1"},
+        "libx265": {"hevc", "h265", "hev1", "hvc1"},
+        "mpeg4": {"mpeg4", "mp4v"},
+    }.get(normalized, {normalized})
+
+
+def _video_metadata(path: Path) -> dict[str, Any]:
+    """读取 imageio 视频 metadata, 读取失败时让正式攻击直接失败。"""
+
+    import imageio.v3 as iio
+
+    metadata = iio.immeta(path)
+    if not isinstance(metadata, Mapping):
+        raise RuntimeError("runtime_attack_output_metadata_not_mapping")
+    return dict(metadata)
+
+
+def apply_runtime_attack_to_video_file(
+    source_video_path: str | Path,
+    output_video_path: str | Path,
+    attack_name: str,
+    *,
+    fps: float | None = None,
+) -> dict[str, Any]:
+    """对真实视频文件执行共享 runtime attack 并完成效果验真。
+
+    该函数是 SSTW 与所有 official baseline 的统一文件级攻击原语。调用顺序为:
+
+    1. 从输入文件解码真实帧。
+    2. 执行注册表定义的帧级变换。
+    3. 把 codec 和 CRF / qscale 参数传给 imageio-ffmpeg。
+    4. 重新解码输出并核验 codec、文件摘要和帧级变化。
+
+    只有全部必要条件通过时才返回
+    `formal_runtime_video_transform_verified`。任何无变化、codec 不匹配或空输出
+    都会抛出异常, 因而调用方不能把未执行的攻击写成正式论文记录。
+    """
+
+    import imageio.v3 as iio
+
+    source_path = Path(source_video_path)
+    output_path = Path(output_video_path)
+    if not source_path.is_file():
+        raise FileNotFoundError(f"runtime_attack_source_video_missing:{source_path}")
+    if source_path.resolve() == output_path.resolve():
+        raise ValueError("runtime_attack_output_must_not_overwrite_source")
+
+    source_frames = [frame for frame in iio.imiter(source_path)]
+    if not source_frames:
+        raise RuntimeError("runtime_attack_source_video_empty")
+    source_metadata = _video_metadata(source_path)
+    attacked_frames, protocol_metadata = apply_runtime_attack_to_frames(
+        source_frames,
+        attack_name,
+    )
+    if not attacked_frames:
+        raise RuntimeError("runtime_attack_transform_produced_no_frames")
+
+    spec = runtime_attack_spec(attack_name)
+    source_frame_digest = _frame_sequence_digest(source_frames)
+    transformed_frame_digest = _frame_sequence_digest(attacked_frames)
+    preencode_effect_verified = source_frame_digest != transformed_frame_digest
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    writer_kwargs: dict[str, Any] = {
+        "fps": float(fps if fps is not None else source_metadata.get("fps") or 8.0),
+    }
+    if spec.video_writer_codec:
+        writer_kwargs["codec"] = spec.video_writer_codec
+    if spec.video_writer_output_params:
+        writer_kwargs["output_params"] = list(spec.video_writer_output_params)
+    iio.imwrite(output_path, attacked_frames, **writer_kwargs)
+    if not output_path.is_file() or output_path.stat().st_size <= 0:
+        raise RuntimeError("runtime_attack_output_video_missing_or_empty")
+
+    decoded_frames = [frame for frame in iio.imiter(output_path)]
+    if not decoded_frames:
+        raise RuntimeError("runtime_attack_output_video_not_decodable")
+    output_metadata = _video_metadata(output_path)
+    requested_codec = str(spec.video_writer_codec or "")
+    observed_codec = str(output_metadata.get("codec") or "").strip().lower()
+    codec_required = bool(requested_codec)
+    codec_verified = (
+        not codec_required
+        or observed_codec in _expected_output_codec_names(requested_codec)
+    )
+    if not codec_verified:
+        raise RuntimeError(
+            "runtime_attack_output_codec_mismatch:"
+            f"requested={requested_codec}:observed={observed_codec or 'missing'}"
+        )
+
+    if spec.attack_name == "platform_transcode_runtime":
+        pixel_format = str(output_metadata.get("pix_fmt") or "").lower()
+        if not pixel_format.startswith("yuv420p"):
+            raise RuntimeError(
+                "runtime_attack_platform_transcode_pixel_format_mismatch:"
+                f"{pixel_format or 'missing'}"
+            )
+
+    source_file_sha256 = _sha256_file(source_path)
+    output_file_sha256 = _sha256_file(output_path)
+    output_file_changed = source_file_sha256 != output_file_sha256
+    decoded_output_frame_digest = _frame_sequence_digest(decoded_frames)
+    decoded_effect_verified = source_frame_digest != decoded_output_frame_digest
+    decoded_mae = _decoded_mean_absolute_error(source_frames, decoded_frames)
+
+    if codec_required and spec.attack_family == "compression":
+        effect_verified = (
+            codec_verified
+            and output_file_changed
+            and decoded_effect_verified
+        )
+        verification_basis = (
+            "decoded_frame_effect_plus_codec_metadata_and_reencoded_file_digest"
+        )
+    elif codec_required:
+        effect_verified = (
+            codec_verified
+            and output_file_changed
+            and preencode_effect_verified
+            and decoded_effect_verified
+        )
+        verification_basis = (
+            "frame_transform_and_decoded_effect_digests_plus_codec_metadata_and_reencoded_file_digest"
+        )
+    else:
+        effect_verified = (
+            preencode_effect_verified
+            and output_file_changed
+            and decoded_effect_verified
+        )
+        verification_basis = (
+            "frame_transform_and_decoded_effect_digests_plus_output_file_digest"
+        )
+    if not effect_verified:
+        raise RuntimeError(
+            "runtime_attack_effect_verification_failed:"
+            f"attack={spec.attack_name}:preencode_changed={preencode_effect_verified}:"
+            f"decoded_changed={decoded_effect_verified}:"
+            f"file_changed={output_file_changed}:codec_verified={codec_verified}"
+        )
+
+    return {
+        **protocol_metadata,
+        "runtime_attack_implementation_level": spec.implementation_level,
+        "runtime_attack_formal_evidence_level": "formal_runtime_video_transform_verified",
+        "runtime_attack_proxy_free": True,
+        "runtime_attack_effect_verified": True,
+        "runtime_attack_effect_verification_status": "verified",
+        "runtime_attack_effect_verification_basis": verification_basis,
+        "runtime_attack_source_frame_count": len(source_frames),
+        "runtime_attack_transformed_frame_count": len(attacked_frames),
+        "runtime_attack_decoded_output_frame_count": len(decoded_frames),
+        "runtime_attack_source_frame_digest": source_frame_digest,
+        "runtime_attack_transformed_frame_digest": transformed_frame_digest,
+        "runtime_attack_decoded_output_frame_digest": decoded_output_frame_digest,
+        "runtime_attack_preencode_effect_verified": preencode_effect_verified,
+        "runtime_attack_decoded_effect_verified": decoded_effect_verified,
+        "runtime_attack_source_video_sha256": source_file_sha256,
+        "runtime_attack_output_video_sha256": output_file_sha256,
+        "runtime_attack_output_file_changed": output_file_changed,
+        "runtime_attack_decoded_mean_absolute_error": (
+            round(decoded_mae, 8) if decoded_mae is not None else None
+        ),
+        "runtime_attack_requested_codec": requested_codec or None,
+        "runtime_attack_observed_codec": observed_codec or None,
+        "runtime_attack_codec_verification_status": (
+            "verified" if codec_required else "not_required"
+        ),
+        "runtime_attack_requested_output_params": list(spec.video_writer_output_params),
+        "runtime_attack_writer_parameters_applied": True,
+        "runtime_attack_source_video_path": str(source_path),
+        "runtime_attack_output_video_path": str(output_path),
+        "runtime_attack_output_file_size_bytes": int(output_path.stat().st_size),
+        "runtime_attack_output_pixel_format": output_metadata.get("pix_fmt"),
+        "runtime_attack_platform_execution_scope": (
+            "local_platform_style_transcode_not_external_upload_download"
+            if spec.attack_name == "platform_transcode_runtime"
+            else "not_applicable"
+        ),
+    }
+
+
+def prefixed_runtime_attack_metadata(
+    metadata: Mapping[str, Any],
+    *,
+    prefix: str,
+) -> dict[str, Any]:
+    """给同一 comparison unit 中的第二条攻击证据增加稳定字段前缀。"""
+
+    normalized_prefix = str(prefix or "").strip()
+    if not normalized_prefix or not normalized_prefix.endswith("_"):
+        raise ValueError("runtime_attack_metadata_prefix_must_end_with_underscore")
+    return {
+        f"{normalized_prefix}{field_name}": value
+        for field_name, value in metadata.items()
+    }
+
+
 def _to_numpy(frame: Any) -> Any:
     """把一帧转换为 numpy array, 避免在模块导入时强依赖 numpy。"""
 
@@ -1155,111 +1421,67 @@ def apply_runtime_attack_to_frames(frames: list[Any], attack_name: str) -> tuple
 
 
 def apply_runtime_attack_to_video_tensor(video: Any, attack_name: str) -> Any:
-    """对 T-first 视频张量执行轻量 runtime attack。
+    """对 T-first 视频张量执行非 codec 帧变换。
 
-    该函数用于 VideoSeal 这类以张量形式返回视频的 official runtime。若遇到
-    空间或像素值攻击, 会尽量保持输入类型不变; 复杂几何攻击采用轻量近似。
+    该兼容入口不产生正式攻击证据。所有 codec 或包含 codec 的组合攻击必须调用
+    `apply_runtime_attack_to_video_file`, 因为只有真实文件写出才能应用并核验
+    H.264、H.265、MPEG-4、CRF 和 qscale 参数。其余攻击会先把张量转换为帧,
+    复用与文件级路径完全相同的 PIL / NumPy 实现, 不再使用 roll、量化或平均滤波
+    冒充 rotation、perspective、JPEG、median blur 等不同攻击。
     """
 
+    import numpy as np
+
     spec = runtime_attack_spec(attack_name)
-    normalized = spec.attack_name
-    if normalized in {
-        "video_compression_runtime",
-        "h264_crf18_runtime",
-        "h264_crf23_runtime",
-        "h264_crf28_runtime",
-        "h264_crf33_runtime",
-        "h264_crf38_runtime",
-        "h265_crf23_runtime",
-        "h265_crf28_runtime",
-        "h265_crf33_runtime",
-        "mpeg4_crf28_runtime",
-        "mpeg4_q2_runtime",
-        "mpeg4_q8_runtime",
-        "platform_transcode_runtime",
-    }:
-        return video
-    if normalized == "jpeg_frame_compression_runtime":
-        return _tensor_quantize(video, levels=64)
-    if normalized == "temporal_crop_runtime":
-        return video[1:-1] if video.shape[0] >= 4 else video
-    if normalized == "temporal_clip_middle_runtime":
-        if video.shape[0] >= 6:
-            clip_len = max(1, int(video.shape[0] * 0.20))
-            start = max(1, (int(video.shape[0]) - clip_len) // 2)
-            return _tensor_concat([video[:start], video[start + clip_len :]])
-        return video
-    if normalized in {"frame_rate_resampling_runtime", "compression_temporal_combined_runtime"}:
-        return video[::2] if video.shape[0] >= 3 else video
-    if normalized == "frame_drop_uniform_runtime":
-        indices = [index for index in range(int(video.shape[0])) if (index + 1) % 3 != 0]
-        return video[indices] if indices else video
-    if normalized == "irregular_frame_drop_runtime":
-        indices = [index for index in range(int(video.shape[0])) if index % 5 not in {1, 4}]
-        return video[indices] if indices else video
-    if normalized == "frame_insert_duplicate_runtime":
-        midpoint = max(0, int(video.shape[0]) // 2)
-        return _tensor_concat([video[:midpoint], video[midpoint : midpoint + 1], video[midpoint:]])
-    if normalized == "frame_insert_noise_runtime":
-        midpoint = max(0, int(video.shape[0]) // 2)
-        noisy_frame = _tensor_add_noise(video[midpoint : midpoint + 1])
-        return _tensor_concat([video[:midpoint], noisy_frame, video[midpoint:]])
-    if normalized == "frame_duplicate_runtime":
-        parts = []
-        for index in range(int(video.shape[0])):
-            parts.append(video[index : index + 1])
-            if (index + 1) % 4 == 0:
-                parts.append(video[index : index + 1])
-        return _tensor_concat(parts) if parts else video
-    if normalized == "speed_change_runtime":
-        parts = []
-        for index in range(int(video.shape[0])):
-            if (index + 1) % 4 == 0:
-                continue
-            parts.append(video[index : index + 1])
-            if (index + 1) % 6 == 0:
-                parts.append(video[index : index + 1])
-        return _tensor_concat(parts) if parts else video
-    if normalized == "frame_swap_adjacent_runtime":
-        output = video.clone() if hasattr(video, "clone") else video.copy()
-        if output.shape[0] >= 4:
-            midpoint = int(output.shape[0]) // 2
-            before = output[midpoint - 1].clone() if hasattr(output[midpoint - 1], "clone") else output[midpoint - 1].copy()
-            output[midpoint - 1] = output[midpoint]
-            output[midpoint] = before
-        return output
-    if normalized == "frame_average_runtime":
-        output = video.clone() if hasattr(video, "clone") else video.copy()
-        if output.shape[0] >= 2:
-            output[1:] = (output[:-1] + output[1:]) / 2
-        return output
-    if normalized in {"spatial_resize_runtime", "spatial_crop_resize_runtime", "compression_crop_combined_runtime"}:
-        return _tensor_center_crop(video, crop_ratio=0.80 if "crop" in normalized else 0.75)
-    if normalized == "spatial_corner_crop_resize_runtime":
-        return _tensor_corner_crop(video, crop_ratio=0.85)
-    if normalized in {"rotation_runtime", "perspective_runtime"}:
-        return _tensor_roll(video, shift=2)
-    if normalized == "spatial_mask_runtime":
-        return _tensor_spatial_mask(video)
-    if normalized == "gaussian_noise_runtime":
-        return _tensor_add_noise(video)
-    if normalized == "salt_pepper_noise_runtime":
-        return _tensor_salt_pepper(video)
-    if normalized in {"gaussian_blur_runtime", "median_blur_runtime", "denoise_runtime"}:
-        return _tensor_average_blur(video)
-    if normalized in {"brightness_contrast_runtime", "compression_brightness_combined_runtime"}:
-        return _tensor_brightness_contrast(video)
-    if normalized == "gamma_correction_runtime":
-        return _tensor_gamma(video)
-    if normalized in {"color_jitter_runtime", "compression_color_jitter_combined_runtime"}:
-        return _tensor_color_jitter(video)
-    if normalized == "sharpen_runtime":
-        return _tensor_sharpen_filter(video)
-    if normalized == "compression_noise_combined_runtime":
-        return _tensor_add_noise(video)
-    if normalized == "crop_rotation_combined_runtime":
-        return _tensor_roll(_tensor_center_crop(video, crop_ratio=0.80), shift=2)
-    raise ValueError(f"unsupported_runtime_attack:{attack_name}")
+    if spec.video_writer_codec:
+        raise ValueError(
+            "file_level_runtime_attack_required_for_codec_or_combined_attack:"
+            f"{spec.attack_name}"
+        )
+
+    is_torch = hasattr(video, "detach") and hasattr(video, "device")
+    if is_torch:
+        source_array = video.detach().cpu().numpy()
+        source_device = video.device
+        source_dtype = video.dtype
+    else:
+        source_array = np.asarray(video)
+        source_device = None
+        source_dtype = source_array.dtype
+    if source_array.ndim != 4:
+        raise ValueError("runtime_attack_video_tensor_must_be_tchw")
+    if int(source_array.shape[1]) not in {1, 3, 4}:
+        raise ValueError("runtime_attack_video_tensor_channel_count_unsupported")
+
+    floating_input = np.issubdtype(source_array.dtype, np.floating)
+    minimum = float(source_array.min()) if source_array.size else 0.0
+    maximum = float(source_array.max()) if source_array.size else 0.0
+    if floating_input and minimum >= -1.01 and maximum <= 1.01 and minimum < -0.01:
+        value_range = "minus_one_to_one"
+        uint8_array = np.clip((source_array + 1.0) * 127.5, 0, 255).round().astype(np.uint8)
+    elif floating_input and minimum >= -0.01 and maximum <= 1.01:
+        value_range = "zero_to_one"
+        uint8_array = np.clip(source_array * 255.0, 0, 255).round().astype(np.uint8)
+    else:
+        value_range = "uint8_scale"
+        uint8_array = np.clip(source_array, 0, 255).round().astype(np.uint8)
+    frames = [frame for frame in np.transpose(uint8_array, (0, 2, 3, 1))]
+    attacked_frames, _metadata = apply_runtime_attack_to_frames(frames, spec.attack_name)
+    attacked_array = np.transpose(np.stack(attacked_frames, axis=0), (0, 3, 1, 2))
+    if value_range == "minus_one_to_one":
+        restored = attacked_array.astype(np.float32) / 127.5 - 1.0
+    elif value_range == "zero_to_one":
+        restored = attacked_array.astype(np.float32) / 255.0
+    else:
+        restored = attacked_array.astype(source_array.dtype, copy=False)
+    if is_torch:
+        import torch
+
+        return torch.from_numpy(np.ascontiguousarray(restored)).to(
+            device=source_device,
+            dtype=source_dtype,
+        )
+    return restored.astype(source_dtype, copy=False)
 
 
 def _tensor_concat(parts: list[Any]) -> Any:

@@ -8,6 +8,8 @@ from statistics import mean
 from typing import Any, Iterable, Mapping, Sequence
 
 from main.methods.state_space_watermark.flow_state_posterior import (
+    FLOW_STATE_ADMISSIBILITY_THRESHOLD_NAMES,
+    FLOW_STATE_POSTERIOR_CONTRACT_VERSION,
     FLOW_STATE_POSTERIOR_MODEL_TYPE,
     POSTERIOR_FEATURE_NAMES,
     CalibratedFlowPosteriorModel,
@@ -21,6 +23,22 @@ from main.methods.state_space_watermark.flow_state_posterior import (
 
 FLOW_STATE_POSTERIOR_SCORE_SOURCE = (
     "dual_hypothesis_state_space_marginal_likelihood_calibrated_probability_posterior"
+)
+
+FLOW_STATE_POSTERIOR_PROBABILITY_SEMANTICS = (
+    "class_balanced_calibration_probability_from_state_space_marginal_likelihood_ratio"
+)
+
+FLOW_STATE_POSTERIOR_CALIBRATION_PROTOCOL = (
+    "nested_source_video_group_cross_fitted_state_space_llr_and_platt"
+)
+
+FLOW_STATE_FIXED_FPR_THRESHOLD_SCORE_SOURCE = (
+    "outer_group_heldout_nested_cross_fitted_conservative_scores"
+)
+
+FLOW_STATE_DYNAMICS_CONTRACT = (
+    "phase_conditioned_transition_with_reliability_heteroscedastic_observation"
 )
 
 REQUIRED_FLOW_PHASE_OBSERVATION_FIELDS = (
@@ -98,78 +116,327 @@ class FrozenFlowDetectorCalibration:
         }
 
 
+def _required_artifact_field(payload: Mapping[str, Any], field_name: str) -> Any:
+    """读取正式冻结 artifact 的必需字段, 缺失时立即阻断。"""
+
+    if field_name not in payload or payload[field_name] is None:
+        raise ValueError(f"threshold artifact 缺少正式字段: {field_name}")
+    return payload[field_name]
+
+
+def _finite_artifact_float(payload: Mapping[str, Any], field_name: str) -> float:
+    """读取有限浮点字段, 避免 NaN 或 Inf 绕过冻结契约。"""
+
+    value = float(_required_artifact_field(payload, field_name))
+    if not isfinite(value):
+        raise ValueError(f"threshold artifact 字段必须为有限数值: {field_name}")
+    return value
+
+
+def _positive_artifact_integer(payload: Mapping[str, Any], field_name: str) -> int:
+    """读取严格正整数计数字段。"""
+
+    raw_value = _required_artifact_field(payload, field_name)
+    if isinstance(raw_value, bool):
+        raise ValueError(f"threshold artifact 字段必须为正整数: {field_name}")
+    value = int(raw_value)
+    if value <= 0 or float(raw_value) != float(value):
+        raise ValueError(f"threshold artifact 字段必须为正整数: {field_name}")
+    return value
+
+
+def _validate_formal_state_model_payload(
+    payload: Any,
+    *,
+    hypothesis_name: str,
+    dimension: int,
+) -> LinearGaussianFlowStateModel:
+    """验证一个假设模型已实现 phase 转移与可靠性异方差观测。"""
+
+    if not isinstance(payload, Mapping):
+        raise ValueError(f"{hypothesis_name} 状态空间模型必须为映射对象")
+    required_fields = (
+        "state_space_dynamics_contract",
+        "transition_matrix",
+        "transition_bias",
+        "process_covariance",
+        "observation_covariance",
+        "initial_mean",
+        "initial_covariance",
+        "training_sequence_count",
+        "training_group_count",
+        "training_transition_count",
+        "training_transition_group_count",
+        "phase_transition_matrix",
+        "phase_transition_reference",
+        "reliability_observation_variance_scale",
+        "phase_conditioned_transition_configured",
+        "reliability_heteroscedastic_observation_configured",
+    )
+    missing_fields = [name for name in required_fields if name not in payload]
+    if missing_fields:
+        raise ValueError(
+            f"{hypothesis_name} 状态空间模型缺少正式字段: "
+            + ", ".join(missing_fields)
+        )
+    if payload["state_space_dynamics_contract"] != FLOW_STATE_DYNAMICS_CONTRACT:
+        raise ValueError(f"{hypothesis_name} 状态空间动力学契约不兼容")
+    if payload["phase_conditioned_transition_configured"] is not True:
+        raise ValueError(f"{hypothesis_name} 状态空间模型未配置 phase 条件转移")
+    if payload["reliability_heteroscedastic_observation_configured"] is not True:
+        raise ValueError(f"{hypothesis_name} 状态空间模型未配置可靠性异方差观测")
+
+    model = LinearGaussianFlowStateModel.from_dict(payload)
+    vector_fields = {
+        "transition_bias": model.transition_bias,
+        "initial_mean": model.initial_mean,
+    }
+    matrix_fields = {
+        "transition_matrix": model.transition_matrix,
+        "phase_transition_matrix": model.phase_transition_matrix,
+        "process_covariance": model.process_covariance,
+        "observation_covariance": model.observation_covariance,
+        "initial_covariance": model.initial_covariance,
+    }
+    for field_name, values in vector_fields.items():
+        if len(values) != dimension or any(not isfinite(value) for value in values):
+            raise ValueError(f"{hypothesis_name} 状态空间字段维度或数值无效: {field_name}")
+    for field_name, rows in matrix_fields.items():
+        if (
+            len(rows) != dimension
+            or any(len(row) != dimension for row in rows)
+            or any(not isfinite(value) for row in rows for value in row)
+        ):
+            raise ValueError(f"{hypothesis_name} 状态空间字段维度或数值无效: {field_name}")
+        if any(
+            row_index != column_index and abs(float(value)) > 1e-10
+            for row_index, row in enumerate(rows)
+            for column_index, value in enumerate(row)
+        ):
+            raise ValueError(f"{hypothesis_name} 状态空间字段必须为对角矩阵: {field_name}")
+    for covariance_name in (
+        "process_covariance",
+        "observation_covariance",
+        "initial_covariance",
+    ):
+        covariance = matrix_fields[covariance_name]
+        if any(float(covariance[index][index]) <= 0.0 for index in range(dimension)):
+            raise ValueError(f"{hypothesis_name} 状态空间协方差必须严格正定: {covariance_name}")
+    if not 0.0 <= float(model.phase_transition_reference) <= 1.0:
+        raise ValueError(f"{hypothesis_name} phase transition reference 必须位于 [0, 1]")
+    if (
+        not isfinite(float(model.reliability_observation_variance_scale))
+        or float(model.reliability_observation_variance_scale) <= 0.0
+    ):
+        raise ValueError(f"{hypothesis_name} reliability variance scale 必须严格为正")
+    if min(
+        model.training_sequence_count,
+        model.training_group_count,
+        model.training_transition_count,
+        model.training_transition_group_count,
+    ) <= 0:
+        raise ValueError(f"{hypothesis_name} 状态空间模型缺少真实训练序列或转移")
+    return model
+
+
 def frozen_flow_detector_calibration_from_dict(
     payload: Mapping[str, Any],
 ) -> FrozenFlowDetectorCalibration:
     """从 governed threshold artifact 重建只读检测器。
 
     该函数属于通用工程写法。任何离线评分调用方都必须消费已经冻结的
-    calibration artifact, 不能在查询候选视频时重新拟合模型或阈值。
+    calibration artifact, 不能在查询候选视频时重新拟合模型或阈值。正式
+    artifact 不提供旧字段默认值, 因为静默兼容会把不完整模型误用于论文结论。
     """
 
-    if payload.get("posterior_model_type") != FLOW_STATE_POSTERIOR_MODEL_TYPE:
+    if not isinstance(payload, Mapping):
+        raise TypeError("threshold artifact 必须为映射对象")
+    if _required_artifact_field(payload, "posterior_model_type") != FLOW_STATE_POSTERIOR_MODEL_TYPE:
         raise ValueError("threshold artifact 不是受支持的双假设状态空间后验模型")
-    feature_names = tuple(str(value) for value in payload["posterior_feature_names"])
+    if (
+        _required_artifact_field(payload, "posterior_model_contract_version")
+        != FLOW_STATE_POSTERIOR_CONTRACT_VERSION
+    ):
+        raise ValueError("threshold artifact 的概率后验契约版本不兼容")
+    if _finite_artifact_float(payload, "posterior_reference_prior") != 0.5:
+        raise ValueError("threshold artifact 必须使用类平衡的0.5参考先验")
+    if (
+        _required_artifact_field(payload, "posterior_probability_semantics")
+        != FLOW_STATE_POSTERIOR_PROBABILITY_SEMANTICS
+    ):
+        raise ValueError("threshold artifact 的概率后验语义不兼容")
+    for context_field in (
+        "posterior_flow_phase_feature_included",
+        "posterior_phase_conditioned_transition_configured",
+        "posterior_reliability_heteroscedastic_observation_configured",
+        "posterior_admissibility_context_complete",
+    ):
+        if _required_artifact_field(payload, context_field) is not True:
+            raise ValueError(f"threshold artifact 正式上下文不完整: {context_field}")
+
+    feature_names = tuple(
+        str(value) for value in _required_artifact_field(payload, "posterior_feature_names")
+    )
     if feature_names != POSTERIOR_FEATURE_NAMES:
         raise ValueError("threshold artifact 的概率后验特征顺序不兼容")
+    dimension = len(feature_names)
+    feature_means = tuple(
+        float(value)
+        for value in _required_artifact_field(payload, "posterior_feature_means")
+    )
+    feature_scales = tuple(
+        float(value)
+        for value in _required_artifact_field(payload, "posterior_feature_scales")
+    )
+    if (
+        len(feature_means) != dimension
+        or len(feature_scales) != dimension
+        or any(not isfinite(value) for value in feature_means)
+        or any(not isfinite(value) or value <= 0.0 for value in feature_scales)
+    ):
+        raise ValueError("threshold artifact 的特征标准化参数无效")
+
+    negative_model = _validate_formal_state_model_payload(
+        _required_artifact_field(payload, "posterior_negative_state_space_model"),
+        hypothesis_name="H0",
+        dimension=dimension,
+    )
+    positive_model = _validate_formal_state_model_payload(
+        _required_artifact_field(payload, "posterior_positive_state_space_model"),
+        hypothesis_name="H1",
+        dimension=dimension,
+    )
+    threshold_payload = _required_artifact_field(
+        payload,
+        "posterior_admissibility_thresholds",
+    )
+    if not isinstance(threshold_payload, Mapping):
+        raise ValueError("posterior admissibility thresholds 必须为映射对象")
+    admissibility_thresholds = {
+        str(key): float(value) for key, value in threshold_payload.items()
+    }
+    missing_thresholds = [
+        name
+        for name in FLOW_STATE_ADMISSIBILITY_THRESHOLD_NAMES
+        if name not in admissibility_thresholds
+    ]
+    if missing_thresholds:
+        raise ValueError(
+            "posterior admissibility thresholds 不完整: "
+            + ", ".join(missing_thresholds)
+        )
+    if any(not isfinite(value) for value in admissibility_thresholds.values()):
+        raise ValueError("posterior admissibility thresholds 必须为有限数值")
+
+    calibration_group_count = _positive_artifact_integer(
+        payload,
+        "posterior_calibration_group_count",
+    )
+    calibration_record_count = _positive_artifact_integer(
+        payload,
+        "posterior_calibration_record_count",
+    )
+    calibration_negative_count = _positive_artifact_integer(
+        payload,
+        "calibration_negative_count",
+    )
+    calibration_positive_count = _positive_artifact_integer(
+        payload,
+        "calibration_positive_count",
+    )
+    calibration_negative_cluster_count = _positive_artifact_integer(
+        payload,
+        "calibration_negative_cluster_count",
+    )
+    calibration_positive_cluster_count = _positive_artifact_integer(
+        payload,
+        "calibration_positive_cluster_count",
+    )
+    if calibration_record_count != calibration_negative_count + calibration_positive_count:
+        raise ValueError("threshold artifact 的 calibration 记录计数不一致")
+    if min(calibration_negative_cluster_count, calibration_positive_cluster_count) < 2:
+        raise ValueError("正式 threshold artifact 的 H0 与 H1 各需至少2个独立视频簇")
+    if calibration_group_count < 2:
+        raise ValueError("正式 threshold artifact 至少需要2个独立视频簇")
+
+    probability_protocol = str(
+        _required_artifact_field(payload, "posterior_probability_calibration_protocol")
+    )
+    if probability_protocol != FLOW_STATE_POSTERIOR_CALIBRATION_PROTOCOL:
+        raise ValueError("threshold artifact 的概率校准协议不兼容")
+    outer_fold_count = _positive_artifact_integer(
+        payload,
+        "posterior_probability_calibration_outer_fold_count",
+    )
+    inner_fold_minimum = _positive_artifact_integer(
+        payload,
+        "posterior_probability_calibration_inner_fold_minimum",
+    )
+    if min(outer_fold_count, inner_fold_minimum) < 2:
+        raise ValueError("正式概率校准必须执行至少2折嵌套视频簇交叉拟合")
+    threshold_score_source = str(
+        _required_artifact_field(payload, "fixed_fpr_threshold_score_source")
+    )
+    if threshold_score_source != FLOW_STATE_FIXED_FPR_THRESHOLD_SCORE_SOURCE:
+        raise ValueError("threshold artifact 的 fixed-FPR 分数来源协议不兼容")
+    mechanism_value = _required_artifact_field(
+        payload,
+        "flow_state_admissibility_enforced",
+    )
+    if type(mechanism_value) is not bool:
+        raise ValueError("flow_state_admissibility_enforced 必须为布尔值")
+    detector_configuration_id = str(
+        _required_artifact_field(payload, "detector_configuration_id")
+    ).strip()
+    if not detector_configuration_id:
+        raise ValueError("detector_configuration_id 不能为空")
+    target_fpr = _finite_artifact_float(payload, "target_fpr")
+    if not 0.0 < target_fpr < 1.0:
+        raise ValueError("threshold artifact 的 target_fpr 必须位于 (0, 1)")
+
     model = CalibratedFlowPosteriorModel(
         feature_names=feature_names,
-        feature_means=tuple(float(value) for value in payload["posterior_feature_means"]),
-        feature_scales=tuple(float(value) for value in payload["posterior_feature_scales"]),
-        negative_state_space_model=LinearGaussianFlowStateModel.from_dict(
-            payload["posterior_negative_state_space_model"]
+        feature_means=feature_means,
+        feature_scales=feature_scales,
+        negative_state_space_model=negative_model,
+        positive_state_space_model=positive_model,
+        platt_slope=_finite_artifact_float(payload, "posterior_platt_slope"),
+        platt_intercept=_finite_artifact_float(payload, "posterior_platt_intercept"),
+        admissibility_thresholds=admissibility_thresholds,
+        calibration_brier_score=_finite_artifact_float(
+            payload,
+            "posterior_calibration_brier_score",
         ),
-        positive_state_space_model=LinearGaussianFlowStateModel.from_dict(
-            payload["posterior_positive_state_space_model"]
+        calibration_log_loss=_finite_artifact_float(
+            payload,
+            "posterior_calibration_log_loss",
         ),
-        platt_slope=float(payload["posterior_platt_slope"]),
-        platt_intercept=float(payload["posterior_platt_intercept"]),
-        admissibility_thresholds={
-            str(key): float(value)
-            for key, value in dict(payload["posterior_admissibility_thresholds"]).items()
-        },
-        calibration_brier_score=float(payload["posterior_calibration_brier_score"]),
-        calibration_log_loss=float(payload["posterior_calibration_log_loss"]),
-        calibration_expected_calibration_error=float(
-            payload["posterior_calibration_expected_calibration_error"]
+        calibration_expected_calibration_error=_finite_artifact_float(
+            payload,
+            "posterior_calibration_expected_calibration_error",
         ),
-        calibration_group_count=int(payload["posterior_calibration_group_count"]),
-        calibration_record_count=int(payload["posterior_calibration_record_count"]),
+        calibration_group_count=calibration_group_count,
+        calibration_record_count=calibration_record_count,
     )
     return FrozenFlowDetectorCalibration(
-        target_fpr=float(payload["target_fpr"]),
+        target_fpr=target_fpr,
         posterior_model=model,
         mechanism_config=FlowDetectorMechanismConfig(
-            enforce_state_admissibility=bool(
-                payload.get("flow_state_admissibility_enforced", True)
-            )
+            enforce_state_admissibility=mechanism_value,
         ),
-        final_score_threshold=float(payload["frozen_final_score_threshold"]),
-        calibration_negative_count=int(payload["calibration_negative_count"]),
-        calibration_positive_count=int(payload["calibration_positive_count"]),
-        calibration_negative_cluster_count=int(
-            payload["calibration_negative_cluster_count"]
+        final_score_threshold=_finite_artifact_float(
+            payload,
+            "frozen_final_score_threshold",
         ),
-        calibration_positive_cluster_count=int(
-            payload["calibration_positive_cluster_count"]
-        ),
-        posterior_probability_calibration_protocol=str(
-            payload.get("posterior_probability_calibration_protocol")
-            or "legacy_unspecified_probability_calibration"
-        ),
-        posterior_probability_calibration_outer_fold_count=int(
-            payload.get("posterior_probability_calibration_outer_fold_count") or 0
-        ),
-        posterior_probability_calibration_inner_fold_minimum=int(
-            payload.get("posterior_probability_calibration_inner_fold_minimum") or 0
-        ),
-        fixed_fpr_threshold_score_source=str(
-            payload.get("fixed_fpr_threshold_score_source")
-            or "legacy_unspecified_threshold_score_source"
-        ),
-        detector_configuration_id=str(
-            payload.get("detector_configuration_id", "sstw_core")
-        ),
+        calibration_negative_count=calibration_negative_count,
+        calibration_positive_count=calibration_positive_count,
+        calibration_negative_cluster_count=calibration_negative_cluster_count,
+        calibration_positive_cluster_count=calibration_positive_cluster_count,
+        posterior_probability_calibration_protocol=probability_protocol,
+        posterior_probability_calibration_outer_fold_count=outer_fold_count,
+        posterior_probability_calibration_inner_fold_minimum=inner_fold_minimum,
+        fixed_fpr_threshold_score_source=threshold_score_source,
+        detector_configuration_id=detector_configuration_id,
     )
 
 
@@ -346,6 +613,45 @@ def _shrunk_covariance(matrix: Any, *, minimum_variance: float = 1e-3) -> Any:
     return np.diag(variances + minimum_variance)
 
 
+def _solve_three_parameter_system(matrix: Any, vector: Any) -> tuple[float, float, float]:
+    """用带主元的标量消元求解3参数回归, 避免小矩阵 BLAS 崩溃。"""
+
+    coefficients = [
+        [float(matrix[row_index][column_index]) for column_index in range(3)]
+        for row_index in range(3)
+    ]
+    targets = [float(vector[index]) for index in range(3)]
+    for pivot_index in range(3):
+        selected_index = max(
+            range(pivot_index, 3),
+            key=lambda row_index: abs(coefficients[row_index][pivot_index]),
+        )
+        if abs(coefficients[selected_index][pivot_index]) < 1e-12:
+            raise RuntimeError("phase 条件转移回归方程在正则化后仍不可解")
+        coefficients[pivot_index], coefficients[selected_index] = (
+            coefficients[selected_index],
+            coefficients[pivot_index],
+        )
+        targets[pivot_index], targets[selected_index] = (
+            targets[selected_index],
+            targets[pivot_index],
+        )
+        pivot = coefficients[pivot_index][pivot_index]
+        for column_index in range(pivot_index, 3):
+            coefficients[pivot_index][column_index] /= pivot
+        targets[pivot_index] /= pivot
+        for row_index in range(3):
+            if row_index == pivot_index:
+                continue
+            factor = coefficients[row_index][pivot_index]
+            for column_index in range(pivot_index, 3):
+                coefficients[row_index][column_index] -= (
+                    factor * coefficients[pivot_index][column_index]
+                )
+            targets[row_index] -= factor * targets[pivot_index]
+    return targets[0], targets[1], targets[2]
+
+
 def _fit_linear_gaussian_state_model(
     sequences: Sequence[Any],
     *,
@@ -353,23 +659,66 @@ def _fit_linear_gaussian_state_model(
     feature_means: Any,
     feature_scales: Any,
 ) -> LinearGaussianFlowStateModel:
-    """按 source-video group 等权拟合线性转移和高斯噪声。"""
+    """按 source-video group 等权拟合 phase 条件转移与异方差观测噪声。
+
+    每个独立视频簇先获得相同总权重, 再在簇内平均其重复 key trial 与 phase
+    转移。该实现避免把同一源视频的重复测量误当作额外独立样本。phase
+    调制项与可靠性方差尺度均由 calibration 数据拟合, 而不是固定常数。
+    """
 
     import numpy as np
 
-    standardized = [
-        (np.asarray(sequence, dtype=np.float64) - feature_means)
-        / np.maximum(feature_scales, 1e-8)
-        for sequence in sequences
-    ]
-    if len(standardized) != len(group_ids):
+    if not sequences:
+        raise ValueError("状态空间模型至少需要一个观测序列")
+    if len(sequences) != len(group_ids):
         raise ValueError("状态空间序列与 source-video group 数量不一致")
-    dimension = standardized[0].shape[1]
+    means = np.asarray(feature_means, dtype=np.float64)
+    scales = np.asarray(feature_scales, dtype=np.float64)
+    dimension = len(POSTERIOR_FEATURE_NAMES)
+    if means.shape != (dimension,) or scales.shape != (dimension,):
+        raise ValueError("状态空间特征标准化参数维度不正确")
+    if not bool(np.isfinite(means).all()) or not bool(np.isfinite(scales).all()):
+        raise ValueError("状态空间特征标准化参数必须为有限数值")
+    if bool(np.any(scales <= 0.0)):
+        raise ValueError("状态空间特征尺度必须严格为正")
+
+    raw_sequences: list[Any] = []
+    for sequence in sequences:
+        matrix = np.asarray(sequence, dtype=np.float64)
+        if matrix.ndim != 2 or matrix.shape[1] != dimension or len(matrix) == 0:
+            raise ValueError("状态空间 calibration 序列形状不一致")
+        if not bool(np.isfinite(matrix).all()):
+            raise ValueError("状态空间 calibration 序列必须为有限数值")
+        flow_phases = matrix[:, POSTERIOR_FEATURE_NAMES.index("flow_phase")]
+        if bool(np.any(flow_phases < 0.0)) or bool(np.any(flow_phases > 1.0)):
+            raise ValueError("状态空间 calibration 的 Flow phase 必须位于 [0, 1]")
+        replay_reliabilities = matrix[
+            :, POSTERIOR_FEATURE_NAMES.index("replay_reliability")
+        ]
+        if bool(np.any(replay_reliabilities < 0.0)) or bool(
+            np.any(replay_reliabilities > 1.0)
+        ):
+            raise ValueError("状态空间 calibration 的 replay reliability 必须位于 [0, 1]")
+        raw_sequences.append(matrix)
+    standardized = [
+        (matrix - means) / np.maximum(scales, 1e-8)
+        for matrix in raw_sequences
+    ]
     unique_groups = sorted(set(group_ids))
+    if not unique_groups:
+        raise ValueError("状态空间模型缺少 source-video group")
     grouped_sequences = {
         group_id: [
             sequence
             for sequence, current_group_id in zip(standardized, group_ids)
+            if current_group_id == group_id
+        ]
+        for group_id in unique_groups
+    }
+    grouped_raw_sequences = {
+        group_id: [
+            sequence
+            for sequence, current_group_id in zip(raw_sequences, group_ids)
             if current_group_id == group_id
         ]
         for group_id in unique_groups
@@ -382,70 +731,183 @@ def _fit_linear_gaussian_state_model(
         ],
         axis=0,
     )
-    transition_rows_by_group: dict[str, tuple[Any, Any]] = {}
+    phase_reference = 0.5
+    transition_rows_by_group: dict[str, tuple[Any, Any, Any, Any]] = {}
+    phase_index = POSTERIOR_FEATURE_NAMES.index("flow_phase")
+    reliability_index = POSTERIOR_FEATURE_NAMES.index("replay_reliability")
     for group_id, group_sequences in grouped_sequences.items():
+        raw_group_sequences = grouped_raw_sequences[group_id]
         previous = [sequence[:-1] for sequence in group_sequences if len(sequence) > 1]
         following = [sequence[1:] for sequence in group_sequences if len(sequence) > 1]
+        following_phases = [
+            raw_sequence[1:, phase_index]
+            for raw_sequence in raw_group_sequences
+            if len(raw_sequence) > 1
+        ]
+        following_reliabilities = [
+            raw_sequence[1:, reliability_index]
+            for raw_sequence in raw_group_sequences
+            if len(raw_sequence) > 1
+        ]
         if previous:
             transition_rows_by_group[group_id] = (
                 np.concatenate(previous, axis=0),
                 np.concatenate(following, axis=0),
+                np.concatenate(following_phases, axis=0),
+                np.concatenate(following_reliabilities, axis=0),
             )
     transition_count = sum(
-        len(previous) for previous, _following in transition_rows_by_group.values()
+        len(previous)
+        for previous, _following, _phase, _reliability in transition_rows_by_group.values()
     )
     transition_group_count = len(transition_rows_by_group)
     if transition_count:
-        previous_mean = np.stack(
-            [rows[0].mean(axis=0) for rows in transition_rows_by_group.values()],
+        previous_rows = np.concatenate(
+            [rows[0] for rows in transition_rows_by_group.values()],
             axis=0,
-        ).mean(axis=0)
-        following_mean = np.stack(
-            [rows[1].mean(axis=0) for rows in transition_rows_by_group.values()],
+        )
+        following_rows = np.concatenate(
+            [rows[1] for rows in transition_rows_by_group.values()],
             axis=0,
-        ).mean(axis=0)
-        numerator = np.stack(
+        )
+        following_phases = np.concatenate(
+            [rows[2] for rows in transition_rows_by_group.values()],
+            axis=0,
+        )
+        following_reliabilities = np.concatenate(
+            [rows[3] for rows in transition_rows_by_group.values()],
+            axis=0,
+        )
+        transition_weights = np.concatenate(
             [
-                ((previous - previous_mean) * (following - following_mean)).mean(axis=0)
-                for previous, following in transition_rows_by_group.values()
+                np.full(
+                    len(rows[0]),
+                    1.0 / transition_group_count / len(rows[0]),
+                    dtype=np.float64,
+                )
+                for rows in transition_rows_by_group.values()
             ],
             axis=0,
-        ).mean(axis=0)
-        denominator = np.stack(
-            [
-                ((previous - previous_mean) ** 2).mean(axis=0)
-                for previous, _following in transition_rows_by_group.values()
-            ],
-            axis=0,
-        ).mean(axis=0) + 0.05
-        diagonal_transition = numerator / denominator
-        diagonal_transition = np.clip(diagonal_transition, -0.98, 0.98)
+        )
+        centered_phases = following_phases - phase_reference
+        diagonal_transition = np.zeros(dimension, dtype=np.float64)
+        diagonal_phase_transition = np.zeros(dimension, dtype=np.float64)
+        bias = np.zeros(dimension, dtype=np.float64)
+        ridge = np.diag([0.05, 0.05, 1e-8])
+        for feature_index in range(dimension):
+            previous_feature = previous_rows[:, feature_index]
+            design = np.stack(
+                [
+                    previous_feature,
+                    centered_phases * previous_feature,
+                    np.ones(len(previous_feature), dtype=np.float64),
+                ],
+                axis=1,
+            )
+            target_feature = following_rows[:, feature_index]
+            normal_matrix = np.asarray(
+                [
+                    [
+                        float(
+                            np.sum(
+                                transition_weights
+                                * design[:, row_index]
+                                * design[:, column_index]
+                            )
+                        )
+                        for column_index in range(3)
+                    ]
+                    for row_index in range(3)
+                ],
+                dtype=np.float64,
+            )
+            normal_target = np.asarray(
+                [
+                    float(
+                        np.sum(
+                            transition_weights
+                            * design[:, row_index]
+                            * target_feature
+                        )
+                    )
+                    for row_index in range(3)
+                ],
+                dtype=np.float64,
+            )
+            coefficients = _solve_three_parameter_system(
+                normal_matrix + ridge,
+                normal_target,
+            )
+            base_transition = float(np.clip(coefficients[0], -0.95, 0.95))
+            phase_limit = max(0.0, 2.0 * (0.98 - abs(base_transition)))
+            phase_transition = float(
+                np.clip(coefficients[1], -phase_limit, phase_limit)
+            )
+            diagonal_transition[feature_index] = base_transition
+            diagonal_phase_transition[feature_index] = phase_transition
+            bias[feature_index] = float(
+                np.sum(
+                    transition_weights
+                    * (
+                        following_rows[:, feature_index]
+                        - base_transition * previous_feature
+                        - phase_transition * centered_phases * previous_feature
+                    )
+                )
+            )
         transition = np.diag(diagonal_transition)
-        bias = following_mean - diagonal_transition * previous_mean
-        process_variance = np.stack(
-            [
-                np.square(
-                    following - (previous * diagonal_transition + bias)
-                ).mean(axis=0)
-                for previous, following in transition_rows_by_group.values()
-            ],
+        phase_transition_matrix = np.diag(diagonal_phase_transition)
+        predictions = (
+            previous_rows * diagonal_transition
+            + previous_rows * centered_phases[:, None] * diagonal_phase_transition
+            + bias
+        )
+        squared_residuals = np.square(following_rows - predictions)
+        reliability_penalty = np.clip(
+            (1.0 - np.clip(following_reliabilities, 1e-4, 1.0))
+            / np.clip(following_reliabilities, 1e-4, 1.0),
+            0.0,
+            100.0,
+        )
+        penalty_mean = float(np.sum(transition_weights * reliability_penalty))
+        centered_penalty = reliability_penalty - penalty_mean
+        penalty_variance = float(
+            np.sum(transition_weights * np.square(centered_penalty))
+        )
+        residual_mean = np.sum(
+            transition_weights[:, None] * squared_residuals,
             axis=0,
-        ).mean(axis=0)
+        )
+        if penalty_variance > 1e-12:
+            reliability_slopes = np.sum(
+                transition_weights[:, None]
+                * centered_penalty[:, None]
+                * squared_residuals,
+                axis=0,
+            ) / penalty_variance
+        else:
+            reliability_slopes = np.zeros(dimension, dtype=np.float64)
+        reliability_slopes = np.maximum(reliability_slopes, 0.0)
+        base_residual_variance = np.maximum(
+            residual_mean - reliability_slopes * penalty_mean,
+            0.04,
+        )
+        process_variance = np.maximum(base_residual_variance * 0.5, 0.02)
+        observation_variance = np.maximum(base_residual_variance * 0.5, 0.02)
+        fitted_reliability_scales = reliability_slopes / observation_variance
+        reliability_observation_variance_scale = float(
+            np.clip(np.mean(fitted_reliability_scales), 1e-6, 100.0)
+        )
     else:
         transition = np.eye(dimension, dtype=np.float64) * 0.5
+        phase_transition_matrix = np.zeros((dimension, dimension), dtype=np.float64)
         bias = initial_states.mean(axis=0) * 0.5
         process_variance = ((initial_states - initial_states.mean(axis=0)) ** 2).mean(
             axis=0
         )
+        observation_variance = np.maximum(process_variance, 0.02)
+        reliability_observation_variance_scale = 1e-6
     process_covariance = np.diag(np.maximum(process_variance, 0.02))
-    observation_second_moment = np.stack(
-        [
-            (np.concatenate(grouped_sequences[group_id], axis=0) ** 2).mean(axis=0)
-            for group_id in unique_groups
-        ],
-        axis=0,
-    ).mean(axis=0)
-    observation_variance = np.maximum(observation_second_moment * 0.1, 0.02)
     observation_covariance = np.diag(observation_variance)
     initial_covariance = _shrunk_covariance(initial_states, minimum_variance=0.05)
     return LinearGaussianFlowStateModel(
@@ -465,6 +927,14 @@ def _fit_linear_gaussian_state_model(
         training_group_count=len(unique_groups),
         training_transition_count=transition_count,
         training_transition_group_count=transition_group_count,
+        phase_transition_matrix=tuple(
+            tuple(float(value) for value in row)
+            for row in phase_transition_matrix
+        ),
+        phase_transition_reference=phase_reference,
+        reliability_observation_variance_scale=(
+            reliability_observation_variance_scale
+        ),
     )
 
 
@@ -555,13 +1025,53 @@ def _calibration_metrics(
     return brier, log_loss, float(ece)
 
 
+def _admissibility_summary(
+    observations: Sequence[FlowEvidenceObservation],
+    probability: float,
+) -> dict[str, float]:
+    """计算 P6 准入所需的同一组视频级统计量。"""
+
+    if not observations:
+        raise ValueError("P6 admissibility 至少需要一个 Flow phase 观测")
+    probability = float(probability)
+    if not isfinite(probability) or not 0.0 <= probability <= 1.0:
+        raise ValueError("P6 admissibility 概率必须位于 [0, 1]")
+    clipped_probability = max(1e-8, min(1.0 - 1e-8, probability))
+    return {
+        "endpoint_score": mean(
+            max(0.0, min(1.0, row.endpoint_score)) for row in observations
+        ),
+        "path_score": mean(
+            max(-1.0, min(1.0, row.path_score)) for row in observations
+        ),
+        "path_endpoint_consistency": mean(
+            max(0.0, min(1.0, row.path_endpoint_consistency))
+            for row in observations
+        ),
+        "posterior_confidence": max(probability, 1.0 - probability),
+        "coverage": mean(
+            max(0.0, min(1.0, row.coverage_ratio)) for row in observations
+        ),
+        "replay_reliability": mean(
+            max(0.0, min(1.0, row.replay_reliability)) for row in observations
+        ),
+        "time_grid_reliability": mean(
+            max(0.0, min(1.0, row.time_grid_reliability)) for row in observations
+        ),
+        "posterior_entropy_maximum": -(
+            clipped_probability * log(clipped_probability)
+            + (1.0 - clipped_probability) * log(1.0 - clipped_probability)
+        ),
+    }
+
+
 def _fit_admissibility_thresholds(
     observation_sequences: Sequence[Sequence[FlowEvidenceObservation]],
     probabilities: Sequence[float],
     labels: Sequence[int],
     group_ids: Sequence[str],
 ) -> dict[str, float]:
-    """按独立视频簇等权拟合质量与正类后验熵准入阈值。"""
+    """按正类独立视频簇等权拟合完整 P6 准入阈值。"""
 
     if not (
         len(observation_sequences)
@@ -570,6 +1080,8 @@ def _fit_admissibility_thresholds(
         == len(group_ids)
     ):
         raise ValueError("admissibility calibration 输入长度不一致")
+    if any(int(label) not in (0, 1) for label in labels):
+        raise ValueError("admissibility calibration 标签只能为0或1")
     unique_groups = sorted(set(group_ids))
     if not unique_groups:
         raise ValueError("admissibility calibration 缺少独立视频簇")
@@ -581,30 +1093,11 @@ def _fit_admissibility_thresholds(
         ]
         for group_id in unique_groups
     }
-    quality_extractors = {
-        "coverage": lambda row: row.coverage_ratio,
-        "replay_reliability": lambda row: row.replay_reliability,
-        "time_grid_reliability": lambda row: row.time_grid_reliability,
-    }
-    quality = {
-        name: [
-            mean(
-                mean(extractor(row) for row in observation_sequences[index])
-                for index in group_indices[group_id]
-            )
-            for group_id in unique_groups
-        ]
-        for name, extractor in quality_extractors.items()
-    }
-    entropy_by_record = [
-        -(
-            float(probability) * log(max(float(probability), 1e-8))
-            + (1.0 - float(probability))
-            * log(max(1.0 - float(probability), 1e-8))
-        )
-        for probability in probabilities
+    summaries = [
+        _admissibility_summary(sequence, probability)
+        for sequence, probability in zip(observation_sequences, probabilities)
     ]
-    positive_entropies: list[float] = []
+    positive_group_summaries: list[dict[str, float]] = []
     for group_id in unique_groups:
         positive_indices = [
             index
@@ -612,17 +1105,34 @@ def _fit_admissibility_thresholds(
             if int(labels[index]) == 1
         ]
         if positive_indices:
-            positive_entropies.append(
-                mean(entropy_by_record[index] for index in positive_indices)
+            positive_group_summaries.append(
+                {
+                    name: mean(summaries[index][name] for index in positive_indices)
+                    for name in FLOW_STATE_ADMISSIBILITY_THRESHOLD_NAMES
+                }
             )
-    if not positive_entropies:
+    if not positive_group_summaries:
         raise ValueError("admissibility calibration 缺少正类视频簇")
+    lower_bound_names = tuple(
+        name
+        for name in FLOW_STATE_ADMISSIBILITY_THRESHOLD_NAMES
+        if name != "posterior_entropy_maximum"
+    )
     return {
         **{
-            name: _quantile(values, 0.05)
-            for name, values in quality.items()
+            name: _quantile(
+                [summary[name] for summary in positive_group_summaries],
+                0.05,
+            )
+            for name in lower_bound_names
         },
-        "posterior_entropy_maximum": _quantile(positive_entropies, 0.95),
+        "posterior_entropy_maximum": _quantile(
+            [
+                summary["posterior_entropy_maximum"]
+                for summary in positive_group_summaries
+            ],
+            0.95,
+        ),
     }
 
 
@@ -876,28 +1386,21 @@ def _cross_fitted_conservative_score(
 
     if not mechanism_config.enforce_state_admissibility:
         return float(probability)
-    quality = {
-        "coverage": mean(max(0.0, min(1.0, row.coverage_ratio)) for row in observations),
-        "replay_reliability": mean(
-            max(0.0, min(1.0, row.replay_reliability)) for row in observations
-        ),
-        "time_grid_reliability": mean(
-            max(0.0, min(1.0, row.time_grid_reliability)) for row in observations
-        ),
-    }
-    entropy = -(
-        float(probability) * log(max(float(probability), 1e-8))
-        + (1.0 - float(probability))
-        * log(max(1.0 - float(probability), 1e-8))
+    if any(
+        name not in admissibility_thresholds
+        for name in FLOW_STATE_ADMISSIBILITY_THRESHOLD_NAMES
+    ):
+        return 0.0
+    summary = _admissibility_summary(observations, probability)
+    lower_bound_ready = all(
+        summary[name] >= float(admissibility_thresholds[name])
+        for name in FLOW_STATE_ADMISSIBILITY_THRESHOLD_NAMES
+        if name != "posterior_entropy_maximum"
     )
-    quality_ready = all(
-        value >= float(admissibility_thresholds.get(name, 0.0))
-        for name, value in quality.items()
+    entropy_ready = summary["posterior_entropy_maximum"] <= float(
+        admissibility_thresholds["posterior_entropy_maximum"]
     )
-    entropy_ready = entropy <= float(
-        admissibility_thresholds.get("posterior_entropy_maximum", log(2.0))
-    )
-    return float(probability) if quality_ready and entropy_ready else 0.0
+    return float(probability) if lower_bound_ready and entropy_ready else 0.0
 
 
 def _fixed_fpr_threshold(values: Iterable[float], target_fpr: float) -> float:
@@ -1062,12 +1565,12 @@ def fit_flow_detector_calibration(
             group for group, label in zip(groups, labels) if label == 1
         }),
         posterior_probability_calibration_protocol=(
-            "nested_source_video_group_cross_fitted_state_space_llr_and_platt"
+            FLOW_STATE_POSTERIOR_CALIBRATION_PROTOCOL
         ),
         posterior_probability_calibration_outer_fold_count=fitted.outer_fold_count,
         posterior_probability_calibration_inner_fold_minimum=fitted.inner_fold_minimum,
         fixed_fpr_threshold_score_source=(
-            "outer_group_heldout_nested_cross_fitted_conservative_scores"
+            FLOW_STATE_FIXED_FPR_THRESHOLD_SCORE_SOURCE
         ),
         detector_configuration_id=str(detector_configuration_id),
     )

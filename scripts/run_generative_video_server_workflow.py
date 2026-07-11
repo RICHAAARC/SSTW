@@ -26,9 +26,16 @@ from workflows.modern_external_baseline_reference import (
 )
 from workflows.stage_package_sync import prepare_colab_stage_layout
 from workflows import generative_video_paper as probe_workflow
+from workflows.runtime_environment_preflight import (
+    DEFAULT_RUNTIME_LOCK_PATH,
+    build_runtime_environment_preflight_decision,
+    resolved_model_commit,
+    write_runtime_environment_preflight_artifact,
+)
 
 
 SERVER_PIPELINES = (
+    "runtime_environment_preflight",
     "motion_threshold_calibration",
     "generative_video_generation",
     "generative_video_quality_scoring",
@@ -53,6 +60,7 @@ GENERATIVE_VIDEO_SPLIT_ROLE_ORDER = (
 )
 
 PIPELINE_ROLE_ORDER = {
+    "runtime_environment_preflight": (),
     "motion_threshold_calibration": ("motion_threshold_calibration",),
     "generative_video_generation": ("generative_video_generation",),
     "generative_video_quality_scoring": ("generative_video_quality_scoring",),
@@ -70,6 +78,23 @@ PIPELINE_ROLE_ORDER = {
         "paper_evidence_postprocess",
         "paper_gate_and_package",
     ),
+}
+
+GPU_REQUIRED_PIPELINES = {
+    "runtime_environment_preflight",
+    "motion_threshold_calibration",
+    "generative_video_generation",
+    "generative_video_quality_scoring",
+    "runtime_detection",
+    "external_baseline_references",
+    "paper_protocol_complete",
+}
+
+MODEL_REVISION_REQUIRED_PIPELINES = {
+    "runtime_environment_preflight",
+    "motion_threshold_calibration",
+    "generative_video_generation",
+    "paper_protocol_complete",
 }
 
 
@@ -149,8 +174,12 @@ def _apply_server_environment(args: argparse.Namespace) -> None:
 
     if args.model_id:
         os.environ["SSTW_MODEL_ID"] = args.model_id
+    if args.model_revision:
+        os.environ["SSTW_MODEL_REVISION"] = args.model_revision
     if args.cross_model_id:
         os.environ["SSTW_CROSS_MODEL_ID"] = args.cross_model_id
+    if args.cross_model_revision:
+        os.environ["SSTW_CROSS_MODEL_REVISION"] = args.cross_model_revision
     if args.semantic_model_id:
         os.environ["SSTW_SEMANTIC_MODEL_ID"] = args.semantic_model_id
     if args.semantic_frame_limit is not None:
@@ -200,6 +229,8 @@ def _runtime_options(args: argparse.Namespace) -> dict[str, Any]:
     return {
         "model_id": args.model_id,
         "cross_model_id": args.cross_model_id,
+        "model_revision": args.model_revision,
+        "cross_model_revision": args.cross_model_revision,
         "semantic_model_id": args.semantic_model_id,
         "semantic_frame_limit": args.semantic_frame_limit,
         "disable_semantic_metric": args.disable_semantic_metric,
@@ -288,6 +319,10 @@ def _run_role(args: argparse.Namespace, notebook_role: str) -> dict[str, Any]:
     """运行单个非 baseline-reference role。"""
 
     layout = _build_layout_for_role(args, notebook_role, hydrate=True)
+    write_runtime_environment_preflight_artifact(
+        layout["drive_run_root"],
+        args.runtime_environment_preflight,
+    )
     role_profile = _workflow_profile_for_role(args, notebook_role)
     if notebook_role == "formal_comparison_scoring":
         environment = probe_workflow.apply_formal_comparison_external_baseline_environment(
@@ -314,6 +349,17 @@ def _baseline_ids_from_args(args: argparse.Namespace) -> list[str]:
 def _run_external_baseline_references(args: argparse.Namespace) -> dict[str, Any]:
     """按配置运行 5 个 modern external baseline 官方参考结果闭环。"""
 
+    environment_manifest_root = (
+        Path(args.local_workspace_root).expanduser().resolve()
+        / "_runtime_environment_preflight"
+    )
+    environment_manifest_path = write_runtime_environment_preflight_artifact(
+        environment_manifest_root,
+        args.runtime_environment_preflight,
+    )
+    os.environ["SSTW_RUNTIME_ENVIRONMENT_PREFLIGHT_DECISION_PATH"] = str(
+        environment_manifest_path
+    )
     rows: list[dict[str, Any]] = []
     for baseline_id in _baseline_ids_from_args(args):
         print(f"\n===== external baseline formal reference: {baseline_id} =====")
@@ -370,12 +416,42 @@ def _run_pipeline(args: argparse.Namespace) -> dict[str, Any]:
         "package_execution_mode": args.package_execution_mode,
         "dry_run": bool(args.dry_run),
         "include_videos": bool(args.include_videos),
+        "runtime_environment_preflight": args.runtime_environment_preflight,
+        "resolved_main_generation_model_revision": args.model_revision or None,
+        "resolved_cross_generation_model_revision": args.cross_model_revision or None,
         "created_at_utc_filename": current_utc_time_for_filename(),
         "git_short_commit": current_short_commit(),
         "pipeline_results": rows,
         "server_workflow_decision": "DRY_RUN" if args.dry_run else "PASS",
         "claim_support_status": "server_workflow_runner_not_claim_evidence",
     }
+
+
+def _run_runtime_environment_preflight(args: argparse.Namespace) -> dict[str, Any]:
+    """验证锁定依赖、代码来源、GPU 能力与生成模型不可变 revision。"""
+
+    model_requests: dict[str, str | None] = {}
+    if args.pipeline in MODEL_REVISION_REQUIRED_PIPELINES:
+        if args.model_id:
+            model_requests[args.model_id] = args.model_revision or None
+        if args.cross_model_id and args.pipeline != "motion_threshold_calibration":
+            model_requests[args.cross_model_id] = args.cross_model_revision or None
+    decision = build_runtime_environment_preflight_decision(
+        repo_root=args.repo_root,
+        lock_path=args.runtime_lock_path,
+        require_gpu=args.pipeline in GPU_REQUIRED_PIPELINES,
+        model_requests=model_requests,
+        hf_token=os.environ.get("HF_TOKEN") or None,
+    )
+    if decision.get("runtime_environment_preflight_decision") != "PASS":
+        return decision
+    if args.model_id in model_requests:
+        args.model_revision = resolved_model_commit(decision, args.model_id)
+        os.environ["SSTW_MODEL_REVISION"] = args.model_revision
+    if args.cross_model_id in model_requests:
+        args.cross_model_revision = resolved_model_commit(decision, args.cross_model_id)
+        os.environ["SSTW_CROSS_MODEL_REVISION"] = args.cross_model_revision
+    return decision
 
 
 def _write_decision_if_requested(args: argparse.Namespace, decision: dict[str, Any]) -> Path | None:
@@ -409,11 +485,13 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--baseline-id", action="append", choices=MODERN_EXTERNAL_BASELINE_BUILD_ORDER, help="只运行指定 external baseline, 可重复传入")
     parser.add_argument("--model-id", default=os.environ.get("SSTW_MODEL_ID", "Wan-AI/Wan2.1-T2V-1.3B-Diffusers"), help="主生成模型 ID")
+    parser.add_argument("--model-revision", default=os.environ.get("SSTW_MODEL_REVISION", ""), help="主生成模型 revision; 正式运行前会解析并冻结为40位 commit")
     parser.add_argument(
         "--cross-model-id",
         default=os.environ.get("SSTW_CROSS_MODEL_ID", "Lightricks/LTX-Video"),
         help="跨模型泛化模型 ID; 传入空字符串可显式关闭",
     )
+    parser.add_argument("--cross-model-revision", default=os.environ.get("SSTW_CROSS_MODEL_REVISION", ""), help="跨模型 revision; 正式运行前会解析并冻结为40位 commit")
     parser.add_argument("--semantic-model-id", default=os.environ.get("SSTW_SEMANTIC_MODEL_ID", "openai/clip-vit-base-patch32"), help="语义指标模型 ID")
     parser.add_argument("--semantic-frame-limit", type=int, default=int(os.environ.get("SSTW_SEMANTIC_FRAME_LIMIT", "8")), help="语义指标最多抽帧数")
     parser.add_argument("--disable-semantic-metric", action="store_true", help="禁用语义指标")
@@ -425,6 +503,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--reset-local-workspace", action="store_true", help="运行前清理 project-root 内的本地 workspace/cache")
     parser.add_argument("--continue-on-baseline-failure", action="store_true", help="单个 baseline 失败时继续运行其它 baseline")
     parser.add_argument("--dry-run", action="store_true", help="只打印 stage plan 和命令, 不执行 GPU 或打包任务")
+    parser.add_argument("--runtime-lock-path", default=str(DEFAULT_RUNTIME_LOCK_PATH), help="论文 GPU 运行环境锁路径")
     parser.add_argument("--decision-output", default="", help="可选运行清单 JSON 输出路径")
     return parser
 
@@ -436,7 +515,19 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     _apply_server_environment(args)
     _reset_local_workspace_if_requested(args)
+    args.runtime_environment_preflight = {
+        "runtime_environment_preflight_decision": "NOT_RUN_DRY_RUN",
+        "runtime_environment_lock_path": str(args.runtime_lock_path),
+        "claim_support_status": "dry_run_plan_only_not_claim_evidence",
+    }
     try:
+        if not args.dry_run:
+            args.runtime_environment_preflight = _run_runtime_environment_preflight(args)
+            if args.runtime_environment_preflight.get("runtime_environment_preflight_decision") != "PASS":
+                failures = args.runtime_environment_preflight.get("runtime_environment_preflight_failures") or []
+                raise RuntimeError(
+                    f"论文运行环境预检未通过: {', '.join(str(item) for item in failures)}"
+                )
         decision = _run_pipeline(args)
     except Exception as exc:
         failure = {
@@ -446,6 +537,7 @@ def main(argv: list[str] | None = None) -> int:
             "project_root": str(Path(args.project_root).expanduser().resolve()),
             "repo_root": str(Path(args.repo_root).expanduser().resolve()),
             "package_execution_mode": args.package_execution_mode,
+            "runtime_environment_preflight": args.runtime_environment_preflight,
             "server_workflow_decision": "FAIL",
             "failure_reason": str(exc),
             "claim_support_status": "server_workflow_runner_blocked_not_claim_evidence",

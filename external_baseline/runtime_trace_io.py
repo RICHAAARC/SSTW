@@ -13,6 +13,36 @@ RUNTIME_DETECTION_RECORD_PATH = Path("records/runtime_detection_records.jsonl")
 TRAJECTORY_TRACE_RECORD_PATH = Path("records/trajectory_trace.jsonl")
 GENERATION_RECORD_PATH = Path("records/generation_records.jsonl")
 
+SAME_SOURCE_POSTHOC_BASELINE_IDS = frozenset({
+    "videoseal",
+    "wam_frame",
+    "revmark",
+})
+NATIVE_GENERATION_BASELINE_IDS = frozenset({
+    "videomark",
+    "videoshield",
+    "vidsig",
+})
+SAME_SOURCE_POSTHOC_COMPARISON_DESIGN = "same_source_posthoc_embedding"
+NATIVE_GENERATION_COMPARISON_DESIGN = "native_generation_method"
+
+
+def baseline_comparison_design(baseline_id: str) -> str:
+    """返回 baseline 的正式生成与比较设计。
+
+    post-hoc 方法在 SSTW 的同模型、同 prompt、同 seed clean reference 上嵌入
+    自己的水印, 可以执行逐像素配对质量比较。native-generation 方法必须使用
+    自己的官方生成模型, 只能按 prompt / seed / attack 作为实验设计块进行独立
+    视频统计, 不能伪装成同一源视频的配对比较。
+    """
+
+    normalized = str(baseline_id or "").strip().lower()
+    if normalized in SAME_SOURCE_POSTHOC_BASELINE_IDS:
+        return SAME_SOURCE_POSTHOC_COMPARISON_DESIGN
+    if normalized in NATIVE_GENERATION_BASELINE_IDS:
+        return NATIVE_GENERATION_COMPARISON_DESIGN
+    raise ValueError(f"unregistered_external_baseline_comparison_design:{baseline_id}")
+
 
 def read_jsonl(path: str | Path) -> list[dict[str, Any]]:
     """读取 JSONL 文件, 并兼容 Google Drive 或 Windows 工具写入的 UTF-8 BOM。

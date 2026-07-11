@@ -20,14 +20,21 @@ import sys
 from typing import Any, Mapping
 
 from external_baseline.official_eval_adapters.common import build_official_reference_bundle_execution_status
-from external_baseline.runtime_trace_io import comparable_detection_records
+from external_baseline.runtime_trace_io import (
+    SAME_SOURCE_POSTHOC_COMPARISON_DESIGN,
+    comparable_detection_records,
+)
 from external_baseline.score_semantics import official_score_formal_comparison_summary
 from external_baseline.video_tensor_io import read_video_tchw_uint8, write_video_tchw
 from external_baseline.videoseal_official_runtime import (
     ensure_videoseal_official_runtime_layout,
     videoseal_official_source_cwd,
 )
-from evaluation.attacks.video_runtime_attack_protocol import apply_runtime_attack_to_video_tensor
+from evaluation.attacks.video_runtime_attack_protocol import (
+    apply_runtime_attack_to_video_file,
+    apply_runtime_attack_to_video_tensor,
+    prefixed_runtime_attack_metadata,
+)
 from runtime.core.progress import (
     ProgressReporter,
     configure_noisy_library_progress,
@@ -91,15 +98,17 @@ def _load_resource_rows(config_path: str | Path = DEFAULT_RESOURCE_REQUIREMENTS)
 
 
 def _apply_video_tensor_attack(video: Any, attack_name: str) -> Any:
-    """对官方 baseline 水印视频应用与 SSTW runtime attack 对齐的轻量文件级攻击。
+    """为旧调用方保留非 codec 张量攻击兼容入口。
 
-    该函数只操作 official baseline 自己生成的 watermarked video, 不读取 SSTW 检测分数。
-    调用方会把结果写为 mp4 并重新读取后再检测, 因此 `video_compression_runtime`
-    即使在这里不裁剪帧, 也会通过 decode / re-encode 路径真实参与评分。
+    正式路径直接调用共享文件级 executor。codec 与组合攻击不能在张量内准确
+    表达编码参数, 因而此入口必须保留 `file_level_runtime_attack_required` 错误,
+    不能把它误报成未知 attack 或退化为无操作。
     """
     try:
         return apply_runtime_attack_to_video_tensor(video, attack_name)
     except ValueError as exc:
+        if "file_level_runtime_attack_required_for_codec_or_combined_attack" in str(exc):
+            raise
         raise ValueError(f"unsupported_videoseal_runtime_attack:{attack_name}") from exc
 
 
@@ -240,22 +249,32 @@ def generate_videoseal_official_bundle(
             reference_message = embed_outputs.get("msgs")
             if watermarked is None:
                 raise RuntimeError("videoseal_embed_missing_imgs_w")
-            attacked = _apply_video_tensor_attack(watermarked, str(record.get("attack_name") or ""))
             video_stem = output_json.stem
             baseline_video_dir = bundle / "videoseal" / "videos"
             baseline_source_video = baseline_video_dir / f"{video_stem}_watermarked.mp4"
             baseline_attacked_video = baseline_video_dir / f"{video_stem}_attacked.mp4"
+            baseline_clean_source_video = baseline_video_dir / f"{video_stem}_clean_source.mp4"
+            clean_negative_video = baseline_video_dir / f"{video_stem}_clean_negative.mp4"
             baseline_video_dir.mkdir(parents=True, exist_ok=True)
             write_video_tchw(baseline_source_video, watermarked, fps=fps)
-            write_video_tchw(baseline_attacked_video, attacked, fps=fps)
+            write_video_tchw(baseline_clean_source_video, video, fps=fps)
+            attack_metadata = apply_runtime_attack_to_video_file(
+                baseline_source_video,
+                baseline_attacked_video,
+                str(record.get("attack_name") or ""),
+                fps=fps,
+            )
+            clean_negative_attack_metadata = apply_runtime_attack_to_video_file(
+                baseline_clean_source_video,
+                clean_negative_video,
+                str(record.get("attack_name") or ""),
+                fps=fps,
+            )
             attacked_uint8, attacked_read_info = read_video_tchw_uint8(
                 baseline_attacked_video,
                 empty_error="videoseal_attacked_video_empty_after_reencode",
             )
             attacked_for_detection = attacked_uint8.float().to(device) / 255.0
-            clean_negative = _apply_video_tensor_attack(video, str(record.get("attack_name") or ""))
-            clean_negative_video = baseline_video_dir / f"{video_stem}_clean_negative.mp4"
-            write_video_tchw(clean_negative_video, clean_negative, fps=fps)
             clean_negative_uint8, clean_negative_read_info = read_video_tchw_uint8(
                 clean_negative_video,
                 empty_error="videoseal_clean_negative_video_empty_after_reencode",
@@ -278,6 +297,9 @@ def generate_videoseal_official_bundle(
                 "official_attacked_video_io_backend": attacked_read_info.get("video_io_backend"),
                 "official_clean_negative_video_io_backend": clean_negative_read_info.get("video_io_backend"),
                 "external_baseline_generation_model_id": "videoseal_official_api",
+                "external_baseline_comparison_design": SAME_SOURCE_POSTHOC_COMPARISON_DESIGN,
+                "external_baseline_quality_comparison_protocol": "paired_same_source_distortion",
+                "external_baseline_clean_source_video_path": str(baseline_clean_source_video),
                 "external_baseline_source_video_path": str(baseline_source_video),
                 "external_baseline_attacked_video_path": str(baseline_attacked_video),
                 "external_baseline_official_execution_mode": "videoseal_official_embed_detect",
@@ -291,6 +313,11 @@ def generate_videoseal_official_bundle(
                 "seed_id": record.get("seed_id"),
                 "trajectory_trace_id": record.get("trajectory_trace_id"),
                 "official_execution_manifest_path": str(bundle / "videoseal" / "official_bundle_generation_manifest.json"),
+                **attack_metadata,
+                **prefixed_runtime_attack_metadata(
+                    clean_negative_attack_metadata,
+                    prefix="clean_negative_",
+                ),
             }
             payload = {
                 **payload,

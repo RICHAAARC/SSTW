@@ -26,10 +26,17 @@ from external_baseline.official_eval_adapters.common import (
     build_official_reference_bundle_execution_status,
 )
 from external_baseline.official_runtime_progress import emit_official_reference_plan, official_record_label
-from external_baseline.runtime_trace_io import build_comparison_unit_id, comparable_detection_records
+from external_baseline.runtime_trace_io import (
+    NATIVE_GENERATION_COMPARISON_DESIGN,
+    build_comparison_unit_id,
+    comparable_detection_records,
+)
 from external_baseline.score_semantics import official_score_formal_comparison_summary
 from external_baseline.video_tensor_io import read_video_tchw_uint8, write_video_tchw
-from evaluation.attacks.video_runtime_attack_protocol import apply_runtime_attack_to_frames
+from evaluation.attacks.video_runtime_attack_protocol import (
+    apply_runtime_attack_to_video_file,
+    prefixed_runtime_attack_metadata,
+)
 from runtime.core.progress import (
     ProgressReporter,
     configure_noisy_library_progress,
@@ -587,29 +594,30 @@ def _generate_watermarked_unit(
     }
 
 
-def _apply_runtime_attack_to_frames(
-    frames: list[Any],
+def _apply_runtime_attack_to_video_file(
+    source_video_path: Path,
     *,
     attack_name: str,
     output_video_path: Path,
     fps: int,
 ) -> tuple[list[Any], dict[str, Any]]:
-    """对 VideoShield 自己生成的视频施加 SSTW runtime attack 锚点。"""
+    """对 VideoShield 自己生成的视频执行统一文件级攻击并验真。"""
 
     try:
-        attacked_frames, attack_metadata = apply_runtime_attack_to_frames(frames, attack_name)
+        attack_metadata = apply_runtime_attack_to_video_file(
+            source_video_path,
+            output_video_path,
+            attack_name,
+            fps=float(fps),
+        )
     except ValueError as exc:
         raise ValueError(f"unsupported_videoshield_runtime_attack:{attack_name}") from exc
-    video_tensor = _frames_to_tchw(attacked_frames)
-    write_info = write_video_tchw(output_video_path, video_tensor, fps=float(fps))
     decoded_frames = _read_video_frames_float(output_video_path)
     return decoded_frames, {
-        "attack_protocol_status": "project_runtime_attack_applied_to_videoshield_watermarked_video",
+        "attack_protocol_status": "verified_project_runtime_attack_applied_to_videoshield_video",
         **attack_metadata,
         "attacked_video_path": str(output_video_path),
-        "attacked_frame_count_before_decode": len(attacked_frames),
         "attacked_frame_count_after_decode": len(decoded_frames),
-        "video_write_info": write_info,
     }
 
 
@@ -789,8 +797,8 @@ def run_videoshield_official_runtime(config: VideoShieldOfficialRuntimeConfig) -
                         key = (str(record.get("prompt_id") or ""), str(record.get("seed_id") or ""))
                         unit_result = generation_rows[key]
                         attacked_video_path = video_dir / f"{output_json.stem}_attacked.mp4"
-                        attacked_frames, attack_info = _apply_runtime_attack_to_frames(
-                            unit_result["frames"],
+                        attacked_frames, attack_info = _apply_runtime_attack_to_video_file(
+                            Path(unit_result["watermarked_video_path"]),
                             attack_name=str(record.get("attack_name") or ""),
                             output_video_path=attacked_video_path,
                             fps=int(config.fps),
@@ -804,8 +812,8 @@ def run_videoshield_official_runtime(config: VideoShieldOfficialRuntimeConfig) -
                                 config=config,
                             )
                         clean_negative_video_path = video_dir / f"{output_json.stem}_clean_negative.mp4"
-                        clean_negative_frames, clean_negative_attack_info = _apply_runtime_attack_to_frames(
-                            unit_result["clean_frames"],
+                        clean_negative_frames, clean_negative_attack_info = _apply_runtime_attack_to_video_file(
+                            Path(unit_result["clean_negative_video_path"]),
                             attack_name=str(record.get("attack_name") or ""),
                             output_video_path=clean_negative_video_path,
                             fps=int(config.fps),
@@ -831,6 +839,9 @@ def run_videoshield_official_runtime(config: VideoShieldOfficialRuntimeConfig) -
                             "official_source_dir": str(source_dir),
                             "official_runtime_source_dir": str(runtime_source_dir),
                             "external_baseline_generation_model_id": f"videoshield_{config.model_name}",
+                            "external_baseline_comparison_design": NATIVE_GENERATION_COMPARISON_DESIGN,
+                            "external_baseline_quality_comparison_protocol": "native_generation_semantic_quality",
+                            "external_baseline_clean_source_video_path": unit_result["clean_negative_video_path"],
                             "external_baseline_official_execution_mode": (
                                 "videoshield_generation_watermarked_video_project_runtime_attack_official_inversion"
                             ),
@@ -855,6 +866,11 @@ def run_videoshield_official_runtime(config: VideoShieldOfficialRuntimeConfig) -
                             "trajectory_trace_id": record.get("trajectory_trace_id"),
                             "official_execution_manifest_path": str(manifest_path),
                             "claim_support_status": "official_reference_bundle_written_not_claim_by_itself",
+                            **attack_info,
+                            **prefixed_runtime_attack_metadata(
+                                clean_negative_attack_info,
+                                prefix="clean_negative_",
+                            ),
                         }
                         payload = {
                             **payload,

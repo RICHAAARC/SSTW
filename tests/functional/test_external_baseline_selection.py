@@ -113,7 +113,11 @@ def test_videoseal_runtime_attack_mapping_is_explicit_and_fail_closed() -> None:
 
     video = torch.arange(5, dtype=torch.float32).reshape(5, 1, 1, 1)
 
-    assert _apply_video_tensor_attack(video, "video_compression_runtime").shape[0] == 5
+    with pytest.raises(
+        ValueError,
+        match="file_level_runtime_attack_required_for_codec_or_combined_attack",
+    ):
+        _apply_video_tensor_attack(video, "video_compression_runtime")
     assert _apply_video_tensor_attack(video, "temporal_crop_runtime").shape[0] == 3
     assert _apply_video_tensor_attack(video, "frame_rate_resampling_runtime").shape[0] == 3
     with pytest.raises(ValueError, match="unsupported_videoseal_runtime_attack"):
@@ -741,7 +745,7 @@ def test_modern_external_baseline_formal_command_adapter_normalizes_clean_negati
         "parser.add_argument('--source-video')\n"
         "parser.add_argument('--attacked-video')\n"
         "parser.add_argument('--attack-name')\n"
-        "parser.add_argument('--baseline-id', default='unit_modern')\n"
+        "parser.add_argument('--baseline-id', default='videoseal')\n"
         "args = parser.parse_args()\n"
         "json.dump({'score': 0.44, 'detected': True, "
         "'score_semantics': 'watermark_presence_confidence', 'score_orientation': 'higher_is_more_watermarked', 'official_score_extraction_policy': 'test_official_detector_confidence', 'official_reference_protocol_anchor': 'same_prompt_seed_attack_runtime_comparison_unit', 'clean_negative_score': 0.09, "
@@ -750,7 +754,21 @@ def test_modern_external_baseline_formal_command_adapter_normalizes_clean_negati
         "'official_result_provenance': 'repository_generated_from_third_party_official_code', "
         "'official_adapter_baseline_id': args.baseline_id, 'official_baseline_id': args.baseline_id, "
         "'official_result_bundle_path': 'official/bundle_record.json', "
-        "'official_execution_manifest_path': 'official/execution_manifest.json'}, "
+        "'official_execution_manifest_path': 'official/execution_manifest.json', "
+        "'runtime_attack_implementation_level': 'formal_runtime_video_transform', "
+        "'runtime_attack_formal_evidence_level': 'formal_runtime_video_transform_verified', "
+        "'runtime_attack_proxy_free': True, 'runtime_attack_effect_verified': True, "
+        "'runtime_attack_effect_verification_status': 'verified', "
+        "'runtime_attack_decoded_effect_verified': True, "
+        "'clean_negative_runtime_attack_formal_evidence_level': 'formal_runtime_video_transform_verified', "
+        "'clean_negative_runtime_attack_implementation_level': 'formal_runtime_video_transform', "
+        "'clean_negative_runtime_attack_proxy_free': True, "
+        "'clean_negative_runtime_attack_effect_verified': True, "
+        "'clean_negative_runtime_attack_effect_verification_status': 'verified', "
+        "'clean_negative_runtime_attack_decoded_effect_verified': True, "
+        "'external_baseline_comparison_design': 'same_source_posthoc_embedding', "
+        "'external_baseline_quality_comparison_protocol': 'paired_same_source_distortion', "
+        "'external_baseline_clean_source_video_path': 'official/clean_source.mp4'}, "
         "open(args.output_json, 'w', encoding='utf-8'))\n",
         encoding="utf-8",
     )
@@ -764,19 +782,19 @@ def test_modern_external_baseline_formal_command_adapter_normalizes_clean_negati
     )
     monkeypatch.setenv("SSTW_UNIT_MODERN_EVAL_COMMAND", command)
     config = ModernBaselineCommandConfig(
-        baseline_name="unit_modern",
-        baseline_family="unit_modern_video_watermark",
-        adapter_path="external_baseline/primary/unit_modern/adapter/run_sstw_eval.py",
+        baseline_name="videoseal",
+        baseline_family="video_watermark",
+        adapter_path="external_baseline/primary/videoseal/adapter/run_sstw_eval.py",
         env_var="SSTW_UNIT_MODERN_EVAL_COMMAND",
-        default_source_script="external_baseline/primary/unit_modern/adapter/run_sstw_eval.py",
+        default_source_script="external_baseline/primary/videoseal/adapter/run_sstw_eval.py",
         score_source="official_command_adapter",
     )
 
     modern_records = build_modern_score_records(
         run_root,
         {
-            "external_baseline_name": "unit_modern",
-            "external_baseline_family": "unit_modern_video_watermark",
+            "external_baseline_name": "videoseal",
+            "external_baseline_family": "video_watermark",
             "external_baseline_layer": "modern_external_baseline",
         },
         config,
@@ -809,7 +827,7 @@ def test_modern_external_baseline_formal_scoring_reads_official_bundle_without_l
         Path(record["source_video_path"]).unlink(missing_ok=True)
         Path(record["attacked_video_path"]).unlink(missing_ok=True)
 
-    baseline_id = "unit_modern"
+    baseline_id = "videoseal"
     bundle_root = tmp_path / "external_baseline_official_result_bundles" / "probe_paper"
     baseline_root = bundle_root / baseline_id
     records_root = baseline_root / "records"
@@ -855,6 +873,21 @@ def test_modern_external_baseline_formal_scoring_reads_official_bundle_without_l
             "external_baseline_clean_negative_video_path": str(baseline_root / "clean_negative.mp4"),
             "external_baseline_source_video_path": str(baseline_root / "official_source.mp4"),
             "external_baseline_attacked_video_path": str(baseline_root / f"official_attacked_{index}.mp4"),
+            "runtime_attack_formal_evidence_level": "formal_runtime_video_transform_verified",
+            "runtime_attack_implementation_level": "formal_runtime_video_transform",
+            "runtime_attack_proxy_free": True,
+            "runtime_attack_effect_verified": True,
+            "runtime_attack_effect_verification_status": "verified",
+            "runtime_attack_decoded_effect_verified": True,
+            "clean_negative_runtime_attack_formal_evidence_level": "formal_runtime_video_transform_verified",
+            "clean_negative_runtime_attack_implementation_level": "formal_runtime_video_transform",
+            "clean_negative_runtime_attack_proxy_free": True,
+            "clean_negative_runtime_attack_effect_verified": True,
+            "clean_negative_runtime_attack_effect_verification_status": "verified",
+            "clean_negative_runtime_attack_decoded_effect_verified": True,
+            "external_baseline_comparison_design": "same_source_posthoc_embedding",
+            "external_baseline_quality_comparison_protocol": "paired_same_source_distortion",
+            "external_baseline_clean_source_video_path": str(baseline_root / "clean_source.mp4"),
             "detected": True,
         }
         bundle_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -863,10 +896,10 @@ def test_modern_external_baseline_formal_scoring_reads_official_bundle_without_l
     monkeypatch.setenv("SSTW_UNIT_MODERN_EVAL_COMMAND", "python should_not_run.py --output-json {output_json_path}")
     config = ModernBaselineCommandConfig(
         baseline_name=baseline_id,
-        baseline_family="unit_modern_video_watermark",
-        adapter_path="external_baseline/primary/unit_modern/adapter/run_sstw_eval.py",
+        baseline_family="video_watermark",
+        adapter_path="external_baseline/primary/videoseal/adapter/run_sstw_eval.py",
         env_var="SSTW_UNIT_MODERN_EVAL_COMMAND",
-        default_source_script="external_baseline/primary/unit_modern/adapter/run_sstw_eval.py",
+        default_source_script="external_baseline/primary/videoseal/adapter/run_sstw_eval.py",
         score_source="official_command_adapter",
     )
 
@@ -874,7 +907,7 @@ def test_modern_external_baseline_formal_scoring_reads_official_bundle_without_l
         run_root,
         {
             "external_baseline_name": baseline_id,
-            "external_baseline_family": "unit_modern_video_watermark",
+            "external_baseline_family": "video_watermark",
             "external_baseline_layer": "modern_external_baseline",
         },
         config,

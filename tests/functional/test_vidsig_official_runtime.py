@@ -331,7 +331,39 @@ def test_vidsig_bundle_writer_records_clean_negative_score(
         Path(path).write_bytes(b"npy")
 
     monkeypatch.setattr(vidsig_runtime, "_read_video_frames", fake_read_video_frames)
-    monkeypatch.setattr(vidsig_runtime, "_write_video_frames", lambda path, _frames, *, fps: Path(path).parent.mkdir(parents=True, exist_ok=True) or Path(path).write_bytes(b"video"))
+
+    def fake_file_attack(
+        source_video_path: Path,
+        output_video_path: Path,
+        attack_name: str,
+        *,
+        fps: int,
+    ) -> dict[str, object]:
+        """模拟已经由共享文件级 executor 验真的攻击结果。"""
+
+        Path(output_video_path).parent.mkdir(parents=True, exist_ok=True)
+        Path(output_video_path).write_bytes(b"verified-attacked-video")
+        return {
+            "runtime_attack_name": attack_name,
+            "runtime_attack_implementation_level": "formal_runtime_video_transform",
+            "runtime_attack_formal_evidence_level": "formal_runtime_video_transform_verified",
+            "runtime_attack_proxy_free": True,
+            "runtime_attack_effect_verified": True,
+            "runtime_attack_effect_verification_status": "verified",
+            "runtime_attack_decoded_effect_verified": True,
+            "runtime_attack_effect_verification_basis": "test_file_executor",
+            "runtime_attack_source_video_path": str(source_video_path),
+            "runtime_attack_output_video_path": str(output_video_path),
+            "runtime_attack_output_file_changed": True,
+            "runtime_attack_writer_parameters_applied": True,
+            "video_fps": fps,
+        }
+
+    monkeypatch.setattr(
+        vidsig_runtime,
+        "_apply_runtime_attack_to_video_file",
+        fake_file_attack,
+    )
     monkeypatch.setattr(vidsig_runtime, "_save_frame_array", fake_save_frame_array)
 
     call_state = {"count": 0}
@@ -373,6 +405,8 @@ def test_vidsig_bundle_writer_records_clean_negative_score(
     assert payload["official_score_value_type"] == "payload_bit_accuracy_score"
     assert payload["official_score_formal_comparison_eligibility"] == "eligible"
     assert payload["official_score_formal_comparison_block_reason"] == "none"
+    assert payload["runtime_attack_effect_verified"] is True
+    assert payload["clean_negative_runtime_attack_effect_verified"] is True
     assert payload["attacked_video_decoded_frame_count"] == 3
     assert payload["clean_negative_video_decoded_frame_count"] == 2
     assert saved_frame_arrays["sstw_attacked_video.npy"] == [

@@ -34,6 +34,9 @@ def test_server_workflow_cli_dry_run_exposes_split_stage_plans(tmp_path: Path) -
     ]
 
     assert scoring_payload["server_workflow_decision"] == "DRY_RUN"
+    assert scoring_payload["runtime_environment_preflight"][
+        "runtime_environment_preflight_decision"
+    ] == "NOT_RUN_DRY_RUN"
     assert scoring_payload["pipeline"] == "formal_comparison_scoring"
     assert scoring_payload["include_videos"] is False
     assert "sstw_measured_formal_result" in scoring_stage_names
@@ -132,3 +135,45 @@ def test_server_workflow_complete_pipeline_order_matches_notebook_handoff_model(
     )
     assert "generative_video_runtime" not in PIPELINE_ROLE_ORDER
     assert "probe_paper_complete" not in PIPELINE_ROLE_ORDER
+
+
+@pytest.mark.quick
+def test_server_workflow_dry_run_carries_revision_and_preflight_contract(tmp_path: Path) -> None:
+    """dry-run 不访问 GPU 或网络, 但必须显示 revision 与预检边界。"""
+
+    main_commit = "1" * 40
+    cross_commit = "2" * 40
+    completed = subprocess.run(
+        [
+            sys.executable,
+            "scripts/run_generative_video_server_workflow.py",
+            "--project-root",
+            str(tmp_path / "sstw_server_run"),
+            "--pipeline",
+            "generative_video_generation",
+            "--model-revision",
+            main_commit,
+            "--cross-model-revision",
+            cross_commit,
+            "--dry-run",
+        ],
+        check=True,
+        text=True,
+        capture_output=True,
+    )
+    payload = json.loads(completed.stdout)
+    command_rows = [
+        row["command"]
+        for row in payload["pipeline_results"][0]["stage_plan"]
+        if isinstance(row.get("command"), list)
+    ]
+    flattened = [item for command in command_rows for item in command]
+
+    assert payload["server_workflow_decision"] == "DRY_RUN"
+    assert payload["resolved_main_generation_model_revision"] == main_commit
+    assert payload["resolved_cross_generation_model_revision"] == cross_commit
+    assert payload["runtime_environment_preflight"][
+        "runtime_environment_preflight_decision"
+    ] == "NOT_RUN_DRY_RUN"
+    assert main_commit in flattened
+    assert cross_commit in flattened

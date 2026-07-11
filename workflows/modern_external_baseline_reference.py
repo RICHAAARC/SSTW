@@ -40,6 +40,9 @@ from workflows.stage_package_sync import (
 )
 from workflows.run_timing import start_notebook_run_timer
 from workflows import generative_video_paper as probe_workflow
+from workflows.runtime_environment_preflight import (
+    write_runtime_environment_preflight_artifact,
+)
 
 
 MODERN_EXTERNAL_BASELINE_BUILD_ORDER = (
@@ -1009,6 +1012,16 @@ def run_modern_external_baseline_formal_reference_plan(
         baseline_id=config.baseline_id,
     )
     run_root = Path(layout["drive_run_root"])
+    environment_preflight_source = Path(
+        os.environ.get("SSTW_RUNTIME_ENVIRONMENT_PREFLIGHT_DECISION_PATH", "")
+    )
+    if not environment_preflight_source.is_file():
+        raise RuntimeError("external baseline 正式运行缺少服务器环境预检记录")
+    environment_preflight = _read_json(environment_preflight_source)
+    write_runtime_environment_preflight_artifact(
+        run_root,
+        environment_preflight,
+    )
     bundle_root = Path(layout["external_baseline_official_result_bundle_root"])
     os.environ["SSTW_EXTERNAL_BASELINE_OFFICIAL_RESULT_BUNDLE_ROOT"] = str(bundle_root)
     os.environ.setdefault("SSTW_EXTERNAL_BASELINE_RESOURCE_ROOT", layout["external_baseline_resource_root"])

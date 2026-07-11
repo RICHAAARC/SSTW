@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import argparse
+from hashlib import sha256
 import json
 import shutil
+import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable
@@ -33,6 +35,7 @@ PROFILES = {
             "tests",
             "experiments",
             "scripts",
+            "requirements",
             "/paper_workflow",
             "audit_reports",
             "outputs",
@@ -55,6 +58,7 @@ PROFILES = {
             "experiments",
             "workflows",
             "scripts",
+            "requirements",
             "docs/artifact_rebuild.md",
             "docs/field_registry.md",
             "docs/file_organization.md",
@@ -80,6 +84,39 @@ PROFILES = {
         ),
     ),
 }
+
+
+def _source_git_provenance(root_path: Path) -> tuple[str | None, bool]:
+    """读取抽离源仓库的 commit 与干净状态, 供服务器预检验证。"""
+
+    try:
+        commit = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            cwd=root_path,
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        status = subprocess.run(
+            ["git", "status", "--porcelain"],
+            cwd=root_path,
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+    except OSError:
+        return None, False
+    commit_text = commit.stdout.strip() if commit.returncode == 0 else ""
+    return (commit_text or None), bool(status.returncode == 0 and status.stdout.strip() == "")
+
+
+def _runtime_lock_digest(root_path: Path) -> str | None:
+    """返回随服务器重建包复制的运行环境锁摘要。"""
+
+    lock_path = root_path / "requirements" / "paper_runtime_environment_lock.json"
+    if not lock_path.is_file():
+        return None
+    return sha256(lock_path.read_bytes()).hexdigest()
 
 
 def should_skip(relative_path: Path, exclude_parts: Iterable[str]) -> bool:
@@ -124,6 +161,7 @@ def extract_profile(root: str | Path, output: str | Path, profile_name: str, dry
     if profile_name not in PROFILES:
         raise ValueError(f"不支持的抽离 profile: {profile_name}")
     profile = PROFILES[profile_name]
+    source_git_commit, source_git_tree_clean = _source_git_provenance(root_path)
 
     copied_files: list[str] = []
     missing_paths: list[str] = []
@@ -152,7 +190,13 @@ def extract_profile(root: str | Path, output: str | Path, profile_name: str, dry
         "dry_run": dry_run,
         "development_checks_packaged": False,
         "development_checks_execution_policy": "run_in_development_repository_before_extraction",
+        "source_git_commit": source_git_commit,
+        "source_git_tree_clean": source_git_tree_clean,
     }
+    if profile.profile_name == "paper_artifact_rebuild_package":
+        manifest["paper_runtime_environment_lock_sha256"] = _runtime_lock_digest(
+            root_path
+        )
     if not dry_run:
         output_path.mkdir(parents=True, exist_ok=True)
         manifest_path = output_path / "extraction_manifest.json"

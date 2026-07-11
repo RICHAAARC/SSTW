@@ -341,6 +341,7 @@ def test_claim2_gate_rejects_non_nested_or_incomplete_pairs() -> None:
         paired_path,
         paired_velocity,
         target_fpr=0.1,
+        minimum_velocity_causal_pair_count=12,
     )
     contaminated = [dict(row) for row in paired_path]
     contaminated[0]["paired_path_ablation_method_variant"] = "endpoint_only_control"
@@ -349,6 +350,7 @@ def test_claim2_gate_rejects_non_nested_or_incomplete_pairs() -> None:
         contaminated,
         paired_velocity,
         target_fpr=0.1,
+        minimum_velocity_causal_pair_count=12,
     )
 
     assert passed["claim_2_path_evidence_independent_gain_decision"] == "PASS"

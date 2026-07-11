@@ -9,6 +9,10 @@ from pathlib import Path
 from typing import Any
 
 from external_baseline.baseline_registry import audit_external_baseline_records
+from external_baseline.runtime_trace_io import (
+    NATIVE_GENERATION_COMPARISON_DESIGN,
+    SAME_SOURCE_POSTHOC_COMPARISON_DESIGN,
+)
 from experiments.generative_video_model_probe.external_baseline_runner import audit_external_baseline_comparison_records
 from experiments.generative_video_model_probe.sstw_formal_result import (
     formal_sstw_clean_negative_record_ready_for_calibration,
@@ -66,6 +70,8 @@ HARD_REQUIRED_PAPER_PROFILE_CONFIG_FLAGS = (
     "require_data_split_and_leakage_guard",
     "require_sstw_advantage_claim_ready",
     "require_baseline_matched_video_quality_metrics",
+    "require_heldout_posterior_probability_evaluation",
+    "require_nested_paper_profile_prompt_seed_universe",
 )
 
 
@@ -116,6 +122,27 @@ def _load_config(config_path: str | Path = DEFAULT_PAPER_PROFILE_CONFIG) -> dict
         "paper_protocol_level": config.get("paper_protocol_level"),
         "paper_profile_mechanism_difference_policy": config.get(
             "paper_profile_mechanism_difference_policy"
+        ),
+        "paper_profile_common_contract_id": config.get(
+            "paper_profile_common_contract_id"
+        ),
+        "paper_profile_common_contract_status": config.get(
+            "paper_profile_common_contract_status"
+        ),
+        "paper_profile_common_contract_sha256": config.get(
+            "paper_profile_common_contract_sha256"
+        ),
+        "paper_profile_common_contract_observed_sha256": config.get(
+            "paper_profile_common_contract_observed_sha256"
+        ),
+        "paper_profile_prompt_seed_universe_id": config.get(
+            "paper_profile_prompt_seed_universe_id"
+        ),
+        "paper_profile_prompt_seed_sampling_policy": config.get(
+            "paper_profile_prompt_seed_sampling_policy"
+        ),
+        "require_nested_paper_profile_prompt_seed_universe": bool(
+            config.get("require_nested_paper_profile_prompt_seed_universe", False)
         ),
         "threshold_protocol": config.get("threshold_protocol"),
         "threshold_source_split": config.get("threshold_source_split"),
@@ -170,6 +197,36 @@ def _load_config(config_path: str | Path = DEFAULT_PAPER_PROFILE_CONFIG) -> dict
         ),
         "minimum_internal_ablation_trace_count": int(
             config.get("minimum_internal_ablation_trace_count", 0)
+        ),
+        "minimum_heldout_posterior_positive_cluster_count": int(
+            config.get("minimum_heldout_posterior_positive_cluster_count", 0)
+        ),
+        "minimum_heldout_posterior_negative_cluster_count": int(
+            config.get("minimum_heldout_posterior_negative_cluster_count", 0)
+        ),
+        "minimum_heldout_posterior_attack_cluster_count": int(
+            config.get("minimum_heldout_posterior_attack_cluster_count", 0)
+        ),
+        "maximum_heldout_posterior_brier_score": float(
+            config.get("maximum_heldout_posterior_brier_score", 0.25)
+        ),
+        "maximum_heldout_posterior_log_loss": float(
+            config.get("maximum_heldout_posterior_log_loss", 0.693147)
+        ),
+        "maximum_heldout_posterior_expected_calibration_error": float(
+            config.get(
+                "maximum_heldout_posterior_expected_calibration_error",
+                0.1,
+            )
+        ),
+        "heldout_posterior_bootstrap_resample_count": int(
+            config.get("heldout_posterior_bootstrap_resample_count", 0)
+        ),
+        "minimum_sstw_worst_attack_tpr_ci_lower": float(
+            config.get("minimum_sstw_worst_attack_tpr_ci_lower", 0.5)
+        ),
+        "require_heldout_posterior_probability_evaluation": bool(
+            config.get("require_heldout_posterior_probability_evaluation", False)
         ),
         "require_external_baseline_status_records": bool(config.get("require_external_baseline_status_records", True)),
         "require_external_baseline_comparison_records": bool(config.get("require_external_baseline_comparison_records", True)),
@@ -358,9 +415,13 @@ def _paper_profile_scale_evidence(
     """
 
     target_fpr = float(config["target_fpr"])
-    calibration_generation = _records_by_split(generation_records, {"calibration"})
+    primary_generation = _primary_claim_method_records(generation_records)
+    calibration_generation = _records_by_split(
+        primary_generation,
+        {"calibration"},
+    )
     heldout_generation = _records_by_split(
-        generation_records,
+        primary_generation,
         {"test", "heldout", "heldout_test"},
     )
     formal_rows = _primary_claim_method_records([
@@ -412,9 +473,24 @@ def _paper_profile_scale_evidence(
             if record.get("trajectory_trace_id")
         },
     )
+    expected_prompt_suite_id = str(
+        config.get("paper_profile_prompt_seed_universe_id") or ""
+    )
+    nested_universe_record_count = sum(
+        str(record.get("prompt_suite_id") or "") == expected_prompt_suite_id
+        for record in generation_records
+    )
     checks = {
+        "paper_profile_nested_prompt_seed_universe_ready": (
+            not config.get("require_nested_paper_profile_prompt_seed_universe")
+            or (
+                bool(expected_prompt_suite_id)
+                and bool(generation_records)
+                and nested_universe_record_count == len(generation_records)
+            )
+        ),
         "paper_profile_generation_unique_video_count_ready": (
-            _identity_count(generation_records)
+            _identity_count(primary_generation)
             >= config["minimum_unique_video_count"]
         ),
         "paper_profile_calibration_split_ready": (
@@ -464,7 +540,7 @@ def _paper_profile_scale_evidence(
         ),
     }
     summary = {
-        "paper_profile_unique_video_count": _identity_count(generation_records),
+        "paper_profile_unique_video_count": _identity_count(primary_generation),
         "paper_profile_calibration_unique_video_count": _identity_count(
             calibration_generation
         ),
@@ -489,6 +565,9 @@ def _paper_profile_scale_evidence(
         "heldout_attack_event_counts": dict(sorted(attack_counts.items())),
         "external_baseline_trace_count_min": external_trace_min,
         "external_baseline_trace_counts": external_trace_counts,
+        "paper_profile_prompt_seed_universe_id": expected_prompt_suite_id,
+        "paper_profile_nested_universe_record_count": nested_universe_record_count,
+        "paper_profile_nested_universe_record_total": len(generation_records),
     }
     return checks, summary
 
@@ -600,6 +679,8 @@ def _adaptive_attack_ready(
         record
         for record in records
         if record.get("adaptive_attack_evidence_level") == "formal_adaptive_attack_execution"
+        and record.get("adaptive_attack_execution_granularity")
+        == "per_video_frozen_flow_detector_adaptive_execution"
         and record.get("adaptive_robustness_claim_allowed") is True
         and record.get("metric_status") == "measured_formal"
     ]
@@ -637,11 +718,78 @@ def _replay_or_sketch_ready(run_root: Path) -> tuple[bool, str]:
     return False, "missing_full_attacked_video_replay_and_authenticated_sketch"
 
 
-def _confidence_interval_ready(run_root: Path) -> tuple[bool, str]:
-    """检查统计置信区间报告是否已由 governed artifact 写出。"""
-    decision = _read_json(run_root / "artifacts" / "statistical_confidence_interval_decision.json")
-    ready = _decision_pass(decision, "statistical_confidence_interval_decision")
-    return ready, decision.get("claim_support_status", "missing_confidence_interval_decision")
+def _heldout_posterior_calibration_ready(run_root: Path) -> tuple[bool, str]:
+    """直接核验 Claim-3 held-out 概率后验可靠性 artifact。
+
+    replay gate 也会消费该 artifact, 此处再次独立检查是为了防止旧 replay PASS
+    artifact 或不完整阶段包绕过最新的 held-out 概率校准要求。
+    """
+
+    decision = _read_json(
+        run_root / "artifacts" / "heldout_posterior_calibration_decision.json"
+    )
+    ready = _decision_pass(
+        decision,
+        "heldout_posterior_calibration_decision",
+    )
+    return ready, str(
+        decision.get("claim_support_status")
+        or "missing_heldout_posterior_calibration_decision"
+    )
+
+
+def _confidence_interval_ready(
+    run_root: Path,
+    minimum_sstw_worst_attack_tpr_ci_lower: float,
+) -> tuple[bool, bool, bool, float | None, bool, str]:
+    """核验总体 CI、逐攻击 CI 和 SSTW 最弱攻击下界。
+
+    仅有聚合 TPR 的 PASS 不能支撑正式鲁棒性主张。该函数同时要求预注册攻击
+    范围完整、SSTW 最弱攻击的簇 bootstrap 下界达到 profile 冻结阈值, 并检查
+    产物中记录的阈值与当前 profile 一致, 从而阻止复用旧阈值产物。
+    """
+
+    decision = _read_json(
+        run_root / "artifacts" / "statistical_confidence_interval_decision.json"
+    )
+    decision_ready = _decision_pass(
+        decision,
+        "statistical_confidence_interval_decision",
+    )
+    per_attack_ready = decision.get("per_attack_tpr_ci_ready") is True
+    try:
+        worst_attack_lower = float(decision["worst_attack_tpr_ci_lower"])
+    except (KeyError, TypeError, ValueError):
+        worst_attack_lower = None
+    try:
+        artifact_minimum = float(
+            decision["minimum_sstw_worst_attack_tpr_ci_lower"]
+        )
+    except (KeyError, TypeError, ValueError):
+        artifact_minimum = None
+    threshold_matches_profile = bool(
+        artifact_minimum is not None
+        and abs(
+            artifact_minimum - minimum_sstw_worst_attack_tpr_ci_lower
+        ) <= 1e-12
+    )
+    worst_attack_ready = bool(
+        threshold_matches_profile
+        and worst_attack_lower is not None
+        and worst_attack_lower >= minimum_sstw_worst_attack_tpr_ci_lower
+    )
+    ready = decision_ready and per_attack_ready and worst_attack_ready
+    return (
+        ready,
+        per_attack_ready,
+        worst_attack_ready,
+        worst_attack_lower,
+        threshold_matches_profile,
+        str(
+            decision.get("claim_support_status")
+            or "missing_confidence_interval_decision"
+        ),
+    )
 
 
 def _low_fpr_formal_statistics_ready(run_root: Path) -> tuple[bool, int, str]:
@@ -900,15 +1048,51 @@ def _formal_comparison_anchor_ready(record: dict, required_attack_names: list[st
 
 
 def _difference_interval_anchor_ready(record: dict, required_attack_names: list[str]) -> bool:
-    """检查差值区间是否来自 prompt / seed / attack 完全配对的比较单元。"""
+    """按 baseline 设计核验同源配对或 native 独立两样本统计。"""
 
-    return (
-        str(record.get("comparison_anchor_alignment_status") or "") == "aligned_with_sstw_reference_anchors"
-        and _nonnegative_int(record, "paired_comparison_unit_count") > 0
-        and _nonnegative_int(record, "unpaired_reference_anchor_count") == 0
-        and _nonnegative_int(record, "unpaired_baseline_anchor_count") == 0
-        and not _missing_required_attack_names(record, "paired_attack_names", required_attack_names, "paired_comparison_anchor_keys")
+    if (
+        str(record.get("comparison_anchor_alignment_status") or "")
+        != "aligned_with_sstw_reference_anchors"
+        or _nonnegative_int(record, "unpaired_reference_anchor_count") != 0
+        or _nonnegative_int(record, "unpaired_baseline_anchor_count") != 0
+    ):
+        return False
+    comparison_design = str(
+        record.get("external_baseline_comparison_design") or ""
     )
+    if comparison_design == SAME_SOURCE_POSTHOC_COMPARISON_DESIGN:
+        return (
+            record.get("paired_source_video_inference_used") is True
+            and _nonnegative_int(record, "paired_comparison_unit_count") > 0
+            and not _missing_required_attack_names(
+                record,
+                "paired_attack_names",
+                required_attack_names,
+                "paired_comparison_anchor_keys",
+            )
+            and record.get("difference_interval_method")
+            == "paired_source_video_cluster_bootstrap_detection_difference"
+        )
+    if comparison_design == NATIVE_GENERATION_COMPARISON_DESIGN:
+        return (
+            record.get("paired_source_video_inference_used") is False
+            and _nonnegative_int(record, "paired_comparison_unit_count") == 0
+            and not (record.get("paired_comparison_anchor_keys") or [])
+            and not (record.get("paired_attack_names") or [])
+            and _nonnegative_int(record, "matched_design_anchor_count") > 0
+            and not _missing_required_attack_names(
+                record,
+                "matched_design_attack_names",
+                required_attack_names,
+                "matched_design_anchor_keys",
+            )
+            and record.get("difference_interval_method")
+            == (
+                "independent_two_sample_source_video_cluster_bootstrap_"
+                "detection_difference"
+            )
+        )
+    return False
 
 
 def _formal_method_baseline_comparison_ready(
@@ -1229,13 +1413,27 @@ def build_paper_profile_gate_audit(
         config["minimum_non_runtime_attack_protocol_count"],
     )
     replay_or_sketch_ready, replay_or_sketch_status = _replay_or_sketch_ready(run_root)
+    (
+        heldout_posterior_calibration_ready,
+        heldout_posterior_calibration_status,
+    ) = _heldout_posterior_calibration_ready(run_root)
     mechanism_contract_audit = config.get("paper_mechanism_contract_audit") or {}
     mechanism_contract_ready = mechanism_contract_audit.get("paper_mechanism_contract_decision") == "PASS"
     complete_claim_decision = _read_json(
         run_root / "artifacts" / "complete_paper_mechanism_claim_decision.json"
     )
     complete_claim_ready = complete_claim_decision.get("complete_paper_mechanism_claim_decision") == "PASS"
-    confidence_interval_ready, confidence_interval_status = _confidence_interval_ready(run_root)
+    (
+        confidence_interval_ready,
+        per_attack_tpr_ci_ready,
+        worst_attack_tpr_ci_ready,
+        worst_attack_tpr_ci_lower,
+        confidence_interval_threshold_matches_profile,
+        confidence_interval_status,
+    ) = _confidence_interval_ready(
+        run_root,
+        config["minimum_sstw_worst_attack_tpr_ci_lower"],
+    )
     low_fpr_ready, low_fpr_record_count, low_fpr_status = _low_fpr_formal_statistics_ready(run_root)
     paper_skeleton_ready, paper_skeleton_status = _paper_result_artifact_skeleton_ready(run_root)
     sstw_measured_formal_ready, sstw_measured_formal_record_count, sstw_measured_formal_status = _sstw_measured_formal_ready(run_root)
@@ -1326,11 +1524,23 @@ def build_paper_profile_gate_audit(
             or replay_or_sketch_ready
         ),
         "validation_claim3_full_support_ready": (not config["require_claim3_full_support"]) or replay_or_sketch_ready,
+        "validation_heldout_posterior_calibration_ready": (
+            not config["require_heldout_posterior_probability_evaluation"]
+            or heldout_posterior_calibration_ready
+        ),
         "validation_complete_paper_mechanism_contract_ready": (
             (not config["require_complete_paper_mechanism_contract"])
             or (mechanism_contract_ready and complete_claim_ready)
         ),
         "validation_confidence_interval_report_ready": (not config["require_confidence_interval_report"]) or confidence_interval_ready,
+        "validation_per_attack_tpr_ci_ready": (
+            (not config["require_confidence_interval_report"])
+            or per_attack_tpr_ci_ready
+        ),
+        "validation_sstw_worst_attack_tpr_ci_lower_ready": (
+            (not config["require_confidence_interval_report"])
+            or worst_attack_tpr_ci_ready
+        ),
         "validation_low_fpr_formal_statistics_blocking_record_ready": (not config["require_low_fpr_formal_statistics_blocking_record"]) or low_fpr_ready,
         "validation_paper_result_artifact_skeleton_ready": (not config["require_paper_result_artifact_skeleton"]) or paper_skeleton_ready,
         "validation_artifact_rebuild_dry_run_ready": (not config["require_artifact_rebuild_dry_run"]) or artifact_rebuild_ready,
@@ -1498,12 +1708,26 @@ def build_paper_profile_gate_audit(
         "adaptive_attack_missing_non_runtime_protocols": missing_non_runtime_attack_protocols,
         "adaptive_attack_missing_non_runtime_protocol_count": len(missing_non_runtime_attack_protocols),
         "replay_or_sketch_status": replay_or_sketch_status,
+        "heldout_posterior_calibration_ready": (
+            heldout_posterior_calibration_ready
+        ),
+        "heldout_posterior_calibration_status": (
+            heldout_posterior_calibration_status
+        ),
         "require_claim3_full_support": config["require_claim3_full_support"],
         "paper_mechanism_contract_decision": mechanism_contract_audit.get("paper_mechanism_contract_decision"),
         "formal_mechanism_contract_id": mechanism_contract_audit.get("formal_mechanism_contract_id"),
         "paper_mechanism_contract_violations": mechanism_contract_audit.get("paper_mechanism_contract_violations", []),
         "complete_paper_mechanism_claim_decision": complete_claim_decision.get("complete_paper_mechanism_claim_decision"),
         "confidence_interval_status": confidence_interval_status,
+        "per_attack_tpr_ci_ready": per_attack_tpr_ci_ready,
+        "worst_attack_tpr_ci_lower": worst_attack_tpr_ci_lower,
+        "minimum_sstw_worst_attack_tpr_ci_lower": config[
+            "minimum_sstw_worst_attack_tpr_ci_lower"
+        ],
+        "confidence_interval_threshold_matches_profile": (
+            confidence_interval_threshold_matches_profile
+        ),
         "low_fpr_formal_statistics_record_count": low_fpr_record_count,
         "low_fpr_formal_statistics_status": low_fpr_status,
         "paper_result_artifact_skeleton_status": paper_skeleton_status,
@@ -1580,6 +1804,8 @@ def write_paper_profile_gate_audit(
         f"- paper_profile_unique_video_count: {audit['paper_profile_unique_video_count']}\n"
         f"- paper_profile_calibration_unique_video_count: {audit['paper_profile_calibration_unique_video_count']}\n"
         f"- paper_profile_heldout_test_unique_video_count: {audit['paper_profile_heldout_test_unique_video_count']}\n"
+        f"- paper_profile_prompt_seed_universe_id: {audit['paper_profile_prompt_seed_universe_id']}\n"
+        f"- paper_profile_nested_universe_record_count: {audit['paper_profile_nested_universe_record_count']}\n"
         f"- calibration_negative_video_cluster_count: {audit['calibration_negative_video_cluster_count']}\n"
         f"- heldout_negative_video_cluster_count: {audit['heldout_negative_video_cluster_count']}\n"
         f"- heldout_attacked_positive_event_count: {audit['heldout_attacked_positive_event_count']}\n"
@@ -1615,6 +1841,13 @@ def write_paper_profile_gate_audit(
         f"- paper_profile_sstw_advantage_blocking_reasons: {', '.join(audit['paper_profile_sstw_advantage_blocking_reasons']) if audit['paper_profile_sstw_advantage_blocking_reasons'] else 'none'}\n"
         f"- formal_internal_ablation_summary_variant_count: {audit['formal_internal_ablation_summary_variant_count']}\n"
         f"- formal_internal_ablation_summary_status: {audit['formal_internal_ablation_summary_status']}\n"
+        f"- heldout_posterior_calibration_ready: {str(audit['heldout_posterior_calibration_ready']).lower()}\n"
+        f"- heldout_posterior_calibration_status: {audit['heldout_posterior_calibration_status']}\n"
+        f"- confidence_interval_status: {audit['confidence_interval_status']}\n"
+        f"- per_attack_tpr_ci_ready: {str(audit['per_attack_tpr_ci_ready']).lower()}\n"
+        f"- worst_attack_tpr_ci_lower: {audit['worst_attack_tpr_ci_lower']}\n"
+        f"- minimum_sstw_worst_attack_tpr_ci_lower: {audit['minimum_sstw_worst_attack_tpr_ci_lower']}\n"
+        f"- confidence_interval_threshold_matches_profile: {str(audit['confidence_interval_threshold_matches_profile']).lower()}\n"
         f"- low_fpr_formal_statistics_record_count: {audit['low_fpr_formal_statistics_record_count']}\n"
         f"- low_fpr_formal_statistics_status: {audit['low_fpr_formal_statistics_status']}\n"
         f"- paper_result_artifact_skeleton_status: {audit['paper_result_artifact_skeleton_status']}\n"

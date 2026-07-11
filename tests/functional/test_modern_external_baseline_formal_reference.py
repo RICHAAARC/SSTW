@@ -265,31 +265,27 @@ def test_main_five_baseline_wrapper_modules_are_thin_entrypoints() -> None:
 
 @pytest.mark.quick
 def test_main_five_baseline_formal_reference_notebooks_call_repository_helpers() -> None:
-    """独立 Notebook 必须只作为 Colab 入口, 不得直接手写正式 records。"""
+    """独立 baseline Notebook 必须调用统一服务器 CLI, 不得保留专用执行逻辑。"""
 
     for baseline_id in EXPECTED_BASELINE_ORDER:
         notebook_path = Path("paper_workflow/colab_notebooks") / f"{baseline_id}_formal_reference_colab.ipynb"
         assert notebook_path.exists()
         notebook = json.loads(notebook_path.read_text(encoding="utf-8"))
         source = "".join("".join(cell.get("source", [])) for cell in notebook["cells"])
-        first_code_cell = next(cell for cell in notebook["cells"] if cell.get("cell_type") == "code")
-        first_code_source = "".join(first_code_cell.get("source", []))
 
         assert "drive.mount('/content/drive')" in source
-        assert first_code_source.startswith("SSTW_WORKFLOW_PROFILE_VALUE = 'probe_paper'")
-        assert "SSTW_WORKFLOW_PROFILE_VALUE = globals().get('SSTW_WORKFLOW_PROFILE_VALUE', 'probe_paper')" in source
+        assert "SSTW_WORKFLOW_PROFILE_VALUE = 'probe_paper'" in source
         assert "NOTEBOOK_ROLE = 'external_baseline_formal_scoring'" in source
-        assert f"configs/external_baselines/requirements/{baseline_id}.txt" in source
-        assert "SSTW_INSTALL_BASELINE_REQUIREMENTS" in source
-        assert f"from paper_workflow.colab_utils.{baseline_id}_formal_reference import" in source
-        assert f"run_default_{baseline_id}_formal_reference_plan" in source
-        assert "formal_reference_decision" in source
-        assert "formal_comparison_scoring_colab" in source
-        assert "pytest -q" in source
-        assert "tools/harness/run_all_audits.py" in source
-        assert "pip install -U imageio" not in source
-        assert "pip install -U -r" not in source
-        assert " av torchvision " not in source
+        assert "SERVER_PIPELINE = 'external_baseline_references'" in source
+        assert "scripts/run_generative_video_server_workflow.py" in source
+        assert f"server_command.extend(['--baseline-id', '{baseline_id}'])" in source
+        assert "%pip install --requirement requirements/paper_runtime_lock.txt" in source
+        assert "result = run_streaming_command(server_command)" in source
+        assert "run_default_" not in source
+        assert "from paper_workflow.colab_utils" not in source
+        assert "run_configured_colab_stage_plan" not in source
+        assert "pytest -q" not in source
+        assert "tools/harness/run_all_audits.py" not in source
         assert "write_jsonl(" not in source
         assert "runtime_detection_records.jsonl" not in source
 

@@ -141,6 +141,7 @@ def test_paper_profile_notebooks_load_shared_private_drive_secret() -> None:
         source = notebook_path.read_text(encoding="utf-8")
         assert "load_trajectory_authentication_from_private_drive" in source
         assert source.index("load_trajectory_authentication_from_private_drive") < source.index(
-            "run_configured_colab_stage_plan"
+            "result = run_streaming_command(server_command)"
         )
         assert "trajectory_authentication" in source
+        assert "scripts/run_generative_video_server_workflow.py" in source

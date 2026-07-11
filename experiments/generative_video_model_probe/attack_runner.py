@@ -14,6 +14,7 @@ from evaluation.attacks.video_runtime_attack_protocol import (
     PAPER_PROFILE_RUNTIME_ATTACKS,
     RUNTIME_ATTACK_SPECS,
     apply_runtime_attack_to_frames,
+    load_protocol_config_with_shared_attack_protocol,
     required_runtime_attack_names_from_config,
 )
 from runtime.core.progress import ProgressReporter
@@ -138,6 +139,73 @@ def _load_required_attack_names(config_path: str | Path | None, attack_names: tu
     return required_runtime_attack_names_from_config(config)
 
 
+def _attack_subset_identity(record: dict[str, Any]) -> str:
+    """构造不读取检测结果的稳定 source-video 身份。"""
+
+    payload = {
+        "generation_model_id": record.get("generation_model_id"),
+        "prompt_id": record.get("prompt_id"),
+        "seed_id": record.get("seed_id"),
+        "trajectory_trace_id": record.get("trajectory_trace_id"),
+        "split": record.get("split"),
+    }
+    return json.dumps(payload, ensure_ascii=False, sort_keys=True)
+
+
+def _select_preregistered_attack_jobs(
+    generation_records: list[dict[str, Any]],
+    attack_names: tuple[str, ...],
+    *,
+    maximum_per_model_split: int | None,
+) -> list[tuple[dict[str, Any], str, int, str]]:
+    """按攻击名哈希预注册逐模型、逐 split 子集，避免结果后挑样本。
+
+    正式 runtime robustness 只评估完整 SSTW 方法。改变嵌入机制的内部消融由
+    formal Flow runner 直接消费各自原始生成视频，不再把同一组46种攻击重复
+    施加到全部消融，从而在不削弱主鲁棒性证据的前提下降低 GPU replay 成本。
+    """
+
+    eligible = [
+        record
+        for record in generation_records
+        if record.get("method_variant") == "sstw_full_method"
+        and str(record.get("split") or "") in {"calibration", "test"}
+    ]
+    groups: dict[tuple[str, str], list[dict[str, Any]]] = {}
+    for record in eligible:
+        key = (
+            str(record.get("generation_model_id") or ""),
+            str(record.get("split") or ""),
+        )
+        groups.setdefault(key, []).append(record)
+
+    jobs: list[tuple[dict[str, Any], str, int, str]] = []
+    for attack_name in attack_names:
+        for group_key in sorted(groups):
+            ranked = sorted(
+                groups[group_key],
+                key=lambda record: hashlib.sha256(
+                    f"sstw-runtime-attack-subset-v1::{attack_name}::"
+                    f"{_attack_subset_identity(record)}".encode("utf-8")
+                ).hexdigest(),
+            )
+            selected = (
+                ranked
+                if maximum_per_model_split is None
+                else ranked[: max(0, int(maximum_per_model_split))]
+            )
+            selection_digest = hashlib.sha256(
+                "\n".join(_attack_subset_identity(record) for record in selected).encode(
+                    "utf-8"
+                )
+            ).hexdigest()
+            jobs.extend(
+                (record, attack_name, rank, selection_digest)
+                for rank, record in enumerate(selected, start=1)
+            )
+    return jobs
+
+
 def build_runtime_attack_records(
     run_root: str | Path,
     attack_names: tuple[str, ...] | None = None,
@@ -154,109 +222,170 @@ def build_runtime_attack_records(
     ]
     formal_metric_records = _read_jsonl(run_root / "records" / "formal_quality_motion_semantic_records.jsonl")
     selection = select_motion_claim_generation_records(generation_records, formal_metric_records)
+    maximum_per_model_split: int | None = None
+    if config_path is not None:
+        protocol_config = load_protocol_config_with_shared_attack_protocol(
+            config_path
+        )
+        maximum_per_model_split = int(
+            protocol_config["minimum_attack_event_count_per_attack"]
+        )
+    jobs = _select_preregistered_attack_jobs(
+        selection.eligible_generation_records,
+        selected_attack_names,
+        maximum_per_model_split=maximum_per_model_split,
+    )
     records: list[dict] = []
-    total_attack_jobs = len(selection.eligible_generation_records) * len(selected_attack_names)
-    progress = ProgressReporter("runtime_attack_video_transform", total_attack_jobs, "attack_video")
+    progress = ProgressReporter(
+        "runtime_attack_video_transform",
+        len(jobs),
+        "attack_video",
+    )
     progress_index = 0
-    for generation_record in selection.eligible_generation_records:
+    for generation_record, attack_name, subset_rank, selection_digest in jobs:
         source_video_path = _resolve_video_path(run_root, generation_record)
-        for attack_name in selected_attack_names:
-            progress_index += 1
-            progress.update(
-                progress_index,
-                f"prompt={generation_record.get('prompt_id')} seed={generation_record.get('seed_id')} attack={attack_name}",
-            )
-            record = with_flow_evidence_protocol_defaults({
-                "record_version": "generative_video_runtime_attack_v1",
-                "generation_model_id": generation_record.get("generation_model_id"),
-                "generation_model_family": generation_record.get(
-                    "generation_model_family"
+        progress_index += 1
+        progress.update(
+            progress_index,
+            f"prompt={generation_record.get('prompt_id')} seed={generation_record.get('seed_id')} attack={attack_name}",
+        )
+        record = with_flow_evidence_protocol_defaults({
+            "record_version": "generative_video_runtime_attack_v1",
+            "generation_model_id": generation_record.get("generation_model_id"),
+            "generation_model_family": generation_record.get(
+                "generation_model_family"
+            ),
+            "generation_model_requested_revision": generation_record.get(
+                "generation_model_requested_revision"
+            ),
+            "generation_model_commit_or_hash": generation_record.get(
+                "generation_model_commit_or_hash"
+            ),
+            "generation_model_revision_source": generation_record.get(
+                "generation_model_revision_source"
+            ),
+            "generation_model_revision_resolution_status": generation_record.get(
+                "generation_model_revision_resolution_status"
+            ),
+            "cross_model_role": generation_record.get("cross_model_role"),
+            "prompt_id": generation_record.get("prompt_id"),
+            "seed_id": generation_record.get("seed_id"),
+            "watermark_key_derivation_id": generation_record.get(
+                "watermark_key_derivation_id"
+            ),
+            "watermark_key_id": generation_record.get("watermark_key_id"),
+            "generation_seed_random": generation_record.get("generation_seed_random"),
+            "generation_generator_state_digest_random": generation_record.get(
+                "generation_generator_state_digest_random"
+            ),
+            "velocity_causal_pair_id": generation_record.get("velocity_causal_pair_id"),
+            "velocity_causal_intervention_status": generation_record.get(
+                "velocity_causal_intervention_status"
+            ),
+            "trajectory_trace_id": generation_record.get("trajectory_trace_id"),
+            "split": generation_record.get("split"),
+            "protocol_split": generation_record.get("protocol_split"),
+            "colab_runtime_profile": generation_record.get("colab_runtime_profile"),
+            "sample_role": "attacked_positive",
+            "generation_sample_role": generation_record.get("generation_sample_role"),
+            "method_variant": generation_record.get("method_variant"),
+            "watermark_embedding_status": generation_record.get("watermark_embedding_status"),
+            "formal_method_variant_execution": generation_record.get("formal_method_variant_execution"),
+            "num_inference_steps": generation_record.get("num_inference_steps"),
+            "guidance_scale": generation_record.get("guidance_scale"),
+            "scheduler_id": generation_record.get("scheduler_id"),
+            "trajectory_time_grid_id": generation_record.get("trajectory_time_grid_id"),
+            "prompt_text_hash": generation_record.get("prompt_text_hash"),
+            "flow_sampler_signature": generation_record.get(
+                "flow_sampler_signature"
+            ),
+            "flow_tubelet_key_context_digest": generation_record.get(
+                "flow_tubelet_key_context_digest"
+            ),
+            "generation_record_digest": generation_record.get(
+                "generation_record_digest"
+            ),
+                "code_commit": generation_record.get("code_commit"),
+                "flow_runtime_formal_context_complete": generation_record.get(
+                    "flow_runtime_formal_context_complete"
                 ),
-                "generation_model_requested_revision": generation_record.get(
-                    "generation_model_requested_revision"
+                "generation_endpoint_control_formal_context_complete": (
+                    generation_record.get(
+                        "generation_endpoint_control_formal_context_complete"
+                    )
                 ),
-                "generation_model_commit_or_hash": generation_record.get(
-                    "generation_model_commit_or_hash"
+                "generation_endpoint_quality_energy_guard_passed": (
+                    generation_record.get(
+                        "generation_endpoint_quality_energy_guard_passed"
+                    )
                 ),
-                "generation_model_revision_source": generation_record.get(
-                    "generation_model_revision_source"
+                "generation_endpoint_control_cumulative_energy_final": (
+                    generation_record.get(
+                        "generation_endpoint_control_cumulative_energy_final"
+                    )
                 ),
-                "generation_model_revision_resolution_status": generation_record.get(
-                    "generation_model_revision_resolution_status"
+                "generation_endpoint_reference_cumulative_energy_final": (
+                    generation_record.get(
+                        "generation_endpoint_reference_cumulative_energy_final"
+                    )
                 ),
-                "cross_model_role": generation_record.get("cross_model_role"),
-                "prompt_id": generation_record.get("prompt_id"),
-                "seed_id": generation_record.get("seed_id"),
-                "watermark_key_derivation_id": generation_record.get(
-                    "watermark_key_derivation_id"
+                "generation_velocity_constraint_delta_ratio_maximum": (
+                    generation_record.get(
+                        "generation_velocity_constraint_delta_ratio_maximum"
+                    )
                 ),
-                "watermark_key_id": generation_record.get("watermark_key_id"),
-                "generation_seed_random": generation_record.get("generation_seed_random"),
-                "generation_generator_state_digest_random": generation_record.get(
-                    "generation_generator_state_digest_random"
-                ),
-                "velocity_causal_pair_id": generation_record.get("velocity_causal_pair_id"),
-                "velocity_causal_intervention_status": generation_record.get(
-                    "velocity_causal_intervention_status"
-                ),
-                "trajectory_trace_id": generation_record.get("trajectory_trace_id"),
-                "split": generation_record.get("split"),
-                "protocol_split": generation_record.get("protocol_split"),
-                "colab_runtime_profile": generation_record.get("colab_runtime_profile"),
-                "sample_role": "attacked_positive",
-                "generation_sample_role": generation_record.get("generation_sample_role"),
-                "method_variant": generation_record.get("method_variant"),
-                "watermark_embedding_status": generation_record.get("watermark_embedding_status"),
-                "formal_method_variant_execution": generation_record.get("formal_method_variant_execution"),
-                "num_inference_steps": generation_record.get("num_inference_steps"),
-                "guidance_scale": generation_record.get("guidance_scale"),
-                "scheduler_id": generation_record.get("scheduler_id"),
-                "trajectory_time_grid_id": generation_record.get("trajectory_time_grid_id"),
-                "prompt_text_hash": generation_record.get("prompt_text_hash"),
                 "attack_name": attack_name,
-                "attack_matrix_evidence_level": "runtime_video_file",
+            "runtime_attack_preregistered_subset_rank": subset_rank,
+            "runtime_attack_preregistered_subset_digest": selection_digest,
+            "runtime_attack_preregistered_subset_maximum_per_model_split": (
+                maximum_per_model_split
+            ),
+            "runtime_attack_preregistered_subset_policy": (
+                "attack_name_hashed_source_video_rank_before_detection"
+            ),
+            "attack_matrix_evidence_level": "runtime_video_file",
+            "attack_runtime_status": "failed",
+            "attack_runtime_failure_reason": "not_run",
+            "source_video_path": str(source_video_path),
+            "source_video_sha256": None,
+            "attacked_video_path": None,
+            "attacked_video_sha256": None,
+            "source_frame_count": 0,
+            "attacked_frame_count": 0,
+            "runtime_attack_formal_evidence_level": "not_run",
+            "runtime_attack_claim_level": "not_run",
+            "runtime_attack_proxy_free": False,
+            "claim_support_status": "runtime_attack_formal_transform_pending",
+        },
+            negative_family=None,
+            trajectory_source_level="runtime_video_file_attack",
+            flow_state_admissibility_status="not_evaluated",
+            claim_support_status="runtime_attack_formal_transform_pending",
+        )
+        try:
+            if not source_video_path.exists():
+                raise FileNotFoundError("source_video_not_found")
+            frames = _load_video_frames(source_video_path)
+            attacked_frames, attack_metadata = _apply_runtime_attack(frames, attack_name)
+            attacked_video_path = _build_attacked_video_path(run_root, generation_record, attack_name)
+            _write_video_frames(attacked_video_path, attacked_frames, attack_metadata=attack_metadata)
+            record.update({
+                "attack_runtime_status": "ready",
+                "attack_runtime_failure_reason": "none",
+                "source_video_sha256": _sha256_file(source_video_path),
+                "attacked_video_path": str(attacked_video_path),
+                "attacked_video_sha256": _sha256_file(attacked_video_path),
+                "source_frame_count": len(frames),
+                "attacked_frame_count": len(attacked_frames),
+                "claim_support_status": "runtime_attack_formal_video_transform_ready",
+                **attack_metadata,
+            })
+        except Exception as exc:  # pragma: no cover - 依赖具体视频解码和编码后端
+            record.update({
                 "attack_runtime_status": "failed",
-                "attack_runtime_failure_reason": "not_run",
-                "source_video_path": str(source_video_path),
-                "source_video_sha256": None,
-                "attacked_video_path": None,
-                "attacked_video_sha256": None,
-                "source_frame_count": 0,
-                "attacked_frame_count": 0,
-                "runtime_attack_formal_evidence_level": "not_run",
-                "runtime_attack_claim_level": "not_run",
-                "runtime_attack_proxy_free": False,
-                "claim_support_status": "runtime_attack_formal_transform_pending",
-            },
-                negative_family=None,
-                trajectory_source_level="runtime_video_file_attack",
-                flow_state_admissibility_status="not_evaluated",
-                claim_support_status="runtime_attack_formal_transform_pending",
-            )
-            try:
-                if not source_video_path.exists():
-                    raise FileNotFoundError("source_video_not_found")
-                frames = _load_video_frames(source_video_path)
-                attacked_frames, attack_metadata = _apply_runtime_attack(frames, attack_name)
-                attacked_video_path = _build_attacked_video_path(run_root, generation_record, attack_name)
-                _write_video_frames(attacked_video_path, attacked_frames, attack_metadata=attack_metadata)
-                record.update({
-                    "attack_runtime_status": "ready",
-                    "attack_runtime_failure_reason": "none",
-                    "source_video_sha256": _sha256_file(source_video_path),
-                    "attacked_video_path": str(attacked_video_path),
-                    "attacked_video_sha256": _sha256_file(attacked_video_path),
-                    "source_frame_count": len(frames),
-                    "attacked_frame_count": len(attacked_frames),
-                    "claim_support_status": "runtime_attack_formal_video_transform_ready",
-                    **attack_metadata,
-                })
-            except Exception as exc:  # pragma: no cover - 依赖具体视频解码和编码后端
-                record.update({
-                    "attack_runtime_status": "failed",
-                    "attack_runtime_failure_reason": str(exc),
-                })
-            records.append(record)
+                "attack_runtime_failure_reason": str(exc),
+            })
+        records.append(record)
     ready_count = sum(1 for record in records if record.get("attack_runtime_status") == "ready")
     progress.finish(f"ready={ready_count} failed={len(records) - ready_count}")
     return records
@@ -359,6 +488,33 @@ def build_cross_sample_adaptive_video_records(run_root: str | Path) -> list[dict
                 "guidance_scale": source.get("guidance_scale"),
                 "scheduler_id": source.get("scheduler_id"),
                 "trajectory_time_grid_id": source.get("trajectory_time_grid_id"),
+                "prompt_text_hash": source.get("prompt_text_hash"),
+                "flow_sampler_signature": source.get("flow_sampler_signature"),
+                "flow_tubelet_key_context_digest": source.get(
+                    "flow_tubelet_key_context_digest"
+                ),
+                "generation_record_digest": source.get(
+                    "generation_record_digest"
+                ),
+                "code_commit": source.get("code_commit"),
+                "flow_runtime_formal_context_complete": source.get(
+                    "flow_runtime_formal_context_complete"
+                ),
+                "generation_endpoint_control_formal_context_complete": source.get(
+                    "generation_endpoint_control_formal_context_complete"
+                ),
+                "generation_endpoint_quality_energy_guard_passed": source.get(
+                    "generation_endpoint_quality_energy_guard_passed"
+                ),
+                "generation_endpoint_control_cumulative_energy_final": source.get(
+                    "generation_endpoint_control_cumulative_energy_final"
+                ),
+                "generation_endpoint_reference_cumulative_energy_final": source.get(
+                    "generation_endpoint_reference_cumulative_energy_final"
+                ),
+                "generation_velocity_constraint_delta_ratio_maximum": source.get(
+                    "generation_velocity_constraint_delta_ratio_maximum"
+                ),
             }
             try:
                 if attack_name == "collusion_multi_sample_attack":
@@ -465,7 +621,11 @@ def run_runtime_attacks(
     """执行 runtime attacks 并写出 governed records、table、decision 和 report。"""
     run_root = Path(run_root)
     selected_attack_names = _load_required_attack_names(config_path, attack_names)
-    records = build_runtime_attack_records(run_root, attack_names=selected_attack_names, config_path=None)
+    records = build_runtime_attack_records(
+        run_root,
+        attack_names=selected_attack_names,
+        config_path=config_path,
+    )
     protocol_config = json.loads(Path(config_path).read_text(encoding="utf-8-sig")) if config_path else {}
     cross_sample_records = (
         build_cross_sample_adaptive_video_records(run_root)

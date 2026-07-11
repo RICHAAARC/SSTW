@@ -118,20 +118,32 @@ def test_videoshield_runtime_payload_stamps_official_adapter_identity() -> None:
     assert '"official_adapter_baseline_id": BASELINE_ID' in runtime_text
     assert '"official_baseline_id": BASELINE_ID' in runtime_text
     assert "official_score_formal_comparison_summary" in runtime_text
-    assert "apply_runtime_attack_to_frames" in runtime_text
+    assert "apply_runtime_attack_to_video_file" in runtime_text
+    assert "prefixed_runtime_attack_metadata" in runtime_text
     assert "unsupported_videoshield_runtime_attack" in runtime_text
     assert "attack_metadata" in runtime_text
 
 
 @pytest.mark.quick
-def test_videoshield_runtime_attack_mapping_is_fail_closed(tmp_path: Path) -> None:
+def test_videoshield_runtime_attack_mapping_is_fail_closed(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """VideoShield 不能把未知 runtime attack 当作 compression 继续运行。"""
 
+    def reject_unknown_attack(*_args: object, **_kwargs: object) -> dict[str, object]:
+        raise ValueError("unsupported_runtime_attack:unexpected_runtime_attack")
+
+    monkeypatch.setattr(
+        videoshield_runtime,
+        "apply_runtime_attack_to_video_file",
+        reject_unknown_attack,
+    )
     with pytest.raises(ValueError, match="unsupported_videoshield_runtime_attack"):
-        videoshield_runtime._apply_runtime_attack_to_frames(
-            ["frame_0", "frame_1"],
-            attack_name="unexpected_runtime_attack",
+        videoshield_runtime._apply_runtime_attack_to_video_file(
+            tmp_path / "source.mp4",
             output_video_path=tmp_path / "unexpected.mp4",
+            attack_name="unexpected_runtime_attack",
             fps=8,
         )
 

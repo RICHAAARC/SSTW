@@ -67,6 +67,18 @@ def _validate_profile_item_counts(
         raise ValueError(f"{profile} prompt/seed 清单与 protocol config 漂移: observed={observed}, expected={expected}")
 
 
+def _stable_digest(payload: object) -> str:
+    """对确定性 prompt/seed 结构计算可跨平台复核的 JSON 摘要。"""
+
+    encoded = json.dumps(
+        payload,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("utf-8")
+    return sha256(encoded).hexdigest()
+
+
 PROMPT_ITEMS = [
     {
         "prompt_id": "motion_object_pan",
@@ -397,70 +409,92 @@ PILOT_PAPER_PROMPT_ITEMS = [
 ]
 
 
-# pilot_paper 的 FPR=0.01 单侧 95% 上界需要至少300个独立 held-out
-# negative videos。这里把25个基础运动场景扩展为50个审阅可追溯场景, 再配合
-# 6个 calibration seed 和6个 test seed, 形成每个 split 300个独立视频。
+PAPER_PROFILE_PROMPT_SEED_UNIVERSE_ID = "sstw_nested_paper_prompt_seed_universe_v1"
+PAPER_PROFILE_PROMPT_SEED_SAMPLING_POLICY = (
+    "deterministic_nested_prefix_probe_subset_pilot_subset_full"
+)
+_PAPER_PROFILE_PROMPT_COUNTS = {
+    "probe_paper": 10,
+    "pilot_paper": 50,
+    "full_paper": 200,
+}
+_PAPER_PROFILE_SEED_COUNTS_PER_SPLIT = {
+    "probe_paper": 3,
+    "pilot_paper": 6,
+    "full_paper": 15,
+}
 _PILOT_PAPER_BASE_PROMPT_ITEMS = tuple(PILOT_PAPER_PROMPT_ITEMS)
-PILOT_PAPER_PROMPT_ITEMS = list(_PILOT_PAPER_BASE_PROMPT_ITEMS) + [
-    {
-        **_PILOT_PAPER_BASE_PROMPT_ITEMS[index % len(_PILOT_PAPER_BASE_PROMPT_ITEMS)],
-        "prompt_id": f"pilot_paper_statistical_variant_{index + 1:02d}",
-        "prompt_text": (
-            f"{_PILOT_PAPER_BASE_PROMPT_ITEMS[index % len(_PILOT_PAPER_BASE_PROMPT_ITEMS)]['prompt_text']} "
-            f"Statistical scene variant {index + 1:02d}, neutral background, fixed exposure."
-        ),
-        "motion_pattern_id": (
-            f"{_PILOT_PAPER_BASE_PROMPT_ITEMS[index % len(_PILOT_PAPER_BASE_PROMPT_ITEMS)]['motion_pattern_id']}"
-            f"_statistical_variant_{index + 1:02d}"
-        ),
-    }
-    for index in range(25)
-]
+_MASTER_SCENE_MODIFIERS = (
+    "under bright studio lighting with a plain matte background",
+    "on a high contrast checker floor with clear object boundaries",
+    "with colored fiducial markers visible near the moving object",
+    "in a minimal indoor scene with stable exposure and fixed camera",
+    "with a neutral background and large foreground motion occupying most of the frame",
+    "under soft diffuse lighting with a clean geometric background",
+    "in a sparse tabletop scene with strong color separation and no distractors",
+)
 
 
-def _build_full_paper_prompts() -> list[dict]:
-    """构造 full_paper 专用 prompt 列表。
+def _build_master_paper_prompt_universe() -> list[dict]:
+    """构造三个正式 profile 共同冻结的200项 prompt 母体。
 
-    该函数属于项目特定写法。full_paper 需要200个 prompt, 同时必须与 probe_paper
-    和 pilot_paper 保持同构运动类别。这里以 pilot_paper 的代表性运动 prompt 为
-    锚点, 通过稳定场景修饰生成唯一 prompt, 避免 Notebook 维护长列表。
+    该实现属于项目特定写法。每25项完成一次全部预注册运动场景覆盖, 后续轮次
+    只增加稳定的场景修饰。profile 不再改写 prompt 文本, 仅选择该母体的确定性
+    前缀, 因而 probe 是 pilot 的真子集, pilot 又是 full 的真子集。
     """
 
-    scene_modifiers = [
-        "under bright studio lighting with a plain matte background",
-        "on a high contrast checker floor with clear object boundaries",
-        "with colored fiducial markers visible near the moving object",
-        "in a minimal indoor scene with stable exposure and fixed camera",
-        "with a neutral background and large foreground motion occupying most of the frame",
-    ]
     prompts: list[dict] = []
-    for index in range(200):
-        base = PILOT_PAPER_PROMPT_ITEMS[index % len(PILOT_PAPER_PROMPT_ITEMS)]
-        modifier = scene_modifiers[index % len(scene_modifiers)]
+    base_count = len(_PILOT_PAPER_BASE_PROMPT_ITEMS)
+    for index in range(_PAPER_PROFILE_PROMPT_COUNTS["full_paper"]):
+        base = _PILOT_PAPER_BASE_PROMPT_ITEMS[index % base_count]
+        replication_index = index // base_count
+        prompt_text = str(base["prompt_text"])
+        if replication_index:
+            modifier = _MASTER_SCENE_MODIFIERS[
+                (replication_index - 1) % len(_MASTER_SCENE_MODIFIERS)
+            ]
+            prompt_text = f"{prompt_text.rstrip('.')} {modifier}."
         prompts.append({
-            "prompt_id": f"full_paper_motion_{index + 1:02d}_{base['motion_pattern_id']}",
-            "prompt_text": f"{base['prompt_text']} Full-paper variant {index + 1:02d}, {modifier}.",
-            "prompt_negative_text": base["prompt_negative_text"],
-            "prompt_category": f"full_paper_{base['prompt_category']}",
-            "motion_pattern_id": f"full_paper_{base['motion_pattern_id']}_{index + 1:02d}",
+            "master_prompt_id": f"paper_master_prompt_{index + 1:03d}",
+            "paper_prompt_universe_index": index,
+            "paper_prompt_stratum_id": str(base["motion_pattern_id"]),
+            "paper_prompt_replication_index": replication_index,
+            "prompt_text": prompt_text,
+            "prompt_negative_text": str(base["prompt_negative_text"]),
+            "prompt_category": str(base["prompt_category"]).removeprefix(
+                "pilot_paper_"
+            ),
+            "motion_pattern_id": (
+                f"{base['motion_pattern_id']}_registered_{replication_index:02d}"
+            ),
             "motion_claim_role": "positive_motion",
-            "prompt_suite_role": "full_paper",
-            "split": "full_paper",
+            "paper_profile_prompt_seed_universe_id": (
+                PAPER_PROFILE_PROMPT_SEED_UNIVERSE_ID
+            ),
         })
     return prompts
 
 
-FULL_PAPER_PROMPT_ITEMS = _build_full_paper_prompts()
+MASTER_PAPER_PROMPT_ITEMS = _build_master_paper_prompt_universe()
 
-PROBE_PAPER_PROMPT_ITEMS = [
-    {
-        **PILOT_PAPER_PROMPT_ITEMS[index],
-        "prompt_id": f"probe_paper_{PILOT_PAPER_PROMPT_ITEMS[index]['prompt_id']}",
-        "prompt_suite_role": "probe_paper",
-        "split": "probe_paper",
-    }
-    for index in range(10)
-]
+
+def _build_profile_prompt_items(profile: str) -> list[dict]:
+    """从冻结母体提取 profile 的确定性嵌套 prompt 前缀。"""
+
+    return [
+        {
+            **item,
+            "prompt_id": f"{profile}_{item['master_prompt_id']}",
+            "prompt_suite_role": profile,
+            "split": profile,
+        }
+        for item in MASTER_PAPER_PROMPT_ITEMS[:_PAPER_PROFILE_PROMPT_COUNTS[profile]]
+    ]
+
+
+PROBE_PAPER_PROMPT_ITEMS = _build_profile_prompt_items("probe_paper")
+PILOT_PAPER_PROMPT_ITEMS = _build_profile_prompt_items("pilot_paper")
+FULL_PAPER_PROMPT_ITEMS = _build_profile_prompt_items("full_paper")
 
 SEED_ITEMS = [
     {"seed_id": "seed_main_a", "seed_value": 101, "prompt_suite_role": "main"},
@@ -468,61 +502,93 @@ SEED_ITEMS = [
     {"seed_id": "seed_heldout_c", "seed_value": 303, "prompt_suite_role": "heldout_seed"},
 ]
 
-PROBE_PAPER_SEED_ITEMS = [
+MASTER_PAPER_CALIBRATION_SEED_ITEMS = [
     {
-        "seed_id": f"seed_probe_paper_calib_{index + 1:02d}",
+        "master_seed_id": f"paper_master_calibration_seed_{index + 1:02d}",
+        "paper_seed_universe_split_index": index,
         "seed_value": 1201 + index * 37,
-        "prompt_suite_role": "probe_paper",
         "split": "calibration",
+        "paper_profile_prompt_seed_universe_id": (
+            PAPER_PROFILE_PROMPT_SEED_UNIVERSE_ID
+        ),
     }
-    for index in range(3)
-] + [
+    for index in range(_PAPER_PROFILE_SEED_COUNTS_PER_SPLIT["full_paper"])
+]
+MASTER_PAPER_TEST_SEED_ITEMS = [
     {
-        "seed_id": f"seed_probe_paper_test_{index + 1:02d}",
+        "master_seed_id": f"paper_master_test_seed_{index + 1:02d}",
+        "paper_seed_universe_split_index": index,
         "seed_value": 2201 + index * 37,
-        "prompt_suite_role": "probe_paper",
         "split": "test",
+        "paper_profile_prompt_seed_universe_id": (
+            PAPER_PROFILE_PROMPT_SEED_UNIVERSE_ID
+        ),
     }
-    for index in range(3)
+    for index in range(_PAPER_PROFILE_SEED_COUNTS_PER_SPLIT["full_paper"])
 ]
 
 
-PILOT_PAPER_SEED_ITEMS = [
-    {
-        "seed_id": f"seed_pilot_paper_calib_{index + 1:02d}",
-        "seed_value": 1401 + index * 41,
-        "prompt_suite_role": "pilot_paper",
-        "split": "calibration",
-    }
-    for index in range(6)
-] + [
-    {
-        "seed_id": f"seed_pilot_paper_test_{index + 1:02d}",
-        "seed_value": 2401 + index * 41,
-        "prompt_suite_role": "pilot_paper",
-        "split": "test",
-    }
-    for index in range(6)
-]
+def _build_profile_seed_items(profile: str) -> list[dict]:
+    """从 calibration/test 两个冻结 seed 母体提取同长度嵌套前缀。"""
+
+    count = _PAPER_PROFILE_SEED_COUNTS_PER_SPLIT[profile]
+    selected = (
+        MASTER_PAPER_CALIBRATION_SEED_ITEMS[:count]
+        + MASTER_PAPER_TEST_SEED_ITEMS[:count]
+    )
+    return [
+        {
+            **item,
+            "seed_id": f"{profile}_{item['master_seed_id']}",
+            "prompt_suite_role": profile,
+        }
+        for item in selected
+    ]
 
 
-FULL_PAPER_SEED_ITEMS = [
-    {
-        "seed_id": f"seed_full_paper_calib_{index + 1:02d}",
-        "seed_value": 3001 + index * 37,
-        "prompt_suite_role": "full_paper",
-        "split": "calibration",
+PROBE_PAPER_SEED_ITEMS = _build_profile_seed_items("probe_paper")
+PILOT_PAPER_SEED_ITEMS = _build_profile_seed_items("pilot_paper")
+FULL_PAPER_SEED_ITEMS = _build_profile_seed_items("full_paper")
+
+
+def _validate_nested_paper_profile_universe() -> None:
+    """验证 prompt 与两个 seed split 都满足 probe ⊂ pilot ⊂ full。"""
+
+    prompt_ids = {
+        profile: [item["master_prompt_id"] for item in items]
+        for profile, items in {
+            "probe_paper": PROBE_PAPER_PROMPT_ITEMS,
+            "pilot_paper": PILOT_PAPER_PROMPT_ITEMS,
+            "full_paper": FULL_PAPER_PROMPT_ITEMS,
+        }.items()
     }
-    for index in range(15)
-] + [
-    {
-        "seed_id": f"seed_full_paper_test_{index + 1:02d}",
-        "seed_value": 4001 + index * 37,
-        "prompt_suite_role": "full_paper",
-        "split": "test",
+    if prompt_ids["probe_paper"] != prompt_ids["pilot_paper"][:len(prompt_ids["probe_paper"])]:
+        raise ValueError("probe_paper prompt 母体不是 pilot_paper 的确定性前缀")
+    if prompt_ids["pilot_paper"] != prompt_ids["full_paper"][:len(prompt_ids["pilot_paper"])]:
+        raise ValueError("pilot_paper prompt 母体不是 full_paper 的确定性前缀")
+
+    profile_seeds = {
+        "probe_paper": PROBE_PAPER_SEED_ITEMS,
+        "pilot_paper": PILOT_PAPER_SEED_ITEMS,
+        "full_paper": FULL_PAPER_SEED_ITEMS,
     }
-    for index in range(15)
-]
+    for split in ("calibration", "test"):
+        master_ids = {
+            profile: [
+                item["master_seed_id"]
+                for item in items
+                if item["split"] == split
+            ]
+            for profile, items in profile_seeds.items()
+        }
+        if master_ids["probe_paper"] != master_ids["pilot_paper"][:len(master_ids["probe_paper"])]:
+            raise ValueError(
+                f"probe_paper {split} seed 母体不是 pilot_paper 的确定性前缀"
+            )
+        if master_ids["pilot_paper"] != master_ids["full_paper"][:len(master_ids["pilot_paper"])]:
+            raise ValueError(
+                f"pilot_paper {split} seed 母体不是 full_paper 的确定性前缀"
+            )
 
 MOTION_CALIBRATION_SEED_ITEMS = [
     {"seed_id": f"seed_motion_calib_{index:02d}", "seed_value": 1001 + index * 37, "prompt_suite_role": "motion_calibration"}
@@ -617,6 +683,27 @@ def build_prompt_suite(
     pilot_paper_config = _read_json(pilot_paper_config_path)
     probe_paper_config = _read_json(probe_paper_config_path)
     full_paper_config = _read_json(full_paper_config_path)
+    configs_by_profile = {
+        "probe_paper": probe_paper_config,
+        "pilot_paper": pilot_paper_config,
+        "full_paper": full_paper_config,
+    }
+    for profile_name, config in configs_by_profile.items():
+        if (
+            config.get("paper_profile_prompt_seed_universe_id")
+            != PAPER_PROFILE_PROMPT_SEED_UNIVERSE_ID
+        ):
+            raise ValueError(
+                f"{profile_name} 未绑定冻结的 paper prompt/seed 母体"
+            )
+        if (
+            config.get("paper_profile_prompt_seed_sampling_policy")
+            != PAPER_PROFILE_PROMPT_SEED_SAMPLING_POLICY
+        ):
+            raise ValueError(f"{profile_name} prompt/seed 嵌套抽样策略漂移")
+        if config.get("require_nested_paper_profile_prompt_seed_universe") is not True:
+            raise ValueError(f"{profile_name} 未启用 prompt/seed 嵌套母体硬门禁")
+    _validate_nested_paper_profile_universe()
     probe_paper_prompt_count = _required_int(probe_paper_config, "minimum_prompt_count", probe_paper_config_path)
     probe_paper_seed_count = _required_int(probe_paper_config, "minimum_seed_per_prompt", probe_paper_config_path)
     probe_paper_calibration_seed_count = _required_int(
@@ -683,14 +770,39 @@ def build_prompt_suite(
     )
     full_paper_runtime_attack_names = required_runtime_attack_names_from_config(full_paper_config)
     full_paper_runtime_attack_count = len(full_paper_runtime_attack_names)
+    master_prompt_digest = _stable_digest(MASTER_PAPER_PROMPT_ITEMS)
+    master_seed_digest = _stable_digest({
+        "calibration": MASTER_PAPER_CALIBRATION_SEED_ITEMS,
+        "test": MASTER_PAPER_TEST_SEED_ITEMS,
+    })
     suite = {
-        "prompt_suite_id": "generative_video_probe_prompt_suite_motion_observability_pilot_paper",
+        "prompt_suite_id": PAPER_PROFILE_PROMPT_SEED_UNIVERSE_ID,
         "dataset_construction_status": "constructed",
         "dataset_source": "repository_deterministic_prompt_seed_spec",
+        "paper_profile_sampling_contract": {
+            "paper_profile_prompt_seed_universe_id": (
+                PAPER_PROFILE_PROMPT_SEED_UNIVERSE_ID
+            ),
+            "paper_profile_prompt_seed_sampling_policy": (
+                PAPER_PROFILE_PROMPT_SEED_SAMPLING_POLICY
+            ),
+            "master_prompt_count": len(MASTER_PAPER_PROMPT_ITEMS),
+            "master_calibration_seed_count": len(
+                MASTER_PAPER_CALIBRATION_SEED_ITEMS
+            ),
+            "master_test_seed_count": len(MASTER_PAPER_TEST_SEED_ITEMS),
+            "master_prompt_digest": master_prompt_digest,
+            "master_seed_digest": master_seed_digest,
+            "prompt_nesting_decision": "PASS",
+            "calibration_seed_nesting_decision": "PASS",
+            "test_seed_nesting_decision": "PASS",
+        },
         "pilot_paper_design": {
             "paper_result_level": pilot_paper_config.get("paper_result_level", "pilot_paper"),
             "paper_protocol_level": pilot_paper_config.get("paper_protocol_level", "paper_grade_protocol"),
-            "paper_protocol_difference_from_full_paper": pilot_paper_config.get("paper_protocol_difference_from_full_paper", "sample_scale_only"),
+            "paper_protocol_difference_from_full_paper": pilot_paper_config.get("paper_protocol_difference_from_full_paper", "sample_scale_and_target_fpr_only"),
+            "paper_profile_prompt_seed_universe_id": PAPER_PROFILE_PROMPT_SEED_UNIVERSE_ID,
+            "paper_profile_prompt_seed_sampling_policy": PAPER_PROFILE_PROMPT_SEED_SAMPLING_POLICY,
             "recommended_runtime_profile": "pilot_paper",
             "target_fpr": _required_float(pilot_paper_config, "target_fpr", pilot_paper_config_path),
             "blocked_target_fpr": _required_float(pilot_paper_config, "blocked_target_fpr", pilot_paper_config_path),
@@ -701,10 +813,10 @@ def build_prompt_suite(
             "target_generation_video_count": pilot_paper_prompt_count * pilot_paper_seed_count,
             "target_calibration_unique_video_count": int(pilot_paper_config.get("minimum_calibration_unique_video_count", 0)),
             "target_test_unique_video_count": int(pilot_paper_config.get("minimum_test_unique_video_count", 0)),
-            "target_runtime_attack_count": probe_paper_runtime_attack_count,
-            "target_runtime_attack_names": list(probe_paper_runtime_attack_names),
+            "target_runtime_attack_count": pilot_paper_runtime_attack_count,
+            "target_runtime_attack_names": list(pilot_paper_runtime_attack_names),
             "target_test_attacked_positive_event_count": int(pilot_paper_config.get("minimum_heldout_attacked_positive_event_count", 0)),
-            "target_negative_family_count": probe_paper_negative_family_count,
+            "target_negative_family_count": pilot_paper_negative_family_count,
             "target_calibration_negative_event_count": int(pilot_paper_config.get("minimum_calibration_negative_event_count", 0)),
             "target_heldout_test_negative_event_count": int(pilot_paper_config.get("minimum_heldout_test_negative_event_count", 0)),
             "threshold_protocol": pilot_paper_config.get("threshold_protocol", "calibration_split_to_frozen_threshold_to_heldout_test_split"),
@@ -714,7 +826,9 @@ def build_prompt_suite(
         "probe_paper_design": {
             "paper_result_level": probe_paper_config.get("paper_result_level", "probe_paper"),
             "paper_protocol_level": probe_paper_config.get("paper_protocol_level", "paper_grade_protocol"),
-            "paper_protocol_difference_from_pilot_paper": probe_paper_config.get("paper_protocol_difference_from_pilot_paper", "target_fpr_only_same_sample_scale"),
+            "paper_protocol_difference_from_pilot_paper": probe_paper_config.get("paper_protocol_difference_from_pilot_paper", "sample_scale_and_target_fpr_only"),
+            "paper_profile_prompt_seed_universe_id": PAPER_PROFILE_PROMPT_SEED_UNIVERSE_ID,
+            "paper_profile_prompt_seed_sampling_policy": PAPER_PROFILE_PROMPT_SEED_SAMPLING_POLICY,
             "recommended_runtime_profile": "probe_paper",
             "target_fpr": _required_float(probe_paper_config, "target_fpr", probe_paper_config_path),
             "blocked_target_fpr": _required_float(probe_paper_config, "blocked_target_fpr", probe_paper_config_path),
@@ -725,10 +839,10 @@ def build_prompt_suite(
             "target_generation_video_count": probe_paper_prompt_count * probe_paper_seed_count,
             "target_calibration_unique_video_count": int(probe_paper_config.get("minimum_calibration_unique_video_count", 0)),
             "target_test_unique_video_count": int(probe_paper_config.get("minimum_test_unique_video_count", 0)),
-            "target_runtime_attack_count": pilot_paper_runtime_attack_count,
-            "target_runtime_attack_names": list(pilot_paper_runtime_attack_names),
+            "target_runtime_attack_count": probe_paper_runtime_attack_count,
+            "target_runtime_attack_names": list(probe_paper_runtime_attack_names),
             "target_test_attacked_positive_event_count": int(probe_paper_config.get("minimum_heldout_attacked_positive_event_count", 0)),
-            "target_negative_family_count": pilot_paper_negative_family_count,
+            "target_negative_family_count": probe_paper_negative_family_count,
             "target_calibration_negative_event_count": int(probe_paper_config.get("minimum_calibration_negative_event_count", 0)),
             "target_heldout_test_negative_event_count": int(probe_paper_config.get("minimum_heldout_test_negative_event_count", 0)),
             "threshold_protocol": probe_paper_config.get("threshold_protocol", "calibration_split_to_frozen_threshold_to_heldout_test_split"),
@@ -739,6 +853,8 @@ def build_prompt_suite(
             "paper_result_level": full_paper_config.get("paper_result_level", "full_paper"),
             "paper_protocol_level": full_paper_config.get("paper_protocol_level", "paper_grade_protocol"),
             "paper_protocol_difference_from_pilot_paper": full_paper_config.get("paper_protocol_difference_from_pilot_paper", "sample_scale_and_target_fpr_only"),
+            "paper_profile_prompt_seed_universe_id": PAPER_PROFILE_PROMPT_SEED_UNIVERSE_ID,
+            "paper_profile_prompt_seed_sampling_policy": PAPER_PROFILE_PROMPT_SEED_SAMPLING_POLICY,
             "recommended_runtime_profile": "full_paper",
             "target_fpr": _required_float(full_paper_config, "target_fpr", full_paper_config_path),
             "prompt_count": full_paper_prompt_count,

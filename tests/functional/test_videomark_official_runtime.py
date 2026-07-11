@@ -80,12 +80,30 @@ def test_videomark_runtime_generates_per_attack_official_bundle_without_sstw_sco
         )
 
     def fake_attack(
-        frames: np.ndarray,
+        source_video_path: Path,
         attack_name: str,
         output_path: Path,
         fps: float,
     ) -> tuple[list[np.ndarray], dict[str, object]]:
-        return list(frames), {"attack_name": attack_name, "video_fps": fps}
+        """模拟共享文件级 executor, 并保持 clean / watermarked 路径可区分。"""
+
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_bytes(b"verified-attacked-video")
+        value = 0.0 if source_video_path.stem.endswith("_clean") else 1.0
+        frames = [np.full((4, 4, 3), value, dtype=np.float32) for _ in range(2)]
+        return frames, {
+            "runtime_attack_name": attack_name,
+            "runtime_attack_implementation_level": "formal_runtime_video_transform",
+            "runtime_attack_formal_evidence_level": "formal_runtime_video_transform_verified",
+            "runtime_attack_proxy_free": True,
+            "runtime_attack_effect_verified": True,
+            "runtime_attack_effect_verification_status": "verified",
+            "runtime_attack_decoded_effect_verified": True,
+            "runtime_attack_effect_verification_basis": "test_file_executor",
+            "runtime_attack_output_file_changed": True,
+            "runtime_attack_writer_parameters_applied": True,
+            "video_fps": fps,
+        }
 
     def fake_detect(
         backend_arg: object,
@@ -121,7 +139,9 @@ def test_videomark_runtime_generates_per_attack_official_bundle_without_sstw_sco
     )
     monkeypatch.setattr(
         "external_baseline.videomark_official_runtime.write_video_tchw",
-        lambda *args, **kwargs: {},
+        lambda path, *_args, **_kwargs: Path(path).parent.mkdir(parents=True, exist_ok=True)
+        or Path(path).write_bytes(b"source-video")
+        or {},
     )
 
     manifest = run_videomark_official_runtime(
@@ -144,6 +164,11 @@ def test_videomark_runtime_generates_per_attack_official_bundle_without_sstw_sco
     assert len(payloads) == 2
     assert all(payload["external_baseline_score"] == 1.0 for payload in payloads)
     assert all(payload["external_baseline_clean_negative_score"] == 0.0 for payload in payloads)
+    assert all(payload["runtime_attack_effect_verified"] is True for payload in payloads)
+    assert all(
+        payload["clean_negative_runtime_attack_effect_verified"] is True
+        for payload in payloads
+    )
     assert all("S_final_conservative" not in payload for payload in payloads)
     assert all(
         payload["official_result_provenance"]

@@ -29,12 +29,18 @@ CLAIM_EVIDENCE_PATHS: dict[str, tuple[str, ...]] = {
     ),
     "claim_3_attacked_video_replay_posterior": (
         "artifacts/replay_and_sketch_gate_decision.json",
+        "artifacts/heldout_posterior_calibration_decision.json",
+        "records/heldout_posterior_calibration_records.jsonl",
+        "tables/heldout_posterior_calibration_table.csv",
         "records/replay_uncertainty_records.jsonl",
         "records/wrong_key_replay_records.jsonl",
         "records/wrong_sampler_replay_records.jsonl",
         "records/wrong_prompt_replay_records.jsonl",
         "records/wrong_time_grid_replay_records.jsonl",
+        "records/formal_adaptive_attack_query_budget_checkpoint_records.jsonl",
+        "tables/formal_adaptive_attack_query_budget_checkpoint_table.csv",
         "reports/replay_and_sketch_gate_report.md",
+        "reports/heldout_posterior_calibration_report.md",
     ),
     "supportive_cross_model_generalization": (
         "artifacts/cross_model_generalization_decision.json",

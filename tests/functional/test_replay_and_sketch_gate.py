@@ -7,8 +7,8 @@ from evaluation.protocol.record_writer import read_jsonl, write_jsonl
 
 
 @pytest.mark.quick
-def test_replay_and_sketch_gate_writes_owner_side_diagnostic_records(tmp_path: Path) -> None:
-    """replay/sketch gate 必须从轨迹 records 写出四类 governed records, 但不伪装成 full-paper 强 Claim-3。"""
+def test_replay_and_sketch_gate_rejects_owner_side_diagnostic_inputs(tmp_path: Path) -> None:
+    """仅有 owner-side 轨迹时必须失败关闭, 不得生成 Claim-3 降级记录。"""
     run_root = tmp_path / "run"
     generation_records = []
     trajectory_records = []
@@ -41,22 +41,22 @@ def test_replay_and_sketch_gate_writes_owner_side_diagnostic_records(tmp_path: P
     wrong_sampler_records = read_jsonl(run_root / "records" / "wrong_sampler_replay_records.jsonl")
     wrong_prompt_records = read_jsonl(run_root / "records" / "wrong_prompt_replay_records.jsonl")
 
-    assert audit["replay_and_sketch_gate_decision"] == "PASS"
-    assert audit["replay_and_sketch_evidence_level"] == "owner_side_runtime_trace_diagnostic"
+    assert audit["replay_and_sketch_gate_decision"] == "FAIL"
+    assert audit["replay_and_sketch_evidence_level"] == (
+        "attacked_video_key_independent_inversion_hypothesis_replay_with_hmac_sketch"
+    )
     assert audit["claim3_full_support_allowed"] is False
-    assert audit["trajectory_sketch_verified_count"] == 4
-    assert audit["replay_uncertainty_ready_count"] == 4
-    assert audit["wrong_sampler_replay_rejected_count"] == 4
-    assert audit["wrong_prompt_replay_rejected_count"] == 4
-    assert len(sketch_records) == 4
-    assert len(uncertainty_records) == 4
-    assert len(wrong_sampler_records) == 4
-    assert len(wrong_prompt_records) == 4
-    assert sketch_records[0]["trajectory_sketch_digest_random"]
-    assert sketch_records[0]["trajectory_sketch_verification_status"] == "verified"
-    assert uncertainty_records[0]["replay_uncertainty_weight"] is not None
-    assert wrong_sampler_records[0]["replay_control_status"] == "replay_rejected"
-    assert wrong_prompt_records[0]["replay_control_status"] == "replay_rejected"
+    assert "authenticated_trajectory_sketch_records_ready" in audit[
+        "replay_and_sketch_missing_requirements"
+    ]
+    assert audit["trajectory_sketch_verified_count"] == 0
+    assert audit["replay_uncertainty_ready_count"] == 0
+    assert audit["wrong_sampler_replay_rejected_count"] == 0
+    assert audit["wrong_prompt_replay_rejected_count"] == 0
+    assert sketch_records == []
+    assert uncertainty_records == []
+    assert wrong_sampler_records == []
+    assert wrong_prompt_records == []
     assert (run_root / "tables" / "replay_verification_table.csv").exists()
     assert (run_root / "artifacts" / "replay_and_sketch_gate_decision.json").exists()
     assert (run_root / "reports" / "replay_and_sketch_gate_report.md").exists()

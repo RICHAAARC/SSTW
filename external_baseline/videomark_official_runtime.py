@@ -20,13 +20,19 @@ import re
 import sys
 from typing import Any, Iterator, Mapping
 
-from evaluation.attacks.video_runtime_attack_protocol import apply_runtime_attack_to_frames
+from evaluation.attacks.video_runtime_attack_protocol import (
+    apply_runtime_attack_to_video_file,
+    prefixed_runtime_attack_metadata,
+)
 from external_baseline.official_eval_adapters.common import (
     REPOSITORY_GENERATED_OFFICIAL_PROVENANCE,
     build_official_reference_bundle_execution_status,
 )
 from external_baseline.official_runtime_progress import emit_official_reference_plan
-from external_baseline.runtime_trace_io import comparable_detection_records
+from external_baseline.runtime_trace_io import (
+    NATIVE_GENERATION_COMPARISON_DESIGN,
+    comparable_detection_records,
+)
 from external_baseline.score_semantics import official_score_formal_comparison_summary
 from external_baseline.video_tensor_io import read_video_tchw_uint8, write_video_tchw
 from runtime.core.digest import build_stable_digest
@@ -340,26 +346,19 @@ def _generate_reference_pair(
 
 
 def _attack_roundtrip(
-    frames: Any,
+    source_video_path: Path,
     attack_name: str,
     output_path: Path,
     fps: float,
 ) -> tuple[list[Any], dict[str, Any]]:
-    """施加共享 runtime attack, 经 mp4 编解码后返回 detector 输入。"""
+    """通过统一文件级 executor 施加攻击并返回官方 detector 输入。"""
 
-    import numpy as np
-    import torch
-
-    source_frames = [
-        np.clip(np.asarray(frame) * 255.0, 0, 255).round().astype(np.uint8)
-        for frame in frames
-    ]
-    attacked_frames, attack_metadata = apply_runtime_attack_to_frames(
-        source_frames,
+    attack_metadata = apply_runtime_attack_to_video_file(
+        source_video_path,
+        output_path,
         attack_name,
+        fps=fps,
     )
-    tensor = torch.from_numpy(np.stack(attacked_frames)).permute(0, 3, 1, 2).contiguous()
-    write_video_tchw(output_path, tensor, fps=fps)
     decoded, read_info = read_video_tchw_uint8(
         output_path,
         empty_error="videomark_attacked_video_empty_after_reencode",
@@ -524,6 +523,7 @@ def run_videomark_official_runtime(
     )
     backend = _load_official_backend(config)
     cache: dict[tuple[str, str], tuple[Any, Any, int]] = {}
+    source_paths_by_group: dict[tuple[str, str], tuple[Path, Path]] = {}
     generated = 0
     failures: list[dict[str, Any]] = []
     progress = ProgressReporter(
@@ -558,23 +558,32 @@ def run_videomark_official_runtime(
                 )
             watermarked_frames, clean_frames, shift = cache[group_key]
             stem = output_json.stem
-            watermarked_path = video_dir / f"{stem}_watermarked.mp4"
             attacked_path = video_dir / f"{stem}_attacked.mp4"
-            clean_path = video_dir / f"{stem}_clean_negative.mp4"
-            watermarked_tensor = backend["torch"].from_numpy(
-                backend["numpy"].stack(watermarked_frames)
-            ).permute(0, 3, 1, 2)
-            write_video_tchw(watermarked_path, watermarked_tensor, fps=config.fps)
+            clean_attacked_path = video_dir / f"{stem}_clean_negative.mp4"
+            if group_key not in source_paths_by_group:
+                source_token = f"{_safe_token(prompt_id)}__{_safe_token(seed_id)}"
+                watermarked_path = video_dir / "sources" / f"{source_token}_watermarked.mp4"
+                clean_source_path = video_dir / "sources" / f"{source_token}_clean.mp4"
+                watermarked_tensor = backend["torch"].from_numpy(
+                    backend["numpy"].stack(watermarked_frames)
+                ).permute(0, 3, 1, 2)
+                clean_tensor = backend["torch"].from_numpy(
+                    backend["numpy"].stack(clean_frames)
+                ).permute(0, 3, 1, 2)
+                write_video_tchw(watermarked_path, watermarked_tensor, fps=config.fps)
+                write_video_tchw(clean_source_path, clean_tensor, fps=config.fps)
+                source_paths_by_group[group_key] = (watermarked_path, clean_source_path)
+            watermarked_path, clean_source_path = source_paths_by_group[group_key]
             attacked_frames, attacked_metadata = _attack_roundtrip(
-                watermarked_frames,
+                watermarked_path,
                 attack_name,
                 attacked_path,
                 config.fps,
             )
             clean_attacked_frames, clean_metadata = _attack_roundtrip(
-                clean_frames,
+                clean_source_path,
                 attack_name,
-                clean_path,
+                clean_attacked_path,
                 config.fps,
             )
             positive = _detect_payload(backend, config, attacked_frames)
@@ -584,7 +593,7 @@ def run_videomark_official_runtime(
                     **positive,
                     "external_baseline_clean_negative_score": negative["raw_detector_score"],
                     "external_baseline_clean_negative_score_semantics": negative["score_semantics"],
-                    "external_baseline_clean_negative_video_path": str(clean_path),
+                    "external_baseline_clean_negative_video_path": str(clean_attacked_path),
                     "official_result_provenance": REPOSITORY_GENERATED_OFFICIAL_PROVENANCE,
                     "official_adapter_baseline_id": BASELINE_ID,
                     "official_baseline_id": BASELINE_ID,
@@ -597,6 +606,9 @@ def run_videomark_official_runtime(
                         "temporal_matching_minimum_edit_distance",
                     ],
                     "external_baseline_generation_model_id": config.model_id,
+                    "external_baseline_comparison_design": NATIVE_GENERATION_COMPARISON_DESIGN,
+                    "external_baseline_quality_comparison_protocol": "native_generation_semantic_quality",
+                    "external_baseline_clean_source_video_path": str(clean_source_path),
                     "external_baseline_source_video_path": str(watermarked_path),
                     "external_baseline_attacked_video_path": str(attacked_path),
                     "external_baseline_official_execution_mode": "videomark_official_prc_generation_inversion_temporal_matching",
@@ -606,6 +618,11 @@ def run_videomark_official_runtime(
                     "attack_name": attack_name,
                     "attack_metadata": attacked_metadata,
                     "clean_negative_attack_metadata": clean_metadata,
+                    **attacked_metadata,
+                    **prefixed_runtime_attack_metadata(
+                        clean_metadata,
+                        prefix="clean_negative_",
+                    ),
                     "prompt_id": prompt_id,
                     "seed_id": seed_id,
                     "trajectory_trace_id": record.get("trajectory_trace_id"),

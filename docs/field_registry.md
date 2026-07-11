@@ -148,6 +148,64 @@ Notebook 与 repository module 的跨边界数据
 | runtime_attack_formal_missing_count | metric | none | true | true | false | Runtime attack ready records 中缺少正式视频文件级变换证据的数量。 |
 | video_writer_codec | protocol | none | true | false | false | runtime attack 写出 attacked video 时请求的编码器名称。 |
 | video_writer_output_params | protocol | none | true | false | false | runtime attack 写出 attacked video 时请求传递给视频编码器的参数列表。 |
+| runtime_attack_effect_verified | governance | none | true | true | false | 文件级 runtime attack 是否通过编码前变换、解码后效果、codec metadata 与文件摘要的适用验真条件。 |
+| runtime_attack_effect_verification_status | governance | none | true | true | false | 文件级 runtime attack 的效果验真状态; 正式记录必须为 verified。 |
+| runtime_attack_effect_verification_basis | provenance | none | true | false | false | 文件级 runtime attack 通过效果验真的证据组合。 |
+| runtime_attack_source_frame_count | metric | none | true | false | false | 文件级 runtime attack 解码得到的输入帧数。 |
+| runtime_attack_transformed_frame_count | metric | none | true | false | false | 文件级 runtime attack 在编码前得到的变换后帧数。 |
+| runtime_attack_decoded_output_frame_count | metric | none | true | false | false | 攻击输出文件重新解码得到的帧数。 |
+| runtime_attack_source_frame_digest | provenance | none | true | false | false | 输入帧序列按顺序、shape、dtype 与像素构造的 SHA-256 摘要。 |
+| runtime_attack_transformed_frame_digest | provenance | none | true | false | false | 编码前变换后帧序列的 SHA-256 摘要。 |
+| runtime_attack_decoded_output_frame_digest | provenance | none | true | false | false | 攻击输出重新解码后帧序列的 SHA-256 摘要。 |
+| runtime_attack_preencode_effect_verified | governance | none | true | true | false | 非纯 codec 变换是否在编码前真实改变帧序列。 |
+| runtime_attack_decoded_effect_verified | governance | none | true | true | false | 攻击输出重新解码后是否相对输入帧序列发生真实变化。 |
+| runtime_attack_source_video_sha256 | provenance | none | true | false | false | 文件级 runtime attack 输入视频的 SHA-256 摘要。 |
+| runtime_attack_output_video_sha256 | provenance | none | true | false | false | 文件级 runtime attack 输出视频的 SHA-256 摘要。 |
+| runtime_attack_output_file_changed | governance | none | true | true | false | 攻击输出文件摘要是否不同于输入文件。 |
+| runtime_attack_decoded_mean_absolute_error | metric | none | true | false | false | 输入与攻击输出可对齐解码帧的平均绝对像素差。 |
+| runtime_attack_requested_codec | protocol | none | true | false | false | 文件级攻击请求传给 writer 的 codec; 非 codec 攻击为 null。 |
+| runtime_attack_observed_codec | provenance | none | true | false | false | 从攻击输出 metadata 读取的实际 codec。 |
+| runtime_attack_codec_verification_status | governance | none | true | true | false | 请求 codec 与输出实际 codec 的一致性验真状态。 |
+| runtime_attack_requested_output_params | protocol | none | true | false | false | 文件级攻击请求传给 writer 的 CRF、qscale 或 pixel format 参数。 |
+| runtime_attack_writer_parameters_applied | governance | none | true | true | false | 文件级 executor 是否把受治理 writer 参数传入实际视频写出调用。 |
+| runtime_attack_source_video_path | artifact | none | true | false | false | 文件级 runtime attack 的输入视频路径。 |
+| runtime_attack_output_video_path | artifact | none | true | false | false | 文件级 runtime attack 的独立输出视频路径。 |
+| runtime_attack_output_file_size_bytes | metric | none | true | false | false | 文件级 runtime attack 输出文件大小。 |
+| runtime_attack_output_pixel_format | provenance | none | true | false | false | 从攻击输出 metadata 读取的 pixel format。 |
+| runtime_attack_platform_execution_scope | protocol | none | true | false | false | platform transcode 是本地平台风格转码还是外部真实上传下载的范围声明。 |
+| clean_negative_attack_family | protocol | none | true | false | false | clean negative 视频所执行 runtime attack 的攻击家族。 |
+| clean_negative_runtime_attack_expected_effect | protocol | none | true | false | false | clean negative 视频所执行 runtime attack 的预期效果。 |
+| clean_negative_runtime_attack_implementation_level | protocol | none | true | true | false | clean negative 攻击实现层级; 正式记录必须为 formal_runtime_video_transform。 |
+| clean_negative_runtime_attack_formal_evidence_level | governance | none | true | true | false | clean negative 是否由已验真的正式文件级攻击产生。 |
+| clean_negative_runtime_attack_claim_level | governance | none | true | false | false | clean negative runtime attack 可支持的论文协议层级。 |
+| clean_negative_runtime_attack_proxy_free | governance | none | true | true | false | clean negative runtime attack 是否未使用 proxy 或轻量替代。 |
+| clean_negative_video_writer_codec | protocol | none | true | false | false | clean negative 攻击写出时请求的编码器名称。 |
+| clean_negative_video_writer_output_params | protocol | none | true | false | false | clean negative 攻击写出时请求的编码器参数。 |
+| clean_negative_runtime_attack_effect_verified | governance | none | true | true | false | clean negative 文件级攻击是否通过适用的效果验真条件。 |
+| clean_negative_runtime_attack_effect_verification_status | governance | none | true | true | false | clean negative 文件级攻击效果验真状态; 正式记录必须为 verified。 |
+| clean_negative_runtime_attack_effect_verification_basis | provenance | none | true | false | false | clean negative 文件级攻击通过效果验真的证据组合。 |
+| clean_negative_runtime_attack_source_frame_count | metric | none | true | false | false | clean negative 攻击输入文件的解码帧数。 |
+| clean_negative_runtime_attack_transformed_frame_count | metric | none | true | false | false | clean negative 攻击编码前的变换后帧数。 |
+| clean_negative_runtime_attack_decoded_output_frame_count | metric | none | true | false | false | clean negative 攻击输出重新解码后的帧数。 |
+| clean_negative_runtime_attack_source_frame_digest | provenance | none | true | false | false | clean negative 攻击输入帧序列摘要。 |
+| clean_negative_runtime_attack_transformed_frame_digest | provenance | none | true | false | false | clean negative 编码前变换后帧序列摘要。 |
+| clean_negative_runtime_attack_decoded_output_frame_digest | provenance | none | true | false | false | clean negative 攻击输出重新解码后的帧序列摘要。 |
+| clean_negative_runtime_attack_preencode_effect_verified | governance | none | true | true | false | clean negative 非纯 codec 变换是否在编码前改变帧序列。 |
+| clean_negative_runtime_attack_decoded_effect_verified | governance | none | true | true | false | clean negative 攻击输出重新解码后是否相对输入发生真实变化。 |
+| clean_negative_runtime_attack_source_video_sha256 | provenance | none | true | false | false | clean negative 文件级攻击输入视频摘要。 |
+| clean_negative_runtime_attack_output_video_sha256 | provenance | none | true | false | false | clean negative 文件级攻击输出视频摘要。 |
+| clean_negative_runtime_attack_output_file_changed | governance | none | true | true | false | clean negative 攻击输出文件摘要是否不同于输入。 |
+| clean_negative_runtime_attack_decoded_mean_absolute_error | metric | none | true | false | false | clean negative 输入与攻击输出可对齐帧的平均绝对像素差。 |
+| clean_negative_runtime_attack_requested_codec | protocol | none | true | false | false | clean negative 文件级攻击请求的 codec。 |
+| clean_negative_runtime_attack_observed_codec | provenance | none | true | false | false | clean negative 攻击输出 metadata 中的实际 codec。 |
+| clean_negative_runtime_attack_codec_verification_status | governance | none | true | true | false | clean negative 请求 codec 与输出实际 codec 的一致性状态。 |
+| clean_negative_runtime_attack_requested_output_params | protocol | none | true | false | false | clean negative 文件级攻击请求的 CRF、qscale 或 pixel format 参数。 |
+| clean_negative_runtime_attack_writer_parameters_applied | governance | none | true | true | false | clean negative 文件级 executor 是否应用受治理 writer 参数。 |
+| clean_negative_runtime_attack_source_video_path | artifact | none | true | false | false | clean negative 文件级攻击输入视频路径。 |
+| clean_negative_runtime_attack_output_video_path | artifact | none | true | false | false | clean negative 文件级攻击独立输出视频路径。 |
+| clean_negative_runtime_attack_output_file_size_bytes | metric | none | true | false | false | clean negative 文件级攻击输出文件大小。 |
+| clean_negative_runtime_attack_output_pixel_format | provenance | none | true | false | false | clean negative 攻击输出 metadata 中的 pixel format。 |
+| clean_negative_runtime_attack_platform_execution_scope | protocol | none | true | false | false | clean negative platform transcode 的执行范围声明。 |
 | runtime_attack_observed_names | protocol | none | true | false | false | probe_paper gate 从 runtime_attack_records 观察到的 ready attack 名称集合。 |
 | runtime_attack_missing_required_names | governance | none | true | false | false | probe_paper gate 中 runtime_attack_records 缺失的 required runtime attack 名称集合。 |
 | runtime_attack_missing_required_count | metric | none | true | true | false | probe_paper gate 中 runtime_attack_records 缺失的 required runtime attack 数量。 |
@@ -628,7 +686,7 @@ Notebook 与 repository module 的跨边界数据
 | replay_signature_mismatch_status | governance | none | true | false | false | Replay signature mismatch 状态。 |
 | trajectory_sketch_tamper_status | governance | none | true | false | false | Trajectory sketch tamper 状态。 |
 | quality_guard_status | governance | none | true | false | false | Quality guard 状态。 |
-| semantic_projection_status | governance | none | true | false | false | Semantic projection 状态。 |
+| semantic_projection_status | method | none | true | true | false | prompt-conditioned velocity 一阶切向投影的执行或拒绝状态。 |
 | adaptive_negative_fpr | metric | none | true | false | false | Adaptive negative FPR。 |
 | adaptive_negative_fpr_status | governance | none | true | false | false | Adaptive negative FPR 可用状态。 |
 | adaptive_attack_success_status | governance | none | true | false | false | Adaptive attack success 状态; 正式论文证据必须同时具备 measured_formal 和 formal_adaptive_attack_execution evidence。 |
@@ -1353,6 +1411,13 @@ Notebook 与 repository module 的跨边界数据
 | difference_ci_lower | metric | none | true | true | false | 差值置信区间下界。 |
 | difference_ci_upper | metric | none | true | true | false | 差值置信区间上界。 |
 | difference_interval_method | protocol | none | true | false | false | 差值置信区间使用的统计方法。 |
+| external_baseline_comparison_design | protocol | none | true | true | false | baseline 使用同源 post-hoc 设计还是 native-generation 独立两样本设计。 |
+| paired_source_video_inference_used | governance | none | true | true | false | 差值区间是否真实使用同一 source video 的配对推断。 |
+| matched_design_anchor_count | metric | none | true | true | false | 两种方法在 prompt、seed、attack 实验设计上共同覆盖的锚点数，不表示视频配对。 |
+| matched_design_anchor_keys | provenance | none | true | false | false | 两种方法共同覆盖的实验设计锚点集合，不表示同一视频。 |
+| matched_design_attack_names | protocol | none | true | true | false | native-generation 独立两样本比较共同覆盖的预注册攻击集合。 |
+| paired_comparison_unit_count_semantics | governance | none | true | false | false | paired_comparison_unit_count 是真实同源配对还是不适用的明确语义。 |
+| source_video_pairing_status | governance | none | true | true | false | 当前差值统计是否使用同一 source video 的显式状态。 |
 | difference_interval_status | governance | none | true | false | false | 单条差值置信区间 record 是否可用。 |
 | significance_claim_status | governance | none | true | true | false | 当前差值区间是否允许支撑显著性 claim 的状态。 |
 | difference_interval_record_count | metric | none | true | true | false | 差值置信区间 records 数量。 |
@@ -2120,6 +2185,71 @@ Notebook 与 repository module 的跨边界数据
 | adaptive_search_coordinate_2_name | method | none | true | true | false | 第二个独立原生攻击参数对应的归一化坐标名称。 |
 | adaptive_search_coordinate_2_value | method | none | true | true | false | 第二个原生攻击参数的实际归一化查询坐标。 |
 | adaptive_search_feedback_parent_candidate_index | provenance | none | true | true | false | detector-feedback 细化查询所依据的历史最优可接受候选索引; 初始探针为空。 |
+| adaptive_attack_query_budget_per_video | protocol | none | true | false | false | 三个正式 profile 共用的单视频单协议最大冻结检测器查询预算。 |
+| adaptive_attack_execution_granularity | governance | none | true | true | false | 正式 adaptive evidence 逐 source-video 使用冻结 Flow 检测器独立执行的粒度声明。 |
+| adaptive_attack_checkpoint_total_detector_query_count | metric | none | true | true | false | 当前 checkpoint 的 target 查询前缀加 public-negative warmup 后的真实总查询数。 |
+| adaptive_attack_checkpoint_public_negative_query_count | metric | none | true | true | false | 当前 checkpoint 之前已经消耗的 calibration public-negative 冻结检测器调用数。 |
+| adaptive_attack_query_accounting_protocol | governance | none | true | true | false | 要求统计全部 target 和 public-negative 冻结检测器调用、禁止隐藏 warmup 查询的协议。 |
+| adaptive_attack_total_detector_query_count | metric | none | true | true | false | 单视频攻击实际发生的 target 与 public-negative 冻结检测器调用总数。 |
+| adaptive_attack_public_negative_probe_query_budget | protocol | none | true | false | false | public-negative detector probing 预注册的 calibration warmup 查询数, 与 held-out target 查询分别记账。 |
+| adaptive_attack_query_budget_checkpoints | protocol | none | true | true | false | 预注册的严格递增真实查询前缀, 最后一项必须等于最大查询预算。 |
+| adaptive_attack_query_budget_checkpoint_protocol | governance | none | true | true | false | query-budget 曲线只从同一次真实序贯查询的嵌套前缀选择候选的协议标识。 |
+| adaptive_attack_query_budget_checkpoint_records | metric | none | true | true | false | 单视频各预注册查询预算前缀的真实最优可接受候选记录。 |
+| adaptive_attack_query_budget_checkpoint | protocol | none | true | true | false | 当前 checkpoint 已允许并实际观察的冻结检测器查询次数。 |
+| adaptive_attack_checkpoint_observed_query_count | metric | none | true | true | false | 当前 checkpoint 前缀内实际完成的候选查询数量。 |
+| adaptive_attack_checkpoint_candidate_count | metric | none | true | true | false | 当前 checkpoint 可用于选择的真实候选视频数量。 |
+| adaptive_attack_checkpoint_admissible_candidate_count | metric | none | true | true | false | 当前 checkpoint 内同时满足质量和 endpoint 约束的真实候选数量。 |
+| adaptive_attack_checkpoint_has_admissible_candidate | metric | none | true | true | false | 当前 checkpoint 是否至少存在一个满足预注册约束的真实候选。 |
+| adaptive_attack_checkpoint_selection_protocol | governance | none | true | true | false | 当前 checkpoint 仅在已发生查询前缀中选择最优可接受候选的规则。 |
+| adaptive_attack_checkpoint_is_final_budget | governance | none | true | false | false | 当前 checkpoint 是否对应预注册最大查询预算。 |
+| adaptive_attack_checkpoint_selected_candidate_index | provenance | none | true | true | false | 当前查询前缀中按冻结目标选择的候选索引。 |
+| adaptive_attack_checkpoint_output_video_path | provenance | none | true | false | false | checkpoint 最优真实候选视频的运行目录路径。 |
+| adaptive_attack_checkpoint_output_video_sha256 | provenance | none | true | true | false | checkpoint 最优真实候选视频的内容摘要。 |
+| adaptive_attack_checkpoint_detector_score | metric | none | true | true | false | checkpoint 最优候选的冻结完整方法后验分数。 |
+| adaptive_attack_checkpoint_path_score | metric | none | true | true | false | checkpoint 最优候选的路径证据分数。 |
+| adaptive_attack_checkpoint_endpoint_score | metric | none | true | true | false | checkpoint 最优候选的 endpoint 证据分数。 |
+| adaptive_attack_checkpoint_quality_psnr | metric | none | true | true | false | checkpoint 最优候选相对其 source video 的实测 PSNR。 |
+| adaptive_attack_checkpoint_detected_by_sstw | metric | none | true | true | false | checkpoint 最优候选是否被同一冻结 SSTW 检测器检出。 |
+| formal_adaptive_query_budget_checkpoint_record_id | provenance | none | true | true | false | 由 checkpoint 内容稳定摘要生成的 governed record 标识。 |
+| adaptive_attack_checkpoint_query_role | governance | none | true | true | false | checkpoint 记录属于 held-out test source video, 不属于 calibration public negative。 |
+| adaptive_attack_query_budget_checkpoint_record_count | metric | none | true | true | false | 正式执行生成的 held-out query-budget checkpoint governed record 总数。 |
+| adaptive_attack_query_budget_statistics | metric | none | true | true | false | 各攻击协议和查询预算下按 source-video cluster 等权计算的检出率区间。 |
+| adaptive_attack_checkpoint_watermark_retention_rate_estimate | metric | none | true | true | false | 指定攻击协议与查询预算下的 cluster-equal 水印检出率。 |
+| adaptive_attack_checkpoint_watermark_retention_rate_ci_95_lower | metric | none | true | true | false | query-budget checkpoint 水印检出率的95%区间下界。 |
+| adaptive_attack_checkpoint_watermark_retention_rate_ci_95_upper | metric | none | true | true | false | query-budget checkpoint 水印检出率的95%区间上界。 |
+| adaptive_attack_checkpoint_watermark_retention_rate_cluster_count | metric | none | true | true | false | query-budget checkpoint 统计使用的独立 source-video cluster 数。 |
+| adaptive_attack_checkpoint_watermark_retention_rate_observation_count | metric | none | true | false | false | query-budget checkpoint 的原始行数, 不作为独立样本量。 |
+| adaptive_attack_checkpoint_watermark_retention_rate_bootstrap_resample_count | metric | none | true | false | false | query-budget checkpoint cluster bootstrap 的重采样次数。 |
+| adaptive_attack_public_negative_query_budget_checkpoints | protocol | none | true | false | false | calibration public negative 探测使用的同一预注册查询预算前缀。 |
+| adaptive_attack_public_negative_query_budget_checkpoint_records | metric | none | true | false | false | calibration public negative 真实查询前缀记录, 仅用于证明探测过程不是固定攻击列表。 |
+| adaptive_attack_source_cluster_selection_protocol | governance | none | true | true | false | 在读取攻击分数前按 source cluster 稳定摘要选择 adaptive 样本的冻结协议。 |
+| minimum_adaptive_attack_source_video_cluster_count_per_protocol | protocol | none | true | true | false | 当前 profile 每个 adaptive 协议必须覆盖的最少独立 source-video cluster 数。 |
+| adaptive_spoof_independent_video_count | metric | none | true | true | false | executor 为固定 FPR copy/spoof 误接受统计执行的独立视频数量。 |
+| adaptive_attack_spoof_source_video_cluster_count | metric | none | true | true | false | copy/spoof 正式统计实际覆盖的独立 recipient source-video cluster 数。 |
+| adaptive_attack_spoof_donor_source | provenance | none | true | true | false | copy/spoof donor 来自真实 held-out 完整方法生成视频而不是 runtime attack 小子集或代理记录。 |
+| adaptive_attack_spoof_source_population_cluster_count | metric | none | true | false | false | 抽样前可用于固定 FPR copy/spoof 的 held-out full-method generation donor 总数。 |
+| minimum_adaptive_spoof_source_video_cluster_count | protocol | none | true | true | false | 为在当前固定 FPR 下形成有效单侧误接受上界而必须执行的 copy/spoof 独立 recipient 视频数。 |
+| adaptive_attack_source_statistical_cluster_id | provenance | none | true | true | false | 每条 adaptive 执行记录对应的原始 held-out source-video cluster 标识。 |
+| adaptive_attack_source_population_cluster_count | metric | none | true | false | false | 预注册抽样前可用的 held-out source-video cluster 总数。 |
+| adaptive_attack_selected_source_video_cluster_count | metric | none | true | true | false | 进入正式 adaptive 执行的独立 source-video cluster 数。 |
+| adaptive_attack_protocol_independent_cluster_counts | metric | none | true | true | false | 各协议按其正确统计单位去重后的独立 cluster 或 pair 数。 |
+| adaptive_attack_incomplete_cluster_protocols | governance | none | true | true | false | 未满足预注册独立簇覆盖的 adaptive 协议列表。 |
+| adaptive_attack_duplicate_independent_units | governance | none | true | true | false | 同一协议内重复出现的 source-video cluster 或 collusion pair 标识。 |
+| adaptive_attack_missing_query_budget_checkpoint_scopes | governance | none | true | true | false | 缺少完整独立簇覆盖的攻击协议与查询预算组合。 |
+| adaptive_attack_source_cluster_coverage_decision | governance | none | true | true | false | 全部正式 adaptive 协议是否达到预注册独立 source-video cluster 覆盖。 |
+| adaptive_attack_independent_unit_uniqueness_decision | governance | none | true | true | false | executor 是否实现每协议每 source cluster 一条统计记录且 collusion 每对只记录一次。 |
+| adaptive_attack_query_budget_checkpoint_coverage_decision | governance | none | true | true | false | executor 的全部协议与预注册查询预算是否具备完整独立簇 checkpoint 记录。 |
+| adaptive_attack_source_cluster_coverage_ready | governance | none | true | false | false | executor 内部用于组合正式执行门禁的独立簇覆盖布尔值。 |
+| adaptive_attack_independent_unit_uniqueness_ready | governance | none | true | false | false | executor 内部用于组合正式执行门禁的无伪重复布尔值。 |
+| adaptive_attack_query_budget_checkpoint_coverage_ready | governance | none | true | false | false | executor 内部用于组合正式执行门禁的 checkpoint 覆盖布尔值。 |
+| adaptive_attack_pseudoreplication_decision | governance | none | true | true | false | 外层 runner 对重复 source cluster 和重复 collusion pair 的阻断决策。 |
+| adaptive_attack_query_budget_checkpoint_decision | governance | none | true | true | false | 外层 runner 对真实查询前缀完整性的复核决策。 |
+| adaptive_attack_mechanism_invariance_decision | governance | none | true | true | false | 外层 runner 是否确认所有记录共用相同预算、checkpoint 和抽样协议。 |
+| formal_adaptive_attack_execution_artifact_decision | governance | none | true | true | false | 外层 runner 是否读取到通过全部 executor 审计的正式 decision artifact。 |
+| adaptive_attack_collusion_independent_pair_count | metric | none | true | true | false | collusion 协议中不重叠 source-video pair 的独立统计单位数量。 |
+| adaptive_attack_query_statistical_role | governance | none | true | true | false | 单次 detector query 是 source-video cluster 内的依赖重复测量, 不能作为独立样本。 |
+| adaptive_attack_independent_video_count | metric | none | true | true | false | 外层 adaptive 证据门禁确认的独立 source-video cluster 数。 |
+| adaptive_attack_incomplete_video_clusters | governance | none | true | false | false | 兼容字段, 当前保存未满足独立簇覆盖的协议列表。 |
 | adaptive_attack_public_negative_informed_strength | metric | none | true | true | false | calibration public negative 查询确定的 held-out 初始攻击强度。 |
 | model_vae_regeneration_status | governance | none | true | true | false | 候选是否完成模型 VAE encode-perturb-decode 重生成。 |
 | model_vae_class | provenance | none | true | true | false | 执行生成式重压缩的官方 VAE 类名。 |
@@ -2257,3 +2387,321 @@ Notebook 与 repository module 的跨边界数据
 | generation_variant_provenance_failure_variants | governance | none | true | false | false | 缺少独立生成来源证据的生成机制变体。 |
 | generation_variant_trace_overlap_pairs | governance | none | true | false | false | 错误共享同一 trajectory trace 的生成机制变体对。 |
 | internal_ablation_video_reuse_policy_passed | governance | none | true | true | false | 当前 profile 的逐变体样本量与视频复用策略是否通过公共闭合器。 |
+| heldout_posterior_calibration_record_id | provenance | none | true | true | false | 冻结检测器在 held-out attacked test 上进行概率可靠性评测的稳定记录标识。 |
+| heldout_posterior_calibration_scope | protocol | none | true | true | false | held-out 概率可靠性记录覆盖全局攻击集合还是单一预注册攻击。 |
+| heldout_posterior_calibration_protocol | method | none | true | true | false | 使用冻结后验、类平衡和独立视频簇等权统计的 held-out 概率评测协议。 |
+| heldout_posterior_brier_score | metric | none | true | true | false | held-out attacked test 上按类别平衡且按视频簇等权计算的 Brier score。 |
+| heldout_posterior_brier_score_ci_lower | metric | none | true | true | false | held-out Brier score 的视频簇 bootstrap 双侧区间下界。 |
+| heldout_posterior_brier_score_ci_upper | metric | none | true | true | false | held-out Brier score 的视频簇 bootstrap 双侧区间上界。 |
+| heldout_posterior_log_loss | metric | none | true | true | false | held-out attacked test 上按类别平衡且按视频簇等权计算的 log loss。 |
+| heldout_posterior_log_loss_ci_lower | metric | none | true | true | false | held-out log loss 的视频簇 bootstrap 双侧区间下界。 |
+| heldout_posterior_log_loss_ci_upper | metric | none | true | true | false | held-out log loss 的视频簇 bootstrap 双侧区间上界。 |
+| heldout_posterior_expected_calibration_error | metric | none | true | true | false | held-out attacked test 上按类别平衡且按视频簇等权计算的 ECE。 |
+| heldout_posterior_expected_calibration_error_ci_lower | metric | none | true | true | false | held-out ECE 的视频簇 bootstrap 双侧区间下界。 |
+| heldout_posterior_expected_calibration_error_ci_upper | metric | none | true | true | false | held-out ECE 的视频簇 bootstrap 双侧区间上界。 |
+| heldout_posterior_positive_cluster_count | metric | none | true | true | false | held-out 概率可靠性评测中的独立 attacked-positive 视频簇数。 |
+| heldout_posterior_negative_cluster_count | metric | none | true | true | false | held-out 概率可靠性评测中的独立 negative 视频簇数。 |
+| heldout_posterior_attack_cluster_count | metric | none | true | true | false | 单攻击 held-out 概率可靠性记录中的独立 positive 视频簇数。 |
+| heldout_posterior_bootstrap_resample_count | protocol | none | true | false | false | held-out 概率可靠性区间使用的视频簇 bootstrap 重采样次数。 |
+| heldout_posterior_calibration_ready | governance | none | true | true | false | held-out 概率可靠性记录是否同时满足样本、指标和置信区间门禁。 |
+| heldout_posterior_calibration_decision | governance | none | true | true | false | Claim-3 held-out 概率可靠性总门禁决策。 |
+| heldout_posterior_calibration_failure_reasons | governance | none | true | false | false | held-out 概率可靠性未通过时的可审计失败原因集合。 |
+| heldout_posterior_record_count | metric | none | true | false | false | 单条 held-out 概率可靠性记录实际消费的 governed 检测记录数。 |
+| heldout_posterior_calibration_record_count | metric | none | true | true | false | 当前运行生成的 held-out 概率可靠性记录总数。 |
+| heldout_posterior_primary_model_ids | provenance | none | true | true | false | 必须闭合 Claim-3 held-out 后验可靠性的主生成模型集合。 |
+| heldout_posterior_required_attack_names | protocol | none | true | true | false | Claim-3 held-out 后验可靠性必须逐项覆盖的预注册攻击集合。 |
+| heldout_posterior_missing_scopes | governance | none | true | false | false | 缺少全局或逐攻击 held-out 后验可靠性记录的范围集合。 |
+| heldout_posterior_blocked_scopes | governance | none | true | false | false | 已生成但未通过概率指标或样本量门禁的 held-out 范围集合。 |
+| per_attack_tpr_ci_record_count | metric | none | true | true | false | 预注册攻击逐项 TPR 视频簇置信区间记录数。 |
+| per_attack_tpr_ci_missing_scopes | governance | none | true | false | false | 缺少逐攻击 TPR 置信区间的方法与攻击范围集合。 |
+| per_attack_tpr_ci_ready | governance | none | true | true | false | 所有方法是否具有全部预注册攻击的 source-video cluster TPR 区间。 |
+| worst_attack_tpr_ci_lower | metric | none | true | true | false | SSTW 在全部预注册攻击中的最小 TPR bootstrap 下界。 |
+| worst_attack_name | provenance | none | true | true | false | 产生 SSTW 最小 TPR 置信下界的预注册攻击名称。 |
+| minimum_sstw_worst_attack_tpr_ci_lower | protocol | none | true | false | false | 三档 profile 共用的 SSTW 最坏攻击 TPR 置信下界门槛。 |
+| flow_energy_budget_ratio | method | none | true | true | false | 累计 Flow 控制能量相对预计参考速度能量的全局上限。 |
+| finite_difference_probe_ratio | method | none | true | false | false | endpoint controllability 有限差分探针相对单步范数预算的比例。 |
+| minimum_controllability_gain | method | none | true | true | false | endpoint 最小能量控制允许施加扰动的最小有限差分响应增益。 |
+| prompt_velocity_sensitivity_gate_enabled | method | none | true | true | false | 是否按 prompt-conditioned velocity 幅度抑制一阶高敏感位置。 |
+| semantic_tangent_projection_enabled | method | none | true | true | false | 是否将密钥方向投影到 prompt-conditioned velocity 的一阶正交切向。 |
+| semantic_tangent_minimum_retained_ratio | method | none | true | false | false | 一阶切向投影后允许继续控制的最小密钥方向保留比例。 |
+| endpoint_control_formal_context_complete | governance | none | true | true | false | 当前速度约束是否具有 delta sigma、累计能量和剩余步数等完整 P3 上下文。 |
+| endpoint_control_policy | method | none | true | true | false | endpoint 控制使用有限差分最小能量近似还是非正式兼容路径。 |
+| semantic_projection_retained_key_energy_ratio | metric | none | true | false | false | 一阶切向投影后保留的密钥方向范数比例。 |
+| endpoint_response_without_control | metric | none | true | false | false | 当前 Flow step 局部预测中不施加水印控制时的 endpoint 响应。 |
+| endpoint_response_finite_difference_probe | metric | none | true | false | false | 有限差分探针下的 endpoint 响应。 |
+| endpoint_response_predicted_after_step | metric | none | true | false | false | 施加选定最小能量控制后的局部 endpoint 响应预测。 |
+| endpoint_controllability_gain | metric | none | true | true | false | 单位速度扰动范数产生的有限差分 endpoint 响应增益。 |
+| endpoint_margin_deficit_before_control | metric | none | true | false | false | 当前 step 控制前相对预注册 endpoint margin 的缺口。 |
+| endpoint_control_energy_increment | metric | none | true | true | false | 当前 step 的 delta-sigma 加权控制能量。 |
+| endpoint_control_cumulative_energy_after | metric | none | true | true | false | 当前 step 后的累计控制能量。 |
+| endpoint_reference_energy_increment | metric | none | true | false | false | 当前 step 的 delta-sigma 加权参考速度能量。 |
+| endpoint_reference_cumulative_energy_after | metric | none | true | false | false | 当前 step 后的累计参考速度能量。 |
+| endpoint_projected_total_energy_budget | metric | none | true | true | false | 根据已观测参考能量和剩余步数预计的累计控制能量预算。 |
+| endpoint_remaining_energy_budget_before_step | metric | none | true | false | false | 当前 step 施加控制前剩余的累计能量预算。 |
+| endpoint_minimum_energy_control_status | governance | none | true | true | false | endpoint 最小能量控制的应用、限幅、拒绝或消融状态。 |
+| endpoint_quality_energy_guard_passed | governance | none | true | true | false | 当前控制能量是否同时满足单步和累计质量保护预算。 |
+| generation_record_digest | provenance | none | true | true | false | 认证 sketch 绑定的规范 generation record 字段集合 SHA-256。 |
+| code_commit | provenance | none | true | true | false | 生成视频和签署 trajectory sketch 时使用的仓库 Git commit。 |
+| trajectory_sketch_formal_binding_complete | governance | none | true | true | false | sketch 是否同时绑定 trace、method、video、generation record 和 code commit。 |
+| trajectory_sketch_signature_valid | governance | none | true | true | false | trajectory sketch 的 HMAC 签名是否正确。 |
+| trajectory_sketch_binding_matches | governance | none | true | true | false | sketch 内全部正式绑定字段是否与当前 governed records 一致。 |
+| trajectory_sketch_nonce_fresh | governance | none | true | true | false | generation nonce 是否尚未在当前验证注册表中被消费。 |
+| trajectory_sketch_generation_record_digest_matches | governance | none | true | true | false | sketch 绑定的 generation record 摘要是否与当前记录重新计算值一致。 |
+| trajectory_sketch_verification_failure_reasons | governance | none | true | false | false | sketch 一次性认证失败的签名、绑定或 nonce 原因。 |
+| flow_tubelet_key_context_digest | provenance | none | true | true | false | prompt、sampler、payload 和 phase code 上下文的稳定摘要。 |
+| maximum_heldout_posterior_brier_score | protocol | none | true | false | false | 三档论文 profile 共用的 held-out Brier score 上界。 |
+| maximum_heldout_posterior_log_loss | protocol | none | true | false | false | 三档论文 profile 共用的 held-out log loss 上界。 |
+| maximum_heldout_posterior_expected_calibration_error | protocol | none | true | false | false | 三档论文 profile 共用的 held-out ECE 上界。 |
+| minimum_heldout_posterior_positive_cluster_count | protocol | none | true | false | false | held-out 概率可靠性评测要求的最小 positive 视频簇数。 |
+| minimum_heldout_posterior_negative_cluster_count | protocol | none | true | false | false | held-out 概率可靠性评测要求的最小 negative 视频簇数。 |
+| minimum_heldout_posterior_attack_cluster_count | protocol | none | true | false | false | 每个预注册攻击要求的最小 held-out positive 视频簇数。 |
+| runtime_environment_preflight_decision | governance | none | true | false | false | 受锁依赖、代码来源、GPU 和模型 revision 的服务器执行前判定。 |
+| runtime_environment_preflight_failures | governance | none | true | false | false | 阻断论文服务器 workflow 的环境失败原因集合。 |
+| runtime_environment_lock_id | provenance | none | true | false | false | 服务器与 Colab 共用的论文环境锁标识。 |
+| runtime_environment_lock_path | provenance | none | true | false | false | 本次预检读取的环境锁绝对路径。 |
+| runtime_environment_lock_sha256 | provenance | none | true | false | false | 本次预检读取的环境锁 SHA-256。 |
+| installed_distribution_versions | provenance | none | true | false | false | 预检实际观测到的公共 Python distribution 版本映射。 |
+| dependency_mismatches | governance | none | true | false | false | 与精确环境锁不一致或缺失的 distribution 列表。 |
+| gpu_observation | provenance | none | true | false | false | CUDA 可用性、显存、compute capability 与 PyTorch CUDA 版本观测。 |
+| repository_provenance_source | provenance | none | true | false | false | 代码 commit 来自 Git 工作树还是抽离包清单。 |
+| repository_commit | provenance | none | true | false | false | 服务器 workflow 执行代码的不可变40位 Git commit。 |
+| repository_tree_clean | governance | none | true | false | false | 开发仓库或抽离源在打包时是否没有未提交改动。 |
+| resolved_generation_models | provenance | none | true | false | false | 模型 ID、请求 revision、不可变 commit 与解析来源记录集合。 |
+| generation_model_revision_check_status | governance | none | true | false | false | 模型 revision 解析已完成或因更早环境失败而未执行。 |
+| resolved_main_generation_model_revision | provenance | none | true | false | false | 服务器 CLI 传给主模型生成 workflow 的不可变 commit。 |
+| resolved_cross_generation_model_revision | provenance | none | true | false | false | 服务器 CLI 传给跨模型生成 workflow 的不可变 commit。 |
+| paper_runtime_environment_lock_sha256 | provenance | none | true | false | false | 抽离清单记录的论文环境锁 SHA-256。 |
+| source_git_commit | provenance | none | true | false | false | 论文重建包抽离源的 Git commit。 |
+| source_git_tree_clean | governance | none | true | false | false | 论文重建包抽离源是否为干净工作树。 |
+
+## 正式联合上下文与公平评测补充字段
+
+下列字段补全本轮状态空间同步原语, 公平比较, 嵌套 profile 和服务器执行链的治理登记.
+
+| field_name | category | required_suffix | allowed_in_records | allowed_in_claims | replacement_required | description |
+| --- | --- | --- | --- | --- | --- | --- |
+| method_configuration_id | provenance | none | true | true | false | 认证 trajectory sketch 绑定的核心方法配置标识, 不在核心包中解释实验变体语义. |
+| flow_sampler_signature | provenance | none | true | true | false | 生成和 replay 共用的 Flow scheduler 与采样参数签名. |
+| flow_sampler_signature_digest | provenance | none | true | true | false | Flow sampler signature 的 SHA-256 摘要. |
+| flow_prompt_digest_binding | provenance | none | true | true | false | tubelet code 实际绑定的完整 prompt SHA-256. |
+| flow_payload_mode | method | none | true | true | false | tubelet code 使用 zero-bit presence 或独立 binary payload 的语义. |
+| flow_payload_bit_count | metric | none | true | false | false | 独立 payload 实际编码的 bit 数量. |
+| flow_tubelet_code_semantics | method | none | true | true | false | prompt, sampler, payload 和 phase 联合 tubelet code 的正式机制标识. |
+| flow_tubelet_formal_context_complete | governance | none | true | true | false | tubelet 方向是否同时具有正式生成上下文和连续 Flow phase. |
+| flow_tubelet_phase | protocol | none | true | false | false | 构造当前 tubelet 方向时使用的规范化 Flow phase. |
+| flow_tubelet_phase_code_minimum | metric | none | true | false | false | 当前 tubelet 集合的密钥条件 phase code 最小值. |
+| flow_tubelet_phase_code_maximum | metric | none | true | false | false | 当前 tubelet 集合的密钥条件 phase code 最大值. |
+| flow_tubelet_phase_code_mean | metric | none | true | false | false | 当前 tubelet 集合的密钥条件 phase code 均值. |
+| flow_integrated_phase_count | metric | none | true | true | false | endpoint 与 replay 共用积分方向覆盖的 Flow phase 数量. |
+| flow_integrated_weight_sum | metric | none | true | false | false | 积分 tubelet 方向使用的 delta-sigma 调度权重总和. |
+| flow_integrated_key_direction_ready | governance | none | true | true | false | 运行时是否已构造 endpoint 与 replay 共用的积分密钥方向. |
+| flow_integrated_key_direction_digest | provenance | none | true | true | false | 积分密钥方向与 Flow schedule 联合绑定的稳定摘要. |
+| flow_runtime_step_formal_context_complete | governance | none | true | true | false | 单个 scheduler step 是否具有 joint code, delta sigma 和能量状态. |
+| flow_runtime_formal_context_complete | governance | none | true | true | false | 完整生成轨迹的全部有效 step 是否具有正式 Flow 上下文. |
+| trajectory_delta_sigma | metric | none | true | true | false | 相邻 scheduler sigma 的真实有符号差值. |
+| endpoint_formal_context_complete | governance | none | true | true | false | endpoint 观测是否由 joint code 与真实 Flow schedule 构造. |
+| endpoint_key_context_digest | provenance | none | true | true | false | endpoint 参考方向绑定的 tubelet key context 摘要. |
+| endpoint_key_direction_digest | provenance | none | true | true | false | endpoint 检测实际使用的积分密钥方向摘要. |
+| endpoint_key_direction_semantics | method | none | true | true | false | endpoint 参考方向与生成 Flow schedule 的联合积分语义. |
+| endpoint_integrated_phase_count | metric | none | true | true | false | endpoint 积分方向覆盖的 Flow phase 数量. |
+| endpoint_integrated_weight_sum | metric | none | true | false | false | endpoint 积分方向的调度权重总和. |
+| selected_delta_norm | metric | none | true | true | false | minimum-energy endpoint 控制实际选用的速度扰动范数. |
+| required_delta_norm | metric | none | true | false | false | 局部有限差分模型为达到 endpoint margin 估计的最小扰动范数. |
+| generation_endpoint_control_formal_context_complete | governance | none | true | true | false | 生成记录中全部有效 endpoint 控制 step 是否具备正式时间和能量上下文. |
+| generation_endpoint_quality_energy_guard_passed | governance | none | true | true | false | 生成轨迹累计控制能量是否始终满足预注册质量保护预算. |
+| generation_endpoint_control_cumulative_energy_final | metric | none | true | true | false | 生成轨迹结束时的 delta-sigma 加权累计控制能量. |
+| generation_endpoint_reference_cumulative_energy_final | metric | none | true | false | false | 生成轨迹结束时的参考速度累计能量. |
+| generation_velocity_constraint_delta_ratio_maximum | metric | none | true | true | false | 单个生成视频全部 step 中最大的速度约束相对范数. |
+| path_sigma_measure | metric | none | true | true | false | 路径求积中当前 step 使用的绝对 delta-sigma 测度. |
+| path_arc_length | metric | none | true | true | false | 当前 Flow 状态增量的 latent 弧长. |
+| path_projection_integrand | metric | none | true | true | false | 按绝对 delta-sigma 归一化的路径投影积分密度. |
+| path_quadrature_contribution | metric | none | true | true | false | 当前 step 对路径线积分的真实离散求积贡献. |
+| path_quadrature_context_complete | governance | none | true | true | false | 路径证据是否具有真实 delta-sigma, 弧长和求积贡献. |
+| path_quadrature_rule | method | none | true | true | false | 路径证据使用的 delta-sigma 弧长离散线积分规则. |
+| path_total_sigma_measure | metric | none | true | false | false | 聚合路径覆盖的绝对 delta-sigma 总测度. |
+| path_total_arc_length | metric | none | true | true | false | 聚合路径覆盖的 latent 总弧长. |
+| path_reparameterization_stability_semantics | method | none | true | true | false | 路径统计量在同一路径分段细化下保持稳定的正式语义. |
+| flow_endpoint_admissibility_measurement | metric | none | true | true | false | P6 准入实际消费的 endpoint 视频级测量值. |
+| flow_path_admissibility_measurement | metric | none | true | true | false | P6 准入实际消费的 path 视频级测量值. |
+| flow_path_endpoint_consistency_admissibility_measurement | metric | none | true | true | false | P6 准入实际消费的 path-endpoint 一致性测量值. |
+| flow_state_admissibility_context_complete | governance | none | true | true | false | 状态空间后验的完整 P6 准入上下文是否可用. |
+| posterior_entropy | metric | none | true | true | false | 二元水印概率后验的 Shannon entropy. |
+| posterior_model_contract_version | provenance | none | true | true | false | 冻结概率状态空间模型的结构化契约版本. |
+| posterior_flow_phase_feature_included | governance | none | true | true | false | 概率状态空间模型是否把连续 Flow phase 纳入观测向量. |
+| posterior_phase_conditioned_transition_configured | governance | none | true | true | false | 正负双假设模型是否都配置 phase-conditioned transition. |
+| posterior_reliability_heteroscedastic_observation_configured | governance | none | true | true | false | 正负双假设模型是否都配置 replay reliability 异方差观测噪声. |
+| posterior_admissibility_context_complete | governance | none | true | true | false | 冻结 posterior artifact 是否包含全部 P6 准入阈值. |
+| posterior_admissibility_thresholds | protocol | none | true | true | false | 仅由 calibration split 正类独立视频簇拟合的 P6 准入阈值. |
+| phase_transition_matrix | method | none | true | true | false | 连续 Flow phase 对状态转移矩阵的线性调制项. |
+| phase_transition_reference | protocol | none | true | false | false | phase-conditioned transition 使用的中心化参考 phase. |
+| phase_conditioned_transition_configured | governance | none | true | true | false | 单个状态空间假设模型是否包含 phase transition 参数. |
+| reliability_observation_variance_scale | method | none | true | true | false | replay reliability 对观测噪声方差的异方差缩放系数. |
+| reliability_heteroscedastic_observation_configured | governance | none | true | true | false | 单个状态空间假设模型是否启用可靠性异方差观测. |
+| state_space_dynamics_contract | method | none | true | true | false | 状态空间 transition 与 observation dynamics 的正式结构语义. |
+| flow_state_observation_formal_context_complete | governance | none | true | true | false | 单个检测记录是否提供 joint code, quadrature, replay 和 P6 所需观测. |
+| complete_p6_admissibility_context | governance | none | true | true | false | 检测阶段是否已构造完整且冻结的 P6 准入上下文. |
+| joint_flow_context_complete | governance | none | true | true | false | 生成, endpoint, path 与 replay 是否共享同一 Flow key context 和 schedule. |
+| replay_joint_context_complete | governance | none | true | true | false | replay backend 是否消费与生成一致的 prompt, sampler 和 payload 上下文. |
+| replay_joint_schedule_context_complete | governance | none | true | true | false | replay backend 是否消费真实 sigma 网格与逐 phase 积分权重. |
+| replay_control_joint_context_complete | governance | none | true | true | false | 正确 key, 错误 key, 错误 prompt 和错误 sampler 控制是否分别重建合法上下文. |
+| replay_control_correct_key_context_digest | provenance | none | true | true | false | 正确 replay 控制使用的 key context 摘要. |
+| wrong_prompt_key_context_digest | provenance | none | true | true | false | 错误 prompt 控制独立派生的 key context 摘要. |
+| wrong_sampler_key_context_digest | provenance | none | true | true | false | 错误 sampler 控制独立派生的 key context 摘要. |
+| causal_ablation_selection_protocol | protocol | none | true | true | false | Claim-1 generation causal ablation 在读取得分前冻结的稳定子集协议. |
+| causal_ablation_subset_digest | provenance | none | true | true | false | Claim-1 generation causal ablation 所选独立视频身份集合摘要. |
+| causal_ablation_subset_rank | provenance | none | true | false | false | 当前视频在 Claim-1 冻结因果子集中的稳定排序. |
+| runtime_attack_preregistered_subset_policy | protocol | none | true | true | false | 正式 runtime attack 按攻击名和视频身份稳定摘要预注册子集的规则. |
+| runtime_attack_preregistered_subset_digest | provenance | none | true | true | false | 当前攻击所选独立 source-video 集合摘要. |
+| runtime_attack_preregistered_subset_rank | provenance | none | true | false | false | 当前 source video 在攻击冻结子集中的稳定排序. |
+| runtime_attack_preregistered_subset_maximum_per_model_split | protocol | none | true | true | false | 当前 profile 每模型每 split 每攻击允许执行的最大独立视频数. |
+| ci_bootstrap_resample_count | protocol | none | true | false | false | source-video cluster bootstrap 使用的重采样次数. |
+| ci_cluster_bootstrap_lower | metric | none | true | true | false | 按独立 source-video cluster 重采样得到的95%区间下界. |
+| ci_cluster_bootstrap_upper | metric | none | true | true | false | 按独立 source-video cluster 重采样得到的95%区间上界. |
+| detected_at_target_fpr | metric | none | true | true | false | 使用 calibration split 冻结阈值后的逐视频检出指示量. |
+| heldout_attacked_test_posterior_calibration_ready | governance | none | true | true | false | Claim-3 attacked held-out 概率可靠性评测是否通过. |
+| heldout_posterior_calibration_status | governance | none | true | true | false | profile gate 读取到的 held-out posterior 可靠性状态. |
+| heldout_posterior_cluster_count_derivation_policy | protocol | none | true | true | false | held-out posterior 独立视频簇样本量如何随 profile 统计强度扩展. |
+| validation_heldout_posterior_calibration_ready | governance | none | true | true | false | validation rebuild 中 held-out posterior 产物是否完整且通过. |
+| validation_per_attack_tpr_ci_ready | governance | none | true | true | false | validation rebuild 中逐攻击 TPR cluster CI 是否完整. |
+| validation_sstw_worst_attack_tpr_ci_lower_ready | governance | none | true | true | false | SSTW 最坏攻击 TPR 区间下界是否达到公共门槛. |
+| baseline_statistical_comparison_design | protocol | none | true | true | false | baseline 使用同源配对或 native-generation 独立双样本设计. |
+| baseline_independent_video_cluster_count | metric | none | true | true | false | native baseline 检测统计使用的独立视频簇数. |
+| reference_independent_video_cluster_count | metric | none | true | true | false | SSTW 参考方法检测统计使用的独立视频簇数. |
+| baseline_embeds_own_watermark_into_clean_reference | governance | none | true | true | false | 同源 post-hoc baseline 是否在相同 clean reference 上嵌入自身水印. |
+| baseline_uses_official_native_generation_model | governance | none | true | true | false | native-generation baseline 是否使用其官方生成模型与水印路径. |
+| external_baseline_clean_source_video_path | provenance | none | true | false | false | external baseline 官方运行实际消费的 clean source video 路径. |
+| baseline_quality_reference_video_path | provenance | none | true | false | false | 质量评测为当前 baseline 选择的合法参考视频路径. |
+| external_baseline_generation_model_id | provenance | none | true | true | false | native-generation baseline 使用的官方生成模型标识. |
+| external_baseline_quality_comparison_protocol | protocol | none | true | true | false | baseline 质量指标采用同源失真或 native semantic distribution 的规则. |
+| cross_generator_pixel_metric_prohibited | governance | none | true | true | false | native-generation 比较是否禁止跨生成器 PSNR 和 SSIM. |
+| paired_same_source_distortion | governance | none | true | true | false | 当前质量单元是否允许计算同源配对失真指标. |
+| same_source_posthoc_clean_reference | governance | none | true | true | false | 当前质量单元是否来自同一 clean source 的 post-hoc 水印. |
+| native_generation_own_model_clean_reference | governance | none | true | true | false | native baseline 是否使用其自身模型生成的 clean reference 分布. |
+| native_generation_clean_source_video_path | provenance | none | true | false | false | native baseline 自身模型 clean 输出视频路径. |
+| native_generation_watermarked_source_video_path | provenance | none | true | false | false | native baseline 自身模型 watermarked 输出视频路径. |
+| native_generation_semantic_metric_name | method | none | true | true | false | native-generation 质量比较使用的文本到视频语义指标名称. |
+| native_generation_semantic_model_id | provenance | none | true | true | false | native-generation 语义评测使用的冻结模型标识. |
+| native_generation_clean_semantic_consistency_score | metric | none | true | true | false | native clean video 与 prompt 的实测语义一致性. |
+| native_generation_watermarked_semantic_consistency_score | metric | none | true | true | false | native watermarked video 与 prompt 的实测语义一致性. |
+| native_generation_semantic_consistency_delta | metric | none | true | true | false | native watermarked 与 clean 语义一致性的同身份差值. |
+| native_generation_semantic_consistency_minimum | protocol | none | true | true | false | native watermarked video 允许的最小语义一致性. |
+| native_generation_maximum_mean_semantic_degradation | protocol | none | true | true | false | native-generation 方法允许的平均语义一致性退化上界. |
+| native_generation_quality_status | governance | none | true | true | false | native-generation 单个质量单元的计算状态. |
+| native_generation_quality_failure_reason | governance | none | true | false | false | native-generation 质量单元失败关闭的原因. |
+| native_generation_semantic_quality | governance | none | true | true | false | 当前质量面板是否采用 native-generation 语义分布协议. |
+| native_generation_quality_unit_count | metric | none | true | true | false | 当前质量面板的独立 native-generation prompt-seed 单元数. |
+| native_generation_semantic_quality_ready_count | metric | none | true | true | false | 具有完整 native 语义质量指标的独立单元数. |
+| mean_native_generation_clean_semantic_consistency | metric | none | true | true | false | native clean 视频语义一致性的独立单元均值. |
+| mean_native_generation_watermarked_semantic_consistency | metric | none | true | true | false | native watermarked 视频语义一致性的独立单元均值. |
+| mean_native_generation_semantic_consistency_delta | metric | none | true | true | false | native watermarked 相对 clean 的语义一致性差值均值. |
+| quality_identity_generation_model_id | provenance | none | true | false | false | 质量统计去重身份中的生成模型标识. |
+| quality_identity_prompt_id | provenance | none | true | false | false | 质量统计去重身份中的 prompt 标识. |
+| quality_identity_seed_id | provenance | none | true | false | false | 质量统计去重身份中的 seed 标识. |
+| quality_evaluation_unit_count | metric | none | true | true | false | 去除攻击重复后实际评测的独立质量单元数. |
+| quality_evaluation_ready_count | metric | none | true | true | false | 具有全部方法适配质量指标的独立单元数. |
+| quality_evaluation_blocked_count | metric | none | true | false | false | 因缺少合法参考或实测指标而失败关闭的质量单元数. |
+| quality_protocol | protocol | none | true | true | false | 单个质量记录采用的同源配对或 native-generation 协议. |
+| paper_profile_prompt_seed_universe_id | provenance | none | true | true | false | 三档 profile 共用的嵌套 prompt-seed 母体标识. |
+| paper_profile_prompt_seed_sampling_policy | protocol | none | true | true | false | 三档 profile 只以嵌套前缀扩大样本量的冻结抽样规则. |
+| paper_profile_sampling_contract | protocol | none | true | true | false | prompt suite manifest 中 probe, pilot, full 的嵌套样本契约. |
+| paper_profile_common_contract_sha256 | provenance | none | true | true | false | profile 配置声明的 canonical common contract 摘要. |
+| paper_profile_common_contract_observed_sha256 | provenance | none | true | true | false | 运行时重新计算得到的 canonical common contract 摘要. |
+| paper_profile_common_contract_resolved_path | provenance | none | true | false | false | 运行时解析到的 canonical common contract 绝对路径. |
+| paper_profile_nested_prompt_seed_universe_ready | governance | none | true | true | false | profile gate 是否确认 prompt 与 seed 集合按档位严格嵌套. |
+| paper_profile_nested_universe_record_count | metric | none | true | true | false | 当前 profile 实际覆盖的嵌套 prompt-seed 身份数. |
+| paper_profile_nested_universe_record_total | metric | none | true | false | false | prompt suite manifest 中全部 profile 身份记录总数. |
+| master_prompt_id | provenance | none | true | false | false | 嵌套 prompt 母体中的稳定 prompt 标识. |
+| master_prompt_digest | provenance | none | true | true | false | 嵌套 prompt 母体完整内容的稳定摘要. |
+| master_prompt_count | metric | none | true | false | false | full profile 母体包含的唯一 prompt 数量. |
+| master_seed_id | provenance | none | true | false | false | 嵌套 seed 母体中的稳定 seed 标识. |
+| master_seed_digest | provenance | none | true | true | false | 嵌套 seed 母体的稳定摘要. |
+| master_calibration_seed_count | metric | none | true | false | false | full profile 母体中的 calibration seed 数量. |
+| master_test_seed_count | metric | none | true | false | false | full profile 母体中的 held-out test seed 数量. |
+| paper_prompt_universe_index | provenance | none | true | false | false | prompt 在共用母体中的零起始稳定索引. |
+| paper_prompt_replication_index | provenance | none | true | false | false | 同一语义 stratum 内 prompt 的复制索引. |
+| paper_prompt_stratum_id | provenance | none | true | false | false | prompt 所属预注册运动和场景分层标识. |
+| paper_seed_universe_split_index | provenance | none | true | false | false | seed 在 calibration 或 test 子母体中的稳定索引. |
+| prompt_nesting_decision | governance | none | true | true | false | probe, pilot, full 的 prompt 集合是否严格按前缀嵌套. |
+| calibration_seed_nesting_decision | governance | none | true | true | false | 三档 calibration seed 集合是否严格按前缀嵌套. |
+| test_seed_nesting_decision | governance | none | true | true | false | 三档 held-out test seed 集合是否严格按前缀嵌套. |
+| motion_pattern_id | provenance | none | true | false | false | prompt suite 中预注册运动模式的稳定标识. |
+| target_negative_family_count | protocol | none | true | false | false | prompt suite 需要覆盖的独立 negative family 数量. |
+| target_runtime_attack_count | protocol | none | true | false | false | prompt suite 需要覆盖的预注册 runtime attack 数量. |
+| target_runtime_attack_names | protocol | none | true | true | false | prompt suite 绑定的预注册 runtime attack 名称集合. |
+| adaptive_attack_objective | method | none | true | true | false | 逐视频 adaptive optimizer 使用的冻结检测器目标与质量约束语义. |
+| adaptive_attack_public_negative_probe_count | metric | none | true | true | false | 每个攻击协议真实执行的 public-negative warmup 查询数. |
+| adaptive_query_budget_checkpoint_ready | governance | none | true | true | false | 单个视频是否产生全部预注册查询预算 checkpoint. |
+| candidate_index | provenance | none | true | false | false | adaptive 序贯查询中真实候选视频的零起始索引. |
+| detector_score | metric | none | true | true | false | 冻结 SSTW 检测器对真实候选视频输出的后验分数. |
+| admissible | governance | none | true | true | false | adaptive 候选是否同时满足质量和 endpoint 预注册约束. |
+| independent_video_count | metric | none | true | true | false | 当前攻击或统计范围覆盖的独立 source-video 数量. |
+| minimum_source_video_cluster_count_per_protocol | protocol | none | true | true | false | executor 复核每个 adaptive 协议所需的最小独立视频簇数. |
+| minimum_spoof_source_video_cluster_count | protocol | none | true | true | false | executor 复核固定 FPR spoof 统计所需的最小独立 recipient 数. |
+| public_negative_probe_query_budget | protocol | none | true | false | false | executor 实际使用的 public-negative warmup 最大查询数. |
+| query_budget | protocol | none | true | true | false | executor 实际使用的单视频 held-out target 最大查询数. |
+| query_budget_checkpoints | protocol | none | true | true | false | executor 实际使用的真实查询前缀 checkpoint 集合. |
+| selection_protocol | protocol | none | true | true | false | 样本或候选选择在读取 held-out 分数前冻结的规则. |
+| confidence_interval_threshold_matches_profile | governance | none | true | true | false | 统计决策读取的置信区间门槛是否与当前 canonical profile 一致. |
+| repository_generated_external_baseline_cache_allowed | governance | none | true | true | false | 正式 baseline 是否允许消费仓库自产 cache, 当前必须为 false. |
+| require_heldout_posterior_probability_evaluation | protocol | none | true | true | false | profile 是否强制 Claim-3 held-out 概率可靠性评测. |
+| require_nested_paper_profile_prompt_seed_universe | protocol | none | true | true | false | profile 是否强制嵌套 prompt-seed 母体治理. |
+| runtime_environment_preflight | governance | none | true | false | false | 服务器 pipeline 的环境锁与 GPU 预检阶段结果. |
+| model_revision | provenance | none | true | false | false | 主生成模型请求使用的不可变 revision. |
+| cross_model_revision | provenance | none | true | false | false | 跨模型泛化生成器请求使用的不可变 revision. |
+| paper_artifact_rebuild_package | artifact | none | true | false | false | 最小发布包中允许携带的论文产物重建层目录. |
+| trajectory_sketch_failure_reason | governance | none | true | false | false | 生成阶段无法形成正式认证 sketch 时的失败关闭原因. |
+| admissibility_context | protocol | none | true | false | false | 状态空间后验推理输入的 P6 视频级准入上下文对象. |
+| calibration | protocol | none | true | false | false | prompt-seed 嵌套清单中的 calibration split 配置分支. |
+| codec | method | none | true | false | false | 文件级视频攻击或转码输出实际使用的 codec. |
+| collusion_multi_sample_attack | method | none | true | true | false | 多独立水印视频样本参与 collusion 攻击的正式协议标识. |
+| color | method | none | true | false | false | runtime attack 注册表中的颜色变换攻击族. |
+| compression | method | none | true | false | false | runtime attack 注册表中的压缩攻击族. |
+| expected | governance | none | true | false | false | 配置一致性失败记录中的预期值. |
+| expected_maximum | governance | none | true | false | false | 配置一致性失败记录中的允许最大值. |
+| full_paper | protocol | none | true | false | false | 嵌套 profile 映射中的 full_paper 分支名称. |
+| libx264 | method | none | true | false | false | 文件级 H.264 转码使用的 FFmpeg encoder 注册键. |
+| libx265 | method | none | true | false | false | 文件级 H.265 转码使用的 FFmpeg encoder 注册键. |
+| minimize_path_with_fixed_endpoint | method | none | true | true | false | adaptive attack 在固定 endpoint 约束下最小化路径证据的目标标识. |
+| minus_one_to_one | protocol | none | true | false | false | 视频张量值域为 [-1, 1] 的显式范围标识. |
+| missing_authentication_key_or_generation_binding | governance | none | true | false | false | 正式 sketch 因缺少认证密钥或生成绑定而失败关闭的状态字段. |
+| motion_threshold_calibration | protocol | none | true | false | false | 服务器 pipeline 中 motion threshold calibration 阶段标识. |
+| mpeg4 | method | none | true | false | false | 文件级 MPEG-4 转码使用的 FFmpeg encoder 注册键. |
+| native_generation_semantic_quality_unit_count | metric | none | true | true | false | native-generation 语义质量面板覆盖的独立 prompt-seed 单元数. |
+| numpy | provenance | none | true | false | false | baseline 独立运行依赖声明中的 NumPy distribution 键. |
+| observed | governance | none | true | false | false | 配置一致性失败记录中的实际观测值. |
+| output_params | artifact | none | true | false | false | 文件级攻击执行后 FFprobe 观测到的输出编码参数对象. |
+| panel_id | provenance | none | true | false | false | 论文质量或证据面板的稳定标识. |
+| paper_protocol_difference_from_pilot_paper | protocol | none | true | true | false | 当前 profile 相对 pilot_paper 仅允许样本量和统计强度差异的声明. |
+| payload_bits | method | none | true | false | false | 独立 binary payload 模式提供的原始 bit 序列. |
+| payload_mode | method | none | true | true | false | Flow tubelet code 的 zero-bit 或独立 payload 模式. |
+| pilot_paper | protocol | none | true | false | false | 嵌套 profile 映射中的 pilot_paper 分支名称. |
+| pix_fmt | method | none | true | false | false | 文件级视频攻击输出实际使用的像素格式. |
+| platform_transcode_runtime | provenance | none | true | true | false | 正式 codec 攻击使用平台 FFmpeg 文件级转码运行时的标识. |
+| posterior_contract_version | provenance | none | true | true | false | detector record 绑定的冻结 posterior 契约版本. |
+| probe_paper | protocol | none | true | false | false | 嵌套 profile 映射中的 probe_paper 分支名称. |
+| prompt_text | provenance | none | true | false | false | 生成或语义质量评测实际消费的完整 prompt 文本. |
+| prompts | artifact | none | true | false | false | prompt suite 或质量聚合记录中的 prompt 集合. |
+| ready | governance | none | true | false | false | 局部质量面板或重建单元的通过状态. |
+| required_protocols | protocol | none | true | true | false | adaptive executor 必须完整覆盖的攻击协议集合. |
+| selected_prompt_seed_identities | provenance | none | true | true | false | 正式因果或统计子集实际选中的 prompt-seed 身份集合. |
+| success | governance | none | true | false | false | 生成调用或服务器阶段是否成功完成的通用状态. |
+| torch | provenance | none | true | false | false | baseline 独立运行依赖声明中的 PyTorch distribution 键. |
+| watermarked_video_path | provenance | none | true | false | false | external baseline 官方运行输出的 watermarked video 路径. |
+| zero_to_one | protocol | none | true | false | false | 视频张量值域为 [0, 1] 的显式范围标识. |
+| adaptive_attack_public_negative_candidate_records | artifact | none | true | false | false | public-negative warmup 的真实候选查询记录集合. |
+| attack_a | protocol | none | true | false | false | 统计测试 fixture 中代表单个预注册攻击范围的稳定键. |
+| command | artifact | none | true | false | false | 服务器 workflow 测试记录的已解析命令参数集合. |
+| figure_rows | artifact | none | true | false | false | 质量图重建测试中由 governed records 派生的行集合. |
+| full_paper_design | protocol | none | true | false | false | 嵌套 prompt suite 测试中的 full_paper 样本设计对象. |
+| official_execution_manifest_path | provenance | none | true | false | false | baseline fixture 绑定的官方执行 manifest 路径. |
+| paper_profile_hard_required_config_missing_count | metric | none | true | false | false | profile gate 测试中缺少硬性配置项的数量. |
+| pipeline_results | artifact | none | true | false | false | 服务器 workflow 测试中各 pipeline 的返回结果集合. |
+| prompt_suite_path | provenance | none | true | false | false | Colab 或服务器入口实际读取的 prompt suite 路径. |
+| runtime_attack_name | protocol | none | true | false | false | baseline fixture 中当前执行的预注册 runtime attack 名称. |
+| seed_value | provenance | none | true | false | false | prompt suite fixture 中稳定 seed 标识对应的数值. |
+| seeds | artifact | none | true | false | false | prompt suite fixture 中 calibration 或 test seed 集合. |
+| server_workflow_decision | governance | none | true | false | false | 服务器 workflow 测试中的总执行判定. |
+| stage_plan | protocol | none | true | false | false | 服务器 workflow 测试中的规范阶段编排集合. |
+| target_test_attacked_positive_event_count | protocol | none | true | false | false | profile fixture 期望生成的 attacked held-out positive 事件数. |
+| videoseal | provenance | none | true | false | false | 质量公平性 fixture 中 VideoSeal 方法分支键. |
+| videoshield | provenance | none | true | false | false | 质量公平性 fixture 中 VideoShield 方法分支键. |

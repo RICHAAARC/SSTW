@@ -27,9 +27,16 @@ from external_baseline.official_runtime_progress import (
     official_record_label,
     run_official_subprocess_with_heartbeat,
 )
-from external_baseline.runtime_trace_io import build_comparison_unit_id, comparable_detection_records
+from external_baseline.runtime_trace_io import (
+    NATIVE_GENERATION_COMPARISON_DESIGN,
+    build_comparison_unit_id,
+    comparable_detection_records,
+)
 from external_baseline.score_semantics import official_score_formal_comparison_summary
-from evaluation.attacks.video_runtime_attack_protocol import apply_runtime_attack_to_frames
+from evaluation.attacks.video_runtime_attack_protocol import (
+    apply_runtime_attack_to_video_file,
+    prefixed_runtime_attack_metadata,
+)
 from runtime.core.progress import ProgressReporter, emit_progress_event
 
 
@@ -821,20 +828,22 @@ def _read_video_frames(video_path: Path) -> list[Any]:
     return [frame for frame in iio.imiter(video_path)]
 
 
-def _write_video_frames(video_path: Path, frames: list[Any], *, fps: int) -> None:
-    """写出 mp4 帧序列。"""
-
-    import imageio.v3 as iio
-
-    video_path.parent.mkdir(parents=True, exist_ok=True)
-    iio.imwrite(video_path, frames, fps=fps)
-
-
-def _apply_runtime_attack_to_frames(frames: list[Any], attack_name: str) -> tuple[list[Any], dict[str, Any]]:
-    """对 VidSig watermarked 视频执行与主流程同名的 runtime attack。"""
+def _apply_runtime_attack_to_video_file(
+    source_video_path: Path,
+    output_video_path: Path,
+    attack_name: str,
+    *,
+    fps: int,
+) -> dict[str, Any]:
+    """对 VidSig 视频执行共享文件级攻击并完成效果验真。"""
 
     try:
-        return apply_runtime_attack_to_frames(frames, attack_name)
+        return apply_runtime_attack_to_video_file(
+            source_video_path,
+            output_video_path,
+            attack_name,
+            fps=float(fps),
+        )
     except ValueError as exc:
         raise ValueError(f"unsupported_vidsig_runtime_attack:{attack_name}") from exc
 
@@ -946,15 +955,18 @@ def write_vidsig_official_bundle_records(
             frame_array_path = frame_array_dir / "sstw_attacked_video.npy"
             clean_frame_array_dir = official_record_work_dir / "clean_negative_frame_arrays"
             clean_frame_array_path = clean_frame_array_dir / "sstw_clean_negative_video.npy"
-            frames = _read_video_frames(watermarked_video_path)
-            clean_frames = _read_video_frames(clean_video_path)
-            attacked_frames, attack_metadata = _apply_runtime_attack_to_frames(frames, str(record.get("attack_name") or ""))
-            clean_negative_frames, clean_negative_attack_metadata = _apply_runtime_attack_to_frames(
-                clean_frames,
+            attack_metadata = _apply_runtime_attack_to_video_file(
+                watermarked_video_path,
+                attacked_video_path,
                 str(record.get("attack_name") or ""),
+                fps=int(config.fps),
             )
-            _write_video_frames(attacked_video_path, attacked_frames, fps=int(config.fps))
-            _write_video_frames(clean_negative_video_path, clean_negative_frames, fps=int(config.fps))
+            clean_negative_attack_metadata = _apply_runtime_attack_to_video_file(
+                clean_video_path,
+                clean_negative_video_path,
+                str(record.get("attack_name") or ""),
+                fps=int(config.fps),
+            )
             attacked_frames_for_detection = _read_video_frames(attacked_video_path)
             clean_negative_frames_for_detection = _read_video_frames(clean_negative_video_path)
             _save_frame_array(frame_array_path, attacked_frames_for_detection)
@@ -1008,6 +1020,9 @@ def write_vidsig_official_bundle_records(
                 "official_adapter_baseline_id": BASELINE_ID,
                 "official_baseline_id": BASELINE_ID,
                 "external_baseline_generation_model_id": config.model_id,
+                "external_baseline_comparison_design": NATIVE_GENERATION_COMPARISON_DESIGN,
+                "external_baseline_quality_comparison_protocol": "native_generation_semantic_quality",
+                "external_baseline_clean_source_video_path": str(clean_video_path),
                 "external_baseline_official_execution_mode": "vidsig_generate_ms_watermarked_video_project_runtime_attack_official_attack_py",
                 "official_score_extraction_policy": "vidsig_official_attack_log_bit_accuracy_after_project_runtime_attack",
                 "official_reference_protocol_anchor": "same_prompt_seed_attack_runtime_comparison_unit",
@@ -1037,8 +1052,10 @@ def write_vidsig_official_bundle_records(
                 "sstw_attacked_video_path": record.get("attacked_video_path"),
                 "claim_support_status": "official_reference_bundle_written_not_claim_by_itself",
                 **attack_metadata,
-                "clean_negative_attack_transform": clean_negative_attack_metadata["attack_transform"],
-                "clean_negative_attack_strength": clean_negative_attack_metadata["attack_strength"],
+                **prefixed_runtime_attack_metadata(
+                    clean_negative_attack_metadata,
+                    prefix="clean_negative_",
+                ),
             }
             payload = {
                 **payload,

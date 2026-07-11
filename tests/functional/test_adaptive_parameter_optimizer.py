@@ -5,8 +5,10 @@ from __future__ import annotations
 import pytest
 
 from evaluation.attacks.adaptive_video_optimizer import (
+    ADAPTIVE_QUERY_BUDGET_CHECKPOINT_PROTOCOL,
     ADAPTIVE_TWO_COORDINATE_SEARCH_PROTOCOL,
     AdaptiveVideoCandidate,
+    AdaptiveVideoOptimizationResult,
     _next_bounded_parameter,
     _next_two_coordinate_parameters,
     _parameterized_attack_frames,
@@ -230,6 +232,11 @@ def test_adaptive_evidence_requires_true_vae_and_public_feedback_queries() -> No
                 })
             row = {
                 "candidate_index": index,
+                "video_sha256": f"digest-{index}",
+                "detector_score": 0.8 - 0.2 * index,
+                "path_score": 0.7 - 0.1 * index,
+                "decision": index < 2,
+                "admissible": True,
                 "attack_parameters": parameters,
             }
             if not vae:
@@ -244,6 +251,39 @@ def test_adaptive_evidence_requires_true_vae_and_public_feedback_queries() -> No
             rows.append(row)
         return rows
 
+    def checkpoints(rows: list[dict]) -> list[dict]:
+        selected = min(
+            rows,
+            key=lambda row: (
+                row["detector_score"],
+                row["path_score"],
+                row["candidate_index"],
+            ),
+        )
+        return [{
+            "adaptive_attack_query_budget_checkpoint": 3,
+            "adaptive_attack_checkpoint_observed_query_count": 3,
+            "adaptive_attack_checkpoint_candidate_count": 3,
+            "adaptive_attack_checkpoint_admissible_candidate_count": 3,
+            "adaptive_attack_checkpoint_has_admissible_candidate": True,
+            "adaptive_attack_checkpoint_selection_protocol": (
+                ADAPTIVE_QUERY_BUDGET_CHECKPOINT_PROTOCOL
+            ),
+            "adaptive_attack_checkpoint_selected_candidate_index": selected[
+                "candidate_index"
+            ],
+            "adaptive_attack_checkpoint_output_video_sha256": selected[
+                "video_sha256"
+            ],
+            "adaptive_attack_checkpoint_detector_score": selected[
+                "detector_score"
+            ],
+            "adaptive_attack_checkpoint_detected_by_sstw": selected["decision"],
+        }]
+
+    regeneration_candidates = candidates(vae=True)
+    public_candidates = candidates(vae=False)
+
     regeneration = {
         "non_runtime_attack_protocol": (
             "generative_recompression_or_regeneration_attack"
@@ -252,8 +292,20 @@ def test_adaptive_evidence_requires_true_vae_and_public_feedback_queries() -> No
             "sequential_detector_feedback_one_coordinate_model_vae_search"
         ),
         "adaptive_attack_query_count": 3,
+        "adaptive_attack_total_detector_query_count": 3,
+        "adaptive_attack_query_accounting_protocol": (
+            "all_target_and_public_negative_frozen_detector_calls"
+        ),
+        "adaptive_attack_objective": "minimize_detector_score",
         "adaptive_attack_selected_parameters": {"attack_strength": 0.5},
-        "adaptive_attack_candidate_records": candidates(vae=True),
+        "adaptive_attack_candidate_records": regeneration_candidates,
+        "adaptive_attack_query_budget_checkpoint_protocol": (
+            ADAPTIVE_QUERY_BUDGET_CHECKPOINT_PROTOCOL
+        ),
+        "adaptive_attack_query_budget_checkpoints": [3],
+        "adaptive_attack_query_budget_checkpoint_records": checkpoints(
+            regeneration_candidates
+        ),
     }
     public_probe = {
         "non_runtime_attack_protocol": "detector_probing_with_public_negatives",
@@ -262,10 +314,26 @@ def test_adaptive_evidence_requires_true_vae_and_public_feedback_queries() -> No
         ),
         "adaptive_search_protocol": ADAPTIVE_TWO_COORDINATE_SEARCH_PROTOCOL,
         "adaptive_attack_query_count": 3,
+        "adaptive_attack_total_detector_query_count": 6,
+        "adaptive_attack_query_accounting_protocol": (
+            "all_target_and_public_negative_frozen_detector_calls"
+        ),
+        "adaptive_attack_objective": "minimize_detector_score",
         "adaptive_attack_selected_parameters": {"attack_strength": 0.5},
-        "adaptive_attack_candidate_records": candidates(vae=False),
+        "adaptive_attack_candidate_records": public_candidates,
+        "adaptive_attack_query_budget_checkpoint_protocol": (
+            ADAPTIVE_QUERY_BUDGET_CHECKPOINT_PROTOCOL
+        ),
+        "adaptive_attack_query_budget_checkpoints": [3],
+        "adaptive_attack_query_budget_checkpoint_records": checkpoints(
+            public_candidates
+        ),
         "adaptive_attack_public_negative_probe_count": 3,
-        "adaptive_attack_public_negative_candidate_records": candidates(vae=False),
+        "adaptive_attack_public_negative_candidate_records": public_candidates,
+        "adaptive_attack_public_negative_query_budget_checkpoints": [3],
+        "adaptive_attack_public_negative_query_budget_checkpoint_records": (
+            checkpoints(public_candidates)
+        ),
         "adaptive_attack_public_negative_informed_strength": 0.5,
     }
 
@@ -286,3 +354,41 @@ def test_adaptive_evidence_requires_true_vae_and_public_feedback_queries() -> No
 
     assert all(ready.values())
     assert blocked["adaptive_model_vae_regeneration_ready"] is False
+
+
+@pytest.mark.quick
+def test_query_budget_checkpoints_use_only_actual_nested_query_prefixes() -> None:
+    """较小 budget 不得复用尚未发生的最终查询候选。"""
+
+    candidates = (
+        _candidate(0.0, 0.8),
+        _candidate(0.1, 0.3),
+        _candidate(0.2, 0.5),
+        _candidate(0.3, 0.1),
+    )
+    result = AdaptiveVideoOptimizationResult(
+        objective="minimize_detector_score",
+        selected=candidates[-1],
+        candidates=candidates,
+        endpoint_reference=0.7,
+        endpoint_tolerance=0.08,
+        minimum_quality_psnr=24.0,
+        query_budget=4,
+        query_budget_checkpoints=(1, 3, 4),
+    )
+
+    checkpoint_records = result.checkpoint_records()
+
+    assert [
+        row["adaptive_attack_checkpoint_selected_candidate_index"]
+        for row in checkpoint_records
+    ] == [0, 1, 3]
+    assert [
+        row["adaptive_attack_checkpoint_observed_query_count"]
+        for row in checkpoint_records
+    ] == [1, 3, 4]
+    assert all(
+        row["adaptive_attack_checkpoint_selection_protocol"]
+        == ADAPTIVE_QUERY_BUDGET_CHECKPOINT_PROTOCOL
+        for row in checkpoint_records
+    )

@@ -28,7 +28,12 @@ from experiments.generative_video_model_probe.colab_runtime import (
 from runtime.core.digest import build_stable_digest
 from main.methods.state_space_watermark.endpoint_latent_detector import compute_endpoint_latent_evidence
 from main.methods.state_space_watermark.flow_tubelet_key_code import (
+    FlowTubeletKeyContext,
     build_flow_tubelet_key_direction_like,
+    flow_tubelet_key_context_digest,
+)
+from main.methods.state_space_watermark.flow_velocity_runtime import (
+    normalized_flow_phase_from_sigma_interval,
 )
 from main.methods.state_space_watermark.path_observation import compute_path_step_observation
 from main.methods.state_space_watermark.replay_inversion import (
@@ -52,7 +57,14 @@ from experiments.generative_video_model_probe.formal_method_variants import (
     fit_flow_evidence_calibration,
     frozen_flow_detector_calibration_artifact,
 )
+from experiments.generative_video_model_probe.heldout_posterior_calibration import (
+    audit_heldout_posterior_calibration_records,
+    build_heldout_posterior_calibration_records,
+    write_heldout_posterior_calibration_artifacts,
+)
 from main.methods.state_space_watermark.flow_state_posterior import (
+    FLOW_STATE_ADMISSIBILITY_THRESHOLD_NAMES,
+    FLOW_STATE_POSTERIOR_CONTRACT_VERSION,
     FLOW_STATE_POSTERIOR_MODEL_TYPE,
 )
 from main.methods.state_space_watermark.watermark_key_derivation import (
@@ -62,6 +74,7 @@ from main.methods.state_space_watermark.watermark_key_derivation import (
 )
 from main.methods.state_space_watermark.wan_flow_replay_backend import (
     WanFlowReplayResult,
+    compute_wan_endpoint_evidence_for_key,
     evaluate_fixed_wan_replay_hypothesis_for_key,
     run_wan_attacked_video_replay,
     run_wan_control_replay,
@@ -94,6 +107,7 @@ def _run_attacked_video_replay_for_model(
     *,
     prompt: str,
     key_text: str,
+    key_context: FlowTubeletKeyContext,
     likelihood_config: ReplayGaussianLikelihoodConfig,
     replay_step_counts: tuple[int, ...] = (16, 20, 24),
 ) -> WanFlowReplayResult | LTXFlowReplayResult:
@@ -105,6 +119,7 @@ def _run_attacked_video_replay_for_model(
             video_path,
             prompt=prompt,
             key_text=key_text,
+            key_context=key_context,
             likelihood_config=likelihood_config,
             replay_step_counts=replay_step_counts,
         )
@@ -113,6 +128,7 @@ def _run_attacked_video_replay_for_model(
         video_path,
         prompt=prompt,
         key_text=key_text,
+        key_context=key_context,
         likelihood_config=likelihood_config,
         replay_step_counts=replay_step_counts,
     )
@@ -122,12 +138,21 @@ def _compute_replay_endpoint_evidence_for_key(
     replay: WanFlowReplayResult | LTXFlowReplayResult,
     *,
     key_text: str,
+    key_context: FlowTubeletKeyContext | None = None,
 ) -> Any:
     """在模型对应的五维 VAE endpoint 坐标上计算同源 key 证据。"""
 
     if isinstance(replay, LTXFlowReplayResult):
-        return compute_ltx_endpoint_evidence_for_key(replay, key_text=key_text)
-    return compute_endpoint_latent_evidence(replay.endpoint_latent, key_text=key_text)
+        return compute_ltx_endpoint_evidence_for_key(
+            replay,
+            key_text=key_text,
+            key_context=key_context,
+        )
+    return compute_wan_endpoint_evidence_for_key(
+        replay,
+        key_text=key_text,
+        key_context=key_context,
+    )
 
 
 def _run_control_replay_for_model(
@@ -136,6 +161,7 @@ def _run_control_replay_for_model(
     *,
     prompt: str,
     key_text: str,
+    key_context: FlowTubeletKeyContext,
     num_inference_steps: int,
     scheduler: Any | None = None,
     fixed_trajectory: ReplayTrajectory | None = None,
@@ -149,6 +175,7 @@ def _run_control_replay_for_model(
             latent_layout=replay.latent_layout,
             prompt=prompt,
             key_text=key_text,
+            key_context=key_context,
             num_inference_steps=num_inference_steps,
             scheduler=scheduler,
             fixed_trajectory=fixed_trajectory,
@@ -159,6 +186,7 @@ def _run_control_replay_for_model(
         replay.endpoint_latent,
         prompt=prompt,
         key_text=key_text,
+        key_context=key_context,
         num_inference_steps=num_inference_steps,
         scheduler=scheduler,
         fixed_trajectory=fixed_trajectory,
@@ -172,6 +200,7 @@ def _evaluate_fixed_replay_hypothesis_for_key(
     *,
     prompt: str,
     key_text: str,
+    key_context: FlowTubeletKeyContext,
 ) -> tuple[Any, dict[str, float | int | None]]:
     """在同一 key 无关固定反演路径上评估候选 key, 防止循环构造观测。"""
 
@@ -181,12 +210,14 @@ def _evaluate_fixed_replay_hypothesis_for_key(
             replay,
             prompt=prompt,
             key_text=key_text,
+            key_context=key_context,
         )
     return evaluate_fixed_wan_replay_hypothesis_for_key(
         pipeline,
         replay,
         prompt=prompt,
         key_text=key_text,
+        key_context=key_context,
     )
 
 
@@ -300,12 +331,44 @@ def _scheduler_signature(scheduler: Any) -> str:
     return f"{type(scheduler).__name__}:{sha256(payload.encode('utf-8')).hexdigest()}"
 
 
+def _flow_key_context(prompt: str, scheduler: Any) -> FlowTubeletKeyContext:
+    """按生成阶段同一规则重建 prompt 与 sampler 联合 key context。"""
+
+    return FlowTubeletKeyContext(
+        prompt_digest=sha256(prompt.encode("utf-8")).hexdigest(),
+        sampler_signature=_scheduler_signature(scheduler),
+    )
+
+
+def _validated_flow_key_context(
+    source: Mapping[str, Any],
+    *,
+    prompt: str,
+    scheduler: Any,
+) -> FlowTubeletKeyContext:
+    """重建并核验 generation 绑定的 tubelet context，防止检测期漂移。"""
+
+    context = _flow_key_context(prompt, scheduler)
+    observed_digest = str(source.get("flow_tubelet_key_context_digest") or "")
+    expected_digest = flow_tubelet_key_context_digest(context)
+    if not observed_digest:
+        raise RuntimeError("正式 replay 输入缺少 flow tubelet key context 摘要")
+    if observed_digest != expected_digest:
+        raise RuntimeError(
+            "正式 replay 的 prompt/sampler context 与生成记录不一致: "
+            f"expected={expected_digest}, observed={observed_digest}"
+        )
+    return context
+
+
 def _replay_native_key_direction(
     replay: WanFlowReplayResult | LTXFlowReplayResult,
     *,
     key_text: str,
+    key_context: FlowTubeletKeyContext,
+    flow_phase: float,
 ) -> Any:
-    """在模型原生 replay 布局中构造同一个五维 SSTW tubelet key 方向。"""
+    """在模型原生 replay 布局中构造同一 phase 的联合 tubelet code。"""
 
     reference = replay.replay_trajectories[replay.primary_replay_index].reverse_states[0]
     if isinstance(replay, LTXFlowReplayResult):
@@ -313,11 +376,15 @@ def _replay_native_key_direction(
         canonical_direction, _metadata = build_flow_tubelet_key_direction_like(
             canonical,
             key_text=key_text,
+            key_context=key_context,
+            flow_phase=flow_phase,
         )
         return replay.latent_layout.from_canonical(canonical_direction)
     direction, _metadata = build_flow_tubelet_key_direction_like(
         reference,
         key_text=key_text,
+        key_context=key_context,
+        flow_phase=flow_phase,
     )
     return direction
 
@@ -343,6 +410,7 @@ def build_flow_state_observation_sequence(
     key_text: str,
     trajectory: ReplayTrajectory | None = None,
     schedule: Iterable[Any] | None = None,
+    key_context: FlowTubeletKeyContext | None = None,
 ) -> list[dict[str, Any]]:
     """从固定 inversion 路径构造真实逐 phase 状态空间观测序列。"""
 
@@ -355,10 +423,10 @@ def build_flow_state_observation_sequence(
         raise RuntimeError("状态空间观测的 replay states 与 schedule 长度不一致")
     if len(active.forward_states) != len(states) or len(active.null_forward_states) != len(states):
         raise RuntimeError("候选、null 与固定 inversion 轨迹长度不一致")
-    direction = _replay_native_key_direction(replay, key_text=key_text).to(
-        device=states[0].device,
-        dtype=states[0].dtype,
-    )
+    active_key_context = key_context or replay.key_context
+    if active_key_context is None:
+        raise RuntimeError("正式状态空间观测缺少 FlowTubeletKeyContext")
+    sigma_grid = [float(point.sigma) for point in active_schedule]
     replay_reliability = float(replay.replay_uncertainty.replay_reliability)
     grid_reliability = _time_grid_reliability(replay)
     coverage = float(replay.endpoint_evidence.coverage_ratio)
@@ -369,7 +437,16 @@ def build_flow_state_observation_sequence(
         )
         if abs(delta_sigma) <= 1e-12:
             continue
-        phase = step_index / max(1, len(states) - 2)
+        phase = normalized_flow_phase_from_sigma_interval(
+            sigma_grid,
+            step_index,
+        )
+        direction = _replay_native_key_direction(
+            replay,
+            key_text=key_text,
+            key_context=active_key_context,
+            flow_phase=phase,
+        ).to(device=states[0].device, dtype=states[0].dtype)
         displacement = states[step_index + 1] - states[step_index]
         velocity = displacement / delta_sigma
         path = compute_path_step_observation(
@@ -378,6 +455,7 @@ def build_flow_state_observation_sequence(
             velocity,
             direction,
             flow_phase=phase,
+            delta_sigma=delta_sigma,
         )
         state_projection = _normalized_projection(states[step_index + 1], direction)
         endpoint_score = max(0.0, min(1.0, 0.5 + 0.5 * state_projection))
@@ -404,6 +482,14 @@ def build_flow_state_observation_sequence(
         observations.append({
             "flow_state_observation_step_index": step_index,
             "flow_phase": round(phase, 8),
+            "trajectory_delta_sigma": round(delta_sigma, 10),
+            "flow_tubelet_key_context_digest": flow_tubelet_key_context_digest(
+                active_key_context
+            ),
+            "flow_tubelet_formal_context_complete": True,
+            "path_quadrature_context_complete": (
+                path.path_quadrature_context_complete
+            ),
             "endpoint_score": round(endpoint_score, 8),
             "velocity_score": round(path.velocity_projection_normalized, 8),
             "path_score": round(
@@ -466,6 +552,11 @@ def build_flow_evidence_payload(
     path = dict(replay.path_evidence)
     uncertainty = replay.replay_uncertainty.as_dict()
     state_sequence = build_flow_state_observation_sequence(replay, key_text=key_text)
+    state_context_complete = all(
+        row.get("flow_tubelet_formal_context_complete") is True
+        and row.get("path_quadrature_context_complete") is True
+        for row in state_sequence
+    )
     return {
         **endpoint,
         **path,
@@ -488,6 +579,12 @@ def build_flow_evidence_payload(
         "flow_state_observation_sequence": state_sequence,
         "flow_state_observation_sequence_status": "measured_from_fixed_replay_path",
         "flow_state_observation_step_count": len(state_sequence),
+        "flow_state_observation_formal_context_complete": state_context_complete,
+        "flow_tubelet_key_context_digest": (
+            flow_tubelet_key_context_digest(replay.key_context)
+            if replay.key_context is not None
+            else None
+        ),
         "flow_state_transition_source": "calibration_fitted_linear_gaussian_dynamics",
     }
 
@@ -504,7 +601,15 @@ def _control_payload(
     """执行 wrong key、wrong prompt 与 wrong sampler/time-grid 真实对照。"""
 
     wrong_key = wrong_key_text
-    wrong_key_endpoint = _compute_replay_endpoint_evidence_for_key(replay, key_text=wrong_key)
+    if replay.key_context is None:
+        raise RuntimeError("正式 replay control 缺少正确生成 key context")
+    correct_context = replay.key_context
+    wrong_prompt_context = _flow_key_context(wrong_prompt, pipeline.scheduler)
+    wrong_key_endpoint = _compute_replay_endpoint_evidence_for_key(
+        replay,
+        key_text=wrong_key,
+        key_context=correct_context,
+    )
 
     primary_steps = int(replay.replay_step_counts[replay.primary_replay_index])
     fixed_trajectory = replay.replay_trajectories[replay.primary_replay_index]
@@ -513,6 +618,7 @@ def _control_payload(
         replay,
         prompt=prompt,
         key_text=wrong_key,
+        key_context=correct_context,
         num_inference_steps=primary_steps,
         fixed_trajectory=fixed_trajectory,
     )
@@ -521,6 +627,7 @@ def _control_payload(
         replay,
         prompt=wrong_prompt,
         key_text=key_text,
+        key_context=wrong_prompt_context,
         num_inference_steps=primary_steps,
         fixed_trajectory=fixed_trajectory,
     )
@@ -547,6 +654,7 @@ def _control_payload(
         replay,
         prompt=prompt,
         key_text=key_text,
+        key_context=_flow_key_context(prompt, wrong_scheduler),
         num_inference_steps=primary_steps,
         scheduler=wrong_scheduler,
         fixed_trajectory=fixed_trajectory,
@@ -583,18 +691,21 @@ def _control_payload(
         key_text=wrong_key,
         trajectory=wrong_key_trajectory,
         schedule=wrong_key_schedule,
+        key_context=correct_context,
     )
     wrong_prompt_sequence = build_flow_state_observation_sequence(
         replay,
         key_text=key_text,
         trajectory=wrong_prompt_trajectory,
         schedule=wrong_prompt_schedule,
+        key_context=wrong_prompt_context,
     )
     wrong_sampler_sequence = build_flow_state_observation_sequence(
         replay,
         key_text=key_text,
         trajectory=wrong_sampler_trajectory,
         schedule=wrong_sampler_schedule,
+        key_context=_flow_key_context(prompt, wrong_scheduler),
     )
     fixed_reverse_reused = all(
         trajectory.reverse_states is fixed_trajectory.reverse_states
@@ -653,6 +764,16 @@ def _control_payload(
         "replay_control_fixed_reverse_path_reused": fixed_reverse_reused,
         "replay_control_execution_status": "measured_formal",
         "wrong_prompt_control_prompt_digest": sha256(wrong_prompt.encode("utf-8")).hexdigest(),
+        "replay_control_correct_key_context_digest": (
+            flow_tubelet_key_context_digest(correct_context)
+        ),
+        "wrong_prompt_key_context_digest": (
+            flow_tubelet_key_context_digest(wrong_prompt_context)
+        ),
+        "wrong_sampler_key_context_digest": flow_tubelet_key_context_digest(
+            _flow_key_context(prompt, wrong_scheduler)
+        ),
+        "replay_control_joint_context_complete": True,
     }
 
 
@@ -693,6 +814,10 @@ def _controlled_negative_records_from_positive(
         "authenticated_generation_time_grid_id",
         "authenticated_generation_step_count",
         "formal_flow_detector_input_contract",
+        "replay_likelihood_calibration_protocol",
+        "replay_likelihood_calibration_cluster_count",
+        "replay_relative_observation_noise_standard_deviation",
+        "replay_minimum_observation_noise_variance",
     )
     common = {field: positive_record.get(field) for field in identity_fields}
     specs = (
@@ -751,6 +876,26 @@ def _controlled_negative_records_from_positive(
                     "measured_from_fixed_replay_path"
                 ),
                 "flow_state_observation_step_count": len(sequence),
+                "flow_state_observation_formal_context_complete": all(
+                    row.get("flow_tubelet_formal_context_complete") is True
+                    and row.get("path_quadrature_context_complete") is True
+                    for row in sequence
+                ),
+                "flow_tubelet_key_context_digest": sequence[0].get(
+                    "flow_tubelet_key_context_digest"
+                ),
+                "flow_tubelet_formal_context_complete": all(
+                    row.get("flow_tubelet_formal_context_complete") is True
+                    for row in sequence
+                ),
+                "path_quadrature_context_complete": all(
+                    row.get("path_quadrature_context_complete") is True
+                    for row in sequence
+                ),
+                "endpoint_formal_context_complete": True,
+                "endpoint_evidence_source": (
+                    "fixed_reverse_path_phase_conditioned_state_endpoint"
+                ),
                 "flow_state_transition_source": (
                     "calibration_fitted_linear_gaussian_dynamics"
                 ),
@@ -836,6 +981,26 @@ def _base_record(source: Mapping[str, Any], *, sample_role: str, method_variant:
         "generation_source_video_sha256": source.get("source_video_sha256"),
         "statistical_cluster_id": statistical_cluster_id,
         "statistical_independent_unit": "source_video_prompt_seed",
+        "generation_record_digest": source.get("generation_record_digest"),
+        "code_commit": source.get("code_commit"),
+        "flow_runtime_formal_context_complete": source.get(
+            "flow_runtime_formal_context_complete"
+        ),
+        "generation_endpoint_control_formal_context_complete": source.get(
+            "generation_endpoint_control_formal_context_complete"
+        ),
+        "generation_endpoint_quality_energy_guard_passed": source.get(
+            "generation_endpoint_quality_energy_guard_passed"
+        ),
+        "generation_endpoint_control_cumulative_energy_final": source.get(
+            "generation_endpoint_control_cumulative_energy_final"
+        ),
+        "generation_endpoint_reference_cumulative_energy_final": source.get(
+            "generation_endpoint_reference_cumulative_energy_final"
+        ),
+        "generation_velocity_constraint_delta_ratio_maximum": source.get(
+            "generation_velocity_constraint_delta_ratio_maximum"
+        ),
     }
 
 
@@ -1108,6 +1273,8 @@ def _paired_velocity_causal_records(
         and record.get("split") == "test"
         and record.get("method_variant")
         in {"sstw_full_method", "without_velocity_constraint"}
+        and record.get("attack_name")
+        == "no_attack_generation_causal_ablation"
     ]
     by_identity: dict[tuple[str, str, str, str, str], dict[str, Mapping[str, Any]]] = defaultdict(dict)
     for record in positives:
@@ -1144,6 +1311,13 @@ def _paired_velocity_causal_records(
             != control.get("generation_source_video_sha256")
             and full.get("velocity_causal_intervention_status")
             == "velocity_constraint_enabled"
+            and full.get("flow_runtime_formal_context_complete") is True
+            and full.get(
+                "generation_endpoint_control_formal_context_complete"
+            )
+            is True
+            and full.get("generation_endpoint_quality_energy_guard_passed")
+            is True
             and control.get("velocity_causal_intervention_status")
             == "velocity_constraint_disabled"
         )
@@ -1215,6 +1389,7 @@ def _audit_three_layer_mechanism(
     paired_velocity_records: Iterable[Mapping[str, Any]],
     *,
     target_fpr: float,
+    minimum_velocity_causal_pair_count: int,
 ) -> dict[str, Any]:
     """审计 Claim-1 与 Claim-2, Claim-3 的最终认证由 replay gate 继续完成。"""
 
@@ -1304,7 +1479,7 @@ def _audit_three_layer_mechanism(
         bool(full_positive)
         and bool(full_test_negative)
         and bool(velocity_paired)
-        and len(velocity_paired) == len(full_positive)
+        and len(velocity_paired) >= int(minimum_velocity_causal_pair_count)
         and not velocity_pairing_failures
         and fpr_estimate.estimate <= target_fpr
         and tpr_estimate.confidence_interval_lower > target_fpr
@@ -1332,10 +1507,16 @@ def _audit_three_layer_mechanism(
         "claim_1_tpr_ci_95_upper": round(tpr_estimate.confidence_interval_upper, 8),
         "claim_1_tpr_statistical_cluster_count": tpr_estimate.cluster_count,
         "claim_1_velocity_causal_pair_count": len(velocity_paired),
-        "claim_1_velocity_causal_expected_pair_count": len(full_positive),
+        "claim_1_velocity_causal_expected_pair_count": int(
+            minimum_velocity_causal_pair_count
+        ),
         "claim_1_velocity_causal_pairing_failure_count": len(velocity_pairing_failures),
         "claim_1_velocity_causal_pair_coverage": round(
-            len(velocity_paired) / max(1, len(full_positive)),
+            min(
+                1.0,
+                len(velocity_paired)
+                / max(1, int(minimum_velocity_causal_pair_count)),
+            ),
             8,
         ),
         "claim_1_velocity_causal_detector_protocol": (
@@ -1458,7 +1639,6 @@ def _audit_cross_model_generalization(
             and bool(negatives)
             and bool(paths)
             and bool(velocities)
-            and len(velocities) == len(positives)
             and fpr.estimate <= target_fpr
             and tpr.estimate > fpr.estimate
             and path_gain.estimate > 0.0
@@ -1511,6 +1691,28 @@ def _state_space_posterior_mechanism_failures(
             "posterior_model_type": (
                 record.get("posterior_model_type") == FLOW_STATE_POSTERIOR_MODEL_TYPE
             ),
+            "posterior_contract_version": (
+                record.get("posterior_model_contract_version")
+                == FLOW_STATE_POSTERIOR_CONTRACT_VERSION
+            ),
+            "phase_conditioned_transition_configured": (
+                record.get("posterior_phase_conditioned_transition_configured")
+                is True
+            ),
+            "reliability_heteroscedastic_observation_configured": (
+                record.get(
+                    "posterior_reliability_heteroscedastic_observation_configured"
+                )
+                is True
+            ),
+            "complete_p6_admissibility_context": (
+                record.get("posterior_admissibility_context_complete") is True
+                and isinstance(
+                    record.get("posterior_admissibility_thresholds"), Mapping
+                )
+                and set(record["posterior_admissibility_thresholds"])
+                == set(FLOW_STATE_ADMISSIBILITY_THRESHOLD_NAMES)
+            ),
             "nested_group_probability_calibration": (
                 record.get("posterior_probability_calibration_protocol")
                 == "nested_source_video_group_cross_fitted_state_space_llr_and_platt"
@@ -1540,12 +1742,32 @@ def _state_space_posterior_mechanism_failures(
                 and int(negative_model.get("training_transition_count") or 0) > 0
                 and int(negative_model.get("training_transition_group_count") or 0) >= 2
                 and int(negative_model.get("training_group_count") or 0) >= 2
+                and negative_model.get("state_space_dynamics_contract")
+                == "phase_conditioned_transition_with_reliability_heteroscedastic_observation"
+                and bool(negative_model.get("phase_transition_matrix"))
+                and float(
+                    negative_model.get(
+                        "reliability_observation_variance_scale"
+                    )
+                    or 0.0
+                )
+                > 0.0
             ),
             "positive_state_transitions_fitted": (
                 isinstance(positive_model, Mapping)
                 and int(positive_model.get("training_transition_count") or 0) > 0
                 and int(positive_model.get("training_transition_group_count") or 0) >= 2
                 and int(positive_model.get("training_group_count") or 0) >= 2
+                and positive_model.get("state_space_dynamics_contract")
+                == "phase_conditioned_transition_with_reliability_heteroscedastic_observation"
+                and bool(positive_model.get("phase_transition_matrix"))
+                and float(
+                    positive_model.get(
+                        "reliability_observation_variance_scale"
+                    )
+                    or 0.0
+                )
+                > 0.0
             ),
         }
         missing = [name for name, passed in checks.items() if not passed]
@@ -1570,6 +1792,23 @@ def _state_space_posterior_mechanism_failures(
                 isinstance(sequence, list)
                 and step_count >= 2
                 and len(sequence) == step_count
+            ),
+            "joint_flow_context_complete": (
+                record.get("flow_state_observation_formal_context_complete")
+                is True
+                and bool(record.get("flow_tubelet_key_context_digest"))
+                and record.get("endpoint_formal_context_complete") is True
+                and record.get("flow_tubelet_formal_context_complete") is True
+                and record.get("path_quadrature_context_complete") is True
+                and isinstance(sequence, list)
+                and all(
+                    row.get("flow_tubelet_formal_context_complete") is True
+                    and row.get("path_quadrature_context_complete") is True
+                    and row.get("trajectory_delta_sigma") is not None
+                    and row.get("flow_tubelet_key_context_digest")
+                    == record.get("flow_tubelet_key_context_digest")
+                    for row in sequence
+                )
             ),
             "kalman_filter_consumed_complete_sequence": (
                 filter_step_count == step_count and filter_step_count >= 2
@@ -1733,6 +1972,11 @@ def _fit_model_specific_replay_likelihood_configs(
             video_path,
             prompt=prompt_map[prompt_id],
             key_text=calibration_key_text,
+            key_context=_validated_flow_key_context(
+                source,
+                prompt=prompt_map[prompt_id],
+                scheduler=pipelines[model_id].scheduler,
+            ),
             likelihood_config=bootstrap_config,
             replay_step_counts=(calibration_step_count,),
         )
@@ -1810,6 +2054,89 @@ def _fit_model_specific_replay_likelihood_configs(
     return fitted, records
 
 
+def _generation_causal_ablation_replay_sources(
+    generation_records: Iterable[Mapping[str, Any]],
+    *,
+    maximum_identity_count_per_model_split: int,
+) -> list[dict[str, Any]]:
+    """选择预注册同 prompt/seed 生成变体，形成 Claim-1 因果配对。
+
+    runtime robustness 的46种攻击只施加到完整方法；改变生成轨迹的内部消融在
+    同一 prompt、seed 和模型的原始输出上比较。该设计隔离了速度约束干预，避免
+    将攻击随机性混入 Claim-1，同时按 profile 的统计规模限制昂贵 replay 数量。
+    """
+
+    candidates = [
+        dict(record)
+        for record in generation_records
+        if record.get("generation_status") == "success"
+        and record.get("method_variant") in GENERATION_METHOD_VARIANTS
+        and str(record.get("split") or "") in {"calibration", "test"}
+        and str(record.get("sample_role") or "") != "clean_negative"
+    ]
+    grouped: dict[tuple[str, str], dict[tuple[str, str], list[dict[str, Any]]]] = (
+        defaultdict(lambda: defaultdict(list))
+    )
+    for record in candidates:
+        group_key = (
+            str(record.get("generation_model_id") or ""),
+            str(record.get("split") or ""),
+        )
+        identity = (
+            str(record.get("prompt_id") or ""),
+            str(record.get("seed_id") or ""),
+        )
+        grouped[group_key][identity].append(record)
+
+    selected_sources: list[dict[str, Any]] = []
+    required_variants = set(GENERATION_METHOD_VARIANTS)
+    maximum_count = max(1, int(maximum_identity_count_per_model_split))
+    for group_key in sorted(grouped):
+        complete_identities = [
+            identity
+            for identity, rows in grouped[group_key].items()
+            if {str(row.get("method_variant")) for row in rows}
+            == required_variants
+        ]
+        ranked_identities = sorted(
+            complete_identities,
+            key=lambda identity: build_stable_digest({
+                "selection_protocol": (
+                    "sstw_generation_causal_ablation_subset_v1"
+                ),
+                "generation_model_id": group_key[0],
+                "split": group_key[1],
+                "prompt_id": identity[0],
+                "seed_id": identity[1],
+            }),
+        )[:maximum_count]
+        selection_digest = build_stable_digest({
+            "generation_model_id": group_key[0],
+            "split": group_key[1],
+            "selected_prompt_seed_identities": ranked_identities,
+        })
+        for rank, identity in enumerate(ranked_identities, start=1):
+            for source in grouped[group_key][identity]:
+                selected_sources.append({
+                    **source,
+                    "sample_role": "attacked_positive",
+                    "attack_name": "no_attack_generation_causal_ablation",
+                    "attack_runtime_status": "ready",
+                    "attacked_video_path": source.get("video_path"),
+                    "attacked_video_sha256": source.get("video_sha256"),
+                    "source_video_sha256": source.get("video_sha256"),
+                    "generation_source_video_sha256": source.get(
+                        "video_sha256"
+                    ),
+                    "causal_ablation_subset_rank": rank,
+                    "causal_ablation_subset_digest": selection_digest,
+                    "causal_ablation_selection_protocol": (
+                        "prompt_seed_hash_before_detection_complete_variant_block"
+                    ),
+                })
+    return selected_sources
+
+
 def run_formal_flow_evidence(
     run_root: str | Path,
     prompt_suite_path: str | Path,
@@ -1827,7 +2154,20 @@ def run_formal_flow_evidence(
     attack_records.extend(_read_jsonl(run_root / "records" / "cross_sample_adaptive_video_attack_records.jsonl"))
     successful_generation = [record for record in generation_records if record.get("generation_status") == "success"]
     clean_records = [record for record in successful_generation if record.get("sample_role") == "clean_negative"]
-    ready_attacks = [record for record in attack_records if record.get("attack_runtime_status") == "ready"]
+    ready_attacks = [
+        record
+        for record in attack_records
+        if record.get("attack_runtime_status") == "ready"
+        and record.get("method_variant") == "sstw_full_method"
+    ]
+    ready_attacks.extend(
+        _generation_causal_ablation_replay_sources(
+            successful_generation,
+            maximum_identity_count_per_model_split=int(
+                config.get("minimum_internal_ablation_trace_count") or 1
+            ),
+        )
+    )
     if not ready_attacks:
         raise RuntimeError("缺少 ready runtime attack records, 不能执行正式 Flow replay")
     if str(config.get("paper_result_level") or "") in {
@@ -1887,12 +2227,18 @@ def run_formal_flow_evidence(
             wrong_prompt = next(value for value in all_prompts if value != prompt)
             pipeline = pipelines[str(source.get("generation_model_id"))]
             key_text = _generation_key(source)
+            key_context = _validated_flow_key_context(
+                source,
+                prompt=prompt,
+                scheduler=pipeline.scheduler,
+            )
             video_path = _resolve_video_path(run_root, source.get("attacked_video_path"), fallback_dir="attacked_videos")
             replay = _run_attacked_video_replay_for_model(
                 pipeline,
                 video_path,
                 prompt=prompt,
                 key_text=key_text,
+                key_context=key_context,
                 likelihood_config=replay_likelihood_configs[
                     str(source.get("generation_model_id"))
                 ],
@@ -1973,6 +2319,11 @@ def run_formal_flow_evidence(
                         source,
                         extra_context={"negative_role": "clean_replay_base"},
                     ),
+                    key_context=_validated_flow_key_context(
+                        source,
+                        prompt=prompt,
+                        scheduler=pipeline.scheduler,
+                    ),
                     likelihood_config=replay_likelihood_configs[
                         source_model_id
                     ],
@@ -1993,12 +2344,14 @@ def run_formal_flow_evidence(
                         endpoint = _compute_replay_endpoint_evidence_for_key(
                             base_replay,
                             key_text=trial_key,
+                            key_context=base_replay.key_context,
                         )
                         hypothesis, path = _evaluate_fixed_replay_hypothesis_for_key(
                             pipeline,
                             base_replay,
                             prompt=prompt,
                             key_text=trial_key,
+                            key_context=base_replay.key_context,
                         )
                         trial_reliability = math.exp(-0.5 * (
                             float(hypothesis.candidate_residual_mean_squared_error)
@@ -2008,6 +2361,7 @@ def run_formal_flow_evidence(
                             base_replay,
                             key_text=trial_key,
                             trajectory=hypothesis,
+                            key_context=base_replay.key_context,
                         )
                         payload = {
                             **_base_record(source, sample_role="clean_negative", method_variant=method_variant),
@@ -2064,6 +2418,20 @@ def run_formal_flow_evidence(
                                 "measured_from_fixed_replay_path"
                             ),
                             "flow_state_observation_step_count": len(state_sequence),
+                            "flow_state_observation_formal_context_complete": all(
+                                row.get("flow_tubelet_formal_context_complete")
+                                is True
+                                and row.get("path_quadrature_context_complete")
+                                is True
+                                for row in state_sequence
+                            ),
+                            "flow_tubelet_key_context_digest": (
+                                flow_tubelet_key_context_digest(
+                                    base_replay.key_context
+                                )
+                                if base_replay.key_context is not None
+                                else None
+                            ),
                             "flow_state_transition_source": (
                                 "calibration_fitted_linear_gaussian_dynamics"
                             ),
@@ -2086,6 +2454,16 @@ def run_formal_flow_evidence(
         evidence_records,
         target_fpr=float(config["target_fpr"]),
     )
+    # Calibration split 只负责拟合状态模型、Platt 映射与 fixed-FPR 阈值。
+    # Claim-3 的“可靠后验”必须另外在 test split 上评价，且不得更新任何参数。
+    heldout_posterior_records = build_heldout_posterior_calibration_records(
+        scored_records,
+        config,
+    )
+    heldout_posterior_audit = audit_heldout_posterior_calibration_records(
+        heldout_posterior_records,
+        config,
+    )
     paired_path_records = _paired_path_gain_records(scored_records, calibrations)
     paired_velocity_records = _paired_velocity_causal_records(
         scored_records,
@@ -2096,6 +2474,9 @@ def run_formal_flow_evidence(
         paired_path_records,
         paired_velocity_records,
         target_fpr=float(config["target_fpr"]),
+        minimum_velocity_causal_pair_count=int(
+            config["minimum_internal_ablation_trace_count"]
+        ),
     )
     cross_model_audit = _audit_cross_model_generalization(
         scored_records,
@@ -2267,6 +2648,8 @@ def run_formal_flow_evidence(
         and not posterior_calibration_failures
         and not state_space_posterior_mechanism_failures
         and not replay_likelihood_calibration_failures
+        and heldout_posterior_audit["heldout_posterior_calibration_decision"]
+        == "PASS"
         and negative_family_mechanism_pass
         and mechanism_audit["three_layer_mechanism_pre_replay_decision"] == "PASS"
         and cross_model_audit["cross_model_generalization_decision"] in {"PASS", "NOT_CONFIGURED"}
@@ -2323,6 +2706,18 @@ def run_formal_flow_evidence(
         "replay_likelihood_calibration_failures": (
             replay_likelihood_calibration_failures
         ),
+        "heldout_posterior_calibration_decision": heldout_posterior_audit[
+            "heldout_posterior_calibration_decision"
+        ],
+        "heldout_posterior_calibration_record_count": heldout_posterior_audit[
+            "heldout_posterior_calibration_record_count"
+        ],
+        "heldout_posterior_missing_scopes": heldout_posterior_audit[
+            "heldout_posterior_missing_scopes"
+        ],
+        "heldout_posterior_blocked_scopes": heldout_posterior_audit[
+            "heldout_posterior_blocked_scopes"
+        ],
         "claim_1_velocity_constraint_detectable_watermark_decision": mechanism_audit["claim_1_velocity_constraint_detectable_watermark_decision"],
         "claim_2_path_evidence_independent_gain_decision": mechanism_audit["claim_2_path_evidence_independent_gain_decision"],
         "cross_model_generalization_decision": cross_model_audit["cross_model_generalization_decision"],
@@ -2351,6 +2746,11 @@ def run_formal_flow_evidence(
         / "thresholds"
         / "replay_gaussian_likelihood_calibrations.jsonl",
         replay_likelihood_calibration_records,
+    )
+    write_heldout_posterior_calibration_artifacts(
+        run_root,
+        heldout_posterior_records,
+        heldout_posterior_audit,
     )
     write_csv(run_root / "tables" / "formal_flow_detection_table.csv", scored_records)
     write_csv(run_root / "tables" / "runtime_detection_table.csv", positive_records)
@@ -2386,6 +2786,7 @@ def run_formal_flow_evidence(
         f"- claim_2_decision: {audit['claim_2_path_evidence_independent_gain_decision']}\n"
         f"- claim3_real_replay_record_count: {audit['claim3_real_replay_record_count']}\n"
         f"- replay_likelihood_calibration_decision: {audit['replay_likelihood_calibration_decision']}\n"
+        f"- heldout_posterior_calibration_decision: {audit['heldout_posterior_calibration_decision']}\n"
         f"- cross_model_generalization_decision: {audit['cross_model_generalization_decision']}\n"
     )
     for report_name in ("formal_flow_evidence_report.md", "runtime_detection_report.md"):

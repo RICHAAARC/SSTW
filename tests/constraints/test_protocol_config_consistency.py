@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from hashlib import sha256
 import json
 from pathlib import Path
 
@@ -9,9 +10,16 @@ import pytest
 
 from evaluation.attacks.video_runtime_attack_protocol import load_protocol_config_with_shared_attack_protocol
 from evaluation.protocol.paper_profile_contract import (
+    CANONICAL_COMMON_CONTRACT_ID,
+    CANONICAL_COMMON_CONTRACT_PATH,
+    CANONICAL_COMMON_CONTRACT_SHA256,
+    COMMON_CONTRACT_DIGEST_FIELD,
     COMMON_CONTRACT_PATH_FIELD,
+    PAPER_PROFILE_CANONICAL_PATHS,
+    PAPER_PROFILE_INVARIANT_METADATA_FIELDS,
     PAPER_PROFILE_ONLY_FIELD_CATEGORIES,
     PAPER_PROFILE_ONLY_FIELDS,
+    enforce_paper_profile_common_contract,
 )
 
 
@@ -158,9 +166,14 @@ def test_paper_profiles_match_the_same_common_mechanism_contract() -> None:
     assert contract["replay_likelihood_calibration_step_count"] == (
         replay_likelihood["calibration_replay_step_count"]
     )
+    assert contract["paper_profile_common_contract_id"] == CANONICAL_COMMON_CONTRACT_ID
+    assert sha256(contract_path.read_bytes()).hexdigest() == (
+        CANONICAL_COMMON_CONTRACT_SHA256
+    )
     for config_path in PAPER_PROFILE_PROTOCOL_CONFIGS:
         config = json.loads(config_path.read_text(encoding="utf-8"))
         assert config["paper_profile_common_contract_path"] == contract_path.as_posix()
+        assert config[COMMON_CONTRACT_DIGEST_FIELD] == CANONICAL_COMMON_CONTRACT_SHA256
         assert {
             key: config.get(key)
             for key in contract
@@ -181,7 +194,7 @@ def test_every_profile_only_field_has_an_explicit_non_mechanism_category() -> No
     for config_path in PAPER_PROFILE_PROTOCOL_CONFIGS:
         config = json.loads(config_path.read_text(encoding="utf-8"))
         profile_only = (
-            set(config) - set(contract) - {COMMON_CONTRACT_PATH_FIELD}
+            set(config) - set(contract) - set(PAPER_PROFILE_INVARIANT_METADATA_FIELDS)
         )
         assert profile_only <= set(PAPER_PROFILE_ONLY_FIELDS)
 
@@ -194,14 +207,11 @@ def test_unregistered_profile_evidence_key_is_rejected_fail_closed(
 
     source = json.loads(PAPER_PROFILE_PROTOCOL_CONFIGS[0].read_text(encoding="utf-8"))
     source["require_unregistered_claim_evidence"] = True
-    config_path = tmp_path / "probe_paper_unregistered_evidence.json"
-    config_path.write_text(
-        json.dumps(source, ensure_ascii=False),
-        encoding="utf-8",
-    )
-
     with pytest.raises(ValueError, match="未登记的层级差异字段"):
-        load_protocol_config_with_shared_attack_protocol(config_path)
+        enforce_paper_profile_common_contract(
+            source,
+            PAPER_PROFILE_CANONICAL_PATHS["probe_paper"],
+        )
 
 
 @pytest.mark.constraint
@@ -212,11 +222,57 @@ def test_profile_target_fpr_cannot_drift_within_the_allowed_scale_category(
 
     source = json.loads(PAPER_PROFILE_PROTOCOL_CONFIGS[0].read_text(encoding="utf-8"))
     source["target_fpr"] = 0.2
-    config_path = tmp_path / "probe_paper_wrong_fpr.json"
+    with pytest.raises(ValueError, match="target_fpr 必须为"):
+        enforce_paper_profile_common_contract(
+            source,
+            PAPER_PROFILE_CANONICAL_PATHS["probe_paper"],
+        )
+
+
+@pytest.mark.constraint
+def test_noncanonical_formal_profile_is_rejected_by_default(tmp_path: Path) -> None:
+    """正式 CLI 不得从临时路径加载自定义 probe/pilot/full 配置。"""
+
+    source = json.loads(PAPER_PROFILE_PROTOCOL_CONFIGS[0].read_text(encoding="utf-8"))
+    config_path = tmp_path / "probe_paper_custom.json"
     config_path.write_text(json.dumps(source, ensure_ascii=False), encoding="utf-8")
 
-    with pytest.raises(ValueError, match="target_fpr 必须为"):
+    with pytest.raises(ValueError, match="只接受仓库 canonical profile"):
         load_protocol_config_with_shared_attack_protocol(config_path)
+
+
+@pytest.mark.constraint
+def test_custom_common_contract_path_is_rejected(tmp_path: Path) -> None:
+    """profile 不能把任意自定义 JSON 声明为可信公共机制契约。"""
+
+    source = json.loads(PAPER_PROFILE_PROTOCOL_CONFIGS[0].read_text(encoding="utf-8"))
+    custom_contract = tmp_path / "paper_profile_common_contract.json"
+    custom_contract.write_text("{}\n", encoding="utf-8")
+    source[COMMON_CONTRACT_PATH_FIELD] = str(custom_contract)
+
+    with pytest.raises(ValueError, match="只能引用仓库 canonical 公共契约"):
+        enforce_paper_profile_common_contract(
+            source,
+            PAPER_PROFILE_CANONICAL_PATHS["probe_paper"],
+        )
+
+
+@pytest.mark.constraint
+def test_common_contract_declared_digest_must_match_frozen_content() -> None:
+    """profile 声明摘要必须与代码冻结的 canonical 内容摘要一致。"""
+
+    source = json.loads(PAPER_PROFILE_PROTOCOL_CONFIGS[0].read_text(encoding="utf-8"))
+    source[COMMON_CONTRACT_DIGEST_FIELD] = "0" * 64
+
+    with pytest.raises(ValueError, match=COMMON_CONTRACT_DIGEST_FIELD):
+        enforce_paper_profile_common_contract(
+            source,
+            PAPER_PROFILE_CANONICAL_PATHS["probe_paper"],
+        )
+
+    assert CANONICAL_COMMON_CONTRACT_PATH == Path(
+        "configs/protocol/paper_profile_common_contract.json"
+    ).resolve()
 
 
 @pytest.mark.constraint
@@ -295,6 +351,65 @@ def test_profile_negative_video_counts_support_their_fpr_scale() -> None:
 
 
 @pytest.mark.constraint
+def test_heldout_posterior_requirements_are_profile_invariant_and_scale_derived() -> None:
+    """held-out 后验阈值必须同构, 簇数只能由各档统计规模派生。"""
+
+    invariant_expected = {
+        "maximum_heldout_posterior_brier_score": 0.25,
+        "maximum_heldout_posterior_log_loss": 0.693147,
+        "maximum_heldout_posterior_expected_calibration_error": 0.1,
+        "heldout_posterior_bootstrap_resample_count": 5000,
+        "minimum_sstw_worst_attack_tpr_ci_lower": 0.5,
+        "require_heldout_posterior_probability_evaluation": True,
+    }
+    for config_path in PAPER_PROFILE_PROTOCOL_CONFIGS:
+        config = load_protocol_config_with_shared_attack_protocol(config_path)
+        for field_name, expected in invariant_expected.items():
+            assert config[field_name] == expected
+        heldout_count = int(config["minimum_test_unique_video_count"])
+        assert int(config["minimum_heldout_posterior_positive_cluster_count"]) == heldout_count
+        assert int(config["minimum_heldout_posterior_negative_cluster_count"]) == heldout_count
+        attack_count = int(config["minimum_attack_event_count_per_attack"])
+        assert int(config["minimum_heldout_posterior_attack_cluster_count"]) == attack_count
+        assert attack_count <= heldout_count
+
+
+@pytest.mark.constraint
+def test_adaptive_query_mechanism_is_invariant_and_only_cluster_count_scales() -> None:
+    """三个层级必须共享真实查询机制, 只能扩大 independent video 数量。"""
+
+    expected_cluster_counts = {
+        "probe_paper": 30,
+        "pilot_paper": 100,
+        "full_paper": 200,
+    }
+    for config_path in PAPER_PROFILE_PROTOCOL_CONFIGS:
+        config = json.loads(config_path.read_text(encoding="utf-8-sig"))
+        level = str(config["paper_result_level"])
+        assert config["adaptive_attack_query_budget_per_video"] == 9
+        assert config["adaptive_attack_query_budget_checkpoints"] == [1, 3, 5, 9]
+        assert config[
+            "adaptive_attack_public_negative_probe_query_budget"
+        ] == 3
+        assert config["adaptive_attack_source_cluster_selection_protocol"] == (
+            "stable_sha256_rank_over_heldout_source_cluster_before_attack_scoring_v1"
+        )
+        assert config[
+            "minimum_adaptive_attack_source_video_cluster_count_per_protocol"
+        ] == expected_cluster_counts[level]
+        assert config[
+            "minimum_adaptive_attack_source_video_cluster_count_per_protocol"
+        ] == config["minimum_attack_event_count_per_attack"]
+        spoof_count = int(
+            config[
+                "minimum_independent_negative_video_count_for_fpr_upper_bound"
+            ]
+        )
+        zero_false_accept_upper = 1.0 - (0.05 ** (1.0 / spoof_count))
+        assert zero_false_accept_upper <= float(config["target_fpr"])
+
+
+@pytest.mark.constraint
 def test_workflow_profile_counts_are_derived_from_protocol_scale() -> None:
     """工作流摘要数量必须与规范 protocol config 完全一致, 防止双配置漂移."""
 
@@ -361,5 +476,8 @@ def test_internal_ablation_video_reuse_policy_is_profile_invariant() -> None:
         )
         assert config["require_internal_ablation_video_reuse_policy"] is True
         assert int(config["minimum_internal_ablation_trace_count"]) == int(
+            config["minimum_attack_event_count_per_attack"]
+        )
+        assert int(config["minimum_internal_ablation_trace_count"]) <= int(
             config["minimum_test_unique_video_count"]
         )

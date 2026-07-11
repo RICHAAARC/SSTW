@@ -20,10 +20,24 @@ from experiments.generative_video_model_probe.validation_artifact_rebuild import
 from experiments.generative_video_model_probe.validation_internal_ablation import run_validation_internal_ablation
 from experiments.generative_video_model_probe.formal_internal_ablation_summary import run_formal_internal_ablation_summary
 from evaluation.attacks.video_runtime_attack_protocol import FULL_PAPER_RUNTIME_ATTACKS
+from evaluation.protocol.paper_profile_contract import (
+    allow_noncanonical_paper_profile_for_tests,
+)
+from evaluation.protocol.paper_profile_contract import (
+    allow_noncanonical_paper_profile_for_tests,
+)
 from evaluation.protocol.record_writer import read_jsonl, write_json, write_jsonl
 
 
 REQUIRED_RUNTIME_ATTACK_NAMES = FULL_PAPER_RUNTIME_ATTACKS
+
+
+@pytest.fixture(autouse=True)
+def _allow_reduced_noncanonical_profile_fixture():
+    """仅在本模块中允许显式的轻量 profile 测试配置。"""
+
+    with allow_noncanonical_paper_profile_for_tests():
+        yield
 
 
 def _formal_sstw_state_fields() -> dict[str, object]:
@@ -250,6 +264,13 @@ def test_pilot_paper_internal_ablation_writes_same_profile_records(tmp_path: Pat
 def test_statistical_confidence_interval_reporter_writes_clustered_intervals(tmp_path: Path) -> None:
     """统计 CI reporter 必须写出视频簇 bootstrap TPR 与 exact FPR 区间。"""
     run_root = tmp_path / "run"
+    config_path = tmp_path / "ci_protocol.json"
+    write_json(config_path, {
+        "target_fpr": 0.1,
+        "paper_result_level": "probe_paper",
+        "required_runtime_attack_names": ["attack_a"],
+        "minimum_sstw_worst_attack_tpr_ci_lower": 0.0,
+    })
     write_jsonl(run_root / "records" / "fair_detection_calibration_records.jsonl", [
         {
             "method_id": "sstw_key_conditioned_flow_trajectory",
@@ -261,6 +282,9 @@ def test_statistical_confidence_interval_reporter_writes_clustered_intervals(tmp
             "positive_detection_units_at_target_fpr": [
                 {
                     "comparison_anchor_key": f"prompt_{index}::seed_a::attack_a",
+                    "prompt_id": f"prompt_{index}",
+                    "seed_id": "seed_a",
+                    "attack_name": "attack_a",
                     "detected_at_target_fpr": index < 2,
                 }
                 for index in range(3)
@@ -275,9 +299,10 @@ def test_statistical_confidence_interval_reporter_writes_clustered_intervals(tmp
         },
     ])
 
-    audit = run_statistical_confidence_interval_reporter(run_root)
+    with allow_noncanonical_paper_profile_for_tests():
+        audit = run_statistical_confidence_interval_reporter(run_root, config_path)
     records = read_jsonl(run_root / "records" / "statistical_confidence_interval_records.jsonl")
-    protocol = json.loads(Path("configs/protocol/probe_paper_generative_probe.json").read_text(encoding="utf-8"))
+    protocol = json.loads(config_path.read_text(encoding="utf-8"))
 
     assert audit["statistical_confidence_interval_decision"] == "PASS"
     assert audit["paper_result_level"] == "probe_paper"
@@ -287,7 +312,8 @@ def test_statistical_confidence_interval_reporter_writes_clustered_intervals(tmp
     assert audit["ci_success_count"] == 2
     assert 0 <= audit["ci_cluster_bootstrap_lower"] <= audit["ci_cluster_bootstrap_upper"] <= 1
     assert audit["heldout_fpr_confidence_bound_available"] is True
-    assert len(records) == 2
+    assert len(records) == 3
+    assert audit["per_attack_tpr_ci_ready"] is True
     assert records[0]["paper_low_fpr_ci_status"] == "formal_target_fpr_ci_ready"
     assert (run_root / "tables" / "statistical_confidence_interval_table.csv").exists()
     assert (run_root / "reports" / "statistical_confidence_interval_report.md").exists()
@@ -300,6 +326,13 @@ def test_statistical_confidence_interval_blocks_point_fpr_when_upper_bound_excee
     """点估计低于目标 FPR 但置信上界越界时, 正式结论必须阻断。"""
 
     run_root = tmp_path / "run"
+    config_path = tmp_path / "ci_protocol.json"
+    write_json(config_path, {
+        "target_fpr": 0.1,
+        "paper_result_level": "probe_paper",
+        "required_runtime_attack_names": ["attack_a"],
+        "minimum_sstw_worst_attack_tpr_ci_lower": 0.0,
+    })
     write_jsonl(run_root / "records" / "fair_detection_calibration_records.jsonl", [
         {
             "method_id": "sstw_key_conditioned_flow_trajectory",
@@ -310,6 +343,9 @@ def test_statistical_confidence_interval_blocks_point_fpr_when_upper_bound_excee
             "positive_detection_units_at_target_fpr": [
                 {
                     "comparison_anchor_key": f"prompt_{index}::seed_a::attack_a",
+                    "prompt_id": f"prompt_{index}",
+                    "seed_id": "seed_a",
+                    "attack_name": "attack_a",
                     "detected_at_target_fpr": index < 2,
                 }
                 for index in range(3)
@@ -324,7 +360,8 @@ def test_statistical_confidence_interval_blocks_point_fpr_when_upper_bound_excee
         },
     ])
 
-    audit = run_statistical_confidence_interval_reporter(run_root)
+    with allow_noncanonical_paper_profile_for_tests():
+        audit = run_statistical_confidence_interval_reporter(run_root, config_path)
 
     assert audit["heldout_fpr_point_target_closed"] is True
     assert audit["heldout_fpr_confidence_upper_within_target"] is False
@@ -471,7 +508,9 @@ def test_formal_comparison_rejects_fair_calibration_target_fpr_mismatch(tmp_path
     assert all(record["metric_status"] == "missing" for record in comparison_records)
     assert all(record["source_fair_detection_target_fpr"] == 0.01 for record in comparison_records)
     assert all(record["comparison_missing_reason"] == "fair_detection_calibration_target_fpr_mismatch" for record in comparison_records)
-    assert difference_records[0]["difference_interval_status"] == "missing_or_unaligned_paired_anchors"
+    assert difference_records[0]["difference_interval_status"] == (
+        "missing_or_unaligned_comparison_design_anchors"
+    )
     assert difference_records[0]["baseline_source_fair_detection_target_fpr"] == 0.01
 
 
@@ -939,7 +978,9 @@ def test_formal_method_baseline_comparison_rejects_unaligned_prompt_seed_attack_
     assert videoshield_row["metric_status"] == "missing"
     assert videoshield_difference_row["comparison_anchor_alignment_status"] == "anchor_set_mismatch_with_sstw"
     assert videoshield_difference_row["unpaired_reference_anchor_count"] == 1
-    assert videoshield_difference_row["difference_interval_status"] == "missing_or_unaligned_paired_anchors"
+    assert videoshield_difference_row["difference_interval_status"] == (
+        "missing_or_unaligned_comparison_design_anchors"
+    )
 
 
 @pytest.mark.quick

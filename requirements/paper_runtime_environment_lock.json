@@ -1,0 +1,40 @@
+{
+  "lock_schema_version": "sstw_paper_runtime_environment_lock_v1",
+  "lock_id": "sstw_paper_runtime_torch_2_6_cuda_12_4",
+  "python_major_minor": "3.11",
+  "torch_cuda_version": "12.4",
+  "minimum_cuda_compute_capability": [
+    7,
+    0
+  ],
+  "minimum_gpu_memory_gib": 14.0,
+  "required_distributions": {
+    "accelerate": "1.10.1",
+    "av": "14.2.0",
+    "diffusers": "0.35.2",
+    "huggingface-hub": "0.34.4",
+    "imageio": "2.37.0",
+    "imageio-ffmpeg": "0.6.0",
+    "numpy": "1.26.4",
+    "opencv-python-headless": "4.10.0.84",
+    "protobuf": "5.29.3",
+    "safetensors": "0.5.2",
+    "scikit-image": "0.25.2",
+    "sentencepiece": "0.2.0",
+    "torch": "2.6.0",
+    "torchvision": "0.21.0",
+    "transformers": "4.49.0"
+  },
+  "registered_generation_models": {
+    "Lightricks/LTX-Video": {
+      "revision_policy": "resolve_then_freeze_immutable_40_hex_commit"
+    },
+    "Wan-AI/Wan2.1-T2V-1.3B-Diffusers": {
+      "revision_policy": "resolve_then_freeze_immutable_40_hex_commit"
+    }
+  },
+  "repository_policy": {
+    "development_repository_requires_clean_git_tree": true,
+    "extracted_package_requires_recorded_clean_source_commit": true
+  }
+}

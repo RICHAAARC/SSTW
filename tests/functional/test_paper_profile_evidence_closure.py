@@ -10,10 +10,21 @@ import pytest
 from evaluation.protocol.paper_profile_evidence_closure import (
     build_paper_profile_evidence_closure_audit,
 )
+from evaluation.protocol.paper_profile_contract import (
+    allow_noncanonical_paper_profile_for_tests,
+)
 from evaluation.protocol.record_writer import write_json, write_jsonl
 
 
 MODERN_BASELINES = ("videoshield", "vidsig", "videoseal", "videomark", "wam_frame")
+
+
+@pytest.fixture(autouse=True)
+def _allow_reduced_noncanonical_profile_fixture():
+    """仅在本模块中允许显式的轻量 profile 测试配置。"""
+
+    with allow_noncanonical_paper_profile_for_tests():
+        yield
 
 
 def _write_decision(

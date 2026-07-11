@@ -13,6 +13,12 @@ from evaluation.attacks.video_runtime_attack_protocol import apply_runtime_attac
 ADAPTIVE_TWO_COORDINATE_SEARCH_PROTOCOL = (
     "two_coordinate_detector_feedback_pattern_search_v1"
 )
+ADAPTIVE_QUERY_BUDGET_CHECKPOINT_PROTOCOL = (
+    "nested_actual_query_prefix_best_admissible_candidate_v1"
+)
+ADAPTIVE_SOURCE_CLUSTER_SELECTION_PROTOCOL = (
+    "stable_sha256_rank_over_heldout_source_cluster_before_attack_scoring_v1"
+)
 
 
 _ATTACK_FAMILY_COORDINATE_NAMES: dict[str, tuple[str, str]] = {
@@ -97,6 +103,57 @@ class AdaptiveVideoOptimizationResult:
     minimum_quality_psnr: float
     query_budget: int
     adaptive_search_protocol: str | None = None
+    query_budget_checkpoints: tuple[int, ...] = ()
+
+    def checkpoint_records(self) -> tuple[dict[str, Any], ...]:
+        """从真实序贯查询前缀构建预注册 budget checkpoint 证据。
+
+        每个 checkpoint 只查看该时刻已经实际生成、落盘并由冻结检测器查询过的
+        候选。该函数不会补跑候选、外推曲线或用最终候选回填较小 budget, 因而
+        可以直接用于复现有限查询攻击下的真实强度曲线。
+        """
+
+        checkpoints = _normalize_query_budget_checkpoints(
+            self.query_budget_checkpoints or (self.query_budget,),
+            query_budget=self.query_budget,
+        )
+        records: list[dict[str, Any]] = []
+        for checkpoint in checkpoints:
+            prefix = self.candidates[:checkpoint]
+            feasible = [candidate for candidate in prefix if candidate.admissible]
+            selected = (
+                min(feasible, key=lambda row: _candidate_order_key(row, self.objective))
+                if feasible
+                else None
+            )
+            record: dict[str, Any] = {
+                "adaptive_attack_query_budget_checkpoint": int(checkpoint),
+                "adaptive_attack_checkpoint_observed_query_count": len(prefix),
+                "adaptive_attack_checkpoint_candidate_count": len(prefix),
+                "adaptive_attack_checkpoint_admissible_candidate_count": len(feasible),
+                "adaptive_attack_checkpoint_has_admissible_candidate": selected is not None,
+                "adaptive_attack_checkpoint_selection_protocol": (
+                    ADAPTIVE_QUERY_BUDGET_CHECKPOINT_PROTOCOL
+                ),
+                "adaptive_attack_checkpoint_is_final_budget": (
+                    int(checkpoint) == int(self.query_budget)
+                ),
+            }
+            if selected is not None:
+                record.update({
+                    "adaptive_attack_checkpoint_selected_candidate_index": (
+                        selected.candidate_index
+                    ),
+                    "adaptive_attack_checkpoint_output_video_path": selected.video_path,
+                    "adaptive_attack_checkpoint_output_video_sha256": selected.video_sha256,
+                    "adaptive_attack_checkpoint_detector_score": selected.detector_score,
+                    "adaptive_attack_checkpoint_path_score": selected.path_score,
+                    "adaptive_attack_checkpoint_endpoint_score": selected.endpoint_score,
+                    "adaptive_attack_checkpoint_quality_psnr": selected.quality_psnr,
+                    "adaptive_attack_checkpoint_detected_by_sstw": selected.decision,
+                })
+            records.append(record)
+        return tuple(records)
 
     def as_dict(self) -> dict[str, Any]:
         """转换为正式 adaptive execution record 可复用的摘要。"""
@@ -117,6 +174,18 @@ class AdaptiveVideoOptimizationResult:
             "adaptive_attack_endpoint_tolerance": self.endpoint_tolerance,
             "adaptive_attack_minimum_quality_psnr": self.minimum_quality_psnr,
             "adaptive_attack_candidate_records": [row.as_dict() for row in self.candidates],
+            "adaptive_attack_query_budget_checkpoints": list(
+                _normalize_query_budget_checkpoints(
+                    self.query_budget_checkpoints or (self.query_budget,),
+                    query_budget=self.query_budget,
+                )
+            ),
+            "adaptive_attack_query_budget_checkpoint_protocol": (
+                ADAPTIVE_QUERY_BUDGET_CHECKPOINT_PROTOCOL
+            ),
+            "adaptive_attack_query_budget_checkpoint_records": list(
+                self.checkpoint_records()
+            ),
             "adaptive_attack_replay_likelihood_model_id": (
                 self.selected.replay_likelihood_model_id
             ),
@@ -139,6 +208,26 @@ class AdaptiveVideoOptimizationResult:
                 ],
             })
         return payload
+
+
+def _normalize_query_budget_checkpoints(
+    checkpoints: Sequence[int],
+    *,
+    query_budget: int,
+) -> tuple[int, ...]:
+    """验证 nested query-budget checkpoint 是严格递增的预注册前缀。"""
+
+    budget = int(query_budget)
+    normalized = tuple(int(value) for value in checkpoints)
+    if not normalized:
+        raise ValueError("adaptive query-budget checkpoints 不能为空")
+    if normalized != tuple(sorted(set(normalized))):
+        raise ValueError("adaptive query-budget checkpoints 必须严格递增且不重复")
+    if normalized[0] < 1 or normalized[-1] > budget:
+        raise ValueError("adaptive query-budget checkpoint 必须位于实际查询预算内")
+    if normalized[-1] != budget:
+        raise ValueError("adaptive query-budget checkpoints 必须包含最终查询预算")
+    return normalized
 
 
 def _read_video(path: Path) -> list[Any]:
@@ -606,6 +695,7 @@ def optimize_bounded_parameter_attack_for_video(
     endpoint_tolerance: float = 0.08,
     minimum_quality_psnr: float = 24.0,
     query_budget: int = 5,
+    query_budget_checkpoints: Sequence[int] | None = None,
     initial_strength: float | None = None,
 ) -> AdaptiveVideoOptimizationResult:
     """用冻结检测器反馈逐次优化两个独立原生攻击参数。
@@ -621,6 +711,10 @@ def optimize_bounded_parameter_attack_for_video(
         raise ValueError("二维 adaptive optimization 至少需要3次查询")
     if attack_family not in _ATTACK_FAMILY_COORDINATE_NAMES:
         raise ValueError(f"未注册的 parameterized adaptive attack family: {attack_family}")
+    checkpoints = _normalize_query_budget_checkpoints(
+        query_budget_checkpoints or (budget,),
+        query_budget=budget,
+    )
     source_path = Path(source_video_path)
     source_frames = _read_video(source_path)
     destination = Path(output_dir)
@@ -705,6 +799,7 @@ def optimize_bounded_parameter_attack_for_video(
         minimum_quality_psnr=float(minimum_quality_psnr),
         query_budget=budget,
         adaptive_search_protocol=ADAPTIVE_TWO_COORDINATE_SEARCH_PROTOCOL,
+        query_budget_checkpoints=checkpoints,
     )
 
 
@@ -787,12 +882,17 @@ def optimize_model_vae_regeneration_attack_for_video(
     endpoint_tolerance: float = 0.08,
     minimum_quality_psnr: float = 24.0,
     query_budget: int = 5,
+    query_budget_checkpoints: Sequence[int] | None = None,
 ) -> AdaptiveVideoOptimizationResult:
     """用冻结检测器反馈优化真实模型 VAE regeneration 的 latent 噪声强度。"""
 
     budget = int(query_budget)
     if budget < 3:
         raise ValueError("VAE regeneration adaptive optimization 至少需要3次查询")
+    checkpoints = _normalize_query_budget_checkpoints(
+        query_budget_checkpoints or (budget,),
+        query_budget=budget,
+    )
     source_path = Path(source_video_path)
     source_frames = _read_video(source_path)
     destination = Path(output_dir)
@@ -855,6 +955,7 @@ def optimize_model_vae_regeneration_attack_for_video(
         endpoint_tolerance=float(endpoint_tolerance),
         minimum_quality_psnr=float(minimum_quality_psnr),
         query_budget=budget,
+        query_budget_checkpoints=checkpoints,
     )
 
 
@@ -869,6 +970,7 @@ def optimize_adaptive_attack_for_video(
     endpoint_tolerance: float = 0.08,
     minimum_quality_psnr: float = 24.0,
     query_budget: int | None = None,
+    query_budget_checkpoints: Sequence[int] | None = None,
 ) -> AdaptiveVideoOptimizationResult:
     """逐候选生成、落盘并查询同一视频的冻结检测器。
 
@@ -884,6 +986,10 @@ def optimize_adaptive_attack_for_video(
         names = names[: max(0, int(query_budget))]
     if not names:
         raise ValueError("adaptive optimization 至少需要一个候选变换")
+    checkpoints = _normalize_query_budget_checkpoints(
+        query_budget_checkpoints or (len(names),),
+        query_budget=len(names),
+    )
     source_path = Path(source_video_path)
     source_frames = _read_video(source_path)
     destination = Path(output_dir)
@@ -948,6 +1054,7 @@ def optimize_adaptive_attack_for_video(
         endpoint_tolerance=float(endpoint_tolerance),
         minimum_quality_psnr=float(minimum_quality_psnr),
         query_budget=len(names),
+        query_budget_checkpoints=checkpoints,
     )
 
 

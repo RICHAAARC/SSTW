@@ -42,13 +42,6 @@ class ReplayTrajectory:
     reverse_step_count: int
     forward_step_count: int
 
-    @property
-    def cycle_relative_error(self) -> float:
-        """保留旧调用方使用的候选假设循环误差只读别名。"""
-
-        return self.candidate_cycle_relative_error
-
-
 @dataclass(frozen=True)
 class ReplayUncertainty:
     """保存多网格假设误差、似然比离散度与可靠性权重。"""
@@ -162,6 +155,37 @@ def gaussian_replay_residual_likelihood(
         log_likelihood_ratio_per_dimension=candidate_log_likelihood - null_log_likelihood,
         likelihood_model_id=config.likelihood_model_id,
     )
+
+
+def replay_step_reliability_weight(
+    trajectory: ReplayTrajectory,
+    state_index: int,
+) -> float:
+    """根据单步候选 replay 残差返回可复用的路径积分可靠性权重。
+
+    该权重只衡量候选 forward state 对固定 reverse observation 的高斯拟合
+    程度, 不读取标签或最终检测分数。调用方可以把它直接用于路径步积分, 从而
+    避免高残差 replay step 与可靠 step 获得相同证据权重。
+    """
+
+    index = int(state_index)
+    if index < 0 or index >= len(trajectory.reverse_states):
+        raise IndexError("replay state index 超出固定轨迹范围")
+    if (
+        len(trajectory.forward_states) != len(trajectory.reverse_states)
+        or len(trajectory.null_forward_states) != len(trajectory.reverse_states)
+    ):
+        raise ValueError("候选、null 与固定 reverse replay 轨迹长度必须一致")
+    likelihood = gaussian_replay_residual_likelihood(
+        trajectory.forward_states[index],
+        trajectory.null_forward_states[index],
+        trajectory.reverse_states[index],
+    )
+    normalized_residual = (
+        likelihood.candidate_residual_mean_squared_error
+        / max(likelihood.observation_noise_variance, 1e-12)
+    )
+    return max(0.0, min(1.0, exp(-0.5 * normalized_residual)))
 
 
 def _relative_error(left: Any, right: Any) -> float:
@@ -318,21 +342,6 @@ def evaluate_candidate_on_fixed_inversion(
         replay_likelihood_model_id=likelihood.likelihood_model_id,
         reverse_step_count=fixed_trajectory.reverse_step_count,
         forward_step_count=len(candidate_forward_states) - 1,
-    )
-
-
-def run_flow_inversion_and_replay(
-    endpoint_latent: Any,
-    schedule: Sequence[FlowSchedulePoint],
-    velocity_function: VelocityFunction,
-) -> ReplayTrajectory:
-    """兼容单 velocity round-trip 测试, 正式检测应使用独立候选假设接口。"""
-
-    return run_key_independent_inversion_hypothesis(
-        endpoint_latent,
-        schedule,
-        velocity_function,
-        velocity_function,
     )
 
 

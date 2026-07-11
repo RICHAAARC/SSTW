@@ -117,11 +117,12 @@ def _formal_baseline_clean_negative_record(
     return row
 
 
-@pytest.mark.quick
-def test_validation_internal_ablation_writes_formal_records(tmp_path: Path) -> None:
-    """内部消融 runner 必须只从正式视频内容检测记录写出 measured_formal 消融矩阵。"""
-    run_root = tmp_path / "run"
-    variant_scores = {
+def _formal_internal_ablation_fixture(
+    profile: str,
+) -> tuple[list[dict[str, object]], list[dict[str, object]]]:
+    """构造4个生成变体与4个复用 full 视频的 detector-only 变体。"""
+
+    scores = {
         "sstw_full_method": 0.82,
         "endpoint_only_control": 0.62,
         "trajectory_only_score": 0.66,
@@ -131,31 +132,66 @@ def test_validation_internal_ablation_writes_formal_records(tmp_path: Path) -> N
         "without_flow_state_admissibility": 0.70,
         "generic_ssm_baseline": 0.55,
     }
-    generation_records = []
-    detection_records = []
-    for index, (variant_name, score) in enumerate(variant_scores.items()):
-        trace_id = f"trace_{index:02d}_{variant_name}"
-        generation_records.append({
+    generation_variants = {
+        "sstw_full_method",
+        "endpoint_only_control",
+        "without_velocity_constraint",
+        "without_endpoint_aware_control",
+    }
+    generation_records = [
+        {
             "generation_status": "success",
-            "colab_runtime_profile": "probe_paper",
-            "trajectory_trace_id": trace_id,
-            "prompt_id": "prompt_a",
-            "seed_id": "seed_a",
-            "method_variant": variant_name,
-        })
+            "colab_runtime_profile": profile,
+            "trajectory_trace_id": f"trace_{profile}_{variant}",
+            "prompt_id": f"prompt_{profile}",
+            "seed_id": f"seed_{profile}",
+            "split": "test",
+            "method_variant": variant,
+        }
+        for variant in scores
+        if variant in generation_variants
+    ]
+    detection_records: list[dict[str, object]] = []
+    for variant, score in scores.items():
+        detector_only = variant not in generation_variants
+        trace_id = (
+            f"trace_{profile}_sstw_full_method"
+            if detector_only
+            else f"trace_{profile}_{variant}"
+        )
         detection_records.append({
             "runtime_detection_status": "ready",
             "trajectory_trace_id": trace_id,
             "generation_model_id": "model",
-            "prompt_id": "prompt_a",
-            "seed_id": "seed_a",
+            "prompt_id": f"prompt_{profile}",
+            "seed_id": f"seed_{profile}",
+            "split": "test",
             "attack_name": "video_compression_runtime",
-            "method_variant": variant_name,
+            "method_variant": variant,
+            "detector_only_ablation": detector_only,
+            "detector_only_source_method_variant": (
+                "sstw_full_method" if detector_only else None
+            ),
+            "attacked_video_sha256": (
+                "full_video_digest"
+                if detector_only or variant == "sstw_full_method"
+                else f"{variant}_video_digest"
+            ),
             "sstw_detector_evidence_level": "attacked_video_key_independent_inversion_hypothesis_replay",
             "trajectory_trace_used_for_score": False,
             "runtime_detection_claim_level": "formal_paper_detector",
             "sstw_raw_detector_score": score,
         })
+    return generation_records, detection_records
+
+
+@pytest.mark.quick
+def test_validation_internal_ablation_writes_formal_records(tmp_path: Path) -> None:
+    """内部消融 runner 必须只从正式视频内容检测记录写出 measured_formal 消融矩阵。"""
+    run_root = tmp_path / "run"
+    generation_records, detection_records = _formal_internal_ablation_fixture(
+        "probe_paper"
+    )
     write_jsonl(run_root / "records" / "generation_records.jsonl", generation_records)
     write_jsonl(run_root / "records" / "runtime_detection_records.jsonl", detection_records)
 
@@ -169,6 +205,8 @@ def test_validation_internal_ablation_writes_formal_records(tmp_path: Path) -> N
     assert all(record["claim_support_status"] == "formal_internal_ablation_variant_measured" for record in records)
     assert all(record["metric_status"] == "measured_formal" for record in records)
     assert all(record["ablation_runtime_profile"] == "probe_paper" for record in records)
+    assert audit["detector_only_video_reuse_decision"] == "PASS"
+    assert audit["generation_variant_independent_video_decision"] == "PASS"
     assert (run_root / "records" / "formal_internal_ablation_variant_records.jsonl").exists()
     assert (run_root / "tables" / "validation_internal_ablation_table.csv").exists()
     assert (run_root / "reports" / "validation_internal_ablation_report.md").exists()
@@ -178,41 +216,9 @@ def test_validation_internal_ablation_writes_formal_records(tmp_path: Path) -> N
 def test_pilot_paper_internal_ablation_writes_same_profile_records(tmp_path: Path) -> None:
     """pilot_paper 运行时内部消融必须覆盖 pilot_paper trace, 不能复用其他 profile。"""
     run_root = tmp_path / "run"
-    variant_scores = {
-        "sstw_full_method": 0.82,
-        "endpoint_only_control": 0.62,
-        "trajectory_only_score": 0.66,
-        "without_velocity_constraint": 0.58,
-        "without_endpoint_aware_control": 0.63,
-        "without_replay_uncertainty_weighting": 0.68,
-        "without_flow_state_admissibility": 0.70,
-        "generic_ssm_baseline": 0.55,
-    }
-    generation_records = []
-    detection_records = []
-    for index, (variant_name, score) in enumerate(variant_scores.items()):
-        trace_id = f"trace_pilot_{index:02d}_{variant_name}"
-        generation_records.append({
-            "generation_status": "success",
-            "colab_runtime_profile": "pilot_paper",
-            "trajectory_trace_id": trace_id,
-            "prompt_id": "prompt_pilot_paper",
-            "seed_id": "seed_pilot_paper",
-            "method_variant": variant_name,
-        })
-        detection_records.append({
-            "runtime_detection_status": "ready",
-            "trajectory_trace_id": trace_id,
-            "generation_model_id": "model",
-            "prompt_id": "prompt_pilot_paper",
-            "seed_id": "seed_pilot_paper",
-            "attack_name": "video_compression_runtime",
-            "method_variant": variant_name,
-            "sstw_detector_evidence_level": "attacked_video_key_independent_inversion_hypothesis_replay",
-            "trajectory_trace_used_for_score": False,
-            "runtime_detection_claim_level": "formal_paper_detector",
-            "sstw_raw_detector_score": score,
-        })
+    generation_records, detection_records = _formal_internal_ablation_fixture(
+        "pilot_paper"
+    )
     write_jsonl(run_root / "records" / "generation_records.jsonl", generation_records)
     write_jsonl(run_root / "records" / "runtime_detection_records.jsonl", detection_records)
 
@@ -222,6 +228,17 @@ def test_pilot_paper_internal_ablation_writes_same_profile_records(tmp_path: Pat
     assert audit["validation_internal_ablation_decision"] == "PASS"
     assert audit["pilot_paper_internal_ablation_record_count"] == len(records)
     assert all(record["ablation_runtime_profile"] == "pilot_paper" for record in records)
+    assert all(
+        record["ablation_video_execution_mode"]
+        == "detector_only_reuse_full_method_video"
+        for record in records
+        if record["method_variant"] in {
+            "trajectory_only_score",
+            "without_replay_uncertainty_weighting",
+            "without_flow_state_admissibility",
+            "generic_ssm_baseline",
+        }
+    )
 
 
 @pytest.mark.quick

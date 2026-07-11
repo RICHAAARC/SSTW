@@ -57,6 +57,10 @@ from experiments.generative_video_model_probe.colab_runtime import (
     _build_internal_ablation_generation_plan,
     _formalize_paper_trajectory_record,
 )
+from experiments.generative_video_model_probe.formal_method_variants import (
+    DETECTOR_ONLY_METHOD_VARIANTS,
+    GENERATION_METHOD_VARIANTS,
+)
 from scripts.package_results.generative_video_drive_packager import package_generative_video_colab_run
 from scripts.prepare_generative_video_prompt_suite import write_prompt_suite
 from evaluation.attacks.video_runtime_attack_protocol import load_protocol_config_with_shared_attack_protocol
@@ -324,7 +328,7 @@ def test_cross_model_runtime_settings_match_governed_workflow_config() -> None:
 
 @pytest.mark.quick
 def test_probe_paper_internal_ablation_covers_every_independent_video(tmp_path: Path) -> None:
-    """每个正式消融变体必须覆盖 calibration/test 的全部独立视频."""
+    """只有改变嵌入轨迹的消融才重新生成全部独立视频。"""
 
     output_root = tmp_path / "prompt_suite"
     summary = write_prompt_suite(output_root)
@@ -341,13 +345,18 @@ def test_probe_paper_internal_ablation_covers_every_independent_video(tmp_path: 
         item["method_variant"]
         for item in ablation_plan
     }
-    assert len(variants) == 7
-    assert len(ablation_plan) == 60 * 7
+    expected_generation_ablations = set(GENERATION_METHOD_VARIANTS) - {
+        "sstw_full_method"
+    }
+    assert variants == expected_generation_ablations
+    assert variants.isdisjoint(DETECTOR_ONLY_METHOD_VARIANTS)
+    assert len(ablation_plan) == 60 * len(expected_generation_ablations)
     for variant in variants:
         rows = [item for item in ablation_plan if item["method_variant"] == variant]
         assert len(rows) == 60
         assert sum(item["split"] == "calibration" for item in rows) == 30
         assert sum(item["split"] == "test" for item in rows) == 30
+        assert all(item["internal_ablation_source"] is True for item in rows)
 
 
 @pytest.mark.quick

@@ -9,6 +9,7 @@ import pytest
 
 import experiments.generative_video_model_probe.formal_metric_runner as formal_metric_runner
 import evaluation.metrics.semantic_video_metrics as semantic_video_metrics
+from evaluation.metrics.video_file_metrics import compute_paired_video_quality_metrics
 from experiments.generative_video_model_probe.formal_metric_runner import run_formal_metric_audit
 from evaluation.protocol.record_writer import read_jsonl, write_json, write_jsonl
 from scripts.check_results.generative_video_colab_result_checker import check_generative_video_colab_results
@@ -39,6 +40,24 @@ def _write_low_motion_video(path: Path) -> None:
     frames = [frame.copy() for _ in range(6)]
     path.parent.mkdir(parents=True, exist_ok=True)
     iio.imwrite(path, frames, fps=4)
+
+
+@pytest.mark.quick
+def test_paired_video_quality_uses_clean_reference_frames(tmp_path: Path) -> None:
+    """水印质量必须由同源 clean-reference 配对失真计算。"""
+
+    reference = tmp_path / "reference.mp4"
+    candidate = tmp_path / "candidate.mp4"
+    _write_tiny_video(reference)
+    _write_tiny_video(candidate)
+
+    metrics = compute_paired_video_quality_metrics(reference, candidate)
+
+    assert metrics["paired_video_quality_status"] == "ready"
+    assert metrics["paired_quality_frame_count"] == 6
+    assert metrics["paired_watermark_psnr"] > 40.0
+    assert metrics["paired_watermark_ssim"] > 0.99
+    assert metrics["paired_temporal_delta_error"] < 0.01
 
 
 @pytest.mark.quick

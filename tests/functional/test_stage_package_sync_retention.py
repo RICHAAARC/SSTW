@@ -28,11 +28,23 @@ def _write_probe_paper_package_pass_manifest(run_root: Path) -> None:
             {
                 "probe_paper_package_manifest_decision": "PASS",
                 "probe_paper_gate_decision": "PASS",
-                "probe_paper_to_pilot_paper_transition_decision": "PASS",
+                "stage_transition_dependency_policy": (
+                    "package_manifest_pass_required_before_stage_transition"
+                ),
                 "missing_artifact_count": 0,
                 "missing_artifact_relpaths": [],
             }
         ),
+        encoding="utf-8",
+    )
+    transition_path = (
+        run_root
+        / "artifacts"
+        / "probe_paper_to_pilot_paper_transition_decision.json"
+    )
+    transition_path.parent.mkdir(parents=True, exist_ok=True)
+    transition_path.write_text(
+        json.dumps({"probe_paper_to_pilot_paper_transition_decision": "PASS"}),
         encoding="utf-8",
     )
 

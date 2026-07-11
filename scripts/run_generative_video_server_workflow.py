@@ -41,6 +41,10 @@ SERVER_PIPELINES = (
     "paper_protocol_complete",
 )
 
+PACKAGE_EXECUTION_MODE_AUTO = "auto"
+DEVELOPMENT_REPOSITORY_EXECUTION_MODE = "development_repository"
+PAPER_ARTIFACT_REBUILD_PACKAGE_EXECUTION_MODE = "paper_artifact_rebuild_package"
+
 GENERATIVE_VIDEO_SPLIT_ROLE_ORDER = (
     "generative_video_generation",
     "generative_video_quality_scoring",
@@ -81,6 +85,36 @@ def _set_default_env(name: str, value: str) -> None:
     os.environ.setdefault(name, value)
 
 
+def _resolve_package_execution_mode(repo_root: Path, requested_mode: str) -> str:
+    """根据抽离清单识别当前是否运行在论文产物重建包中。
+
+    开发仓库在抽离前负责运行 pytest 与 harness。重建包明确不携带这些开发治理
+    目录, 因此服务器入口需要把对应 workflow stage 标记为已在抽离前执行, 而不是
+    尝试访问包外文件。显式参数仅用于审计和故障排查, 默认应使用自动识别。
+    """
+
+    normalized = str(requested_mode or PACKAGE_EXECUTION_MODE_AUTO).strip()
+    if normalized != PACKAGE_EXECUTION_MODE_AUTO:
+        return normalized
+    manifest_path = repo_root / "extraction_manifest.json"
+    if not manifest_path.is_file():
+        return DEVELOPMENT_REPOSITORY_EXECUTION_MODE
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8-sig"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise ValueError(f"无法读取抽离包清单: {manifest_path}: {exc}") from exc
+    if not isinstance(manifest, dict):
+        raise TypeError(f"抽离包清单顶层必须是对象: {manifest_path}")
+    manifest_mode = str(
+        manifest.get("package_execution_mode")
+        or manifest.get("profile_name")
+        or ""
+    ).strip()
+    if manifest_mode == PAPER_ARTIFACT_REBUILD_PACKAGE_EXECUTION_MODE:
+        return PAPER_ARTIFACT_REBUILD_PACKAGE_EXECUTION_MODE
+    return DEVELOPMENT_REPOSITORY_EXECUTION_MODE
+
+
 def _apply_server_environment(args: argparse.Namespace) -> None:
     """为服务器命令行运行设置与 Colab stage zip 交接兼容的环境变量。
 
@@ -97,6 +131,10 @@ def _apply_server_environment(args: argparse.Namespace) -> None:
     )
     args.project_root = str(project_root)
     args.repo_root = str(Path(args.repo_root).expanduser().resolve())
+    args.package_execution_mode = _resolve_package_execution_mode(
+        Path(args.repo_root),
+        args.package_execution_mode,
+    )
     args.local_workspace_root = str(local_workspace_root)
     args.local_package_cache_root = str(local_package_cache_root)
 
@@ -107,6 +145,7 @@ def _apply_server_environment(args: argparse.Namespace) -> None:
     os.environ["SSTW_LOCAL_STAGE_WORKSPACE_ROOT"] = str(local_workspace_root)
     os.environ["SSTW_LOCAL_STAGE_PACKAGE_CACHE_ROOT"] = str(local_package_cache_root)
     os.environ["SSTW_INCLUDE_VIDEOS_IN_PACKAGE"] = _bool_text(args.include_videos)
+    os.environ["SSTW_PACKAGE_EXECUTION_MODE"] = args.package_execution_mode
 
     if args.model_id:
         os.environ["SSTW_MODEL_ID"] = args.model_id
@@ -164,6 +203,7 @@ def _runtime_options(args: argparse.Namespace) -> dict[str, Any]:
         "semantic_model_id": args.semantic_model_id,
         "semantic_frame_limit": args.semantic_frame_limit,
         "disable_semantic_metric": args.disable_semantic_metric,
+        "package_execution_mode": args.package_execution_mode,
     }
 
 
@@ -201,6 +241,18 @@ def _dry_run_role_plan(args: argparse.Namespace, notebook_role: str) -> dict[str
     stage_plan = probe_workflow.build_workflow_stage_plan(role_profile, notebook_role)
     stage_rows: list[dict[str, Any]] = []
     for stage_name in stage_plan:
+        if (
+            stage_name == "quick_tests_and_harness"
+            and args.package_execution_mode
+            == PAPER_ARTIFACT_REBUILD_PACKAGE_EXECUTION_MODE
+        ):
+            stage_rows.append({
+                "stage_name": stage_name,
+                "stage_execution_kind": "pre_extraction_development_check",
+                "stage_execution_status": "skipped_in_extracted_package",
+                "skip_reason": "development_checks_run_before_package_extraction",
+            })
+            continue
         if stage_name in {
             "external_baseline_colab_preflight",
             "motion_threshold_reuse_check",
@@ -315,6 +367,7 @@ def _run_pipeline(args: argparse.Namespace) -> dict[str, Any]:
         "pipeline": args.pipeline,
         "project_root": str(Path(args.project_root).expanduser().resolve()),
         "repo_root": str(Path(args.repo_root).expanduser().resolve()),
+        "package_execution_mode": args.package_execution_mode,
         "dry_run": bool(args.dry_run),
         "include_videos": bool(args.include_videos),
         "created_at_utc_filename": current_utc_time_for_filename(),
@@ -344,6 +397,16 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--workflow-profile", default="probe_paper", choices=["probe_paper", "pilot_paper", "full_paper"], help="运行层级")
     parser.add_argument("--pipeline", default="paper_protocol_complete", choices=SERVER_PIPELINES, help="要执行的语义 pipeline")
     parser.add_argument("--repo-root", default=".", help="SSTW 仓库根目录")
+    parser.add_argument(
+        "--package-execution-mode",
+        default=PACKAGE_EXECUTION_MODE_AUTO,
+        choices=(
+            PACKAGE_EXECUTION_MODE_AUTO,
+            DEVELOPMENT_REPOSITORY_EXECUTION_MODE,
+            PAPER_ARTIFACT_REBUILD_PACKAGE_EXECUTION_MODE,
+        ),
+        help="运行边界; 默认根据 extraction_manifest.json 自动识别",
+    )
     parser.add_argument("--baseline-id", action="append", choices=MODERN_EXTERNAL_BASELINE_BUILD_ORDER, help="只运行指定 external baseline, 可重复传入")
     parser.add_argument("--model-id", default=os.environ.get("SSTW_MODEL_ID", "Wan-AI/Wan2.1-T2V-1.3B-Diffusers"), help="主生成模型 ID")
     parser.add_argument(
@@ -382,6 +445,7 @@ def main(argv: list[str] | None = None) -> int:
             "pipeline": args.pipeline,
             "project_root": str(Path(args.project_root).expanduser().resolve()),
             "repo_root": str(Path(args.repo_root).expanduser().resolve()),
+            "package_execution_mode": args.package_execution_mode,
             "server_workflow_decision": "FAIL",
             "failure_reason": str(exc),
             "claim_support_status": "server_workflow_runner_blocked_not_claim_evidence",

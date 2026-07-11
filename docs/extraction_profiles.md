@@ -31,12 +31,16 @@ docs/file_organization.md
 docs/release_boundary.md
 docs/extraction_profiles.md
 docs/intermediate_state_governance.md
-tests/functional/
 README.md
 pyproject.toml
 ```
 
-默认排除 `.codex/`、`tools/harness/`、`paper_workflow/`、重型测试、私有数据、运行输出和 Notebook 缓存。该 profile 必须能够脱离 Notebook 在 GPU 服务器运行。
+默认排除 `.codex/`、`tools/harness/`、`paper_workflow/`、全部开发测试、私有数据、运行输出和 Notebook 缓存。该 profile 必须能够脱离 Notebook 在 GPU 服务器运行。
+
+测试与 harness 只在开发仓库中承担抽离前验证职责。抽离后的
+`extraction_manifest.json` 会声明 `package_execution_mode=paper_artifact_rebuild_package`。
+服务器 CLI 和共享 workflow 在该模式下保留开发检查的审计记录，但不会尝试执行包内不存在的
+pytest 或 harness。这样既避免把 Notebook 与开发治理层带入服务器包，也不会把跳过原因伪装成测试通过。
 
 ## `minimal_method_package`
 
@@ -45,7 +49,6 @@ pyproject.toml
 ```text
 main/methods/
 configs/methods/
-README.md
 pyproject.toml
 ```
 

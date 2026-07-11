@@ -293,6 +293,45 @@ def _resolve_cross_profile_artifact_path(run_root: Path, relative_path: str, fie
     return local_path
 
 
+def _source_package_status(
+    run_root: Path,
+    source_stage: str,
+) -> tuple[bool, dict[str, Any]]:
+    """检查 source profile 的审稿索引、诊断图和完整 package manifest。
+
+    阶段跳转必须发生在完整证据包生成之后。该检查打破旧流程中
+    “package 依赖 transition, transition 又早于 package”的循环关系。
+    """
+
+    manifest_path = run_root / "manifests" / f"{source_stage}_package_manifest.json"
+    manifest = _read_json(manifest_path)
+    manifest_field = f"{source_stage}_package_manifest_decision"
+    reviewer_path = run_root / "artifacts" / "reviewer_evidence_index_decision.json"
+    reviewer = _read_json(reviewer_path)
+    figure_path = run_root / "figures" / f"{source_stage}_gate_figure.json"
+    passed = (
+        manifest.get(manifest_field) == "PASS"
+        and manifest.get("reviewer_evidence_index_decision") == "PASS"
+        and manifest.get("stage_transition_dependency_policy")
+        == "package_manifest_pass_required_before_stage_transition"
+        and reviewer.get("reviewer_evidence_index_decision") == "PASS"
+        and figure_path.is_file()
+        and figure_path.stat().st_size > 0
+    )
+    return passed, {
+        "source_package_manifest_path": str(manifest_path),
+        "source_package_manifest_field": manifest_field,
+        "source_package_manifest_decision": manifest.get(manifest_field),
+        "source_reviewer_evidence_index_path": str(reviewer_path),
+        "source_reviewer_evidence_index_decision": reviewer.get(
+            "reviewer_evidence_index_decision"
+        ),
+        "source_gate_figure_path": str(figure_path),
+        "source_gate_figure_ready": figure_path.is_file()
+        and figure_path.stat().st_size > 0,
+    }
+
+
 def build_stage_transition_decision(
     run_root: str | Path,
     transition_id: str,
@@ -311,10 +350,18 @@ def build_stage_transition_decision(
     source_payload = _read_json(source_gate_path)
     source_passed = _decision_pass(source_payload, tuple(spec["source_gate_fields"]))
     upstream_passed, upstream_rows, upstream_missing = _upstream_transition_status(run_root, spec)
+    source_package_passed, source_package_summary = _source_package_status(
+        run_root,
+        str(spec["source_stage"]),
+    )
 
     missing_requirements: list[str] = []
     if not source_passed:
         missing_requirements.append(f"{spec['source_stage']}_source_gate_passed")
+    if not source_package_passed:
+        missing_requirements.append(
+            f"{spec['source_stage']}_complete_package_manifest_passed"
+        )
     missing_requirements.extend(upstream_missing)
 
     for predicate in spec.get("extra_pass_predicates", ()):
@@ -352,6 +399,7 @@ def build_stage_transition_decision(
             field: source_payload.get(field)
             for field in spec["source_gate_fields"]
         },
+        **source_package_summary,
         "required_upstream_transition_results": upstream_rows,
         "missing_transition_requirements": missing_requirements,
         "transition_missing_requirement_count": len(missing_requirements),

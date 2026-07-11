@@ -25,8 +25,6 @@ PROFILES = {
         include_paths=(
             "main/methods",
             "configs/methods",
-            "configs/protocol/shared_generative_video_attack_protocol.json",
-            "README.md",
             "pyproject.toml",
         ),
         exclude_parts=(
@@ -38,6 +36,10 @@ PROFILES = {
             "/paper_workflow",
             "audit_reports",
             "outputs",
+            "output",
+            "result",
+            "results",
+            "logs",
             "__pycache__",
             ".pytest_cache",
         ),
@@ -59,19 +61,20 @@ PROFILES = {
             "docs/release_boundary.md",
             "docs/extraction_profiles.md",
             "docs/intermediate_state_governance.md",
-            "tests/functional",
             "README.md",
             "pyproject.toml",
         ),
         exclude_parts=(
             ".codex",
             "tools",
-            "tests/constraints",
-            "tests/integration",
-            "tests/helpers",
+            "tests",
             "/paper_workflow",
             "audit_reports",
             "outputs",
+            "output",
+            "result",
+            "results",
+            "logs",
             "__pycache__",
             ".pytest_cache",
         ),
@@ -140,12 +143,15 @@ def extract_profile(root: str | Path, output: str | Path, profile_name: str, dry
 
     manifest = {
         "profile_name": profile.profile_name,
+        "package_execution_mode": profile.profile_name,
         "root_path": str(root_path),
         "output_path": str(output_path),
         "copied_files": sorted(copied_files),
         "missing_paths": missing_paths,
         "excluded_parts": list(profile.exclude_parts),
         "dry_run": dry_run,
+        "development_checks_packaged": False,
+        "development_checks_execution_policy": "run_in_development_repository_before_extraction",
     }
     if not dry_run:
         output_path.mkdir(parents=True, exist_ok=True)

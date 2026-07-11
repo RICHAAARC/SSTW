@@ -20,8 +20,16 @@ REQUIRED_PROFILE_NAMES = [
 REQUIRED_EXCLUDED_PATHS = [
     ".codex/",
     "tools/harness/",
+    "paper_workflow/",
+    "tests/",
     "audit_reports/",
     "outputs/",
+]
+
+REQUIRED_REBUILD_PACKAGE_TOKENS = [
+    "package_execution_mode",
+    "development_checks_packaged",
+    "paper_artifact_rebuild_package",
 ]
 
 
@@ -29,11 +37,17 @@ def run_audit(root: str | Path) -> dict:
     """检查抽离 profile 文档和抽取脚本是否存在并包含关键边界。"""
     root_path = Path(root)
     violations = []
-    checked_paths = ["docs/extraction_profiles.md", "docs/release_boundary.md", "scripts/extract_minimal_paper_package.py"]
+    checked_paths = [
+        "docs/extraction_profiles.md",
+        "docs/release_boundary.md",
+        "scripts/extract_minimal_paper_package.py",
+        "scripts/run_generative_video_server_workflow.py",
+    ]
 
     profile_doc = root_path / "docs" / "extraction_profiles.md"
     release_doc = root_path / "docs" / "release_boundary.md"
     extraction_script = root_path / "scripts" / "extract_minimal_paper_package.py"
+    server_workflow_script = root_path / "scripts" / "run_generative_video_server_workflow.py"
 
     if not profile_doc.exists():
         violations.append({"path": "docs/extraction_profiles.md", "reason": "missing_extraction_profiles"})
@@ -53,13 +67,29 @@ def run_audit(root: str | Path) -> dict:
     else:
         script_text = extraction_script.read_text(encoding="utf-8")
 
-    combined_text = "\n".join([profile_text, release_text, script_text])
+    if not server_workflow_script.exists():
+        violations.append({
+            "path": "scripts/run_generative_video_server_workflow.py",
+            "reason": "missing_server_workflow_script",
+        })
+        server_workflow_text = ""
+    else:
+        server_workflow_text = server_workflow_script.read_text(encoding="utf-8")
+
+    combined_text = "\n".join([profile_text, release_text, script_text, server_workflow_text])
     for profile_name in REQUIRED_PROFILE_NAMES:
         if profile_name not in combined_text:
             violations.append({"path": "docs/extraction_profiles.md", "reason": "missing_profile_name", "profile_name": profile_name})
     for excluded_path in REQUIRED_EXCLUDED_PATHS:
         if excluded_path not in combined_text:
             violations.append({"path": "docs/extraction_profiles.md", "reason": "missing_excluded_path", "excluded_path": excluded_path})
+    for token in REQUIRED_REBUILD_PACKAGE_TOKENS:
+        if token not in combined_text:
+            violations.append({
+                "path": "scripts/extract_minimal_paper_package.py",
+                "reason": "missing_rebuild_package_execution_contract",
+                "token": token,
+            })
 
     return build_report("audit_release_extraction_contract", "fail" if violations else "pass", violations, checked_paths)
 

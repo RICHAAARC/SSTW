@@ -1,8 +1,9 @@
 """paper profile 正式内部消融矩阵汇总。
 
-该文件只把已经真实生成并完成正式视频内容检测的不同 method_variant
-转写为内部消融记录。它不再从 full-method 分数派生替代分数, 因而不会把
-component-removal 的假设性结果写入论文 claim。
+该文件只把已经完成正式视频内容检测的不同 method_variant 转写为内部消融
+记录。改变嵌入轨迹的变体必须独立生成; 仅改变检测器的变体必须复用
+full-method 的同一视频、同一 replay 和同一统计簇。两类变体都不允许合成
+假设性分数。
 """
 
 from __future__ import annotations
@@ -13,6 +14,10 @@ from pathlib import Path
 from statistics import mean
 from typing import Any
 
+from experiments.generative_video_model_probe.formal_method_variants import (
+    DETECTOR_ONLY_METHOD_VARIANTS,
+    GENERATION_METHOD_VARIANTS,
+)
 from evaluation.protocol.flow_evidence_fields import with_flow_evidence_protocol_defaults
 from evaluation.protocol.record_writer import write_json, write_jsonl
 from evaluation.protocol.table_builder import write_csv
@@ -139,9 +144,9 @@ def _formal_detection_ready(record: dict) -> bool:
 def build_validation_internal_ablation_records(run_root: str | Path) -> list[dict]:
     """从正式 runtime detection records 构建内部消融 measured_formal records。
 
-    只有当每个消融变体都已经通过独立生成配置真实产出视频, 并经过同一正式
-    视频内容检测器评分后, 对应记录才会进入 `metric_status: measured_formal`。
-    若某个变体没有真实记录, 本函数不会合成替代分数, 后续门禁会 fail-closed。
+    改变 scheduler 的 generation variant 必须独立生成视频。只改变 detector 的
+    detector-only variant 必须复用 full-method 视频与 replay 证据, 禁止重复生成。
+    两类变体都必须经过正式视频内容检测器评分, 且不会由汇总分数合成替代结果。
     """
 
     run_root = Path(run_root)
@@ -151,7 +156,7 @@ def build_validation_internal_ablation_records(run_root: str | Path) -> list[dic
         record
         for record in _read_jsonl(run_root / "records" / "runtime_detection_records.jsonl")
         if _formal_detection_ready(record)
-        and (not allowed_trace_ids or str(record.get("trajectory_trace_id")) in allowed_trace_ids)
+        and str(record.get("trajectory_trace_id")) in allowed_trace_ids
     ]
     variant_config = {item["method_variant"]: item for item in VALIDATION_ABLATION_VARIANTS}
     records: list[dict] = []
@@ -163,6 +168,22 @@ def build_validation_internal_ablation_records(run_root: str | Path) -> list[dic
         )
         if method_variant not in variant_config:
             continue
+        detector_only = method_variant in DETECTOR_ONLY_METHOD_VARIANTS
+        generation_variant = method_variant in GENERATION_METHOD_VARIANTS
+        detector_only_provenance_ready = (
+            detector_only
+            and detection_record.get("detector_only_ablation") is True
+            and detection_record.get("detector_only_source_method_variant")
+            == FULL_METHOD_VARIANT
+            and generation_context.get("method_variant") == FULL_METHOD_VARIANT
+        )
+        generation_provenance_ready = (
+            generation_variant
+            and detection_record.get("detector_only_ablation") is not True
+            and generation_context.get("method_variant") == method_variant
+        )
+        if not (detector_only_provenance_ready or generation_provenance_ready):
+            continue
         config = variant_config[method_variant]
         score = _formal_score(detection_record)
         if score is None:
@@ -173,9 +194,23 @@ def build_validation_internal_ablation_records(run_root: str | Path) -> list[dic
             "generation_model_id": detection_record.get("generation_model_id"),
             "prompt_id": detection_record.get("prompt_id"),
             "seed_id": detection_record.get("seed_id"),
+            "split": detection_record.get("split"),
             "trajectory_trace_id": trace_id,
             "attack_name": detection_record.get("attack_name"),
             "method_variant": method_variant,
+            "ablation_video_execution_mode": (
+                "detector_only_reuse_full_method_video"
+                if detector_only
+                else "independent_generation_variant_video"
+            ),
+            "ablation_source_method_variant": (
+                FULL_METHOD_VARIANT if detector_only else method_variant
+            ),
+            "ablation_source_trajectory_trace_id": trace_id,
+            "ablation_source_video_sha256": detection_record.get(
+                "attacked_video_sha256"
+            ),
+            "ablation_independent_video_generation_required": not detector_only,
             "ablation_family": config["ablation_family"],
             "ablation_name": method_variant,
             "ablation_removed_component": config["ablation_removed_component"],
@@ -207,6 +242,48 @@ def audit_validation_internal_ablation_records(records: list[dict]) -> dict[str,
         trace_id = str(record.get("trajectory_trace_id") or "")
         if variant and trace_id:
             trace_counts_by_variant.setdefault(variant, set()).add(trace_id)
+
+    full_trace_ids = trace_counts_by_variant.get(FULL_METHOD_VARIANT, set())
+    detector_only_reuse_failures = sorted(
+        variant
+        for variant in DETECTOR_ONLY_METHOD_VARIANTS
+        if trace_counts_by_variant.get(variant, set()) != full_trace_ids
+        or any(
+            record.get("ablation_video_execution_mode")
+            != "detector_only_reuse_full_method_video"
+            or record.get("ablation_source_method_variant") != FULL_METHOD_VARIANT
+            or record.get("ablation_independent_video_generation_required") is not False
+            for record in records
+            if record.get("method_variant") == variant
+        )
+    )
+    generation_trace_sets = {
+        variant: trace_counts_by_variant.get(variant, set())
+        for variant in GENERATION_METHOD_VARIANTS
+    }
+    generation_overlap_pairs = sorted(
+        f"{left}::{right}"
+        for index, left in enumerate(GENERATION_METHOD_VARIANTS)
+        for right in GENERATION_METHOD_VARIANTS[index + 1 :]
+        if generation_trace_sets[left] & generation_trace_sets[right]
+    )
+    generation_provenance_failures = sorted(
+        variant
+        for variant in GENERATION_METHOD_VARIANTS
+        if not generation_trace_sets[variant]
+        or any(
+            record.get("ablation_video_execution_mode")
+            != "independent_generation_variant_video"
+            or record.get("ablation_source_method_variant") != variant
+            or record.get("ablation_independent_video_generation_required") is not True
+            for record in records
+            if record.get("method_variant") == variant
+        )
+    )
+    detector_only_video_reuse_ready = bool(full_trace_ids) and not detector_only_reuse_failures
+    generation_variant_independent_video_ready = (
+        not generation_provenance_failures and not generation_overlap_pairs
+    )
 
     required_variants = {item["method_variant"] for item in VALIDATION_ABLATION_VARIANTS}
     missing_variants = sorted(required_variants - variants)
@@ -241,6 +318,8 @@ def audit_validation_internal_ablation_records(records: list[dict]) -> dict[str,
         and attacks
         and score_margin is not None
         and score_margin > 0
+        and detector_only_video_reuse_ready
+        and generation_variant_independent_video_ready
         else "FAIL"
     )
     return {
@@ -260,6 +339,17 @@ def audit_validation_internal_ablation_records(records: list[dict]) -> dict[str,
         "validation_internal_ablation_trace_counts": {
             variant: len(trace_ids) for variant, trace_ids in sorted(trace_counts_by_variant.items())
         },
+        "detector_only_video_reuse_decision": (
+            "PASS" if detector_only_video_reuse_ready else "FAIL"
+        ),
+        "detector_only_video_reuse_failure_variants": detector_only_reuse_failures,
+        "generation_variant_independent_video_decision": (
+            "PASS" if generation_variant_independent_video_ready else "FAIL"
+        ),
+        "generation_variant_provenance_failure_variants": (
+            generation_provenance_failures
+        ),
+        "generation_variant_trace_overlap_pairs": generation_overlap_pairs,
         "pilot_paper_internal_ablation_record_count": len(pilot_paper_records),
     }
 
@@ -276,9 +366,9 @@ def run_validation_internal_ablation(run_root: str | Path) -> dict[str, Any]:
     write_json(run_root / "artifacts" / "validation_internal_ablation_decision.json", audit)
     report = (
         "# Formal Internal Ablation Variant Matrix Report\n\n"
-        "该报告只消费正式 runtime detection records。若某个 component-removal 变体没有"
-        "独立生成视频并完成正式视频内容检测, 该变体保持 missing, 不会由 full-method "
-        "分数合成替代结果。\n\n"
+        "该报告只消费正式 runtime detection records。生成机制变体必须独立生成; "
+        "检测器专用变体必须复用 full-method 的同一视频与同一 replay。若来源关系"
+        "不满足预注册语义, 该变体保持 missing, 不会合成替代结果。\n\n"
         f"- validation_internal_ablation_decision: {audit['validation_internal_ablation_decision']}\n"
         f"- internal_ablation_record_count: {audit['internal_ablation_record_count']}\n"
         f"- validation_internal_ablation_variant_count: {audit['validation_internal_ablation_variant_count']}\n"

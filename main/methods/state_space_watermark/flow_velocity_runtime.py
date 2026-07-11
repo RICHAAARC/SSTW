@@ -20,11 +20,17 @@ from main.methods.state_space_watermark.velocity_field_constraint import (
 )
 
 
-VELOCITY_DISABLED_VARIANTS = {
-    "sstw_clean_unwatermarked_reference",
-    "endpoint_only_control",
-    "without_velocity_constraint",
-}
+@dataclass(frozen=True)
+class FlowVelocityRuntimeMechanismConfig:
+    """定义 scheduler 包装器启用的核心速度场机制。
+
+    该配置只包含可组合的运行原语。论文中的受控实验如何选择这些参数，
+    由外层实验模块负责，核心运行时不识别实验变体名称。
+    """
+
+    velocity_constraint_enabled: bool = True
+    endpoint_control_enabled: bool = True
+    terminal_endpoint_perturbation_enabled: bool = False
 
 
 @dataclass
@@ -39,7 +45,9 @@ class FlowVelocityConstraintRuntime:
     scheduler: Any
     key_text: str
     total_steps: int
-    method_variant: str = "sstw_full_method"
+    mechanism_config: FlowVelocityRuntimeMechanismConfig = field(
+        default_factory=FlowVelocityRuntimeMechanismConfig
+    )
     velocity_config: VelocityFieldConstraintConfig = field(default_factory=VelocityFieldConstraintConfig)
     tubelet_config: FlowTubeletKeyCodeConfig = field(default_factory=FlowTubeletKeyCodeConfig)
     latent_layout: FlowLatentLayout = field(default_factory=FiveDimensionalFlowLatentLayout)
@@ -133,9 +141,7 @@ class FlowVelocityConstraintRuntime:
             raise RuntimeError("FlowVelocityConstraintRuntime 尚未进入 context")
         direction = self._direction(sample)
         flow_phase = self._step_index / max(1, self.total_steps - 1)
-        velocity_enabled = self.method_variant not in VELOCITY_DISABLED_VARIANTS
-        endpoint_control_enabled = self.method_variant != "without_endpoint_aware_control"
-        if velocity_enabled:
+        if self.mechanism_config.velocity_constraint_enabled:
             constrained_velocity, velocity_record = apply_velocity_field_constraint(
                 model_output,
                 sample,
@@ -143,24 +149,27 @@ class FlowVelocityConstraintRuntime:
                 flow_phase=flow_phase,
                 config=self.velocity_config,
                 tubelet_config=self.tubelet_config,
-                endpoint_control_enabled=endpoint_control_enabled,
+                endpoint_control_enabled=self.mechanism_config.endpoint_control_enabled,
             )
         else:
             constrained_velocity = model_output
             velocity_record = {
-                "velocity_field_constraint_status": "disabled_by_method_variant",
+                "velocity_field_constraint_status": "disabled_by_mechanism_config",
                 "velocity_field_source": "scheduler_model_output_before_flow_match_step",
                 "flow_phase": round(float(flow_phase), 8),
                 "flow_phase_weight": 0.0,
                 "velocity_constraint_lambda": 0.0,
                 "velocity_constraint_delta_norm": 0.0,
                 "velocity_constraint_delta_ratio": 0.0,
-                "endpoint_control_enabled": endpoint_control_enabled,
+                "endpoint_control_enabled": self.mechanism_config.endpoint_control_enabled,
             }
 
         step_output = self._original_step(constrained_velocity, timestep, sample, *args, **kwargs)
         sample_after = self._first_sample(step_output)
-        if self.method_variant == "endpoint_only_control" and self._step_index == self.total_steps - 1:
+        if (
+            self.mechanism_config.terminal_endpoint_perturbation_enabled
+            and self._step_index == self.total_steps - 1
+        ):
             endpoint_delta_norm = (
                 float(sample_after.detach().float().norm().item())
                 * self.velocity_config.velocity_norm_ratio_budget
@@ -168,7 +177,10 @@ class FlowVelocityConstraintRuntime:
             )
             sample_after = sample_after + direction * endpoint_delta_norm
             step_output = self._replace_sample(step_output, sample_after)
-            velocity_record["endpoint_only_delta_norm"] = round(endpoint_delta_norm, 6)
+            velocity_record["terminal_endpoint_perturbation_delta_norm"] = round(
+                endpoint_delta_norm,
+                6,
+            )
 
         path_record = compute_path_step_observation(
             sample,
@@ -181,8 +193,13 @@ class FlowVelocityConstraintRuntime:
         self._step_records.append({
             "trajectory_step_index": self._step_index,
             "trajectory_timestep": timestep_value,
-            "method_variant": self.method_variant,
             "flow_scheduler_runtime_verified": True,
+            "velocity_constraint_enabled": (
+                self.mechanism_config.velocity_constraint_enabled
+            ),
+            "terminal_endpoint_perturbation_enabled": (
+                self.mechanism_config.terminal_endpoint_perturbation_enabled
+            ),
             **self._key_metadata,
             **velocity_record,
             **path_record,

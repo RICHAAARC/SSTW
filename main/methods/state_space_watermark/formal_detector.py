@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from math import floor, inf, log, nextafter
+from math import floor, inf, isfinite, log, nextafter
 from statistics import mean
 from typing import Any, Iterable, Mapping, Sequence
 
@@ -19,49 +19,72 @@ from main.methods.state_space_watermark.flow_state_posterior import (
 )
 
 
-FORMAL_METHOD_VARIANTS = (
-    "sstw_full_method",
-    "endpoint_only_control",
-    "trajectory_only_score",
-    "without_velocity_constraint",
-    "without_endpoint_aware_control",
-    "without_replay_uncertainty_weighting",
-    "without_flow_state_admissibility",
-    "generic_ssm_baseline",
-)
-
 FLOW_STATE_POSTERIOR_SCORE_SOURCE = (
     "dual_hypothesis_state_space_marginal_likelihood_calibrated_probability_posterior"
 )
 
 
 @dataclass(frozen=True)
-class FrozenFlowDetectorCalibration:
-    """保存一个 method variant 的概率模型与 fixed-FPR 阈值。"""
+class FlowDetectorMechanismConfig:
+    """定义核心检测器启用的参数化机制。
 
-    method_variant: str
+    该对象只描述 SSTW 检测原语是否执行可接受域约束，不包含任何外层实验
+    组合名称。外层可以通过显式参数构造对照，但核心包不需要了解其研究语义。
+    """
+
+    enforce_state_admissibility: bool = True
+
+    def as_dict(self) -> dict[str, bool]:
+        """返回可随冻结阈值保存的核心机制参数。"""
+
+        return {
+            "flow_state_admissibility_enforced": self.enforce_state_admissibility,
+        }
+
+
+@dataclass(frozen=True)
+class FrozenFlowDetectorCalibration:
+    """保存核心概率模型、机制参数与 fixed-FPR 阈值。"""
+
     target_fpr: float
     posterior_model: CalibratedFlowPosteriorModel
+    mechanism_config: FlowDetectorMechanismConfig
     final_score_threshold: float
     calibration_negative_count: int
     calibration_positive_count: int
     calibration_negative_cluster_count: int
     calibration_positive_cluster_count: int
+    posterior_probability_calibration_protocol: str
+    posterior_probability_calibration_outer_fold_count: int
+    posterior_probability_calibration_inner_fold_minimum: int
+    fixed_fpr_threshold_score_source: str
+    detector_configuration_id: str = "sstw_core"
 
     def as_dict(self) -> dict[str, Any]:
         """转换为可重建 detection 的 threshold artifact。"""
 
         return {
-            "method_variant": self.method_variant,
+            "detector_configuration_id": self.detector_configuration_id,
             "target_fpr": self.target_fpr,
             "calibration_negative_count": self.calibration_negative_count,
             "calibration_positive_count": self.calibration_positive_count,
             "calibration_negative_cluster_count": self.calibration_negative_cluster_count,
             "calibration_positive_cluster_count": self.calibration_positive_cluster_count,
+            "posterior_probability_calibration_protocol": (
+                self.posterior_probability_calibration_protocol
+            ),
+            "posterior_probability_calibration_outer_fold_count": (
+                self.posterior_probability_calibration_outer_fold_count
+            ),
+            "posterior_probability_calibration_inner_fold_minimum": (
+                self.posterior_probability_calibration_inner_fold_minimum
+            ),
+            "fixed_fpr_threshold_score_source": self.fixed_fpr_threshold_score_source,
             **self.posterior_model.as_dict(),
             "frozen_final_score_threshold": self.final_score_threshold,
             "threshold_source_split": "calibration",
             "test_time_threshold_update_blocked": True,
+            **self.mechanism_config.as_dict(),
         }
 
 
@@ -70,8 +93,8 @@ def frozen_flow_detector_calibration_from_dict(
 ) -> FrozenFlowDetectorCalibration:
     """从 governed threshold artifact 重建只读检测器。
 
-    该函数属于通用工程写法。adaptive attack 与服务器离线评分必须消费已经
-    冻结的 calibration artifact, 不能在查询候选视频时重新拟合模型或阈值。
+    该函数属于通用工程写法。任何离线评分调用方都必须消费已经冻结的
+    calibration artifact, 不能在查询候选视频时重新拟合模型或阈值。
     """
 
     if payload.get("posterior_model_type") != FLOW_STATE_POSTERIOR_MODEL_TYPE:
@@ -104,9 +127,13 @@ def frozen_flow_detector_calibration_from_dict(
         calibration_record_count=int(payload["posterior_calibration_record_count"]),
     )
     return FrozenFlowDetectorCalibration(
-        method_variant=str(payload["method_variant"]),
         target_fpr=float(payload["target_fpr"]),
         posterior_model=model,
+        mechanism_config=FlowDetectorMechanismConfig(
+            enforce_state_admissibility=bool(
+                payload.get("flow_state_admissibility_enforced", True)
+            )
+        ),
         final_score_threshold=float(payload["frozen_final_score_threshold"]),
         calibration_negative_count=int(payload["calibration_negative_count"]),
         calibration_positive_count=int(payload["calibration_positive_count"]),
@@ -115,6 +142,23 @@ def frozen_flow_detector_calibration_from_dict(
         ),
         calibration_positive_cluster_count=int(
             payload["calibration_positive_cluster_count"]
+        ),
+        posterior_probability_calibration_protocol=str(
+            payload.get("posterior_probability_calibration_protocol")
+            or "legacy_unspecified_probability_calibration"
+        ),
+        posterior_probability_calibration_outer_fold_count=int(
+            payload.get("posterior_probability_calibration_outer_fold_count") or 0
+        ),
+        posterior_probability_calibration_inner_fold_minimum=int(
+            payload.get("posterior_probability_calibration_inner_fold_minimum") or 0
+        ),
+        fixed_fpr_threshold_score_source=str(
+            payload.get("fixed_fpr_threshold_score_source")
+            or "legacy_unspecified_threshold_score_source"
+        ),
+        detector_configuration_id=str(
+            payload.get("detector_configuration_id", "sstw_core")
         ),
     )
 
@@ -127,79 +171,57 @@ def _quantile(values: Iterable[float], quantile: float) -> float:
     return rows[position]
 
 
-def _record_value(record: Mapping[str, Any], field_name: str) -> float:
-    value = record.get(field_name)
-    if value is None:
-        raise KeyError(f"正式 Flow evidence 缺少字段: {field_name}")
-    return float(value)
-
-
 def _cluster_id(record: Mapping[str, Any]) -> str:
     """读取统计独立单元, 禁止把同视频 key trial 当成独立视频。"""
 
-    value = (
-        record.get("statistical_cluster_id")
-        or record.get("source_video_cluster_id")
-        or record.get("trajectory_trace_id")
-    )
+    value = record.get("statistical_cluster_id")
     if not value:
         raise KeyError("正式 calibration record 缺少 statistical_cluster_id")
     return str(value)
 
 
-def observation_from_flow_evidence_record(
-    record: Mapping[str, Any],
-    *,
-    method_variant: str,
-) -> FlowEvidenceObservation:
-    """返回记录的第一个状态空间观测, 供兼容调用方使用。"""
-
-    return observation_sequence_from_flow_evidence_record(
-        record,
-        method_variant=method_variant,
-    )[0]
-
-
 def _observation_from_mapping(
     values: Mapping[str, Any],
-    *,
-    method_variant: str,
 ) -> FlowEvidenceObservation:
-    """把一个 phase 观测映射为指定消融变体的状态空间输入。"""
+    """把一个已由调用方规范化的 phase 映射为状态空间输入。"""
 
-    endpoint = float(values.get("endpoint_score") or 0.0)
-    velocity = float(values.get("velocity_score") or values.get("S_velocity") or 0.0)
-    path = float(values.get("path_score") or values.get("S_path_inv") or 0.0)
-    consistency = float(values.get("path_endpoint_consistency") or 0.0)
-    coverage = float(values.get("coverage_ratio") or values.get("endpoint_coverage_ratio") or 0.0)
-    replay_reliability = float(values.get("replay_reliability") or values.get("replay_reliability_weight") or 0.0)
-    grid_reliability = float(values.get("time_grid_reliability") or replay_reliability)
-    replay_log_likelihood_ratio = float(
-        values.get("replay_log_likelihood_ratio")
-        or values.get("replay_log_likelihood_ratio_mean")
-        or 0.0
+    def numeric_value(*field_names: str, default: float) -> float:
+        """按字段优先级读取数值, 显式的0不能被后备字段覆盖。"""
+
+        for field_name in field_names:
+            value = values.get(field_name)
+            if value is None:
+                continue
+            result = float(value)
+            if not isfinite(result):
+                raise ValueError(f"Flow phase 观测字段必须为有限数值: {field_name}")
+            return result
+        return float(default)
+
+    endpoint = numeric_value("endpoint_score", default=0.0)
+    velocity = numeric_value("velocity_score", "S_velocity", default=0.0)
+    path = numeric_value("path_score", "S_path_inv", default=0.0)
+    consistency = numeric_value("path_endpoint_consistency", default=0.0)
+    coverage = numeric_value(
+        "coverage_ratio",
+        "endpoint_coverage_ratio",
+        default=0.0,
     )
-    if method_variant == "endpoint_only_control":
-        velocity = 0.0
-        path = 0.0
-        consistency = 0.0
-        replay_log_likelihood_ratio = 0.0
-        replay_reliability = 1.0
-        grid_reliability = 1.0
-    elif method_variant == "trajectory_only_score":
-        endpoint = 0.0
-    elif method_variant == "without_replay_uncertainty_weighting":
-        replay_reliability = 1.0
-        grid_reliability = 1.0
-    elif method_variant == "generic_ssm_baseline":
-        # generic SSM 只能消费不含候选 key 投影的轨迹能量和一致性特征。
-        # 此处显式清零 key-conditioned endpoint/path/velocity/LLR, 防止把完整
-        # SSTW 观测复制一份后改名为 baseline。
-        endpoint = float(values.get("key_agnostic_endpoint_energy") or 0.0)
-        velocity = float(values.get("key_agnostic_velocity_energy") or 0.0)
-        path = float(values.get("key_agnostic_path_energy") or 0.0)
-        consistency = float(values.get("path_velocity_consistency") or consistency)
-        replay_log_likelihood_ratio = 0.0
+    replay_reliability = numeric_value(
+        "replay_reliability",
+        "replay_reliability_weight",
+        default=0.0,
+    )
+    grid_reliability = numeric_value(
+        "time_grid_reliability",
+        default=replay_reliability,
+    )
+    replay_log_likelihood_ratio = numeric_value(
+        "replay_log_likelihood_ratio",
+        "replay_log_likelihood_ratio_mean",
+        default=0.0,
+    )
+    flow_phase = numeric_value("flow_phase", default=0.5)
     return FlowEvidenceObservation(
         endpoint_score=endpoint,
         velocity_score=velocity,
@@ -209,30 +231,21 @@ def _observation_from_mapping(
         coverage_ratio=coverage,
         replay_reliability=replay_reliability,
         time_grid_reliability=grid_reliability,
-        flow_phase=float(values.get("flow_phase") or 0.5),
+        flow_phase=flow_phase,
     )
 
 
 def observation_sequence_from_flow_evidence_record(
     record: Mapping[str, Any],
-    *,
-    method_variant: str,
 ) -> list[FlowEvidenceObservation]:
-    """读取真实逐 phase 观测序列; 历史聚合记录只形成单步兼容观测。"""
+    """读取真实逐 phase 观测序列, 并拒绝聚合或单步替代输入。"""
 
     raw_sequence = record.get("flow_state_observation_sequence")
-    if raw_sequence is not None:
-        if not isinstance(raw_sequence, list) or not raw_sequence:
-            raise ValueError("flow_state_observation_sequence 必须是非空对象列表")
-        if not all(isinstance(row, Mapping) for row in raw_sequence):
-            raise TypeError("flow_state_observation_sequence 每一项必须为对象")
-        return [
-            _observation_from_mapping(row, method_variant=method_variant)
-            for row in raw_sequence
-        ]
-    # 该分支只保留轻量单元测试和旧诊断记录兼容。正式 paper records 的公共门禁
-    # 会要求 measured observation sequence, 不允许单步聚合观测支持状态空间主张。
-    return [_observation_from_mapping(record, method_variant=method_variant)]
+    if not isinstance(raw_sequence, list) or len(raw_sequence) < 2:
+        raise ValueError("flow_state_observation_sequence 必须包含至少2个真实 phase 观测")
+    if not all(isinstance(row, Mapping) for row in raw_sequence):
+        raise TypeError("flow_state_observation_sequence 每一项必须为对象")
+    return [_observation_from_mapping(row) for row in raw_sequence]
 
 
 def _balanced_weights(labels: Any, group_ids: Sequence[str] | None = None) -> Any:
@@ -332,7 +345,7 @@ def _equal_group_feature_moments(
 
 
 def _shrunk_covariance(matrix: Any, *, minimum_variance: float = 1e-3) -> Any:
-    """估计严格对角正定协方差, 适配 probe_paper 小样本和稳定复现。"""
+    """估计严格对角正定协方差, 兼顾小样本稳定性与跨平台复现。"""
 
     import numpy as np
 
@@ -553,22 +566,92 @@ def _calibration_metrics(
     return brier, log_loss, float(ece)
 
 
-def _fit_calibrated_posterior_model(
+def _fit_admissibility_thresholds(
     observation_sequences: Sequence[Sequence[FlowEvidenceObservation]],
+    probabilities: Sequence[float],
     labels: Sequence[int],
     group_ids: Sequence[str],
-) -> CalibratedFlowPosteriorModel:
-    """按视频簇交叉拟合双假设 SSM, 再对 OOF LLR 执行 Platt calibration。"""
+) -> dict[str, float]:
+    """按独立视频簇等权拟合质量与正类后验熵准入阈值。"""
+
+    if not (
+        len(observation_sequences)
+        == len(probabilities)
+        == len(labels)
+        == len(group_ids)
+    ):
+        raise ValueError("admissibility calibration 输入长度不一致")
+    unique_groups = sorted(set(group_ids))
+    if not unique_groups:
+        raise ValueError("admissibility calibration 缺少独立视频簇")
+    group_indices = {
+        group_id: [
+            index
+            for index, current_group_id in enumerate(group_ids)
+            if current_group_id == group_id
+        ]
+        for group_id in unique_groups
+    }
+    quality_extractors = {
+        "coverage": lambda row: row.coverage_ratio,
+        "replay_reliability": lambda row: row.replay_reliability,
+        "time_grid_reliability": lambda row: row.time_grid_reliability,
+    }
+    quality = {
+        name: [
+            mean(
+                mean(extractor(row) for row in observation_sequences[index])
+                for index in group_indices[group_id]
+            )
+            for group_id in unique_groups
+        ]
+        for name, extractor in quality_extractors.items()
+    }
+    entropy_by_record = [
+        -(
+            float(probability) * log(max(float(probability), 1e-8))
+            + (1.0 - float(probability))
+            * log(max(1.0 - float(probability), 1e-8))
+        )
+        for probability in probabilities
+    ]
+    positive_entropies: list[float] = []
+    for group_id in unique_groups:
+        positive_indices = [
+            index
+            for index in group_indices[group_id]
+            if int(labels[index]) == 1
+        ]
+        if positive_indices:
+            positive_entropies.append(
+                mean(entropy_by_record[index] for index in positive_indices)
+            )
+    if not positive_entropies:
+        raise ValueError("admissibility calibration 缺少正类视频簇")
+    return {
+        **{
+            name: _quantile(values, 0.05)
+            for name, values in quality.items()
+        },
+        "posterior_entropy_maximum": _quantile(positive_entropies, 0.95),
+    }
+
+
+def _stratified_group_fold_ids(
+    labels: Sequence[int],
+    group_ids: Sequence[str],
+    *,
+    maximum_fold_count: int = 5,
+) -> tuple[Any, int]:
+    """按标签组合分配独立视频簇，确保同一簇不会跨 fold 泄漏。"""
 
     import numpy as np
 
-    y = np.asarray(labels, dtype=np.float64)
-    unique_groups = sorted(set(group_ids))
-    if len(unique_groups) < 2:
-        raise ValueError("概率后验 calibration 至少需要2个独立视频簇")
+    if len(labels) != len(group_ids):
+        raise ValueError("labels 与 group_ids 长度不一致")
     labels_by_group: dict[str, set[int]] = {}
     for group_id, label in zip(group_ids, labels):
-        labels_by_group.setdefault(group_id, set()).add(int(label))
+        labels_by_group.setdefault(str(group_id), set()).add(int(label))
     groups_by_label = {
         label: sorted(
             group_id
@@ -579,18 +662,56 @@ def _fit_calibrated_posterior_model(
     }
     if min(len(groups_by_label[0]), len(groups_by_label[1])) < 2:
         raise ValueError("严格 group cross-fitting 要求 H0 与 H1 各至少2个独立视频簇")
-    fold_count = min(5, len(groups_by_label[0]), len(groups_by_label[1]))
+    fold_count = min(
+        int(maximum_fold_count),
+        len(groups_by_label[0]),
+        len(groups_by_label[1]),
+    )
     fold_by_group: dict[str, int] = {}
     groups_by_label_signature: dict[tuple[int, ...], list[str]] = {}
     for group_id, group_labels in labels_by_group.items():
-        groups_by_label_signature.setdefault(tuple(sorted(group_labels)), []).append(
-            group_id
-        )
+        groups_by_label_signature.setdefault(
+            tuple(sorted(group_labels)), []
+        ).append(group_id)
     for signature in sorted(groups_by_label_signature):
-        for index, group_id in enumerate(sorted(groups_by_label_signature[signature])):
+        for index, group_id in enumerate(
+            sorted(groups_by_label_signature[signature])
+        ):
             fold_by_group[group_id] = index % fold_count
-    fold_ids = np.asarray([fold_by_group[group_id] for group_id in group_ids])
+    return np.asarray([fold_by_group[str(group_id)] for group_id in group_ids]), fold_count
+
+
+@dataclass(frozen=True)
+class _NestedPosteriorCalibrationFit:
+    """保存最终模型及未观察各自视频簇时得到的校准概率。"""
+
+    model: CalibratedFlowPosteriorModel
+    nested_cross_fitted_probabilities: tuple[float, ...]
+    nested_admissibility_thresholds: tuple[Mapping[str, float], ...]
+    outer_fold_count: int
+    inner_fold_minimum: int
+
+
+def _fit_calibrated_posterior_model(
+    observation_sequences: Sequence[Sequence[FlowEvidenceObservation]],
+    labels: Sequence[int],
+    group_ids: Sequence[str],
+) -> _NestedPosteriorCalibrationFit:
+    """执行嵌套视频簇交叉拟合，并用外层未见样本评价概率校准。"""
+
+    import numpy as np
+
+    y = np.asarray(labels, dtype=np.float64)
+    unique_groups = sorted(set(group_ids))
+    if len(unique_groups) < 2:
+        raise ValueError("概率后验 calibration 至少需要2个独立视频簇")
+    fold_ids, fold_count = _stratified_group_fold_ids(labels, group_ids)
     out_of_fold_llrs = np.full(len(y), np.nan, dtype=np.float64)
+    nested_cross_fitted_probabilities = np.full(len(y), np.nan, dtype=np.float64)
+    nested_admissibility_thresholds: list[dict[str, float] | None] = [
+        None for _ in range(len(y))
+    ]
+    inner_fold_counts: list[int] = []
     for fold in range(fold_count):
         validation_mask = fold_ids == fold
         training_mask = ~validation_mask
@@ -617,6 +738,85 @@ def _fit_calibrated_posterior_model(
                     sequence,
                     fold_model,
                 )[2]
+
+        # 外层 validation 概率只能由外层 training 内部再次交叉拟合的 Platt
+        # 映射产生。这样 calibration 指标不会评价刚刚拟合自身的概率。
+        outer_training_indices = np.flatnonzero(training_mask)
+        outer_training_labels = y[training_mask].astype(int).tolist()
+        outer_training_groups = [
+            group_ids[index] for index in outer_training_indices
+        ]
+        inner_fold_ids, inner_fold_count = _stratified_group_fold_ids(
+            outer_training_labels,
+            outer_training_groups,
+        )
+        inner_fold_counts.append(inner_fold_count)
+        inner_oof_llrs = np.full(len(outer_training_indices), np.nan, dtype=np.float64)
+        for inner_fold in range(inner_fold_count):
+            inner_validation_mask = inner_fold_ids == inner_fold
+            inner_training_mask = ~inner_validation_mask
+            inner_sequences = [
+                observation_sequences[outer_training_indices[index]]
+                for index in range(len(outer_training_indices))
+                if inner_training_mask[index]
+            ]
+            inner_labels = [
+                outer_training_labels[index]
+                for index in range(len(outer_training_indices))
+                if inner_training_mask[index]
+            ]
+            inner_groups = [
+                outer_training_groups[index]
+                for index in range(len(outer_training_indices))
+                if inner_training_mask[index]
+            ]
+            if len(set(inner_labels)) < 2:
+                raise RuntimeError("嵌套 group cross-fitting 的内层训练集缺少双假设")
+            inner_model = _build_uncalibrated_state_posterior_model(
+                inner_sequences,
+                inner_labels,
+                inner_groups,
+            )
+            for inner_index, source_index in enumerate(outer_training_indices):
+                if inner_validation_mask[inner_index]:
+                    inner_oof_llrs[inner_index] = (
+                        state_space_marginal_log_likelihood_ratio(
+                            observation_sequences[source_index],
+                            inner_model,
+                        )[2]
+                    )
+        if bool(np.isnan(inner_oof_llrs).any()):
+            raise RuntimeError("嵌套 group cross-fitting 存在未生成的内层 OOF 分数")
+        outer_coefficients, outer_intercept = _fit_logistic(
+            inner_oof_llrs.reshape(-1, 1),
+            np.asarray(outer_training_labels, dtype=np.float64),
+            sample_weights=_balanced_weights(
+                outer_training_labels,
+                outer_training_groups,
+            ),
+            l2_penalty=0.01,
+        )
+        outer_slope = float(outer_coefficients[0])
+        outer_training_logits = (
+            outer_intercept + outer_slope * inner_oof_llrs
+        )
+        outer_training_probabilities = 1.0 / (
+            1.0 + np.exp(-np.clip(outer_training_logits, -40.0, 40.0))
+        )
+        outer_admissibility_thresholds = _fit_admissibility_thresholds(
+            fold_sequences,
+            outer_training_probabilities.tolist(),
+            outer_training_labels,
+            outer_training_groups,
+        )
+        for index in np.flatnonzero(validation_mask):
+            logit = outer_intercept + outer_slope * out_of_fold_llrs[index]
+            nested_cross_fitted_probabilities[index] = 1.0 / (
+                1.0 + np.exp(-np.clip(logit, -40.0, 40.0))
+            )
+            nested_admissibility_thresholds[index] = dict(
+                outer_admissibility_thresholds
+            )
     full_model = _build_uncalibrated_state_posterior_model(
         observation_sequences,
         [int(value) for value in labels],
@@ -632,41 +832,22 @@ def _fit_calibrated_posterior_model(
         l2_penalty=0.01,
     )
     platt_slope = float(platt_coefficients[0])
-    calibrated_logits = platt_intercept + platt_slope * out_of_fold_llrs
-    probabilities = 1.0 / (1.0 + np.exp(-np.clip(calibrated_logits, -40.0, 40.0)))
-    brier, log_loss_value, ece = _calibration_metrics(probabilities, y, group_ids)
-    group_indices = {
-        group_id: [
-            index for index, current_group_id in enumerate(group_ids)
-            if current_group_id == group_id
-        ]
-        for group_id in unique_groups
-    }
-    quality_extractors = {
-        "coverage": lambda row: row.coverage_ratio,
-        "replay_reliability": lambda row: row.replay_reliability,
-        "time_grid_reliability": lambda row: row.time_grid_reliability,
-    }
-    quality = {
-        name: [
-            mean(
-                mean(extractor(row) for row in observation_sequences[index])
-                for index in group_indices[group_id]
-            )
-            for group_id in unique_groups
-        ]
-        for name, extractor in quality_extractors.items()
-    }
-    entropy_by_record = [
-        -(probability * log(max(probability, 1e-8))
-          + (1.0 - probability) * log(max(1.0 - probability, 1e-8)))
-        for probability in probabilities
-    ]
-    positive_entropies = [
-        mean(entropy_by_record[index] for index in group_indices[group_id])
-        for group_id in groups_by_label[1]
-    ]
-    return CalibratedFlowPosteriorModel(
+    if bool(np.isnan(nested_cross_fitted_probabilities).any()):
+        raise RuntimeError("存在未由嵌套 group cross-fitting 生成的校准概率")
+    brier, log_loss_value, ece = _calibration_metrics(
+        nested_cross_fitted_probabilities,
+        y,
+        group_ids,
+    )
+    if any(value is None for value in nested_admissibility_thresholds):
+        raise RuntimeError("存在未由外层 training fold 拟合的准入阈值")
+    final_admissibility_thresholds = _fit_admissibility_thresholds(
+        observation_sequences,
+        nested_cross_fitted_probabilities.tolist(),
+        [int(value) for value in labels],
+        group_ids,
+    )
+    model = CalibratedFlowPosteriorModel(
         feature_names=POSTERIOR_FEATURE_NAMES,
         feature_means=full_model.feature_means,
         feature_scales=full_model.feature_scales,
@@ -674,19 +855,60 @@ def _fit_calibrated_posterior_model(
         positive_state_space_model=full_model.positive_state_space_model,
         platt_slope=platt_slope,
         platt_intercept=float(platt_intercept),
-        admissibility_thresholds={
-            **{
-                name: _quantile(values, 0.05)
-                for name, values in quality.items()
-            },
-            "posterior_entropy_maximum": _quantile(positive_entropies, 0.95),
-        },
+        admissibility_thresholds=final_admissibility_thresholds,
         calibration_brier_score=brier,
         calibration_log_loss=log_loss_value,
         calibration_expected_calibration_error=ece,
         calibration_group_count=len(unique_groups),
         calibration_record_count=len(observation_sequences),
     )
+    return _NestedPosteriorCalibrationFit(
+        model=model,
+        nested_cross_fitted_probabilities=tuple(
+            float(value) for value in nested_cross_fitted_probabilities
+        ),
+        nested_admissibility_thresholds=tuple(
+            dict(value)
+            for value in nested_admissibility_thresholds
+            if value is not None
+        ),
+        outer_fold_count=fold_count,
+        inner_fold_minimum=min(inner_fold_counts),
+    )
+
+
+def _cross_fitted_conservative_score(
+    observations: Sequence[FlowEvidenceObservation],
+    probability: float,
+    admissibility_thresholds: Mapping[str, float],
+    mechanism_config: FlowDetectorMechanismConfig,
+) -> float:
+    """把外层未见概率与冻结准入阈值组合为阈值校准分数。"""
+
+    if not mechanism_config.enforce_state_admissibility:
+        return float(probability)
+    quality = {
+        "coverage": mean(max(0.0, min(1.0, row.coverage_ratio)) for row in observations),
+        "replay_reliability": mean(
+            max(0.0, min(1.0, row.replay_reliability)) for row in observations
+        ),
+        "time_grid_reliability": mean(
+            max(0.0, min(1.0, row.time_grid_reliability)) for row in observations
+        ),
+    }
+    entropy = -(
+        float(probability) * log(max(float(probability), 1e-8))
+        + (1.0 - float(probability))
+        * log(max(1.0 - float(probability), 1e-8))
+    )
+    quality_ready = all(
+        value >= float(admissibility_thresholds.get(name, 0.0))
+        for name, value in quality.items()
+    )
+    entropy_ready = entropy <= float(
+        admissibility_thresholds.get("posterior_entropy_maximum", log(2.0))
+    )
+    return float(probability) if quality_ready and entropy_ready else 0.0
 
 
 def _fixed_fpr_threshold(values: Iterable[float], target_fpr: float) -> float:
@@ -709,18 +931,20 @@ def score_flow_evidence_record(
     record: Mapping[str, Any],
     posterior_model: CalibratedFlowPosteriorModel,
     *,
-    method_variant: str,
+    mechanism_config: FlowDetectorMechanismConfig | None = None,
 ) -> dict[str, Any]:
     """使用冻结概率模型计算一个 comparison unit。"""
 
-    observations = observation_sequence_from_flow_evidence_record(
-        record,
-        method_variant=method_variant,
-    )
+    mechanism_config = mechanism_config or FlowDetectorMechanismConfig()
+    observations = observation_sequence_from_flow_evidence_record(record)
     posterior = infer_flow_state_posterior(observations, posterior_model)
     payload = posterior.as_dict()
-    if method_variant == "without_flow_state_admissibility":
-        payload["flow_state_admissibility_status"] = "disabled_by_ablation"
+    # 判定分数必须保留计算精度。若沿用展示字段的8位小数，靠近冻结阈值的
+    # 样本可能因格式化舍入改变判定，从而破坏 fixed-FPR 的比较语义。
+    payload["S_final_unconstrained"] = float(posterior.watermark_probability)
+    payload["S_final_conservative"] = float(posterior.conservative_score)
+    if not mechanism_config.enforce_state_admissibility:
+        payload["flow_state_admissibility_status"] = "disabled_by_mechanism_config"
         payload["flow_state_admissibility_failures"] = []
         payload["S_final_conservative"] = payload["S_final_unconstrained"]
     payload["flow_detector_score_source"] = (
@@ -732,47 +956,100 @@ def score_flow_evidence_record(
 def fit_flow_evidence_calibration(
     calibration_records: Iterable[Mapping[str, Any]],
     *,
-    method_variant: str,
     target_fpr: float,
+    mechanism_config: FlowDetectorMechanismConfig | None = None,
+    detector_configuration_id: str = "sstw_core",
 ) -> FrozenFlowDetectorCalibration:
     """使用 calibration positive/negative 拟合后验, 再由 negative 冻结 FPR 阈值。"""
 
-    if method_variant not in FORMAL_METHOD_VARIANTS:
-        raise ValueError(f"未注册的正式 method variant: {method_variant}")
+    mechanism_config = mechanism_config or FlowDetectorMechanismConfig()
     if not 0.0 < float(target_fpr) < 1.0:
         raise ValueError("target_fpr 必须位于 (0, 1)")
     rows = [dict(row) for row in calibration_records]
+    invalid_splits = sorted({
+        str(row.get("split") or "missing")
+        for row in rows
+        if row.get("split") != "calibration"
+    })
+    if invalid_splits:
+        raise ValueError(
+            "概率后验与 fixed-FPR 阈值只能使用 calibration split, "
+            f"收到: {invalid_splits}"
+        )
+    allowed_sample_roles = {
+        "attacked_positive",
+        "clean_negative",
+        "controlled_negative",
+    }
+    invalid_sample_roles = sorted({
+        str(row.get("sample_role") or "missing")
+        for row in rows
+        if row.get("sample_role") not in allowed_sample_roles
+    })
+    if invalid_sample_roles:
+        raise ValueError(
+            "概率后验 calibration 包含未知 sample_role: "
+            f"{invalid_sample_roles}"
+        )
     labels = [1 if row.get("sample_role") == "attacked_positive" else 0 for row in rows]
     positive_count = sum(labels)
     negative_count = len(labels) - positive_count
     if positive_count < 2 or negative_count < 2:
         raise ValueError("概率后验 calibration 至少需要2条 positive 和2条 negative")
     observation_sequences = [
-        observation_sequence_from_flow_evidence_record(row, method_variant=method_variant)
+        observation_sequence_from_flow_evidence_record(row)
         for row in rows
     ]
-    model = _fit_calibrated_posterior_model(
+    fitted = _fit_calibrated_posterior_model(
         observation_sequences,
         labels,
         [_cluster_id(row) for row in rows],
     )
+    model = fitted.model
     negative_rows = [row for row, label in zip(rows, labels) if label == 0]
+    negative_probabilities = [
+        probability
+        for probability, label in zip(
+            fitted.nested_cross_fitted_probabilities,
+            labels,
+        )
+        if label == 0
+    ]
+    negative_observations = [
+        observations
+        for observations, label in zip(observation_sequences, labels)
+        if label == 0
+    ]
+    negative_admissibility_thresholds = [
+        thresholds
+        for thresholds, label in zip(
+            fitted.nested_admissibility_thresholds,
+            labels,
+        )
+        if label == 0
+    ]
     negative_scores_by_cluster: dict[str, list[float]] = {}
-    for row in negative_rows:
-        negative_scores_by_cluster.setdefault(_cluster_id(row), []).append(float(
-            score_flow_evidence_record(
-            row,
-            model,
-            method_variant=method_variant,
-        )["S_final_conservative"]
-        ))
+    for row, observations, probability, admissibility_thresholds in zip(
+        negative_rows,
+        negative_observations,
+        negative_probabilities,
+        negative_admissibility_thresholds,
+    ):
+        negative_scores_by_cluster.setdefault(_cluster_id(row), []).append(
+            _cross_fitted_conservative_score(
+                observations,
+                probability,
+                admissibility_thresholds,
+                mechanism_config,
+            )
+        )
     # 同一 clean video 的多个 key trial 是簇内重复测量。阈值按每视频最大分数
     # 冻结, 使目标 FPR 对应独立视频而不是人为扩增的 trial 数量。
     negative_cluster_scores = [max(values) for values in negative_scores_by_cluster.values()]
     return FrozenFlowDetectorCalibration(
-        method_variant=method_variant,
         target_fpr=float(target_fpr),
         posterior_model=model,
+        mechanism_config=mechanism_config,
         final_score_threshold=_fixed_fpr_threshold(negative_cluster_scores, target_fpr),
         calibration_negative_count=negative_count,
         calibration_positive_count=positive_count,
@@ -780,6 +1057,15 @@ def fit_flow_evidence_calibration(
         calibration_positive_cluster_count=len({
             _cluster_id(row) for row, label in zip(rows, labels) if label == 1
         }),
+        posterior_probability_calibration_protocol=(
+            "nested_source_video_group_cross_fitted_state_space_llr_and_platt"
+        ),
+        posterior_probability_calibration_outer_fold_count=fitted.outer_fold_count,
+        posterior_probability_calibration_inner_fold_minimum=fitted.inner_fold_minimum,
+        fixed_fpr_threshold_score_source=(
+            "outer_group_heldout_nested_cross_fitted_conservative_scores"
+        ),
+        detector_configuration_id=str(detector_configuration_id),
     )
 
 
@@ -792,7 +1078,7 @@ def apply_frozen_flow_detector(
     score_payload = score_flow_evidence_record(
         record,
         calibration.posterior_model,
-        method_variant=calibration.method_variant,
+        mechanism_config=calibration.mechanism_config,
     )
     score = float(score_payload["S_final_conservative"])
     return {

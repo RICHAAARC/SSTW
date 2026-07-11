@@ -89,11 +89,14 @@ scripts/README.md
 ## 目录职责
 
 ```text
-main/                   论文方法、协议、分析、CLI 和核心复现能力
+main/                   可独立抽离的 SSTW 论文核心方法, 不包含 runner、攻击、统计或 CLI
+runtime/                可复用运行时基础设施, 只向内依赖 main
+evaluation/             攻击、指标、统计与结果协议
 configs/                profile、protocol、baseline 和 workflow 配置
 experiments/            实验 runner、paper protocol 和后处理逻辑
 external_baseline/      external baseline source intake、official runtime 和 adapter
-paper_workflow/         Notebook / Colab workflow 入口和共享 helper
+workflows/              可脱离 Notebook 的服务器阶段编排
+paper_workflow/         最外层 Notebook / Colab 薄入口与专用挂载、鉴权 helper
 scripts/                数据准备、结果检查、打包和服务器 workflow 入口
 docs/                   工程治理、实验协议和复现说明
 tools/harness/          可执行治理审计
@@ -113,6 +116,9 @@ python tools/harness/run_all_audits.py
 ```
 
 `pytest -q` 默认只运行轻量测试, 不应把真实 GPU 运行放入默认测试路径。
+`paper_artifact_rebuild_package` 不携带 tests、`tools/harness/` 或 `paper_workflow/`。
+必须先在开发仓库完成上述两项检查，再抽离服务器重建包；抽离包通过
+`scripts/run_generative_video_server_workflow.py` 直接运行同一 repository workflow。
 
 ## 论文产物治理原则
 

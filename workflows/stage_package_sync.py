@@ -1218,8 +1218,8 @@ def _paper_profile_gate_publish_blocker(
 
     该门禁属于项目特定写法。普通阶段 zip 只是文件交接容器, 但
     probe_paper 的 paper gate zip 同时承担“进入 pilot_paper 前最终证据包”的职责。
-    若 package manifest 缺失或失败, 说明公平比较、artifact rebuild、stage transition
-    等闭环没有被当前运行证明, 因此只能写阻断 manifest, 不能发布可被误用的完整 zip。
+    若 package manifest 缺失或失败, 或 package 之后的 stage transition 未通过,
+    说明完整闭环没有被当前运行证明, 因此只能写阻断 manifest, 不能发布可被误用的完整 zip。
     """
 
     role = sanitize_filename_token(notebook_role)
@@ -1262,7 +1262,25 @@ def _paper_profile_gate_publish_blocker(
 
     decision = str(manifest.get("probe_paper_package_manifest_decision") or "UNKNOWN")
     gate_decision = str(manifest.get("probe_paper_gate_decision") or "UNKNOWN")
-    transition_decision = str(manifest.get("probe_paper_to_pilot_paper_transition_decision") or "UNKNOWN")
+    transition_path = (
+        run_root
+        / "artifacts"
+        / "probe_paper_to_pilot_paper_transition_decision.json"
+    )
+    try:
+        transition = (
+            json.loads(transition_path.read_text(encoding="utf-8-sig"))
+            if transition_path.exists()
+            else {}
+        )
+    except json.JSONDecodeError:
+        transition = {}
+    if not isinstance(transition, dict):
+        transition = {}
+    transition_decision = str(
+        transition.get("probe_paper_to_pilot_paper_transition_decision")
+        or "UNKNOWN"
+    )
     if decision == "PASS" and gate_decision == "PASS" and transition_decision == "PASS":
         return None
     return {

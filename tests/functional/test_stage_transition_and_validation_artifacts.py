@@ -55,6 +55,29 @@ def _write_minimal_probe_paper_package_artifacts(run_root: Path) -> None:
             _write_minimal_artifact_file(target)
 
 
+def _write_completed_profile_package(run_root: Path, profile: str) -> None:
+    """写入阶段跳转所要求的完整 package 决策 fixture。"""
+
+    write_json(
+        run_root / "artifacts" / "reviewer_evidence_index_decision.json",
+        {"reviewer_evidence_index_decision": "PASS"},
+    )
+    write_json(
+        run_root / "figures" / f"{profile}_gate_figure.json",
+        {"artifact_type": "figure_manifest", "paper_profile": profile},
+    )
+    write_json(
+        run_root / "manifests" / f"{profile}_package_manifest.json",
+        {
+            f"{profile}_package_manifest_decision": "PASS",
+            "reviewer_evidence_index_decision": "PASS",
+            "stage_transition_dependency_policy": (
+                "package_manifest_pass_required_before_stage_transition"
+            ),
+        },
+    )
+
+
 def _official_score_extraction_payload() -> dict:
     """构造 official bundle 分数抽取口径 fixture。"""
 
@@ -128,6 +151,7 @@ def test_probe_paper_to_pilot_transition_writes_governed_records(tmp_path: Path)
     """probe_paper PASS 后只能生成进入 pilot_paper 的跳转判定, 不能直接放行 full_paper。"""
     run_root = tmp_path / "run"
     write_json(run_root / "artifacts" / "probe_paper_gate_decision.json", _probe_paper_gate_pass_payload())
+    _write_completed_profile_package(run_root, "probe_paper")
 
     audit = write_stage_transition_decision(run_root, "probe_paper_to_pilot_paper")
 
@@ -145,11 +169,33 @@ def test_probe_paper_to_pilot_transition_no_longer_requires_validation_to_probe_
 
     run_root = tmp_path / "runs" / "generative_video_model_probe" / "probe_paper"
     write_json(run_root / "artifacts" / "probe_paper_gate_decision.json", _probe_paper_gate_pass_payload())
+    _write_completed_profile_package(run_root, "probe_paper")
 
     passed = write_stage_transition_decision(run_root, "probe_paper_to_pilot_paper")
     assert passed["probe_paper_to_pilot_paper_transition_decision"] == "PASS"
     assert passed["allowed_next_result_profiles"] == ["pilot_paper"]
     assert "full_paper" in passed["blocked_next_result_profiles"]
+
+
+@pytest.mark.quick
+def test_probe_paper_transition_waits_for_complete_package_manifest(tmp_path: Path) -> None:
+    """source gate PASS 不能绕过审稿索引、诊断图和 package manifest。"""
+
+    run_root = tmp_path / "run"
+    write_json(
+        run_root / "artifacts" / "probe_paper_gate_decision.json",
+        _probe_paper_gate_pass_payload(),
+    )
+
+    audit = write_stage_transition_decision(
+        run_root,
+        "probe_paper_to_pilot_paper",
+    )
+
+    assert audit["probe_paper_to_pilot_paper_transition_decision"] == "FAIL"
+    assert "probe_paper_complete_package_manifest_passed" in audit[
+        "missing_transition_requirements"
+    ]
 
 
 @pytest.mark.quick
@@ -205,6 +251,7 @@ def test_pilot_to_full_transition_requires_previous_transition(tmp_path: Path) -
         "paper_claim_support_status": "pilot_claim_supported",
         "paper_result_formality_guard_decision": "PASS",
     })
+    _write_completed_profile_package(run_root, "pilot_paper")
 
     blocked = write_stage_transition_decision(run_root, "pilot_paper_to_full_paper")
     assert blocked["pilot_paper_to_full_paper_transition_decision"] == "FAIL"
@@ -231,6 +278,7 @@ def test_pilot_to_full_transition_can_consume_sibling_probe_paper_run_root(tmp_p
         "paper_claim_support_status": "pilot_claim_supported",
         "paper_result_formality_guard_decision": "PASS",
     })
+    _write_completed_profile_package(pilot_run_root, "pilot_paper")
     write_json(probe_run_root / "artifacts" / "probe_paper_to_pilot_paper_transition_decision.json", {
         "probe_paper_to_pilot_paper_transition_decision": "PASS",
     })
@@ -1013,8 +1061,8 @@ def test_paper_profile_figure_and_package_manifest_are_rebuilt_from_artifacts(tm
     write_json(run_root / "artifacts" / "data_split_and_leakage_guard_decision.json", {
         "data_split_and_leakage_guard_decision": "PASS",
     })
-    write_json(run_root / "artifacts" / "probe_paper_to_pilot_paper_transition_decision.json", {
-        "probe_paper_to_pilot_paper_transition_decision": "PASS",
+    write_json(run_root / "artifacts" / "reviewer_evidence_index_decision.json", {
+        "reviewer_evidence_index_decision": "PASS",
     })
 
     figure = write_paper_profile_gate_figure(run_root)
@@ -1022,7 +1070,10 @@ def test_paper_profile_figure_and_package_manifest_are_rebuilt_from_artifacts(tm
 
     assert figure["probe_paper_gate_decision"] == "PASS"
     assert manifest["probe_paper_package_manifest_decision"] == "PASS"
-    assert manifest["probe_paper_to_pilot_paper_transition_decision"] == "PASS"
+    assert manifest["reviewer_evidence_index_decision"] == "PASS"
+    assert manifest["stage_transition_dependency_policy"] == (
+        "package_manifest_pass_required_before_stage_transition"
+    )
     assert manifest["motion_consistency_exclusion_decision"] == "PASS"
     assert manifest["sstw_measured_formal_decision"] == "PASS"
     assert manifest["fair_detection_calibration_decision"] == "PASS"
@@ -1038,3 +1089,30 @@ def test_paper_profile_figure_and_package_manifest_are_rebuilt_from_artifacts(tm
     assert "reports/fair_detection_calibration_report.md" in inventory_relpaths
     assert (run_root / "figures" / "probe_paper_gate_figure.json").exists()
     assert (run_root / "manifests" / "probe_paper_package_manifest.json").exists()
+
+
+@pytest.mark.quick
+def test_profile_package_prefers_current_later_stage_over_restored_upstream_gate(
+    tmp_path: Path,
+) -> None:
+    """pilot/full run_root 含上游 gate 时, package 仍必须选择当前最高阶段。"""
+
+    run_root = tmp_path / "run"
+    write_json(
+        run_root / "artifacts" / "probe_paper_gate_decision.json",
+        {"probe_paper_gate_decision": "PASS", "paper_result_level": "probe_paper"},
+    )
+    write_json(
+        run_root / "artifacts" / "pilot_paper_gate_decision.json",
+        {"pilot_paper_gate_decision": "PASS", "paper_result_level": "pilot_paper"},
+    )
+    assert write_paper_profile_gate_figure(run_root)["paper_result_level"] == "pilot_paper"
+
+    write_json(
+        run_root / "artifacts" / "full_paper_result_checker_decision.json",
+        {
+            "full_paper_result_checker_decision": "PASS",
+            "paper_result_level": "full_paper",
+        },
+    )
+    assert write_paper_profile_gate_figure(run_root)["paper_result_level"] == "full_paper"

@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 
 from tools.harness.run_all_audits import run_all_audits
+from tools.harness.audits.audit_notebook_thin_entrypoints import run_audit as run_notebook_thin_entrypoint_audit
 from tools.harness.lib.file_scanner import should_skip_path
 
 
@@ -27,6 +28,14 @@ def test_harness_audits_pass_for_template() -> None:
     """模板仓库自身必须通过内置 harness 审计。"""
     summary = run_all_audits(Path.cwd())
     assert summary["overall_decision"] == "pass"
+
+
+@pytest.mark.constraint
+def test_notebooks_are_governed_thin_entrypoints() -> None:
+    """全部 Notebook 必须委托仓库 workflow, 不得内嵌方法或产物 writer。"""
+
+    report = run_notebook_thin_entrypoint_audit(Path.cwd())
+    assert report["decision"] == "pass", report["violations"]
 
 
 @pytest.mark.constraint

@@ -205,3 +205,53 @@ def test_workflow_profile_counts_are_derived_from_protocol_scale() -> None:
         assert int(profile["minimum_clean_negative_count"]) == int(config["minimum_clean_negative_count"])
         assert float(profile["target_fpr"]) == float(config["target_fpr"])
         assert profile["enabled_for_claim"] is True
+
+
+@pytest.mark.constraint
+def test_stage_transition_occurs_after_complete_profile_package() -> None:
+    """三个正式 profile 都必须先完成审稿索引、诊断图和 package 再跳转。"""
+
+    workflow = json.loads(
+        Path("configs/paper_workflow/generative_video_notebook_workflows.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    plan = workflow["notebook_roles"]["paper_gate_and_package"]["stage_plan"]
+    reviewer_index = plan.index("reviewer_evidence_index")
+    figure_index = plan.index("paper_profile_gate_figure_builder")
+    manifest_index = plan.index("paper_profile_package_manifest_builder")
+    assert reviewer_index < figure_index < manifest_index
+    for transition_name in (
+        "probe_paper_to_pilot_paper_transition_decision",
+        "pilot_paper_to_full_paper_transition_decision",
+        "full_paper_to_submission_freeze_transition_decision",
+    ):
+        assert manifest_index < plan.index(transition_name)
+    for profile_name in ("probe_paper", "pilot_paper", "full_paper"):
+        disabled = set(
+            workflow["workflow_profiles"][profile_name]["disabled_stage_names"]
+        )
+        assert "reviewer_evidence_index" not in disabled
+        assert "paper_profile_gate_figure_builder" not in disabled
+        assert "paper_profile_package_manifest_builder" not in disabled
+
+
+@pytest.mark.constraint
+def test_internal_ablation_video_reuse_policy_is_profile_invariant() -> None:
+    """detector-only 消融必须复用 full 视频, 只有生成机制消融可独立生成。"""
+
+    for config_path in PAPER_PROFILE_PROTOCOL_CONFIGS:
+        config = json.loads(config_path.read_text(encoding="utf-8"))
+        profile = str(config["paper_result_level"])
+        required = set(config["required_internal_ablation_variants"])
+        generation = set(config["generation_internal_ablation_variants"])
+        detector_only = set(config["detector_only_internal_ablation_variants"])
+        assert generation & detector_only == set()
+        assert generation | detector_only == required
+        assert config["internal_ablation_video_reuse_policy"] == (
+            "detector_only_reuses_full_method_video_generation_variants_use_independent_videos"
+        )
+        assert config["require_internal_ablation_video_reuse_policy"] is True
+        assert int(config[f"minimum_{profile}_internal_ablation_trace_count"]) == int(
+            config["minimum_test_unique_video_count"]
+        )

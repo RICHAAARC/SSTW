@@ -5,6 +5,12 @@
   "allow_effect_size_claims": true,
   "blocked_target_fpr": 0.01,
   "claim_support_status": "paper_profile_complete_claim_evidence",
+  "detector_only_internal_ablation_variants": [
+    "trajectory_only_score",
+    "without_replay_uncertainty_weighting",
+    "without_flow_state_admissibility",
+    "generic_ssm_baseline"
+  ],
   "external_baseline_prohibited_result_sources": [
     "externally_supplied_result_bundle",
     "manual_result_json",
@@ -15,10 +21,18 @@
   "external_baseline_result_production_contract": "project_clone_build_run_adapt_record",
   "fair_comparison_protocol": "method_specific_clean_negative_calibration_to_target_fpr",
   "formal_mechanism_contract_id": "sstw_complete_paper_mechanism_v1",
-  "formal_mechanism_contract_path": "configs/methods/sstw_complete_paper_mechanism.json",
+  "formal_mechanism_contract_path": "configs/protocol/sstw_complete_paper_mechanism.json",
   "fpr_confidence_level": 0.95,
+  "generation_internal_ablation_variants": [
+    "sstw_full_method",
+    "endpoint_only_control",
+    "without_velocity_constraint",
+    "without_endpoint_aware_control"
+  ],
+  "internal_ablation_video_reuse_policy": "detector_only_reuses_full_method_video_generation_variants_use_independent_videos",
   "maximum_posterior_brier_score": 0.25,
   "maximum_posterior_expected_calibration_error": 0.1,
+  "minimum_adaptive_watermark_retention_rate": 0.5,
   "minimum_attack_event_count_per_attack": 30,
   "minimum_calibration_negative_event_count": 30,
   "minimum_calibration_negative_event_count_per_family": 7,
@@ -26,7 +40,6 @@
   "minimum_calibration_unique_video_count": 30,
   "minimum_clean_negative_count": 60,
   "minimum_external_baseline_measured_adapter_count": 5,
-  "minimum_adaptive_watermark_retention_rate": 0.5,
   "minimum_heldout_attacked_positive_event_count": 1380,
   "minimum_heldout_negative_event_count_per_family": 7,
   "minimum_heldout_test_negative_event_count": 30,
@@ -40,6 +53,8 @@
   "minimum_probe_paper_internal_ablation_trace_count": 30,
   "minimum_prompt_count": 10,
   "minimum_seed_per_prompt": 6,
+  "minimum_sstw_advantage_baseline_count": 5,
+  "minimum_sstw_tpr_at_target_fpr_difference": 0.0,
   "minimum_test_seed_per_prompt": 3,
   "minimum_test_unique_video_count": 30,
   "minimum_unique_video_count": 60,
@@ -67,6 +82,7 @@
   "require_complete_paper_mechanism_contract": true,
   "require_complete_result_artifact_skeleton": true,
   "require_confidence_interval_report": true,
+  "require_cross_model_generalization": true,
   "require_data_split_and_leakage_guard": true,
   "require_efficiency_metric_records": true,
   "require_external_baseline_comparison_ready": true,
@@ -79,6 +95,7 @@
   "require_formal_motion_claim_ready": true,
   "require_heldout_fpr_confidence_upper_bound": true,
   "require_internal_ablation_matrix_ready": true,
+  "require_internal_ablation_video_reuse_policy": true,
   "require_low_fpr_curve_records": true,
   "require_low_fpr_formal_statistics_blocking_record": true,
   "require_modern_external_baseline_formal_results": true,
@@ -90,6 +107,7 @@
   "require_real_adaptive_attack_records": true,
   "require_real_world_attack_records": true,
   "require_replay_and_sketch_full_support": true,
+  "require_sstw_advantage_ci_lower_above_zero": true,
   "require_sstw_advantage_claim_ready": true,
   "require_sstw_measured_formal_records": true,
   "require_statistical_confidence_interval_decision": true,
@@ -159,6 +177,5 @@
   "target_fpr": 0.1,
   "test_time_threshold_update_blocked": true,
   "threshold_protocol": "calibration_split_to_frozen_threshold_to_heldout_test_split",
-  "threshold_source_split": "calibration",
-  "require_cross_model_generalization": true
+  "threshold_source_split": "calibration"
 }

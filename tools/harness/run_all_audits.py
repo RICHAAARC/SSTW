@@ -23,6 +23,7 @@ AUDIT_MODULE_NAMES = [
     "tools.harness.audits.audit_skill_file_presence",
     "tools.harness.audits.audit_placeholder_random_fields",
     "tools.harness.audits.audit_dependency_boundaries",
+    "tools.harness.audits.audit_notebook_thin_entrypoints",
     "tools.harness.audits.audit_release_extraction_contract",
 ]
 

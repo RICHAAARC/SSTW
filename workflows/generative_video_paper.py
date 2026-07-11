@@ -28,6 +28,7 @@ DEFAULT_NOTEBOOK_WORKFLOW_CONFIG = "configs/paper_workflow/generative_video_note
 DEFAULT_MODERN_BASELINE_COLAB_COMMAND_CONFIG = "configs/external_baselines/modern_baseline_colab_commands.json"
 DEFAULT_NOTEBOOK_ROLE = "generative_video_generation"
 PAPER_GATE_PROFILES = {"probe_paper", "pilot_paper", "full_paper"}
+PAPER_ARTIFACT_REBUILD_PACKAGE_EXECUTION_MODE = "paper_artifact_rebuild_package"
 EXTERNAL_BASELINE_COLAB_PREFLIGHT_DECISION = "artifacts/external_baseline_colab_preflight_decision.json"
 EXTERNAL_BASELINE_COMMAND_TEMPLATE_SUMMARY = "artifacts/external_baseline_command_template_summary.json"
 EXTERNAL_BASELINE_OFFICIAL_BRIDGE_PREFLIGHT_DECISION = "artifacts/external_baseline_official_bridge_preflight_decision.json"
@@ -2046,6 +2047,21 @@ def run_configured_colab_stage_plan(
                 continue
 
             if stage_name == "quick_tests_and_harness":
+                package_execution_mode = str(
+                    options.get("package_execution_mode")
+                    or os.environ.get("SSTW_PACKAGE_EXECUTION_MODE")
+                    or "development_repository"
+                )
+                if package_execution_mode == PAPER_ARTIFACT_REBUILD_PACKAGE_EXECUTION_MODE:
+                    stage_results.append({
+                        "stage_name": stage_name,
+                        "stage_execution_status": "skipped_in_extracted_package",
+                        "stage_execution_kind": "pre_extraction_development_check",
+                        "skip_reason": "development_checks_run_before_package_extraction",
+                        "package_execution_mode": package_execution_mode,
+                    })
+                    stage_progress.update(stage_index, f"stage={stage_name} status=skipped_in_extracted_package")
+                    continue
                 stage_results.append(
                     notebook_timer.run_stage(
                         "quick_tests",

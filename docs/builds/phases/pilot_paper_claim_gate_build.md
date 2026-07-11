@@ -89,9 +89,9 @@ scripts/package_results/generative_video_drive_packager.py
 ```text
 records/pilot_paper_gate_records.jsonl
 tables/pilot_paper_gate_table.csv
-thresholds/pilot_paper_frozen_threshold.json
 artifacts/pilot_paper_gate_decision.json
 reports/pilot_paper_gate_report.md
+records/fair_detection_calibration_records.jsonl
 ```
 
 文件名和 artifact 字段统一使用 `pilot_paper`; artifact 内部必须写出 `paper_result_level = pilot_paper` 和 `paper_protocol_difference_from_full_paper = sample_scale_and_target_fpr_only`。
@@ -138,7 +138,7 @@ heldout_negative_family_count >= 4
 calibration_negative_event_count_per_family_min >= 1250
 heldout_negative_event_count_per_family_min >= 1250
 attack_event_count_per_attack_min >= 50
-frozen_threshold_artifact_computable == true
+formal_frozen_threshold_artifact_ready == true
 heldout_negative_fpr_at_threshold <= 0.01
 tpr_at_fpr_01 is computable
 path_marginal_gain_at_fixed_fpr > 0

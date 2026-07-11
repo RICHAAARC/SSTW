@@ -26,6 +26,7 @@ from main.methods.state_space_watermark.replay_inversion import (
     ReplayUncertainty,
     estimate_replay_uncertainty,
     evaluate_candidate_on_fixed_inversion,
+    replay_step_reliability_weight,
     run_key_independent_inversion_hypothesis,
 )
 from main.methods.state_space_watermark.velocity_field_constraint import (
@@ -198,13 +199,18 @@ def _path_evidence_from_replay(
             continue
         phase = step_index / max(1, len(states) - 2)
         velocity = (states[step_index + 1] - states[step_index]) / delta_sigma
-        records.append(compute_path_step_observation(
+        step_record = compute_path_step_observation(
             states[step_index],
             states[step_index + 1],
             velocity,
             direction,
             flow_phase=phase,
-        ).as_dict())
+        ).as_dict()
+        step_record["replay_reliability_weight"] = replay_step_reliability_weight(
+            trajectory,
+            step_index + 1,
+        )
+        records.append(step_record)
     return aggregate_path_observations(records)
 
 
@@ -237,13 +243,18 @@ def score_replay_trajectory_for_key(
             continue
         velocity = (states[step_index + 1] - states[step_index]) / delta_sigma
         phase = step_index / max(1, len(states) - 2)
-        records.append(compute_path_step_observation(
+        step_record = compute_path_step_observation(
             states[step_index],
             states[step_index + 1],
             velocity,
             direction,
             flow_phase=phase,
-        ).as_dict())
+        ).as_dict()
+        step_record["replay_reliability_weight"] = replay_step_reliability_weight(
+            trajectory,
+            step_index + 1,
+        )
+        records.append(step_record)
     return aggregate_path_observations(records)
 
 

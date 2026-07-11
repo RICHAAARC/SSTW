@@ -227,10 +227,10 @@ manually_selected_best_threshold
 
 ```text
 artifacts/pilot_paper_gate_decision.json
-thresholds/pilot_paper_frozen_threshold.json
 records/pilot_paper_gate_records.jsonl
 tables/pilot_paper_gate_table.csv
 reports/pilot_paper_gate_report.md
+records/fair_detection_calibration_records.jsonl
 ```
 
 `pilot_paper_gate_decision.json` 必须至少包含:
@@ -274,7 +274,7 @@ pilot_paper_heldout_test_split_ready
 calibration_negative_event_count_ready
 heldout_test_negative_event_count_ready
 heldout_attacked_positive_event_count_ready
-frozen_threshold_artifact_computable
+formal_frozen_threshold_artifact_ready
 heldout_fpr_within_target
 tpr_at_fpr_01_computable
 path_marginal_gain_ready

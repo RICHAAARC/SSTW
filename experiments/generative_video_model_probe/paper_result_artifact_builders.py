@@ -175,13 +175,36 @@ def build_video_quality_metric_records(run_root: str | Path, context: Mapping[st
     """从正式视频质量 records 构建论文质量指标汇总 records。"""
 
     run_root = Path(run_root)
-    formal_records = _read_jsonl(run_root / "records" / "formal_quality_motion_semantic_records.jsonl")
+    formal_records = [
+        record
+        for record in _read_jsonl(
+            run_root / "records" / "formal_quality_motion_semantic_records.jsonl"
+        )
+        if record.get("method_variant") == "sstw_full_method"
+    ]
     records: list[dict[str, Any]] = []
     scopes = sorted({str(item.get("motion_claim_role") or "unspecified") for item in formal_records})
     for role in scopes:
         scoped = [item for item in formal_records if str(item.get("motion_claim_role") or "unspecified") == role]
         ready_count = sum(1 for item in scoped if item.get("formal_metric_result_used_for_claim") is True)
-        status = "ready" if ready_count > 0 else "blocked"
+        required_metric_fields = (
+            "mean_brightness",
+            "mean_contrast",
+            "motion_delta_score",
+            "temporal_flicker_score",
+            "semantic_consistency_score",
+        )
+        complete_metric_count = sum(
+            all(item.get(field_name) is not None for field_name in required_metric_fields)
+            for item in scoped
+        )
+        status = (
+            "ready"
+            if scoped
+            and ready_count == len(scoped)
+            and complete_metric_count == len(scoped)
+            else "blocked"
+        )
         claim_status = _claim_status_for_current_profile(context, status)
         records.append(with_flow_evidence_protocol_defaults({
             "record_version": "paper_video_quality_metric_v1",
@@ -191,10 +214,11 @@ def build_video_quality_metric_records(run_root: str | Path, context: Mapping[st
             "quality_metric_source_record_count": len(scoped),
             "formal_metric_ready_count": ready_count,
             "formal_metric_blocked_count": len(scoped) - ready_count,
+            "formal_metric_complete_value_count": complete_metric_count,
             "mean_brightness": _mean_optional(item.get("mean_brightness") for item in scoped),
             "mean_contrast": _mean_optional(item.get("mean_contrast") for item in scoped),
-            "mean_motion_delta": _mean_optional(item.get("motion_delta_mean") for item in scoped),
-            "mean_temporal_flicker": _mean_optional(item.get("temporal_flicker_mean") for item in scoped),
+            "mean_motion_delta": _mean_optional(item.get("motion_delta_score") for item in scoped),
+            "mean_temporal_flicker": _mean_optional(item.get("temporal_flicker_score") for item in scoped),
             "mean_semantic_consistency_score": _mean_optional(item.get("semantic_consistency_score") for item in scoped),
             "video_quality_metric_status": status,
             "metric_status": "measured_formal" if status == "ready" else "missing",
@@ -207,7 +231,7 @@ def audit_video_quality_metric_records(records: list[dict[str, Any]], context: M
     """审计视频质量指标派生产物是否可用于构图。"""
 
     ready_count = sum(1 for item in records if item.get("video_quality_metric_status") == "ready")
-    decision = "PASS" if records and ready_count > 0 else "FAIL"
+    decision = "PASS" if records and ready_count == len(records) else "FAIL"
     return {
         "stage_id": "video_quality_metric_builder",
         "paper_result_level": context["paper_result_level"],

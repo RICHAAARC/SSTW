@@ -30,15 +30,27 @@ from main.methods.state_space_watermark.replay_inversion import (
     REPLAY_GAUSSIAN_LIKELIHOOD_MODEL_ID,
     ReplayTrajectory,
     gaussian_replay_residual_likelihood,
+    replay_step_reliability_weight,
 )
 from main.methods.state_space_watermark.formal_detector import (
-    FORMAL_METHOD_VARIANTS,
     FLOW_STATE_POSTERIOR_SCORE_SOURCE,
+)
+from experiments.generative_video_model_probe.formal_method_variants import (
+    CLAIM2_PATH_NESTED_ABLATION_VARIANT,
+    DETECTOR_ONLY_METHOD_VARIANTS,
+    FORMAL_DETECTOR_VARIANTS,
+    FORMAL_METHOD_VARIANTS,
+    GENERATION_METHOD_VARIANTS,
     apply_frozen_flow_detector,
     fit_flow_evidence_calibration,
 )
 from main.methods.state_space_watermark.flow_state_posterior import (
     FLOW_STATE_POSTERIOR_MODEL_TYPE,
+)
+from main.methods.state_space_watermark.watermark_key_derivation import (
+    WATERMARK_KEY_DERIVATION_ID,
+    derive_watermark_key_text,
+    derive_wrong_key_control_text,
 )
 from main.methods.state_space_watermark.wan_flow_replay_backend import (
     WanFlowReplayResult,
@@ -197,10 +209,55 @@ def _prompt_text_by_id(prompt_suite: Mapping[str, Any]) -> dict[str, str]:
     }
 
 
-def _generation_key(record: Mapping[str, Any]) -> str:
-    """生成与嵌入阶段完全一致的项目水印 key。"""
+def _owner_key_context(record: Mapping[str, Any]) -> tuple[bytes, str]:
+    """读取所有者密钥，并核对 record 中公开的派生算法和 key ID。"""
 
-    return f"{record.get('generation_model_id')}::{record.get('prompt_id')}::{record.get('seed_id')}"
+    authentication_key = (
+        os.environ.get("SSTW_TRAJECTORY_AUTHENTICATION_KEY") or ""
+    ).encode("utf-8")
+    key_id = (os.environ.get("SSTW_TRAJECTORY_AUTHENTICATION_KEY_ID") or "").strip()
+    if len(authentication_key) < 32 or not key_id:
+        raise RuntimeError(
+            "正式检测要求至少32字节的 SSTW 所有者密钥和非空 key ID"
+        )
+    record_derivation_id = str(record.get("watermark_key_derivation_id") or "")
+    if record_derivation_id and record_derivation_id != WATERMARK_KEY_DERIVATION_ID:
+        raise RuntimeError("generation record 的水印 key 派生算法与当前实现不一致")
+    record_key_id = str(record.get("watermark_key_id") or "").strip()
+    if record_key_id and record_key_id != key_id:
+        raise RuntimeError("generation record 的水印 key ID 与检测密钥不一致")
+    return authentication_key, key_id
+
+
+def _generation_key(
+    record: Mapping[str, Any],
+    *,
+    extra_context: Mapping[str, Any] | None = None,
+) -> str:
+    """使用所有者秘密和公开生成上下文复算与嵌入阶段一致的水印 key。"""
+
+    authentication_key, key_id = _owner_key_context(record)
+    return derive_watermark_key_text(
+        authentication_key,
+        key_id=key_id,
+        generation_model_id=str(record.get("generation_model_id") or ""),
+        prompt_id=str(record.get("prompt_id") or ""),
+        seed_id=str(record.get("seed_id") or ""),
+        extra_context=extra_context,
+    )
+
+
+def _wrong_owner_generation_key(record: Mapping[str, Any]) -> str:
+    """使用域分离的错误所有者秘密构造真正独立的 wrong-key 对照。"""
+
+    authentication_key, key_id = _owner_key_context(record)
+    return derive_wrong_key_control_text(
+        authentication_key,
+        key_id=key_id,
+        generation_model_id=str(record.get("generation_model_id") or ""),
+        prompt_id=str(record.get("prompt_id") or ""),
+        seed_id=str(record.get("seed_id") or ""),
+    )
 
 
 def _path_endpoint_consistency(endpoint_projection: float, path_projection: float) -> float:
@@ -212,7 +269,10 @@ def _path_endpoint_consistency(endpoint_projection: float, path_projection: floa
 def _time_grid_reliability(result: WanFlowReplayResult | LTXFlowReplayResult) -> float:
     """根据多时间网格循环误差离散程度计算独立的 time-grid 可靠性。"""
 
-    errors = [float(row.cycle_relative_error) for row in result.replay_trajectories]
+    errors = [
+        float(row.candidate_cycle_relative_error)
+        for row in result.replay_trajectories
+    ]
     dispersion = pstdev(errors) if len(errors) > 1 else 0.0
     return math.exp(-max(0.0, dispersion))
 
@@ -310,21 +370,55 @@ def build_flow_state_observation_sequence(
             active.null_forward_states[step_index + 1],
             states[step_index + 1],
         )
+        local_replay_reliability = replay_step_reliability_weight(
+            active,
+            step_index + 1,
+        )
+        step_replay_reliability = max(
+            0.0,
+            min(1.0, replay_reliability * local_replay_reliability),
+        )
+        unweighted_path_score = float(path.path_projection_normalized)
+        unweighted_path_endpoint_consistency = max(
+            0.0,
+            min(1.0, 1.0 - abs(state_projection - unweighted_path_score)),
+        )
         observations.append({
             "flow_state_observation_step_index": step_index,
             "flow_phase": round(phase, 8),
             "endpoint_score": round(endpoint_score, 8),
             "velocity_score": round(path.velocity_projection_normalized, 8),
-            "path_score": round(path.path_projection_normalized, 8),
+            "path_score": round(
+                unweighted_path_score * step_replay_reliability,
+                8,
+            ),
+            "path_score_unweighted": round(unweighted_path_score, 8),
             "path_endpoint_consistency": round(
-                max(0.0, min(1.0, 1.0 - abs(state_projection - path.path_projection_normalized))),
+                unweighted_path_endpoint_consistency * step_replay_reliability,
+                8,
+            ),
+            "path_endpoint_consistency_unweighted": round(
+                unweighted_path_endpoint_consistency,
                 8,
             ),
             "replay_log_likelihood_ratio": round(
                 likelihood.log_likelihood_ratio_per_dimension,
                 8,
             ),
-            "replay_reliability": round(replay_reliability, 8),
+            "replay_reliability": round(step_replay_reliability, 8),
+            "replay_reliability_weight": round(step_replay_reliability, 8),
+            "replay_step_reliability_weight": round(
+                step_replay_reliability,
+                8,
+            ),
+            "replay_step_likelihood_reliability": round(
+                local_replay_reliability,
+                8,
+            ),
+            "replay_global_reliability": round(replay_reliability, 8),
+            "path_replay_uncertainty_weighting_status": (
+                "global_multigrid_and_step_likelihood_weight_applied"
+            ),
             "time_grid_reliability": round(grid_reliability, 8),
             "coverage_ratio": round(coverage, 8),
             "path_velocity_consistency": round(path.path_velocity_consistency, 8),
@@ -387,10 +481,11 @@ def _control_payload(
     prompt: str,
     wrong_prompt: str,
     key_text: str,
+    wrong_key_text: str,
 ) -> dict[str, Any]:
     """执行 wrong key、wrong prompt 与 wrong sampler/time-grid 真实对照。"""
 
-    wrong_key = f"{key_text}::wrong_key_control"
+    wrong_key = wrong_key_text
     wrong_key_endpoint = _compute_replay_endpoint_evidence_for_key(replay, key_text=wrong_key)
 
     primary_steps = int(replay.replay_step_counts[replay.primary_replay_index])
@@ -494,7 +589,10 @@ def _control_payload(
     return {
         "wrong_key_endpoint_score": round(wrong_key_endpoint.score, 8),
         "wrong_key_S_path_inv": wrong_key_path.get("S_path_inv"),
-        "wrong_key_replay_cycle_error": round(wrong_key_trajectory.cycle_relative_error, 8),
+        "wrong_key_replay_cycle_error": round(
+            wrong_key_trajectory.candidate_cycle_relative_error,
+            8,
+        ),
         "wrong_key_replay_log_likelihood_ratio": round(
             wrong_key_trajectory.replay_log_likelihood_ratio,
             8,
@@ -504,7 +602,10 @@ def _control_payload(
             - (wrong_key_endpoint.score + wrong_key_path_reliability_score),
             8,
         ),
-        "wrong_prompt_replay_cycle_error": round(wrong_prompt_trajectory.cycle_relative_error, 8),
+        "wrong_prompt_replay_cycle_error": round(
+            wrong_prompt_trajectory.candidate_cycle_relative_error,
+            8,
+        ),
         "wrong_prompt_replay_log_likelihood_ratio": round(
             wrong_prompt_trajectory.replay_log_likelihood_ratio,
             8,
@@ -514,7 +615,10 @@ def _control_payload(
             matched_path_reliability_score - wrong_prompt_path_reliability_score,
             8,
         ),
-        "wrong_sampler_replay_cycle_error": round(wrong_sampler_trajectory.cycle_relative_error, 8),
+        "wrong_sampler_replay_cycle_error": round(
+            wrong_sampler_trajectory.candidate_cycle_relative_error,
+            8,
+        ),
         "wrong_sampler_replay_log_likelihood_ratio": round(
             wrong_sampler_trajectory.replay_log_likelihood_ratio,
             8,
@@ -545,6 +649,8 @@ def _controlled_negative_records_from_positive(
         "cross_model_role",
         "prompt_id",
         "seed_id",
+        "watermark_key_derivation_id",
+        "watermark_key_id",
         "generation_seed_random",
         "generation_generator_state_digest_random",
         "velocity_causal_pair_id",
@@ -664,6 +770,10 @@ def _base_record(source: Mapping[str, Any], *, sample_role: str, method_variant:
         "cross_model_role": source.get("cross_model_role"),
         "prompt_id": source.get("prompt_id"),
         "seed_id": source.get("seed_id"),
+        "watermark_key_derivation_id": source.get(
+            "watermark_key_derivation_id"
+        ),
+        "watermark_key_id": source.get("watermark_key_id"),
         "split": source.get("split"),
     })
     return {
@@ -712,7 +822,44 @@ def _score_records_with_frozen_calibration(
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]], dict[str, Any]]:
     """按 method variant 冻结 calibration negative 后评分全部 records。"""
 
-    rows = [dict(record) for record in evidence_records]
+    source_rows = [dict(record) for record in evidence_records]
+    unexpected_source_variants = sorted({
+        str(record.get("method_variant"))
+        for record in source_rows
+        if str(record.get("method_variant")) not in GENERATION_METHOD_VARIANTS
+    })
+    if unexpected_source_variants:
+        raise ValueError(
+            "正式 Flow replay 输入只能包含真实生成机制变体; 检测器专用消融必须"
+            "由 full-method 同视频证据派生: "
+            + ", ".join(unexpected_source_variants)
+        )
+    rows: list[dict[str, Any]] = []
+    for source in source_rows:
+        rows.append(source)
+        if source.get("method_variant") != "sstw_full_method":
+            continue
+        for detector_variant in DETECTOR_ONLY_METHOD_VARIANTS:
+            derived = dict(source)
+            derived.update({
+                "method_variant": detector_variant,
+                "detector_only_ablation": True,
+                "detector_only_source_method_variant": "sstw_full_method",
+                "formal_flow_evidence_unit_id": build_stable_digest({
+                    "source_formal_flow_evidence_unit_id": source.get(
+                        "formal_flow_evidence_unit_id"
+                    ),
+                    "detector_only_method_variant": detector_variant,
+                }),
+            })
+            rows.append(derived)
+    governed_unit_ids = [
+        str(record["formal_flow_evidence_unit_id"])
+        for record in rows
+        if record.get("formal_flow_evidence_unit_id")
+    ]
+    if len(governed_unit_ids) != len(set(governed_unit_ids)):
+        raise RuntimeError("检测器专用消融展开后出现重复 formal_flow_evidence_unit_id")
     calibration_rows: dict[tuple[str, str], list[dict[str, Any]]] = defaultdict(list)
     for record in rows:
         if record.get("split") == "calibration":
@@ -720,14 +867,28 @@ def _score_records_with_frozen_calibration(
                 str(record.get("generation_model_id")),
                 str(record.get("method_variant")),
             )].append(record)
+    calibration_source_variant = {
+        variant: (
+            "sstw_full_method"
+            if variant in {
+                CLAIM2_PATH_NESTED_ABLATION_VARIANT,
+                *DETECTOR_ONLY_METHOD_VARIANTS,
+            }
+            else variant
+        )
+        for variant in FORMAL_DETECTOR_VARIANTS
+    }
     calibrations = {
         (model_id, variant): fit_flow_evidence_calibration(
-            calibration_rows.get((model_id, variant), []),
+            calibration_rows.get(
+                (model_id, calibration_source_variant[variant]),
+                [],
+            ),
             method_variant=variant,
             target_fpr=target_fpr,
         )
         for model_id in sorted({str(record.get("generation_model_id")) for record in rows})
-        for variant in FORMAL_METHOD_VARIANTS
+        for variant in FORMAL_DETECTOR_VARIANTS
     }
     cross_model_role_by_model = {
         model_id: next(
@@ -773,9 +934,18 @@ def _score_records_with_frozen_calibration(
             "generation_model_id": model_id,
             "cross_model_role": cross_model_role_by_model.get(model_id),
             "model_specific_calibration": True,
+            "method_variant": variant,
+            "calibration_source_method_variant": calibration_source_variant[variant],
+            "detector_only_nested_ablation": (
+                variant
+                in {
+                    CLAIM2_PATH_NESTED_ABLATION_VARIANT,
+                    *DETECTOR_ONLY_METHOD_VARIANTS,
+                }
+            ),
             **calibration.as_dict(),
         }
-        for (model_id, _variant), calibration in calibrations.items()
+        for (model_id, variant), calibration in calibrations.items()
     ]
     return scored, threshold_records, calibrations
 
@@ -784,7 +954,12 @@ def _paired_path_gain_records(
     scored_records: Iterable[Mapping[str, Any]],
     calibrations: Mapping[tuple[str, str], Any],
 ) -> list[dict[str, Any]]:
-    """在同一 full-method 视频证据上配对比较 full 与 endpoint-only 检测器。"""
+    """在同一 full-method 视频上比较完整检测器与仅移除路径证据的检测器。
+
+    两个检测器消费相同视频、replay 轨迹、速度证据、endpoint 证据和状态空间
+    机制。唯一干预是把 path score 与 path-endpoint consistency 置零, 因而该
+    配对差可以识别 Claim-2 的路径证据边际增益。
+    """
 
     rows: list[dict[str, Any]] = []
     for record in scored_records:
@@ -794,14 +969,19 @@ def _paired_path_gain_records(
             or record.get("split") != "test"
         ):
             continue
-        endpoint_only = apply_frozen_flow_detector(
+        without_path = apply_frozen_flow_detector(
             record,
-            calibrations[(str(record.get("generation_model_id")), "endpoint_only_control")],
+            calibrations[
+                (
+                    str(record.get("generation_model_id")),
+                    CLAIM2_PATH_NESTED_ABLATION_VARIANT,
+                )
+            ],
         )
         full_score = float(record["S_final_conservative"])
-        endpoint_score = float(endpoint_only["S_final_conservative"])
+        without_path_score = float(without_path["S_final_conservative"])
         rows.append({
-            "record_version": "paired_path_evidence_gain_v1",
+            "record_version": "paired_path_evidence_gain_v2",
             "generation_model_id": record.get("generation_model_id"),
             "cross_model_role": record.get("cross_model_role"),
             "prompt_id": record.get("prompt_id"),
@@ -811,14 +991,45 @@ def _paired_path_gain_records(
             "statistical_cluster_id": record.get("statistical_cluster_id"),
             "target_fpr": record.get("target_fpr"),
             "paired_source_method_variant": "sstw_full_method",
+            "paired_path_ablation_method_variant": (
+                CLAIM2_PATH_NESTED_ABLATION_VARIANT
+            ),
+            "paired_path_nested_ablation_status": (
+                "same_video_same_replay_only_path_features_removed"
+            ),
+            "paired_detector_threshold_source_split": "calibration",
+            "paired_test_time_threshold_update_blocked": True,
+            "paired_full_detector_target_fpr": record.get("target_fpr"),
+            "paired_without_path_evidence_detector_target_fpr": without_path.get(
+                "target_fpr"
+            ),
+            "paired_fpr_alignment_status": (
+                "same_preregistered_target_fpr"
+                if abs(
+                    float(record.get("target_fpr") or -1.0)
+                    - float(without_path.get("target_fpr") or -2.0)
+                )
+                <= 1e-12
+                else "target_fpr_mismatch"
+            ),
             "paired_full_detector_score": full_score,
-            "paired_endpoint_only_detector_score": endpoint_score,
-            "paired_path_evidence_score_gain": round(full_score - endpoint_score, 8),
+            "paired_without_path_evidence_detector_score": without_path_score,
+            "paired_path_evidence_score_gain": round(
+                full_score - without_path_score,
+                8,
+            ),
             "paired_full_detector_decision": bool(record.get("decision")),
-            "paired_endpoint_only_detector_decision": bool(endpoint_only.get("decision")),
-            "paired_path_evidence_detection_gain": int(bool(record.get("decision"))) - int(bool(endpoint_only.get("decision"))),
+            "paired_without_path_evidence_detector_decision": bool(
+                without_path.get("decision")
+            ),
+            "paired_path_evidence_detection_gain": (
+                int(bool(record.get("decision")))
+                - int(bool(without_path.get("decision")))
+            ),
             "metric_status": "measured_formal",
-            "claim_support_status": "claim2_same_video_paired_fixed_fpr_evidence",
+            "claim_support_status": (
+                "claim2_same_video_nested_path_ablation_fixed_fpr_evidence"
+            ),
         })
     return rows
 
@@ -978,6 +1189,22 @@ def _audit_three_layer_mechanism(
         for record in paired_path_records
         if record.get("cross_model_role") != "cross_model_validation_model"
     ]
+    path_pairing_failures = [
+        record
+        for record in paired
+        if (
+            record.get("paired_path_ablation_method_variant")
+            != CLAIM2_PATH_NESTED_ABLATION_VARIANT
+            or record.get("paired_path_nested_ablation_status")
+            != "same_video_same_replay_only_path_features_removed"
+            or record.get("paired_detector_threshold_source_split") != "calibration"
+            or record.get("paired_test_time_threshold_update_blocked") is not True
+            or record.get("paired_fpr_alignment_status")
+            != "same_preregistered_target_fpr"
+            or abs(float(record.get("target_fpr") or -1.0) - float(target_fpr))
+            > 1e-12
+        )
+    ]
     path_score_gain = paired_cluster_difference_interval(
         paired,
         difference_field="paired_path_evidence_score_gain",
@@ -1025,6 +1252,8 @@ def _audit_three_layer_mechanism(
     )
     claim2_pass = (
         bool(paired)
+        and len(paired) == len(full_positive)
+        and not path_pairing_failures
         and path_score_gain.confidence_interval_lower > 0.0
         and path_detection_gain.confidence_interval_lower > 0.0
     )
@@ -1059,6 +1288,18 @@ def _audit_three_layer_mechanism(
         "claim_1_velocity_causal_detection_gain_ci_95_upper": round(velocity_detection_gain.confidence_interval_upper, 8),
         "claim_2_path_evidence_independent_gain_decision": "PASS" if claim2_pass else "FAIL",
         "claim_2_paired_comparison_count": len(paired),
+        "claim_2_expected_paired_comparison_count": len(full_positive),
+        "claim_2_pairing_failure_count": len(path_pairing_failures),
+        "claim_2_paired_comparison_coverage": round(
+            len(paired) / max(1, len(full_positive)),
+            8,
+        ),
+        "claim_2_nested_ablation_method_variant": (
+            CLAIM2_PATH_NESTED_ABLATION_VARIANT
+        ),
+        "claim_2_causal_comparison_protocol": (
+            "same_video_same_replay_only_path_features_removed_with_frozen_calibration"
+        ),
         "claim_2_paired_score_gain_mean": round(path_score_gain.estimate, 8),
         "claim_2_paired_score_gain_ci_95_lower": round(path_score_gain.confidence_interval_lower, 8),
         "claim_2_paired_score_gain_ci_95_upper": round(path_score_gain.confidence_interval_upper, 8),
@@ -1209,6 +1450,28 @@ def _state_space_posterior_mechanism_failures(
             "posterior_model_type": (
                 record.get("posterior_model_type") == FLOW_STATE_POSTERIOR_MODEL_TYPE
             ),
+            "nested_group_probability_calibration": (
+                record.get("posterior_probability_calibration_protocol")
+                == "nested_source_video_group_cross_fitted_state_space_llr_and_platt"
+                and int(
+                    record.get(
+                        "posterior_probability_calibration_outer_fold_count"
+                    )
+                    or 0
+                )
+                >= 2
+                and int(
+                    record.get(
+                        "posterior_probability_calibration_inner_fold_minimum"
+                    )
+                    or 0
+                )
+                >= 2
+            ),
+            "group_heldout_fixed_fpr_threshold_scores": (
+                record.get("fixed_fpr_threshold_score_source")
+                == "outer_group_heldout_nested_cross_fitted_conservative_scores"
+            ),
             "negative_state_model_reconstructable": isinstance(negative_model, Mapping),
             "positive_state_model_reconstructable": isinstance(positive_model, Mapping),
             "negative_state_transitions_fitted": (
@@ -1334,7 +1597,7 @@ def run_formal_flow_evidence(
 
     for source in ready_attacks:
         method_variant = str(source.get("method_variant") or "sstw_full_method")
-        if method_variant not in FORMAL_METHOD_VARIANTS:
+        if method_variant not in GENERATION_METHOD_VARIANTS:
             continue
         try:
             prompt = prompt_map[str(source.get("prompt_id"))]
@@ -1355,6 +1618,7 @@ def run_formal_flow_evidence(
                     prompt=prompt,
                     wrong_prompt=wrong_prompt,
                     key_text=key_text,
+                    wrong_key_text=_wrong_owner_generation_key(source),
                 )
                 if method_variant == "sstw_full_method"
                 else {
@@ -1413,11 +1677,24 @@ def run_formal_flow_evidence(
                     pipeline,
                     video_path,
                     prompt=prompt,
-                    key_text=f"{_generation_key(source)}::clean_replay_base",
+                    key_text=_generation_key(
+                        source,
+                        extra_context={"negative_role": "clean_replay_base"},
+                    ),
                 )
-                for method_variant in FORMAL_METHOD_VARIANTS:
+                # 这里只为真实生成机制变体构造独立 candidate-key 负假设。
+                # 检测器专用消融必须在评分阶段复用 full-method 的同一 replay、
+                # 同一 candidate key 和同一统计簇, 否则会引入伪重复与随机性混杂。
+                for method_variant in GENERATION_METHOD_VARIANTS:
                     for trial_index in range(trial_count):
-                        trial_key = f"{_generation_key(source)}::clean_negative::{method_variant}::{trial_index:06d}"
+                        trial_key = _generation_key(
+                            source,
+                            extra_context={
+                                "negative_role": "clean_negative_candidate_key",
+                                "method_variant": method_variant,
+                                "trial_index": trial_index,
+                            },
+                        )
                         endpoint = _compute_replay_endpoint_evidence_for_key(
                             base_replay,
                             key_text=trial_key,
@@ -1559,6 +1836,21 @@ def run_formal_flow_evidence(
         and record.get("replay_control_execution_status") == "measured_formal"
         and record.get("replay_control_fixed_reverse_path_reused") is True
     ]
+    watermark_key_derivation_failures = [
+        {
+            "formal_flow_evidence_unit_id": record.get(
+                "formal_flow_evidence_unit_id"
+            ),
+            "watermark_key_derivation_id": record.get(
+                "watermark_key_derivation_id"
+            ),
+            "watermark_key_id": record.get("watermark_key_id"),
+        }
+        for record in positive_records
+        if record.get("watermark_key_derivation_id")
+        != WATERMARK_KEY_DERIVATION_ID
+        or not str(record.get("watermark_key_id") or "").strip()
+    ]
     posterior_calibration_failures = [
         {
             "method_variant": record.get("method_variant"),
@@ -1610,6 +1902,7 @@ def run_formal_flow_evidence(
         and not failure_records
         and required_variants.issubset(observed_variants)
         and bool(claim3_records)
+        and not watermark_key_derivation_failures
         and not posterior_calibration_failures
         and not state_space_posterior_mechanism_failures
         and negative_family_mechanism_pass
@@ -1639,6 +1932,10 @@ def run_formal_flow_evidence(
         "formal_flow_missing_method_variants": sorted(required_variants - observed_variants),
         "formal_flow_threshold_record_count": len(threshold_records),
         "claim3_real_replay_record_count": len(claim3_records),
+        "watermark_key_derivation_decision": (
+            "PASS" if not watermark_key_derivation_failures else "FAIL"
+        ),
+        "watermark_key_derivation_failures": watermark_key_derivation_failures,
         "posterior_probability_calibration_decision": (
             "PASS" if not posterior_calibration_failures else "FAIL"
         ),

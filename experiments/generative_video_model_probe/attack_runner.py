@@ -175,6 +175,10 @@ def build_runtime_attack_records(
                 "cross_model_role": generation_record.get("cross_model_role"),
                 "prompt_id": generation_record.get("prompt_id"),
                 "seed_id": generation_record.get("seed_id"),
+                "watermark_key_derivation_id": generation_record.get(
+                    "watermark_key_derivation_id"
+                ),
+                "watermark_key_id": generation_record.get("watermark_key_id"),
                 "generation_seed_random": generation_record.get("generation_seed_random"),
                 "generation_generator_state_digest_random": generation_record.get(
                     "generation_generator_state_digest_random"
@@ -310,6 +314,10 @@ def build_cross_sample_adaptive_video_records(run_root: str | Path) -> list[dict
                 "generation_model_id": source.get("generation_model_id"),
                 "prompt_id": source.get("prompt_id"),
                 "seed_id": source.get("seed_id"),
+                "watermark_key_derivation_id": source.get(
+                    "watermark_key_derivation_id"
+                ),
+                "watermark_key_id": source.get("watermark_key_id"),
                 "trajectory_trace_id": source.get("trajectory_trace_id"),
                 "split": source.get("split"),
                 "colab_runtime_profile": source.get("colab_runtime_profile"),

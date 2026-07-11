@@ -36,6 +36,12 @@ INTERNAL_ABLATION_VARIANTS = (
     "without_flow_state_admissibility",
     "generic_ssm_baseline",
 )
+GENERATION_ABLATION_VARIANTS = {
+    "sstw_full_method",
+    "endpoint_only_control",
+    "without_velocity_constraint",
+    "without_endpoint_aware_control",
+}
 
 
 def _paper_profile_gate_pass_payload() -> dict:
@@ -150,6 +156,20 @@ def _write_pilot_paper_fair_comparison_fixture(
             "fair_comparison_status": "ready" if not is_blocked else "blocked",
             "target_fpr": target_fpr,
             "paper_result_level": "pilot_paper",
+            "fair_detection_calibration_record_id": f"fair_{method_id}",
+            "threshold_protocol": "calibration_split_to_frozen_threshold_to_heldout_test_split",
+            "threshold_source_split": "calibration",
+            "test_time_threshold_update_blocked": True,
+            "calibrated_threshold": 0.5 if not is_blocked else None,
+            "calibration_fpr_at_calibrated_threshold": 0.0 if not is_blocked else None,
+            "heldout_fpr_at_calibrated_threshold": 0.0 if not is_blocked else None,
+            "calibration_clean_negative_score_count": 100 if not is_blocked else 0,
+            "negative_detection_units_at_target_fpr": [
+                {
+                    "statistical_cluster_id": "negative_0",
+                    "false_positive_at_target_fpr": False,
+                }
+            ] if not is_blocked else [],
             "clean_negative_score_count": 5000 if not is_blocked else 0,
             "attacked_positive_score_count": len(anchor_units) if not is_blocked else 0,
             "positive_anchor_count": len(anchor_units) if not is_blocked else 0,
@@ -195,8 +215,8 @@ def _write_pilot_paper_fair_comparison_fixture(
             "metric_status": "measured_formal" if not is_blocked else "missing",
             "target_fpr": target_fpr,
             "reference_tpr_at_target_fpr": 1.0,
-            "baseline_tpr_at_target_fpr": 1.0 if not is_blocked else None,
-            "tpr_at_target_fpr_difference": 0.0 if not is_blocked else None,
+            "baseline_tpr_at_target_fpr": 0.9 if not is_blocked else None,
+            "tpr_at_target_fpr_difference": 0.1 if not is_blocked else None,
             "paired_comparison_unit_count": len(anchor_units) if not is_blocked else 0,
             "unpaired_reference_anchor_count": 0 if not is_blocked else len(anchor_units),
             "unpaired_baseline_anchor_count": 0,
@@ -205,8 +225,8 @@ def _write_pilot_paper_fair_comparison_fixture(
             else "anchor_set_mismatch_with_sstw",
             "difference_interval_status": "ready" if not is_blocked else "missing_or_unaligned_paired_anchors",
             "difference_ci_confidence_level": 0.95,
-            "difference_ci_lower": 0.0 if not is_blocked else None,
-            "difference_ci_upper": 0.0 if not is_blocked else None,
+            "difference_ci_lower": 0.01 if not is_blocked else None,
+            "difference_ci_upper": 0.2 if not is_blocked else None,
             "claim_support_status": "formal_baseline_difference_interval_pilot_paper_ready"
             if not is_blocked
             else "formal_baseline_difference_interval_blocked",
@@ -299,20 +319,31 @@ def _seed_pilot_paper_run(
                 "split": split_name,
                 "trajectory_trace_id": trace_id,
             }
-            generation_records.append({
-                **base,
-                "generation_status": "success",
-                "colab_runtime_profile": profile,
-                "motion_claim_role": "positive_motion",
-            })
-            formal_records.append({
-                **base,
-                "formal_visual_quality_ready": True,
-                "formal_motion_consistency_ready": True,
-                "formal_semantic_consistency_ready": True,
-                "formal_metric_result_used_for_claim": True,
-                "motion_claim_role": "positive_motion",
-            })
+            for generation_variant in sorted(GENERATION_ABLATION_VARIANTS):
+                generation_trace_id = (
+                    trace_id
+                    if generation_variant == "sstw_full_method"
+                    else f"{trace_id}__{generation_variant}"
+                )
+                generation_variant_base = {
+                    **base,
+                    "trajectory_trace_id": generation_trace_id,
+                    "method_variant": generation_variant,
+                }
+                generation_records.append({
+                    **generation_variant_base,
+                    "generation_status": "success",
+                    "colab_runtime_profile": profile,
+                    "motion_claim_role": "positive_motion",
+                })
+                formal_records.append({
+                    **generation_variant_base,
+                    "formal_visual_quality_ready": True,
+                    "formal_motion_consistency_ready": True,
+                    "formal_semantic_consistency_ready": True,
+                    "formal_metric_result_used_for_claim": True,
+                    "motion_claim_role": "positive_motion",
+                })
             for attack_name in ATTACKS:
                 runtime_detection_records.append({
                     **base,
@@ -403,11 +434,28 @@ def _seed_pilot_paper_run(
                             })
                         external_baseline_records.append(external_baseline_record)
                     for method_variant in INTERNAL_ABLATION_VARIANTS:
+                        detector_only = method_variant not in GENERATION_ABLATION_VARIANTS
+                        variant_trace_id = (
+                            trace_id
+                            if detector_only or method_variant == "sstw_full_method"
+                            else f"{trace_id}__{method_variant}"
+                        )
                         internal_ablation_records.append({
                             **base,
+                            "trajectory_trace_id": variant_trace_id,
                             "attack_name": attack_name,
                             "method_variant": method_variant,
                             "ablation_runtime_profile": profile,
+                            "ablation_video_execution_mode": (
+                                "detector_only_reuse_full_method_video"
+                                if detector_only
+                                else "independent_generation_variant_video"
+                            ),
+                            "ablation_source_method_variant": (
+                                "sstw_full_method" if detector_only else method_variant
+                            ),
+                            "ablation_source_trajectory_trace_id": variant_trace_id,
+                            "ablation_independent_video_generation_required": not detector_only,
                             "metric_status": "measured_formal",
                             "formal_internal_ablation_evidence_level": "formal_component_removal_video_detector",
                             "formal_internal_ablation_score": 0.80 if method_variant == "sstw_full_method" else 0.62,
@@ -454,6 +502,8 @@ def _seed_pilot_paper_run(
             "validation_internal_ablation_variant_count": len(INTERNAL_ABLATION_VARIANTS),
             "validation_internal_ablation_score_margin": 0.18,
             "validation_internal_ablation_evidence_level": "formal_component_removal_video_detector",
+            "detector_only_video_reuse_decision": "PASS",
+            "generation_variant_independent_video_decision": "PASS",
             "claim_support_status": "formal_internal_ablation_variant_matrix_ready",
         })
     write_json(run_root / "artifacts" / "motion_threshold_calibration_decision.json", {

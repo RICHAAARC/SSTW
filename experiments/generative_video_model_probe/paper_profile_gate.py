@@ -267,6 +267,8 @@ def _internal_ablation_ready(run_root: Path) -> tuple[bool, int, str]:
     decision_ready = (
         _decision_pass(decision, "validation_internal_ablation_decision", "internal_ablation_decision")
         and decision.get("validation_internal_ablation_evidence_level") == "formal_component_removal_video_detector"
+        and decision.get("detector_only_video_reuse_decision") == "PASS"
+        and decision.get("generation_variant_independent_video_decision") == "PASS"
     )
     return (
         bool(records) and len(formal_records) == len(records) and decision_ready,

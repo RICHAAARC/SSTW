@@ -1353,9 +1353,9 @@ Notebook 与 repository module 的跨边界数据
 | probe_paper_sstw_advantage_missing_baseline_names | governance | none | true | false | false | 共享 paper profile/probe gate 中尚未满足 SSTW 优势证据标准的现代 baseline 名称集合。 |
 | probe_paper_sstw_advantage_blocking_reasons | governance | none | true | false | false | 共享 paper profile/probe gate 阻断 SSTW target_fpr=0.1 完整优势主张的原因列表。 |
 | probe_paper_sstw_advantage_claim_status | claim | none | true | true | false | 共享 paper profile/probe gate 对 SSTW target_fpr=0.1 完整优势主张的 claim 支撑状态; 当前只有 probe_paper 可以把它升级为论文闭合证据。 |
-| minimum_sstw_advantage_baseline_count | protocol | none | true | false | false | probe_paper gate 要求 SSTW 优势证据覆盖的现代 baseline 最小数量。 |
-| minimum_sstw_tpr_at_target_fpr_difference | protocol | none | true | false | false | probe_paper gate 要求 SSTW 相对 baseline 的 TPR@target FPR 差值下限。 |
-| require_sstw_advantage_ci_lower_above_zero | protocol | none | true | false | false | probe_paper gate 是否要求 SSTW 相对 baseline 的差值置信区间下界大于0。 |
+| minimum_sstw_advantage_baseline_count | protocol | none | true | false | false | 三个正式 profile 共同要求 SSTW 优势证据覆盖的现代 baseline 最小数量。 |
+| minimum_sstw_tpr_at_target_fpr_difference | protocol | none | true | false | false | 三个正式 profile 共同要求 SSTW 相对 baseline 的 TPR@target FPR 差值下限。 |
+| require_sstw_advantage_ci_lower_above_zero | protocol | none | true | false | false | 三个正式 profile 是否要求 SSTW 相对 baseline 的差值置信区间下界大于0。 |
 | probe_paper_transition_claim_support_status | governance | none | true | false | false | 历史兼容字段: pilot_paper gate 读取到的 probe_paper -> pilot_paper 旧跳转 claim_support_status; 当前主链改用 probe_paper_transition_* 字段。 |
 | probe_paper_transition_source_gate_passed | governance | none | true | false | false | 历史兼容字段: probe_paper -> pilot_paper 旧跳转记录中的 source gate 是否已通过。 |
 | probe_paper_transition_missing_requirements | governance | none | true | false | false | 历史兼容字段: probe_paper -> pilot_paper 旧跳转记录中的原始缺失要求列表。 |
@@ -1662,8 +1662,8 @@ Notebook 与 repository module 的跨边界数据
 | frozen_final_score_threshold | metric | none | true | false | false | 完整论文机制中 `frozen_final_score_threshold` 的受治理记录字段。 |
 | generation_nonce_random | metric | _random | true | false | false | 生成时为防止 trajectory sketch 重放而产生的随机 nonce。 |
 | model_signature | protocol | none | true | false | false | 完整论文机制中 `model_signature` 的受治理记录字段。 |
-| paired_endpoint_only_detector_decision | governance | none | true | false | false | 完整论文机制中 `paired_endpoint_only_detector_decision` 的受治理记录字段。 |
-| paired_endpoint_only_detector_score | metric | none | true | false | false | 完整论文机制中 `paired_endpoint_only_detector_score` 的受治理记录字段。 |
+| paired_endpoint_only_detector_decision | governance | none | true | false | false | 历史 Claim-2 原型字段, 正式机制不再使用; endpoint-only 仍仅作为生成级说明性对照。 |
+| paired_endpoint_only_detector_score | metric | none | true | false | false | 历史 Claim-2 原型字段, 不得支持路径独立增益主张。 |
 | paired_full_detector_decision | governance | none | true | false | false | 完整论文机制中 `paired_full_detector_decision` 的受治理记录字段。 |
 | paired_full_detector_score | metric | none | true | false | false | 完整论文机制中 `paired_full_detector_score` 的受治理记录字段。 |
 | paired_path_evidence_detection_gain | metric | none | true | true | false | 完整论文机制中 `paired_path_evidence_detection_gain` 的受治理记录字段。 |
@@ -1957,7 +1957,7 @@ Notebook 与 repository module 的跨边界数据
 | cross_model_test_fpr | generalization | none | true | false | true | 跨模型模型专属冻结阈值下的 test FPR 点估计。 |
 | cross_model_test_fpr_ci_95_upper | generalization | none | true | false | true | 跨模型 test FPR 的95%置信上界, 用于披露小样本不确定性。 |
 | cross_model_path_pair_count | generalization | none | true | false | true | 跨模型 Claim-2 同视频路径增益配对数量。 |
-| cross_model_path_score_gain_mean | generalization | none | true | false | true | 跨模型路径证据相对 endpoint-only 的平均分数增益。 |
+| cross_model_path_score_gain_mean | generalization | none | true | false | true | 跨模型完整检测器相对仅移除路径证据嵌套消融的平均分数增益。 |
 | cross_model_velocity_pair_count | generalization | none | true | false | true | 跨模型 Claim-1 速度约束因果配对数量。 |
 | cross_model_velocity_score_gain_mean | generalization | none | true | false | true | 跨模型完整方法相对无速度约束的平均分数增益。 |
 | cross_model_replay_control_record_count | generalization | none | true | false | true | 跨模型真实 replay control 记录数。 |
@@ -2071,3 +2071,116 @@ Notebook 与 repository module 的跨边界数据
 | formal_adaptive_attack_expected_query_record_count | metric | none | true | true | false | 按各协议实际查询数与 public negative 探测数计算的预期查询日志总数。 |
 | adaptive_attack_donor_statistical_cluster_id | provenance | none | true | true | false | copy/spoof 攻击中提供水印内容的 donor 视频独立簇标识。 |
 | adaptive_attack_member_statistical_cluster_ids | provenance | none | true | true | false | collusion 不重叠视频对包含的两个 source-video cluster 标识。 |
+| attack_parameters | method | none | true | true | false | 单次 adaptive detector 查询实际使用的连续攻击参数。 |
+| adaptive_attack_selected_parameters | method | none | true | true | false | 冻结检测器目标下最终选中候选的攻击参数。 |
+| adaptive_attack_optimizer_type | method | none | true | true | false | 逐视频 adaptive attack 使用的序贯黑盒优化算法。 |
+| adaptive_attack_public_negative_informed_strength | metric | none | true | true | false | calibration public negative 查询确定的 held-out 初始攻击强度。 |
+| model_vae_regeneration_status | governance | none | true | true | false | 候选是否完成模型 VAE encode-perturb-decode 重生成。 |
+| model_vae_class | provenance | none | true | true | false | 执行生成式重压缩的官方 VAE 类名。 |
+| model_vae_latent_noise_ratio | method | none | true | true | false | 相对 latent 标准差的重生成噪声强度。 |
+| model_vae_random_seed_random | random | _random | true | false | false | 模型 VAE 重生成噪声使用的可复现随机种子。 |
+| model_vae_source_frame_count | metric | none | true | true | false | VAE encode 输入的真实视频帧数。 |
+| model_vae_output_frame_count | metric | none | true | true | false | VAE decode 后写入候选视频的帧数。 |
+| formal_metric_complete_value_count | metric | none | true | true | false | 当前质量 scope 中同时具备全部必需实测指标的记录数。 |
+| paired_video_quality_status | governance | none | true | true | false | 同模型、prompt、seed 的 clean-reference 配对质量计算状态。 |
+| paired_video_quality_failure_reason | governance | none | true | false | false | 配对质量指标不可用时的明确原因。 |
+| paired_quality_frame_count | metric | none | true | true | false | 配对 PSNR、SSIM 与时间差分实际使用的公共帧数。 |
+| paired_watermark_psnr | metric | none | true | true | false | watermarked 视频相对同源 clean reference 的配对 PSNR。 |
+| paired_watermark_ssim | metric | none | true | true | false | watermarked 视频相对同源 clean reference 的配对 SSIM。 |
+| paired_temporal_delta_error | metric | none | true | true | false | watermarked 与 clean 视频相邻帧差分之间的归一化平均绝对误差。 |
+| paired_video_quality_required | governance | none | true | true | false | 当前记录是否属于必须计算配对失真的 SSTW 完整方法视频。 |
+| paired_reference_video_path | provenance | none | true | false | false | 与当前 watermarked 视频共享模型、prompt 和 seed 的 clean reference 路径。 |
+| formal_paired_video_quality_ready | governance | none | true | true | false | 当前记录或整体质量门禁是否具备所需配对质量指标。 |
+| formal_paired_video_quality_required_count | metric | none | true | true | false | 正式质量门禁要求配对指标的 SSTW 完整方法视频数量。 |
+| formal_paired_video_quality_ready_count | metric | none | true | true | false | 已成功获得配对质量指标的 SSTW 完整方法视频数量。 |
+| detector_configuration_id | provenance | none | true | false | false | 外层实验为参数化核心检测器分配的配置标识, 核心方法不根据该标识切换语义。 |
+| flow_state_admissibility_enforced | method | none | true | true | false | 冻结检测器是否执行状态证据可接受域约束。 |
+| velocity_constraint_enabled | method | none | true | true | false | 当前 scheduler 运行是否启用 SSTW 速度场弱约束。 |
+| terminal_endpoint_perturbation_enabled | method | none | true | false | false | 当前参数化运行是否启用终点扰动原语, 仅供外层受控实验组合。 |
+| terminal_endpoint_perturbation_delta_norm | metric | none | true | false | false | 终点扰动原语实际施加到模型原生 latent 的增量范数。 |
+| package_execution_mode | governance | none | true | false | false | 当前服务器入口运行于开发仓库还是论文产物重建抽离包。 |
+| development_checks_packaged | governance | none | true | false | false | 抽离包是否携带开发期 pytest 与 harness 检查实现。 |
+| development_checks_execution_policy | governance | none | true | false | false | 开发检查应在抽离前执行还是由当前运行包执行。 |
+| skip_reason | governance | none | true | false | false | 某个编排阶段未执行时的明确、可审计原因。 |
+| claim_audit_report_passed | governance | none | true | true | false | 完整三层主张 decision 与自动生成的主张审计报告是否同时存在并通过。 |
+| cluster_aware_statistics_passed | governance | none | true | true | false | 当前 profile 是否使用 source-video cluster 统计并生成冻结 FPR 置信证据。 |
+| formal_motion_claim_passed | governance | none | true | true | false | formal motion 筛选是否已执行且至少保留一个可支撑主张的视频。 |
+| sstw_advantage_claim_passed | governance | none | true | true | false | SSTW 相对全部预注册 baseline 的 TPR 差值与置信区间下界是否为正。 |
+| sstw_advantage_claim_failures | governance | none | true | false | false | SSTW 优势门禁未通过时按 baseline 记录的明确失败原因。 |
+| formal_frozen_threshold_record_id | provenance | none | true | true | false | pilot gate 消费的公平校准 SSTW 阈值 record 标识。 |
+| formal_frozen_threshold_source_path | provenance | none | true | true | false | pilot gate 只读消费的正式冻结阈值 record 路径。 |
+| formal_frozen_threshold_value | metric | none | true | true | false | 公平校准阶段已经冻结且由 pilot gate 复用的 SSTW 阈值。 |
+| formal_frozen_threshold_source_split | provenance | none | true | true | false | 正式冻结阈值的来源 split, 必须为 calibration。 |
+| formal_frozen_threshold_protocol | governance | none | true | true | false | 正式冻结阈值使用的 calibration-to-heldout 协议。 |
+| formal_frozen_threshold_test_time_update_blocked | governance | none | true | true | false | 正式冻结阈值是否禁止 test-time 更新。 |
+| formal_frozen_threshold_calibration_negative_count | metric | none | true | true | false | 正式 SSTW 阈值使用的 calibration negative 独立视频数。 |
+| formal_frozen_threshold_calibration_fpr | metric | none | true | true | false | 正式冻结阈值在 calibration split 上的 FPR。 |
+| formal_frozen_threshold_heldout_fpr | metric | none | true | true | false | 正式冻结阈值在 held-out split 上的 FPR。 |
+| formal_frozen_threshold_tpr | metric | none | true | true | false | 正式冻结阈值在 held-out attacked positives 上的 TPR。 |
+| formal_frozen_threshold_heldout_false_positive_count | metric | none | true | true | false | held-out 独立视频中由正式阈值产生的 false positive 数。 |
+| formal_frozen_threshold_true_positive_count | metric | none | true | true | false | held-out attacked positives 中由正式阈值检出的数量。 |
+| formal_frozen_threshold_ready | governance | none | true | true | false | SSTW 公平校准 record 是否可作为只读正式冻结阈值 artifact。 |
+| formal_frozen_threshold_artifact_ready | governance | none | true | true | false | pilot gate 是否已成功消费正式冻结阈值而未重新校准。 |
+| stage_transition_dependency_policy | governance | none | true | true | false | 阶段跳转是否明确依赖完整 package manifest 先通过。 |
+| source_package_manifest_path | provenance | none | true | false | false | 阶段跳转消费的 source profile package manifest 路径。 |
+| source_package_manifest_field | governance | none | true | false | false | source profile package manifest 的规范 decision 字段。 |
+| source_package_manifest_decision | governance | none | true | true | false | 阶段跳转读取到的 source profile package 决策。 |
+| source_reviewer_evidence_index_path | provenance | none | true | false | false | 阶段跳转消费的审稿证据索引路径。 |
+| source_reviewer_evidence_index_decision | governance | none | true | true | false | 阶段跳转读取到的审稿证据索引决策。 |
+| source_gate_figure_path | provenance | none | true | false | false | 阶段跳转消费的 source profile 诊断图 manifest 路径。 |
+| source_gate_figure_ready | governance | none | true | true | false | source profile 诊断图 manifest 是否已生成。 |
+| paper_profile_source_gate_decision_field | governance | none | true | false | false | package builder 为当前 profile 解析出的规范 source gate 字段。 |
+| watermark_key_derivation_id | method | none | true | true | false | 从所有者秘密与公开生成上下文派生水印方向的冻结 HMAC 算法标识。 |
+| watermark_key_id | provenance | none | true | true | false | 所有者密钥的公开标识, 不包含密钥材料或派生后的水印方向。 |
+| posterior_probability_calibration_protocol | method | none | true | true | false | 概率后验使用的嵌套 source-video group 交叉拟合协议。 |
+| posterior_probability_calibration_outer_fold_count | metric | none | true | true | false | 生成未见视频簇概率和无泄漏校准指标的外层 fold 数量。 |
+| posterior_probability_calibration_inner_fold_minimum | metric | none | true | true | false | 各外层训练分区内部拟合 Platt 映射所用的最小 fold 数量。 |
+| fixed_fpr_threshold_score_source | governance | none | true | true | false | 冻结固定 FPR 阈值使用的 calibration 分数来源, 必须为视频簇外推分数。 |
+| calibration_source_method_variant | provenance | none | true | true | false | 当前冻结检测器实际复用的 calibration record 方法变体。 |
+| detector_only_nested_ablation | governance | none | true | true | false | 当前阈值是否属于不重新生成视频的检测器级嵌套消融。 |
+| paired_path_ablation_method_variant | provenance | none | true | true | false | Claim-2 同视频配对使用的仅移除路径证据检测器标识。 |
+| paired_path_nested_ablation_status | governance | none | true | true | false | Claim-2 配对是否保持同视频、同 replay 且只移除路径特征。 |
+| paired_without_path_evidence_detector_score | metric | none | true | true | false | 同视频 `without_path_evidence` 冻结检测器的保守分数。 |
+| paired_without_path_evidence_detector_decision | governance | none | true | true | false | 同视频 `without_path_evidence` 冻结检测器在目标 FPR 下的判定。 |
+| paired_full_detector_target_fpr | metric | none | true | true | false | Claim-2 完整检测器使用的预注册目标 FPR。 |
+| paired_without_path_evidence_detector_target_fpr | metric | none | true | true | false | Claim-2 仅移除路径检测器使用的预注册目标 FPR。 |
+| paired_fpr_alignment_status | governance | none | true | true | false | Claim-2 两个冻结检测器是否使用相同预注册目标 FPR。 |
+| claim_2_expected_paired_comparison_count | metric | none | true | true | false | Claim-2 按全部 held-out full-method positive 计算的预期配对数。 |
+| claim_2_pairing_failure_count | metric | none | true | true | false | Claim-2 中不满足仅路径单一干预或冻结阈值协议的配对数。 |
+| claim_2_paired_comparison_coverage | metric | none | true | true | false | Claim-2 实际配对数占预期 held-out full-method positive 数的比例。 |
+| claim_2_nested_ablation_method_variant | provenance | none | true | true | false | Claim-2 因果归因绑定的检测器级嵌套消融标识。 |
+| claim_2_causal_comparison_protocol | governance | none | true | true | false | Claim-2 保持视频、replay 和非路径机制不变的冻结检测器比较协议。 |
+| S_path_inv_unweighted | metric | none | true | false | false | 应用 replay step 可靠性前的时间重参数化路径积分分数。 |
+| path_replay_reliability_weight_mean | metric | none | true | false | false | 路径积分实际消费的逐 step replay 可靠性均值。 |
+| path_replay_weighted_aggregation_applied | governance | none | true | false | false | 路径积分是否直接消费逐 step replay 可靠性权重。 |
+| path_score_unweighted | metric | none | true | false | false | 单个 Flow phase 在 replay 不确定性衰减前的路径投影。 |
+| path_endpoint_consistency_unweighted | metric | none | true | false | false | 单个 Flow phase 在 replay 不确定性衰减前的路径与 endpoint 一致性。 |
+| replay_step_reliability_weight | metric | none | true | true | false | 全局多网格可靠性与单步高斯拟合可靠性的乘积, 直接用于路径观测。 |
+| replay_step_likelihood_reliability | metric | none | true | false | false | 单个 replay step 根据候选残差和预注册观测方差计算的高斯拟合可靠性。 |
+| replay_global_reliability | metric | none | true | false | false | 多时间网格 replay uncertainty 形成的记录级全局可靠性。 |
+| path_replay_uncertainty_weighting_status | governance | none | true | true | false | 当前 phase 路径观测采用的 replay 不确定性直接加权协议。 |
+| adaptive_parameter_search_policy | method | none | true | true | false | 连续攻击参数如何由先前冻结检测器查询反馈选择下一候选。 |
+| adaptive_detector_feedback_search_decision | governance | none | true | true | false | 所有逐视频连续攻击是否按查询预算完成不重复的 detector-feedback 搜索。 |
+| adaptive_model_vae_regeneration_decision | governance | none | true | true | false | 生成式攻击的每个候选是否真实执行模型 VAE encode-perturb-decode。 |
+| adaptive_public_negative_probe_decision | governance | none | true | true | false | public-negative 探测是否独立完成并只向 held-out 搜索传递攻击参数。 |
+| watermark_key_derivation_decision | governance | none | true | true | false | 全部正式 positive 是否声明冻结的所有者秘密 HMAC 派生算法和非空 key ID。 |
+| watermark_key_derivation_failures | governance | none | true | false | false | 水印 key 派生算法或公开 key ID 不符合正式协议的记录列表。 |
+| paired_watermark_ssim_protocol | method | none | true | true | false | 配对 SSIM 使用的局部高斯窗口、多通道和 data range 配置。 |
+| model_vae_noise_direction_policy | method | none | true | true | false | 同一源视频的 latent 攻击是否固定噪声方向并仅优化连续幅度。 |
+| detector_only_ablation | governance | none | true | true | false | 当前结果是否复用同一 full-method 视频和 replay, 仅改变检测器观测。 |
+| detector_only_source_method_variant | provenance | none | true | true | false | 检测器级消融复用的源视频方法变体, 正式值必须为 `sstw_full_method`。 |
+| generation_internal_ablation_variants | governance | none | true | false | false | 三档正式协议中必须独立生成视频的 scheduler 机制变体。 |
+| detector_only_internal_ablation_variants | governance | none | true | false | false | 三档正式协议中必须复用 full-method 视频的检测器变体。 |
+| internal_ablation_video_reuse_policy | governance | none | true | false | false | 生成机制消融与 detector-only 消融的视频来源隔离策略。 |
+| require_internal_ablation_video_reuse_policy | governance | none | true | false | false | 正式 profile 是否强制审计内部消融视频复用策略。 |
+| ablation_video_execution_mode | governance | none | true | false | false | 内部消融使用独立生成视频还是复用 full-method 视频。 |
+| ablation_source_method_variant | governance | none | true | false | false | 当前消融 record 的真实视频来源方法变体。 |
+| ablation_source_trajectory_trace_id | governance | none | true | false | false | 当前消融实际复用或独立生成的视频轨迹标识。 |
+| ablation_source_video_sha256 | governance | none | true | false | false | 当前消融实际消费的视频内容摘要。 |
+| ablation_independent_video_generation_required | governance | none | true | false | false | 当前变体是否因改变生成机制而必须独立生成视频。 |
+| detector_only_video_reuse_decision | governance | none | true | true | false | 全部 detector-only 变体是否逐 trace 复用 full-method 视频。 |
+| detector_only_video_reuse_failure_variants | governance | none | true | false | false | 未正确复用 full-method 视频的 detector-only 变体。 |
+| generation_variant_independent_video_decision | governance | none | true | true | false | 全部生成机制变体是否使用互不重叠的独立轨迹。 |
+| generation_variant_provenance_failure_variants | governance | none | true | false | false | 缺少独立生成来源证据的生成机制变体。 |
+| generation_variant_trace_overlap_pairs | governance | none | true | false | false | 错误共享同一 trajectory trace 的生成机制变体对。 |
+| internal_ablation_video_reuse_policy_passed | governance | none | true | true | false | 当前 profile 的逐变体样本量与视频复用策略是否通过公共闭合器。 |

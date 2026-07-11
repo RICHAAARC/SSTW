@@ -48,8 +48,8 @@ def build_formal_internal_ablation_summary_records(run_root: str | Path) -> list
     """汇总 paper_profile 内部消融正式结果。
 
     该函数只允许 `metric_status: measured_formal` 的消融记录进入 ready 状态。
-    若当前 run_root 只有历史内部消融替代记录, 对应消融变体会被写成 missing,
-    从而阻断 paper gate, 防止非正式消融影响论文结论。
+    若当前 run_root 只有历史替代记录, 或检测器专用消融没有 same-video replay
+    来源关系, 对应消融变体会被写成 missing, 从而阻断 paper gate。
     """
     run_root = Path(run_root)
     sstw_records = [
@@ -92,7 +92,7 @@ def build_formal_internal_ablation_summary_records(run_root: str | Path) -> list
         score_mean = _mean_or_none(variant_scores)
         delta = round(score_mean - full_score_mean, 6) if score_mean is not None and full_score_mean is not None else None
         claim_support_status = (
-            "formal_internal_ablation_summary_ready_for_target_fpr_0_1_claim_context"
+            "formal_internal_ablation_summary_ready_for_current_profile_claim_context"
             if metric_status != "missing"
             else "formal_internal_ablation_summary_missing_variant"
         )
@@ -130,7 +130,7 @@ def audit_formal_internal_ablation_summary_records(records: list[dict[str, Any]]
     return {
         "stage_id": "formal_internal_ablation_summary",
         "formal_internal_ablation_summary_decision": decision,
-        "claim_support_status": "formal_internal_ablation_summary_ready_for_target_fpr_0_1_claim_context"
+        "claim_support_status": "formal_internal_ablation_summary_ready_for_current_profile_claim_context"
         if decision == "PASS"
         else "formal_internal_ablation_summary_blocked",
         "formal_internal_ablation_variant_count": len(ready_variants),
@@ -151,8 +151,8 @@ def run_formal_internal_ablation_summary(run_root: str | Path) -> dict[str, Any]
     write_json(run_root / "artifacts" / "formal_internal_ablation_summary_decision.json", audit)
     report = (
         "# Formal Internal Ablation Summary Report\n\n"
-        "该报告只汇总 measured_formal 内部消融记录。若缺少正式 component-removal "
-        "视频检测结果, 对应变体保持 missing 并阻断 paper gate。\n\n"
+        "该报告只汇总 measured_formal 内部消融记录。生成机制消融要求独立生成, "
+        "检测器消融要求 same-video replay; 缺失任一正式结果时对应变体保持 missing。\n\n"
         f"- formal_internal_ablation_summary_decision: {audit['formal_internal_ablation_summary_decision']}\n"
         f"- formal_internal_ablation_variant_count: {audit['formal_internal_ablation_variant_count']}\n"
         f"- formal_internal_ablation_full_method_formal_ready: {str(audit['formal_internal_ablation_full_method_formal_ready']).lower()}\n"

@@ -1,6 +1,16 @@
 {
   "authenticated_trajectory_sketch_required": true,
   "contract_id": "sstw_complete_paper_mechanism_v1",
+  "core_method_config_path": "configs/methods/sstw_core_method.json",
+  "detector_only_internal_ablation_variants": [
+    "trajectory_only_score",
+    "without_replay_uncertainty_weighting",
+    "without_flow_state_admissibility",
+    "generic_ssm_baseline"
+  ],
+  "detector_only_nested_ablations": [
+    "without_path_evidence"
+  ],
   "formal_method_variants": [
     "sstw_full_method",
     "endpoint_only_control",
@@ -11,17 +21,21 @@
     "without_flow_state_admissibility",
     "generic_ssm_baseline"
   ],
-  "minimum_replay_reliability_mean": 0.5,
+  "generation_internal_ablation_variants": [
+    "sstw_full_method",
+    "endpoint_only_control",
+    "without_velocity_constraint",
+    "without_endpoint_aware_control"
+  ],
+  "internal_ablation_video_reuse_policy": "detector_only_reuses_full_method_video_generation_variants_use_independent_videos",
   "minimum_adaptive_watermark_retention_rate": 0.5,
+  "minimum_replay_reliability_mean": 0.5,
   "profile_invariant": "probe_paper、pilot_paper 和 full_paper 必须执行相同机制、攻击、消融、检测、replay 和结果门禁; 只允许目标 FPR、样本数量与由此产生的统计功效不同。",
   "replay_step_counts": [
     16,
     20,
     24
   ],
-  "replay_likelihood_model_id": "endpoint_energy_scaled_isotropic_gaussian_per_latent_dimension",
-  "replay_minimum_observation_noise_variance": 1e-08,
-  "replay_relative_observation_noise_standard_deviation": 0.05,
   "required_claims": [
     {
       "claim_id": "claim_1_velocity_constraint_detectable_watermark",
@@ -39,7 +53,9 @@
       "claim_id": "claim_2_path_evidence_independent_gain",
       "required_evidence": [
         "key_independent_fixed_inversion_path_observation",
-        "endpoint_only_ablation",
+        "same_video_same_replay_without_path_evidence_nested_ablation",
+        "all_non_path_detector_features_held_constant",
+        "separately_frozen_full_and_without_path_calibration_thresholds",
         "same_video_paired_fixed_fpr_difference_interval",
         "source_video_cluster_bootstrap_interval"
       ]

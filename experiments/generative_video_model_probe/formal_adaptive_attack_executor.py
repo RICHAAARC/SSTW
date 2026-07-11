@@ -10,7 +10,8 @@ from pathlib import Path
 from typing import Any, Callable, Mapping
 
 from evaluation.attacks.adaptive_video_optimizer import (
-    optimize_adaptive_attack_for_video,
+    optimize_bounded_parameter_attack_for_video,
+    optimize_model_vae_regeneration_attack_for_video,
     write_cross_video_blend,
 )
 from evaluation.attacks.video_runtime_attack_protocol import (
@@ -25,6 +26,7 @@ from evaluation.statistics.clustered_inference import (
     one_sided_binomial_upper_bound,
 )
 from experiments.generative_video_model_probe.formal_flow_evidence_runner import (
+    _generation_key,
     _load_pipeline,
     _prompt_text_by_id,
     _run_attacked_video_replay_for_model,
@@ -42,26 +44,26 @@ from runtime.core.progress import ProgressReporter
 DEFAULT_PROTOCOL_CONFIG = "configs/protocol/probe_paper_generative_probe.json"
 FORMAL_ADAPTIVE_ATTACK_EVIDENCE_LEVEL = "per_video_frozen_flow_detector_adaptive_execution"
 
-ADAPTIVE_SEARCH_PROTOCOLS: dict[str, tuple[str, tuple[str, ...]]] = {
+ADAPTIVE_SEARCH_PROTOCOLS: dict[str, tuple[str, str]] = {
     "generative_recompression_or_regeneration_attack": (
         "minimize_detector_score",
-        ("h264_crf28_runtime", "h265_crf28_runtime", "jpeg_frame_compression_runtime"),
+        "model_vae_regeneration",
     ),
     "endpoint_preserving_path_perturbation_attack": (
         "minimize_path_with_fixed_endpoint",
-        ("frame_swap_adjacent_runtime", "frame_drop_uniform_runtime", "speed_change_runtime", "frame_average_runtime"),
+        "endpoint_path_perturbation",
     ),
     "detector_probing_with_public_negatives": (
         "minimize_detector_score",
-        ("brightness_contrast_runtime", "color_jitter_runtime", "gaussian_blur_runtime", "jpeg_frame_compression_runtime"),
+        "public_detector_probe",
     ),
     "watermark_removal_optimization_attack": (
         "minimize_detector_score",
-        ("denoise_runtime", "gaussian_blur_runtime", "median_blur_runtime", "gaussian_noise_runtime", "jpeg_frame_compression_runtime"),
+        "watermark_removal",
     ),
     "adversarial_detector_evasion_attack": (
         "minimize_detector_score",
-        ("compression_noise_combined_runtime", "compression_crop_combined_runtime", "compression_color_jitter_combined_runtime", "crop_rotation_combined_runtime"),
+        "detector_evasion",
     ),
 }
 
@@ -255,6 +257,88 @@ def _finalize_record(payload: dict[str, Any]) -> dict[str, Any]:
     )
 
 
+def audit_adaptive_optimizer_evidence(
+    records: list[Mapping[str, Any]],
+    *,
+    query_budget: int,
+) -> dict[str, bool]:
+    """核验 detector-feedback 搜索、public probe 与模型 VAE 重生成均为真实执行。"""
+
+    search_rows = [
+        row
+        for row in records
+        if row.get("non_runtime_attack_protocol") in ADAPTIVE_SEARCH_PROTOCOLS
+    ]
+    search_ready = bool(search_rows) and all(
+        row.get("adaptive_attack_optimizer_type")
+        == "sequential_detector_feedback_bounded_parameter_search"
+        and int(row.get("adaptive_attack_query_count") or 0) == int(query_budget)
+        and isinstance(row.get("adaptive_attack_selected_parameters"), Mapping)
+        and isinstance(row.get("adaptive_attack_candidate_records"), list)
+        and len(row["adaptive_attack_candidate_records"]) == int(query_budget)
+        and len({
+            round(float(candidate["attack_parameters"]["attack_strength"]), 12)
+            for candidate in row["adaptive_attack_candidate_records"]
+            if isinstance(candidate.get("attack_parameters"), Mapping)
+            and candidate["attack_parameters"].get("attack_strength") is not None
+        })
+        == int(query_budget)
+        for row in search_rows
+    )
+    regeneration_rows = [
+        row
+        for row in search_rows
+        if row.get("non_runtime_attack_protocol")
+        == "generative_recompression_or_regeneration_attack"
+    ]
+    regeneration_ready = bool(regeneration_rows) and all(
+        all(
+            isinstance(candidate.get("attack_parameters"), Mapping)
+            and candidate["attack_parameters"].get("model_vae_regeneration_status")
+            == "measured_model_vae_encode_perturb_decode"
+            and bool(candidate["attack_parameters"].get("model_vae_class"))
+            and candidate["attack_parameters"].get(
+                "model_vae_noise_direction_policy"
+            )
+            == "fixed_per_source_video_across_strength_queries"
+            and int(
+                candidate["attack_parameters"].get("model_vae_source_frame_count")
+                or 0
+            )
+            > 0
+            and int(
+                candidate["attack_parameters"].get("model_vae_output_frame_count")
+                or 0
+            )
+            > 0
+            for candidate in row["adaptive_attack_candidate_records"]
+        )
+        for row in regeneration_rows
+    )
+    public_rows = [
+        row
+        for row in search_rows
+        if row.get("non_runtime_attack_protocol")
+        == "detector_probing_with_public_negatives"
+    ]
+    public_probe_ready = bool(public_rows) and all(
+        int(row.get("adaptive_attack_public_negative_probe_count") or 0)
+        == int(query_budget)
+        and isinstance(
+            row.get("adaptive_attack_public_negative_candidate_records"), list
+        )
+        and len(row["adaptive_attack_public_negative_candidate_records"])
+        == int(query_budget)
+        and row.get("adaptive_attack_public_negative_informed_strength") is not None
+        for row in public_rows
+    )
+    return {
+        "adaptive_detector_feedback_search_ready": search_ready,
+        "adaptive_model_vae_regeneration_ready": regeneration_ready,
+        "adaptive_public_negative_probe_ready": public_probe_ready,
+    }
+
+
 def run_formal_adaptive_attack_execution(
     run_root: str | Path,
     config_path: str | Path = DEFAULT_PROTOCOL_CONFIG,
@@ -328,7 +412,7 @@ def run_formal_adaptive_attack_execution(
     for source_index, source in enumerate(sources):
         model_id = str(source["generation_model_id"])
         prompt = prompt_map[str(source["prompt_id"])]
-        key_text = f"{model_id}::{source.get('prompt_id')}::{source.get('seed_id')}"
+        key_text = _generation_key(source)
         pipeline = pipelines[model_id]
         scorer = _build_scorer(
             pipeline,
@@ -345,8 +429,9 @@ def run_formal_adaptive_attack_execution(
             base["adaptive_attack_input_video_sha256"] = source.get("attacked_video_sha256")
             try:
                 if protocol in ADAPTIVE_SEARCH_PROTOCOLS:
-                    objective, candidate_names = ADAPTIVE_SEARCH_PROTOCOLS[protocol]
+                    objective, attack_family = ADAPTIVE_SEARCH_PROTOCOLS[protocol]
                     public_probe_summary: dict[str, Any] = {}
+                    public_informed_strength: float | None = None
                     if protocol == "detector_probing_with_public_negatives":
                         if not public_calibration_negatives:
                             raise RuntimeError("detector probing 缺少 calibration public negative")
@@ -360,9 +445,13 @@ def run_formal_adaptive_attack_execution(
                             pipelines[public_model_id] = pipeline_loader(public_model_id)
                         public_prompt = prompt_map[str(public_row["prompt_id"])]
                         public_trial_index = int(public_row.get("clean_negative_trial_index") or 0)
-                        public_key = (
-                            f"{public_model_id}::{public_row.get('prompt_id')}::{public_row.get('seed_id')}"
-                            f"::clean_negative::sstw_full_method::{public_trial_index:06d}"
+                        public_key = _generation_key(
+                            public_row,
+                            extra_context={
+                                "negative_role": "clean_negative_candidate_key",
+                                "method_variant": "sstw_full_method",
+                                "trial_index": public_trial_index,
+                            },
                         )
                         public_scorer = _build_scorer(
                             pipelines[public_model_id],
@@ -375,10 +464,10 @@ def run_formal_adaptive_attack_execution(
                             public_row.get("clean_negative_video_path"),
                             "videos",
                         )
-                        public_result = optimize_adaptive_attack_for_video(
+                        public_result = optimize_bounded_parameter_attack_for_video(
                             public_video,
                             root / "adaptive_public_negative_probes" / str(source.get("statistical_cluster_id")),
-                            candidate_attack_names=candidate_names,
+                            attack_family=attack_family,
                             scorer=public_scorer,
                             objective="minimize_detector_score",
                             endpoint_reference=float(public_row["endpoint_score"]),
@@ -405,12 +494,10 @@ def run_formal_adaptive_attack_execution(
                                 ),
                                 **candidate.as_dict(),
                             })
-                        candidate_names = tuple(
-                            row.attack_name
-                            for row in sorted(
-                                public_result.candidates,
-                                key=lambda row: (row.detector_score, row.candidate_index),
-                            )
+                        public_informed_strength = float(
+                            public_result.selected.attack_parameters[
+                                "attack_strength"
+                            ]
                         )
                         public_probe_summary = {
                             "adaptive_attack_public_negative_probe_count": len(public_result.candidates),
@@ -418,25 +505,56 @@ def run_formal_adaptive_attack_execution(
                             "adaptive_attack_public_negative_candidate_records": [
                                 row.as_dict() for row in public_result.candidates
                             ],
-                            "adaptive_attack_public_negative_informed_order": list(candidate_names),
+                            "adaptive_attack_public_negative_informed_strength": public_informed_strength,
                         }
-                    result = optimize_adaptive_attack_for_video(
-                        source_video,
-                        root / "adaptive_attacked_videos" / str(source.get("statistical_cluster_id")) / protocol,
-                        candidate_attack_names=candidate_names,
-                        scorer=scorer,
-                        objective=objective,
-                        endpoint_reference=float(source["endpoint_score"]),
-                        endpoint_tolerance=context["endpoint_tolerance"],
-                        minimum_quality_psnr=context["minimum_quality_psnr"],
-                        query_budget=context["query_budget"],
+                    adaptive_output_dir = (
+                        root
+                        / "adaptive_attacked_videos"
+                        / str(source.get("statistical_cluster_id"))
+                        / protocol
                     )
+                    if attack_family == "model_vae_regeneration":
+                        result = optimize_model_vae_regeneration_attack_for_video(
+                            pipeline,
+                            source_video,
+                            adaptive_output_dir,
+                            scorer=scorer,
+                            endpoint_reference=float(source["endpoint_score"]),
+                            endpoint_tolerance=context["endpoint_tolerance"],
+                            minimum_quality_psnr=context["minimum_quality_psnr"],
+                            query_budget=context["query_budget"],
+                        )
+                        execution_backend = (
+                            "model_vae_encode_perturb_decode_bounded_black_box_search"
+                        )
+                    else:
+                        result = optimize_bounded_parameter_attack_for_video(
+                            source_video,
+                            adaptive_output_dir,
+                            attack_family=attack_family,
+                            scorer=scorer,
+                            objective=objective,
+                            endpoint_reference=float(source["endpoint_score"]),
+                            endpoint_tolerance=context["endpoint_tolerance"],
+                            minimum_quality_psnr=context["minimum_quality_psnr"],
+                            query_budget=context["query_budget"],
+                            initial_strength=public_informed_strength,
+                        )
+                        execution_backend = (
+                            "detector_feedback_bounded_continuous_parameter_search"
+                        )
                     selected = result.selected
                     payload = {
                         **base,
                         **result.as_dict(),
                         **public_probe_summary,
-                        "adaptive_attack_execution_backend": "actual_video_candidate_generation_and_frozen_flow_queries",
+                        "adaptive_attack_execution_backend": execution_backend,
+                        "adaptive_attack_optimizer_type": (
+                            "sequential_detector_feedback_bounded_parameter_search"
+                        ),
+                        "adaptive_parameter_search_policy": (
+                            "boundary_seed_then_detector_feedback_interval_refinement"
+                        ),
                         "adaptive_attack_score": selected.detector_score,
                         "adaptive_attack_path_score": selected.path_score,
                         "adaptive_attack_endpoint_score": selected.endpoint_score,
@@ -618,6 +736,11 @@ def run_formal_adaptive_attack_execution(
         and query.get("test_time_threshold_update_blocked") is True
         for query in query_rows
     )
+    optimizer_evidence = audit_adaptive_optimizer_evidence(
+        records,
+        query_budget=context["query_budget"],
+    )
+    optimizer_evidence_ready = all(optimizer_evidence.values())
     expected_query_count = sum(
         int(record.get("adaptive_attack_query_count") or 0)
         for record in records
@@ -627,6 +750,7 @@ def run_formal_adaptive_attack_execution(
         len(records) == expected_count
         and not failure_rows
         and adaptive_query_provenance_ready
+        and optimizer_evidence_ready
         and len(query_rows) == expected_query_count
     )
     retention_rows_by_protocol = {
@@ -719,6 +843,21 @@ def run_formal_adaptive_attack_execution(
         "adaptive_attack_public_negative_query_count": len(public_probe_candidate_records),
         "adaptive_attack_query_provenance_decision": (
             "PASS" if adaptive_query_provenance_ready else "FAIL"
+        ),
+        "adaptive_detector_feedback_search_decision": (
+            "PASS"
+            if optimizer_evidence["adaptive_detector_feedback_search_ready"]
+            else "FAIL"
+        ),
+        "adaptive_model_vae_regeneration_decision": (
+            "PASS"
+            if optimizer_evidence["adaptive_model_vae_regeneration_ready"]
+            else "FAIL"
+        ),
+        "adaptive_public_negative_probe_decision": (
+            "PASS"
+            if optimizer_evidence["adaptive_public_negative_probe_ready"]
+            else "FAIL"
         ),
         "adaptive_watermark_retention_minimum_rate": context["minimum_retention_rate"],
         "adaptive_watermark_retention_statistics": retention_statistics,

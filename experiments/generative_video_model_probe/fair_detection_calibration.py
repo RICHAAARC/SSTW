@@ -93,6 +93,9 @@ def _load_profile_context(config_path: str | Path) -> dict[str, Any]:
         "minimum_heldout_attacked_positive_event_count": int(config.get("minimum_heldout_attacked_positive_event_count") or 0),
         "threshold_protocol": str(config.get("threshold_protocol") or ""),
         "threshold_source_split": str(config.get("threshold_source_split") or "calibration"),
+        "test_time_threshold_update_blocked": bool(
+            config.get("test_time_threshold_update_blocked", False)
+        ),
         "required_modern_external_baseline_adapter_names": [
             str(item)
             for item in config.get("required_modern_external_baseline_adapter_names", DEFAULT_REQUIRED_BASELINES)

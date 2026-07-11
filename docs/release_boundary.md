@@ -11,7 +11,6 @@
 ```text
 main/methods/
 configs/methods/
-README.md
 pyproject.toml
 ```
 
@@ -31,7 +30,6 @@ experiments/
 workflows/
 scripts/
 必要的 docs/
-tests/functional/
 README.md
 pyproject.toml
 ```
@@ -46,10 +44,15 @@ audit_reports/
 outputs/
 tests/constraints/
 tests/integration/
+tests/functional/
 私有密钥、私有数据与本地绝对路径配置
 ```
 
-`paper_workflow/` 只是 Colab / Notebook 最外层入口，服务器复现不依赖它。
+`paper_workflow/` 只是 Colab / Notebook 最外层入口，服务器复现不依赖它。测试与
+`tools/harness/` 属于开发仓库的抽离前治理层，同样不进入服务器重建包。开发仓库必须先运行
+`pytest -q` 和 `python tools/harness/run_all_audits.py`，再执行抽离。抽离清单会将
+`package_execution_mode` 标记为 `paper_artifact_rebuild_package`；服务器 workflow 读取该标记后，
+不会在重建包内重复访问已经排除的测试和 harness 路径。
 
 ## 正式输出边界
 

@@ -1,4 +1,5 @@
 import json
+from dataclasses import asdict
 from pathlib import Path
 
 import pytest
@@ -7,6 +8,7 @@ import torch
 from experiments.generative_video_model_probe.formal_flow_evidence_runner import (
     _base_record as _flow_evidence_base_record,
     _controlled_negative_records_from_positive,
+    _generation_key,
     _paired_velocity_causal_records,
     _state_space_posterior_mechanism_failures,
 )
@@ -22,24 +24,43 @@ from main.methods.state_space_watermark.authenticated_trajectory_sketch import (
     verify_authenticated_trajectory_sketch,
 )
 from main.methods.state_space_watermark.endpoint_latent_detector import compute_endpoint_latent_evidence
-from main.methods.state_space_watermark.flow_tubelet_key_code import build_flow_tubelet_key_direction_like
+from main.methods.state_space_watermark.flow_tubelet_key_code import (
+    FlowTubeletKeyCodeConfig,
+    build_flow_tubelet_key_direction_like,
+)
 from main.methods.state_space_watermark.flow_latent_layout import PackedTokenFlowLatentLayout
 from main.methods.state_space_watermark.flow_velocity_runtime import FlowVelocityConstraintRuntime
 from main.methods.state_space_watermark.formal_detector import (
     FLOW_STATE_POSTERIOR_SCORE_SOURCE,
+    _fit_admissibility_thresholds,
+    _fit_calibrated_posterior_model,
+    observation_sequence_from_flow_evidence_record,
+)
+from experiments.generative_video_model_probe.formal_method_variants import (
+    FORMAL_METHOD_VARIANTS,
     apply_frozen_flow_detector,
     fit_flow_evidence_calibration,
-    observation_sequence_from_flow_evidence_record,
+    observation_sequence_for_method_variant,
 )
 from main.methods.state_space_watermark.path_observation import compute_path_step_observation
 from main.methods.state_space_watermark.replay_inversion import (
     FlowSchedulePoint,
     ReplayGaussianLikelihoodConfig,
     gaussian_replay_residual_likelihood,
-    run_flow_inversion_and_replay,
     run_key_independent_inversion_hypothesis,
 )
-from main.methods.state_space_watermark.velocity_field_constraint import apply_velocity_field_constraint
+from main.methods.state_space_watermark.velocity_field_constraint import (
+    VelocityFieldConstraintConfig,
+    apply_velocity_field_constraint,
+)
+from main.methods.state_space_watermark.flow_state_posterior import (
+    FLOW_STATE_POSTERIOR_MODEL_TYPE,
+)
+from main.methods.state_space_watermark.watermark_key_derivation import (
+    WATERMARK_KEY_DERIVATION_ID,
+    derive_watermark_key_text,
+    derive_wrong_key_control_text,
+)
 from evaluation.protocol.paper_mechanism_contract import (
     audit_paper_profile_mechanism_contract,
     load_paper_mechanism_contract,
@@ -253,11 +274,16 @@ def test_linear_flow_inversion_and_replay_closes_cycle() -> None:
         del timestep, step_index
         return torch.full_like(latent, 0.2)
 
-    replay = run_flow_inversion_and_replay(endpoint, schedule, constant_velocity)
+    replay = run_key_independent_inversion_hypothesis(
+        endpoint,
+        schedule,
+        constant_velocity,
+        constant_velocity,
+    )
 
     assert replay.reverse_step_count == 2
     assert replay.forward_step_count == 2
-    assert replay.cycle_relative_error < 1e-6
+    assert replay.candidate_cycle_relative_error < 1e-6
 
 
 @pytest.mark.quick
@@ -314,6 +340,7 @@ def test_flow_posterior_uses_fitted_state_transition_filter_and_smoother() -> No
     negatives = [
         {
             "sample_role": "clean_negative",
+            "split": "calibration",
             "statistical_cluster_id": f"state-negative-{index}",
             "flow_state_observation_sequence": _state_sequence(0.2 + index * 0.001, increasing=False),
         }
@@ -322,6 +349,7 @@ def test_flow_posterior_uses_fitted_state_transition_filter_and_smoother() -> No
     positives = [
         {
             "sample_role": "attacked_positive",
+            "split": "calibration",
             "statistical_cluster_id": f"state-positive-{index}",
             "flow_state_observation_sequence": _state_sequence(0.75 + index * 0.001, increasing=True),
         }
@@ -342,6 +370,14 @@ def test_flow_posterior_uses_fitted_state_transition_filter_and_smoother() -> No
     )
     assert model_payload["posterior_positive_state_space_model"]["training_transition_count"] > 0
     assert model_payload["posterior_negative_state_space_model"]["training_transition_count"] > 0
+    assert calibration.posterior_probability_calibration_protocol == (
+        "nested_source_video_group_cross_fitted_state_space_llr_and_platt"
+    )
+    assert calibration.posterior_probability_calibration_outer_fold_count >= 2
+    assert calibration.posterior_probability_calibration_inner_fold_minimum >= 2
+    assert calibration.fixed_fpr_threshold_score_source == (
+        "outer_group_heldout_nested_cross_fitted_conservative_scores"
+    )
     assert positive_score["flow_state_filter_step_count"] == 5
     assert positive_score["flow_state_filtering_status"] == "kalman_filter_ready"
     assert positive_score["flow_state_smoothing_status"] == "rauch_tung_striebel_smoother_ready"
@@ -357,6 +393,7 @@ def test_formal_state_space_gate_rejects_single_step_or_unmeasured_posterior() -
     negatives = [
         {
             "sample_role": "clean_negative",
+            "split": "calibration",
             "statistical_cluster_id": f"gate-negative-{index}",
             "flow_state_observation_sequence": _state_sequence(0.2, increasing=False),
         }
@@ -365,6 +402,7 @@ def test_formal_state_space_gate_rejects_single_step_or_unmeasured_posterior() -
     positives = [
         {
             "sample_role": "attacked_positive",
+            "split": "calibration",
             "statistical_cluster_id": f"gate-positive-{index}",
             "flow_state_observation_sequence": _state_sequence(0.8, increasing=True),
         }
@@ -390,6 +428,7 @@ def test_formal_state_space_gate_rejects_single_step_or_unmeasured_posterior() -
     }
     threshold_record = {
         "generation_model_id": "test-flow-model",
+        "method_variant": "sstw_full_method",
         **calibration.as_dict(),
     }
 
@@ -401,7 +440,7 @@ def test_formal_state_space_gate_rejects_single_step_or_unmeasured_posterior() -
     invalid_record = {
         **valid_record,
         "flow_state_observation_sequence": [valid_record["flow_state_observation_sequence"][0]],
-        "flow_state_observation_sequence_status": "legacy_single_step_fallback",
+        "flow_state_observation_sequence_status": "invalid_single_phase_input",
         "flow_state_observation_step_count": 1,
     }
     failures = _state_space_posterior_mechanism_failures(
@@ -415,23 +454,135 @@ def test_formal_state_space_gate_rejects_single_step_or_unmeasured_posterior() -
 
 
 @pytest.mark.quick
+def test_core_detector_rejects_missing_or_single_phase_observation() -> None:
+    """核心检测器本身必须拒绝聚合替代值, 不能只依赖外层门禁补救。"""
+
+    with pytest.raises(ValueError, match="至少2个真实 phase"):
+        observation_sequence_from_flow_evidence_record({"endpoint_score": 0.8})
+    with pytest.raises(ValueError, match="至少2个真实 phase"):
+        observation_sequence_from_flow_evidence_record(
+            {"flow_state_observation_sequence": _state_sequence(0.8, increasing=True)[:1]}
+        )
+
+
+@pytest.mark.quick
+def test_flow_observation_preserves_explicit_zero_and_rejects_nonfinite_values() -> None:
+    """规范字段中的0必须覆盖旧后备字段, NaN 不得进入概率模型。"""
+
+    phase = {
+        **_state_sequence(0.8, increasing=True)[0],
+        "flow_phase": 0.0,
+        "velocity_score": 0.0,
+        "S_velocity": 0.9,
+        "path_score": 0.0,
+        "S_path_inv": 0.9,
+        "coverage_ratio": 0.0,
+        "endpoint_coverage_ratio": 1.0,
+        "replay_reliability": 0.0,
+        "replay_reliability_weight": 1.0,
+        "replay_log_likelihood_ratio": 0.0,
+        "replay_log_likelihood_ratio_mean": 2.0,
+    }
+    observation = observation_sequence_from_flow_evidence_record({
+        "flow_state_observation_sequence": [phase, dict(phase)],
+    })[0]
+
+    assert observation.flow_phase == 0.0
+    assert observation.velocity_score == 0.0
+    assert observation.path_score == 0.0
+    assert observation.coverage_ratio == 0.0
+    assert observation.replay_reliability == 0.0
+    assert observation.replay_log_likelihood_ratio == 0.0
+
+    with pytest.raises(ValueError, match="有限数值"):
+        observation_sequence_from_flow_evidence_record({
+            "flow_state_observation_sequence": [
+                {**phase, "endpoint_score": float("nan")},
+                phase,
+            ],
+        })
+
+
+@pytest.mark.quick
 def test_replay_gaussian_likelihood_configuration_matches_method_contract() -> None:
     """核心 replay 概率模型默认值必须与受治理方法契约完全一致。"""
 
-    contract = json.loads(
-        Path("configs/methods/sstw_complete_paper_mechanism.json").read_text(
+    core_method = json.loads(
+        Path("configs/methods/sstw_core_method.json").read_text(
             encoding="utf-8"
         )
     )
     config = ReplayGaussianLikelihoodConfig()
+    replay_config = core_method["replay_likelihood"]
 
-    assert config.likelihood_model_id == contract["replay_likelihood_model_id"]
+    assert config.likelihood_model_id == replay_config["model_id"]
     assert config.minimum_observation_noise_variance == pytest.approx(
-        contract["replay_minimum_observation_noise_variance"]
+        replay_config["minimum_observation_noise_variance"]
     )
     assert config.relative_observation_noise_standard_deviation == pytest.approx(
-        contract["replay_relative_observation_noise_standard_deviation"]
+        replay_config["relative_observation_noise_standard_deviation"]
     )
+
+
+@pytest.mark.quick
+def test_parameterized_core_defaults_match_minimal_method_config() -> None:
+    """可抽离核心配置必须与代码默认参数一致, 防止实现与发布配置漂移。"""
+
+    core_method = json.loads(
+        Path("configs/methods/sstw_core_method.json").read_text(encoding="utf-8")
+    )
+
+    assert asdict(VelocityFieldConstraintConfig()) == core_method[
+        "velocity_field_constraint"
+    ]
+    assert asdict(FlowTubeletKeyCodeConfig()) == core_method["flow_tubelet_key_code"]
+    assert FLOW_STATE_POSTERIOR_MODEL_TYPE == core_method["flow_state_posterior"][
+        "model_type"
+    ]
+    assert WATERMARK_KEY_DERIVATION_ID == core_method["watermark_key_derivation"][
+        "algorithm_id"
+    ]
+
+
+@pytest.mark.quick
+def test_watermark_direction_key_requires_owner_secret_and_record_identity(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """公开的 model、prompt 和 seed 不得单独预测正式水印方向。"""
+
+    secret = b"owner-secret-material-with-32-bytes-minimum"
+    key_id = "owner-key-2026"
+    monkeypatch.setenv("SSTW_TRAJECTORY_AUTHENTICATION_KEY", secret.decode("utf-8"))
+    monkeypatch.setenv("SSTW_TRAJECTORY_AUTHENTICATION_KEY_ID", key_id)
+    record = {
+        "generation_model_id": "flow-model",
+        "prompt_id": "prompt-a",
+        "seed_id": "seed-a",
+        "watermark_key_derivation_id": WATERMARK_KEY_DERIVATION_ID,
+        "watermark_key_id": key_id,
+    }
+
+    derived = _generation_key(record)
+    expected = derive_watermark_key_text(
+        secret,
+        key_id=key_id,
+        generation_model_id="flow-model",
+        prompt_id="prompt-a",
+        seed_id="seed-a",
+    )
+    wrong_owner = derive_wrong_key_control_text(
+        secret,
+        key_id=key_id,
+        generation_model_id="flow-model",
+        prompt_id="prompt-a",
+        seed_id="seed-a",
+    )
+
+    assert derived == expected
+    assert wrong_owner != derived
+    assert "flow-model::prompt-a::seed-a" not in derived
+    with pytest.raises(RuntimeError, match="key ID"):
+        _generation_key({**record, "watermark_key_id": "different-owner"})
 
 
 @pytest.mark.quick
@@ -441,6 +592,7 @@ def test_state_space_calibration_is_source_video_group_equal_weighted() -> None:
     negatives = [
         {
             "sample_role": "clean_negative",
+            "split": "calibration",
             "statistical_cluster_id": f"equal-negative-{index}",
             "flow_state_observation_sequence": _state_sequence(
                 0.2 + index * 0.01,
@@ -452,6 +604,7 @@ def test_state_space_calibration_is_source_video_group_equal_weighted() -> None:
     positives = [
         {
             "sample_role": "attacked_positive",
+            "split": "calibration",
             "statistical_cluster_id": f"equal-positive-{index}",
             "flow_state_observation_sequence": _state_sequence(
                 0.7 + index * 0.01,
@@ -512,6 +665,7 @@ def test_claim1_causal_pair_uses_same_detector_and_controlled_generation_state()
     calibration_rows = [
         {
             "sample_role": "clean_negative",
+            "split": "calibration",
             "statistical_cluster_id": f"causal-negative-{index}",
             "flow_state_observation_sequence": _state_sequence(0.2, increasing=False),
         }
@@ -519,6 +673,7 @@ def test_claim1_causal_pair_uses_same_detector_and_controlled_generation_state()
     ] + [
         {
             "sample_role": "attacked_positive",
+            "split": "calibration",
             "statistical_cluster_id": f"causal-positive-{index}",
             "flow_state_observation_sequence": _state_sequence(0.8, increasing=True),
         }
@@ -631,11 +786,13 @@ def test_group_cross_fitting_keeps_paired_h0_h1_hypotheses_in_same_fold() -> Non
         rows.extend([
             {
                 "sample_role": "attacked_positive",
+                "split": "calibration",
                 "statistical_cluster_id": cluster_id,
                 "flow_state_observation_sequence": _state_sequence(0.8, increasing=True),
             },
             {
                 "sample_role": "controlled_negative",
+                "split": "calibration",
                 "statistical_cluster_id": cluster_id,
                 "flow_state_observation_sequence": _state_sequence(0.2, increasing=False),
             },
@@ -653,17 +810,134 @@ def test_group_cross_fitting_keeps_paired_h0_h1_hypotheses_in_same_fold() -> Non
 
 
 @pytest.mark.quick
+def test_calibration_rejects_noncalibration_split_unknown_role_and_missing_cluster() -> None:
+    """冻结后验和阈值不得静默吸收 held-out、未知标签或无簇记录。"""
+
+    valid_rows = [
+        {
+            "sample_role": "clean_negative",
+            "split": "calibration",
+            "statistical_cluster_id": f"strict-negative-{index}",
+            "flow_state_observation_sequence": _state_sequence(0.2, increasing=False),
+        }
+        for index in range(4)
+    ] + [
+        {
+            "sample_role": "attacked_positive",
+            "split": "calibration",
+            "statistical_cluster_id": f"strict-positive-{index}",
+            "flow_state_observation_sequence": _state_sequence(0.8, increasing=True),
+        }
+        for index in range(4)
+    ]
+    with pytest.raises(ValueError, match="只能使用 calibration split"):
+        fit_flow_evidence_calibration(
+            [{**valid_rows[0], "split": "test"}, *valid_rows[1:]],
+            method_variant="sstw_full_method",
+            target_fpr=0.1,
+        )
+    with pytest.raises(ValueError, match="未知 sample_role"):
+        fit_flow_evidence_calibration(
+            [{**valid_rows[0], "sample_role": "unknown_negative"}, *valid_rows[1:]],
+            method_variant="sstw_full_method",
+            target_fpr=0.1,
+        )
+    missing_cluster = dict(valid_rows[0])
+    missing_cluster.pop("statistical_cluster_id")
+    with pytest.raises(KeyError, match="statistical_cluster_id"):
+        fit_flow_evidence_calibration(
+            [missing_cluster, *valid_rows[1:]],
+            method_variant="sstw_full_method",
+            target_fpr=0.1,
+        )
+
+
+@pytest.mark.quick
+def test_outer_fold_admissibility_thresholds_exclude_validation_video_clusters() -> None:
+    """阈值用的 conservative score 不得使用自身视频簇拟合准入阈值。"""
+
+    records = [
+        {
+            "sample_role": "clean_negative",
+            "statistical_cluster_id": f"admissibility-negative-{index}",
+            "flow_state_observation_sequence": _state_sequence(0.2, increasing=False),
+        }
+        for index in range(8)
+    ] + [
+        {
+            "sample_role": "attacked_positive",
+            "statistical_cluster_id": f"admissibility-positive-{index}",
+            "flow_state_observation_sequence": _state_sequence(0.8, increasing=True),
+        }
+        for index in range(8)
+    ]
+    labels = [0] * 8 + [1] * 8
+    groups = [str(record["statistical_cluster_id"]) for record in records]
+    base_sequences = [
+        observation_sequence_from_flow_evidence_record(record)
+        for record in records
+    ]
+    mutated_records = [dict(record) for record in records]
+    for index in (0, 8):
+        mutated_records[index] = {
+            **mutated_records[index],
+            "flow_state_observation_sequence": [
+                {
+                    **row,
+                    "coverage_ratio": 0.01,
+                    "replay_reliability": 0.01,
+                    "time_grid_reliability": 0.01,
+                }
+                for row in mutated_records[index]["flow_state_observation_sequence"]
+            ],
+        }
+    mutated_sequences = [
+        observation_sequence_from_flow_evidence_record(record)
+        for record in mutated_records
+    ]
+
+    base_fit = _fit_calibrated_posterior_model(base_sequences, labels, groups)
+    mutated_fit = _fit_calibrated_posterior_model(mutated_sequences, labels, groups)
+
+    for index in (0, 8):
+        assert mutated_fit.nested_admissibility_thresholds[index] == pytest.approx(
+            base_fit.nested_admissibility_thresholds[index]
+        )
+    assert (
+        mutated_fit.model.admissibility_thresholds["coverage"]
+        < base_fit.model.admissibility_thresholds["coverage"]
+    )
+
+
+@pytest.mark.quick
+def test_positive_entropy_admissibility_ignores_negative_hypotheses_in_mixed_cluster() -> None:
+    """正类熵上限只能汇总同簇正假设, 不能混入重复的负假设。"""
+
+    sequence = observation_sequence_from_flow_evidence_record({
+        "flow_state_observation_sequence": _state_sequence(0.8, increasing=True),
+    })
+    thresholds = _fit_admissibility_thresholds(
+        [sequence, sequence, sequence, sequence, sequence],
+        [0.99, 0.5, 0.5, 0.5, 0.99],
+        [1, 0, 0, 0, 1],
+        ["mixed", "mixed", "mixed", "mixed", "positive-only"],
+    )
+
+    assert thresholds["posterior_entropy_maximum"] < 0.1
+
+
+@pytest.mark.quick
 def test_generic_ssm_baseline_cannot_reuse_key_conditioned_sstw_observations() -> None:
     """generic SSM 必须只看无 key 轨迹能量, 不能复制完整 SSTW 特征。"""
 
     record = {
         "flow_state_observation_sequence": _state_sequence(0.8, increasing=True),
     }
-    full = observation_sequence_from_flow_evidence_record(
+    full = observation_sequence_for_method_variant(
         record,
         method_variant="sstw_full_method",
     )
-    generic = observation_sequence_from_flow_evidence_record(
+    generic = observation_sequence_for_method_variant(
         record,
         method_variant="generic_ssm_baseline",
     )
@@ -745,14 +1019,12 @@ def test_fixed_fpr_calibration_never_exceeds_calibration_budget() -> None:
     negatives = [
         {
             "sample_role": "clean_negative",
+            "split": "calibration",
             "statistical_cluster_id": f"negative-{index}",
-            "endpoint_score": index / 20.0,
-            "S_velocity": index / 40.0,
-            "S_path_inv": index / 30.0,
-            "path_endpoint_consistency": 0.8,
-            "endpoint_coverage_ratio": 1.0,
-            "replay_reliability_weight": 0.9,
-            "time_grid_reliability": 0.9,
+            "flow_state_observation_sequence": _state_sequence(
+                0.15 + index / 100.0,
+                increasing=False,
+            ),
         }
         for index in range(20)
     ]
@@ -761,10 +1033,10 @@ def test_fixed_fpr_calibration_never_exceeds_calibration_budget() -> None:
             **negatives[index],
             "sample_role": "attacked_positive",
             "statistical_cluster_id": f"positive-{index}",
-            "endpoint_score": 0.95,
-            "S_velocity": 0.9,
-            "S_path_inv": 0.9,
-            "replay_log_likelihood_ratio_mean": 1.0,
+            "flow_state_observation_sequence": _state_sequence(
+                0.75 + index / 100.0,
+                increasing=True,
+            ),
         }
         for index in range(10)
     ]
@@ -783,7 +1055,7 @@ def test_fixed_fpr_calibration_never_exceeds_calibration_budget() -> None:
 def test_all_paper_profiles_share_complete_mechanism_contract() -> None:
     """三个 paper profile 只允许统计强度与样本规模不同。"""
 
-    contract = load_paper_mechanism_contract("configs/methods/sstw_complete_paper_mechanism.json")
+    contract = load_paper_mechanism_contract("configs/protocol/sstw_complete_paper_mechanism.json")
     configs = [
         json.loads(Path(f"configs/protocol/{profile}_generative_probe.json").read_text(encoding="utf-8"))
         for profile in ("probe_paper", "pilot_paper", "full_paper")
@@ -792,6 +1064,7 @@ def test_all_paper_profiles_share_complete_mechanism_contract() -> None:
     audit = audit_paper_profile_mechanism_contract(configs, contract)
 
     assert audit.passed is True
+    assert tuple(contract["formal_method_variants"]) == FORMAL_METHOD_VARIANTS
     assert audit.audited_profile_count == 3
     assert not audit.violations
 

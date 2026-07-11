@@ -1,0 +1,38 @@
+{
+  "method_id": "state_space_synchronized_flow_matching_trajectory_watermark_v1",
+  "method_family": "state_space_synchronized_flow_matching_trajectory_watermark",
+  "flow_latent_contract": "canonical_batch_channel_time_height_width",
+  "velocity_field_constraint": {
+    "lambda_max": 0.12,
+    "velocity_norm_ratio_budget": 0.02,
+    "endpoint_target_margin": 0.01,
+    "endpoint_control_minimum": 0.25,
+    "endpoint_control_maximum": 1.5,
+    "scheduler_velocity_sign": -1.0
+  },
+  "flow_tubelet_key_code": {
+    "temporal_size": 2,
+    "spatial_height": 8,
+    "spatial_width": 8,
+    "phase_window_start": 0.25,
+    "phase_window_end": 0.75
+  },
+  "watermark_key_derivation": {
+    "algorithm_id": "hmac_sha256_owner_secret_context_key_v1",
+    "minimum_owner_secret_byte_count": 32
+  },
+  "replay_likelihood": {
+    "model_id": "endpoint_energy_scaled_isotropic_gaussian_per_latent_dimension",
+    "minimum_observation_noise_variance": 1e-08,
+    "relative_observation_noise_standard_deviation": 0.05
+  },
+  "flow_state_posterior": {
+    "model_type": "dual_hypothesis_linear_gaussian_state_space_filter_rts_smoother_with_group_cross_fitted_platt_calibration",
+    "minimum_phase_observation_count": 2,
+    "state_admissibility_enforced": true
+  },
+  "trajectory_authentication": {
+    "algorithm": "hmac_sha256",
+    "authenticated_sketch_required": true
+  }
+}

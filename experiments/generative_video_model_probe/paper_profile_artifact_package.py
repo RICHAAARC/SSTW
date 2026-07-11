@@ -51,9 +51,9 @@ def _gate_decision_for_current_profile(run_root: Path) -> tuple[str, Path, dict[
     """
 
     for candidate in (
-        run_root / "artifacts" / "probe_paper_gate_decision.json",
-        run_root / "artifacts" / "pilot_paper_gate_decision.json",
         run_root / "artifacts" / "full_paper_result_checker_decision.json",
+        run_root / "artifacts" / "pilot_paper_gate_decision.json",
+        run_root / "artifacts" / "probe_paper_gate_decision.json",
         run_root / "artifacts" / "paper_profile_gate_decision.json",
     ):
         payload = _read_json(candidate)
@@ -65,16 +65,28 @@ def _gate_decision_for_current_profile(run_root: Path) -> tuple[str, Path, dict[
 def _paper_profile_gate_package_relpaths(profile: str) -> tuple[str, ...]:
     """构造当前 paper profile 的 package manifest 必需文件列表。"""
 
-    transition_relpaths = {
-        "probe_paper": ("artifacts/probe_paper_to_pilot_paper_transition_decision.json",),
-        "pilot_paper": ("artifacts/pilot_paper_to_full_paper_transition_decision.json",),
-        "full_paper": ("artifacts/full_paper_to_submission_freeze_transition_decision.json",),
-    }.get(profile, ())
+    gate_relpaths_by_profile = {
+        "probe_paper": (
+            "records/probe_paper_gate_records.jsonl",
+            "tables/probe_paper_gate_table.csv",
+            "artifacts/probe_paper_gate_decision.json",
+            "reports/probe_paper_gate_report.md",
+        ),
+        "pilot_paper": (
+            "records/pilot_paper_gate_records.jsonl",
+            "tables/pilot_paper_gate_table.csv",
+            "artifacts/pilot_paper_gate_decision.json",
+            "reports/pilot_paper_gate_report.md",
+        ),
+        "full_paper": (
+            "records/full_paper_result_checker_records.jsonl",
+            "tables/full_paper_result_checker_table.csv",
+            "artifacts/full_paper_result_checker_decision.json",
+            "reports/full_paper_result_checker_report.md",
+        ),
+    }
     gate_relpaths = (
-        f"records/{profile}_gate_records.jsonl",
-        f"tables/{profile}_gate_table.csv",
-        f"artifacts/{profile}_gate_decision.json",
-        f"reports/{profile}_gate_report.md",
+        *gate_relpaths_by_profile.get(profile, ()),
         f"figures/{profile}_gate_figure.json",
     )
     return tuple(dict.fromkeys((
@@ -83,7 +95,6 @@ def _paper_profile_gate_package_relpaths(profile: str) -> tuple[str, ...]:
         *PAPER_RESULT_ARTIFACT_RELPATHS,
         *PAPER_PROFILE_SHARED_PACKAGE_RELPATHS,
         *gate_relpaths,
-        *transition_relpaths,
     )))
 
 
@@ -224,16 +235,26 @@ def build_paper_profile_package_manifest(run_root: str | Path) -> dict[str, Any]
     low_fpr = _read_json(run_root / "artifacts" / "low_fpr_formal_statistics_decision.json")
     data_guard = _read_json(run_root / "artifacts" / "data_split_and_leakage_guard_decision.json")
     paper_skeleton = _read_json(run_root / "artifacts" / "paper_result_artifact_skeleton_decision.json")
-    transition_field = {
-        "probe_paper": "probe_paper_to_pilot_paper_transition_decision",
-        "pilot_paper": "pilot_paper_to_full_paper_transition_decision",
-        "full_paper": "full_paper_to_submission_freeze_transition_decision",
-    }.get(profile, "")
-    transition = _read_json(run_root / "artifacts" / f"{transition_field}.json") if transition_field else {}
+    reviewer_index = _read_json(
+        run_root / "artifacts" / "reviewer_evidence_index_decision.json"
+    )
     gate_field = f"{profile}_gate_decision"
+    source_gate_fields = {
+        "probe_paper": ("probe_paper_gate_decision", "paper_profile_gate_decision"),
+        "pilot_paper": ("pilot_paper_gate_decision",),
+        "full_paper": (
+            "full_paper_result_checker_decision",
+            "full_paper_result_decision",
+        ),
+    }.get(profile, ())
+    source_gate_decision_field = next(
+        (field for field in source_gate_fields if profile_gate.get(field) is not None),
+        "",
+    )
+    source_gate_decision = profile_gate.get(source_gate_decision_field)
     manifest_field = f"{profile}_package_manifest_decision"
     decision_ready = (
-        profile_gate.get(gate_field, profile_gate.get("paper_profile_gate_decision")) == "PASS"
+        source_gate_decision == "PASS"
         and motion_exclusion.get("motion_consistency_exclusion_decision") == "PASS"
         and self_containment.get("external_baseline_self_containment_decision") == "PASS"
         and sstw_formal.get("sstw_measured_formal_decision") == "PASS"
@@ -244,7 +265,7 @@ def build_paper_profile_package_manifest(run_root: str | Path) -> dict[str, Any]
         and low_fpr.get("low_fpr_formal_statistics_decision") == "PASS"
         and paper_skeleton.get("paper_result_artifact_skeleton_decision") == "PASS"
         and data_guard.get("data_split_and_leakage_guard_decision") == "PASS"
-        and (not transition_field or transition.get(transition_field) == "PASS")
+        and reviewer_index.get("reviewer_evidence_index_decision") == "PASS"
         and not missing
     )
     return {
@@ -263,8 +284,9 @@ def build_paper_profile_package_manifest(run_root: str | Path) -> dict[str, Any]
         "paper_result_formality_guard_violation_count": profile_gate.get("paper_result_formality_guard_violation_count"),
         "paper_profile": profile,
         "paper_profile_gate_decision_path": str(gate_path),
-        "paper_profile_gate_decision": profile_gate.get("paper_profile_gate_decision"),
-        gate_field: profile_gate.get(gate_field, profile_gate.get("paper_profile_gate_decision")),
+        "paper_profile_source_gate_decision_field": source_gate_decision_field,
+        "paper_profile_gate_decision": source_gate_decision,
+        gate_field: source_gate_decision,
         "paper_result_level": profile_gate.get("paper_result_level"),
         "target_fpr": profile_gate.get("target_fpr"),
         "motion_consistency_exclusion_decision": motion_exclusion.get("motion_consistency_exclusion_decision"),
@@ -277,7 +299,12 @@ def build_paper_profile_package_manifest(run_root: str | Path) -> dict[str, Any]
         "low_fpr_formal_statistics_decision": low_fpr.get("low_fpr_formal_statistics_decision"),
         "paper_result_artifact_skeleton_decision": paper_skeleton.get("paper_result_artifact_skeleton_decision"),
         "data_split_and_leakage_guard_decision": data_guard.get("data_split_and_leakage_guard_decision"),
-        transition_field: transition.get(transition_field) if transition_field else None,
+        "reviewer_evidence_index_decision": reviewer_index.get(
+            "reviewer_evidence_index_decision"
+        ),
+        "stage_transition_dependency_policy": (
+            "package_manifest_pass_required_before_stage_transition"
+        ),
         "required_artifact_count": len(inventory),
         "present_artifact_count": sum(1 for row in inventory if row["artifact_exists"]),
         "missing_artifact_count": len(missing),
@@ -292,11 +319,6 @@ def write_paper_profile_package_manifest(run_root: str | Path) -> dict[str, Any]
     manifest = build_paper_profile_package_manifest(run_root)
     profile = str(manifest.get("paper_profile") or "probe_paper")
     manifest_field = f"{profile}_package_manifest_decision"
-    transition_field = {
-        "probe_paper": "probe_paper_to_pilot_paper_transition_decision",
-        "pilot_paper": "pilot_paper_to_full_paper_transition_decision",
-        "full_paper": "full_paper_to_submission_freeze_transition_decision",
-    }.get(profile, "")
     write_json(run_root / "manifests" / str(manifest["artifact_name"]), manifest)
     report = (
         f"# {profile} Package Manifest Report\n\n"
@@ -316,7 +338,7 @@ def write_paper_profile_package_manifest(run_root: str | Path) -> dict[str, Any]
         f"- low_fpr_formal_statistics_decision: {manifest['low_fpr_formal_statistics_decision']}\n"
         f"- paper_result_artifact_skeleton_decision: {manifest['paper_result_artifact_skeleton_decision']}\n"
         f"- data_split_and_leakage_guard_decision: {manifest['data_split_and_leakage_guard_decision']}\n"
-        + (f"- {transition_field}: {manifest.get(transition_field)}\n" if transition_field else "")
+        f"- reviewer_evidence_index_decision: {manifest['reviewer_evidence_index_decision']}\n"
         + f"- missing_artifact_relpaths: {', '.join(manifest['missing_artifact_relpaths']) if manifest['missing_artifact_relpaths'] else 'none'}\n"
     )
     report_path = run_root / "reports" / f"{profile}_package_manifest_report.md"

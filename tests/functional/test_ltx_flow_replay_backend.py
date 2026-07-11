@@ -19,7 +19,13 @@ from experiments.generative_video_model_probe.formal_flow_evidence_runner import
 from experiments.generative_video_model_probe.formal_adaptive_attack_executor import (
     _calibrations_by_model,
 )
-from main.methods.state_space_watermark.formal_detector import FORMAL_METHOD_VARIANTS
+from experiments.generative_video_model_probe.formal_method_variants import (
+    CLAIM2_PATH_NESTED_ABLATION_VARIANT,
+    DETECTOR_ONLY_METHOD_VARIANTS,
+    FORMAL_DETECTOR_VARIANTS,
+    FORMAL_METHOD_VARIANTS,
+    GENERATION_METHOD_VARIANTS,
+)
 
 
 class _LatentDistribution:
@@ -134,9 +140,12 @@ def test_formal_detector_calibration_is_isolated_by_generation_model(monkeypatch
             "method_variant": method_variant,
             "split": "calibration",
             "sample_role": "clean_negative",
+            "formal_flow_evidence_unit_id": (
+                f"evidence::{model_id}::{method_variant}"
+            ),
         }
         for model_id in ("wan", "ltx")
-        for method_variant in FORMAL_METHOD_VARIANTS
+        for method_variant in GENERATION_METHOD_VARIANTS
     ]
 
     def fake_fit(records, *, method_variant, target_fpr):
@@ -167,14 +176,48 @@ def test_formal_detector_calibration_is_isolated_by_generation_model(monkeypatch
         target_fpr=0.1,
     )
 
-    assert len(scored) == len(rows)
-    assert len(threshold_records) == 2 * len(FORMAL_METHOD_VARIANTS)
+    assert len(scored) == 2 * len(FORMAL_METHOD_VARIANTS)
+    assert len(threshold_records) == 2 * len(FORMAL_DETECTOR_VARIANTS)
     assert set(calibrations) == {
         (model_id, method_variant)
         for model_id in ("wan", "ltx")
-        for method_variant in FORMAL_METHOD_VARIANTS
+        for method_variant in FORMAL_DETECTOR_VARIANTS
     }
     assert {record["generation_model_id"] for record in threshold_records} == {"wan", "ltx"}
+    for model_id in ("wan", "ltx"):
+        model_rows = [
+            record
+            for record in scored
+            if record["generation_model_id"] == model_id
+        ]
+        assert {record["method_variant"] for record in model_rows} == set(
+            FORMAL_METHOD_VARIANTS
+        )
+        detector_only_rows = [
+            record
+            for record in model_rows
+            if record["method_variant"] in DETECTOR_ONLY_METHOD_VARIANTS
+        ]
+        assert len(detector_only_rows) == len(DETECTOR_ONLY_METHOD_VARIANTS)
+        assert all(
+            record["detector_only_ablation"] is True
+            for record in detector_only_rows
+        )
+        assert all(
+            record["detector_only_source_method_variant"] == "sstw_full_method"
+            for record in detector_only_rows
+        )
+    nested_thresholds = [
+        record
+        for record in threshold_records
+        if record["method_variant"]
+        in {CLAIM2_PATH_NESTED_ABLATION_VARIANT, *DETECTOR_ONLY_METHOD_VARIANTS}
+    ]
+    assert nested_thresholds
+    assert all(
+        record["calibration_source_method_variant"] == "sstw_full_method"
+        for record in nested_thresholds
+    )
 
 
 @pytest.mark.quick

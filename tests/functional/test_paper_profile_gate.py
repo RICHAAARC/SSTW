@@ -545,7 +545,7 @@ def test_paper_profile_gate_passes_when_all_governed_inputs_exist(tmp_path: Path
     write_json(run_root / "artifacts" / "formal_internal_ablation_summary_decision.json", {
         "formal_internal_ablation_summary_decision": "PASS",
         "formal_internal_ablation_variant_count": 8,
-        "claim_support_status": "formal_internal_ablation_summary_ready_for_target_fpr_0_1_claim_context",
+        "claim_support_status": "formal_internal_ablation_summary_ready_for_current_profile_claim_context",
     })
     write_jsonl(
         run_root / "records" / "formal_internal_ablation_variant_records.jsonl",
@@ -1034,4 +1034,3 @@ def test_paper_profile_gate_requires_reused_motion_threshold_and_formal_motion_r
     assert audit["paper_profile_gate_decision"] == "FAIL"
     assert "validation_motion_threshold_calibration_ready" in audit["missing_validation_requirements"]
     assert "validation_formal_motion_claim_ready" in audit["missing_validation_requirements"]
-

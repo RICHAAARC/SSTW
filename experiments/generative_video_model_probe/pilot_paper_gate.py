@@ -13,7 +13,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import math
 from collections import Counter, defaultdict
 from pathlib import Path
 from statistics import mean
@@ -91,6 +90,7 @@ SCORE_FIELDS = (
     "sstw_score",
 )
 IGNORED_NEGATIVE_FAMILIES = {"", "none", "not_applicable", "not_evaluated"}
+SSTW_METHOD_ID = "sstw_key_conditioned_flow_trajectory"
 
 
 def _read_json(path: Path) -> dict:
@@ -254,37 +254,6 @@ def _records_with_scores(records: Iterable[dict]) -> list[dict]:
     return rows
 
 
-def _fixed_fpr_threshold(calibration_negative_scores: list[float], target_fpr: float) -> tuple[float | None, float | None, int]:
-    """只使用 calibration negative 分数冻结 fixed-FPR 阈值。
-
-    这是通用 fixed-FPR 写法。阈值选择不读取 held-out test positive 分数,
-    也不读取 held-out test negative 分数, 因而避免 test split 泄漏。
-    """
-    if not calibration_negative_scores:
-        return None, None, 0
-    sorted_desc = sorted(calibration_negative_scores, reverse=True)
-    max_false_positive_count = math.floor(len(sorted_desc) * target_fpr)
-    if max_false_positive_count <= 0:
-        threshold = math.nextafter(sorted_desc[0], math.inf)
-    elif max_false_positive_count >= len(sorted_desc):
-        threshold = sorted_desc[-1]
-    else:
-        threshold = math.nextafter(sorted_desc[max_false_positive_count], math.inf)
-    false_positive_count = sum(1 for score in calibration_negative_scores if score >= threshold)
-    observed_fpr = false_positive_count / len(calibration_negative_scores)
-    # 阈值不能四舍五入后再用于 held-out test, 否则 `nextafter` 产生的严格阈值会退回到
-    # calibration negative 的最大分数, 从而把本应被排除的负样本重新计为 false positive。
-    return threshold, round(observed_fpr, 6), false_positive_count
-
-
-def _rate_at_threshold(scores: list[float], threshold: float | None) -> tuple[float | None, int]:
-    """计算给定阈值下的命中率。"""
-    if threshold is None or not scores:
-        return None, 0
-    hit_count = sum(1 for score in scores if score >= threshold)
-    return round(hit_count / len(scores), 6), hit_count
-
-
 def _pilot_generation_records(generation_records: list[dict], profile_names: set[str]) -> list[dict]:
     """筛选 pilot_paper profile 产生的成功 generation records。"""
     return [
@@ -339,6 +308,15 @@ def _safe_int(value: Any) -> int | None:
         return None
 
 
+def _safe_float(value: Any) -> float | None:
+    """把上游 frozen threshold 字段安全转换为 float。"""
+
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
 def _nonnegative_int(record: dict, field_name: str) -> int:
     """读取 governed record 中的非负计数字段, 缺失时按 0 处理。"""
 
@@ -358,8 +336,92 @@ def _required_fair_method_ids(config: dict[str, Any]) -> set[str]:
     """返回 pilot_paper 公平比较必须覆盖的 SSTW 与 modern baseline 方法集合。"""
 
     return {
-        "sstw_key_conditioned_flow_trajectory",
+        SSTW_METHOD_ID,
         *{str(name) for name in config["required_modern_external_baseline_adapter_names"] if str(name)},
+    }
+
+
+def _official_sstw_frozen_threshold(
+    run_root: Path,
+    config: dict[str, Any],
+) -> tuple[bool, dict[str, Any]]:
+    """读取公平校准阶段已经冻结的 SSTW 正式阈值。
+
+    pilot gate 只能审计该只读 artifact, 不能再次从 calibration scores 选择阈值。
+    这可以保证 probe、pilot、full 的阈值来源语义完全一致, 并避免同一运行内
+    出现两套冻结阈值。
+    """
+
+    records = _read_jsonl(
+        run_root / "records" / "fair_detection_calibration_records.jsonl"
+    )
+    record = next(
+        (
+            row
+            for row in records
+            if row.get("method_id") == SSTW_METHOD_ID
+            and row.get("fair_comparison_status") == "ready"
+            and row.get("metric_status") == "measured_formal"
+            and _target_fpr_matches(row, config["target_fpr"])
+        ),
+        {},
+    )
+    threshold = _safe_float(record.get("calibrated_threshold"))
+    calibration_fpr = _safe_float(
+        record.get("calibration_fpr_at_calibrated_threshold")
+    )
+    heldout_fpr = _safe_float(record.get("heldout_fpr_at_calibrated_threshold"))
+    tpr = _safe_float(record.get("tpr_at_target_fpr"))
+    negative_units = [
+        row
+        for row in record.get("negative_detection_units_at_target_fpr") or []
+        if isinstance(row, dict) and row.get("statistical_cluster_id")
+    ]
+    positive_units = [
+        row
+        for row in record.get("positive_detection_units_at_target_fpr") or []
+        if isinstance(row, dict) and row.get("comparison_anchor_key")
+    ]
+    ready = (
+        bool(record)
+        and threshold is not None
+        and calibration_fpr is not None
+        and heldout_fpr is not None
+        and tpr is not None
+        and record.get("threshold_protocol") == config["threshold_protocol"]
+        and record.get("threshold_source_split") == "calibration"
+        and record.get("test_time_threshold_update_blocked") is True
+    )
+    calibration_count = _nonnegative_int(
+        record,
+        "calibration_clean_negative_score_count",
+    )
+    return ready, {
+        "formal_frozen_threshold_record_id": record.get(
+            "fair_detection_calibration_record_id"
+        ),
+        "formal_frozen_threshold_source_path": (
+            "records/fair_detection_calibration_records.jsonl"
+        ),
+        "formal_frozen_threshold_value": threshold,
+        "formal_frozen_threshold_source_split": record.get(
+            "threshold_source_split"
+        ),
+        "formal_frozen_threshold_protocol": record.get("threshold_protocol"),
+        "formal_frozen_threshold_test_time_update_blocked": record.get(
+            "test_time_threshold_update_blocked"
+        ),
+        "formal_frozen_threshold_calibration_negative_count": calibration_count,
+        "formal_frozen_threshold_calibration_fpr": calibration_fpr,
+        "formal_frozen_threshold_heldout_fpr": heldout_fpr,
+        "formal_frozen_threshold_tpr": tpr,
+        "formal_frozen_threshold_heldout_false_positive_count": sum(
+            1 for row in negative_units if row.get("false_positive_at_target_fpr") is True
+        ),
+        "formal_frozen_threshold_true_positive_count": sum(
+            1 for row in positive_units if row.get("detected_at_target_fpr") is True
+        ),
+        "formal_frozen_threshold_ready": ready,
     }
 
 
@@ -683,6 +745,8 @@ def _internal_ablation_readiness(
     ready = (
         decision.get("validation_internal_ablation_decision") == "PASS"
         and decision.get("validation_internal_ablation_evidence_level") == "formal_component_removal_video_detector"
+        and decision.get("detector_only_video_reuse_decision") == "PASS"
+        and decision.get("generation_variant_independent_video_decision") == "PASS"
         and bool(records)
         and len(formal_records) == len(records)
         and len(variants) >= config["minimum_internal_ablation_variant_count"]
@@ -702,6 +766,12 @@ def _internal_ablation_readiness(
         "pilot_paper_internal_ablation_trace_counts": variant_trace_counts,
         "minimum_pilot_paper_internal_ablation_trace_count": config["minimum_pilot_paper_internal_ablation_trace_count"],
         "validation_internal_ablation_score_margin": score_margin_value,
+        "detector_only_video_reuse_decision": decision.get(
+            "detector_only_video_reuse_decision"
+        ),
+        "generation_variant_independent_video_decision": decision.get(
+            "generation_variant_independent_video_decision"
+        ),
         "internal_ablation_claim_support_status": decision.get("claim_support_status"),
     }
 
@@ -823,9 +893,30 @@ def build_pilot_paper_gate_audit(
         heldout_negative_records
     )
     heldout_positive_scores = [float(record["pilot_paper_score"]) for record in heldout_positive_records]
-    threshold, calibration_fpr, calibration_false_positive_count = _fixed_fpr_threshold(calibration_negative_scores, config["target_fpr"])
-    heldout_fpr, heldout_false_positive_count = _rate_at_threshold(heldout_negative_scores, threshold)
-    tpr_at_fpr, true_positive_count = _rate_at_threshold(heldout_positive_scores, threshold)
+    formal_frozen_threshold_ready, formal_frozen_threshold = (
+        _official_sstw_frozen_threshold(run_root, config)
+    )
+    threshold = formal_frozen_threshold["formal_frozen_threshold_value"]
+    calibration_fpr = formal_frozen_threshold[
+        "formal_frozen_threshold_calibration_fpr"
+    ]
+    heldout_fpr = formal_frozen_threshold["formal_frozen_threshold_heldout_fpr"]
+    tpr_at_fpr = formal_frozen_threshold["formal_frozen_threshold_tpr"]
+    calibration_false_positive_count = round(
+        float(calibration_fpr or 0.0)
+        * int(
+            formal_frozen_threshold[
+                "formal_frozen_threshold_calibration_negative_count"
+            ]
+            or 0
+        )
+    )
+    heldout_false_positive_count = formal_frozen_threshold[
+        "formal_frozen_threshold_heldout_false_positive_count"
+    ]
+    true_positive_count = formal_frozen_threshold[
+        "formal_frozen_threshold_true_positive_count"
+    ]
 
     prompt_count = len(_unique_nonempty(eligible_generation_records, "prompt_id"))
     seed_per_prompt_min = _seed_per_prompt_min(eligible_generation_records)
@@ -924,7 +1015,7 @@ def build_pilot_paper_gate_audit(
         "attack_event_coverage_ready": bool(attack_counts)
         and not missing_required_runtime_attack_names
         and attack_event_count_per_attack_min >= config["minimum_attack_event_count_per_attack"],
-        "frozen_threshold_artifact_computable": threshold is not None and calibration_fpr is not None,
+        "formal_frozen_threshold_artifact_ready": formal_frozen_threshold_ready,
         "heldout_fpr_within_target": heldout_fpr is not None and heldout_fpr <= config["target_fpr"],
         "tpr_at_target_fpr_computable": tpr_at_fpr is not None,
         "path_marginal_gain_ready": formal_method_comparison_ready,
@@ -992,11 +1083,16 @@ def build_pilot_paper_gate_audit(
         **fair_detection_summary,
         **formal_method_comparison_summary,
         **formal_difference_interval_summary,
+        **formal_frozen_threshold,
         **internal_ablation_summary,
         "target_fpr": config["target_fpr"],
         "blocked_target_fpr": config["blocked_target_fpr"],
-        "threshold_id": "pilot_paper_calibrated_threshold_v1" if threshold is not None else None,
-        "threshold_source_split": "calibration" if threshold is not None else None,
+        "threshold_id": formal_frozen_threshold.get(
+            "formal_frozen_threshold_record_id"
+        ),
+        "threshold_source_split": formal_frozen_threshold.get(
+            "formal_frozen_threshold_source_split"
+        ),
         "test_time_threshold_update_blocked": True,
         "fpr_threshold_value": threshold,
         "calibration_negative_fpr_at_threshold": calibration_fpr,
@@ -1071,29 +1167,11 @@ def build_pilot_paper_gate_audit(
     }
 
 
-def _threshold_artifact_from_audit(audit: dict[str, Any]) -> dict[str, Any]:
-    """从 gate audit 中重建冻结阈值 artifact。"""
-    return {
-        "artifact_id": "pilot_paper_frozen_threshold",
-        "artifact_type": "threshold_artifact",
-        "threshold_id": audit.get("threshold_id"),
-        "threshold_value": audit.get("fpr_threshold_value"),
-        "threshold_source_split": audit.get("threshold_source_split"),
-        "target_fpr": audit.get("target_fpr"),
-        "paper_result_level": audit.get("paper_result_level"),
-        "paper_protocol_difference_from_full_paper": audit.get("paper_protocol_difference_from_full_paper"),
-        "calibration_negative_event_count": audit.get("calibration_negative_event_count"),
-        "calibration_negative_fpr_at_threshold": audit.get("calibration_negative_fpr_at_threshold"),
-        "test_time_threshold_update_blocked": True,
-        "claim_support_status": audit.get("claim_support_status"),
-    }
-
-
 def write_pilot_paper_gate_audit(
     run_root: str | Path,
     config_path: str | Path = DEFAULT_PILOT_PAPER_CONFIG,
 ) -> dict[str, Any]:
-    """写出 pilot_paper fixed-FPR gate records、table、threshold artifact、decision 和 report。"""
+    """写出 pilot_paper fixed-FPR gate records、table、decision 和 report。"""
     run_root = Path(run_root)
     audit = build_pilot_paper_gate_audit(run_root, config_path)
     record = with_flow_evidence_protocol_defaults(
@@ -1104,14 +1182,14 @@ def write_pilot_paper_gate_audit(
     )
     write_jsonl(run_root / "records" / "pilot_paper_gate_records.jsonl", [record])
     write_csv(run_root / "tables" / "pilot_paper_gate_table.csv", [record])
-    write_json(run_root / "thresholds" / "pilot_paper_frozen_threshold.json", _threshold_artifact_from_audit(audit))
     write_json(run_root / "artifacts" / "pilot_paper_gate_decision.json", audit)
     target_fpr_text = _format_fpr(audit.get("target_fpr"))
     blocked_target_fpr_text = _format_fpr(audit.get("blocked_target_fpr"))
     report = (
         "# pilot_paper fixed-FPR Paper Gate Report\n\n"
-        "该报告由已落盘的 governed records 自动生成, 使用 calibration split 冻结阈值, "
-        "再在 held-out test split 上报告 FPR 与 TPR。该报告可支持 pilot_paper 规模的 "
+        "该报告由已落盘的 governed records 自动生成, 只读消费 fair detection calibration "
+        "阶段已经冻结的阈值, 不在 gate 内再次校准, 并报告对应 held-out FPR 与 TPR。"
+        "该报告可支持 pilot_paper 规模的 "
         f"TPR@target_fpr={target_fpr_text} 论文级结论。pilot_paper 是小规模跑完整 full_paper 协议并产出 "
         "pilot 级论文结果的阶段, 因此不再需要单独的前置预演阶段。"
         "pilot_paper 与 full_paper 的差异由 protocol config 显式记录, 包括样本规模、统计功效、target FPR "

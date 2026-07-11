@@ -160,14 +160,14 @@
       "stage_plan": [
         "validation_artifact_rebuild_dry_run",
         "paper_profile_gate",
-        "probe_paper_to_pilot_paper_transition_decision",
         "pilot_paper_gate",
-        "pilot_paper_to_full_paper_transition_decision",
         "full_paper_result_checker",
-        "full_paper_to_submission_freeze_transition_decision",
         "reviewer_evidence_index",
         "paper_profile_gate_figure_builder",
         "paper_profile_package_manifest_builder",
+        "probe_paper_to_pilot_paper_transition_decision",
+        "pilot_paper_to_full_paper_transition_decision",
+        "full_paper_to_submission_freeze_transition_decision",
         "quick_tests_and_harness",
         "drive_packaging"
       ]
@@ -183,8 +183,6 @@
         "paper_profile_gate",
         "pilot_paper_gate",
         "pilot_paper_to_full_paper_transition_decision",
-        "paper_profile_gate_figure_builder",
-        "paper_profile_package_manifest_builder",
         "probe_paper_to_pilot_paper_transition_decision"
       ],
       "drive_log_dir_relative": "logs/generative_video_model_probe/full_paper",
@@ -246,8 +244,6 @@
       "disabled_stage_names": [
         "motion_threshold_calibration",
         "paper_profile_gate",
-        "paper_profile_gate_figure_builder",
-        "paper_profile_package_manifest_builder",
         "full_paper_result_checker",
         "full_paper_to_submission_freeze_transition_decision",
         "probe_paper_to_pilot_paper_transition_decision"

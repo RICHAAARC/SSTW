@@ -28,6 +28,28 @@ def _read_json(path: Path) -> dict[str, Any]:
     return payload
 
 
+def _read_jsonl(path: Path) -> list[dict[str, Any]]:
+    """读取 governed JSONL records, 文件不存在时返回空列表。"""
+
+    if not path.exists():
+        return []
+    rows: list[dict[str, Any]] = []
+    for line in path.read_text(encoding="utf-8-sig").splitlines():
+        if not line.strip():
+            continue
+        payload = json.loads(line)
+        if not isinstance(payload, dict):
+            raise TypeError(f"JSONL 每一行必须是对象: {path}")
+        rows.append(payload)
+    return rows
+
+
+def _nonempty_file(path: Path) -> bool:
+    """检查报告或 artifact 文件确实存在且包含内容。"""
+
+    return path.is_file() and path.stat().st_size > 0
+
+
 def _decision_passed(payload: Mapping[str, Any], *field_names: str) -> bool:
     """判断 artifact 的任一规范 decision 字段是否为 PASS。"""
 
@@ -50,6 +72,237 @@ def _required(config: Mapping[str, Any], *flag_names: str) -> bool:
     """只在公共契约显式启用能力时激活对应门禁。"""
 
     return any(config.get(flag_name) is True for flag_name in flag_names)
+
+
+def _safe_float(value: object) -> float | None:
+    """把证据字段安全转换为 float, 不可解析时返回 None。"""
+
+    try:
+        return float(value)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return None
+
+
+def _safe_int(value: object) -> int | None:
+    """把证据字段安全转换为 int, 不可解析时返回 None。"""
+
+    try:
+        return int(value)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return None
+
+
+def _sstw_advantage_ready(
+    records: list[dict[str, Any]],
+    config: Mapping[str, Any],
+    target_fpr: float,
+) -> tuple[bool, list[str]]:
+    """统一审计 SSTW 相对全部正式 baseline 的正差值与 CI 下界。
+
+    该函数只消费公平比较链已经生成的配对差值 records, 不重新计算论文指标。
+    probe、pilot 与 full 共用相同判定, 差别只来自各自 target FPR 和样本量。
+    """
+
+    required_baselines = {
+        str(value)
+        for value in config.get("required_modern_external_baseline_adapter_names", [])
+        if str(value)
+    }
+    minimum_count = int(
+        config.get("minimum_sstw_advantage_baseline_count", len(required_baselines))
+    )
+    minimum_difference = float(
+        config.get("minimum_sstw_tpr_at_target_fpr_difference", 0.0)
+    )
+    require_positive_ci = bool(
+        config.get("require_sstw_advantage_ci_lower_above_zero", True)
+    )
+    ready_baselines: set[str] = set()
+    failures: list[str] = []
+    for record in records:
+        baseline_id = str(record.get("baseline_method_id") or "")
+        if baseline_id not in required_baselines:
+            continue
+        if not _target_fpr_matches(record, target_fpr):
+            failures.append(f"{baseline_id}:target_fpr_mismatch")
+            continue
+        if (
+            record.get("difference_interval_status") != "ready"
+            or record.get("metric_status") != "measured_formal"
+        ):
+            failures.append(f"{baseline_id}:difference_interval_not_ready")
+            continue
+        difference = _safe_float(record.get("tpr_at_target_fpr_difference"))
+        if difference is None or difference <= minimum_difference:
+            failures.append(f"{baseline_id}:difference_not_above_minimum")
+            continue
+        ci_lower = _safe_float(record.get("difference_ci_lower"))
+        if require_positive_ci and (ci_lower is None or ci_lower <= 0.0):
+            failures.append(f"{baseline_id}:difference_ci_lower_not_above_zero")
+            continue
+        ready_baselines.add(baseline_id)
+    missing = sorted(required_baselines - ready_baselines)
+    failures.extend(f"{baseline_id}:missing" for baseline_id in missing)
+    return (
+        bool(required_baselines)
+        and len(ready_baselines) >= minimum_count
+        and ready_baselines == required_baselines
+        and not failures,
+        failures,
+    )
+
+
+def _cluster_aware_statistics_ready(
+    records: list[dict[str, Any]],
+    config: Mapping[str, Any],
+    target_fpr: float,
+) -> bool:
+    """验证每个正式方法同时具备 source-video TPR 与 FPR 统计记录。"""
+
+    required_methods = {
+        "sstw_key_conditioned_flow_trajectory",
+        *{
+            str(value)
+            for value in config.get(
+                "required_modern_external_baseline_adapter_names",
+                [],
+            )
+            if str(value)
+        },
+    }
+    tpr_methods: set[str] = set()
+    fpr_methods: set[str] = set()
+    for record in records:
+        method_id = str(record.get("method_id") or "")
+        if method_id not in required_methods or not _target_fpr_matches(
+            record,
+            target_fpr,
+        ):
+            continue
+        if record.get("ci_evidence_level") != (
+            "fair_detection_calibration_measured_formal"
+        ):
+            continue
+        family = record.get("statistical_confidence_interval_family")
+        cluster_count = _safe_int(record.get("ci_statistical_cluster_count")) or 0
+        if (
+            family == "tpr_at_target_fpr"
+            and record.get("cluster_by_video_interval_status")
+            == "source_video_cluster_bootstrap_complete"
+            and cluster_count >= 2
+            and (_safe_int(record.get("ci_bootstrap_resample_count")) or 0) >= 200
+            and _safe_float(record.get("ci_cluster_bootstrap_lower")) is not None
+            and _safe_float(record.get("ci_cluster_bootstrap_upper")) is not None
+        ):
+            tpr_methods.add(method_id)
+        if (
+            family == "heldout_fpr_at_frozen_threshold"
+            and record.get("cluster_by_video_interval_status")
+            == "source_video_exact_binomial_complete"
+            and cluster_count > 0
+            and _safe_float(record.get("ci_one_sided_exact_upper")) is not None
+        ):
+            fpr_methods.add(method_id)
+    return bool(required_methods) and tpr_methods == required_methods == fpr_methods
+
+
+def _internal_ablation_profile_evidence_ready(
+    records: list[dict[str, Any]],
+    decision: Mapping[str, Any],
+    config: Mapping[str, Any],
+) -> bool:
+    """统一审计三档内部消融的视频生成与 detector-only 复用语义。"""
+
+    profile = str(config.get("paper_result_level") or "")
+    minimum_trace_count = _safe_int(
+        config.get(f"minimum_{profile}_internal_ablation_trace_count")
+    )
+    required_variants = {
+        str(value)
+        for value in config.get("required_internal_ablation_variants", [])
+        if str(value)
+    }
+    generation_variants = {
+        str(value)
+        for value in config.get("generation_internal_ablation_variants", [])
+        if str(value)
+    }
+    detector_only_variants = {
+        str(value)
+        for value in config.get("detector_only_internal_ablation_variants", [])
+        if str(value)
+    }
+    if (
+        minimum_trace_count is None
+        or minimum_trace_count <= 0
+        or not required_variants
+        or generation_variants & detector_only_variants
+        or generation_variants | detector_only_variants != required_variants
+    ):
+        return False
+    rows = [
+        record
+        for record in records
+        if record.get("metric_status") == "measured_formal"
+        and record.get("formal_internal_ablation_evidence_level")
+        == "formal_component_removal_video_detector"
+        and record.get("ablation_runtime_profile") == profile
+        and str(record.get("split") or "").lower()
+        in {"test", "heldout", "heldout_test"}
+    ]
+    traces_by_variant = {
+        variant: {
+            str(record.get("trajectory_trace_id"))
+            for record in rows
+            if record.get("method_variant") == variant
+            and record.get("trajectory_trace_id")
+        }
+        for variant in required_variants
+    }
+    full_traces = traces_by_variant.get("sstw_full_method", set())
+    detector_only_ready = bool(full_traces) and all(
+        traces_by_variant[variant] == full_traces
+        and all(
+            record.get("ablation_video_execution_mode")
+            == "detector_only_reuse_full_method_video"
+            and record.get("ablation_source_method_variant") == "sstw_full_method"
+            and record.get("ablation_independent_video_generation_required") is False
+            for record in rows
+            if record.get("method_variant") == variant
+        )
+        for variant in detector_only_variants
+    )
+    generation_trace_sets = [
+        traces_by_variant[variant] for variant in sorted(generation_variants)
+    ]
+    generation_ready = all(
+        len(traces_by_variant[variant]) >= minimum_trace_count
+        and all(
+            record.get("ablation_video_execution_mode")
+            == "independent_generation_variant_video"
+            and record.get("ablation_source_method_variant") == variant
+            and record.get("ablation_independent_video_generation_required") is True
+            for record in rows
+            if record.get("method_variant") == variant
+        )
+        for variant in generation_variants
+    ) and all(
+        not left & right
+        for index, left in enumerate(generation_trace_sets)
+        for right in generation_trace_sets[index + 1 :]
+    )
+    trace_coverage_ready = all(
+        len(trace_ids) >= minimum_trace_count
+        for trace_ids in traces_by_variant.values()
+    )
+    return (
+        decision.get("validation_internal_ablation_decision") == "PASS"
+        and decision.get("detector_only_video_reuse_decision") == "PASS"
+        and decision.get("generation_variant_independent_video_decision") == "PASS"
+        and detector_only_ready
+        and generation_ready
+        and trace_coverage_ready
+    )
 
 
 def build_paper_profile_evidence_closure_audit(
@@ -97,6 +350,22 @@ def build_paper_profile_evidence_closure_audit(
     motion_threshold = _read_json(artifacts / "motion_threshold_calibration_decision.json")
     adaptive = _read_json(artifacts / "adaptive_attack_decision.json")
     cross_model = _read_json(artifacts / "cross_model_generalization_decision.json")
+    motion_exclusion = _read_json(
+        artifacts / "motion_consistency_exclusion_decision.json"
+    )
+    difference_records = _read_jsonl(
+        root / "records" / "formal_baseline_difference_interval_records.jsonl"
+    )
+    statistical_records = _read_jsonl(
+        root / "records" / "statistical_confidence_interval_records.jsonl"
+    )
+    internal_ablation_records = _read_jsonl(
+        root / "records" / "formal_internal_ablation_variant_records.jsonl"
+    )
+    if not internal_ablation_records:
+        internal_ablation_records = _read_jsonl(
+            root / "records" / "validation_internal_ablation_records.jsonl"
+        )
 
     checks: dict[str, bool] = {}
 
@@ -116,6 +385,12 @@ def build_paper_profile_evidence_closure_audit(
         "complete_paper_mechanism_claim_passed",
         _required(config, "require_complete_paper_mechanism_contract"),
         _decision_passed(complete_claim, "complete_paper_mechanism_claim_decision"),
+    )
+    add(
+        "claim_audit_report_passed",
+        _required(config, "require_claim_audit_report"),
+        _decision_passed(complete_claim, "complete_paper_mechanism_claim_decision")
+        and _nonempty_file(root / "reports" / "complete_paper_mechanism_claim_report.md"),
     )
     add(
         "claim_1_velocity_constraint_full_support_passed",
@@ -185,6 +460,18 @@ def build_paper_profile_evidence_closure_audit(
         )
         and _decision_passed(
             adaptive_execution,
+            "adaptive_detector_feedback_search_decision",
+        )
+        and _decision_passed(
+            adaptive_execution,
+            "adaptive_model_vae_regeneration_decision",
+        )
+        and _decision_passed(
+            adaptive_execution,
+            "adaptive_public_negative_probe_decision",
+        )
+        and _decision_passed(
+            adaptive_execution,
             "adaptive_watermark_retention_decision",
         )
         and _decision_passed(
@@ -202,6 +489,22 @@ def build_paper_profile_evidence_closure_audit(
         _required(config, "require_statistical_confidence_interval_decision", "require_confidence_interval_report"),
         _decision_passed(statistical_ci, "statistical_confidence_interval_decision")
         and _target_fpr_matches(statistical_ci, target_fpr),
+    )
+    add(
+        "cluster_aware_statistics_passed",
+        _required(config, "require_cluster_aware_statistics"),
+        _decision_passed(statistical_ci, "statistical_confidence_interval_decision")
+        and statistical_ci.get("claim_support_status")
+        == "formal_cluster_bootstrap_ci_from_fair_detection_calibration"
+        and statistical_ci.get("cluster_by_video_interval_status")
+        == "source_video_cluster_bootstrap_complete"
+        and (_safe_int(statistical_ci.get("ci_statistical_cluster_count")) or 0) > 0
+        and (_safe_int(statistical_ci.get("heldout_fpr_ci_record_count")) or 0) > 0
+        and _cluster_aware_statistics_ready(
+            statistical_records,
+            config,
+            target_fpr,
+        ),
     )
     add(
         "heldout_fpr_confidence_upper_within_target",
@@ -232,6 +535,15 @@ def build_paper_profile_evidence_closure_audit(
             validation_ablation,
             "validation_internal_ablation_decision",
             "internal_ablation_decision",
+        ),
+    )
+    add(
+        "internal_ablation_video_reuse_policy_passed",
+        _required(config, "require_internal_ablation_video_reuse_policy"),
+        _internal_ablation_profile_evidence_ready(
+            internal_ablation_records,
+            validation_ablation,
+            config,
         ),
     )
     add(
@@ -298,6 +610,18 @@ def build_paper_profile_evidence_closure_audit(
         _decision_passed(difference, "formal_baseline_difference_interval_decision")
         and _target_fpr_matches(difference, target_fpr),
     )
+    sstw_advantage_ready, sstw_advantage_failures = _sstw_advantage_ready(
+        difference_records,
+        config,
+        target_fpr,
+    )
+    add(
+        "sstw_advantage_claim_passed",
+        _required(config, "require_sstw_advantage_claim_ready"),
+        _decision_passed(difference, "formal_baseline_difference_interval_decision")
+        and _target_fpr_matches(difference, target_fpr)
+        and sstw_advantage_ready,
+    )
     add(
         "external_baseline_self_containment_passed",
         _required(
@@ -333,6 +657,19 @@ def build_paper_profile_evidence_closure_audit(
         motion_threshold.get("motion_threshold_calibration_ready") is True,
     )
     add(
+        "formal_motion_claim_passed",
+        _required(config, "require_formal_motion_claim_ready"),
+        _decision_passed(
+            motion_exclusion,
+            "motion_consistency_exclusion_decision",
+        )
+        and motion_exclusion.get("motion_consistency_claim_filter_applied") is True
+        and (_safe_int(motion_exclusion.get("motion_consistency_included_count")) or 0) > 0
+        and _nonempty_file(
+            root / "records" / "motion_consistency_exclusion_records.jsonl"
+        ),
+    )
+    add(
         "adaptive_attack_protocol_passed",
         _required(config, "require_adaptive_attack_records"),
         _decision_passed(adaptive, "adaptive_attack_decision"),
@@ -345,7 +682,6 @@ def build_paper_profile_evidence_closure_audit(
         == "supportive_not_primary_fixed_fpr_closure"
         and bool(cross_model.get("cross_model_generalization_model_ids")),
     )
-
     missing = [name for name, passed in checks.items() if not passed]
     decision = "PASS" if not missing else "FAIL"
     return {
@@ -356,5 +692,6 @@ def build_paper_profile_evidence_closure_audit(
         "paper_profile_evidence_closure_required_check_count": len(checks),
         "paper_profile_evidence_closure_missing_requirements": missing,
         "paper_profile_evidence_closure_missing_requirement_count": len(missing),
+        "sstw_advantage_claim_failures": sstw_advantage_failures,
         "post_gate_requirements": ["reviewer_evidence_index_required"],
     }

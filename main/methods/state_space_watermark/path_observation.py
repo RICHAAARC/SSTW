@@ -75,8 +75,15 @@ def compute_path_step_observation(
     )
 
 
-def aggregate_path_observations(records: Iterable[Mapping[str, Any]]) -> dict[str, float | int | None]:
-    """聚合 trajectory step records, 形成可进入状态后验的路径证据。"""
+def aggregate_path_observations(
+    records: Iterable[Mapping[str, Any]],
+) -> dict[str, float | int | bool | None]:
+    """聚合 trajectory step records, 形成不确定性感知的路径证据。
+
+    生成阶段的 step record 没有 replay 不确定性, 因而默认可靠性为1。攻击后
+    replay 可以逐步提供 ``replay_reliability_weight``; 该权重直接衰减每一步
+    对路径积分的贡献, 而不是只作为检测器的旁路特征。
+    """
 
     rows = [record for record in records if record.get("path_projection_normalized") is not None]
     if not rows:
@@ -85,24 +92,50 @@ def aggregate_path_observations(records: Iterable[Mapping[str, Any]]) -> dict[st
             "S_path_inv": None,
             "S_velocity": None,
             "path_velocity_consistency_mean": None,
+            "S_path_inv_unweighted": None,
+            "path_replay_reliability_weight_mean": None,
+            "path_replay_weighted_aggregation_applied": False,
         }
-    weights = [max(0.0, 1.0 - abs(float(row.get("flow_phase", 0.5)) - 0.5) * 2.0) for row in rows]
-    weight_sum = sum(weights)
-    if weight_sum <= 1e-8:
-        weights = [1.0 for _ in rows]
-        weight_sum = float(len(rows))
+    phase_weights = [
+        max(0.0, 1.0 - abs(float(row.get("flow_phase", 0.5)) - 0.5) * 2.0)
+        for row in rows
+    ]
+    phase_weight_sum = sum(phase_weights)
+    if phase_weight_sum <= 1e-8:
+        phase_weights = [1.0 for _ in rows]
+        phase_weight_sum = float(len(rows))
+    replay_weights = [
+        max(0.0, min(1.0, float(row.get("replay_reliability_weight", 1.0))))
+        for row in rows
+    ]
+    weighted_path_weights = [
+        phase_weight * replay_weight
+        for phase_weight, replay_weight in zip(phase_weights, replay_weights)
+    ]
+    unweighted_path_score = sum(
+        weight * float(row["path_projection_normalized"])
+        for weight, row in zip(phase_weights, rows)
+    ) / phase_weight_sum
     path_score = sum(
         weight * float(row["path_projection_normalized"])
-        for weight, row in zip(weights, rows)
-    ) / weight_sum
+        for weight, row in zip(weighted_path_weights, rows)
+    ) / phase_weight_sum
     velocity_score = sum(
         weight * float(row.get("velocity_projection_normalized") or 0.0)
-        for weight, row in zip(weights, rows)
-    ) / weight_sum
-    consistencies = [float(row.get("path_velocity_consistency") or 0.0) for row in rows]
+        for weight, row in zip(phase_weights, rows)
+    ) / phase_weight_sum
+    consistency_score = sum(
+        weight * float(row.get("path_velocity_consistency") or 0.0)
+        for weight, row in zip(weighted_path_weights, rows)
+    ) / phase_weight_sum
     return {
         "path_observation_step_count": len(rows),
         "S_path_inv": round(path_score, 8),
+        "S_path_inv_unweighted": round(unweighted_path_score, 8),
         "S_velocity": round(velocity_score, 8),
-        "path_velocity_consistency_mean": round(mean(consistencies), 8),
+        "path_velocity_consistency_mean": round(consistency_score, 8),
+        "path_replay_reliability_weight_mean": round(mean(replay_weights), 8),
+        "path_replay_weighted_aggregation_applied": any(
+            "replay_reliability_weight" in row for row in rows
+        ),
     }

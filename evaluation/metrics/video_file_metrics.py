@@ -190,3 +190,93 @@ def compute_video_file_metrics(video_path: str | Path, max_frames: int = 24) -> 
         "visual_quality_failure_reason": visual_failure_reason,
         "motion_consistency_failure_reason": motion_failure_reason,
     }
+
+
+def compute_paired_video_quality_metrics(
+    reference_video_path: str | Path,
+    candidate_video_path: str | Path,
+    *,
+    max_frames: int = 24,
+) -> dict[str, Any]:
+    """计算 clean-reference 与 watermarked 视频的配对失真指标。
+
+    PSNR、SSIM 和 temporal-delta error 都逐帧使用同一个 prompt/seed 的 clean
+    reference。它们衡量水印引入的实际失真, 不再用单视频亮度或对比度替代质量。
+    """
+
+    import math
+    import numpy as np
+    from PIL import Image
+    from skimage.metrics import structural_similarity
+
+    reference_path = Path(reference_video_path)
+    candidate_path = Path(candidate_video_path)
+    if not reference_path.exists() or not candidate_path.exists():
+        return {
+            "paired_video_quality_status": "missing_video",
+            "paired_video_quality_failure_reason": "reference_or_candidate_missing",
+        }
+    try:
+        reference_frames = _load_sampled_frames(reference_path, max_frames=max_frames)
+        candidate_frames = _load_sampled_frames(candidate_path, max_frames=max_frames)
+    except Exception as exc:  # pragma: no cover - 依赖具体 codec
+        return {
+            "paired_video_quality_status": "decode_failed",
+            "paired_video_quality_failure_reason": str(exc),
+        }
+    count = min(len(reference_frames), len(candidate_frames))
+    if count < 2:
+        return {
+            "paired_video_quality_status": "insufficient_frames",
+            "paired_video_quality_failure_reason": "paired_metric_requires_two_frames",
+        }
+    references: list[Any] = []
+    candidates: list[Any] = []
+    for index in range(count):
+        reference = np.asarray(reference_frames[index])[..., :3].astype(np.float64)
+        candidate = np.asarray(candidate_frames[index])[..., :3].astype(np.float64)
+        if candidate.shape != reference.shape:
+            candidate = np.asarray(
+                Image.fromarray(candidate.astype(np.uint8)).resize(
+                    (reference.shape[1], reference.shape[0]),
+                    Image.Resampling.BICUBIC,
+                ),
+                dtype=np.float64,
+            )
+        references.append(reference)
+        candidates.append(candidate)
+    squared_errors = [float(np.mean((left - right) ** 2)) for left, right in zip(references, candidates)]
+    mse = float(np.mean(squared_errors))
+    psnr = 99.0 if mse <= 1e-12 else 10.0 * math.log10((255.0**2) / mse)
+    ssim_values: list[float] = []
+    for left, right in zip(references, candidates):
+        ssim_values.append(
+            float(
+                structural_similarity(
+                    left,
+                    right,
+                    data_range=255.0,
+                    channel_axis=2,
+                    gaussian_weights=True,
+                    use_sample_covariance=False,
+                )
+            )
+        )
+    temporal_errors = []
+    for index in range(1, count):
+        reference_delta = references[index] - references[index - 1]
+        candidate_delta = candidates[index] - candidates[index - 1]
+        temporal_errors.append(
+            float(np.mean(np.abs(reference_delta - candidate_delta)) / 255.0)
+        )
+    return {
+        "paired_video_quality_status": "ready",
+        "paired_video_quality_failure_reason": "none",
+        "paired_quality_frame_count": count,
+        "paired_watermark_psnr": round(float(psnr), 8),
+        "paired_watermark_ssim": round(float(np.mean(ssim_values)), 8),
+        "paired_watermark_ssim_protocol": (
+            "local_gaussian_window_multichannel_ssim_data_range_255"
+        ),
+        "paired_temporal_delta_error": round(float(np.mean(temporal_errors)), 8),
+    }

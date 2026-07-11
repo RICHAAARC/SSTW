@@ -7,7 +7,10 @@ import json
 from pathlib import Path
 
 from evaluation.metrics.semantic_video_metrics import DEFAULT_CLIP_MODEL_ID, DEFAULT_SEMANTIC_THRESHOLD, compute_clip_text_video_similarity
-from evaluation.metrics.video_file_metrics import compute_video_file_metrics
+from evaluation.metrics.video_file_metrics import (
+    compute_paired_video_quality_metrics,
+    compute_video_file_metrics,
+)
 from runtime.core.progress import ProgressReporter
 from evaluation.protocol.flow_evidence_fields import with_flow_evidence_protocol_defaults
 from evaluation.protocol.record_writer import write_json, write_jsonl
@@ -180,7 +183,12 @@ def _build_prompt_missing_semantic_metrics(model_id: str, frame_limit: int) -> d
     }
 
 
-def _formal_metric_blocking_reason(visual_ready: bool, motion_ready: bool, semantic_ready: bool) -> str:
+def _formal_metric_blocking_reason(
+    visual_ready: bool,
+    motion_ready: bool,
+    semantic_ready: bool,
+    paired_quality_ready: bool = True,
+) -> str:
     """把 formal gate 的阻塞来源压缩成一个稳定字符串。"""
     reasons: list[str] = []
     if not visual_ready:
@@ -189,6 +197,8 @@ def _formal_metric_blocking_reason(visual_ready: bool, motion_ready: bool, seman
         reasons.append("formal_motion_consistency_not_ready")
     if not semantic_ready:
         reasons.append("formal_semantic_consistency_not_ready")
+    if not paired_quality_ready:
+        reasons.append("formal_paired_video_quality_not_ready")
     return "none" if not reasons else ";".join(reasons)
 
 
@@ -205,6 +215,16 @@ def build_formal_metric_records(
     generation_records = _read_jsonl(run_root / "records" / "generation_records.jsonl")
     resolved_prompt_suite_path = _resolve_prompt_suite_path(run_root, prompt_suite_path)
     prompt_metadata_by_id, semantic_prompt_source = _load_prompt_metadata(resolved_prompt_suite_path)
+    clean_reference_by_identity = {
+        (
+            str(record.get("generation_model_id") or ""),
+            str(record.get("prompt_id") or ""),
+            str(record.get("seed_id") or ""),
+        ): record
+        for record in generation_records
+        if record.get("sample_role") == "clean_negative"
+        and record.get("generation_status") == "success"
+    }
     records: list[dict] = []
     progress = ProgressReporter("formal_metric_runtime_video_scan", len(generation_records), "runtime_video")
     for index, generation_record in enumerate(generation_records):
@@ -238,7 +258,45 @@ def build_formal_metric_records(
             and semantic_score is not None
             and float(semantic_score) >= semantic_consistency_threshold
         )
-        formal_metric_ready = bool(visual_ready and motion_ready and semantic_ready)
+        paired_quality_required = (
+            generation_record.get("method_variant") == "sstw_full_method"
+            and generation_record.get("sample_role") == "attacked_positive_source"
+        )
+        paired_reference = clean_reference_by_identity.get((
+            str(generation_record.get("generation_model_id") or ""),
+            str(generation_record.get("prompt_id") or ""),
+            str(generation_record.get("seed_id") or ""),
+        ))
+        if paired_quality_required and paired_reference is not None:
+            paired_reference_path = _resolve_video_path(run_root, paired_reference)
+            paired_metrics = compute_paired_video_quality_metrics(
+                paired_reference_path,
+                video_path,
+            )
+            paired_metrics["paired_reference_video_path"] = str(
+                paired_reference_path
+            )
+        elif paired_quality_required:
+            paired_metrics = {
+                "paired_video_quality_status": "missing_reference",
+                "paired_video_quality_failure_reason": (
+                    "same_model_prompt_seed_clean_reference_missing"
+                ),
+                "paired_reference_video_path": None,
+            }
+        else:
+            paired_metrics = {
+                "paired_video_quality_status": "not_required_for_non_primary_variant",
+                "paired_video_quality_failure_reason": "none",
+                "paired_reference_video_path": None,
+            }
+        paired_quality_ready = (
+            not paired_quality_required
+            or paired_metrics.get("paired_video_quality_status") == "ready"
+        )
+        formal_metric_ready = bool(
+            visual_ready and motion_ready and semantic_ready and paired_quality_ready
+        )
         records.append(with_flow_evidence_protocol_defaults({
             "record_version": "generative_video_formal_quality_motion_semantic_v1",
             "generation_model_id": generation_record.get("generation_model_id"),
@@ -257,7 +315,15 @@ def build_formal_metric_records(
             "semantic_consistency_threshold": semantic_consistency_threshold,
             **semantic_metrics,
             "formal_semantic_consistency_ready": semantic_ready,
-            "formal_metric_blocking_reason": _formal_metric_blocking_reason(visual_ready, motion_ready, semantic_ready),
+            "paired_video_quality_required": paired_quality_required,
+            **paired_metrics,
+            "formal_paired_video_quality_ready": paired_quality_ready,
+            "formal_metric_blocking_reason": _formal_metric_blocking_reason(
+                visual_ready,
+                motion_ready,
+                semantic_ready,
+                paired_quality_ready,
+            ),
             "formal_metric_result_used_for_claim": formal_metric_ready,
         },
             trajectory_source_level="formal_video_metric_with_generation_trace_reference",
@@ -274,12 +340,24 @@ def audit_formal_metrics(records: list[dict]) -> dict:
     visual_ready_count = sum(1 for record in records if record.get("formal_visual_quality_ready") is True)
     motion_ready_count = sum(1 for record in records if record.get("formal_motion_consistency_ready") is True)
     semantic_ready_count = sum(1 for record in records if record.get("formal_semantic_consistency_ready") is True)
+    paired_required_records = [
+        record for record in records
+        if record.get("paired_video_quality_required") is True
+    ]
+    paired_ready_count = sum(
+        record.get("formal_paired_video_quality_ready") is True
+        for record in paired_required_records
+    )
     visual_blocked_count = len(records) - visual_ready_count
     motion_blocked_count = len(records) - motion_ready_count
     semantic_blocked_count = len(records) - semantic_ready_count
     all_visual_motion_ready = bool(records) and visual_ready_count == len(records) and motion_ready_count == len(records)
     all_semantic_ready = bool(records) and semantic_ready_count == len(records)
-    formal_ready = all_visual_motion_ready and all_semantic_ready
+    all_paired_ready = (
+        not paired_required_records
+        or paired_ready_count == len(paired_required_records)
+    )
+    formal_ready = all_visual_motion_ready and all_semantic_ready and all_paired_ready
     if formal_ready:
         claim_status = "ready"
     elif visual_blocked_count > 0:
@@ -288,6 +366,8 @@ def audit_formal_metrics(records: list[dict]) -> dict:
         claim_status = "blocked_by_formal_motion_consistency"
     elif semantic_blocked_count > 0:
         claim_status = "blocked_until_semantic_metric_ready"
+    elif not all_paired_ready:
+        claim_status = "blocked_until_paired_video_quality_ready"
     else:
         claim_status = "blocked_until_formal_quality_motion_semantic_metrics"
     return {
@@ -299,8 +379,11 @@ def audit_formal_metrics(records: list[dict]) -> dict:
         "formal_visual_quality_blocked_count": visual_blocked_count,
         "formal_motion_consistency_blocked_count": motion_blocked_count,
         "formal_semantic_consistency_blocked_count": semantic_blocked_count,
+        "formal_paired_video_quality_required_count": len(paired_required_records),
+        "formal_paired_video_quality_ready_count": paired_ready_count,
         "formal_visual_motion_ready": all_visual_motion_ready,
         "formal_semantic_ready": all_semantic_ready,
+        "formal_paired_video_quality_ready": all_paired_ready,
         "formal_quality_motion_semantic_ready": formal_ready,
         "formal_metric_claim_status": claim_status,
     }

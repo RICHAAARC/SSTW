@@ -19,9 +19,18 @@ from main.methods.state_space_watermark.authenticated_trajectory_sketch import (
     sign_authenticated_trajectory_sketch,
 )
 from main.methods.state_space_watermark.flow_velocity_runtime import FlowVelocityConstraintRuntime
+from experiments.generative_video_model_probe.formal_method_variants import (
+    FORMAL_METHOD_VARIANTS,
+    GENERATION_METHOD_VARIANTS,
+    velocity_runtime_mechanism_for_method_variant,
+)
 from main.methods.state_space_watermark.flow_latent_layout import FiveDimensionalFlowLatentLayout
 from main.methods.state_space_watermark.ltx_flow_replay_backend import build_ltx_latent_layout
 from main.methods.state_space_watermark.path_observation import aggregate_path_observations
+from main.methods.state_space_watermark.watermark_key_derivation import (
+    WATERMARK_KEY_DERIVATION_ID,
+    derive_watermark_key_text,
+)
 from evaluation.protocol.flow_evidence_fields import (
     with_flow_evidence_protocol_defaults,
     with_flow_evidence_protocol_defaults_many,
@@ -42,16 +51,7 @@ LTX_VIDEO_CROSS_MODEL_ID = "Lightricks/LTX-Video"
 
 PAPER_RESULT_PROFILES = {"probe_paper", "pilot_paper", "full_paper"}
 
-PAPER_FORMAL_METHOD_VARIANTS = (
-    "sstw_full_method",
-    "endpoint_only_control",
-    "trajectory_only_score",
-    "without_velocity_constraint",
-    "without_endpoint_aware_control",
-    "without_replay_uncertainty_weighting",
-    "without_flow_state_admissibility",
-    "generic_ssm_baseline",
-)
+PAPER_FORMAL_METHOD_VARIANTS = FORMAL_METHOD_VARIANTS
 PROFILE_SETTINGS = {
     "pilot_paper": {
         "prompt_limit": None,
@@ -353,11 +353,12 @@ def _build_generation_plan(prompt_suite: dict, profile: str, model_id: str, cros
 
 
 def _build_internal_ablation_generation_plan(main_plan: list[dict], profile: str) -> list[dict]:
-    """在全部独立视频上展开 component-removal 变体, 不污染主方法样本数.
+    """在全部独立视频上展开会改变嵌入轨迹的 component-removal 变体。
 
     主计划仍保持每个 prompt/seed 一条 full-method positive 和一条 clean negative.
-    内部消融完整复用相同 prompt/seed/split 身份, 从而既能拟合每个变体的冻结
-    后验, 又能在 held-out 视频上进行同源配对因果比较.
+    只有改变 scheduler 运行机制的变体需要重新生成视频。仅改变观测变换或
+    检测器结构的变体会在正式 Flow 评分阶段复用 full-method 的同一视频和同一
+    replay, 从而避免浪费 GPU, 也避免把第二次生成的随机性混入消融效应。
     """
 
     if profile not in PAPER_RESULT_PROFILES:
@@ -370,7 +371,7 @@ def _build_internal_ablation_generation_plan(main_plan: list[dict], profile: str
     sources = [item for item in candidates if item.get("split") in {"calibration", "test"}]
     records: list[dict] = []
     for source in sources:
-        for method_variant in PAPER_FORMAL_METHOD_VARIANTS:
+        for method_variant in GENERATION_METHOD_VARIANTS:
             if method_variant == "sstw_full_method":
                 continue
             item = dict(source)
@@ -401,6 +402,16 @@ def run_colab_probe(output_root: str | Path, prompt_suite_path: str | Path, prof
     settings = PROFILE_SETTINGS[profile]
     dtype = _select_dtype(torch)
     hf_token_status = "provided" if os.environ.get("HF_TOKEN") else "not_provided"
+    authentication_key_text = os.environ.get("SSTW_TRAJECTORY_AUTHENTICATION_KEY") or ""
+    authentication_key_id = os.environ.get("SSTW_TRAJECTORY_AUTHENTICATION_KEY_ID") or ""
+    if (
+        len(authentication_key_text.encode("utf-8")) < 32
+        or not authentication_key_id.strip()
+    ):
+        raise RuntimeError(
+            "SSTW 嵌入运行要求至少32字节的所有者密钥和非空 key ID"
+        )
+    authentication_key = authentication_key_text.encode("utf-8")
     main_plan = _build_generation_plan(prompt_suite, profile, model_id, cross_model_id)
     plan = main_plan + _build_internal_ablation_generation_plan(main_plan, profile)
     progress = ProgressReporter("flow_model_runtime_generation", len(plan), "video")
@@ -458,12 +469,20 @@ def run_colab_probe(output_root: str | Path, prompt_suite_path: str | Path, prof
         )
         started = time.time()
         try:
-            key_text = f"{item['generation_model_id']}::{item['prompt_id']}::{item['seed_id']}"
+            key_text = derive_watermark_key_text(
+                authentication_key,
+                key_id=authentication_key_id,
+                generation_model_id=str(item["generation_model_id"]),
+                prompt_id=str(item["prompt_id"]),
+                seed_id=str(item["seed_id"]),
+            )
             with FlowVelocityConstraintRuntime(
                 pipe.scheduler,
                 key_text=key_text,
                 total_steps=int(settings["num_inference_steps"]),
-                method_variant=str(item["method_variant"]),
+                mechanism_config=velocity_runtime_mechanism_for_method_variant(
+                    str(item["method_variant"])
+                ),
                 latent_layout=latent_layout,
             ) as velocity_runtime:
                 with suppress_third_party_progress_output("flow_model_runtime_single_video_generation"):
@@ -508,8 +527,6 @@ def run_colab_probe(output_root: str | Path, prompt_suite_path: str | Path, prof
 
         sketch_status = "not_required_nonpaper_profile"
         if profile in PAPER_RESULT_PROFILES:
-            authentication_key = os.environ.get("SSTW_TRAJECTORY_AUTHENTICATION_KEY")
-            authentication_key_id = os.environ.get("SSTW_TRAJECTORY_AUTHENTICATION_KEY_ID")
             if generation_status == "success" and step_stats and authentication_key and authentication_key_id:
                 sketch_payload = build_authenticated_trajectory_sketch_payload(
                     step_stats,
@@ -526,7 +543,7 @@ def run_colab_probe(output_root: str | Path, prompt_suite_path: str | Path, prof
                 )
                 signed_sketch = sign_authenticated_trajectory_sketch(
                     sketch_payload,
-                    authentication_key=authentication_key.encode("utf-8"),
+                    authentication_key=authentication_key,
                 )
                 trajectory_sketch_records.append({
                     "record_version": "authenticated_trajectory_sketch_v1",
@@ -577,6 +594,8 @@ def run_colab_probe(output_root: str | Path, prompt_suite_path: str | Path, prof
             "method_variant": item["method_variant"],
             "watermark_embedding_status": item["watermark_embedding_status"],
             "velocity_constraint_config_id": "flow_velocity_constraint_default",
+            "watermark_key_derivation_id": WATERMARK_KEY_DERIVATION_ID,
+            "watermark_key_id": authentication_key_id,
             "flow_phase_schedule_id": "sin_squared_middle_flow_phase",
             "sampling_constraint_applied_step_count": applied_step_count,
             "formal_generation_watermark_embedding_level": (

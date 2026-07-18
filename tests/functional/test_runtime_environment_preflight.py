@@ -21,15 +21,26 @@ from workflows.stage_package_sync import (
 )
 
 
-def _locked_versions() -> dict[str, str]:
-    """读取测试所需的精确依赖版本, 避免复制第二份版本表。"""
+def _runtime_lock_payload() -> dict:
+    """读取测试所需的运行环境锁, 避免复制第二份环境契约。"""
 
-    lock = json.loads(
+    return json.loads(
         Path("requirements/paper_runtime_environment_lock.json").read_text(
             encoding="utf-8"
         )
     )
-    return dict(lock["required_distributions"])
+
+
+def _locked_versions() -> dict[str, str]:
+    """读取锁定依赖版本。"""
+
+    return dict(_runtime_lock_payload()["required_distributions"])
+
+
+def _locked_python_major_minor() -> str:
+    """读取锁定 Python major.minor。"""
+
+    return str(_runtime_lock_payload()["python_major_minor"])
 
 
 def _passing_gpu_observation() -> dict:
@@ -61,7 +72,7 @@ def test_runtime_preflight_freezes_models_and_accepts_exact_locked_environment()
             "Lightricks/LTX-Video": cross_commit,
         },
         installed_versions=_locked_versions(),
-        python_major_minor="3.11",
+        python_major_minor=_locked_python_major_minor(),
         gpu_observation=_passing_gpu_observation(),
         repository_observation={
             "repository_provenance_source": "git_worktree",
@@ -91,7 +102,7 @@ def test_runtime_preflight_fails_closed_on_dependency_gpu_or_dirty_tree() -> Non
         repo_root=Path.cwd(),
         require_gpu=True,
         installed_versions=versions,
-        python_major_minor="3.11",
+        python_major_minor=_locked_python_major_minor(),
         gpu_observation=gpu,
         repository_observation={
             "repository_provenance_source": "git_worktree",
@@ -114,6 +125,8 @@ def test_runtime_lock_is_present_and_machine_readable() -> None:
 
     assert path.name == "paper_runtime_environment_lock.json"
     assert lock["lock_schema_version"] == "sstw_paper_runtime_environment_lock_v1"
+    assert lock["lock_id"] == "sstw_paper_runtime_python_3_12_torch_2_6_cuda_12_4"
+    assert lock["python_major_minor"] == "3.12"
     assert lock["registered_generation_models"]
     assert len(digest) == 64
 
@@ -126,7 +139,7 @@ def test_passed_preflight_is_archived_with_each_formal_stage(tmp_path: Path) -> 
         repo_root=Path.cwd(),
         require_gpu=False,
         installed_versions=_locked_versions(),
-        python_major_minor="3.11",
+        python_major_minor=_locked_python_major_minor(),
         gpu_observation={"cuda_available": False},
         repository_observation={
             "repository_provenance_source": "git_worktree",

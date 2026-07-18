@@ -56,6 +56,24 @@ def test_all_colab_notebooks_delegate_only_to_server_cli() -> None:
 
 
 @pytest.mark.constraint
+def test_colab_notebook_python_metadata_matches_runtime_lock() -> None:
+    """所有 Colab 入口声明的 Python 版本必须与运行环境锁一致。"""
+
+    lock = json.loads(
+        Path("requirements/paper_runtime_environment_lock.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    expected_python = str(lock["python_major_minor"])
+    notebook_paths = sorted(NOTEBOOK_ROOT.glob("*.ipynb"))
+
+    assert notebook_paths
+    for path in notebook_paths:
+        notebook = json.loads(path.read_text(encoding="utf-8"))
+        assert notebook["metadata"]["language_info"]["version"] == expected_python, path
+
+
+@pytest.mark.constraint
 def test_inner_layers_do_not_import_paper_workflow() -> None:
     """服务器可执行内层不得反向依赖最外层 Notebook 包。"""
 

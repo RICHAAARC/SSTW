@@ -1,7 +1,7 @@
 {
   "lock_schema_version": "sstw_paper_runtime_environment_lock_v1",
-  "lock_id": "sstw_paper_runtime_torch_2_6_cuda_12_4",
-  "python_major_minor": "3.11",
+  "lock_id": "sstw_paper_runtime_python_3_12_torch_2_6_cuda_12_4",
+  "python_major_minor": "3.12",
   "torch_cuda_version": "12.4",
   "minimum_cuda_compute_capability": [
     7,

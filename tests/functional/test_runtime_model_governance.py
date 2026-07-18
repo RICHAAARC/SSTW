@@ -10,6 +10,7 @@ import pytest
 from experiments.generative_video_model_probe.colab_runtime import (
     LTX_VIDEO_CROSS_MODEL_ID,
     WAN21_PRIMARY_MODEL_ID,
+    _configure_wan_flow_match_euler_scheduler,
     _model_family_from_id,
     _resolve_generation_model_commit,
     _scheduler_id_for_model,
@@ -44,12 +45,113 @@ def test_generation_model_registry_rejects_unknown_ltx_like_identifier() -> None
     assert _model_family_from_id(LTX_VIDEO_CROSS_MODEL_ID) == (
         "diffusers_ltx_video"
     )
-    assert _scheduler_id_for_model(WAN21_PRIMARY_MODEL_ID).startswith("wan21_")
+    assert _scheduler_id_for_model(WAN21_PRIMARY_MODEL_ID) == (
+        "wan21_flow_match_euler_discrete_scheduler_shift_3"
+    )
     assert _trajectory_time_grid_id_for_model(LTX_VIDEO_CROSS_MODEL_ID).startswith(
         "ltx_"
     )
     with pytest.raises(ValueError, match="未注册"):
         _model_family_from_id("example/unknown-ltx-video")
+
+
+@pytest.mark.quick
+def test_wan_unipc_flow_scheduler_is_normalized_to_registered_euler() -> None:
+    """Wan checkpoint 的 flow-prediction UniPC 必须转为冻结的 Euler Flow scheduler。"""
+
+    class UniPCMultistepScheduler:
+        config = {
+            "prediction_type": "flow_prediction",
+            "use_flow_sigmas": True,
+            "flow_shift": 3.0,
+            "num_train_timesteps": 1000,
+            "use_karras_sigmas": False,
+            "use_exponential_sigmas": False,
+            "use_beta_sigmas": False,
+        }
+
+    class FlowMatchEulerDiscreteScheduler:
+        def __init__(self, **kwargs: object) -> None:
+            self.config = dict(kwargs)
+
+    pipeline = SimpleNamespace(scheduler=UniPCMultistepScheduler())
+
+    summary = _configure_wan_flow_match_euler_scheduler(
+        pipeline,
+        scheduler_class=FlowMatchEulerDiscreteScheduler,
+    )
+
+    assert type(pipeline.scheduler).__name__ == "FlowMatchEulerDiscreteScheduler"
+    assert pipeline.scheduler.config["shift"] == 3.0
+    assert pipeline.scheduler.config["stochastic_sampling"] is False
+    assert summary == {
+        "source_scheduler_class": "UniPCMultistepScheduler",
+        "configured_scheduler_class": "FlowMatchEulerDiscreteScheduler",
+        "scheduler_id": "wan21_flow_match_euler_discrete_scheduler_shift_3",
+        "flow_match_shift": "3.0",
+    }
+
+
+@pytest.mark.quick
+@pytest.mark.parametrize(
+    ("prediction_type", "use_flow_sigmas", "message"),
+    [
+        ("epsilon", True, "flow_prediction"),
+        ("flow_prediction", False, "use_flow_sigmas"),
+    ],
+)
+def test_wan_unipc_nonflow_scheduler_fails_closed(
+    prediction_type: str,
+    use_flow_sigmas: bool,
+    message: str,
+) -> None:
+    """不能把普通 UniPC 或缺少 Flow sigma 的配置伪装成 SSTW Flow scheduler。"""
+
+    scheduler_class = type(
+        "UniPCMultistepScheduler",
+        (),
+        {
+            "config": {
+                "prediction_type": prediction_type,
+                "use_flow_sigmas": use_flow_sigmas,
+                "flow_shift": 3.0,
+            }
+        },
+    )
+    pipeline = SimpleNamespace(scheduler=scheduler_class())
+
+    with pytest.raises(RuntimeError, match=message):
+        _configure_wan_flow_match_euler_scheduler(pipeline)
+
+
+@pytest.mark.quick
+@pytest.mark.parametrize(
+    ("scheduler_name", "config", "message"),
+    [
+        (
+            "UniPCMultistepScheduler",
+            {
+                "prediction_type": "flow_prediction",
+                "use_flow_sigmas": True,
+                "flow_shift": 5.0,
+            },
+            "shift 与预注册契约不一致",
+        ),
+        ("EulerDiscreteScheduler", {}, "不受 SSTW FlowMatch Euler 规范化支持"),
+    ],
+)
+def test_wan_scheduler_drift_or_unknown_class_fails_closed(
+    scheduler_name: str,
+    config: dict[str, object],
+    message: str,
+) -> None:
+    """scheduler 类或冻结 shift 漂移时不得继续 GPU 生成。"""
+
+    scheduler_class = type(scheduler_name, (), {"config": config})
+    pipeline = SimpleNamespace(scheduler=scheduler_class())
+
+    with pytest.raises(RuntimeError, match=message):
+        _configure_wan_flow_match_euler_scheduler(pipeline)
 
 
 @pytest.mark.quick

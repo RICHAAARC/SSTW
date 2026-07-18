@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import os
 import re
 import secrets
@@ -61,7 +62,8 @@ REGISTERED_GENERATION_MODEL_FAMILIES: dict[str, dict[str, str]] = {
     WAN21_PRIMARY_MODEL_ID: {
         "generation_model_family": "diffusers_wan21_flow_matching_dit",
         "pipeline_class_name": "WanPipeline",
-        "scheduler_id": "wan21_flow_matching_pipeline_default_scheduler",
+        "scheduler_id": "wan21_flow_match_euler_discrete_scheduler_shift_3",
+        "flow_match_shift": "3.0",
         "trajectory_time_grid_id": "wan_flow_scheduler_runtime_step_grid",
     },
     LTX_VIDEO_CROSS_MODEL_ID: {
@@ -292,6 +294,77 @@ def _scheduler_id_for_model(model_id: str) -> str:
     return _registered_generation_model(model_id)["scheduler_id"]
 
 
+def _configure_wan_flow_match_euler_scheduler(
+    pipeline: Any,
+    *,
+    scheduler_class: type | None = None,
+) -> dict[str, str]:
+    """把 Wan 仓库 scheduler 规范化为 SSTW 所需的 FlowMatch Euler。
+
+    Wan 的 Diffusers checkpoint 当前可加载为 flow-prediction UniPC scheduler。
+    SSTW 的 ``delta_sigma``、phase 与 endpoint 积分契约明确依赖 Euler FlowMatch
+    更新, 因而不能只凭 ``use_flow_sigmas`` 放宽运行时检查。这里先验证源 scheduler
+    的 Flow 语义, 再用预注册 shift 构造受治理的 Euler scheduler。
+    """
+
+    registration = _registered_generation_model(WAN21_PRIMARY_MODEL_ID)
+    source_scheduler = pipeline.scheduler
+    source_scheduler_name = type(source_scheduler).__name__
+    source_config = dict(source_scheduler.config)
+    expected_shift = float(registration["flow_match_shift"])
+
+    if source_scheduler_name == "UniPCMultistepScheduler":
+        if source_config.get("prediction_type") != "flow_prediction":
+            raise RuntimeError("Wan UniPC scheduler 必须使用 flow_prediction")
+        if source_config.get("use_flow_sigmas") is not True:
+            raise RuntimeError("Wan UniPC scheduler 必须启用 use_flow_sigmas")
+        observed_shift = float(source_config.get("flow_shift", 0.0))
+    elif source_scheduler_name == "FlowMatchEulerDiscreteScheduler":
+        observed_shift = float(source_config.get("shift", 0.0))
+    else:
+        raise RuntimeError(
+            "Wan scheduler 不受 SSTW FlowMatch Euler 规范化支持: "
+            f"{source_scheduler_name}"
+        )
+    if not math.isclose(observed_shift, expected_shift, rel_tol=0.0, abs_tol=1e-12):
+        raise RuntimeError(
+            "Wan scheduler shift 与预注册契约不一致: "
+            f"observed={observed_shift}, expected={expected_shift}"
+        )
+
+    if scheduler_class is None:
+        from diffusers import FlowMatchEulerDiscreteScheduler
+
+        scheduler_class = FlowMatchEulerDiscreteScheduler
+    configured_scheduler = scheduler_class(
+        num_train_timesteps=int(source_config.get("num_train_timesteps", 1000)),
+        shift=expected_shift,
+        use_dynamic_shifting=bool(source_config.get("use_dynamic_shifting", False)),
+        base_shift=float(source_config.get("base_shift", 0.5)),
+        max_shift=float(source_config.get("max_shift", 1.15)),
+        base_image_seq_len=int(source_config.get("base_image_seq_len", 256)),
+        max_image_seq_len=int(source_config.get("max_image_seq_len", 4096)),
+        invert_sigmas=bool(source_config.get("invert_sigmas", False)),
+        shift_terminal=source_config.get("shift_terminal"),
+        use_karras_sigmas=bool(source_config.get("use_karras_sigmas", False)),
+        use_exponential_sigmas=bool(
+            source_config.get("use_exponential_sigmas", False)
+        ),
+        use_beta_sigmas=bool(source_config.get("use_beta_sigmas", False)),
+        time_shift_type=str(source_config.get("time_shift_type", "exponential")),
+        stochastic_sampling=False,
+    )
+    if type(configured_scheduler).__name__ != "FlowMatchEulerDiscreteScheduler":
+        raise RuntimeError("Wan scheduler 规范化未生成 FlowMatchEulerDiscreteScheduler")
+    pipeline.scheduler = configured_scheduler
+    return {
+        "source_scheduler_class": source_scheduler_name,
+        "configured_scheduler_class": type(configured_scheduler).__name__,
+        "scheduler_id": registration["scheduler_id"],
+        "flow_match_shift": str(expected_shift),
+    }
+
+
 def _load_video_generation_pipeline(
     model_id: str,
     torch_dtype: Any,
@@ -323,6 +396,17 @@ def _load_video_generation_pipeline(
                 torch_dtype=torch_dtype,
                 token=hf_token,
             )
+        scheduler_configuration = _configure_wan_flow_match_euler_scheduler(pipe)
+        emit_progress_event(
+            "video_generation_scheduler_config",
+            (
+                f"model={model_id} "
+                f"source={scheduler_configuration['source_scheduler_class']} "
+                f"configured={scheduler_configuration['configured_scheduler_class']} "
+                f"scheduler_id={scheduler_configuration['scheduler_id']} "
+                f"shift={scheduler_configuration['flow_match_shift']}"
+            ),
+        )
     elif registration["pipeline_class_name"] == "LTXPipeline":
         with suppress_third_party_progress_output("video_generation_model_import"):
             from diffusers import LTXPipeline

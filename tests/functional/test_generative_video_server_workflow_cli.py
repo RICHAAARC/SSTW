@@ -174,7 +174,7 @@ def test_method_mechanism_validation_gpu_dry_run_is_paired_and_claim_bounded(
     flattened = [item for command in command_rows for item in command]
 
     assert PIPELINE_ROLE_ORDER["method_mechanism_validation"] == (
-        "generative_video_generation",
+        "method_mechanism_validation",
     )
     assert payload["server_workflow_decision"] == "DRY_RUN"
     assert payload["claim_support_status"] == (
@@ -183,6 +183,10 @@ def test_method_mechanism_validation_gpu_dry_run_is_paired_and_claim_bounded(
     assert payload["resolved_main_generation_model_revision"] == main_commit
     assert payload["resolved_cross_generation_model_revision"] is None
     assert role_result["workflow_profile"] == "method_mechanism_validation"
+    assert role_result["notebook_role"] == "method_mechanism_validation"
+    assert role_result["layout"]["drive_package_dir"].replace("\\", "/").endswith(
+        "/method_mechanism_validation/method_mechanism_validation_colab"
+    )
     assert stage_names == [
         "prepare_prompt_suite",
         "flow_model_runtime_generation",

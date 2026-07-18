@@ -78,6 +78,12 @@ python scripts/run_generative_video_server_workflow.py \
 运行前环境必须通过 `requirements/paper_runtime_environment_lock.json` 预检,
 包括 Python 3.11、PyTorch 2.6、CUDA 12.4、算力不低于 7.0 和显存不低于 14 GiB。
 
+在 Google Colab 上使用
+`paper_workflow/colab_notebooks/method_mechanism_validation_colab.ipynb`。
+该 Notebook 的第一个 cell 挂载 Google Drive，最后一个 cell 执行相同服务器
+pipeline，并校验结果 zip 与 manifest 已落盘到
+`MyDrive/SSTW/method_mechanism_validation/method_mechanism_validation_colab/`。
+
 普通 GPU 服务器可直接使用命令行入口, 不依赖 Colab Notebook:
 
 ```bash

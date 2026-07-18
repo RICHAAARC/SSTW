@@ -293,6 +293,7 @@ MAIN_STAGE_PACKAGE_IDS = {
     "formal_comparison_scoring_colab",
     GEN_VIDEO_GENERATION_PACKAGE_ID,
     GEN_VIDEO_QUALITY_SCORING_PACKAGE_ID,
+    "method_mechanism_validation_colab",
     RUNTIME_ATTACK_PACKAGE_ID,
     RUNTIME_DETECTION_PACKAGE_ID,
     "paper_evidence_postprocess_colab",
@@ -1003,7 +1004,7 @@ def _iter_package_sources(
         )
         return sources
 
-    if role == "generative_video_generation":
+    if role in {"generative_video_generation", "method_mechanism_validation"}:
         run_root = Path(str(layout.get("drive_run_root") or ""))
         run_archive_root = _archive_root_for_layout_path(layout, "drive_run_root")
         _append_existing_run_relpaths(

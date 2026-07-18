@@ -63,7 +63,7 @@ GENERATIVE_VIDEO_SPLIT_ROLE_ORDER = (
 
 PIPELINE_ROLE_ORDER = {
     "runtime_environment_preflight": (),
-    "method_mechanism_validation": ("generative_video_generation",),
+    "method_mechanism_validation": ("method_mechanism_validation",),
     "motion_threshold_calibration": ("motion_threshold_calibration",),
     "generative_video_generation": ("generative_video_generation",),
     "generative_video_quality_scoring": ("generative_video_quality_scoring",),

@@ -537,6 +537,52 @@ def test_generative_video_colab_notebook_calls_repository_modules() -> None:
 
 
 @pytest.mark.quick
+def test_method_mechanism_validation_colab_mounts_first_and_packages_last() -> None:
+    """专用机制 Notebook 必须首 cell 挂载 Drive, 末 cell 执行并验证阶段包。"""
+
+    notebook_path = Path(
+        "paper_workflow/colab_notebooks/method_mechanism_validation_colab.ipynb"
+    )
+    notebook = json.loads(notebook_path.read_text(encoding="utf-8"))
+    cells = notebook["cells"]
+    first_cell_source = "".join(cells[0]["source"])
+    last_cell_source = "".join(cells[-1]["source"])
+    full_source = "\n".join(
+        "".join(cell.get("source", []))
+        for cell in cells
+        if cell.get("cell_type") == "code"
+    )
+
+    assert cells[0]["cell_type"] == "code"
+    assert "from google.colab import drive" in first_cell_source
+    assert "drive.mount('/content/drive')" in first_cell_source
+    assert "WORKFLOW_PROFILE = 'method_mechanism_validation'" in first_cell_source
+    assert cells[-1]["cell_type"] == "code"
+    assert "SERVER_PIPELINE = 'method_mechanism_validation'" in last_cell_source
+    assert "result = run_streaming_command(server_command)" in last_cell_source
+    assert "stage_package_publish_status" in last_cell_source
+    assert "drive_stage_package_zip" in last_cell_source
+    assert "stage_package_manifest_path" in last_cell_source
+    assert "Google Drive result zip" in last_cell_source
+    assert "publish_colab_stage_package" not in full_source
+
+    resolved = resolve_notebook_workflow_profile(
+        "method_mechanism_validation",
+        "method_mechanism_validation",
+    )
+    assert resolved["notebook_path"] == notebook_path.as_posix()
+    assert build_workflow_stage_plan(
+        "method_mechanism_validation",
+        "method_mechanism_validation",
+    ) == [
+        "prepare_prompt_suite",
+        "flow_model_runtime_generation",
+        "quick_tests_and_harness",
+        "drive_packaging",
+    ]
+
+
+@pytest.mark.quick
 def test_split_colab_notebooks_are_profile_driven() -> None:
     """拆分 Notebook 只能选择 profile 和 server pipeline, 不得复制 workflow。"""
     expected_roles = {
@@ -723,6 +769,65 @@ def test_profile_specific_drive_layout_prevents_result_mixing(tmp_path: Path) ->
     assert pilot_layout["motion_threshold_artifact_run_root"].endswith("/runs/generative_video_model_probe/motion_calibration")
     assert pilot_layout["runtime_profile"] == "pilot_paper"
     assert validation_layout["drive_run_root"] != pilot_layout["drive_run_root"]
+
+
+@pytest.mark.quick
+def test_method_mechanism_validation_uses_dedicated_drive_stage_package(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """机制验证必须把生成 records 和视频写入独立的 Drive zip。"""
+
+    monkeypatch.setenv("SSTW_COLAB_STAGE_IO_MODE", "local_zip")
+    monkeypatch.setenv(
+        "SSTW_LOCAL_STAGE_PACKAGE_CACHE_ROOT",
+        str(tmp_path / "local_package_cache"),
+    )
+    drive_root = tmp_path / "drive" / "SSTW"
+    layout = build_drive_layout(
+        str(drive_root),
+        workflow_profile="method_mechanism_validation",
+        notebook_role="method_mechanism_validation",
+    )
+    local_layout = activate_local_stage_layout(
+        layout,
+        notebook_role="method_mechanism_validation",
+        local_workspace_root=tmp_path / "local_workspace",
+    )
+    run_root = Path(local_layout["drive_run_root"])
+    write_jsonl(
+        run_root / "records" / "generation_records.jsonl",
+        [{"generation_status": "success", "method_variant": "sstw_full_method"}],
+    )
+    write_json(
+        run_root / "artifacts" / "generative_video_colab_runtime_decision.json",
+        {
+            "stage_id": "method_mechanism_validation",
+            "implementation_decision": "PASS",
+            "mechanism_decision": "PASS",
+        },
+    )
+    video_path = run_root / "videos" / "paired_sample.mp4"
+    video_path.parent.mkdir(parents=True, exist_ok=True)
+    video_path.write_bytes(b"paired-video")
+
+    published = publish_colab_stage_package(
+        local_layout,
+        notebook_role="method_mechanism_validation",
+        include_videos=True,
+    )
+
+    assert published["stage_package_publish_status"] == "published"
+    assert published["stage_package_id"] == "method_mechanism_validation_colab"
+    assert Path(published["drive_stage_package_zip"]).is_file()
+    assert Path(published["stage_package_manifest_path"]).is_file()
+    assert "/method_mechanism_validation/method_mechanism_validation_colab/" in (
+        published["drive_stage_package_zip"].replace("\\", "/")
+    )
+    with zipfile.ZipFile(published["drive_stage_package_zip"]) as archive:
+        archive_names = set(archive.namelist())
+    assert any(name.endswith("records/generation_records.jsonl") for name in archive_names)
+    assert any(name.endswith("videos/paired_sample.mp4") for name in archive_names)
 
 
 @pytest.mark.quick

@@ -1,6 +1,6 @@
 {
   "config_kind": "generative_video_notebook_workflow_config",
-  "config_version": "2026_07_10_complete_claim_profiles_v1",
+  "config_version": "2026_07_19_method_mechanism_validation_colab_v1",
   "cross_model_generalization_protocol": {
     "claim_scope": "supportive_not_primary_fixed_fpr_closure",
     "cross_model_family": "diffusers_ltx_video_flow_matching_dit",
@@ -88,12 +88,23 @@
     },
     "generative_video_generation": {
       "allowed_workflow_profiles": [
-        "method_mechanism_validation",
         "probe_paper",
         "pilot_paper",
         "full_paper"
       ],
       "notebook_path": "paper_workflow/colab_notebooks/generative_video_generation_colab.ipynb",
+      "stage_plan": [
+        "prepare_prompt_suite",
+        "flow_model_runtime_generation",
+        "quick_tests_and_harness",
+        "drive_packaging"
+      ]
+    },
+    "method_mechanism_validation": {
+      "allowed_workflow_profiles": [
+        "method_mechanism_validation"
+      ],
+      "notebook_path": "paper_workflow/colab_notebooks/method_mechanism_validation_colab.ipynb",
       "stage_plan": [
         "prepare_prompt_suite",
         "flow_model_runtime_generation",

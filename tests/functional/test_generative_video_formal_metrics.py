@@ -260,7 +260,7 @@ def test_formal_metric_runner_accepts_clip_semantic_metric(tmp_path: Path, monke
 def test_clip_semantic_metric_accepts_plain_processor_dict(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """CLIP 语义 metric 不应依赖 processor batch 自带 `.to` 方法。"""
     import numpy as np
-    import torch
+    torch = pytest.importorskip("torch", reason="requires optional method-runtime dependency")
 
     video_path = tmp_path / "placeholder.mp4"
     video_path.write_bytes(b"not_used_by_monkeypatch")
@@ -313,7 +313,7 @@ def test_clip_semantic_metric_accepts_plain_processor_dict(tmp_path: Path, monke
 def test_clip_semantic_metric_accepts_pooling_output(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """CLIP 语义 metric 应兼容带 pooler_output 的模型输出对象。"""
     import numpy as np
-    import torch
+    torch = pytest.importorskip("torch", reason="requires optional method-runtime dependency")
 
     video_path = tmp_path / "placeholder.mp4"
     video_path.write_bytes(b"not_used_by_monkeypatch")

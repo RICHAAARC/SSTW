@@ -301,6 +301,39 @@ def test_pilot_paper_profile_constructs_medium_scale_low_fpr_plan(tmp_path: Path
 
 
 @pytest.mark.quick
+def test_method_mechanism_validation_profile_builds_paired_gpu_plan(tmp_path: Path) -> None:
+    """GPU mechanism validation must pair every prompt and seed across all controls."""
+
+    output_root = tmp_path / "prompt_suite"
+    summary = write_prompt_suite(output_root)
+    suite = json.loads(Path(summary["prompt_suite_path"]).read_text(encoding="utf-8"))
+    plan = _build_generation_plan(
+        suite,
+        "method_mechanism_validation",
+        "Wan-AI/Wan2.1-T2V-1.3B-Diffusers",
+        LTX_VIDEO_CROSS_MODEL_ID,
+    )
+
+    variants = {
+        "sstw_full_method",
+        "without_velocity_constraint",
+        "endpoint_only_control",
+        "sstw_clean_unwatermarked_reference",
+    }
+    assert len(plan) == 16
+    assert {item["method_variant"] for item in plan} == variants
+    assert {
+        variant: sum(item["method_variant"] == variant for item in plan)
+        for variant in variants
+    } == {variant: 4 for variant in variants}
+    assert len({(item["prompt_id"], item["seed_id"]) for item in plan}) == 4
+    assert {item["cross_model_role"] for item in plan} == {"main_generation_model"}
+    assert all(item["formal_method_variant_execution"] is False for item in plan)
+    assert PROFILE_SETTINGS["method_mechanism_validation"]["num_inference_steps"] == 8
+    assert PROFILE_SETTINGS["method_mechanism_validation"]["num_frames"] == 33
+
+
+@pytest.mark.quick
 def test_probe_paper_profile_constructs_independent_video_fixed_fpr_plan(tmp_path: Path) -> None:
     """probe_paper profile 必须构造 60 个独立视频和等量 clean negative 对照."""
     output_root = tmp_path / "prompt_suite"

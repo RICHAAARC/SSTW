@@ -35,6 +35,8 @@ def test_wam_frame_loader_resolves_repo_relative_params_before_source_cwd(
 ) -> None:
     """bootstrap 写出的仓库相对 params 路径在切换 source cwd 后仍必须可用。"""
 
+    pytest.importorskip("torch", reason="requires optional method-runtime dependency")
+
     repo_root = tmp_path / "repo"
     source_dir = repo_root / "external_baseline" / "primary" / "wam_frame" / "source"
     (source_dir / "notebooks").mkdir(parents=True)
@@ -110,7 +112,7 @@ def test_wam_frame_loader_resolves_repo_relative_params_before_source_cwd(
 def test_wam_frame_detect_passes_channel_mask_to_official_message_predictor() -> None:
     """WAM 官方 message predictor 需要 `[B, 1, H, W]` mask, 不能传 `[B, H, W]`。"""
 
-    import torch
+    torch = pytest.importorskip("torch", reason="requires optional method-runtime dependency")
 
     class FakeWAMModel:
         """最小 fake model, 用于验证 WAM detect 输出的 mask 维度适配。"""

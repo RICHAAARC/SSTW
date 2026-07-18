@@ -55,7 +55,7 @@ def test_revmark_model_loader_uses_source_cwd_for_official_relative_checkpoint(
         encoding="utf-8",
     )
     sys.modules.pop("REVMark", None)
-    import torch
+    torch = pytest.importorskip("torch", reason="requires optional method-runtime dependency")
 
     monkeypatch.setattr(torch, "load", lambda *args, **kwargs: {})
     cwd_before = Path.cwd()

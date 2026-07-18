@@ -7,6 +7,8 @@ from typing import Iterator
 
 SKIP_DIRECTORY_NAMES = {
     ".git",
+    ".conda",
+    ".vscode",
     ".gitnexus",
     ".agents",
     "__pycache__",

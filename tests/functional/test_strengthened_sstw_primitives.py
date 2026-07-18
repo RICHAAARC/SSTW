@@ -5,7 +5,8 @@ from __future__ import annotations
 from dataclasses import replace
 
 import pytest
-import torch
+
+torch = pytest.importorskip("torch", reason="requires optional method-runtime dependency")
 
 from main.methods.state_space_watermark.authenticated_trajectory_sketch import (
     build_authenticated_trajectory_sketch_payload,

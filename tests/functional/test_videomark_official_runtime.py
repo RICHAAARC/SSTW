@@ -7,7 +7,8 @@ from pathlib import Path
 
 import numpy as np
 import pytest
-import torch
+
+torch = pytest.importorskip("torch", reason="requires optional method-runtime dependency")
 
 from evaluation.protocol.record_writer import write_jsonl
 from external_baseline.videomark_official_runtime import (

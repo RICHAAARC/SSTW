@@ -36,6 +36,7 @@ from workflows.runtime_environment_preflight import (
 
 SERVER_PIPELINES = (
     "runtime_environment_preflight",
+    "method_mechanism_validation",
     "motion_threshold_calibration",
     "generative_video_generation",
     "generative_video_quality_scoring",
@@ -51,6 +52,7 @@ SERVER_PIPELINES = (
 PACKAGE_EXECUTION_MODE_AUTO = "auto"
 DEVELOPMENT_REPOSITORY_EXECUTION_MODE = "development_repository"
 PAPER_ARTIFACT_REBUILD_PACKAGE_EXECUTION_MODE = "paper_artifact_rebuild_package"
+METHOD_MECHANISM_VALIDATION_PROFILE = "method_mechanism_validation"
 
 GENERATIVE_VIDEO_SPLIT_ROLE_ORDER = (
     "generative_video_generation",
@@ -61,6 +63,7 @@ GENERATIVE_VIDEO_SPLIT_ROLE_ORDER = (
 
 PIPELINE_ROLE_ORDER = {
     "runtime_environment_preflight": (),
+    "method_mechanism_validation": ("generative_video_generation",),
     "motion_threshold_calibration": ("motion_threshold_calibration",),
     "generative_video_generation": ("generative_video_generation",),
     "generative_video_quality_scoring": ("generative_video_quality_scoring",),
@@ -82,6 +85,7 @@ PIPELINE_ROLE_ORDER = {
 
 GPU_REQUIRED_PIPELINES = {
     "runtime_environment_preflight",
+    "method_mechanism_validation",
     "motion_threshold_calibration",
     "generative_video_generation",
     "generative_video_quality_scoring",
@@ -92,6 +96,7 @@ GPU_REQUIRED_PIPELINES = {
 
 MODEL_REVISION_REQUIRED_PIPELINES = {
     "runtime_environment_preflight",
+    "method_mechanism_validation",
     "motion_threshold_calibration",
     "generative_video_generation",
     "paper_protocol_complete",
@@ -423,7 +428,11 @@ def _run_pipeline(args: argparse.Namespace) -> dict[str, Any]:
         "git_short_commit": current_short_commit(),
         "pipeline_results": rows,
         "server_workflow_decision": "DRY_RUN" if args.dry_run else "PASS",
-        "claim_support_status": "server_workflow_runner_not_claim_evidence",
+        "claim_support_status": (
+            "method_mechanism_validation_only_not_paper_evidence"
+            if args.pipeline == METHOD_MECHANISM_VALIDATION_PROFILE
+            else "server_workflow_runner_not_claim_evidence"
+        ),
     }
 
 
@@ -470,7 +479,12 @@ def build_parser() -> argparse.ArgumentParser:
 
     parser = argparse.ArgumentParser(description="在无 Notebook 的 GPU 服务器上运行 SSTW 生成式视频 workflow")
     parser.add_argument("--project-root", required=True, help="服务器上的 SSTW 结果根目录, 等价于 Colab 的 Drive 项目根")
-    parser.add_argument("--workflow-profile", default="probe_paper", choices=["probe_paper", "pilot_paper", "full_paper"], help="运行层级")
+    parser.add_argument(
+        "--workflow-profile",
+        default="probe_paper",
+        choices=[METHOD_MECHANISM_VALIDATION_PROFILE, "probe_paper", "pilot_paper", "full_paper"],
+        help="运行层级",
+    )
     parser.add_argument("--pipeline", default="paper_protocol_complete", choices=SERVER_PIPELINES, help="要执行的语义 pipeline")
     parser.add_argument("--repo-root", default=".", help="SSTW 仓库根目录")
     parser.add_argument(
@@ -513,6 +527,16 @@ def main(argv: list[str] | None = None) -> int:
 
     parser = build_parser()
     args = parser.parse_args(argv)
+    mechanism_pipeline = args.pipeline == METHOD_MECHANISM_VALIDATION_PROFILE
+    mechanism_profile = args.workflow_profile == METHOD_MECHANISM_VALIDATION_PROFILE
+    if mechanism_pipeline != mechanism_profile:
+        parser.error(
+            "method_mechanism_validation pipeline and workflow profile must be selected together"
+        )
+    if mechanism_profile:
+        args.cross_model_id = ""
+        args.cross_model_revision = ""
+
     _apply_server_environment(args)
     _reset_local_workspace_if_requested(args)
     args.runtime_environment_preflight = {

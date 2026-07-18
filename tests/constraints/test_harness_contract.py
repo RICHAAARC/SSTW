@@ -24,6 +24,14 @@ def test_external_agent_context_directory_is_not_governed_source() -> None:
 
 
 @pytest.mark.constraint
+def test_local_environment_and_editor_directories_are_not_governed_source() -> None:
+    """Local environment and editor state are outside governed source."""
+
+    assert should_skip_path(Path(".conda"))
+    assert should_skip_path(Path(".vscode"))
+
+
+@pytest.mark.constraint
 def test_harness_audits_pass_for_template() -> None:
     """模板仓库自身必须通过内置 harness 审计。"""
     summary = run_all_audits(Path.cwd())

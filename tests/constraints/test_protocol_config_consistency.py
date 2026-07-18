@@ -181,6 +181,18 @@ def test_paper_profiles_match_the_same_common_mechanism_contract() -> None:
 
 
 @pytest.mark.constraint
+def test_canonical_paper_profiles_load_with_matched_common_contract() -> None:
+    """三份 canonical profile 必须能经正式加载入口完成摘要校验。"""
+
+    for config_path in PAPER_PROFILE_PROTOCOL_CONFIGS:
+        loaded = load_protocol_config_with_shared_attack_protocol(config_path)
+        assert loaded["paper_profile_common_contract_status"] == "matched"
+        assert loaded["paper_profile_common_contract_observed_sha256"] == (
+            CANONICAL_COMMON_CONTRACT_SHA256
+        )
+
+
+@pytest.mark.constraint
 def test_every_profile_only_field_has_an_explicit_non_mechanism_category() -> None:
     """公共契约之外的字段必须进入显式允许列表, 不能使用宽泛前缀绕过。"""
 

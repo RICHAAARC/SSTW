@@ -138,6 +138,63 @@ def test_server_workflow_complete_pipeline_order_matches_notebook_handoff_model(
 
 
 @pytest.mark.quick
+def test_method_mechanism_validation_gpu_dry_run_is_paired_and_claim_bounded(
+    tmp_path: Path,
+) -> None:
+    """The GPU-ready profile must stay generation-only and outside paper evidence."""
+
+    main_commit = "1" * 40
+    completed = subprocess.run(
+        [
+            sys.executable,
+            "scripts/run_generative_video_server_workflow.py",
+            "--project-root",
+            str(tmp_path / "sstw_method_validation"),
+            "--workflow-profile",
+            "method_mechanism_validation",
+            "--pipeline",
+            "method_mechanism_validation",
+            "--model-revision",
+            main_commit,
+            "--dry-run",
+            "--exclude-videos",
+        ],
+        check=True,
+        text=True,
+        capture_output=True,
+    )
+    payload = json.loads(completed.stdout)
+    role_result = payload["pipeline_results"][0]
+    stage_names = [row["stage_name"] for row in role_result["stage_plan"]]
+    command_rows = [
+        row["command"]
+        for row in role_result["stage_plan"]
+        if isinstance(row.get("command"), list)
+    ]
+    flattened = [item for command in command_rows for item in command]
+
+    assert PIPELINE_ROLE_ORDER["method_mechanism_validation"] == (
+        "generative_video_generation",
+    )
+    assert payload["server_workflow_decision"] == "DRY_RUN"
+    assert payload["claim_support_status"] == (
+        "method_mechanism_validation_only_not_paper_evidence"
+    )
+    assert payload["resolved_main_generation_model_revision"] == main_commit
+    assert payload["resolved_cross_generation_model_revision"] is None
+    assert role_result["workflow_profile"] == "method_mechanism_validation"
+    assert stage_names == [
+        "prepare_prompt_suite",
+        "flow_model_runtime_generation",
+        "quick_tests_and_harness",
+        "drive_packaging",
+    ]
+    assert "method_mechanism_validation" in flattened
+    assert main_commit in flattened
+    assert "Lightricks/LTX-Video" not in flattened
+
+
+@pytest.mark.quick
 def test_server_workflow_dry_run_carries_revision_and_preflight_contract(tmp_path: Path) -> None:
     """dry-run 不访问 GPU 或网络, 但必须显示 revision 与预检边界。"""
 

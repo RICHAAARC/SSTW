@@ -27,7 +27,7 @@ CANONICAL_COMMON_CONTRACT_ID = "sstw_paper_profile_common_contract_v1"
 # 必须在代码审阅中同时更新本常量与三个 profile 的声明摘要。把期望摘要冻结在代码
 # 而不是另一个可替换 JSON 中, 可以阻止自定义 contract 自行声明并信任自己的摘要。
 CANONICAL_COMMON_CONTRACT_SHA256 = (
-    "f688d35086c8fcbb160a1a05d846fe30278b6e8859626d4e00a8d921413cf88d"
+    "068d5c445692300beb0cb478b279008addf2789aee64316a0294c874d8d640d4"
 )
 
 PAPER_PROFILE_CANONICAL_RELATIVE_PATHS: dict[str, Path] = {

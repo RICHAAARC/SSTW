@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import pytest
-import torch
+
+torch = pytest.importorskip("torch", reason="requires optional method-runtime dependency")
 
 from main.methods.state_space_watermark.endpoint_latent_detector import (
     compute_endpoint_latent_evidence,

@@ -79,7 +79,7 @@
   "minimum_unique_video_count": 60,
   "paper_profile_common_contract_id": "sstw_paper_profile_common_contract_v1",
   "paper_profile_common_contract_path": "configs/protocol/paper_profile_common_contract.json",
-  "paper_profile_common_contract_sha256": "f688d35086c8fcbb160a1a05d846fe30278b6e8859626d4e00a8d921413cf88d",
+  "paper_profile_common_contract_sha256": "068d5c445692300beb0cb478b279008addf2789aee64316a0294c874d8d640d4",
   "paper_profile_mechanism_difference_policy": "target_fpr_sample_count_and_statistical_power_only",
   "paper_profile_names": [
     "probe_paper"

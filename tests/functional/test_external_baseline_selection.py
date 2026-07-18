@@ -88,7 +88,7 @@ def test_videoseal_official_runtime_layout_fails_closed_without_official_config(
 @pytest.mark.quick
 def test_external_baseline_video_tensor_io_uses_imageio_backend(tmp_path: Path) -> None:
     """VideoSeal bundle I/O 必须避开 Colab 中不稳定的 torchvision 视频接口。"""
-    import torch
+    torch = pytest.importorskip("torch", reason="requires optional method-runtime dependency")
 
     video_path = tmp_path / "sample.mp4"
     video = torch.zeros((3, 3, 16, 16), dtype=torch.float32)
@@ -109,7 +109,7 @@ def test_external_baseline_video_tensor_io_uses_imageio_backend(tmp_path: Path) 
 def test_videoseal_runtime_attack_mapping_is_explicit_and_fail_closed() -> None:
     """VideoSeal official bundle 的 runtime attack 映射必须显式登记并对未知 attack 阻断。"""
 
-    import torch
+    torch = pytest.importorskip("torch", reason="requires optional method-runtime dependency")
 
     video = torch.arange(5, dtype=torch.float32).reshape(5, 1, 1, 1)
 

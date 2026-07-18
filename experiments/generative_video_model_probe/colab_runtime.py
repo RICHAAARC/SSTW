@@ -77,6 +77,12 @@ REGISTERED_GENERATION_MODEL_FAMILIES: dict[str, dict[str, str]] = {
 _HUGGINGFACE_COMMIT_PATTERN = re.compile(r"^[0-9a-fA-F]{40,64}$")
 
 PAPER_RESULT_PROFILES = {"probe_paper", "pilot_paper", "full_paper"}
+METHOD_MECHANISM_VALIDATION_PROFILE = "method_mechanism_validation"
+METHOD_MECHANISM_VALIDATION_VARIANTS = (
+    "sstw_full_method",
+    "without_velocity_constraint",
+    "endpoint_only_control",
+)
 
 PAPER_FORMAL_METHOD_VARIANTS = FORMAL_METHOD_VARIANTS
 PROFILE_SETTINGS = {
@@ -118,6 +124,17 @@ PROFILE_SETTINGS = {
         "cross_model_seed_limit": 10,
         "prompt_suite_roles": ["full_paper"],
         "seed_suite_roles": ["full_paper"],
+    },
+    "method_mechanism_validation": {
+        "prompt_limit": 2,
+        "seed_limit": 2,
+        "num_inference_steps": 8,
+        "num_frames": 33,
+        "height": 320,
+        "width": 512,
+        "run_cross_model": False,
+        "prompt_suite_roles": ["probe_paper"],
+        "seed_suite_roles": ["probe_paper"],
     },
     "motion_calibration": {
         "prompt_limit": None,
@@ -492,7 +509,10 @@ def _build_generation_plan(prompt_suite: dict, profile: str, model_id: str, cros
             "model_seeds": cross_seeds,
         })
     plan = []
-    include_clean_negative_references = profile in {"probe_paper", "pilot_paper", "full_paper"}
+    include_clean_negative_references = (
+        profile in PAPER_RESULT_PROFILES
+        or profile == METHOD_MECHANISM_VALIDATION_PROFILE
+    )
     for model_item in model_items:
         for prompt in model_item["model_prompts"]:
             for seed in model_item["model_seeds"]:
@@ -504,11 +524,12 @@ def _build_generation_plan(prompt_suite: dict, profile: str, model_id: str, cros
                 }
                 base_item["prompt_suite_role"] = prompt.get("prompt_suite_role")
                 base_item["seed_suite_role"] = seed.get("seed_suite_role") or seed.get("prompt_suite_role")
-                method_variants = (
-                    ("sstw_full_method",)
-                    if profile in PAPER_RESULT_PROFILES
-                    else ("key_conditioned_state_space_with_trajectory",)
-                )
+                if profile == METHOD_MECHANISM_VALIDATION_PROFILE:
+                    method_variants = METHOD_MECHANISM_VALIDATION_VARIANTS
+                elif profile in PAPER_RESULT_PROFILES:
+                    method_variants = ("sstw_full_method",)
+                else:
+                    method_variants = ("key_conditioned_state_space_with_trajectory",)
                 for method_variant in method_variants:
                     item = dict(base_item)
                     item["sample_role"] = "attacked_positive_source"
@@ -531,7 +552,7 @@ def _build_generation_plan(prompt_suite: dict, profile: str, model_id: str, cros
                 clean_item["method_variant"] = "sstw_clean_unwatermarked_reference"
                 clean_item["watermark_embedding_status"] = "clean_unwatermarked_reference"
                 clean_item["clean_negative_pair_role"] = "same_prompt_seed_unwatermarked_reference"
-                clean_item["formal_method_variant_execution"] = True
+                clean_item["formal_method_variant_execution"] = profile in PAPER_RESULT_PROFILES
                 plan.append(clean_item)
     return plan
 
@@ -969,25 +990,64 @@ def run_colab_probe(
         for record in cross_model_records
     )
     progress.finish(f"success={success_count} failed={len(generation_records) - success_count}")
+    mechanism_validation_profile = profile == METHOD_MECHANISM_VALIDATION_PROFILE
+    successful_variants = {
+        str(record.get("method_variant"))
+        for record in generation_records
+        if record.get("generation_status") == "success"
+    }
+    required_mechanism_variants = {
+        *METHOD_MECHANISM_VALIDATION_VARIANTS,
+        "sstw_clean_unwatermarked_reference",
+    }
+    full_constraint_ready = any(
+        record.get("method_variant") == "sstw_full_method"
+        and int(record.get("sampling_constraint_applied_step_count") or 0) > 0
+        for record in generation_records
+    )
+    without_velocity_rows = [
+        record for record in generation_records
+        if record.get("method_variant") == "without_velocity_constraint"
+    ]
+    without_velocity_disabled = bool(without_velocity_rows) and all(
+        int(record.get("sampling_constraint_applied_step_count") or 0) == 0
+        for record in without_velocity_rows
+    )
+    mechanism_execution_ready = (
+        len(generation_records) == len(plan)
+        and success_count == len(plan)
+        and required_mechanism_variants <= successful_variants
+        and full_constraint_ready
+        and without_velocity_disabled
+        and bool(trajectory_records)
+    )
 
     generation_records = [
         with_flow_evidence_protocol_defaults(
             record,
             trajectory_source_level="flow_scheduler_model_output_and_state_update"
-            if profile in PAPER_RESULT_PROFILES
+            if profile in PAPER_RESULT_PROFILES or mechanism_validation_profile
             else "callback_latent_trace"
             if record.get("trajectory_capture_status") == "captured"
             else "not_captured",
-            claim_support_status="generation_evidence_only",
+            claim_support_status=(
+                "method_mechanism_validation_only_not_paper_evidence"
+                if mechanism_validation_profile
+                else "generation_evidence_only"
+            ),
         )
         for record in generation_records
     ]
     trajectory_records = with_flow_evidence_protocol_defaults_many(
         trajectory_records,
         trajectory_source_level="flow_scheduler_model_output_step"
-        if profile in PAPER_RESULT_PROFILES
+        if profile in PAPER_RESULT_PROFILES or mechanism_validation_profile
         else "callback_latent_step",
-        claim_support_status="trajectory_trace_evidence_only",
+        claim_support_status=(
+            "method_mechanism_validation_only_not_paper_evidence"
+            if mechanism_validation_profile
+            else "trajectory_trace_evidence_only"
+        ),
     )
     quality_records = with_flow_evidence_protocol_defaults_many(
         quality_records,
@@ -1005,11 +1065,36 @@ def run_colab_probe(
     write_csv(output_root / "tables" / "external_baseline_status_table.csv", external_records)
     write_json(output_root / "artifacts" / "external_baseline_status_decision.json", external_baseline_audit)
     decision = {
-        "stage_id": "generative_video_generation",
-        "implementation_decision": "PASS" if any(record["generation_status"] == "success" for record in generation_records) else "FAIL",
-        "mechanism_decision": "PENDING_FORMAL_DETECTION_AND_REPLAY",
+        "stage_id": (
+            METHOD_MECHANISM_VALIDATION_PROFILE
+            if mechanism_validation_profile
+            else "generative_video_generation"
+        ),
+        "implementation_decision": (
+            "PASS"
+            if (
+                mechanism_execution_ready
+                if mechanism_validation_profile
+                else any(record["generation_status"] == "success" for record in generation_records)
+            )
+            else "FAIL"
+        ),
+        "mechanism_decision": (
+            ("PASS" if mechanism_execution_ready else "FAIL")
+            if mechanism_validation_profile
+            else "PENDING_FORMAL_DETECTION_AND_REPLAY"
+        ),
+        "claim_support_status": (
+            "method_mechanism_validation_only_not_paper_evidence"
+            if mechanism_validation_profile
+            else "generation_evidence_only"
+        ),
         "details": {
-            "formal_claim_status": "velocity_path_generation_evidence_ready_detection_and_replay_pending",
+            "formal_claim_status": (
+                "not_supported_method_mechanism_validation_only"
+                if mechanism_validation_profile
+                else "velocity_path_generation_evidence_ready_detection_and_replay_pending"
+            ),
             "generation_model_main_table_ready": any(record["generation_status"] == "success" for record in generation_records),
             "trajectory_observation_gain_confirmed": False,
             "fixed_low_fpr_audit_pass": False,

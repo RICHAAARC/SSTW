@@ -88,6 +88,7 @@
     },
     "generative_video_generation": {
       "allowed_workflow_profiles": [
+        "method_mechanism_validation",
         "probe_paper",
         "pilot_paper",
         "full_paper"
@@ -225,6 +226,26 @@
       "result_tier": "full_paper",
       "runtime_profile": "full_paper",
       "target_fpr": 0.001
+    },
+    "method_mechanism_validation": {
+      "baseline_sample_count": 0,
+      "bootstrap_iteration_count": 0,
+      "disabled_stage_names": [],
+      "drive_log_dir_relative": "logs/generative_video_model_probe/method_mechanism_validation",
+      "drive_package_dir_relative": "method_mechanism_validation",
+      "drive_run_root_relative": "runs/generative_video_model_probe/method_mechanism_validation",
+      "enabled_for_claim": false,
+      "enabled_for_run": true,
+      "method_sample_count": 16,
+      "minimum_clean_negative_count": 4,
+      "motion_threshold_artifact_run_root_relative": "runs/generative_video_model_probe/motion_calibration",
+      "paper_gate_profile": false,
+      "profile_status": "implemented_gpu_validation_only",
+      "profile_switching_note": "GPU execution validation for paired SSTW variants; not paper evidence.",
+      "protocol_config_path": "",
+      "result_tier": "method_mechanism_validation",
+      "runtime_profile": "method_mechanism_validation",
+      "target_fpr": null
     },
     "motion_calibration": {
       "baseline_sample_count": 0,

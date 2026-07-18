@@ -3,7 +3,8 @@ from dataclasses import asdict
 from pathlib import Path
 
 import pytest
-import torch
+
+torch = pytest.importorskip("torch", reason="requires optional method-runtime dependency")
 
 from experiments.generative_video_model_probe.formal_flow_evidence_runner import (
     _base_record as _flow_evidence_base_record,

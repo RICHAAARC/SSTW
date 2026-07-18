@@ -7,7 +7,8 @@ from types import SimpleNamespace
 from dataclasses import dataclass
 
 import pytest
-import torch
+
+torch = pytest.importorskip("torch", reason="requires optional method-runtime dependency")
 
 from main.methods.state_space_watermark.ltx_flow_replay_backend import (
     build_ltx_flow_schedule_points,

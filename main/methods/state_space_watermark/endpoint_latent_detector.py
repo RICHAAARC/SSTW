@@ -341,18 +341,22 @@ def _wan_vae_memory_preflight(
 def _supports_wan_streaming_encode(vae: Any) -> bool:
     """仅对具备 Diffusers Wan 因果缓存接口的 VAE 启用受控流式路径。"""
 
-    return all(
+    static_ready = all(
         hasattr(vae, name)
         for name in (
             "encoder",
             "quant_conv",
             "clear_cache",
-            "_enc_feat_map",
             "blend_v",
             "blend_h",
             "spatial_compression_ratio",
         )
     )
+    if not static_ready:
+        return False
+    # Diffusers AutoencoderKLWan 在 clear_cache() 中延迟创建 encoder cache。
+    vae.clear_cache()
+    return hasattr(vae, "_enc_feat_map") and hasattr(vae, "_enc_conv_idx")
 
 
 def _stream_wan_vae_moments_from_cpu(
@@ -499,6 +503,10 @@ def encode_video_to_wan_endpoint_latent(
         memory_config = configure_wan_vae_encode_memory(vae)
     preflight = _wan_vae_memory_preflight(vae, memory_config)
     streaming_ready = _supports_wan_streaming_encode(vae)
+    if type(vae).__name__ == "AutoencoderKLWan" and not streaming_ready:
+        raise RuntimeError(
+            "真实 AutoencoderKLWan 缺少受控 streaming 接口，禁止回退到 full-tensor GPU encode"
+        )
     video_device = torch.device("cpu") if streaming_ready else device
     video, frame_count = load_video_tensor_for_wan_vae(
         video_path,

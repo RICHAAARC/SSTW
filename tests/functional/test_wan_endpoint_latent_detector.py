@@ -155,3 +155,24 @@ def test_wan_vae_memory_config_rejects_non_native_temporal_chunk() -> None:
 
     with pytest.raises(ValueError, match="固定按4帧"):
         WanVAEEncodeMemoryConfig(temporal_chunk_frame_count=2).validate()
+
+
+@pytest.mark.quick
+def test_real_wan_class_name_cannot_fall_back_to_full_tensor(monkeypatch, tmp_path) -> None:
+    """真实 Wan VAE 接口漂移时必须失败，不能重新引入完整视频 GPU 搬运。"""
+
+    IncompleteWan = type(
+        "AutoencoderKLWan",
+        (_CpuOffloadedVAE,),
+        {},
+    )
+    monkeypatch.setattr(
+        "main.methods.state_space_watermark.endpoint_latent_detector.load_video_tensor_for_wan_vae",
+        lambda *args, **kwargs: (torch.zeros((1, 3, 1, 2, 2)), 1),
+    )
+
+    with pytest.raises(RuntimeError, match="禁止回退"):
+        encode_video_to_wan_endpoint_latent(
+            IncompleteWan(),
+            tmp_path / "source.mp4",
+        )

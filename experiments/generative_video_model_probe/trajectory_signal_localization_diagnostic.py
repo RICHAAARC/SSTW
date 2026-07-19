@@ -16,11 +16,13 @@ from typing import Any, Iterable, Mapping
 
 from evaluation.protocol.record_writer import write_json, write_jsonl
 from experiments.generative_video_model_probe.colab_runtime import (
+    _configure_wan_flow_match_euler_scheduler,
     validate_generation_model_provenance,
 )
 from experiments.generative_video_model_probe.formal_flow_evidence_runner import (
     _compute_replay_endpoint_evidence_for_key,
     _evaluate_fixed_replay_hypothesis_for_key,
+    _flow_key_context,
     _generation_key,
     _invoke_pipeline_loader,
     _load_pipeline,
@@ -34,6 +36,7 @@ from experiments.generative_video_model_probe.formal_flow_evidence_runner import
 )
 from main.methods.state_space_watermark.flow_tubelet_key_code import (
     FlowTubeletKeyCodeConfig,
+    build_integrated_flow_tubelet_key_direction_like,
 )
 from main.methods.state_space_watermark.replay_inversion import (
     ReplayGaussianLikelihoodConfig,
@@ -41,6 +44,7 @@ from main.methods.state_space_watermark.replay_inversion import (
 )
 from main.methods.state_space_watermark.wan_flow_replay_backend import (
     _endpoint_integration_grid,
+    build_flow_schedule_points,
     score_replay_trajectory_for_key,
 )
 
@@ -100,6 +104,11 @@ def validate_signal_localization_config(config: Mapping[str, Any]) -> None:
     }
     if set(config.get("required_source_method_variants") or ()) != expected_variants:
         raise ValueError("Stage 0-D source variants 不完整")
+    if config.get("owner_key_direction_preflight_required") is not True:
+        raise ValueError("Stage 0-D 必须启用 owner-key direction preflight")
+    latent_shape = config.get("expected_wan_endpoint_latent_shape")
+    if [int(value) for value in latent_shape or []] != [1, 16, 9, 40, 64]:
+        raise ValueError("Stage 0-D Wan endpoint latent shape 必须冻结为 [1,16,9,40,64]")
 
 
 def _resolved_source_video(
@@ -234,6 +243,235 @@ def build_immutable_input_snapshot(
     }
     snapshot["immutable_input_snapshot_digest"] = _stable_digest(snapshot)
     return snapshot
+
+
+def _load_owner_key_preflight_scheduler(
+    *,
+    model_id: str,
+    revision: str,
+) -> Any:
+    """只加载 scheduler 配置，不加载 Transformer、VAE 或视频 pipeline。"""
+
+    from diffusers import UniPCMultistepScheduler
+
+    scheduler = UniPCMultistepScheduler.from_pretrained(
+        model_id,
+        subfolder="scheduler",
+        revision=revision,
+        local_files_only=True,
+    )
+    holder = type("OwnerKeySchedulerHolder", (), {})()
+    holder.scheduler = scheduler
+    _configure_wan_flow_match_euler_scheduler(holder)
+    return holder.scheduler
+
+
+def _rebuild_owner_key_direction_metadata(
+    *,
+    source_record: Mapping[str, Any],
+    prompt: str,
+    scheduler: Any,
+    key_text: str,
+    latent_shape: tuple[int, ...],
+) -> dict[str, Any]:
+    """在 CPU 上重建生成期 endpoint direction 的公开摘要元数据。"""
+
+    import torch
+
+    key_context = _flow_key_context(prompt, scheduler)
+    schedule = build_flow_schedule_points(
+        scheduler,
+        num_inference_steps=int(source_record.get("num_inference_steps") or 0),
+        device=torch.device("cpu"),
+    )
+    phases, weights = _endpoint_integration_grid(
+        schedule,
+        FlowTubeletKeyCodeConfig(),
+    )
+    reference = torch.zeros(latent_shape, dtype=torch.float32)
+    _direction, metadata = build_integrated_flow_tubelet_key_direction_like(
+        reference,
+        key_text=key_text,
+        key_context=key_context,
+        flow_phases=phases,
+        integration_weights=weights,
+    )
+    return {
+        "endpoint_key_direction_digest": metadata["flow_key_direction_digest"],
+        "endpoint_key_context_digest": metadata[
+            "flow_tubelet_key_context_digest"
+        ],
+        "endpoint_integrated_phase_count": metadata["flow_integrated_phase_count"],
+        "endpoint_integrated_weight_sum": metadata["flow_integrated_weight_sum"],
+    }
+
+
+def _owner_key_preflight_record(
+    config: Mapping[str, Any],
+    *,
+    status: str,
+    expected_count: int,
+    watermark_key_id: str | None,
+    failure_reason_code: str | None = None,
+    direction_match_count: int = 0,
+    context_match_count: int = 0,
+    phase_grid_match_count: int = 0,
+    direction_mismatch_trace_ids: Iterable[str] = (),
+) -> dict[str, Any]:
+    record = {
+        "record_version": DIAGNOSTIC_RECORD_VERSION,
+        "profile_id": config["profile_id"],
+        "owner_key_direction_preflight_status": status,
+        "owner_key_direction_preflight_failure_reason_code": failure_reason_code,
+        "owner_key_direction_expected_count": expected_count,
+        "owner_key_direction_match_count": direction_match_count,
+        "owner_key_direction_all_match": bool(
+            expected_count > 0 and direction_match_count == expected_count
+        ),
+        "owner_key_context_all_match": bool(
+            expected_count > 0 and context_match_count == expected_count
+        ),
+        "owner_key_phase_grid_all_match": bool(
+            expected_count > 0 and phase_grid_match_count == expected_count
+        ),
+        "owner_key_direction_mismatch_trace_ids": sorted(
+            str(value) for value in direction_mismatch_trace_ids
+        ),
+        "watermark_key_id": watermark_key_id,
+        "claim_support_status": config["claim_support_status"],
+    }
+    record["owner_key_direction_preflight_record_id"] = _stable_digest(record)
+    return record
+
+
+def build_owner_key_direction_preflight(
+    source_root: str | Path,
+    config: Mapping[str, Any],
+    *,
+    scheduler_loader: Any = _load_owner_key_preflight_scheduler,
+    direction_metadata_builder: Any = _rebuild_owner_key_direction_metadata,
+) -> dict[str, Any]:
+    """行为核验 owner secret 是否能重建4个 full-source 生成方向。"""
+
+    source = Path(source_root).resolve()
+    full_rows = [
+        row
+        for row in _read_jsonl(source / "records" / "generation_records.jsonl")
+        if row.get("generation_status") == "success"
+        and row.get("method_variant") == "sstw_full_method"
+    ]
+    expected_count = int(config["required_source_video_count"])
+    key_ids = {
+        str(row.get("watermark_key_id") or "").strip()
+        for row in full_rows
+        if str(row.get("watermark_key_id") or "").strip()
+    }
+    watermark_key_id = next(iter(key_ids)) if len(key_ids) == 1 else None
+    if len(full_rows) != expected_count or len(key_ids) != 1:
+        return _owner_key_preflight_record(
+            config,
+            status="blocked",
+            expected_count=expected_count,
+            watermark_key_id=watermark_key_id,
+            failure_reason_code="owner_key_preflight_source_coverage_invalid",
+        )
+
+    # 先完成凭据派生；凭据缺失时不得触发任何 scheduler/model 加载。
+    try:
+        derived_keys = [_generation_key(row) for row in full_rows]
+    except Exception:
+        return _owner_key_preflight_record(
+            config,
+            status="blocked",
+            expected_count=expected_count,
+            watermark_key_id=watermark_key_id,
+            failure_reason_code="owner_key_credentials_unavailable_or_incompatible",
+        )
+
+    prompt_map = _prompt_text_by_id(
+        _read_json(source / "datasets" / "prompt_seed_suite.json")
+    )
+    latent_shape = tuple(int(value) for value in config["expected_wan_endpoint_latent_shape"])
+    try:
+        revisions: dict[str, str] = {}
+        for row, key_text in zip(full_rows, derived_keys):
+            model_id = str(row.get("generation_model_id") or "")
+            revision = validate_generation_model_provenance(row)
+            previous = revisions.setdefault(model_id, revision)
+            if previous != revision:
+                raise RuntimeError("同一 generation model 混用不同 revision")
+        schedulers = {
+            model_id: scheduler_loader(model_id=model_id, revision=revision)
+            for model_id, revision in sorted(revisions.items())
+        }
+        direction_match_count = 0
+        context_match_count = 0
+        phase_grid_match_count = 0
+        direction_mismatch_trace_ids: list[str] = []
+        for row in full_rows:
+            trace_id = str(row.get("trajectory_trace_id") or "")
+            prompt_id = str(row.get("prompt_id") or "")
+            if prompt_id not in prompt_map:
+                raise RuntimeError("owner-key preflight 缺少生成 prompt")
+            observed = direction_metadata_builder(
+                source_record=row,
+                prompt=prompt_map[prompt_id],
+                scheduler=schedulers[str(row.get("generation_model_id") or "")],
+                key_text=key_text,
+                latent_shape=latent_shape,
+            )
+            direction_matches = (
+                str(observed.get("endpoint_key_direction_digest") or "")
+                == str(row.get("endpoint_key_direction_digest") or "")
+            )
+            context_matches = (
+                str(observed.get("endpoint_key_context_digest") or "")
+                == str(
+                    row.get("endpoint_key_context_digest")
+                    or row.get("flow_tubelet_key_context_digest")
+                    or ""
+                )
+            )
+            phase_matches = int(
+                observed.get("endpoint_integrated_phase_count") or 0
+            ) == int(row.get("endpoint_integrated_phase_count") or 0)
+            weight_matches = math.isclose(
+                float(observed.get("endpoint_integrated_weight_sum") or 0.0),
+                float(row.get("endpoint_integrated_weight_sum") or 0.0),
+                rel_tol=0.0,
+                abs_tol=1e-9,
+            )
+            direction_match_count += int(direction_matches)
+            context_match_count += int(context_matches)
+            phase_grid_match_count += int(phase_matches and weight_matches)
+            if not direction_matches:
+                direction_mismatch_trace_ids.append(trace_id)
+        all_ready = (
+            direction_match_count == expected_count
+            and context_match_count == expected_count
+            and phase_grid_match_count == expected_count
+        )
+        return _owner_key_preflight_record(
+            config,
+            status="ready" if all_ready else "mismatch",
+            expected_count=expected_count,
+            watermark_key_id=watermark_key_id,
+            failure_reason_code=(
+                None if all_ready else "owner_key_generation_direction_mismatch"
+            ),
+            direction_match_count=direction_match_count,
+            context_match_count=context_match_count,
+            phase_grid_match_count=phase_grid_match_count,
+            direction_mismatch_trace_ids=direction_mismatch_trace_ids,
+        )
+    except Exception:
+        return _owner_key_preflight_record(
+            config,
+            status="blocked",
+            expected_count=expected_count,
+            watermark_key_id=watermark_key_id,
+            failure_reason_code="owner_key_direction_rebuild_failed",
+        )
 
 
 def _likelihood_config(source_root: Path) -> ReplayGaussianLikelihoodConfig:
@@ -569,11 +807,12 @@ def execute_condition(
                             "S_path_inv_unweighted"
                         ),
                         "trajectory_velocity_projection": path.get("S_velocity"),
-                        "endpoint_score": endpoint.score,
-                        "endpoint_projection": endpoint.projection,
                         "replay_log_likelihood_ratio": trajectory.replay_log_likelihood_ratio,
                         "trajectory_global_reliability": active.replay_uncertainty.replay_reliability,
                         **replay.endpoint_metadata,
+                        # 必须保存当前 candidate 自己的方向摘要，wrong-key 行不能继承
+                        # replay 初始 correct-key endpoint metadata。
+                        **endpoint.as_dict(),
                         "metric_status": "measured_stage0d_diagnostic",
                     }
                     summaries.append(summary)
@@ -709,6 +948,9 @@ def build_diagnostic_decision(
     pairs: Iterable[Mapping[str, Any]],
     failures: Iterable[Mapping[str, Any]],
     config: Mapping[str, Any],
+    *,
+    owner_key_preflight: Mapping[str, Any] | None = None,
+    attacked_phase_requested: bool = False,
 ) -> dict[str, Any]:
     """只按预声明 gates 分类信号位置；永不授权 Stage 1。"""
 
@@ -776,7 +1018,15 @@ def build_diagnostic_decision(
         row.get("video_condition_id") in set(config["required_attacked_video_condition_ids"])
         for row in summary_rows
     )
-    if not summary_rows and not failure_rows:
+    preflight_status = str(
+        (owner_key_preflight or {}).get("owner_key_direction_preflight_status")
+        or "not_run"
+    )
+    if preflight_status == "mismatch":
+        classification = "owner_key_direction_mismatch_stop"
+    elif preflight_status == "blocked":
+        classification = "owner_key_direction_preflight_failure_stop"
+    elif not summary_rows and not failure_rows:
         classification = "no_attack_replay_pending"
     elif failure_rows:
         classification = "runtime_or_input_failure_stop"
@@ -802,17 +1052,28 @@ def build_diagnostic_decision(
             if attacked_ready
             else "standard_attack_erases_separable_signal_stop"
         )
+    attacked_allowed = bool(
+        preflight_status == "ready"
+        and no_attack_ready
+        and config.get("conditional_attacked_phase_allowed") is True
+    )
+    if (
+        attacked_phase_requested
+        and preflight_status == "ready"
+        and not attacked_allowed
+        and classification == "no_attack_replay_pending"
+    ):
+        classification = "attacked_phase_precondition_not_ready_stop"
     return {
         "record_version": DIAGNOSTIC_RECORD_VERSION,
         "profile_id": config["profile_id"],
         "trajectory_signal_diagnostic_decision": classification,
         "no_attack_signal_separation_ready": no_attack_ready,
         "attacked_phase_executed": attacked_executed,
-        "attacked_phase_execution_allowed": bool(
-            no_attack_ready and config.get("conditional_attacked_phase_allowed") is True
-        ),
+        "attacked_phase_execution_allowed": attacked_allowed,
         "controlled_embedding_profile_construction_allowed": bool(
             summary_rows
+            and preflight_status == "ready"
             and classification == "embedding_or_replay_signal_not_separated_stop"
         ),
         "stage_progression_allowed": False,
@@ -821,6 +1082,16 @@ def build_diagnostic_decision(
         "pair_record_count": len(pair_rows),
         "failure_record_count": len(failure_rows),
         "claim_support_status": config["claim_support_status"],
+        "owner_key_direction_preflight_status": preflight_status,
+        "owner_key_direction_all_match": bool(
+            (owner_key_preflight or {}).get("owner_key_direction_all_match")
+        ),
+        "owner_key_context_all_match": bool(
+            (owner_key_preflight or {}).get("owner_key_context_all_match")
+        ),
+        "owner_key_phase_grid_all_match": bool(
+            (owner_key_preflight or {}).get("owner_key_phase_grid_all_match")
+        ),
     }
 
 
@@ -829,6 +1100,8 @@ def _write_report(path: Path, decision: Mapping[str, Any]) -> None:
         "# SSTW trajectory signal localization diagnostic",
         "",
         f"- Decision: `{decision['trajectory_signal_diagnostic_decision']}`",
+        f"- Owner-key direction preflight: `{decision['owner_key_direction_preflight_status']}`",
+        f"- Owner-key direction all match: `{decision['owner_key_direction_all_match']}`",
         f"- No-attack separation ready: `{decision['no_attack_signal_separation_ready']}`",
         f"- Attacked phase executed: `{decision['attacked_phase_executed']}`",
         f"- Stage progression allowed: `{decision['stage_progression_allowed']}`",
@@ -849,6 +1122,8 @@ def run_stage0d(
     *,
     phase: str,
     pipeline_loader: Any = _load_pipeline,
+    scheduler_loader: Any = _load_owner_key_preflight_scheduler,
+    direction_metadata_builder: Any = _rebuild_owner_key_direction_metadata,
 ) -> dict[str, Any]:
     """运行一个显式阶段并重建 decision/report/manifest。"""
 
@@ -880,7 +1155,56 @@ def run_stage0d(
     ):
         if not path.exists():
             write_jsonl(path, rows)
-    if phase in {"no_attack", "attacked"}:
+    preflight_path = output / "artifacts" / "trajectory_signal_owner_key_preflight.json"
+    owner_key_preflight = _read_json(preflight_path) if preflight_path.exists() else None
+    if phase in {"credential_preflight", "no_attack", "attacked"}:
+        runtime_checkpoint_rows_exist = any(
+            _read_jsonl(path)
+            for path in (output / "runtime").glob(
+                "trajectory_signal_*_checkpoint.jsonl"
+            )
+        ) if (output / "runtime").is_dir() else False
+        if owner_key_preflight is None and (
+            existing_summaries
+            or existing_steps
+            or existing_failures
+            or runtime_checkpoint_rows_exist
+        ):
+            raise RuntimeError(
+                "Stage 0-D 既有 replay 记录缺少 owner-key preflight；必须使用新的 output root"
+            )
+        rebuilt_preflight = build_owner_key_direction_preflight(
+            source,
+            config,
+            scheduler_loader=scheduler_loader,
+            direction_metadata_builder=direction_metadata_builder,
+        )
+        if owner_key_preflight is not None and owner_key_preflight != rebuilt_preflight:
+            raise RuntimeError(
+                "Stage 0-D owner-key preflight 与既有运行不一致；必须使用新的 output root"
+            )
+        owner_key_preflight = rebuilt_preflight
+        if not preflight_path.exists():
+            write_json(preflight_path, owner_key_preflight)
+
+    execution_allowed = bool(
+        owner_key_preflight
+        and owner_key_preflight.get("owner_key_direction_preflight_status") == "ready"
+    )
+    if phase == "attacked" and execution_allowed:
+        existing_pairs = build_pair_records(existing_summaries, config)
+        pre_execution_decision = build_diagnostic_decision(
+            existing_summaries,
+            existing_pairs,
+            existing_failures,
+            config,
+            owner_key_preflight=owner_key_preflight,
+            attacked_phase_requested=True,
+        )
+        execution_allowed = bool(
+            pre_execution_decision["attacked_phase_execution_allowed"]
+        )
+    if phase in {"no_attack", "attacked"} and execution_allowed:
         new_summaries, new_steps, new_failures = execute_condition(
             source,
             output,
@@ -910,12 +1234,16 @@ def run_stage0d(
         pairs,
         existing_failures,
         config,
+        owner_key_preflight=owner_key_preflight,
+        attacked_phase_requested=phase == "attacked",
     )
     decision_path = output / "artifacts" / "trajectory_signal_diagnostic_decision.json"
     report_path = output / "reports" / "trajectory_signal_diagnostic_report.md"
     write_json(decision_path, decision)
     _write_report(report_path, decision)
     governed = [snapshot_path, summary_path, step_path, pair_path, failure_path, decision_path, report_path]
+    if preflight_path.exists():
+        governed.insert(1, preflight_path)
     manifest = {
         "artifact_id": "trajectory_signal_localization_diagnostic_manifest",
         "profile_id": config["profile_id"],
@@ -940,7 +1268,11 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--source-run-root", required=True)
     parser.add_argument("--output-run-root", required=True)
     parser.add_argument("--config-path", default=DEFAULT_CONFIG_PATH)
-    parser.add_argument("--phase", choices=("no_attack", "attacked", "decision"), required=True)
+    parser.add_argument(
+        "--phase",
+        choices=("credential_preflight", "no_attack", "attacked", "decision"),
+        required=True,
+    )
     return parser.parse_args()
 
 

@@ -4,6 +4,13 @@
   "conditional_attacked_phase_allowed": true,
   "cross_project_integration_allowed": false,
   "external_baseline_execution_allowed": false,
+  "expected_wan_endpoint_latent_shape": [
+    1,
+    16,
+    9,
+    40,
+    64
+  ],
   "fixed_fpr_evaluation_allowed": false,
   "frozen_likelihood_calibration_step_count": 20,
   "generation_aligned_replay_step_count": 8,
@@ -13,6 +20,7 @@
   "minimum_full_path_margin_over_endpoint_fraction": 0.5,
   "minimum_replay_reliability": 0.05,
   "no_attack_video_condition_id": "no_attack_original_video",
+  "owner_key_direction_preflight_required": true,
   "paper_result_level": "trajectory_signal_localization_diagnostic",
   "primary_replay_step_count": 20,
   "profile_id": "sstw_trajectory_signal_localization_diagnostic",

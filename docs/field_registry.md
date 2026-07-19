@@ -2830,3 +2830,14 @@ Notebook 与 repository module 的跨边界数据
 | endpoint_vae_cuda_baseline_allocated_gib | metric | none | true | false | false | endpoint VAE streaming 开始前的 CUDA allocated GiB。 |
 | endpoint_vae_cuda_absolute_peak_allocated_gib | metric | none | true | false | false | endpoint VAE streaming 期间绝对 CUDA allocated 峰值 GiB。 |
 | endpoint_vae_cuda_incremental_peak_allocated_gib | metric | none | true | false | false | endpoint VAE streaming 相对 baseline 的新增 CUDA allocated 峰值 GiB。 |
+| expected_wan_endpoint_latent_shape | protocol | none | true | false | false | Stage 0-D owner-key direction preflight 重建生成期 Wan endpoint direction 时冻结的 canonical latent shape。 |
+| owner_key_direction_preflight_required | governance | none | true | false | false | 是否要求在任何 VAE/replay 或 attacked 阶段前先行为核验 owner secret 对生成方向的绑定。 |
+| owner_key_direction_preflight_record_id | provenance | none | true | false | false | owner-key direction preflight 公开结果内容的稳定摘要标识。 |
+| owner_key_direction_preflight_status | governance | none | true | false | false | owner secret 重建 generation direction 摘要的 ready、mismatch、blocked 或 not_run 状态。 |
+| owner_key_direction_preflight_failure_reason_code | governance | none | true | false | false | 不包含密钥材料或异常文本的 owner-key preflight 失败原因代码。 |
+| owner_key_direction_expected_count | metric | none | true | false | false | owner-key direction preflight 预期覆盖的 full-source 记录数。 |
+| owner_key_direction_match_count | metric | none | true | false | false | 当前 owner secret 重建方向摘要与 generation records 一致的 full-source 数量。 |
+| owner_key_direction_all_match | governance | none | true | false | false | 全部 full-source generation direction 摘要是否由当前 owner secret 精确重建。 |
+| owner_key_context_all_match | governance | none | true | false | false | owner-key preflight 的全部 prompt 与 scheduler context 摘要是否和生成记录一致。 |
+| owner_key_phase_grid_all_match | governance | none | true | false | false | owner-key preflight 的全部 phase count 与 integration weight sum 是否和生成记录一致。 |
+| owner_key_direction_mismatch_trace_ids | provenance | none | true | false | false | 方向摘要不一致的公开 trajectory trace ID 集合，不包含密钥或派生方向内容。 |

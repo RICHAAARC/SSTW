@@ -2705,3 +2705,75 @@ Notebook 与 repository module 的跨边界数据
 | target_test_attacked_positive_event_count | protocol | none | true | false | false | profile fixture 期望生成的 attacked held-out positive 事件数. |
 | videoseal | provenance | none | true | false | false | 质量公平性 fixture 中 VideoSeal 方法分支键. |
 | videoshield | provenance | none | true | false | false | 质量公平性 fixture 中 VideoShield 方法分支键. |
+
+### Minimal trajectory replay smoke
+
+| field_name | category | required_suffix | allowed_in_records | allowed_in_claims | replacement_required | description |
+| --- | --- | --- | --- | --- | --- | --- |
+| profile_id | provenance | none | true | false | false | 独立 minimal trajectory smoke profile 的稳定标识. |
+| profile_scope | protocol | none | true | false | false | minimal trajectory smoke 的半白盒问题范围. |
+| cross_project_integration_allowed | governance | none | true | false | false | 当前 profile 是否允许接入其他项目, Stage 0 必须为 false. |
+| external_baseline_execution_allowed | governance | none | true | false | false | 当前 profile 是否允许执行外部 baseline, Stage 0 必须为 false. |
+| fixed_fpr_evaluation_allowed | governance | none | true | false | false | 当前 calibration-only smoke 是否允许产生 fixed-FPR 结论. |
+| large_scale_generation_allowed | governance | none | true | false | false | 当前 smoke 是否允许启动大规模生成, Stage 0 必须为 false. |
+| test_split_claims_allowed | governance | none | true | false | false | 当前 smoke 是否允许使用 test split 支撑 claim, Stage 0 必须为 false. |
+| required_source_method_variants | protocol | none | true | false | false | smoke source package 必须同时具备的 full、endpoint-only 与 clean 变体. |
+| required_source_video_count | protocol | none | true | false | false | smoke 必须覆盖的独立 prompt-seed source 数. |
+| runtime_attack_source_method_variants | protocol | none | true | false | false | runtime attack runner 在当前 profile 中允许消费的生成变体. |
+| runtime_attack_claim_support_status | governance | none | true | false | false | runtime attack records 在 smoke 中使用的非论文证据状态. |
+| source_package_workflow_profile | provenance | none | true | false | false | smoke source package 声明的原始 workflow profile. |
+| stage_progression_on_go | governance | none | true | false | false | smoke GO 时唯一允许的下一语义阶段. |
+| stage_progression_on_no_go | governance | none | true | false | false | smoke NO-GO 时必须执行的停止规则. |
+| minimum_full_correct_over_wrong_fraction | protocol | none | true | false | false | full correct-key 相对 wrong-key 方向通过率下界. |
+| minimum_full_path_margin_over_endpoint_fraction | protocol | none | true | false | false | full path key margin 超过 endpoint-only 的配对比例下界. |
+| minimum_full_path_margin_over_clean_fraction | protocol | none | true | false | false | full path key margin 超过 attacked clean 的配对比例下界. |
+| minimum_replay_reliability | protocol | none | true | false | false | smoke 单元允许继续时的最低 replay reliability. |
+| source_package_path | provenance | none | true | false | false | smoke 实际消费的本地 source ZIP 路径. |
+| source_package_sha256 | provenance | none | true | false | false | smoke source ZIP 的原始字节摘要. |
+| source_split | protocol | none | true | false | false | smoke source package 的唯一 split, 当前必须为 calibration. |
+| source_generation_record_count | metric | none | true | false | false | smoke materialization 实际读取的生成记录数. |
+| source_method_variants | provenance | none | true | false | false | smoke materialization 实际观察到的生成变体集合. |
+| source_video_file_count | metric | none | true | false | false | smoke materialization 实际提取的视频文件数. |
+| source_code_commits | provenance | none | true | false | false | source package 生成记录声明的代码提交集合. |
+| replay_runtime_preflight_status | governance | none | true | false | false | 真实 replay 的依赖、CUDA 与密钥预检状态. |
+| replay_runtime_python_package_status | governance | none | true | false | false | Torch、Diffusers 与 Transformers 的存在性状态对象. |
+| replay_runtime_cuda_available | governance | none | true | false | false | 当前解释器是否具有可用 CUDA runtime. |
+| replay_runtime_authentication_key_present | governance | none | true | false | false | trajectory owner key 是否存在的脱敏布尔状态. |
+| replay_runtime_authentication_key_id_present | governance | none | true | false | false | trajectory key ID 是否存在的脱敏布尔状态. |
+| replay_runtime_blockers | governance | none | true | false | false | 阻断真实 replay 的环境原因列表. |
+| correct_key_endpoint_score | metric | none | true | false | false | smoke correct-key endpoint detector 分数. |
+| correct_key_endpoint_margin | metric | none | true | false | false | correct-key 相对 wrong-key 的 endpoint score 差. |
+| correct_key_path_score | metric | none | true | false | false | smoke correct-key 固定 replay path 分数. |
+| wrong_key_path_score | metric | none | true | false | false | 同一固定 reverse path 上的 wrong-key path 分数. |
+| correct_key_path_margin | metric | none | true | false | false | correct-key 相对 wrong-key 的 path score 差. |
+| correct_key_replay_log_likelihood_ratio | metric | none | true | false | false | correct-key candidate 相对 null replay 的诊断 LLR. |
+| correct_key_replay_likelihood_margin | metric | none | true | false | false | correct-key LLR 相对 wrong-key LLR 的差值. |
+| wrong_key_fixed_reverse_path_reused | governance | none | true | false | false | wrong-key hypothesis 是否复用 correct-key 的固定 reverse states. |
+| replay_numeric_finite | governance | none | true | false | false | smoke replay 所有关键数值是否有限. |
+| replay_smoke_status | governance | none | true | false | false | 单个 replay smoke 单元的执行状态. |
+| replay_smoke_failure_reason | governance | none | true | false | false | 单个 replay smoke 单元的失败原因. |
+| go_no_go_decision | governance | none | true | false | false | Stage 0 是否允许进入下一最小协议构建的 GO 或 NO_GO. |
+| go_no_go_reason_category | governance | none | true | false | false | GO 或 NO_GO 的机制、执行或环境原因类别. |
+| stage_progression | governance | none | true | false | false | 当前 smoke decision 实际放行或阻断的语义阶段. |
+| fixed_fpr_evaluated | governance | none | true | false | false | 当前 smoke 是否真实执行 fixed-FPR 评测, 必须为 false. |
+| test_split_used | governance | none | true | false | false | 当前 smoke 是否消费 held-out test split, 必须为 false. |
+| paper_claim_allowed | governance | none | true | false | false | 当前 smoke 是否允许支持 paper claim, 必须为 false. |
+| external_baseline_executed | governance | none | true | false | false | 当前 Stage 0 是否执行外部 baseline, 必须为 false. |
+| cross_project_integration_executed | governance | none | true | false | false | 当前 Stage 0 是否执行跨项目集成, 必须为 false. |
+| expected_attack_record_count | metric | none | true | false | false | source、variant 与 attack 笛卡尔积要求的攻击记录数. |
+| ready_attack_record_count | metric | none | true | false | false | 已成功完成文件级变换的 smoke attack 记录数. |
+| replay_record_count | metric | none | true | false | false | 已完成真实 VAE/replay 的 smoke 记录数. |
+| replay_failure_record_count | metric | none | true | false | false | 真实 replay 执行失败记录数. |
+| replay_skipped_due_preflight_count | metric | none | true | false | false | 因真实 replay 环境预检阻断而未执行的预期单元数. |
+| full_replay_record_count | metric | none | true | false | false | smoke 中 full-method replay 记录数. |
+| full_correct_over_wrong_path_fraction | metric | none | true | false | false | full correct-key path margin 为正的 smoke 比例. |
+| full_correct_over_wrong_replay_fraction | metric | none | true | false | false | full correct-key replay LLR margin 为正的 smoke 比例. |
+| full_path_margin_over_endpoint_fraction | metric | none | true | false | false | full path margin 超过同源 endpoint-only 的配对比例. |
+| full_path_margin_over_clean_fraction | metric | none | true | false | false | full path margin 超过同源 attacked clean 的配对比例. |
+| minimum_observed_replay_reliability | metric | none | true | false | false | 全部 smoke replay 单元观测到的最小 reliability. |
+| smoke_gate_criteria | governance | none | true | false | false | 由 governed smoke records 重建的逐项 gate 判定对象. |
+| protocol_config_sha256 | provenance | none | true | false | false | smoke manifest 绑定的 minimal profile 原始字节摘要. |
+| smoke_runner_source_path | provenance | none | true | false | false | smoke manifest 绑定的 runner 源文件路径. |
+| smoke_runner_source_sha256 | provenance | none | true | false | false | smoke runner 源文件原始字节摘要. |
+| output_sha256 | provenance | none | true | false | false | smoke decision、report 与 records 的输出摘要映射. |
+| record_paths | artifact | none | true | false | false | smoke manifest 登记的 governed record 路径集合. |

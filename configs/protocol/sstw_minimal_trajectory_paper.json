@@ -1,0 +1,41 @@
+{
+  "claim_support_status": "trajectory_replay_smoke_only_not_paper_evidence",
+  "cross_project_integration_allowed": false,
+  "external_baseline_execution_allowed": false,
+  "fixed_fpr_evaluation_allowed": false,
+  "large_scale_generation_allowed": false,
+  "minimum_attack_event_count_per_attack": 4,
+  "minimum_full_correct_over_wrong_fraction": 0.75,
+  "minimum_full_path_margin_over_clean_fraction": 0.5,
+  "minimum_full_path_margin_over_endpoint_fraction": 0.5,
+  "minimum_replay_likelihood_calibration_clean_video_cluster_count": 4,
+  "minimum_replay_reliability": 0.05,
+  "paper_result_level": "trajectory_paper_smoke",
+  "profile_id": "sstw_minimal_trajectory_paper",
+  "profile_scope": "known_model_prompt_and_generation_conditions_standard_video_postprocessing_attacked_video_vae_replay_diagnostic",
+  "replay_likelihood_calibration_step_count": 20,
+  "replay_step_counts": [
+    20
+  ],
+  "required_runtime_attack_names": [
+    "h264_crf28_runtime",
+    "temporal_crop_runtime"
+  ],
+  "required_source_method_variants": [
+    "sstw_full_method",
+    "endpoint_only_control",
+    "sstw_clean_unwatermarked_reference"
+  ],
+  "required_source_video_count": 4,
+  "runtime_attack_claim_support_status": "trajectory_replay_smoke_attack_only_not_paper_evidence",
+  "runtime_attack_source_method_variants": [
+    "sstw_full_method",
+    "endpoint_only_control",
+    "sstw_clean_unwatermarked_reference"
+  ],
+  "source_package_workflow_profile": "method_mechanism_validation",
+  "stage_id": "trajectory_replay_smoke",
+  "stage_progression_on_go": "minimal_trajectory_paper_protocol_construction_only",
+  "stage_progression_on_no_go": "stop_large_scale_generation_and_preserve_diagnostics",
+  "test_split_claims_allowed": false
+}

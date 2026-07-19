@@ -75,6 +75,46 @@ def test_runtime_attack_subset_is_full_method_bounded_and_score_independent() ->
 
 
 @pytest.mark.quick
+def test_trajectory_smoke_attack_subset_covers_full_endpoint_and_clean_separately() -> None:
+    """最小 trajectory smoke 必须让每个必要变体覆盖全部4个 source。"""
+
+    variants = (
+        "sstw_full_method",
+        "endpoint_only_control",
+        "sstw_clean_unwatermarked_reference",
+    )
+    records = [
+        {
+            **_generation_record(index, method_variant=variant),
+            "sample_role": (
+                "clean_negative"
+                if variant == "sstw_clean_unwatermarked_reference"
+                else "attacked_positive_source"
+            ),
+        }
+        for index in range(4)
+        for variant in variants
+    ]
+
+    jobs = _select_preregistered_attack_jobs(
+        records,
+        ("h264_crf28_runtime", "temporal_crop_runtime"),
+        maximum_per_model_split=4,
+        eligible_method_variants=variants,
+    )
+
+    counts = Counter(
+        (str(record["method_variant"]), attack_name)
+        for record, attack_name, _rank, _digest in jobs
+    )
+    assert counts == {
+        (variant, attack_name): 4
+        for variant in variants
+        for attack_name in ("h264_crf28_runtime", "temporal_crop_runtime")
+    }
+
+
+@pytest.mark.quick
 def test_causal_ablation_subset_selects_complete_prompt_seed_blocks() -> None:
     """Claim-1 子集必须对每个身份同时保留全部生成级变体。"""
 

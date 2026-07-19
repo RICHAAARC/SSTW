@@ -6,6 +6,20 @@
 
 本目录保存 generative_video_model_probe 生成式视频模型探测的可审计运行入口。当前无 GPU 时只生成 blocked decision, 不生成正向机制结论。
 
+## Minimal trajectory replay smoke
+
+只执行已有4-source包的标准攻击与真实 VAE/replay 诊断:
+
+```bash
+python -m experiments.generative_video_model_probe.trajectory_replay_smoke \
+  --package-path outputs/<method_mechanism_validation_package>.zip \
+  --run-root outputs/trajectory_replay_smoke \
+  --config-path configs/protocol/sstw_minimal_trajectory_paper.json
+```
+
+该入口不生成新视频、不运行 external baseline、不使用 test split，也不连接其他项目。
+缺少锁定 GPU 运行时或 owner key 时会生成环境阻断型 `NO_GO` 报告，禁止代理 replay。
+
 ## 生成模型分工
 
 - `Wan-AI/Wan2.1-T2V-1.3B-Diffusers` 是三层主张与固定 FPR 主表模型。

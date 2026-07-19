@@ -157,25 +157,34 @@ def _select_preregistered_attack_jobs(
     attack_names: tuple[str, ...],
     *,
     maximum_per_model_split: int | None,
+    eligible_method_variants: tuple[str, ...] = ("sstw_full_method",),
 ) -> list[tuple[dict[str, Any], str, int, str]]:
     """按攻击名哈希预注册逐模型、逐 split 子集，避免结果后挑样本。
 
-    正式 runtime robustness 只评估完整 SSTW 方法。改变嵌入机制的内部消融由
-    formal Flow runner 直接消费各自原始生成视频，不再把同一组46种攻击重复
-    施加到全部消融，从而在不削弱主鲁棒性证据的前提下降低 GPU replay 成本。
+    默认正式 runtime robustness 只评估完整 SSTW 方法。独立的 trajectory smoke
+    profile 可以显式传入 full、endpoint-only 与 clean；每个变体分别排序和限额，
+    防止多变体共享同一个上限后造成某个必要对照没有攻击覆盖。
     """
 
+    allowed_variants = {
+        str(method_variant)
+        for method_variant in eligible_method_variants
+        if str(method_variant)
+    }
+    if not allowed_variants:
+        raise ValueError("runtime attack source method variants 不能为空")
     eligible = [
         record
         for record in generation_records
-        if record.get("method_variant") == "sstw_full_method"
+        if str(record.get("method_variant") or "") in allowed_variants
         and str(record.get("split") or "") in {"calibration", "test"}
     ]
-    groups: dict[tuple[str, str], list[dict[str, Any]]] = {}
+    groups: dict[tuple[str, str, str], list[dict[str, Any]]] = {}
     for record in eligible:
         key = (
             str(record.get("generation_model_id") or ""),
             str(record.get("split") or ""),
+            str(record.get("method_variant") or ""),
         )
         groups.setdefault(key, []).append(record)
 
@@ -214,19 +223,28 @@ def build_runtime_attack_records(
     """对 generation records 中的真实 mp4 执行 runtime attacks 并返回 records。"""
     run_root = Path(run_root)
     selected_attack_names = _load_required_attack_names(config_path, attack_names)
+    protocol_config = (
+        load_protocol_config_with_shared_attack_protocol(config_path)
+        if config_path is not None
+        else {}
+    )
+    source_method_variants = tuple(
+        str(item)
+        for item in protocol_config.get(
+            "runtime_attack_source_method_variants",
+            ["sstw_full_method"],
+        )
+        if str(item)
+    )
     generation_records = [
         record for record in _read_jsonl(run_root / "records" / "generation_records.jsonl")
         if record.get("generation_status") == "success"
-        and str(record.get("sample_role") or record.get("generation_sample_role") or "").lower() != "clean_negative"
-        and str(record.get("watermark_embedding_status") or "").lower() not in {"disabled_clean_negative", "clean_unwatermarked_reference"}
+        and str(record.get("method_variant") or "") in set(source_method_variants)
     ]
     formal_metric_records = _read_jsonl(run_root / "records" / "formal_quality_motion_semantic_records.jsonl")
     selection = select_motion_claim_generation_records(generation_records, formal_metric_records)
     maximum_per_model_split: int | None = None
     if config_path is not None:
-        protocol_config = load_protocol_config_with_shared_attack_protocol(
-            config_path
-        )
         maximum_per_model_split = int(
             protocol_config["minimum_attack_event_count_per_attack"]
         )
@@ -234,6 +252,7 @@ def build_runtime_attack_records(
         selection.eligible_generation_records,
         selected_attack_names,
         maximum_per_model_split=maximum_per_model_split,
+        eligible_method_variants=source_method_variants,
     )
     records: list[dict] = []
     progress = ProgressReporter(
@@ -244,6 +263,24 @@ def build_runtime_attack_records(
     progress_index = 0
     for generation_record, attack_name, subset_rank, selection_digest in jobs:
         source_video_path = _resolve_video_path(run_root, generation_record)
+        source_sample_role = str(
+            generation_record.get("sample_role")
+            or generation_record.get("generation_sample_role")
+            or ""
+        )
+        clean_negative = (
+            source_sample_role == "clean_negative"
+            or generation_record.get("method_variant")
+            == "sstw_clean_unwatermarked_reference"
+        )
+        attacked_sample_role = "clean_negative" if clean_negative else "attacked_positive"
+        negative_family = (
+            "attacked_clean_unwatermarked_video" if clean_negative else None
+        )
+        attack_claim_support_status = str(
+            protocol_config.get("runtime_attack_claim_support_status")
+            or "runtime_attack_formal_transform_pending"
+        )
         progress_index += 1
         progress.update(
             progress_index,
@@ -286,7 +323,7 @@ def build_runtime_attack_records(
             "split": generation_record.get("split"),
             "protocol_split": generation_record.get("protocol_split"),
             "colab_runtime_profile": generation_record.get("colab_runtime_profile"),
-            "sample_role": "attacked_positive",
+            "sample_role": attacked_sample_role,
             "generation_sample_role": generation_record.get("generation_sample_role"),
             "method_variant": generation_record.get("method_variant"),
             "watermark_embedding_status": generation_record.get("watermark_embedding_status"),
@@ -355,12 +392,12 @@ def build_runtime_attack_records(
             "runtime_attack_formal_evidence_level": "not_run",
             "runtime_attack_claim_level": "not_run",
             "runtime_attack_proxy_free": False,
-            "claim_support_status": "runtime_attack_formal_transform_pending",
+            "claim_support_status": attack_claim_support_status,
         },
-            negative_family=None,
+            negative_family=negative_family,
             trajectory_source_level="runtime_video_file_attack",
             flow_state_admissibility_status="not_evaluated",
-            claim_support_status="runtime_attack_formal_transform_pending",
+            claim_support_status=attack_claim_support_status,
         )
         try:
             if not source_video_path.exists():
@@ -377,7 +414,7 @@ def build_runtime_attack_records(
                 "attacked_video_sha256": _sha256_file(attacked_video_path),
                 "source_frame_count": len(frames),
                 "attacked_frame_count": len(attacked_frames),
-                "claim_support_status": "runtime_attack_formal_video_transform_ready",
+                "claim_support_status": attack_claim_support_status,
                 **attack_metadata,
             })
         except Exception as exc:  # pragma: no cover - 依赖具体视频解码和编码后端

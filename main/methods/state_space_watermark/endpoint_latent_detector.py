@@ -226,6 +226,18 @@ def load_video_tensor_for_wan_vae(video_path: str | Path, *, device: Any, dtype:
     return tensor.to(device=device, dtype=dtype), len(frames)
 
 
+def _vae_execution_device(vae: Any) -> Any:
+    """返回 VAE forward 实际使用的设备，兼容 Accelerate CPU offload。"""
+
+    import torch
+
+    hook = getattr(vae, "_hf_hook", None)
+    execution_device = getattr(hook, "execution_device", None)
+    if execution_device is not None:
+        return torch.device(execution_device)
+    return next(vae.parameters()).device
+
+
 def encode_video_to_wan_endpoint_latent(
     vae: Any,
     video_path: str | Path,
@@ -234,7 +246,7 @@ def encode_video_to_wan_endpoint_latent(
 
     import torch
 
-    device = next(vae.parameters()).device
+    device = _vae_execution_device(vae)
     dtype = vae.dtype
     video, frame_count = load_video_tensor_for_wan_vae(video_path, device=device, dtype=dtype)
     with torch.inference_mode():

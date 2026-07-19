@@ -31,6 +31,7 @@ from experiments.generative_video_model_probe.colab_runtime import (
     validate_generation_model_provenance,
 )
 from experiments.generative_video_model_probe.formal_flow_evidence_runner import (
+    ReplayLikelihoodCalibrationError,
     _compute_replay_endpoint_evidence_for_key,
     _evaluate_fixed_replay_hypothesis_for_key,
     _fit_model_specific_replay_likelihood_configs,
@@ -685,6 +686,17 @@ def run_trajectory_replay_smoke(
                 pipeline_loader=pipeline_loader,
             )
         except Exception as exc:  # pragma: no cover - 真实模型初始化失败
+            detailed_failures = (
+                exc.failure_records
+                if isinstance(exc, ReplayLikelihoodCalibrationError)
+                else []
+            )
+            failure_records.extend({
+                "record_version": SMOKE_RECORD_VERSION,
+                "profile_id": config["profile_id"],
+                **record,
+                "claim_support_status": SMOKE_CLAIM_SUPPORT_STATUS,
+            } for record in detailed_failures)
             failure_records.append({
                 "record_version": SMOKE_RECORD_VERSION,
                 "profile_id": config["profile_id"],

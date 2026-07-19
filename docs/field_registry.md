@@ -2777,3 +2777,56 @@ Notebook 与 repository module 的跨边界数据
 | smoke_runner_source_sha256 | provenance | none | true | false | false | smoke runner 源文件原始字节摘要. |
 | output_sha256 | provenance | none | true | false | false | smoke decision、report 与 records 的输出摘要映射. |
 | record_paths | artifact | none | true | false | false | smoke manifest 登记的 governed record 路径集合. |
+| trajectory_signal_diagnostic_record_id | provenance | none | true | false | false | 由 Stage 0-D 诊断记录身份字段稳定摘要生成的记录 ID。 |
+| trajectory_signal_pair_record_id | provenance | none | true | false | false | correct/wrong 或 full/control 配对诊断记录的稳定 ID。 |
+| video_condition_id | protocol | none | true | false | false | 区分无攻击原视频与既有运行时攻击视频的冻结条件标识。 |
+| candidate_key_role | protocol | none | true | false | false | 当前 replay hypothesis 使用 correct_owner_key 或 wrong_owner_key。 |
+| replay_grid_step_count | protocol | none | true | false | false | 当前 trajectory signal localization replay 网格的步数。 |
+| replay_grid_role | protocol | none | true | false | false | generation_aligned、primary 或 fine_sensitivity 网格角色。 |
+| generation_scheduler_step_count | protocol | none | true | false | false | source generation record 冻结的 scheduler 推理步数。 |
+| replay_candidate_endpoint_mse | metric | none | true | false | false | candidate forward endpoint 相对 VAE observed endpoint 的均方误差。 |
+| replay_null_endpoint_mse | metric | none | true | false | false | null forward endpoint 相对 VAE observed endpoint 的均方误差。 |
+| replay_candidate_mse_advantage | metric | none | true | false | false | null endpoint MSE 减 candidate endpoint MSE，正值表示 candidate 更优。 |
+| trajectory_path_projection | metric | none | true | false | false | 当前 candidate key 在固定反向路径上的 reliability-weighted 聚合投影。 |
+| trajectory_path_projection_unweighted | metric | none | true | false | false | 当前 candidate key 在固定反向路径上的未加权聚合投影。 |
+| trajectory_velocity_projection | metric | none | true | false | false | 当前 candidate key 的聚合 velocity projection。 |
+| fixed_reverse_path_reference_id | provenance | none | true | false | false | 同一视频和网格 correct/wrong hypothesis 共享固定反向路径的公开身份摘要。 |
+| fixed_reverse_path_reused_with_correct_key | governance | none | true | false | false | 当前 wrong-key hypothesis 是否逐对象复用 correct-key reverse states。 |
+| fixed_null_replay_reused_with_correct_key | governance | none | true | false | false | 当前 wrong-key hypothesis 是否逐对象复用 correct-key null replay states。 |
+| trajectory_step_candidate_mse | metric | none | true | false | false | 当前 replay step candidate state 相对固定 reverse observation 的 MSE。 |
+| trajectory_step_null_mse | metric | none | true | false | false | 当前 replay step null state 相对固定 reverse observation 的 MSE。 |
+| trajectory_step_candidate_mse_advantage | metric | none | true | false | false | 当前 step 的 null MSE 减 candidate MSE。 |
+| trajectory_step_path_projection | metric | none | true | false | false | 当前 step reliability-weighted path projection。 |
+| trajectory_step_path_projection_unweighted | metric | none | true | false | false | 当前 step 未加权 path projection。 |
+| trajectory_step_velocity_projection | metric | none | true | false | false | 当前 step velocity projection。 |
+| trajectory_step_endpoint_projection | metric | none | true | false | false | 当前 reverse state 在 candidate key 方向上的 endpoint projection。 |
+| trajectory_step_reliability | metric | none | true | false | false | 当前 step 的 global 与 local likelihood 联合可靠性。 |
+| trajectory_step_local_likelihood_reliability | metric | none | true | false | false | 当前 step 仅由 candidate likelihood residual 得到的局部可靠性。 |
+| trajectory_global_reliability | metric | none | true | false | false | 当前单网格 replay trajectory 的全局可靠性。 |
+| trajectory_sigma_start | protocol | none | true | false | false | 当前 replay step 起点 sigma。 |
+| trajectory_sigma_end | protocol | none | true | false | false | 当前 replay step 终点 sigma。 |
+| trajectory_signal_comparison_kind | protocol | none | true | false | false | candidate key、endpoint-only 或 clean 配对比较类型。 |
+| correct_over_wrong_path_margin | metric | none | true | false | false | correct-key path projection 减 wrong-key path projection。 |
+| correct_over_wrong_likelihood_margin | metric | none | true | false | false | correct-key replay LLR 减 wrong-key replay LLR。 |
+| correct_over_wrong_endpoint_margin | metric | none | true | false | false | correct-key endpoint score 减 wrong-key endpoint score。 |
+| full_over_control_path_margin_gain | metric | none | true | false | false | full correct-over-wrong path margin 减 paired control 对应 margin。 |
+| trajectory_signal_grid_diagnostics | metric | none | true | false | false | 各冻结 replay grid 的 Stage 0-D coverage、方向性和可靠性门禁。 |
+| no_attack_signal_separation_ready | governance | none | true | false | false | 无攻击 primary 与 fine grid 是否同时满足原冻结方向性门槛。 |
+| attacked_phase_executed | governance | none | true | false | false | 是否因无攻击分离门禁通过而条件式执行既有 attacked-video 诊断。 |
+| trajectory_signal_diagnostic_decision | governance | none | true | false | false | Stage 0-D 对信号消失位置的受治理诊断分类。 |
+| controlled_embedding_profile_construction_allowed | governance | none | true | false | false | 仅在无攻击各冻结网格均不分离时允许另建强度阶梯配置，不授权生成。 |
+| endpoint_vae_encode_strategy | protocol | none | true | false | false | Wan endpoint VAE 使用 CPU-resident spatiotemporal streaming 或兼容诊断路径。 |
+| endpoint_vae_temporal_chunk_frame_count | protocol | none | true | false | false | Wan 原生因果缓存首帧后每次送入 encoder 的时间帧数。 |
+| endpoint_vae_tile_sample_height | protocol | none | true | false | false | endpoint VAE streaming 输入 tile 高度。 |
+| endpoint_vae_tile_sample_width | protocol | none | true | false | false | endpoint VAE streaming 输入 tile 宽度。 |
+| endpoint_vae_tile_sample_stride_height | protocol | none | true | false | false | endpoint VAE streaming 输入 tile 纵向步幅。 |
+| endpoint_vae_tile_sample_stride_width | protocol | none | true | false | false | endpoint VAE streaming 输入 tile 横向步幅。 |
+| endpoint_vae_maximum_incremental_cuda_peak_gib | governance | none | true | false | false | 单次 endpoint VAE encode 允许的新增 CUDA allocated 峰值 GiB。 |
+| endpoint_vae_minimum_cuda_free_gib | governance | none | true | false | false | endpoint VAE encode 分配 activation 前要求的最小空闲 CUDA GiB。 |
+| endpoint_vae_memory_preflight_status | governance | none | true | false | false | endpoint VAE 设备与显存预算预检状态。 |
+| endpoint_vae_execution_device | provenance | none | true | false | false | endpoint VAE forward 实际执行设备。 |
+| endpoint_vae_cuda_free_gib | metric | none | true | false | false | endpoint VAE encode 前可用 CUDA GiB。 |
+| endpoint_vae_cuda_total_gib | metric | none | true | false | false | endpoint VAE 设备总 CUDA GiB。 |
+| endpoint_vae_cuda_baseline_allocated_gib | metric | none | true | false | false | endpoint VAE streaming 开始前的 CUDA allocated GiB。 |
+| endpoint_vae_cuda_absolute_peak_allocated_gib | metric | none | true | false | false | endpoint VAE streaming 期间绝对 CUDA allocated 峰值 GiB。 |
+| endpoint_vae_cuda_incremental_peak_allocated_gib | metric | none | true | false | false | endpoint VAE streaming 相对 baseline 的新增 CUDA allocated 峰值 GiB。 |

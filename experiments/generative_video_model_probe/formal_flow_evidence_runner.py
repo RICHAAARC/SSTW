@@ -101,6 +101,14 @@ FORMAL_NEGATIVE_HYPOTHESIS_FAMILIES = frozenset({
 })
 
 
+class ReplayLikelihoodCalibrationError(RuntimeError):
+    """保存逐 source calibration failures，避免第一条异常遮蔽其余输入。"""
+
+    def __init__(self, message: str, failure_records: Iterable[Mapping[str, Any]]):
+        super().__init__(message)
+        self.failure_records = [dict(record) for record in failure_records]
+
+
 def _run_attacked_video_replay_for_model(
     pipeline: Any,
     video_path: str | Path,
@@ -1947,6 +1955,7 @@ def _fit_model_specific_replay_likelihood_configs(
     variances_by_model: dict[str, list[float]] = defaultdict(list)
     cluster_ids_by_model: dict[str, list[str]] = defaultdict(list)
     model_roles: dict[str, set[str]] = defaultdict(set)
+    calibration_failure_records: list[dict[str, Any]] = []
     for source in clean_records:
         if str(source.get("split") or "") != REPLAY_LIKELIHOOD_CALIBRATION_SOURCE_SPLIT:
             continue
@@ -1967,32 +1976,55 @@ def _fit_model_specific_replay_likelihood_configs(
                 "negative_role": "replay_noise_calibration_bootstrap",
             },
         )
-        replay = _run_attacked_video_replay_for_model(
-            pipelines[model_id],
-            video_path,
-            prompt=prompt_map[prompt_id],
-            key_text=calibration_key_text,
-            key_context=_validated_flow_key_context(
-                source,
+        try:
+            replay = _run_attacked_video_replay_for_model(
+                pipelines[model_id],
+                video_path,
                 prompt=prompt_map[prompt_id],
-                scheduler=pipelines[model_id].scheduler,
-            ),
-            likelihood_config=bootstrap_config,
-            replay_step_counts=(calibration_step_count,),
-        )
-        endpoint_energy = float(
-            replay.endpoint_latent.detach().float().pow(2).mean().item()
-        )
-        if not math.isfinite(endpoint_energy) or endpoint_energy <= 0.0:
-            raise RuntimeError("replay 噪声 calibration 的 observed endpoint energy 非有限正数")
-        cluster_id = _replay_likelihood_calibration_cluster_id(source)
-        for trajectory in replay.replay_trajectories:
-            normalized_variance = (
-                float(trajectory.null_residual_mean_squared_error) / endpoint_energy
+                key_text=calibration_key_text,
+                key_context=_validated_flow_key_context(
+                    source,
+                    prompt=prompt_map[prompt_id],
+                    scheduler=pipelines[model_id].scheduler,
+                ),
+                likelihood_config=bootstrap_config,
+                replay_step_counts=(calibration_step_count,),
             )
-            variances_by_model[model_id].append(normalized_variance)
-            cluster_ids_by_model[model_id].append(cluster_id)
-        model_roles[model_id].add(str(source.get("cross_model_role") or "primary_model"))
+            endpoint_energy = float(
+                replay.endpoint_latent.detach().float().pow(2).mean().item()
+            )
+            if not math.isfinite(endpoint_energy) or endpoint_energy <= 0.0:
+                raise RuntimeError(
+                    "replay 噪声 calibration 的 observed endpoint energy 非有限正数"
+                )
+            cluster_id = _replay_likelihood_calibration_cluster_id(source)
+            for trajectory in replay.replay_trajectories:
+                normalized_variance = (
+                    float(trajectory.null_residual_mean_squared_error) / endpoint_energy
+                )
+                variances_by_model[model_id].append(normalized_variance)
+                cluster_ids_by_model[model_id].append(cluster_id)
+            model_roles[model_id].add(
+                str(source.get("cross_model_role") or "primary_model")
+            )
+        except Exception as exc:  # pragma: no cover - 真实 VAE/GPU failure isolation
+            calibration_failure_records.append({
+                "generation_model_id": model_id,
+                "prompt_id": source.get("prompt_id"),
+                "seed_id": source.get("seed_id"),
+                "trajectory_trace_id": source.get("trajectory_trace_id"),
+                "method_variant": source.get("method_variant"),
+                "replay_likelihood_calibration_status": "failed",
+                "replay_likelihood_calibration_failure_reason": str(exc),
+                "metric_status": "missing",
+            })
+
+    if calibration_failure_records:
+        raise ReplayLikelihoodCalibrationError(
+            "replay 噪声 calibration 完成全部 clean source 尝试后发现失败: "
+            f"failure_count={len(calibration_failure_records)}",
+            calibration_failure_records,
+        )
 
     required_models = set(pipelines)
     observed_models = set(variances_by_model)

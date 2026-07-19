@@ -55,6 +55,60 @@ class EndpointLatentEvidence:
         }
 
 
+@dataclass(frozen=True)
+class WanVAEEncodeMemoryConfig:
+    """Wan VAE endpoint encode 的受控显存边界。"""
+
+    temporal_chunk_frame_count: int = 4
+    tile_sample_height: int = 128
+    tile_sample_width: int = 128
+    tile_sample_stride_height: int = 96
+    tile_sample_stride_width: int = 96
+    maximum_incremental_cuda_peak_gib: float = 16.0
+    minimum_cuda_free_gib: float = 12.0
+
+    def validate(self) -> None:
+        """拒绝会改变 Wan 原生因果时间网格或产生无重叠 tile 的配置。"""
+
+        if self.temporal_chunk_frame_count != 4:
+            raise ValueError("Wan VAE 原生因果缓存要求首帧后固定按4帧分块")
+        for name in (
+            "tile_sample_height",
+            "tile_sample_width",
+            "tile_sample_stride_height",
+            "tile_sample_stride_width",
+        ):
+            if int(getattr(self, name)) <= 0:
+                raise ValueError(f"{name} 必须为正整数")
+        if self.tile_sample_stride_height >= self.tile_sample_height:
+            raise ValueError("Wan VAE 纵向 tile stride 必须小于 tile height")
+        if self.tile_sample_stride_width >= self.tile_sample_width:
+            raise ValueError("Wan VAE 横向 tile stride 必须小于 tile width")
+        if self.maximum_incremental_cuda_peak_gib <= 0.0:
+            raise ValueError("Wan VAE CUDA peak budget 必须为正数")
+        if self.minimum_cuda_free_gib < 0.0:
+            raise ValueError("Wan VAE minimum CUDA free memory 不得为负")
+
+
+def configure_wan_vae_encode_memory(
+    vae: Any,
+    config: WanVAEEncodeMemoryConfig | None = None,
+) -> WanVAEEncodeMemoryConfig:
+    """在不改变 FP32 权重边界的前提下登记 SSTW endpoint encode 策略。"""
+
+    resolved = config or WanVAEEncodeMemoryConfig()
+    resolved.validate()
+    setattr(vae, "_sstw_encode_memory_config", resolved)
+    if hasattr(vae, "enable_tiling"):
+        vae.enable_tiling(
+            tile_sample_min_height=resolved.tile_sample_height,
+            tile_sample_min_width=resolved.tile_sample_width,
+            tile_sample_stride_height=resolved.tile_sample_stride_height,
+            tile_sample_stride_width=resolved.tile_sample_stride_width,
+        )
+    return resolved
+
+
 def compute_endpoint_latent_evidence(
     endpoint_latent: Any,
     *,
@@ -238,6 +292,198 @@ def _vae_execution_device(vae: Any) -> Any:
     return next(vae.parameters()).device
 
 
+def _wan_vae_memory_preflight(
+    vae: Any,
+    config: WanVAEEncodeMemoryConfig,
+) -> dict[str, Any]:
+    """在分配视频 activation 前验证设备、策略与可用显存。"""
+
+    import torch
+
+    config.validate()
+    device = _vae_execution_device(vae)
+    metadata: dict[str, Any] = {
+        "endpoint_vae_encode_strategy": "cpu_resident_spatiotemporal_streaming",
+        "endpoint_vae_temporal_chunk_frame_count": config.temporal_chunk_frame_count,
+        "endpoint_vae_tile_sample_height": config.tile_sample_height,
+        "endpoint_vae_tile_sample_width": config.tile_sample_width,
+        "endpoint_vae_tile_sample_stride_height": config.tile_sample_stride_height,
+        "endpoint_vae_tile_sample_stride_width": config.tile_sample_stride_width,
+        "endpoint_vae_maximum_incremental_cuda_peak_gib": (
+            config.maximum_incremental_cuda_peak_gib
+        ),
+        "endpoint_vae_minimum_cuda_free_gib": config.minimum_cuda_free_gib,
+        "endpoint_vae_execution_device": str(device),
+    }
+    if device.type != "cuda":
+        metadata.update(
+            endpoint_vae_memory_preflight_status="ready_non_cuda_diagnostic",
+            endpoint_vae_cuda_free_gib=None,
+            endpoint_vae_cuda_total_gib=None,
+        )
+        return metadata
+    free_bytes, total_bytes = torch.cuda.mem_get_info(device)
+    gib = float(1024**3)
+    free_gib = float(free_bytes) / gib
+    metadata.update(
+        endpoint_vae_cuda_free_gib=round(free_gib, 6),
+        endpoint_vae_cuda_total_gib=round(float(total_bytes) / gib, 6),
+    )
+    if free_gib < config.minimum_cuda_free_gib:
+        raise RuntimeError(
+            "Wan VAE encode 显存预检失败: "
+            f"free={free_gib:.3f} GiB, required={config.minimum_cuda_free_gib:.3f} GiB"
+        )
+    metadata["endpoint_vae_memory_preflight_status"] = "ready"
+    return metadata
+
+
+def _supports_wan_streaming_encode(vae: Any) -> bool:
+    """仅对具备 Diffusers Wan 因果缓存接口的 VAE 启用受控流式路径。"""
+
+    return all(
+        hasattr(vae, name)
+        for name in (
+            "encoder",
+            "quant_conv",
+            "clear_cache",
+            "_enc_feat_map",
+            "blend_v",
+            "blend_h",
+            "spatial_compression_ratio",
+        )
+    )
+
+
+def _stream_wan_vae_moments_from_cpu(
+    vae: Any,
+    video_cpu: Any,
+    *,
+    device: Any,
+    dtype: Any,
+    config: WanVAEEncodeMemoryConfig,
+) -> tuple[Any, dict[str, Any]]:
+    """复刻 Wan tiled_encode 语义，同时只把当前时空 tile 放入 GPU。"""
+
+    import torch
+
+    if video_cpu.device.type != "cpu":
+        raise ValueError("Wan VAE streaming 输入必须保留在 CPU")
+    if getattr(vae.config, "patch_size", None) is not None:
+        raise RuntimeError("SSTW streaming encode 尚不支持启用 patch_size 的 Wan VAE")
+    _, _, num_frames, height, width = video_cpu.shape
+    ratio = int(vae.spatial_compression_ratio)
+    if ratio <= 0:
+        raise RuntimeError("Wan VAE spatial compression ratio 必须为正")
+
+    tile_h = config.tile_sample_height
+    tile_w = config.tile_sample_width
+    stride_h = config.tile_sample_stride_height
+    stride_w = config.tile_sample_stride_width
+    latent_height = height // ratio
+    latent_width = width // ratio
+    latent_tile_h = tile_h // ratio
+    latent_tile_w = tile_w // ratio
+    latent_stride_h = stride_h // ratio
+    latent_stride_w = stride_w // ratio
+    if min(latent_tile_h, latent_tile_w, latent_stride_h, latent_stride_w) <= 0:
+        raise RuntimeError("Wan VAE tile 与 compression ratio 不兼容")
+
+    hook = getattr(vae, "_hf_hook", None)
+    if hook is not None and hasattr(hook, "pre_forward"):
+        hook.pre_forward(vae)
+
+    cuda_enabled = device.type == "cuda"
+    baseline_allocated = 0
+    if cuda_enabled:
+        torch.cuda.synchronize(device)
+        baseline_allocated = int(torch.cuda.memory_allocated(device))
+        torch.cuda.reset_peak_memory_stats(device)
+
+    rows: list[list[Any]] = []
+    try:
+        for i in range(0, height, stride_h):
+            row: list[Any] = []
+            for j in range(0, width, stride_w):
+                vae.clear_cache()
+                time_tiles: list[Any] = []
+                frame_range = 1 + (num_frames - 1) // config.temporal_chunk_frame_count
+                for k in range(frame_range):
+                    vae._enc_conv_idx = [0]
+                    if k == 0:
+                        start, end = 0, 1
+                    else:
+                        start = 1 + config.temporal_chunk_frame_count * (k - 1)
+                        end = min(
+                            num_frames,
+                            1 + config.temporal_chunk_frame_count * k,
+                        )
+                    tile = video_cpu[:, :, start:end, i : i + tile_h, j : j + tile_w]
+                    tile = tile.to(device=device, dtype=dtype)
+                    encoded = vae.encoder(
+                        tile,
+                        feat_cache=vae._enc_feat_map,
+                        feat_idx=vae._enc_conv_idx,
+                    )
+                    encoded = vae.quant_conv(encoded)
+                    time_tiles.append(encoded.to(device="cpu"))
+                    del tile, encoded
+                row.append(torch.cat(time_tiles, dim=2))
+            rows.append(row)
+        vae.clear_cache()
+
+        result_rows: list[Any] = []
+        blend_h = latent_tile_h - latent_stride_h
+        blend_w = latent_tile_w - latent_stride_w
+        for i, row in enumerate(rows):
+            result_row: list[Any] = []
+            for j, tile in enumerate(row):
+                if i > 0:
+                    tile = vae.blend_v(rows[i - 1][j], tile, blend_h)
+                if j > 0:
+                    tile = vae.blend_h(row[j - 1], tile, blend_w)
+                result_row.append(tile[:, :, :, :latent_stride_h, :latent_stride_w])
+            result_rows.append(torch.cat(result_row, dim=-1))
+        moments = torch.cat(result_rows, dim=3)[
+            :, :, :, :latent_height, :latent_width
+        ]
+    finally:
+        vae.clear_cache()
+
+    metadata: dict[str, Any] = {}
+    if cuda_enabled:
+        torch.cuda.synchronize(device)
+        absolute_peak = int(torch.cuda.max_memory_allocated(device))
+        incremental_peak = max(0, absolute_peak - baseline_allocated)
+        gib = float(1024**3)
+        incremental_peak_gib = float(incremental_peak) / gib
+        metadata.update(
+            endpoint_vae_cuda_baseline_allocated_gib=round(
+                float(baseline_allocated) / gib, 6
+            ),
+            endpoint_vae_cuda_absolute_peak_allocated_gib=round(
+                float(absolute_peak) / gib, 6
+            ),
+            endpoint_vae_cuda_incremental_peak_allocated_gib=round(
+                incremental_peak_gib, 6
+            ),
+        )
+        if incremental_peak_gib > config.maximum_incremental_cuda_peak_gib:
+            del moments
+            raise RuntimeError(
+                "Wan VAE encode 超过受治理显存峰值: "
+                f"peak={incremental_peak_gib:.3f} GiB, "
+                f"budget={config.maximum_incremental_cuda_peak_gib:.3f} GiB"
+            )
+    else:
+        metadata.update(
+            endpoint_vae_cuda_baseline_allocated_gib=None,
+            endpoint_vae_cuda_absolute_peak_allocated_gib=None,
+            endpoint_vae_cuda_incremental_peak_allocated_gib=None,
+        )
+    return moments, metadata
+
+
 def encode_video_to_wan_endpoint_latent(
     vae: Any,
     video_path: str | Path,
@@ -248,9 +494,36 @@ def encode_video_to_wan_endpoint_latent(
 
     device = _vae_execution_device(vae)
     dtype = vae.dtype
-    video, frame_count = load_video_tensor_for_wan_vae(video_path, device=device, dtype=dtype)
+    memory_config = getattr(vae, "_sstw_encode_memory_config", None)
+    if memory_config is None:
+        memory_config = configure_wan_vae_encode_memory(vae)
+    preflight = _wan_vae_memory_preflight(vae, memory_config)
+    streaming_ready = _supports_wan_streaming_encode(vae)
+    video_device = torch.device("cpu") if streaming_ready else device
+    video, frame_count = load_video_tensor_for_wan_vae(
+        video_path,
+        device=video_device,
+        dtype=dtype,
+    )
     with torch.inference_mode():
-        latent = _retrieve_vae_latent(vae.encode(video))
+        if streaming_ready:
+            moments, peak_metadata = _stream_wan_vae_moments_from_cpu(
+                vae,
+                video,
+                device=device,
+                dtype=dtype,
+                config=memory_config,
+            )
+            latent = moments.chunk(2, dim=1)[0]
+            del moments
+        else:
+            latent = _retrieve_vae_latent(vae.encode(video))
+            peak_metadata = {
+                "endpoint_vae_encode_strategy": "compatibility_full_tensor_encode",
+                "endpoint_vae_cuda_baseline_allocated_gib": None,
+                "endpoint_vae_cuda_absolute_peak_allocated_gib": None,
+                "endpoint_vae_cuda_incremental_peak_allocated_gib": None,
+            }
     latent = latent.to(device=device, dtype=torch.float32)
     mean_values = getattr(vae.config, "latents_mean", None)
     std_values = getattr(vae.config, "latents_std", None)
@@ -260,6 +533,8 @@ def encode_video_to_wan_endpoint_latent(
     latent_std = 1.0 / torch.tensor(std_values, device=device, dtype=torch.float32).view(1, -1, 1, 1, 1)
     normalized = (latent - latent_mean) * latent_std
     return normalized, {
+        **preflight,
+        **peak_metadata,
         "endpoint_video_frame_count": frame_count,
         "endpoint_vae_model_class": type(vae).__name__,
         "endpoint_vae_encode_status": "ready",
@@ -289,6 +564,7 @@ class WanEndpointLatentDetector:
         vae.eval()
         if hasattr(vae, "enable_tiling"):
             vae.enable_tiling()
+        configure_wan_vae_encode_memory(vae)
         return cls(vae)
 
     def score_video(

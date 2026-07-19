@@ -237,7 +237,7 @@ def test_wan_pipeline_loader_keeps_vae_float32_boundary() -> None:
     """Wan VAE 必须独立按 FP32 加载，Transformer 才使用 L4 的 BF16。"""
 
     observed: dict[str, object] = {}
-    vae = object()
+    vae = SimpleNamespace()
 
     class FakeVae:
         @classmethod
@@ -275,6 +275,8 @@ def test_wan_pipeline_loader_keeps_vae_float32_boundary() -> None:
         "torch_dtype": "bfloat16",
         "token": "token",
     }
+    assert vae._sstw_encode_memory_config.temporal_chunk_frame_count == 4
+    assert vae._sstw_encode_memory_config.maximum_incremental_cuda_peak_gib == 16.0
 
 
 @pytest.mark.quick

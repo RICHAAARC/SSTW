@@ -295,6 +295,11 @@ def _load_wan_pipeline_components(
         torch_dtype=vae_dtype,
         token=hf_token,
     )
+    from main.methods.state_space_watermark.endpoint_latent_detector import (
+        configure_wan_vae_encode_memory,
+    )
+
+    configure_wan_vae_encode_memory(vae)
     return pipeline_class.from_pretrained(
         model_id,
         vae=vae,

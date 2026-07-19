@@ -1,0 +1,41 @@
+{
+  "attacked_phase_execution_policy": "only_after_no_attack_primary_and_fine_grid_separation",
+  "claim_support_status": "trajectory_signal_localization_diagnostic_only_not_paper_evidence",
+  "conditional_attacked_phase_allowed": true,
+  "cross_project_integration_allowed": false,
+  "external_baseline_execution_allowed": false,
+  "fixed_fpr_evaluation_allowed": false,
+  "frozen_likelihood_calibration_step_count": 20,
+  "generation_aligned_replay_step_count": 8,
+  "large_scale_generation_allowed": false,
+  "minimum_full_correct_over_wrong_fraction": 0.75,
+  "minimum_full_path_margin_over_clean_fraction": 0.5,
+  "minimum_full_path_margin_over_endpoint_fraction": 0.5,
+  "minimum_replay_reliability": 0.05,
+  "no_attack_video_condition_id": "no_attack_original_video",
+  "paper_result_level": "trajectory_signal_localization_diagnostic",
+  "primary_replay_step_count": 20,
+  "profile_id": "sstw_trajectory_signal_localization_diagnostic",
+  "profile_scope": "existing_four_source_original_video_then_conditional_existing_attacked_video_vae_replay_signal_localization",
+  "replay_grid_step_counts": [
+    8,
+    20,
+    40
+  ],
+  "required_attacked_video_condition_ids": [
+    "h264_crf28_runtime",
+    "temporal_crop_runtime"
+  ],
+  "required_source_method_variants": [
+    "sstw_full_method",
+    "endpoint_only_control",
+    "sstw_clean_unwatermarked_reference"
+  ],
+  "required_source_video_count": 4,
+  "source_profile_id": "sstw_minimal_trajectory_paper",
+  "stage_id": "trajectory_signal_localization_diagnostic",
+  "stage_progression_allowed": false,
+  "test_split_claims_allowed": false,
+  "time_grid_selection_allowed": false,
+  "trajectory_signal_fine_replay_step_count": 40
+}

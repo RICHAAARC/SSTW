@@ -59,6 +59,7 @@ class WanFlowReplayResult:
     key_context: FlowTubeletKeyContext | None = None
     endpoint_flow_phases: tuple[float, ...] = ()
     endpoint_integration_weights: tuple[float, ...] = ()
+    replay_schedules: tuple[tuple[FlowSchedulePoint, ...], ...] = ()
 
 
 def build_flow_schedule_points(scheduler: Any, *, num_inference_steps: int, device: Any) -> list[FlowSchedulePoint]:
@@ -593,4 +594,5 @@ def run_wan_attacked_video_replay(
         key_context=key_context,
         endpoint_flow_phases=endpoint_flow_phases,
         endpoint_integration_weights=endpoint_integration_weights,
+        replay_schedules=tuple(tuple(schedule) for schedule in schedules),
     )

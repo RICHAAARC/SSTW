@@ -869,6 +869,14 @@ def run_stage0d(
     existing_summaries = _read_jsonl(summary_path)
     existing_steps = _read_jsonl(step_path)
     existing_failures = _read_jsonl(failure_path)
+    # decision-only preflight 也必须物化空 governed records，保证 manifest 可重建。
+    for path, rows in (
+        (summary_path, existing_summaries),
+        (step_path, existing_steps),
+        (failure_path, existing_failures),
+    ):
+        if not path.exists():
+            write_jsonl(path, rows)
     if phase in {"no_attack", "attacked"}:
         new_summaries, new_steps, new_failures = execute_condition(
             source,

@@ -11,6 +11,7 @@ import pytest
 from experiments.generative_video_model_probe.trajectory_signal_localization_diagnostic import (
     build_diagnostic_decision,
     build_immutable_input_snapshot,
+    run_stage0d,
     validate_signal_localization_config,
 )
 
@@ -125,6 +126,22 @@ def test_immutable_preflight_hashes_all_existing_inputs(tmp_path: Path) -> None:
     assert snapshot["generation_record_count"] == 12
     assert snapshot["attack_record_count"] == 24
     assert len(snapshot["video_inputs"]) == 36
+
+    config_path = tmp_path / "stage0d.json"
+    _write_json(config_path, _config())
+    decision = run_stage0d(
+        source,
+        output,
+        config_path,
+        phase="decision",
+    )
+    assert decision["summary_record_count"] == 0
+    assert (
+        output / "artifacts" / "trajectory_signal_diagnostic_manifest.json"
+    ).is_file()
+    assert (
+        output / "records" / "trajectory_signal_summary_records.jsonl"
+    ).is_file()
 
 
 def _decision_rows(*, primary_ready: bool = True, fine_ready: bool = True):

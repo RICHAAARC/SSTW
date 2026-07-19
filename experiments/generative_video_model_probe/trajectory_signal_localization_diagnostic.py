@@ -776,7 +776,9 @@ def build_diagnostic_decision(
         row.get("video_condition_id") in set(config["required_attacked_video_condition_ids"])
         for row in summary_rows
     )
-    if failure_rows:
+    if not summary_rows and not failure_rows:
+        classification = "no_attack_replay_pending"
+    elif failure_rows:
         classification = "runtime_or_input_failure_stop"
     elif primary_ready != fine_ready:
         classification = "replay_grid_sensitive_stop"
@@ -810,7 +812,8 @@ def build_diagnostic_decision(
             no_attack_ready and config.get("conditional_attacked_phase_allowed") is True
         ),
         "controlled_embedding_profile_construction_allowed": bool(
-            classification == "embedding_or_replay_signal_not_separated_stop"
+            summary_rows
+            and classification == "embedding_or_replay_signal_not_separated_stop"
         ),
         "stage_progression_allowed": False,
         "trajectory_signal_grid_diagnostics": diagnostics,

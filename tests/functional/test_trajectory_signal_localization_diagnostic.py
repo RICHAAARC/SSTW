@@ -136,6 +136,10 @@ def test_immutable_preflight_hashes_all_existing_inputs(tmp_path: Path) -> None:
         phase="decision",
     )
     assert decision["summary_record_count"] == 0
+    assert decision["trajectory_signal_diagnostic_decision"] == (
+        "no_attack_replay_pending"
+    )
+    assert decision["controlled_embedding_profile_construction_allowed"] is False
     assert (
         output / "artifacts" / "trajectory_signal_diagnostic_manifest.json"
     ).is_file()

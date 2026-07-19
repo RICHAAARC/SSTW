@@ -67,6 +67,44 @@ def _write_jsonl(path: Path, rows: list[dict[str, object]]) -> None:
     )
 
 
+def _write_generation_prompt_source(source: Path) -> list[dict[str, object]]:
+    rows: list[dict[str, object]] = []
+    for source_index in range(4):
+        for variant in _config()["required_source_method_variants"]:
+            rows.append({
+                "generation_status": "success",
+                "method_variant": variant,
+                "trajectory_trace_id": f"trace-{source_index}-{variant}",
+                "generation_model_id": "Wan-AI/Wan2.1-T2V-1.3B-Diffusers",
+                "generation_model_family": "diffusers_wan21_flow_matching_dit",
+                "generation_model_commit_or_hash": "a" * 40,
+                "generation_model_revision_resolution_status": "resolved_and_frozen",
+                "generation_model_revision_source": "configured_immutable_commit_offline",
+                "prompt_id": f"prompt-{source_index}",
+                "seed_id": f"seed-{source_index}",
+                "num_inference_steps": 8,
+                "watermark_key_id": "sstw-paper-20260710-v1",
+                "endpoint_key_direction_digest": f"direction-{source_index}",
+                "endpoint_key_context_digest": f"context-{source_index}",
+                "endpoint_integrated_phase_count": 8,
+                "endpoint_integrated_weight_sum": 0.5,
+            })
+    _write_jsonl(source / "records" / "generation_records.jsonl", rows)
+    _write_json(
+        source / "datasets" / "prompt_seed_suite.json",
+        {
+            "prompts": [
+                {
+                    "prompt_id": f"prompt-{source_index}",
+                    "prompt_text": f"prompt text {source_index}",
+                }
+                for source_index in range(4)
+            ]
+        },
+    )
+    return rows
+
+
 @pytest.mark.quick
 def test_stage0d_config_rejects_stage_progression() -> None:
     config = _config()
@@ -74,6 +112,123 @@ def test_stage0d_config_rejects_stage_progression() -> None:
     config["stage_progression_allowed"] = True
     with pytest.raises(ValueError, match="禁止项"):
         validate_signal_localization_config(config)
+
+
+@pytest.mark.quick
+def test_credential_snapshot_uses_only_generation_and_prompt_inputs(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    source = tmp_path / "source"
+    output = tmp_path / "credential-output"
+    secret = "owner-secret-material-that-must-not-leak"
+    _write_generation_prompt_source(source)
+    monkeypatch.setenv("SSTW_TRAJECTORY_AUTHENTICATION_KEY", secret)
+    monkeypatch.setenv(
+        "SSTW_TRAJECTORY_AUTHENTICATION_KEY_ID",
+        "sstw-paper-20260710-v1",
+    )
+
+    snapshot = build_immutable_input_snapshot(
+        source,
+        output,
+        _config(),
+        phase="credential_preflight",
+    )
+
+    assert snapshot["immutable_input_scope"] == (
+        "credential_preflight_generation_and_prompt_only"
+    )
+    assert snapshot["generation_record_count"] == 12
+    assert snapshot["prompt_suite_prompt_count"] == 4
+    assert snapshot["attack_input_status"] == (
+        "not_applicable_for_credential_preflight"
+    )
+    assert snapshot["attack_record_count"] == 0
+    assert snapshot["likelihood_calibration_input_status"] == (
+        "not_applicable_for_credential_preflight"
+    )
+    assert snapshot["frozen_likelihood_calibration_record_id"] is None
+    assert snapshot["video_inputs"] == []
+    assert set(snapshot["governed_input_sha256"]) == {
+        str((source / "records" / "generation_records.jsonl").resolve()),
+        str((source / "datasets" / "prompt_seed_suite.json").resolve()),
+    }
+
+    pipeline_load_count = 0
+
+    def forbidden_pipeline_loader(**_kwargs: object) -> object:
+        nonlocal pipeline_load_count
+        pipeline_load_count += 1
+        raise AssertionError("credential preflight 不得加载 replay pipeline")
+
+    config_path = tmp_path / "stage0d.json"
+    _write_json(config_path, _config())
+    decision = run_stage0d(
+        source,
+        output,
+        config_path,
+        phase="credential_preflight",
+        pipeline_loader=forbidden_pipeline_loader,
+        scheduler_loader=_fake_scheduler_loader,
+        direction_metadata_builder=_matching_direction_metadata_builder,
+    )
+    assert pipeline_load_count == 0
+    assert decision["owner_key_direction_preflight_status"] == "ready"
+    assert not (output / "runtime").exists()
+    for path in output.rglob("*"):
+        if path.is_file():
+            assert secret.encode("utf-8") not in path.read_bytes()
+
+
+@pytest.mark.quick
+@pytest.mark.parametrize("phase", ["no_attack", "attacked"])
+def test_replay_phases_reject_empty_calibration_even_with_attack_coverage(
+    tmp_path: Path,
+    phase: str,
+) -> None:
+    source = tmp_path / "source"
+    rows = _write_generation_prompt_source(source)
+    attacks = [
+        {
+            "attack_runtime_status": "ready",
+            "attack_name": attack,
+            "method_variant": row["method_variant"],
+            "trajectory_trace_id": row["trajectory_trace_id"],
+            "attacked_video_path": "not-reached.mp4",
+        }
+        for row in rows
+        for attack in _config()["required_attacked_video_condition_ids"]
+    ]
+    _write_jsonl(
+        source / "records" / "trajectory_replay_smoke_attack_records.jsonl",
+        attacks,
+    )
+    _write_jsonl(
+        source
+        / "records"
+        / "trajectory_replay_smoke_likelihood_calibrations.jsonl",
+        [],
+    )
+    _write_json(
+        source / "artifacts" / "trajectory_replay_smoke_decision.json",
+        {"go_no_go": "NO_GO"},
+    )
+    _write_json(
+        source / "artifacts" / "trajectory_replay_smoke_manifest.json",
+        {"artifact_id": "source"},
+    )
+
+    with pytest.raises(
+        RuntimeError,
+        match="要求唯一冻结 replay likelihood calibration",
+    ):
+        build_immutable_input_snapshot(
+            source,
+            tmp_path / f"{phase}-output",
+            _config(),
+            phase=phase,
+        )
 
 
 @pytest.mark.quick
@@ -148,7 +303,12 @@ def test_immutable_preflight_hashes_all_existing_inputs(tmp_path: Path) -> None:
         },
     )
 
-    snapshot = build_immutable_input_snapshot(source, output, _config())
+    snapshot = build_immutable_input_snapshot(
+        source,
+        output,
+        _config(),
+        phase="no_attack",
+    )
 
     assert snapshot["immutable_input_preflight_status"] == "ready"
     assert snapshot["generation_record_count"] == 12

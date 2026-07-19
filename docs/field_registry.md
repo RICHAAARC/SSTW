@@ -2841,3 +2841,7 @@ Notebook 与 repository module 的跨边界数据
 | owner_key_context_all_match | governance | none | true | false | false | owner-key preflight 的全部 prompt 与 scheduler context 摘要是否和生成记录一致。 |
 | owner_key_phase_grid_all_match | governance | none | true | false | false | owner-key preflight 的全部 phase count 与 integration weight sum 是否和生成记录一致。 |
 | owner_key_direction_mismatch_trace_ids | provenance | none | true | false | false | 方向摘要不一致的公开 trajectory trace ID 集合，不包含密钥或派生方向内容。 |
+| immutable_input_scope | protocol | none | true | false | false | Stage 0-D immutable snapshot 按显式执行阶段冻结的真实输入依赖范围。 |
+| prompt_suite_prompt_count | metric | none | true | false | false | immutable snapshot 已验证并纳入摘要的 prompt suite 条目数。 |
+| attack_input_status | governance | none | true | false | false | attack inputs 对当前显式阶段为 ready 或 not applicable 的状态。 |
+| likelihood_calibration_input_status | governance | none | true | false | false | replay likelihood calibration 对当前显式阶段为 ready 或 not applicable 的状态。 |

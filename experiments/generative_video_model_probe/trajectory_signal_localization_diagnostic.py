@@ -128,27 +128,32 @@ def build_immutable_input_snapshot(
     source_root: str | Path,
     output_root: str | Path,
     config: Mapping[str, Any],
+    *,
+    phase: str,
 ) -> dict[str, Any]:
-    """在模型加载前验证既有输入覆盖与逐文件摘要，且禁止 source/output 混写。"""
+    """按显式阶段验证真实输入依赖，且禁止 source/output 混写。"""
 
     source = Path(source_root).resolve()
     output = Path(output_root).resolve()
     if source == output or source in output.parents:
         raise ValueError("Stage 0-D output 不得写入 source run tree")
+    valid_phases = {"credential_preflight", "no_attack", "attacked", "decision"}
+    if phase not in valid_phases:
+        raise ValueError(f"Stage 0-D immutable input phase 不受支持: {phase}")
     generation_path = source / "records" / "generation_records.jsonl"
+    prompt_suite_path = source / "datasets" / "prompt_seed_suite.json"
     attack_path = source / "records" / "trajectory_replay_smoke_attack_records.jsonl"
     calibration_path = (
         source / "records" / "trajectory_replay_smoke_likelihood_calibrations.jsonl"
     )
     decision_path = source / "artifacts" / "trajectory_replay_smoke_decision.json"
     manifest_path = source / "artifacts" / "trajectory_replay_smoke_manifest.json"
-    for required in (
-        generation_path,
-        attack_path,
-        calibration_path,
-        decision_path,
-        manifest_path,
-    ):
+    required_files = [generation_path, prompt_suite_path]
+    if phase != "credential_preflight":
+        required_files.extend(
+            (attack_path, calibration_path, decision_path, manifest_path)
+        )
+    for required in required_files:
         if not required.is_file():
             raise FileNotFoundError(f"Stage 0-D 缺少冻结输入: {required}")
 
@@ -165,6 +170,61 @@ def build_immutable_input_snapshot(
             "Stage 0-D original video coverage 不完整: "
             f"observed={len(generations)}, expected={expected_generation_count}"
         )
+    for variant in variants:
+        observed_variant_count = sum(
+            row.get("method_variant") == variant for row in generations
+        )
+        if observed_variant_count != int(config["required_source_video_count"]):
+            raise RuntimeError(
+                "Stage 0-D generation variant coverage 不完整: "
+                f"variant={variant}, observed={observed_variant_count}"
+            )
+    for row in generations:
+        validate_generation_model_provenance(row)
+    prompt_map = _prompt_text_by_id(_read_json(prompt_suite_path))
+    if not prompt_map:
+        raise RuntimeError("Stage 0-D prompt suite 未提供 prompt_id/prompt_text")
+    missing_prompt_ids = sorted(
+        {
+            str(row.get("prompt_id") or "")
+            for row in generations
+            if str(row.get("prompt_id") or "") not in prompt_map
+        }
+    )
+    if missing_prompt_ids:
+        raise RuntimeError(
+            "Stage 0-D generation records 缺少 prompt suite 绑定: "
+            + ", ".join(missing_prompt_ids)
+        )
+
+    if phase == "credential_preflight":
+        governed_files = [generation_path, prompt_suite_path]
+        snapshot = {
+            "record_version": DIAGNOSTIC_RECORD_VERSION,
+            "profile_id": config["profile_id"],
+            "immutable_input_preflight_status": "ready",
+            "immutable_input_scope": (
+                "credential_preflight_generation_and_prompt_only"
+            ),
+            "source_run_root": str(source),
+            "output_run_root": str(output),
+            "generation_record_count": len(generations),
+            "prompt_suite_prompt_count": len(prompt_map),
+            "attack_input_status": "not_applicable_for_credential_preflight",
+            "attack_record_count": 0,
+            "likelihood_calibration_input_status": (
+                "not_applicable_for_credential_preflight"
+            ),
+            "frozen_likelihood_calibration_record_id": None,
+            "governed_input_sha256": {
+                str(path): _sha256_file(path) for path in governed_files
+            },
+            "video_inputs": [],
+            "claim_support_status": config["claim_support_status"],
+        }
+        snapshot["immutable_input_snapshot_digest"] = _stable_digest(snapshot)
+        return snapshot
+
     attacks = [
         row
         for row in _read_jsonl(attack_path)
@@ -216,15 +276,26 @@ def build_immutable_input_snapshot(
                 "video_path": str(path),
                 "video_sha256": observed_hash,
             })
-    governed_files = [generation_path, attack_path, calibration_path, decision_path, manifest_path]
+    governed_files = [
+        generation_path,
+        prompt_suite_path,
+        attack_path,
+        calibration_path,
+        decision_path,
+        manifest_path,
+    ]
     snapshot = {
         "record_version": DIAGNOSTIC_RECORD_VERSION,
         "profile_id": config["profile_id"],
         "immutable_input_preflight_status": "ready",
+        "immutable_input_scope": "full_replay_diagnostic_inputs",
         "source_run_root": str(source),
         "output_run_root": str(output),
         "generation_record_count": len(generations),
+        "prompt_suite_prompt_count": len(prompt_map),
+        "attack_input_status": "ready",
         "attack_record_count": len(attacks),
+        "likelihood_calibration_input_status": "ready",
         "frozen_likelihood_calibration_record_id": calibration.get(
             "replay_likelihood_calibration_record_id"
         ),
@@ -1131,7 +1202,12 @@ def run_stage0d(
     output = Path(output_root).resolve()
     config = _read_json(config_path)
     validate_signal_localization_config(config)
-    snapshot = build_immutable_input_snapshot(source, output, config)
+    snapshot = build_immutable_input_snapshot(
+        source,
+        output,
+        config,
+        phase=phase,
+    )
     snapshot_path = output / "artifacts" / "trajectory_signal_immutable_input_snapshot.json"
     if snapshot_path.exists() and _read_json(snapshot_path) != snapshot:
         raise RuntimeError("Stage 0-D immutable input snapshot 与既有运行不一致")

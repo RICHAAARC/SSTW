@@ -394,7 +394,7 @@ def build_owner_key_direction_preflight(
     latent_shape = tuple(int(value) for value in config["expected_wan_endpoint_latent_shape"])
     try:
         revisions: dict[str, str] = {}
-        for row, key_text in zip(full_rows, derived_keys):
+        for row in full_rows:
             model_id = str(row.get("generation_model_id") or "")
             revision = validate_generation_model_provenance(row)
             previous = revisions.setdefault(model_id, revision)
@@ -408,7 +408,7 @@ def build_owner_key_direction_preflight(
         context_match_count = 0
         phase_grid_match_count = 0
         direction_mismatch_trace_ids: list[str] = []
-        for row in full_rows:
+        for row, key_text in zip(full_rows, derived_keys):
             trace_id = str(row.get("trajectory_trace_id") or "")
             prompt_id = str(row.get("prompt_id") or "")
             if prompt_id not in prompt_map:

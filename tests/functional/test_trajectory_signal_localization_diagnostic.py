@@ -328,17 +328,27 @@ def test_owner_key_preflight_mismatch_is_redacted_and_blocks_replay(
         },
     )
 
+    observed_key_texts: list[str] = []
+
+    def capturing_direction_metadata_builder(
+        *, key_text: str, source_record: dict[str, object], **_kwargs: object
+    ) -> dict[str, object]:
+        observed_key_texts.append(key_text)
+        return _matching_direction_metadata_builder(source_record=source_record)
+
     ready_preflight = build_owner_key_direction_preflight(
         source,
         _config(),
         scheduler_loader=_fake_scheduler_loader,
-        direction_metadata_builder=_matching_direction_metadata_builder,
+        direction_metadata_builder=capturing_direction_metadata_builder,
     )
     assert ready_preflight["owner_key_direction_preflight_status"] == "ready"
     assert ready_preflight["owner_key_direction_match_count"] == 4
     assert ready_preflight["owner_key_direction_all_match"] is True
     assert ready_preflight["owner_key_context_all_match"] is True
     assert ready_preflight["owner_key_phase_grid_all_match"] is True
+    assert len(observed_key_texts) == 4
+    assert len(set(observed_key_texts)) == 4
 
     preflight = build_owner_key_direction_preflight(
         source,

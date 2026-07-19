@@ -132,6 +132,25 @@ def test_runtime_lock_is_present_and_machine_readable() -> None:
 
 
 @pytest.mark.quick
+def test_installable_runtime_lock_matches_preflight_distribution_lock() -> None:
+    """可安装依赖与预检依赖必须一致, 包括 Wan 提示词清洗依赖。"""
+
+    installable_requirements: dict[str, str] = {}
+    for raw_line in Path("requirements/paper_runtime_lock.txt").read_text(
+        encoding="utf-8"
+    ).splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith(("#", "--")):
+            continue
+        name, separator, version = line.partition("==")
+        assert separator == "==", line
+        installable_requirements[name] = version
+
+    assert installable_requirements == _locked_versions()
+    assert installable_requirements["ftfy"] == "6.3.1"
+
+
+@pytest.mark.quick
 def test_passed_preflight_is_archived_with_each_formal_stage(tmp_path: Path) -> None:
     """环境与模型来源必须进入阶段包, 不能只停留在 Notebook stdout。"""
 

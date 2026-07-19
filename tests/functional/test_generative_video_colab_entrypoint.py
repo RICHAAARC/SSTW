@@ -54,6 +54,7 @@ from experiments.generative_video_model_probe.colab_runtime import (
     LTX_VIDEO_CROSS_MODEL_ID,
     PROFILE_SETTINGS,
     _build_generation_plan,
+    _should_fail_fast_after_generation,
     _build_internal_ablation_generation_plan,
     _formalize_paper_trajectory_record,
 )
@@ -331,6 +332,21 @@ def test_method_mechanism_validation_profile_builds_paired_gpu_plan(tmp_path: Pa
     assert all(item["formal_method_variant_execution"] is False for item in plan)
     assert PROFILE_SETTINGS["method_mechanism_validation"]["num_inference_steps"] == 8
     assert PROFILE_SETTINGS["method_mechanism_validation"]["num_frames"] == 33
+
+
+@pytest.mark.quick
+def test_method_mechanism_validation_fails_fast_after_first_generation_error() -> None:
+    """相同环境错误不得在16个最小验证计划项中重复消耗 GPU。"""
+
+    assert _should_fail_fast_after_generation(
+        "method_mechanism_validation",
+        "failed",
+    )
+    assert not _should_fail_fast_after_generation(
+        "method_mechanism_validation",
+        "success",
+    )
+    assert not _should_fail_fast_after_generation("probe_paper", "failed")
 
 
 @pytest.mark.quick

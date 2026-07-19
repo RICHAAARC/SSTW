@@ -11,10 +11,12 @@ from experiments.generative_video_model_probe.colab_runtime import (
     LTX_VIDEO_CROSS_MODEL_ID,
     WAN21_PRIMARY_MODEL_ID,
     _configure_wan_flow_match_euler_scheduler,
+    _load_wan_pipeline_components,
     _model_family_from_id,
     _resolve_generation_model_commit,
     _scheduler_id_for_model,
     _trajectory_time_grid_id_for_model,
+    _validate_wan_runtime_software_contract,
     validate_generation_model_provenance,
 )
 from experiments.generative_video_model_probe.formal_flow_evidence_runner import (
@@ -152,6 +154,127 @@ def test_wan_scheduler_drift_or_unknown_class_fails_closed(
 
     with pytest.raises(RuntimeError, match=message):
         _configure_wan_flow_match_euler_scheduler(pipeline)
+
+
+@pytest.mark.quick
+def test_wan_runtime_software_contract_checks_prompt_api_and_encoder(
+    tmp_path,
+) -> None:
+    """模型下载前必须验证 prompt cleaning、调用签名和视频编码器。"""
+
+    ffmpeg_path = tmp_path / "ffmpeg"
+    ffmpeg_path.touch()
+
+    class CompatibleWanPipeline:
+        def __call__(
+            self,
+            prompt,
+            negative_prompt,
+            height,
+            width,
+            num_frames,
+            num_inference_steps,
+            guidance_scale,
+            generator,
+        ):
+            del (
+                prompt,
+                negative_prompt,
+                height,
+                width,
+                num_frames,
+                num_inference_steps,
+                guidance_scale,
+                generator,
+            )
+
+    summary = _validate_wan_runtime_software_contract(
+        pipeline_class=CompatibleWanPipeline,
+        prompt_cleaner=lambda text: text,
+        ffmpeg_executable_resolver=lambda: str(ffmpeg_path),
+    )
+
+    assert summary["wan_runtime_software_contract_status"] == "ready"
+    assert summary["wan_pipeline_required_parameter_count"] == 8
+
+
+@pytest.mark.quick
+def test_wan_runtime_software_contract_fails_before_model_load_on_prompt_cleaner(
+    tmp_path,
+) -> None:
+    """ftfy 等 prompt 依赖失效时必须在下载权重前给出单一明确错误。"""
+
+    ffmpeg_path = tmp_path / "ffmpeg"
+    ffmpeg_path.touch()
+
+    class CompatibleWanPipeline:
+        def __call__(
+            self,
+            prompt,
+            negative_prompt,
+            height,
+            width,
+            num_frames,
+            num_inference_steps,
+            guidance_scale,
+            generator,
+        ):
+            return None
+
+    def missing_prompt_dependency(_text: str) -> str:
+        raise NameError("ftfy")
+
+    with pytest.raises(RuntimeError, match="锁定的 ftfy"):
+        _validate_wan_runtime_software_contract(
+            pipeline_class=CompatibleWanPipeline,
+            prompt_cleaner=missing_prompt_dependency,
+            ffmpeg_executable_resolver=lambda: str(ffmpeg_path),
+        )
+
+
+@pytest.mark.quick
+def test_wan_pipeline_loader_keeps_vae_float32_boundary() -> None:
+    """Wan VAE 必须独立按 FP32 加载，Transformer 才使用 L4 的 BF16。"""
+
+    observed: dict[str, object] = {}
+    vae = object()
+
+    class FakeVae:
+        @classmethod
+        def from_pretrained(cls, model_id: str, **kwargs: object) -> object:
+            observed["vae"] = {"model_id": model_id, **kwargs}
+            return vae
+
+    class FakePipeline:
+        @classmethod
+        def from_pretrained(cls, model_id: str, **kwargs: object) -> object:
+            observed["pipeline"] = {"model_id": model_id, **kwargs}
+            return object()
+
+    _load_wan_pipeline_components(
+        WAN21_PRIMARY_MODEL_ID,
+        resolved_commit="a" * 40,
+        transformer_dtype="bfloat16",
+        hf_token="token",
+        pipeline_class=FakePipeline,
+        vae_class=FakeVae,
+        vae_dtype="float32",
+    )
+
+    assert observed["vae"] == {
+        "model_id": WAN21_PRIMARY_MODEL_ID,
+        "subfolder": "vae",
+        "revision": "a" * 40,
+        "torch_dtype": "float32",
+        "token": "token",
+    }
+    assert observed["pipeline"] == {
+        "model_id": WAN21_PRIMARY_MODEL_ID,
+        "vae": vae,
+        "revision": "a" * 40,
+        "torch_dtype": "bfloat16",
+        "token": "token",
+    }
 
 
 @pytest.mark.quick

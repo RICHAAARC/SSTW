@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import inspect
 import json
 import math
 import os
@@ -201,6 +202,108 @@ def _registered_generation_model(model_id: str) -> dict[str, str]:
     return dict(REGISTERED_GENERATION_MODEL_FAMILIES[str(model_id).strip()])
 
 
+def _validate_wan_runtime_software_contract(
+    *,
+    pipeline_class: type | None = None,
+    prompt_cleaner: Any | None = None,
+    ffmpeg_executable_resolver: Any | None = None,
+) -> dict[str, Any]:
+    """在下载模型权重前验证 Wan 的可选依赖和调用边界。
+
+    Diffusers 0.35.2 的 Wan prompt cleaning 会实际调用可选 ``ftfy``，而模型
+    类导入本身不会暴露缺失依赖。这里主动执行一次清洗，并同时检查本项目使用的
+    pipeline 参数及视频编码器，避免同一环境错误在16个生成计划项中重复出现。
+    """
+
+    if pipeline_class is None:
+        from diffusers import WanPipeline
+
+        pipeline_class = WanPipeline
+    if prompt_cleaner is None:
+        from diffusers.pipelines.wan.pipeline_wan import prompt_clean
+
+        prompt_cleaner = prompt_clean
+    if ffmpeg_executable_resolver is None:
+        from imageio_ffmpeg import get_ffmpeg_exe
+
+        ffmpeg_executable_resolver = get_ffmpeg_exe
+
+    try:
+        cleaned_prompt = str(prompt_cleaner("SSTW runtime compatibility probe"))
+    except Exception as exc:
+        raise RuntimeError(
+            "Wan prompt cleaning 运行时不可用; 请安装锁定的 ftfy 依赖"
+        ) from exc
+    if not cleaned_prompt.strip():
+        raise RuntimeError("Wan prompt cleaning 返回了空文本")
+
+    required_parameters = {
+        "prompt",
+        "negative_prompt",
+        "height",
+        "width",
+        "num_frames",
+        "num_inference_steps",
+        "guidance_scale",
+        "generator",
+    }
+    available_parameters = set(inspect.signature(pipeline_class.__call__).parameters)
+    missing_parameters = sorted(required_parameters - available_parameters)
+    if missing_parameters:
+        raise RuntimeError(
+            "WanPipeline 调用签名缺少 SSTW 必需参数: "
+            + ", ".join(missing_parameters)
+        )
+
+    ffmpeg_path = Path(str(ffmpeg_executable_resolver())).expanduser().resolve()
+    if not ffmpeg_path.is_file():
+        raise RuntimeError(f"imageio-ffmpeg 可执行文件不存在: {ffmpeg_path}")
+    return {
+        "wan_runtime_software_contract_status": "ready",
+        "wan_prompt_cleaning_status": "ready",
+        "wan_pipeline_required_parameter_count": len(required_parameters),
+        "video_encoder_backend": "imageio_ffmpeg",
+        "video_encoder_executable": str(ffmpeg_path),
+    }
+
+
+def _load_wan_pipeline_components(
+    model_id: str,
+    *,
+    resolved_commit: str,
+    transformer_dtype: Any,
+    hf_token: str | None,
+    pipeline_class: type | None = None,
+    vae_class: type | None = None,
+    vae_dtype: Any | None = None,
+) -> Any:
+    """按 Wan 官方精度边界加载 FP32 VAE 与低精度 Transformer。"""
+
+    if pipeline_class is None or vae_class is None:
+        from diffusers import AutoencoderKLWan, WanPipeline
+
+        pipeline_class = pipeline_class or WanPipeline
+        vae_class = vae_class or AutoencoderKLWan
+    if vae_dtype is None:
+        import torch
+
+        vae_dtype = torch.float32
+    vae = vae_class.from_pretrained(
+        model_id,
+        subfolder="vae",
+        revision=resolved_commit,
+        torch_dtype=vae_dtype,
+        token=hf_token,
+    )
+    return pipeline_class.from_pretrained(
+        model_id,
+        vae=vae,
+        revision=resolved_commit,
+        torch_dtype=transformer_dtype,
+        token=hf_token,
+    )
+
+
 def _resolve_generation_model_commit(
     model_id: str,
     *,
@@ -379,6 +482,16 @@ def _load_video_generation_pipeline(
     configure_noisy_library_progress()
     hf_token = os.environ.get("HF_TOKEN") or None
     registration = _registered_generation_model(model_id)
+    if registration["pipeline_class_name"] == "WanPipeline":
+        software_contract = _validate_wan_runtime_software_contract()
+        emit_progress_event(
+            "wan_runtime_software_preflight",
+            (
+                "status=ready "
+                f"pipeline_parameter_count={software_contract['wan_pipeline_required_parameter_count']} "
+                f"video_encoder={software_contract['video_encoder_backend']}"
+            ),
+        )
     resolved_commit, revision_source = _resolve_generation_model_commit(
         model_id,
         requested_revision=revision,
@@ -387,14 +500,18 @@ def _load_video_generation_pipeline(
     emit_progress_event("video_generation_model_load", f"start | model={model_id}")
     if registration["pipeline_class_name"] == "WanPipeline":
         with suppress_third_party_progress_output("video_generation_model_import"):
-            from diffusers import WanPipeline
+            import torch
+            from diffusers import AutoencoderKLWan, WanPipeline
 
         with suppress_third_party_progress_output("video_generation_model_load"):
-            pipe = WanPipeline.from_pretrained(
+            pipe = _load_wan_pipeline_components(
                 model_id,
-                revision=resolved_commit,
-                torch_dtype=torch_dtype,
-                token=hf_token,
+                resolved_commit=resolved_commit,
+                transformer_dtype=torch_dtype,
+                hf_token=hf_token,
+                pipeline_class=WanPipeline,
+                vae_class=AutoencoderKLWan,
+                vae_dtype=torch.float32,
             )
         scheduler_configuration = _configure_wan_flow_match_euler_scheduler(pipe)
         emit_progress_event(
@@ -675,6 +792,15 @@ def _build_internal_ablation_generation_plan(main_plan: list[dict], profile: str
             )
             records.append(item)
     return records
+
+
+def _should_fail_fast_after_generation(profile: str, generation_status: str) -> bool:
+    """最小机制验证失败后不重复执行其余同环境生成项。"""
+
+    return (
+        profile == METHOD_MECHANISM_VALIDATION_PROFILE
+        and generation_status != "success"
+    )
 
 
 def run_colab_probe(
@@ -1062,6 +1188,17 @@ def run_colab_probe(
             "semantic_metric_status": "not_run",
             "metric_failure_reason": "optional_metric_dependencies_not_configured",
         })
+        if _should_fail_fast_after_generation(profile, generation_status):
+            emit_progress_event(
+                "flow_model_runtime_generation",
+                (
+                    "fail_fast | profile=method_mechanism_validation "
+                    f"prompt={item['prompt_id']} seed={item['seed_id']} "
+                    f"method_variant={item['method_variant']} "
+                    f"reason={failure_reason}"
+                ),
+            )
+            break
 
     success_count = sum(1 for record in generation_records if record["generation_status"] == "success")
     cross_model_records = [

@@ -43,7 +43,11 @@ def test_all_colab_notebooks_delegate_only_to_server_cli() -> None:
         assert "scripts/run_generative_video_server_workflow.py" in source, path
         assert "from workflows.streaming_command import run_streaming_command" in source, path
         assert "result = run_streaming_command(server_command)" in source, path
-        assert "%pip install --requirement requirements/paper_runtime_lock.txt" in source, path
+        if path.name == "colab_test_runner.ipynb":
+            assert "scripts/bootstrap_colab_test_runtime.py" in source, path
+            assert "requirements/paper_runtime_lock.txt" not in source, path
+        else:
+            assert "%pip install --requirement requirements/paper_runtime_lock.txt" in source, path
         assert "run_configured_colab_stage_plan" not in source, path
         assert "prepare_colab_stage_layout" not in source, path
         assert "publish_colab_stage_package" not in source, path

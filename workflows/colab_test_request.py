@@ -21,6 +21,9 @@ from evaluation.protocol.record_writer import write_json
 
 
 REQUEST_SCHEMA_VERSION = "sstw_colab_test_request_v1"
+SERVER_WORKFLOW_DECISION_MANIFEST_KIND = (
+    "generative_video_server_workflow_decision"
+)
 TRAJECTORY_REPLAY_SOURCE_BUILD_TEST_ID = "trajectory_replay_smoke_source_build"
 TRAJECTORY_SIGNAL_TEST_ID = "trajectory_signal_localization_diagnostic"
 SUPPORTED_TEST_IDS = (
@@ -285,8 +288,192 @@ def _write_zip(source_root: Path, package_path: Path) -> None:
     package_path.parent.mkdir(parents=True, exist_ok=True)
     with ZipFile(package_path, "w", compression=ZIP_DEFLATED) as archive:
         for path in sorted(source_root.rglob("*")):
-            if path.is_file():
+            if path.is_file() and not path.is_symlink():
                 archive.write(path, path.relative_to(source_root).as_posix())
+
+
+def package_colab_test_recovery_bundle(
+    request_path: str | Path,
+    *,
+    project_root: str | Path,
+    repo_root: str | Path,
+    local_runtime_root: str | Path,
+    local_workspace_root: str | Path,
+    local_package_cache_root: str | Path,
+    run_decision_path: str | Path | None = None,
+) -> dict[str, Any]:
+    """把失败后仍存在的本地 checkpoint 打成非正式排障包并写入 Drive。"""
+
+    root = Path(project_root).expanduser().resolve()
+    repository_root = Path(repo_root).expanduser().resolve()
+    runtime_root = Path(local_runtime_root).expanduser().resolve()
+    workspace_root = Path(local_workspace_root).expanduser().resolve()
+    cache_root = Path(local_package_cache_root).expanduser().resolve()
+    if not runtime_root.is_dir():
+        raise FileNotFoundError(
+            f"Colab recovery 可信本地运行根不存在: {runtime_root}"
+        )
+    for path, label in (
+        (workspace_root, "local_workspace_root"),
+        (cache_root, "local_package_cache_root"),
+    ):
+        if path == runtime_root or not _path_is_within(path, runtime_root):
+            raise ValueError(
+                f"{label} 必须位于可信本地运行根内且不能等于根目录: {path}"
+            )
+        if _path_is_within(path, root):
+            raise ValueError(f"{label} 不得位于 Drive SSTW 根目录内: {path}")
+
+    resolved = load_colab_test_request(request_path, project_root=root)
+    output_root = (
+        workspace_root
+        / "runs"
+        / str(resolved["test_id"])
+        / str(resolved["run_series_id"])
+    )
+    validation_root = (
+        workspace_root / "validation" / str(resolved["run_series_id"])
+    )
+    decision_path: Path | None = None
+    if run_decision_path is not None and str(run_decision_path).strip():
+        unresolved_decision_path = Path(run_decision_path).expanduser()
+        if unresolved_decision_path.is_symlink():
+            raise ValueError(
+                "run_decision_path 必须是非 symlink 普通 JSON 文件"
+            )
+        decision_path = unresolved_decision_path.resolve()
+        if not _path_is_within(decision_path, runtime_root):
+            raise ValueError(
+                "run_decision_path 必须位于可信本地运行根内: "
+                f"{decision_path}"
+            )
+        if _path_is_within(decision_path, root):
+            raise ValueError(
+                f"run_decision_path 不得位于 Drive SSTW 根目录内: {decision_path}"
+            )
+        if decision_path.suffix.lower() != ".json" or not decision_path.is_file():
+            raise ValueError(
+                "run_decision_path 必须是非 symlink 普通 JSON 文件: "
+                f"{decision_path}"
+            )
+        try:
+            run_decision = json.loads(
+                decision_path.read_text(encoding="utf-8-sig")
+            )
+        except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+            raise ValueError(
+                f"run_decision_path 不是有效 JSON: {decision_path}"
+            ) from exc
+        if not isinstance(run_decision, dict):
+            raise ValueError("run_decision_path JSON 顶层必须是对象")
+        expected_decision_fields = {
+            "manifest_kind": SERVER_WORKFLOW_DECISION_MANIFEST_KIND,
+            "workflow_profile": "colab_test",
+            "pipeline": "colab_test",
+            "server_workflow_decision": "FAIL",
+        }
+        mismatches = [
+            field
+            for field, expected in expected_decision_fields.items()
+            if run_decision.get(field) != expected
+        ]
+        if mismatches:
+            raise ValueError(
+                "run_decision_path 必须是明确失败的 colab_test server workflow "
+                "decision; mismatched_fields="
+                + ",".join(mismatches)
+            )
+    recoverable_files: list[tuple[Path, str]] = []
+    for source_root, archive_prefix in (
+        (output_root, "partial_run"),
+        (validation_root, "partial_validation"),
+    ):
+        if not source_root.is_dir():
+            continue
+        for path in sorted(source_root.rglob("*")):
+            if not path.is_file() or path.is_symlink():
+                continue
+            archive_name = (
+                Path(archive_prefix) / path.relative_to(source_root)
+            ).as_posix()
+            recoverable_files.append((path, archive_name))
+    if (
+        decision_path is not None
+        and decision_path.is_file()
+        and not decision_path.is_symlink()
+    ):
+        recoverable_files.append(
+            (decision_path, "diagnostics/server_workflow_decision.json")
+        )
+    if not recoverable_files:
+        raise FileNotFoundError(
+            "Colab recovery 未找到 partial run、validation 或 failure decision"
+        )
+
+    timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S_%f")
+    repository_commit = _repository_commit(repository_root)
+    run_id = f"{timestamp}_{repository_commit[:8]}"
+    package_name = (
+        f"colab_test_recovery_{resolved['test_id']}_{resolved['phase']}_{run_id}.zip"
+    )
+    local_result_root = cache_root / "recovery" / run_id
+    local_package_path = local_result_root / package_name
+    local_package_path.parent.mkdir(parents=True, exist_ok=False)
+    included_entries: list[str] = []
+    with ZipFile(local_package_path, "w", compression=ZIP_DEFLATED) as archive:
+        for source_path, archive_name in recoverable_files:
+            archive.write(source_path, archive_name)
+            included_entries.append(archive_name)
+
+    manifest = {
+        "manifest_kind": "sstw_colab_test_recovery_manifest",
+        "request_schema_version": REQUEST_SCHEMA_VERSION,
+        "test_id": resolved["test_id"],
+        "phase": resolved["phase"],
+        "run_series_id": resolved["run_series_id"],
+        "run_id": run_id,
+        "created_at_utc": datetime.now(timezone.utc).isoformat(),
+        "repository_url": resolved["repository_url"],
+        "repository_ref": resolved["repository_ref"],
+        "repository_commit": repository_commit,
+        "request_path": resolved["request_path"],
+        "local_runtime_root": str(runtime_root),
+        "local_output_root": str(output_root),
+        "local_validation_root": str(validation_root),
+        "run_decision_path": "" if decision_path is None else str(decision_path),
+        "included_entries": included_entries,
+        "formal_result": False,
+        "stage_progression_allowed": False,
+        "claim_support_status": "failure_recovery_only_not_claim_evidence",
+    }
+    local_manifest_path = local_result_root / "colab_test_recovery_manifest.json"
+    write_json(local_manifest_path, manifest)
+
+    drive_output_root = (
+        root
+        / "diagnostic_tests"
+        / str(resolved["test_id"])
+        / "recovery"
+        / run_id
+    )
+    drive_package_path = drive_output_root / package_name
+    drive_manifest_path = drive_output_root / "colab_test_recovery_manifest.json"
+    drive_output_root.mkdir(parents=True, exist_ok=False)
+    shutil.copy2(local_package_path, drive_package_path)
+    shutil.copy2(local_manifest_path, drive_manifest_path)
+    return {
+        "notebook_role": "colab_test_recovery",
+        "test_id": resolved["test_id"],
+        "phase": resolved["phase"],
+        "run_series_id": resolved["run_series_id"],
+        "run_id": run_id,
+        "recovery_package_status": "partial_diagnostic_packaged",
+        "drive_result_zip": str(drive_package_path),
+        "drive_result_manifest": str(drive_manifest_path),
+        "formal_result": False,
+        "stage_progression_allowed": False,
+        "claim_support_status": "failure_recovery_only_not_claim_evidence",
+    }
 
 
 def _default_trajectory_runner(

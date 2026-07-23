@@ -158,11 +158,20 @@ Notebook 固定读取:
 首次使用时，把仓库中的
 `configs/paper_workflow/colab_test_request_example.json` 复制到该 Drive 路径，
 然后只编辑请求文件。Notebook 本身只负责挂载 Drive、按 `repository.ref` checkout、
-安装受锁依赖、认证并调用服务器 CLI；请求不能传入任意命令、Python 模块或脚本路径。
+检查轻量兼容依赖、认证并调用服务器 CLI；请求不能传入任意命令、Python 模块或脚本路径。
 当前白名单测试为 `trajectory_signal_localization_diagnostic`。
 当 Stage 0-D source 未保留时，同一 Notebook 还可通过白名单
 `trajectory_replay_smoke_source_build` 请求，从已保留且包含视频的
 `method_mechanism_validation` ZIP 在 `/content` 重建 source。
+
+该非正式入口使用 Colab 当前自带的 torch、CUDA 和 NumPy，不安装
+`requirements/paper_runtime_lock.txt`，也不以正式论文环境版本作为门禁。Cell 3
+调用 `scripts/bootstrap_colab_test_runtime.py` 做能力探测；只有缺少 Wan/LTX pipeline
+加载或视频 I/O 所需依赖时，才安装
+`requirements/colab_test_runtime_compatibility.txt`。安装过程用当前 torch 与 NumPy
+版本生成 constraints，禁止替换 Colab 核心计算栈，因此正常情况下不需要重启内核。
+若原生 torch 或 NumPy 缺失、补齐依赖失败或关键 import 仍失败，bootstrap 会
+fail-closed。实际检测版本只作为本次兼容性记录，不构成版本唯一性或论文复现门禁。
 
 执行期间，source zip 先从 Drive 复制到 `/content/SSTW_colab_test_packages`，再解压到
 `/content/SSTW_colab_test_workspace`。模型推理、中间 records、视频、checkpoint 和诊断
@@ -192,6 +201,26 @@ trajectory replay smoke 完成且 Stage 0-D immutable-input 校验达到 12 条 
 ```text
 /content/drive/MyDrive/SSTW/diagnostic_tests/<test_id>/<run_id>/
 ```
+
+若执行 Cell 5 时因 GPU、模型加载或诊断逻辑错误中断，Notebook 最后的独立故障恢复
+Cell 可以手动运行。它不重跑 GPU 任务，只调用同一服务器 CLI，把
+`/content/SSTW_colab_test_workspace` 中已落盘的局部 records、checkpoint、validation
+和原始 failure decision 打包到：
+
+```text
+/content/drive/MyDrive/SSTW/diagnostic_tests/<test_id>/recovery/<run_id>/
+```
+
+该目录包含一个 recovery ZIP 和一个最小 recovery manifest。二者均显式记录
+`formal_result=false`、`stage_progression_allowed=false` 和
+`failure_recovery_only_not_claim_evidence`，只用于断点排障，不能当作成功阶段包、续跑输入
+或论文证据。恢复入口把 `/content` 作为可信本地运行根；workspace、package cache 和可选
+failure decision 必须位于该根内且不得位于 Drive SSTW 根内。若提供 decision，它必须是
+非 symlink 普通 JSON 文件，并明确记录 `colab_test` server workflow 的 `FAIL`；越界、
+畸形、`PASS` 或其它 profile/pipeline decision 均 fail-closed。没有 decision 时，只要
+存在合法 partial run 或 validation 仍可恢复。Cell 5 每次启动前会删除上一轮本地
+decision，Cell 6 也只在本次 decision 文件确实存在时附加它，避免 OOM/信号中断时被
+缺失或陈旧 decision 阻断；若没有任何可恢复文件，则不创建空包。
 
 目录中只包含一个结果 zip 和一个最小 manifest，用于记录请求、输入路径、代码 commit、
 模型地址以及诊断 decision。请求不要求手工填写 source、resume 或模型 hash；模型地址和

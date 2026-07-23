@@ -27,6 +27,7 @@ from workflows.modern_external_baseline_reference import (
 from workflows.colab_test_request import (
     build_colab_test_runtime_preflight_decision,
     build_colab_test_dry_run_plan,
+    package_colab_test_recovery_bundle,
     run_colab_test_request,
 )
 from workflows.stage_package_sync import prepare_colab_stage_layout
@@ -513,6 +514,20 @@ def _run_colab_test_runtime_preflight(args: argparse.Namespace) -> dict[str, Any
     )
 
 
+def _run_colab_test_recovery_package(args: argparse.Namespace) -> dict[str, Any]:
+    """不重跑 GPU 任务，只把失败后残留的本地产物复制到 Drive。"""
+
+    return package_colab_test_recovery_bundle(
+        args.colab_test_request_path,
+        project_root=args.project_root,
+        repo_root=args.repo_root,
+        local_runtime_root=args.colab_test_local_runtime_root,
+        local_workspace_root=args.local_workspace_root,
+        local_package_cache_root=args.local_package_cache_root,
+        run_decision_path=args.colab_test_run_decision_path or None,
+    )
+
+
 def _write_decision_if_requested(args: argparse.Namespace, decision: dict[str, Any]) -> Path | None:
     """按需写出服务器 workflow 运行清单。"""
 
@@ -546,6 +561,21 @@ def build_parser() -> argparse.ArgumentParser:
         "--colab-test-request-path",
         default="",
         help="colab_test pipeline 的 Drive JSON 请求路径",
+    )
+    parser.add_argument(
+        "--package-colab-test-recovery",
+        action="store_true",
+        help="只打包失败后仍在本地的 Colab test 排障产物，不执行 GPU 任务",
+    )
+    parser.add_argument(
+        "--colab-test-run-decision-path",
+        default="",
+        help="可选的原始 Colab test failure decision JSON 路径",
+    )
+    parser.add_argument(
+        "--colab-test-local-runtime-root",
+        default="",
+        help="Colab test recovery 可信本地运行根；Colab 固定为 /content",
     )
     parser.add_argument("--repo-root", default=".", help="SSTW 仓库根目录")
     parser.add_argument(
@@ -603,12 +633,51 @@ def main(argv: list[str] | None = None) -> int:
         )
     if args.pipeline == COLAB_TEST_PIPELINE and not args.colab_test_request_path:
         parser.error("colab_test pipeline requires --colab-test-request-path")
+    if args.package_colab_test_recovery and not colab_test_pipeline:
+        parser.error("--package-colab-test-recovery requires colab_test pipeline/profile")
+    if (
+        args.package_colab_test_recovery
+        and not args.colab_test_local_runtime_root
+    ):
+        parser.error(
+            "--package-colab-test-recovery requires "
+            "--colab-test-local-runtime-root"
+        )
+    if args.package_colab_test_recovery and args.dry_run:
+        parser.error("--package-colab-test-recovery cannot be combined with --dry-run")
+    if args.package_colab_test_recovery and args.reset_local_workspace:
+        parser.error(
+            "--package-colab-test-recovery cannot be combined with "
+            "--reset-local-workspace"
+        )
     if mechanism_profile:
         args.cross_model_id = ""
         args.cross_model_revision = ""
 
     _apply_server_environment(args)
     _reset_local_workspace_if_requested(args)
+    if args.package_colab_test_recovery:
+        try:
+            recovery_decision = _run_colab_test_recovery_package(args)
+        except Exception as exc:
+            failure = {
+                "manifest_kind": "sstw_colab_test_recovery_decision",
+                "workflow_profile": args.workflow_profile,
+                "pipeline": args.pipeline,
+                "server_workflow_decision": "FAIL",
+                "failure_reason": str(exc),
+                "formal_result": False,
+                "stage_progression_allowed": False,
+                "claim_support_status": (
+                    "failure_recovery_only_not_claim_evidence"
+                ),
+            }
+            _write_decision_if_requested(args, failure)
+            print(json.dumps(failure, ensure_ascii=False, indent=2), file=sys.stderr)
+            return 1
+        _write_decision_if_requested(args, recovery_decision)
+        print(json.dumps(recovery_decision, ensure_ascii=False, indent=2))
+        return 0
     args.runtime_environment_preflight = {
         "runtime_environment_preflight_kind": (
             "colab_test_lightweight"

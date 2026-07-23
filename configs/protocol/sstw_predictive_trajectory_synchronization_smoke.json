@@ -1,0 +1,46 @@
+{
+  "attacked_phase_execution_allowed": false,
+  "claim_support_status": "predictive_trajectory_synchronization_smoke_only_not_paper_evidence",
+  "cross_project_integration_allowed": false,
+  "external_baseline_execution_allowed": false,
+  "fixed_fpr_evaluation_allowed": false,
+  "generation_step_count": 20,
+  "heldout_prompt_ids": [
+    "probe_paper_paper_master_prompt_003",
+    "probe_paper_paper_master_prompt_004"
+  ],
+  "heldout_seed_ids": [
+    "probe_paper_paper_master_test_seed_01",
+    "probe_paper_paper_master_test_seed_02"
+  ],
+  "lambda_max": 0.12,
+  "large_scale_generation_allowed": false,
+  "maximum_absolute_code_correlation": 0.75,
+  "minimum_active_code_magnitude": 0.25,
+  "minimum_active_phase_count": 4,
+  "minimum_predictive_correct_over_wrong_fraction": 0.75,
+  "minimum_predictive_over_nonnegative_margin_fraction": 0.75,
+  "minimum_replay_reliability": 0.05,
+  "minimum_weighted_code_energy": 0.2,
+  "no_attack_only": true,
+  "paper_result_level": "predictive_trajectory_synchronization_smoke",
+  "phase_segment_count": 8,
+  "predictive_trajectory_carrier_id": "key_context_balanced_multisegment_predictive_carrier",
+  "profile_id": "sstw_predictive_trajectory_synchronization_smoke",
+  "replay_step_count": 20,
+  "required_generation_model_id": "Wan-AI/Wan2.1-T2V-1.3B-Diffusers",
+  "required_source_controlled_embedding_decision": "lambda_increase_did_not_repair_path_signal_stop",
+  "required_source_failure_record_count": 0,
+  "required_source_generation_record_count": 16,
+  "required_source_pair_record_count": 84,
+  "required_source_profile_id": "sstw_controlled_embedding_strength_diagnostic",
+  "required_source_summary_record_count": 96,
+  "smoke_generation_record_count": 8,
+  "stage_progression_allowed": false,
+  "test_split_claims_allowed": false,
+  "trajectory_carrier_variant_ids": [
+    "predictive_signed_phase_code",
+    "nonnegative_phase_control"
+  ],
+  "wrong_owner_key_control_candidate_count": 32
+}

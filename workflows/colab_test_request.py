@@ -32,11 +32,15 @@ CONTROLLED_EMBEDDING_STRENGTH_TEST_ID = (
 MINIMAL_SIGNED_TRAJECTORY_STATE_SPACE_SMOKE_TEST_ID = (
     "minimal_signed_trajectory_state_space_smoke"
 )
+PREDICTIVE_TRAJECTORY_SYNCHRONIZATION_SMOKE_TEST_ID = (
+    "predictive_trajectory_synchronization_smoke"
+)
 SUPPORTED_TEST_IDS = (
     TRAJECTORY_REPLAY_SOURCE_BUILD_TEST_ID,
     TRAJECTORY_SIGNAL_TEST_ID,
     CONTROLLED_EMBEDDING_STRENGTH_TEST_ID,
     MINIMAL_SIGNED_TRAJECTORY_STATE_SPACE_SMOKE_TEST_ID,
+    PREDICTIVE_TRAJECTORY_SYNCHRONIZATION_SMOKE_TEST_ID,
 )
 TRAJECTORY_REPLAY_SOURCE_BUILD_PHASE = "source_build"
 SUPPORTED_TRAJECTORY_PHASES = (
@@ -46,6 +50,7 @@ SUPPORTED_TRAJECTORY_PHASES = (
 )
 SUPPORTED_CONTROLLED_EMBEDDING_PHASES = ("no_attack",)
 SUPPORTED_MINIMAL_SIGNED_TRAJECTORY_PHASES = ("no_attack",)
+SUPPORTED_PREDICTIVE_TRAJECTORY_PHASES = ("no_attack",)
 EXPECTED_REPOSITORY_URL = "https://github.com/RICHAAARC/SSTW.git"
 _SAFE_REPOSITORY_REF = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._/-]*$")
 _SAFE_RUN_SERIES_ID = re.compile(r"^[a-z0-9][a-z0-9_-]{2,63}$")
@@ -154,6 +159,8 @@ def load_colab_test_request(
         supported_phases = SUPPORTED_CONTROLLED_EMBEDDING_PHASES
     elif test_id == MINIMAL_SIGNED_TRAJECTORY_STATE_SPACE_SMOKE_TEST_ID:
         supported_phases = SUPPORTED_MINIMAL_SIGNED_TRAJECTORY_PHASES
+    elif test_id == PREDICTIVE_TRAJECTORY_SYNCHRONIZATION_SMOKE_TEST_ID:
+        supported_phases = SUPPORTED_PREDICTIVE_TRAJECTORY_PHASES
     else:
         supported_phases = SUPPORTED_TRAJECTORY_PHASES
     if phase not in supported_phases:
@@ -190,6 +197,13 @@ def load_colab_test_request(
     ):
         raise ValueError(
             "minimal signed trajectory smoke 不接受 resume package"
+        )
+    if (
+        test_id == PREDICTIVE_TRAJECTORY_SYNCHRONIZATION_SMOKE_TEST_ID
+        and resume_package
+    ):
+        raise ValueError(
+            "predictive trajectory synchronization smoke 不接受 resume package"
         )
     return {
         "request_path": str(path),
@@ -580,6 +594,20 @@ def _default_minimal_signed_trajectory_runner(
     )
 
 
+def _default_predictive_trajectory_runner(
+    source_root: Path,
+    output_root: Path,
+) -> dict[str, Any]:
+    from experiments.generative_video_model_probe.predictive_trajectory_synchronization_smoke import (
+        run_predictive_trajectory_synchronization_smoke,
+    )
+
+    return run_predictive_trajectory_synchronization_smoke(
+        source_root,
+        output_root,
+    )
+
+
 def _source_generation_model_ids(source_root: Path) -> list[str]:
     """读取模型地址列表；有效性校验仍由测试 handler 负责。"""
 
@@ -815,6 +843,9 @@ def run_colab_test_request(
     minimal_signed_trajectory_runner: (
         Callable[..., dict[str, Any]] | None
     ) = None,
+    predictive_trajectory_runner: (
+        Callable[..., dict[str, Any]] | None
+    ) = None,
 ) -> dict[str, Any]:
     """执行一个白名单测试，并把唯一结果 zip 与 manifest 回写 Drive。"""
 
@@ -865,6 +896,14 @@ def run_colab_test_request(
         generation_model_ids = (
             _minimal_signed_trajectory_generation_model_ids(source_root)
         )
+    elif (
+        resolved["test_id"]
+        == PREDICTIVE_TRAJECTORY_SYNCHRONIZATION_SMOKE_TEST_ID
+    ):
+        source_root = source_extract_root
+        generation_model_ids = (
+            _minimal_signed_trajectory_generation_model_ids(source_root)
+        )
     else:
         source_root = _discover_stage0d_source_root(source_extract_root)
         generation_model_ids = _source_generation_model_ids(source_root)
@@ -899,6 +938,15 @@ def run_colab_test_request(
         runner = (
             minimal_signed_trajectory_runner
             or _default_minimal_signed_trajectory_runner
+        )
+        diagnostic_decision = runner(source_root, output_root)
+    elif (
+        resolved["test_id"]
+        == PREDICTIVE_TRAJECTORY_SYNCHRONIZATION_SMOKE_TEST_ID
+    ):
+        runner = (
+            predictive_trajectory_runner
+            or _default_predictive_trajectory_runner
         )
         diagnostic_decision = runner(source_root, output_root)
     else:

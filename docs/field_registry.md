@@ -2945,3 +2945,53 @@ Notebook 与 repository module 的跨边界数据
 | flow_evidence_observation_contract_status | governance | none | true | false | false | signed replay 的逐步映射能否转换成现有 FlowEvidenceObservation 接口。 |
 | sstw_state_posterior_status | governance | none | true | false | false | smoke decision 中状态 posterior 因尚无独立 identities 而保留未拟合的状态。 |
 | sstw_state_posterior_evaluation_status | governance | none | true | false | false | 当前 carrier smoke 是否因缺少独立 calibration/test identities 而保留 posterior 未拟合。 |
+| predictive_trajectory_plan_record_id | provenance | none | true | false | false | predictive synchronization 8 条 held-out generation plan 单元的稳定身份摘要。 |
+| predictive_trajectory_carrier_id | protocol | none | true | false | false | key/context 绑定的八段平衡时变载体构造标识。 |
+| predictive_trajectory_phase_segment_count | protocol | none | true | false | false | predictive 时间码冻结的 phase segment 数，固定为8。 |
+| predictive_trajectory_minimum_active_phase_count | protocol | none | true | false | false | predictive schedule 允许执行的最少 active phase 数，固定为4。 |
+| predictive_trajectory_maximum_absolute_code_correlation | protocol | none | true | false | false | owner 与 wrong-owner 时间码允许的最大绝对加权相关系数，固定为0.75。 |
+| predictive_trajectory_carrier_config_complete | governance | none | true | false | false | 当前 active predictive step 是否使用完整冻结 carrier 配置。 |
+| predictive_trajectory_schedule_digest | provenance | none | true | false | false | predictive carrier 在真实 20-step schedule 上的绑定摘要。 |
+| predictive_trajectory_phase_function_digest | provenance | none | true | false | false | key/context 与当前冻结真实 active schedule 共同选择的八段时间函数摘要。 |
+| predictive_trajectory_phase_segment | protocol | none | true | false | false | 当前真实 Flow phase 所属的八段 predictive carrier 区间。 |
+| predictive_trajectory_ac_code | metric | none | true | false | false | 当前 phase 使用的加权中心化 predictive AC code。 |
+| predictive_trajectory_ac_raw_sign | protocol | none | true | false | false | 当前 phase 的平衡八段原始正负符号。 |
+| predictive_trajectory_ac_weight | metric | none | true | false | false | 当前 phase 用于中心化的真实 delta-sigma 与 phase-window 联合权重。 |
+| predictive_trajectory_ac_weighted_mean | metric | none | true | false | false | predictive 原码在真实 schedule 权重下移除的均值。 |
+| predictive_trajectory_ac_weighted_residual | metric | none | true | false | false | predictive 中心化时间码的加权残差。 |
+| predictive_trajectory_active_phase_count | metric | none | true | false | false | 真实 schedule 中具有正 active weight 的 phase 数。 |
+| predictive_trajectory_minimum_active_code_magnitude | metric | none | true | false | false | predictive 时间码全部 active phase 的最小绝对值。 |
+| predictive_trajectory_weighted_code_energy | metric | none | true | false | false | predictive 时间码在真实 active weights 下的加权能量。 |
+| predictive_trajectory_noncollapse_verified | governance | none | true | false | false | active phase 数、最小码幅与加权码能量是否同时通过预声明门槛。 |
+| predictive_trajectory_inactive_phase_noop | governance | none | true | false | false | phase window 外的 predictive step 是否严格不修改 velocity。 |
+| predictive_trajectory_joint_scale | metric | none | true | false | false | predictive AC delta 为同时遵守 norm 与 Flow-energy 预算采用的缩放。 |
+| predictive_trajectory_joint_norm_budget | metric | none | true | false | false | predictive AC delta 的当前 velocity norm 上限。 |
+| predictive_trajectory_energy_limited_delta_norm | metric | none | true | false | false | 剩余 Flow-energy 允许的 predictive AC delta norm。 |
+| predictive_trajectory_norm_guard_passed | governance | none | true | false | false | predictive AC 最终 delta 是否遵守 velocity norm 预算。 |
+| predictive_trajectory_energy_guard_passed | governance | none | true | false | false | predictive AC 最终 delta 是否遵守 Flow-energy 预算。 |
+| predictive_trajectory_control_energy_increment | metric | none | true | false | false | 当前 predictive step 新增的控制能量。 |
+| predictive_trajectory_control_cumulative_energy_after | metric | none | true | false | false | 当前 predictive step 后的累计控制能量。 |
+| predictive_trajectory_reference_energy_increment | metric | none | true | false | false | 当前 predictive step 的参考 Flow 能量增量。 |
+| predictive_trajectory_reference_cumulative_energy_after | metric | none | true | false | false | 当前 predictive step 后的累计参考能量。 |
+| predictive_trajectory_observability_mode | protocol | none | true | false | false | 由同一 phase-conditioned carrier 形成受限终端残差的可观测性模式。 |
+| predictive_owner_wrong_weighted_code_correlation | metric | none | true | false | false | 同一真实网格上 owner 与 wrong-key predictive 时间码的加权相关系数。 |
+| predictive_wrong_owner_key_control_candidate_index | protocol | none | true | false | false | 预声明 HMAC wrong-owner 候选序列中首个满足时间码相关上限的索引；不读取视频或检测分数。 |
+| predictive_wrong_owner_key_control_candidate_count | protocol | none | true | false | false | predictive smoke 冻结的 HMAC wrong-owner control 候选上限，固定为32。 |
+| predictive_replay_log_likelihood_ratio | metric | none | true | false | false | frozen inversion 初态下 keyed forward replay 相对 null 的逐维 LLR。 |
+| predictive_replay_cycle_relative_error | metric | none | true | false | false | keyed forward replay 对视频 endpoint 的相对循环误差。 |
+| predictive_null_cycle_relative_error | metric | none | true | false | false | 同一 frozen inversion 初态下基础模型 null replay 的相对循环误差。 |
+| predictive_trajectory_summary_record_id | provenance | none | true | false | false | predictive candidate replay summary 的稳定身份摘要。 |
+| predictive_trajectory_pair_record_id | provenance | none | true | false | false | predictive correct/wrong 或 signed/control 配对记录摘要。 |
+| correct_over_wrong_predictive_llr_margin | metric | none | true | false | false | owner-key keyed-forward LLR 减 wrong-key keyed-forward LLR。 |
+| predictive_over_nonnegative_llr_margin_gain | metric | none | true | false | false | predictive signed correct/wrong LLR margin 减 nonnegative control margin。 |
+| predictive_correct_over_wrong_fraction | metric | none | true | false | false | predictive signed LLR margin 为正的四个 held-out 身份比例。 |
+| predictive_over_nonnegative_margin_fraction | metric | none | true | false | false | predictive signed LLR margin 优于 nonnegative control 的 held-out 身份比例。 |
+| predictive_code_separation_ready | governance | none | true | false | false | 四身份 owner/wrong predictive 时间码相关性是否均未超过预声明上限。 |
+| predictive_trajectory_gate_ready | governance | none | true | false | false | code separation、keyed-forward LLR、control margin 与 replay reliability 是否共同通过。 |
+| predictive_trajectory_smoke_decision | governance | none | true | false | false | predictive synchronization smoke 通过仅允许 calibration 设计，失败停止当前 blind trajectory 方法。 |
+| predictive_trajectory_smoke_status | governance | none | true | false | false | 单个 predictive generation/replay 身份的执行状态。 |
+| predictive_trajectory_smoke_failure_reason | governance | none | true | false | false | predictive 身份执行失败时的具体 fail-closed 原因。 |
+| endpoint_gate_executed | governance | none | true | false | false | 当前诊断是否执行 endpoint 门禁；predictive smoke 固定为 false。 |
+| state_space_posterior_executed | governance | none | true | false | false | 当前诊断是否拟合或执行状态空间 posterior；predictive smoke 固定为 false。 |
+| endpoint_gate_execution_allowed | governance | none | true | false | false | 当前 execution decision 是否允许 endpoint 门禁；predictive smoke 固定为 false。 |
+| state_space_posterior_execution_allowed | governance | none | true | false | false | 当前 execution decision 是否允许拟合状态空间 posterior；predictive smoke 固定为 false。 |

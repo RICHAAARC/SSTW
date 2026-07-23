@@ -161,7 +161,8 @@ Notebook 固定读取:
 检查轻量兼容依赖、认证并调用服务器 CLI；请求不能传入任意命令、Python 模块或脚本路径。
 当前白名单测试包括 `trajectory_signal_localization_diagnostic`、
 `controlled_embedding_strength_diagnostic`、
-`minimal_signed_trajectory_state_space_smoke` 与仅用于重建输入的
+`minimal_signed_trajectory_state_space_smoke`、
+`predictive_trajectory_synchronization_smoke` 与仅用于重建输入的
 `trajectory_replay_smoke_source_build`。
 当 Stage 0-D source 未保留时，同一 Notebook 还可通过白名单
 `trajectory_replay_smoke_source_build` 请求，从已保留且包含视频的
@@ -232,6 +233,29 @@ trajectory、signed 相对非负 control
 的 path margin、replay reliability 与 endpoint 参考方向性。状态 posterior 仅保留
 `FlowEvidenceObservation` 接口，不在这 4 个身份上拟合；攻击、fixed-FPR、baseline、
 论文 claim 和阶段推进全部保持关闭。Notebook 无需修改。
+
+前述最小 signed smoke 未通过机制门禁后，预测同步修复实验使用
+`configs/paper_workflow/colab_test_predictive_trajectory_synchronization_smoke_request_example.json`。
+它复用同一个完整 controlled embedding 结果 ZIP，而不把失败的 signed smoke
+结果当作新证据；同样只接受 `phase=no_attack` 且不接受 resume package。handler
+冻结 8 条新生成：
+
+```text
+2 个未用于前轮诊断的 probe test prompts × 2 个 test seeds ×
+  (predictive_signed_phase_code + nonnegative_phase_control)
+```
+
+两组均使用 `lambda_max=0.12`、20-step generation 与同网格 20-step replay，
+并关闭独立 DC/endpoint controller。predictive 组在真实 active schedule 上构造
+key/context 绑定的八段四正四负时间码，保持加权零均值和非塌缩；wrong-owner
+control 从固定 32 个 HMAC 派生候选中取首个满足预声明时间码相关上限的候选，
+该过程不读取视频或检测分数；同一 prompt/seed 的 predictive 与 nonnegative
+变体复用完全相同的候选索引，保持单因子对照。检测只使用 frozen
+key-independent inversion 后的 keyed forward replay LLR，并比较
+correct/wrong 与 predictive/nonnegative
+margin；不再执行 endpoint gate、静态 path 投影 gate 或 state posterior。
+通过也只允许设计独立 calibration，攻击、fixed-FPR、baseline、论文 claim 和
+阶段推进仍全部关闭。Notebook 本身无需修改。
 
 首次 source build 可从
 `configs/paper_workflow/colab_test_source_build_request_example.json` 复制请求。它只有在

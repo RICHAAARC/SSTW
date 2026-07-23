@@ -50,6 +50,9 @@ from main.methods.state_space_watermark.signed_trajectory_carrier import (
     SignedTrajectoryCarrierConfig,
     build_signed_trajectory_schedule,
 )
+from main.methods.state_space_watermark.predictive_trajectory_carrier import (
+    PredictiveTrajectoryCarrierConfig,
+)
 from main.methods.state_space_watermark.formal_detector import (
     FLOW_STATE_POSTERIOR_SCORE_SOURCE,
 )
@@ -127,13 +130,24 @@ def _run_attacked_video_replay_for_model(
     signed_trajectory_carrier_config: (
         SignedTrajectoryCarrierConfig | None
     ) = None,
+    predictive_trajectory_carrier_config: (
+        PredictiveTrajectoryCarrierConfig | None
+    ) = None,
+    endpoint_control_enabled: bool = True,
 ) -> WanFlowReplayResult | LTXFlowReplayResult:
     """按 pipeline 家族分派真实 attacked-video replay, 不允许回退到代理分数。"""
 
     if "LTX" in type(pipeline).__name__.upper():
-        if signed_trajectory_carrier_config is not None:
+        if (
+            signed_trajectory_carrier_config is not None
+            or predictive_trajectory_carrier_config is not None
+        ):
             raise ValueError(
-                "minimal signed trajectory smoke 当前仅允许 Wan 主模型"
+                "trajectory carrier smoke 当前仅允许 Wan 主模型"
+            )
+        if not endpoint_control_enabled:
+            raise ValueError(
+                "endpoint-disabled replay 当前仅允许 Wan 主模型"
             )
         return run_ltx_attacked_video_replay(
             pipeline,
@@ -155,6 +169,10 @@ def _run_attacked_video_replay_for_model(
         signed_trajectory_carrier_config=(
             signed_trajectory_carrier_config
         ),
+        predictive_trajectory_carrier_config=(
+            predictive_trajectory_carrier_config
+        ),
+        endpoint_control_enabled=endpoint_control_enabled,
     )
 
 
@@ -228,13 +246,24 @@ def _evaluate_fixed_replay_hypothesis_for_key(
     signed_trajectory_carrier_config: (
         SignedTrajectoryCarrierConfig | None
     ) = None,
+    predictive_trajectory_carrier_config: (
+        PredictiveTrajectoryCarrierConfig | None
+    ) = None,
+    endpoint_control_enabled: bool | None = None,
 ) -> tuple[Any, dict[str, float | int | None]]:
     """在同一 key 无关固定反演路径上评估候选 key, 防止循环构造观测。"""
 
     if isinstance(replay, LTXFlowReplayResult):
-        if signed_trajectory_carrier_config is not None:
+        if (
+            signed_trajectory_carrier_config is not None
+            or predictive_trajectory_carrier_config is not None
+        ):
             raise ValueError(
-                "minimal signed trajectory smoke 当前仅允许 Wan 主模型"
+                "trajectory carrier smoke 当前仅允许 Wan 主模型"
+            )
+        if endpoint_control_enabled is False:
+            raise ValueError(
+                "endpoint-disabled replay 当前仅允许 Wan 主模型"
             )
         return evaluate_fixed_ltx_replay_hypothesis_for_key(
             pipeline,
@@ -252,6 +281,10 @@ def _evaluate_fixed_replay_hypothesis_for_key(
         signed_trajectory_carrier_config=(
             signed_trajectory_carrier_config
         ),
+        predictive_trajectory_carrier_config=(
+            predictive_trajectory_carrier_config
+        ),
+        endpoint_control_enabled=endpoint_control_enabled,
     )
 
 
@@ -328,7 +361,11 @@ def _generation_key(
     )
 
 
-def _wrong_owner_generation_key(record: Mapping[str, Any]) -> str:
+def _wrong_owner_generation_key(
+    record: Mapping[str, Any],
+    *,
+    extra_context: Mapping[str, Any] | None = None,
+) -> str:
     """使用域分离的错误所有者秘密构造真正独立的 wrong-key 对照。"""
 
     authentication_key, key_id = _owner_key_context(record)
@@ -338,6 +375,7 @@ def _wrong_owner_generation_key(record: Mapping[str, Any]) -> str:
         generation_model_id=str(record.get("generation_model_id") or ""),
         prompt_id=str(record.get("prompt_id") or ""),
         seed_id=str(record.get("seed_id") or ""),
+        extra_context=extra_context,
     )
 
 

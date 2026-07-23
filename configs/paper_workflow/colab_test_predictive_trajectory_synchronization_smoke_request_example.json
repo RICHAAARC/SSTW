@@ -1,0 +1,14 @@
+{
+  "parameters": {
+    "phase": "no_attack",
+    "resume_package_path": "",
+    "run_series_id": "predictive_trajectory_sync_smoke",
+    "source_package_path": "/content/drive/MyDrive/SSTW/inputs/predictive_trajectory_synchronization/controlled_embedding_result.zip"
+  },
+  "repository": {
+    "ref": "main",
+    "url": "https://github.com/RICHAAARC/SSTW.git"
+  },
+  "request_schema_version": "sstw_colab_test_request_v1",
+  "test_id": "predictive_trajectory_synchronization_smoke"
+}

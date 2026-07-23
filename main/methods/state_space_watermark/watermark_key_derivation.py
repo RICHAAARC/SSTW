@@ -56,6 +56,7 @@ def derive_wrong_key_control_text(
     generation_model_id: str,
     prompt_id: str,
     seed_id: str,
+    extra_context: Mapping[str, Any] | None = None,
 ) -> str:
     """使用域分离的错误所有者秘密构造 wrong-key 对照。"""
 
@@ -70,4 +71,5 @@ def derive_wrong_key_control_text(
         generation_model_id=generation_model_id,
         prompt_id=prompt_id,
         seed_id=seed_id,
+        extra_context=extra_context,
     )

@@ -21,7 +21,10 @@ from main.methods.state_space_watermark.authenticated_trajectory_sketch import (
     build_authenticated_trajectory_sketch_payload,
     sign_authenticated_trajectory_sketch,
 )
-from main.methods.state_space_watermark.flow_velocity_runtime import FlowVelocityConstraintRuntime
+from main.methods.state_space_watermark.flow_velocity_runtime import (
+    FlowVelocityConstraintRuntime,
+    FlowVelocityRuntimeMechanismConfig,
+)
 from main.methods.state_space_watermark.velocity_field_constraint import (
     VelocityFieldConstraintConfig,
 )
@@ -30,6 +33,9 @@ from main.methods.state_space_watermark.flow_tubelet_key_code import (
 )
 from main.methods.state_space_watermark.signed_trajectory_carrier import (
     SignedTrajectoryCarrierConfig,
+)
+from main.methods.state_space_watermark.predictive_trajectory_carrier import (
+    PredictiveTrajectoryCarrierConfig,
 )
 from experiments.generative_video_model_probe.formal_method_variants import (
     FORMAL_METHOD_VARIANTS,
@@ -92,6 +98,9 @@ CONTROLLED_EMBEDDING_STRENGTH_DIAGNOSTIC_PROFILE = (
 )
 MINIMAL_SIGNED_TRAJECTORY_STATE_SPACE_SMOKE_PROFILE = (
     "minimal_signed_trajectory_state_space_smoke"
+)
+PREDICTIVE_TRAJECTORY_SYNCHRONIZATION_SMOKE_PROFILE = (
+    "predictive_trajectory_synchronization_smoke"
 )
 METHOD_MECHANISM_VALIDATION_VARIANTS = (
     "sstw_full_method",
@@ -166,6 +175,17 @@ PROFILE_SETTINGS = {
         "prompt_limit": 2,
         "seed_limit": 2,
         "num_inference_steps": 8,
+        "num_frames": 33,
+        "height": 320,
+        "width": 512,
+        "run_cross_model": False,
+        "prompt_suite_roles": ["probe_paper"],
+        "seed_suite_roles": ["probe_paper"],
+    },
+    PREDICTIVE_TRAJECTORY_SYNCHRONIZATION_SMOKE_PROFILE: {
+        "prompt_limit": 2,
+        "seed_limit": 2,
+        "num_inference_steps": 20,
         "num_frames": 33,
         "height": 320,
         "width": 512,
@@ -842,6 +862,7 @@ def _should_fail_fast_after_generation(profile: str, generation_status: str) -> 
             METHOD_MECHANISM_VALIDATION_PROFILE,
             CONTROLLED_EMBEDDING_STRENGTH_DIAGNOSTIC_PROFILE,
             MINIMAL_SIGNED_TRAJECTORY_STATE_SPACE_SMOKE_PROFILE,
+            PREDICTIVE_TRAJECTORY_SYNCHRONIZATION_SMOKE_PROFILE,
         }
         and generation_status != "success"
     )
@@ -863,6 +884,10 @@ def run_colab_probe(
     | None = None,
     signed_trajectory_carrier_by_plan_record_id: Mapping[
         str, SignedTrajectoryCarrierConfig | None
+    ]
+    | None = None,
+    predictive_trajectory_carrier_by_plan_record_id: Mapping[
+        str, PredictiveTrajectoryCarrierConfig | None
     ]
     | None = None,
     pipeline_cache: dict[str, Any] | None = None,
@@ -912,20 +937,20 @@ def run_colab_probe(
         if profile not in {
             CONTROLLED_EMBEDDING_STRENGTH_DIAGNOSTIC_PROFILE,
             MINIMAL_SIGNED_TRAJECTORY_STATE_SPACE_SMOKE_PROFILE,
+            PREDICTIVE_TRAJECTORY_SYNCHRONIZATION_SMOKE_PROFILE,
         }:
             raise ValueError(
                 "generation_plan_override 只允许 controlled embedding diagnostic"
             )
-        plan_id_field = (
-            "controlled_embedding_plan_record_id"
-            if profile == CONTROLLED_EMBEDDING_STRENGTH_DIAGNOSTIC_PROFILE
-            else "signed_trajectory_plan_record_id"
-        )
-        required_plan_count = (
-            16
-            if profile == CONTROLLED_EMBEDDING_STRENGTH_DIAGNOSTIC_PROFILE
-            else 12
-        )
+        if profile == CONTROLLED_EMBEDDING_STRENGTH_DIAGNOSTIC_PROFILE:
+            plan_id_field = "controlled_embedding_plan_record_id"
+            required_plan_count = 16
+        elif profile == MINIMAL_SIGNED_TRAJECTORY_STATE_SPACE_SMOKE_PROFILE:
+            plan_id_field = "signed_trajectory_plan_record_id"
+            required_plan_count = 12
+        else:
+            plan_id_field = "predictive_trajectory_plan_record_id"
+            required_plan_count = 8
         plan_ids = [
             str(item.get(plan_id_field) or "")
             for item in plan
@@ -951,6 +976,15 @@ def run_colab_probe(
             if carrier_ids != set(plan_ids):
                 raise ValueError(
                     "minimal signed trajectory carrier config "
+                    "必须精确覆盖全部 plan ID"
+                )
+        if profile == PREDICTIVE_TRAJECTORY_SYNCHRONIZATION_SMOKE_PROFILE:
+            carrier_ids = set(
+                predictive_trajectory_carrier_by_plan_record_id or {}
+            )
+            if carrier_ids != set(plan_ids):
+                raise ValueError(
+                    "predictive trajectory carrier config "
                     "必须精确覆盖全部 plan ID"
                 )
     progress = ProgressReporter("flow_model_runtime_generation", len(plan), "video")
@@ -1050,10 +1084,23 @@ def run_colab_probe(
             plan_record_id = str(
                 item.get("controlled_embedding_plan_record_id")
                 or item.get("signed_trajectory_plan_record_id")
+                or item.get("predictive_trajectory_plan_record_id")
                 or ""
             )
-            mechanism_config = (
-                (
+            if (
+                profile
+                == PREDICTIVE_TRAJECTORY_SYNCHRONIZATION_SMOKE_PROFILE
+            ):
+                mechanism_config = FlowVelocityRuntimeMechanismConfig(
+                    velocity_constraint_enabled=True,
+                    endpoint_control_enabled=False,
+                    terminal_endpoint_perturbation_enabled=False,
+                )
+            elif (
+                profile
+                == MINIMAL_SIGNED_TRAJECTORY_STATE_SPACE_SMOKE_PROFILE
+            ):
+                mechanism_config = (
                     velocity_runtime_mechanism_for_method_variant(
                         "sstw_clean_unwatermarked_reference"
                     )
@@ -1063,12 +1110,10 @@ def run_colab_probe(
                         "sstw_full_method"
                     )
                 )
-                if profile
-                == MINIMAL_SIGNED_TRAJECTORY_STATE_SPACE_SMOKE_PROFILE
-                else velocity_runtime_mechanism_for_method_variant(
+            else:
+                mechanism_config = velocity_runtime_mechanism_for_method_variant(
                     str(item["method_variant"])
                 )
-            )
             with FlowVelocityConstraintRuntime(
                 pipe.scheduler,
                 key_text=key_text,
@@ -1090,6 +1135,16 @@ def run_colab_probe(
                         ]
                     )
                     if signed_trajectory_carrier_by_plan_record_id
+                    is not None
+                    else None
+                ),
+                predictive_trajectory_carrier_config=(
+                    (
+                        predictive_trajectory_carrier_by_plan_record_id[
+                            plan_record_id
+                        ]
+                    )
+                    if predictive_trajectory_carrier_by_plan_record_id
                     is not None
                     else None
                 ),
@@ -1132,6 +1187,19 @@ def run_colab_probe(
                             "lambda_max": float(item["lambda_max"]),
                         }
                         if item.get("signed_trajectory_plan_record_id")
+                        else {}
+                    ),
+                    **(
+                        {
+                            "predictive_trajectory_plan_record_id": item[
+                                "predictive_trajectory_plan_record_id"
+                            ],
+                            "trajectory_carrier_variant_id": item[
+                                "trajectory_carrier_variant_id"
+                            ],
+                            "lambda_max": float(item["lambda_max"]),
+                        }
+                        if item.get("predictive_trajectory_plan_record_id")
                         else {}
                     ),
                     **record,
@@ -1243,6 +1311,8 @@ def run_colab_probe(
                 if item.get("controlled_embedding_plan_record_id")
                 else "minimal_signed_trajectory_lambda_max_0.12"
                 if item.get("signed_trajectory_plan_record_id")
+                else "predictive_trajectory_lambda_max_0.12"
+                if item.get("predictive_trajectory_plan_record_id")
                 else "flow_velocity_constraint_default"
             ),
             **(
@@ -1306,11 +1376,42 @@ def run_colab_probe(
                 if item.get("signed_trajectory_plan_record_id")
                 else {}
             ),
+            **(
+                {
+                    "predictive_trajectory_plan_record_id": item[
+                        "predictive_trajectory_plan_record_id"
+                    ],
+                    "trajectory_carrier_variant_id": item[
+                        "trajectory_carrier_variant_id"
+                    ],
+                    "predictive_trajectory_carrier_id": item[
+                        "predictive_trajectory_carrier_id"
+                    ],
+                    "lambda_max": float(item["lambda_max"]),
+                    "predictive_trajectory_phase_segment_count": int(
+                        item["predictive_trajectory_phase_segment_count"]
+                    ),
+                    "predictive_trajectory_minimum_active_phase_count": int(
+                        item[
+                            "predictive_trajectory_minimum_active_phase_count"
+                        ]
+                    ),
+                    "predictive_trajectory_maximum_absolute_code_correlation": float(
+                        item[
+                            "predictive_trajectory_maximum_absolute_code_correlation"
+                        ]
+                    ),
+                }
+                if item.get("predictive_trajectory_plan_record_id")
+                else {}
+            ),
             "watermark_key_derivation_id": WATERMARK_KEY_DERIVATION_ID,
             "watermark_key_id": authentication_key_id,
             "flow_phase_schedule_id": (
                 "key_context_central_transition_centered_binary_ac_with_small_dc_v2"
                 if carrier_variant_id == "signed_balanced_ac"
+                else "key_context_balanced_multisegment_predictive_carrier"
+                if carrier_variant_id == "predictive_signed_phase_code"
                 else "sin_squared_middle_flow_phase"
             ),
             "flow_sampler_signature": sampler_signature,
@@ -1471,8 +1572,13 @@ def run_colab_probe(
     signed_trajectory_profile = (
         profile == MINIMAL_SIGNED_TRAJECTORY_STATE_SPACE_SMOKE_PROFILE
     )
+    predictive_trajectory_profile = (
+        profile == PREDICTIVE_TRAJECTORY_SYNCHRONIZATION_SMOKE_PROFILE
+    )
     lightweight_diagnostic_profile = (
-        controlled_embedding_profile or signed_trajectory_profile
+        controlled_embedding_profile
+        or signed_trajectory_profile
+        or predictive_trajectory_profile
     )
     successful_variants = {
         str(record.get("method_variant"))
@@ -1525,6 +1631,20 @@ def run_colab_probe(
             for record in generation_records
         }
     )
+    predictive_trajectory_execution_ready = bool(
+        predictive_trajectory_profile
+        and len(generation_records) == len(plan) == 8
+        and success_count == 8
+        and bool(trajectory_records)
+        and {
+            "predictive_signed_phase_code",
+            "nonnegative_phase_control",
+        }
+        == {
+            str(record.get("trajectory_carrier_variant_id") or "")
+            for record in generation_records
+        }
+    )
 
     generation_records = [
         with_flow_evidence_protocol_defaults(
@@ -1535,6 +1655,7 @@ def run_colab_probe(
                 or mechanism_validation_profile
                 or controlled_embedding_profile
                 or signed_trajectory_profile
+                or predictive_trajectory_profile
             )
             else "callback_latent_trace"
             if record.get("trajectory_capture_status") == "captured"
@@ -1546,6 +1667,8 @@ def run_colab_probe(
                 if controlled_embedding_profile
                 else "minimal_signed_trajectory_state_space_smoke_only_not_paper_evidence"
                 if signed_trajectory_profile
+                else "predictive_trajectory_synchronization_smoke_only_not_paper_evidence"
+                if predictive_trajectory_profile
                 else "generation_evidence_only"
             ),
         )
@@ -1559,6 +1682,7 @@ def run_colab_probe(
             or mechanism_validation_profile
             or controlled_embedding_profile
             or signed_trajectory_profile
+            or predictive_trajectory_profile
         )
         else "callback_latent_step",
         claim_support_status=(
@@ -1568,6 +1692,8 @@ def run_colab_probe(
             if controlled_embedding_profile
             else "minimal_signed_trajectory_state_space_smoke_only_not_paper_evidence"
             if signed_trajectory_profile
+            else "predictive_trajectory_synchronization_smoke_only_not_paper_evidence"
+            if predictive_trajectory_profile
             else "trajectory_trace_evidence_only"
         ),
     )
@@ -1589,6 +1715,8 @@ def run_colab_probe(
                 "not_run_controlled_embedding_diagnostic"
                 if controlled_embedding_profile
                 else "not_run_minimal_signed_trajectory_smoke"
+                if signed_trajectory_profile
+                else "not_run_predictive_trajectory_synchronization_smoke"
             ),
             "external_baseline_execution_allowed": False,
         }
@@ -1612,6 +1740,8 @@ def run_colab_probe(
             if controlled_embedding_profile
             else MINIMAL_SIGNED_TRAJECTORY_STATE_SPACE_SMOKE_PROFILE
             if signed_trajectory_profile
+            else PREDICTIVE_TRAJECTORY_SYNCHRONIZATION_SMOKE_PROFILE
+            if predictive_trajectory_profile
             else "generative_video_generation"
         ),
         "implementation_decision": (
@@ -1623,6 +1753,8 @@ def run_colab_probe(
                 if controlled_embedding_profile
                 else signed_trajectory_execution_ready
                 if signed_trajectory_profile
+                else predictive_trajectory_execution_ready
+                if predictive_trajectory_profile
                 else any(record["generation_status"] == "success" for record in generation_records)
             )
             else "FAIL"
@@ -1642,6 +1774,12 @@ def run_colab_probe(
                 else "FAIL"
             )
             if signed_trajectory_profile
+            else (
+                "GENERATION_READY_NO_ATTACK_REPLAY_PENDING"
+                if predictive_trajectory_execution_ready
+                else "FAIL"
+            )
+            if predictive_trajectory_profile
             else "PENDING_FORMAL_DETECTION_AND_REPLAY"
         ),
         "claim_support_status": (
@@ -1651,6 +1789,8 @@ def run_colab_probe(
             if controlled_embedding_profile
             else "minimal_signed_trajectory_state_space_smoke_only_not_paper_evidence"
             if signed_trajectory_profile
+            else "predictive_trajectory_synchronization_smoke_only_not_paper_evidence"
+            if predictive_trajectory_profile
             else "generation_evidence_only"
         ),
         "details": {
@@ -1661,6 +1801,8 @@ def run_colab_probe(
                 if controlled_embedding_profile
                 else "minimal_signed_trajectory_generation_only_no_attack_replay_pending"
                 if signed_trajectory_profile
+                else "predictive_trajectory_generation_only_no_attack_replay_pending"
+                if predictive_trajectory_profile
                 else "velocity_path_generation_evidence_ready_detection_and_replay_pending"
             ),
             "generation_model_main_table_ready": any(record["generation_status"] == "success" for record in generation_records),

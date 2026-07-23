@@ -25,6 +25,12 @@ from main.methods.state_space_watermark.signed_trajectory_carrier import (
     apply_signed_trajectory_two_channel_constraint,
     build_signed_trajectory_schedule,
 )
+from main.methods.state_space_watermark.predictive_trajectory_carrier import (
+    PredictiveTrajectoryCarrierConfig,
+    PredictiveTrajectorySchedule,
+    apply_predictive_trajectory_constraint,
+    build_predictive_trajectory_schedule,
+)
 from main.methods.state_space_watermark.velocity_field_constraint import (
     VelocityControlContext,
     VelocityFieldConstraintConfig,
@@ -87,6 +93,9 @@ class FlowVelocityConstraintRuntime:
     latent_layout: FlowLatentLayout = field(default_factory=FiveDimensionalFlowLatentLayout)
     key_context: FlowTubeletKeyContext | None = None
     signed_trajectory_carrier_config: SignedTrajectoryCarrierConfig | None = None
+    predictive_trajectory_carrier_config: (
+        PredictiveTrajectoryCarrierConfig | None
+    ) = None
     require_flow_scheduler: bool = True
 
     def __post_init__(self) -> None:
@@ -106,6 +115,9 @@ class FlowVelocityConstraintRuntime:
         self._cumulative_reference_energy = 0.0
         self._step_index = 0
         self._signed_trajectory_schedule: SignedTrajectorySchedule | None = None
+        self._predictive_trajectory_schedule: (
+            PredictiveTrajectorySchedule | None
+        ) = None
         self._canonical_endpoint_key_direction: Any | None = None
 
     @property
@@ -171,10 +183,18 @@ class FlowVelocityConstraintRuntime:
         if self.total_steps <= 0:
             raise ValueError("total_steps 必须为正整数")
         if (
-            self.signed_trajectory_carrier_config is not None
+            (
+                self.signed_trajectory_carrier_config is not None
+                or self.predictive_trajectory_carrier_config is not None
+            )
             and self.key_context is None
         ):
-            raise ValueError("signed trajectory runtime 要求完整 key context")
+            raise ValueError("trajectory carrier runtime 要求完整 key context")
+        if (
+            self.signed_trajectory_carrier_config is not None
+            and self.predictive_trajectory_carrier_config is not None
+        ):
+            raise ValueError("同一次 runtime 不得同时启用两种 trajectory carrier")
         self._original_step = self.scheduler.step
 
         def constrained_step(model_output: Any, timestep: Any, sample: Any, *args: Any, **kwargs: Any):
@@ -304,6 +324,54 @@ class FlowVelocityConstraintRuntime:
             active_weights=weights,
         )
 
+    def _ensure_predictive_trajectory_schedule(self) -> None:
+        """在 pipeline 已物化 timesteps 后绑定预测同步真实网格。"""
+
+        if (
+            self.predictive_trajectory_carrier_config is None
+            or self._predictive_trajectory_schedule is not None
+        ):
+            return
+        if self.key_context is None:
+            raise RuntimeError("predictive trajectory runtime 缺少 key context")
+        sigma_grid = getattr(self.scheduler, "sigmas", None)
+        if sigma_grid is None or len(sigma_grid) != self.total_steps + 1:
+            raise RuntimeError(
+                "predictive trajectory runtime 要求完整 generation sigma grid"
+            )
+        phases: list[float] = []
+        weights: list[float] = []
+        for step_index in range(self.total_steps):
+            phase = normalized_flow_phase_from_sigma_interval(
+                sigma_grid,
+                step_index,
+            )
+            before = (
+                float(sigma_grid[step_index].detach().float().item())
+                if hasattr(sigma_grid[step_index], "detach")
+                else float(sigma_grid[step_index])
+            )
+            after = (
+                float(sigma_grid[step_index + 1].detach().float().item())
+                if hasattr(sigma_grid[step_index + 1], "detach")
+                else float(sigma_grid[step_index + 1])
+            )
+            phases.append(phase)
+            weights.append(
+                abs(after - before)
+                * flow_phase_weight(phase, self.tubelet_config)
+            )
+        self._predictive_trajectory_schedule = (
+            build_predictive_trajectory_schedule(
+                key_text=self.key_text,
+                key_context_digest=flow_tubelet_key_context_digest(
+                    self.key_context
+                ),
+                flow_phases=phases,
+                active_weights=weights,
+            )
+        )
+
     def _direction(self, sample: Any, *, flow_phase: float) -> Any:
         canonical_sample = self.latent_layout.to_canonical(sample)
         canonical_direction, phase_metadata = build_flow_tubelet_key_direction_like(
@@ -319,13 +387,17 @@ class FlowVelocityConstraintRuntime:
             ),
         )
         self._canonical_endpoint_key_direction = canonical_direction
-        if self._signed_trajectory_schedule is not None:
-            ac_code = self._signed_trajectory_schedule.codes[self._step_index]
+        active_schedule = (
+            self._signed_trajectory_schedule
+            or self._predictive_trajectory_schedule
+        )
+        if active_schedule is not None:
+            ac_code = active_schedule.codes[self._step_index]
             canonical_direction = canonical_direction * (
                 1.0 if ac_code >= 0.0 else -1.0
             )
             phase_metadata.update(
-                self._signed_trajectory_schedule.metadata_for_step(
+                active_schedule.metadata_for_step(
                     self._step_index
                 )
             )
@@ -415,8 +487,47 @@ class FlowVelocityConstraintRuntime:
                 remaining_step_count=self.total_steps - self._step_index,
             )
         self._ensure_signed_trajectory_schedule()
+        self._ensure_predictive_trajectory_schedule()
         direction = self._direction(sample, flow_phase=flow_phase)
         if (
+            self.mechanism_config.velocity_constraint_enabled
+            and self.predictive_trajectory_carrier_config is not None
+        ):
+            if (
+                control_context is None
+                or self._predictive_trajectory_schedule is None
+            ):
+                raise RuntimeError(
+                    "predictive trajectory runtime 缺少正式 schedule/control context"
+                )
+            constrained_velocity, velocity_record = (
+                apply_predictive_trajectory_constraint(
+                    model_output,
+                    sample,
+                    direction,
+                    ac_code=self._predictive_trajectory_schedule.codes[
+                        self._step_index
+                    ],
+                    flow_phase=flow_phase,
+                    config=self.velocity_config,
+                    tubelet_config=self.tubelet_config,
+                    carrier_config=(
+                        self.predictive_trajectory_carrier_config
+                    ),
+                    control_context=control_context,
+                )
+            )
+            self._cumulative_control_energy = float(
+                velocity_record[
+                    "predictive_trajectory_control_cumulative_energy_after"
+                ]
+            )
+            self._cumulative_reference_energy = float(
+                velocity_record[
+                    "predictive_trajectory_reference_cumulative_energy_after"
+                ]
+            )
+        elif (
             self.mechanism_config.velocity_constraint_enabled
             and self.signed_trajectory_carrier_config is not None
         ):
@@ -517,6 +628,8 @@ class FlowVelocityConstraintRuntime:
                 canonical_direction=(
                     self._canonical_endpoint_key_direction
                     if self.signed_trajectory_carrier_config is not None
+                    else self._canonical_key_direction
+                    if self.predictive_trajectory_carrier_config is not None
                     else None
                 ),
             )
@@ -547,45 +660,64 @@ class FlowVelocityConstraintRuntime:
             **velocity_record,
             **path_record,
         }
+        if self.predictive_trajectory_carrier_config is not None:
+            carrier_context_complete = bool(
+                step_record.get("predictive_trajectory_inactive_phase_noop")
+                is True
+                or (
+                    step_record.get(
+                        "predictive_trajectory_norm_guard_passed"
+                    )
+                    is True
+                    and step_record.get(
+                        "predictive_trajectory_energy_guard_passed"
+                    )
+                    is True
+                )
+            )
+        else:
+            carrier_context_complete = bool(
+                self.mechanism_config.endpoint_control_enabled
+                and (
+                    (
+                        self.signed_trajectory_carrier_config is not None
+                        and step_record.get(
+                            "signed_trajectory_inactive_phase_noop"
+                        )
+                        is True
+                        and step_record.get(
+                            "signed_trajectory_inactive_phase_noop_context_complete"
+                        )
+                        is True
+                    )
+                    or step_record.get(
+                        "endpoint_control_formal_context_complete"
+                    )
+                    is True
+                    or (
+                        self.signed_trajectory_carrier_config is not None
+                        and step_record.get(
+                            "signed_trajectory_joint_energy_guard_passed"
+                        )
+                        is True
+                        and step_record.get(
+                            "signed_trajectory_joint_norm_guard_passed"
+                        )
+                        is True
+                        and step_record.get(
+                            "signed_trajectory_ac_direction_guard_passed"
+                        )
+                        is True
+                    )
+                )
+            )
         step_record["flow_runtime_step_formal_context_complete"] = bool(
             self.key_context is not None
             and delta_sigma is not None
             and step_record.get("flow_tubelet_formal_context_complete") is True
             and step_record.get("path_quadrature_context_complete") is True
             and self.mechanism_config.velocity_constraint_enabled
-            and self.mechanism_config.endpoint_control_enabled
-            and (
-                (
-                    self.signed_trajectory_carrier_config is not None
-                    and step_record.get(
-                        "signed_trajectory_inactive_phase_noop"
-                    )
-                    is True
-                    and step_record.get(
-                        "signed_trajectory_inactive_phase_noop_context_complete"
-                    )
-                    is True
-                )
-                or step_record.get(
-                    "endpoint_control_formal_context_complete"
-                )
-                is True
-                or (
-                    self.signed_trajectory_carrier_config is not None
-                    and step_record.get(
-                        "signed_trajectory_joint_energy_guard_passed"
-                    )
-                    is True
-                    and step_record.get(
-                        "signed_trajectory_joint_norm_guard_passed"
-                    )
-                    is True
-                    and step_record.get(
-                        "signed_trajectory_ac_direction_guard_passed"
-                    )
-                    is True
-                )
-            )
+            and carrier_context_complete
         )
         self._step_records.append(step_record)
         self._endpoint_latent = sample_after.detach().clone()

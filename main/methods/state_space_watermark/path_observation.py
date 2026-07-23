@@ -252,6 +252,13 @@ def aggregate_path_observations(
         phase_weight_sum = float(len(rows))
     replay_weights = [
         max(0.0, min(1.0, float(row.get("replay_reliability_weight", 1.0))))
+        * max(
+            0.0,
+            min(
+                1.0,
+                float(row.get("trajectory_carrier_magnitude_weight", 1.0)),
+            ),
+        )
         for row in rows
     ]
     quadrature_ready = all(

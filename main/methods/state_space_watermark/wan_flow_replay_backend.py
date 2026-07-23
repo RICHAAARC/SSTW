@@ -35,6 +35,12 @@ from main.methods.state_space_watermark.replay_inversion import (
     replay_step_reliability_weight,
     run_key_independent_inversion_hypothesis,
 )
+from main.methods.state_space_watermark.signed_trajectory_carrier import (
+    SignedTrajectoryCarrierConfig,
+    SignedTrajectorySchedule,
+    apply_signed_trajectory_two_channel_constraint,
+    build_signed_trajectory_schedule,
+)
 from main.methods.state_space_watermark.velocity_field_constraint import (
     VelocityControlContext,
     VelocityFieldConstraintConfig,
@@ -60,6 +66,9 @@ class WanFlowReplayResult:
     endpoint_flow_phases: tuple[float, ...] = ()
     endpoint_integration_weights: tuple[float, ...] = ()
     replay_schedules: tuple[tuple[FlowSchedulePoint, ...], ...] = ()
+    signed_trajectory_carrier_config: (
+        SignedTrajectoryCarrierConfig | None
+    ) = None
 
 
 def build_flow_schedule_points(scheduler: Any, *, num_inference_steps: int, device: Any) -> list[FlowSchedulePoint]:
@@ -116,6 +125,33 @@ def _endpoint_integration_grid(
     if not phases:
         raise RuntimeError("replay schedule 未覆盖 SSTW 激活 phase 窗口")
     return tuple(phases), tuple(weights)
+
+
+def _signed_schedule_for_replay(
+    schedule: Sequence[FlowSchedulePoint],
+    *,
+    key_text: str,
+    key_context: FlowTubeletKeyContext,
+    tubelet_config: FlowTubeletKeyCodeConfig,
+) -> SignedTrajectorySchedule:
+    phases: list[float] = []
+    weights: list[float] = []
+    for step_index in range(len(schedule) - 1):
+        delta_sigma, phase = _schedule_interval(schedule, step_index)
+        phases.append(phase)
+        weights.append(
+            abs(delta_sigma) * flow_phase_weight(phase, tubelet_config)
+        )
+    from main.methods.state_space_watermark.flow_tubelet_key_code import (
+        flow_tubelet_key_context_digest,
+    )
+
+    return build_signed_trajectory_schedule(
+        key_text=key_text,
+        key_context_digest=flow_tubelet_key_context_digest(key_context),
+        flow_phases=phases,
+        active_weights=weights,
+    )
 
 
 class WanPromptConditionedVelocity:
@@ -197,6 +233,9 @@ class WanKeyConditionedVelocity:
         velocity_config: VelocityFieldConstraintConfig | None = None,
         key_context: FlowTubeletKeyContext | None = None,
         schedule: Sequence[FlowSchedulePoint] | None = None,
+        signed_trajectory_carrier_config: (
+            SignedTrajectoryCarrierConfig | None
+        ) = None,
     ) -> None:
         self.base_velocity = base_velocity
         self.key_text = key_text
@@ -205,6 +244,9 @@ class WanKeyConditionedVelocity:
         self.velocity_config = velocity_config or VelocityFieldConstraintConfig()
         self.key_context = key_context
         self.schedule = None if schedule is None else tuple(schedule)
+        self.signed_trajectory_carrier_config = (
+            signed_trajectory_carrier_config
+        )
         if self.schedule is not None and len(self.schedule) != self.total_steps:
             raise ValueError("Wan keyed replay schedule 长度必须等于 total_steps")
         if self.key_context is not None and self.schedule is None:
@@ -214,6 +256,18 @@ class WanKeyConditionedVelocity:
         self._cumulative_control_energy = 0.0
         self._cumulative_reference_energy = 0.0
         self.step_records: list[dict[str, Any]] = []
+        self._signed_trajectory_schedule = (
+            _signed_schedule_for_replay(
+                self.schedule,
+                key_text=self.key_text,
+                key_context=self.key_context,
+                tubelet_config=self.tubelet_config,
+            )
+            if self.signed_trajectory_carrier_config is not None
+            and self.schedule is not None
+            and self.key_context is not None
+            else None
+        )
 
     def __call__(self, latent: Any, timestep: Any, step_index: int) -> Any:
         """返回 base model velocity 与生成阶段弱约束的合成结果。"""
@@ -221,13 +275,32 @@ class WanKeyConditionedVelocity:
         base = self.base_velocity(latent, timestep, step_index)
         if self.key_context is not None and self.schedule is not None:
             delta_sigma, phase = _schedule_interval(self.schedule, int(step_index))
-            self._direction, direction_metadata = build_flow_tubelet_key_direction_like(
+            spatial_direction, direction_metadata = build_flow_tubelet_key_direction_like(
                 latent,
                 key_text=self.key_text,
                 config=self.tubelet_config,
                 flow_phase=phase,
                 key_context=self.key_context,
+                phase_code_override=(
+                    1.0
+                    if self.signed_trajectory_carrier_config is not None
+                    else None
+                ),
             )
+            if self._signed_trajectory_schedule is not None:
+                ac_code = self._signed_trajectory_schedule.codes[
+                    int(step_index)
+                ]
+                self._direction = spatial_direction * (
+                    1.0 if ac_code >= 0.0 else -1.0
+                )
+                direction_metadata.update(
+                    self._signed_trajectory_schedule.metadata_for_step(
+                        int(step_index)
+                    )
+                )
+            else:
+                self._direction = spatial_direction
             self._direction_metadata = dict(direction_metadata)
             control_context = VelocityControlContext(
                 delta_sigma=delta_sigma,
@@ -248,16 +321,53 @@ class WanKeyConditionedVelocity:
             )
             direction_metadata = _metadata
             self._direction_metadata = dict(_metadata)
-        constrained, record = apply_velocity_field_constraint(
-            base,
-            latent,
-            self._direction.to(device=latent.device, dtype=latent.dtype),
-            flow_phase=phase,
-            config=self.velocity_config,
-            tubelet_config=self.tubelet_config,
-            endpoint_control_enabled=True,
-            control_context=control_context,
-        )
+        if self.signed_trajectory_carrier_config is not None:
+            if (
+                self._signed_trajectory_schedule is None
+                or control_context is None
+            ):
+                raise RuntimeError(
+                    "signed trajectory replay 缺少 schedule/control context"
+                )
+            spatial_direction, _metadata = (
+                build_flow_tubelet_key_direction_like(
+                    latent,
+                    key_text=self.key_text,
+                    config=self.tubelet_config,
+                    flow_phase=phase,
+                    key_context=self.key_context,
+                    phase_code_override=1.0,
+                )
+            )
+            constrained, record = (
+                apply_signed_trajectory_two_channel_constraint(
+                    base,
+                    latent,
+                    spatial_direction.to(
+                        device=latent.device,
+                        dtype=latent.dtype,
+                    ),
+                    ac_code=self._signed_trajectory_schedule.codes[
+                        int(step_index)
+                    ],
+                    flow_phase=phase,
+                    config=self.velocity_config,
+                    tubelet_config=self.tubelet_config,
+                    carrier_config=self.signed_trajectory_carrier_config,
+                    control_context=control_context,
+                )
+            )
+        else:
+            constrained, record = apply_velocity_field_constraint(
+                base,
+                latent,
+                self._direction.to(device=latent.device, dtype=latent.dtype),
+                flow_phase=phase,
+                config=self.velocity_config,
+                tubelet_config=self.tubelet_config,
+                endpoint_control_enabled=True,
+                control_context=control_context,
+            )
         if "endpoint_control_cumulative_energy_after" in record:
             self._cumulative_control_energy = float(
                 record["endpoint_control_cumulative_energy_after"]
@@ -289,6 +399,9 @@ def _path_evidence_from_replay(
     schedule: Sequence[FlowSchedulePoint],
     likelihood_config: ReplayGaussianLikelihoodConfig,
     key_context: FlowTubeletKeyContext | None = None,
+    signed_trajectory_carrier_config: (
+        SignedTrajectoryCarrierConfig | None
+    ) = None,
 ) -> dict[str, Any]:
     """在 key 无关固定反演路径上计算候选 key 投影证据。"""
 
@@ -299,6 +412,9 @@ def _path_evidence_from_replay(
         tubelet_config=tubelet_config,
         likelihood_config=likelihood_config,
         key_context=key_context,
+        signed_trajectory_carrier_config=(
+            signed_trajectory_carrier_config
+        ),
     )
 
 
@@ -310,6 +426,9 @@ def score_replay_trajectory_for_key(
     tubelet_config: FlowTubeletKeyCodeConfig | None = None,
     likelihood_config: ReplayGaussianLikelihoodConfig,
     key_context: FlowTubeletKeyContext | None = None,
+    signed_trajectory_carrier_config: (
+        SignedTrajectoryCarrierConfig | None
+    ) = None,
 ) -> dict[str, Any]:
     """在不重复模型推理的情况下为另一把 key 重算 replay 路径证据。
 
@@ -322,6 +441,17 @@ def score_replay_trajectory_for_key(
     if len(states) != len(schedule):
         raise RuntimeError("replay states 与 Flow schedule 长度不一致")
     records: list[dict[str, Any]] = []
+    signed_schedule = (
+        _signed_schedule_for_replay(
+            schedule,
+            key_text=key_text,
+            key_context=key_context,
+            tubelet_config=tubelet_config,
+        )
+        if signed_trajectory_carrier_config is not None
+        and key_context is not None
+        else None
+    )
     for step_index in range(len(states) - 1):
         delta_sigma, phase = _schedule_interval(schedule, step_index)
         direction, direction_metadata = build_flow_tubelet_key_direction_like(
@@ -330,7 +460,18 @@ def score_replay_trajectory_for_key(
             config=tubelet_config,
             flow_phase=(phase if key_context is not None else None),
             key_context=key_context,
+            phase_code_override=(
+                1.0
+                if signed_trajectory_carrier_config is not None
+                else None
+            ),
         )
+        if signed_schedule is not None:
+            ac_code = signed_schedule.codes[step_index]
+            direction = direction * (1.0 if ac_code >= 0.0 else -1.0)
+            direction_metadata.update(
+                signed_schedule.metadata_for_step(step_index)
+            )
         velocity = (states[step_index + 1] - states[step_index]) / delta_sigma
         step_record = compute_path_step_observation(
             states[step_index],
@@ -346,6 +487,10 @@ def score_replay_trajectory_for_key(
             step_index + 1,
             config=likelihood_config,
         )
+        if signed_schedule is not None:
+            step_record["trajectory_carrier_magnitude_weight"] = abs(
+                signed_schedule.codes[step_index]
+            )
         records.append(step_record)
     aggregated = aggregate_path_observations(records)
     aggregated["flow_tubelet_formal_context_complete"] = bool(
@@ -384,6 +529,11 @@ def compute_wan_endpoint_evidence_for_key(
         integration_weights=(
             replay.endpoint_integration_weights if active_context is not None else None
         ),
+        phase_code_override=(
+            1.0
+            if replay.signed_trajectory_carrier_config is not None
+            else None
+        ),
     )
 
 
@@ -397,6 +547,9 @@ def evaluate_fixed_wan_replay_hypothesis_for_key(
     guidance_scale: float = 5.0,
     tubelet_config: FlowTubeletKeyCodeConfig | None = None,
     key_context: FlowTubeletKeyContext | None = None,
+    signed_trajectory_carrier_config: (
+        SignedTrajectoryCarrierConfig | None
+    ) = None,
 ) -> tuple[ReplayTrajectory, dict[str, Any]]:
     """在固定 attacked-video 反演观测上评估另一把候选 key。"""
 
@@ -414,6 +567,10 @@ def evaluate_fixed_wan_replay_hypothesis_for_key(
         tubelet_config=tubelet_config,
         key_context=key_context or replay.key_context,
         schedule=replay.primary_schedule,
+        signed_trajectory_carrier_config=(
+            signed_trajectory_carrier_config
+            or replay.signed_trajectory_carrier_config
+        ),
     )
     fixed = replay.replay_trajectories[replay.primary_replay_index]
     hypothesis = evaluate_candidate_on_fixed_inversion(
@@ -430,6 +587,10 @@ def evaluate_fixed_wan_replay_hypothesis_for_key(
         tubelet_config=tubelet_config,
         likelihood_config=replay.replay_likelihood_config,
         key_context=key_context or replay.key_context,
+        signed_trajectory_carrier_config=(
+            signed_trajectory_carrier_config
+            or replay.signed_trajectory_carrier_config
+        ),
     )
 
 
@@ -515,6 +676,9 @@ def run_wan_attacked_video_replay(
     tubelet_config: FlowTubeletKeyCodeConfig | None = None,
     likelihood_config: ReplayGaussianLikelihoodConfig,
     key_context: FlowTubeletKeyContext | None = None,
+    signed_trajectory_carrier_config: (
+        SignedTrajectoryCarrierConfig | None
+    ) = None,
 ) -> WanFlowReplayResult:
     """从攻击后视频执行多时间网格 Wan inversion/replay 并返回正式证据。"""
 
@@ -544,6 +708,9 @@ def run_wan_attacked_video_replay(
             tubelet_config=tubelet_config,
             key_context=key_context,
             schedule=schedule,
+            signed_trajectory_carrier_config=(
+                signed_trajectory_carrier_config
+            ),
         )
         replay_rows.append(run_key_independent_inversion_hypothesis(
             endpoint_latent,
@@ -567,6 +734,9 @@ def run_wan_attacked_video_replay(
         key_text=key_text,
         tubelet_config=tubelet_config,
         key_context=key_context,
+        phase_code_override=(
+            1.0 if signed_trajectory_carrier_config is not None else None
+        ),
         flow_phases=(endpoint_flow_phases if key_context is not None else None),
         integration_weights=(
             endpoint_integration_weights if key_context is not None else None
@@ -579,6 +749,9 @@ def run_wan_attacked_video_replay(
         schedule=schedules[primary_index],
         likelihood_config=likelihood_config,
         key_context=key_context,
+        signed_trajectory_carrier_config=(
+            signed_trajectory_carrier_config
+        ),
     )
     return WanFlowReplayResult(
         endpoint_evidence=endpoint_evidence,
@@ -595,4 +768,7 @@ def run_wan_attacked_video_replay(
         endpoint_flow_phases=endpoint_flow_phases,
         endpoint_integration_weights=endpoint_integration_weights,
         replay_schedules=tuple(tuple(schedule) for schedule in schedules),
+        signed_trajectory_carrier_config=(
+            signed_trajectory_carrier_config
+        ),
     )

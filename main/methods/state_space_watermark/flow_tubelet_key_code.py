@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from hashlib import sha256
 import json
-from math import cos, pi, sin
+from math import cos, isfinite, pi, sin
 from typing import Any, Sequence
 
 
@@ -185,6 +185,7 @@ def build_flow_tubelet_key_direction_like(
     config: FlowTubeletKeyCodeConfig | None = None,
     flow_phase: float | None = None,
     key_context: FlowTubeletKeyContext | None = None,
+    phase_code_override: float | None = None,
 ) -> tuple[Any, dict[str, Any]]:
     """生成与五维 Flow latent 同形状的密钥条件 tubelet 方向。
 
@@ -208,6 +209,11 @@ def build_flow_tubelet_key_direction_like(
 
     if flow_phase is not None and not 0.0 <= float(flow_phase) <= 1.0:
         raise ValueError("flow_phase 必须位于 [0, 1]")
+    if phase_code_override is not None and (
+        not isfinite(float(phase_code_override))
+        or abs(float(phase_code_override)) <= 1e-12
+    ):
+        raise ValueError("显式 phase code 必须是有限非零数")
 
     batch, channels, frames, height, width = (int(value) for value in reference.shape)
     direction = torch.zeros(reference.shape, device=reference.device, dtype=torch.float32)
@@ -259,7 +265,9 @@ def build_flow_tubelet_key_direction_like(
                     payload_sign = 1.0 if payload_positive else -1.0
                     block = block / block.norm().clamp_min(1e-8)
                     phase_code = (
-                        _tubelet_phase_code(
+                        float(phase_code_override)
+                        if phase_code_override is not None
+                        else _tubelet_phase_code(
                             key_text=key_text,
                             context=key_context,
                             flow_phase=float(flow_phase),
@@ -329,6 +337,13 @@ def build_flow_tubelet_key_direction_like(
             else None
         ),
         "flow_tubelet_phase": None if flow_phase is None else round(float(flow_phase), 8),
+        "flow_tubelet_phase_code_semantics": (
+            "explicit_schedule_carrier_code"
+            if phase_code_override is not None
+            else "nonnegative_key_conditioned_cosine_squared"
+            if key_context is not None and flow_phase is not None
+            else "compatibility_static"
+        ),
         "flow_tubelet_phase_code_minimum": round(min(phase_codes), 8),
         "flow_tubelet_phase_code_maximum": round(max(phase_codes), 8),
         "flow_tubelet_phase_code_mean": round(sum(phase_codes) / len(phase_codes), 8),
@@ -339,6 +354,7 @@ def build_flow_tubelet_key_direction_like(
                 f"{'' if key_context is None else key_context.prompt_digest}::"
                 f"{'' if key_context is None else key_context.sampler_signature}::"
                 f"{flow_phase}::"
+                f"{phase_code_override}::"
                 f"{() if key_context is None else key_context.payload_bits}"
             ).encode("utf-8")
         ).hexdigest(),
@@ -354,6 +370,7 @@ def build_integrated_flow_tubelet_key_direction_like(
     flow_phases: Sequence[float],
     integration_weights: Sequence[float],
     config: FlowTubeletKeyCodeConfig | None = None,
+    phase_code_override: float | None = None,
 ) -> tuple[Any, dict[str, Any]]:
     """按预注册 Flow 网格积分 joint code，构造 endpoint/replay 共用参考方向。
 
@@ -381,6 +398,7 @@ def build_integrated_flow_tubelet_key_direction_like(
             config=config,
             flow_phase=phase,
             key_context=key_context,
+            phase_code_override=phase_code_override,
         )
         accumulated = accumulated + direction.detach().float() * weight
         phase_schedule_bindings.append(

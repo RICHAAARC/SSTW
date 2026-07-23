@@ -2879,3 +2879,59 @@ Notebook 与 repository module 的跨边界数据
 | immutable_input_snapshot_digest | provenance | none | true | false | false | immutable input snapshot 在移除自身摘要字段后的稳定内容摘要。 |
 | controlled_embedding_profile_builder_source_path | provenance | none | true | false | false | construction manifest 绑定的 controlled embedding profile builder 源文件路径。 |
 | controlled_embedding_profile_builder_source_sha256 | provenance | none | true | false | false | controlled embedding profile builder 实际源码字节摘要。 |
+| signed_trajectory_plan_record_id | provenance | none | true | false | false | 最小 signed trajectory 12 条 generation plan 单元的稳定身份摘要。 |
+| trajectory_carrier_variant_id | protocol | none | true | false | false | signed_balanced_ac、nonnegative_phase_control 或 clean_unwatermarked_control。 |
+| signed_trajectory_carrier_id | protocol | none | true | false | false | key/context/schedule 绑定的带符号 AC 时间载体构造标识。 |
+| signed_trajectory_schedule_digest | provenance | none | true | false | false | 不含密钥明文的 signed AC schedule 绑定摘要。 |
+| signed_trajectory_ac_code | metric | none | true | false | false | 当前真实 Flow phase 使用的加权零均值带符号 AC code。 |
+| signed_trajectory_ac_raw_sign | protocol | none | true | false | false | 当前 phase 在 key-conditioned 二值原码中的正负符号。 |
+| signed_trajectory_ac_weight | metric | none | true | false | false | 当前 phase 用于 AC 零均值约束的真实 schedule 权重。 |
+| signed_trajectory_ac_weighted_mean | metric | none | true | false | false | 二值原码在真实 schedule 权重下被移除的加权均值。 |
+| signed_trajectory_ac_weighted_residual | metric | none | true | false | false | 中心化 AC code 的加权和残差，必须接近零。 |
+| signed_trajectory_ac_zero_mean_verified | governance | none | true | false | false | AC trajectory channel 是否通过真实 schedule 加权零均值校验。 |
+| signed_trajectory_phase_bin | protocol | none | true | false | false | 当前连续规范 Flow phase 所属的固定 phase bin。 |
+| signed_trajectory_phase_offset | protocol | none | true | false | false | key/context 绑定的连续 phase-bin 符号函数循环偏移。 |
+| signed_trajectory_phase_pattern_reversed | protocol | none | true | false | false | key/context 绑定的连续 phase-bin 符号函数是否反向。 |
+| signed_trajectory_phase_pattern_polarity | protocol | none | true | false | false | key/context 绑定的连续 phase-bin 符号函数全局极性。 |
+| signed_trajectory_phase_function_digest | provenance | none | true | false | false | 与离散 generation/replay grid 无关的 key/context 连续 phase-bin 符号函数摘要。 |
+| signed_trajectory_ac_allocation | protocol | none | true | false | false | 原总 lambda 预算中分配给 signed AC trajectory channel 的比例。 |
+| signed_trajectory_dc_allocation | protocol | none | true | false | false | 原总 lambda 预算中分配给独立 DC endpoint channel 的比例。 |
+| signed_trajectory_minimum_ac_direction_retained_cosine | protocol | none | true | false | false | 最终 AC+DC delta 相对实际 AC-only delta 必须保留的最小正方向余弦。 |
+| signed_trajectory_dc_direction_guard_scale | metric | none | true | false | false | 为避免 DC 覆盖 signed AC 方向而保留的 DC 增量比例。 |
+| signed_trajectory_dc_delta_norm_before_direction_guard | metric | none | true | false | false | AC-direction guard 前候选 DC endpoint 增量范数。 |
+| signed_trajectory_candidate_joint_ac_direction_cosine | metric | none | true | false | false | 未施加 AC-direction guard 时候选 AC+DC delta 相对 AC-only delta 的余弦。 |
+| signed_trajectory_final_joint_ac_direction_cosine | metric | none | true | false | false | direction guard 与 joint budget 统一缩放后最终 AC+DC delta 相对 AC-only delta 的余弦。 |
+| signed_trajectory_ac_direction_guard_passed | governance | none | true | false | false | 最终 joint delta 是否保持预声明的 signed AC 正方向余弦。 |
+| signed_trajectory_ac_direction_guard_applicable | governance | none | true | false | false | 当前步骤位于 active phase window 内并需要执行 AC-direction guard。 |
+| signed_trajectory_inactive_phase_noop | governance | none | true | false | false | 当前 schedule step 是否为 phase window 外合法零 code no-op。 |
+| signed_trajectory_inactive_phase_noop_context_complete | governance | none | true | false | false | 窗口外 no-op 是否仍绑定有效 scheduler delta 与累计能量上下文。 |
+| signed_trajectory_joint_energy_scale | metric | none | true | false | false | AC/DC 合成 delta 为遵守原 Flow 能量预算使用的统一裁剪比例。 |
+| signed_trajectory_joint_norm_scale | metric | none | true | false | false | AC/DC 合成 delta 为遵守相对原始 model output 的 velocity norm 预算使用的比例。 |
+| signed_trajectory_joint_scale | metric | none | true | false | false | joint norm 与 Flow energy 两种限制中更严格的最终统一裁剪比例。 |
+| signed_trajectory_joint_norm_budget | metric | none | true | false | false | 相对原始 model output 计算的当前 phase 最终 AC+DC delta norm 上限。 |
+| signed_trajectory_joint_energy_limited_delta_norm | metric | none | true | false | false | 当前剩余 Flow energy 能容纳的最终 AC+DC delta norm 上限。 |
+| signed_trajectory_joint_energy_guard_passed | governance | none | true | false | false | AC/DC 合成控制是否未超过原 Flow energy budget。 |
+| signed_trajectory_joint_norm_guard_passed | governance | none | true | false | false | AC/DC 合成控制是否未超过相对原始 model output 的 velocity norm budget。 |
+| signed_trajectory_joint_norm_budget_utilization | metric | none | true | false | false | 最终 AC+DC delta 使用当前 phase joint norm budget 的比例。 |
+| signed_trajectory_joint_delta_velocity_alignment | metric | none | true | false | false | 最终 joint-guard 后 AC+DC delta 与原始 model output 的实际余弦对齐。 |
+| signed_trajectory_ac_semantic_projection_status | governance | none | true | false | false | AC 通道相对原始 model output 的语义切向投影状态。 |
+| signed_trajectory_dc_semantic_projection_status_before_joint_guard | governance | none | true | false | false | DC 通道相对 AC 后中间 velocity 且在 joint guard 前的语义切向投影状态。 |
+| signed_trajectory_ac_semantic_projection_retained_key_energy_ratio | metric | none | true | false | false | AC 通道相对原始 model output 投影后保留的 key-direction 范数比例。 |
+| signed_trajectory_dc_semantic_projection_retained_key_energy_ratio_before_joint_guard | metric | none | true | false | false | DC 通道相对 AC 后中间 velocity 且在 joint guard 前保留的 key-direction 范数比例。 |
+| signed_trajectory_ac_delta_norm_before_joint_guard | metric | none | true | false | false | 联合能量裁剪前 AC trajectory channel 的速度增量范数。 |
+| signed_trajectory_dc_delta_norm_before_joint_guard | metric | none | true | false | false | 联合能量裁剪前 DC endpoint channel 的速度增量范数。 |
+| trajectory_carrier_magnitude_weight | metric | none | true | false | false | matched trajectory aggregation 对中心化 AC code 幅值的权重。 |
+| minimal_signed_trajectory_summary_record_id | provenance | none | true | false | false | signed trajectory replay summary 的稳定身份摘要。 |
+| minimal_signed_trajectory_step_record_id | provenance | none | true | false | false | 真实逐步 signed carrier observation 的稳定身份摘要。 |
+| signed_trajectory_pair_record_id | provenance | none | true | false | false | correct/wrong 或 signed/control 配对记录的稳定身份摘要。 |
+| trajectory_static_aggregation_score | metric | none | true | false | false | 不拟合状态转移时对逐步 trajectory observation 的静态聚合分数。 |
+| signed_correct_over_wrong_trajectory_fraction | metric | none | true | false | false | signed correct-key trajectory margin 为正的四身份比例。 |
+| signed_over_nonnegative_path_margin_fraction | metric | none | true | false | false | signed path margin 优于非负 phase control 的四身份比例。 |
+| signed_correct_over_wrong_endpoint_fraction | metric | none | true | false | false | signed correct-key endpoint margin 为正的四身份比例。 |
+| signed_trajectory_carrier_gate_ready | governance | none | true | false | false | 预声明 signed trajectory 可辨识性、control、reliability 与 endpoint gate 是否同时通过。 |
+| minimal_signed_trajectory_smoke_decision | governance | none | true | false | false | 通过后仅允许设计独立 calibration，失败则停止 trajectory-state-space claim 的分类。 |
+| state_space_control_evaluation_status | governance | none | true | false | false | 配置冻结 endpoint、static 与 posterior 三类最小对照的当前执行边界。 |
+| flow_evidence_observation_count | metric | none | true | false | false | 当前 candidate 由真实 replay 形成的逐 phase FlowEvidenceObservation 数量。 |
+| flow_evidence_observation_contract_status | governance | none | true | false | false | signed replay 的逐步映射能否转换成现有 FlowEvidenceObservation 接口。 |
+| sstw_state_posterior_status | governance | none | true | false | false | smoke decision 中状态 posterior 因尚无独立 identities 而保留未拟合的状态。 |
+| sstw_state_posterior_evaluation_status | governance | none | true | false | false | 当前 carrier smoke 是否因缺少独立 calibration/test identities 而保留 posterior 未拟合。 |

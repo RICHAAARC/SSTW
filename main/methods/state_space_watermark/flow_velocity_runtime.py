@@ -19,6 +19,12 @@ from main.methods.state_space_watermark.flow_tubelet_key_code import (
     flow_tubelet_key_context_digest,
 )
 from main.methods.state_space_watermark.path_observation import compute_path_step_observation
+from main.methods.state_space_watermark.signed_trajectory_carrier import (
+    SignedTrajectoryCarrierConfig,
+    SignedTrajectorySchedule,
+    apply_signed_trajectory_two_channel_constraint,
+    build_signed_trajectory_schedule,
+)
 from main.methods.state_space_watermark.velocity_field_constraint import (
     VelocityControlContext,
     VelocityFieldConstraintConfig,
@@ -80,6 +86,7 @@ class FlowVelocityConstraintRuntime:
     tubelet_config: FlowTubeletKeyCodeConfig = field(default_factory=FlowTubeletKeyCodeConfig)
     latent_layout: FlowLatentLayout = field(default_factory=FiveDimensionalFlowLatentLayout)
     key_context: FlowTubeletKeyContext | None = None
+    signed_trajectory_carrier_config: SignedTrajectoryCarrierConfig | None = None
     require_flow_scheduler: bool = True
 
     def __post_init__(self) -> None:
@@ -98,6 +105,8 @@ class FlowVelocityConstraintRuntime:
         self._cumulative_control_energy = 0.0
         self._cumulative_reference_energy = 0.0
         self._step_index = 0
+        self._signed_trajectory_schedule: SignedTrajectorySchedule | None = None
+        self._canonical_endpoint_key_direction: Any | None = None
 
     @property
     def step_records(self) -> list[dict[str, Any]]:
@@ -161,6 +170,11 @@ class FlowVelocityConstraintRuntime:
             raise RuntimeError(f"正式 velocity constraint 需要 FlowMatch scheduler, 当前为 {scheduler_name}")
         if self.total_steps <= 0:
             raise ValueError("total_steps 必须为正整数")
+        if (
+            self.signed_trajectory_carrier_config is not None
+            and self.key_context is None
+        ):
+            raise ValueError("signed trajectory runtime 要求完整 key context")
         self._original_step = self.scheduler.step
 
         def constrained_step(model_output: Any, timestep: Any, sample: Any, *args: Any, **kwargs: Any):
@@ -242,6 +256,54 @@ class FlowVelocityConstraintRuntime:
         )
         return delta_sigma, phase
 
+    def _ensure_signed_trajectory_schedule(self) -> None:
+        """在 pipeline 已物化 timesteps 后绑定真实 generation schedule。"""
+
+        if (
+            self.signed_trajectory_carrier_config is None
+            or self._signed_trajectory_schedule is not None
+        ):
+            return
+        if self.key_context is None:
+            raise RuntimeError("signed trajectory runtime 缺少 key context")
+        sigma_grid = getattr(self.scheduler, "sigmas", None)
+        if sigma_grid is None or len(sigma_grid) != self.total_steps + 1:
+            raise RuntimeError(
+                "signed trajectory runtime 要求完整 generation sigma grid"
+            )
+        phases: list[float] = []
+        weights: list[float] = []
+        for step_index in range(self.total_steps):
+            phase = normalized_flow_phase_from_sigma_interval(
+                sigma_grid,
+                step_index,
+            )
+            before = (
+                float(sigma_grid[step_index].detach().float().item())
+                if hasattr(sigma_grid[step_index], "detach")
+                else float(sigma_grid[step_index])
+            )
+            after = (
+                float(
+                    sigma_grid[step_index + 1].detach().float().item()
+                )
+                if hasattr(sigma_grid[step_index + 1], "detach")
+                else float(sigma_grid[step_index + 1])
+            )
+            phases.append(phase)
+            weights.append(
+                abs(after - before)
+                * flow_phase_weight(phase, self.tubelet_config)
+            )
+        self._signed_trajectory_schedule = build_signed_trajectory_schedule(
+            key_text=self.key_text,
+            key_context_digest=flow_tubelet_key_context_digest(
+                self.key_context
+            ),
+            flow_phases=phases,
+            active_weights=weights,
+        )
+
     def _direction(self, sample: Any, *, flow_phase: float) -> Any:
         canonical_sample = self.latent_layout.to_canonical(sample)
         canonical_direction, phase_metadata = build_flow_tubelet_key_direction_like(
@@ -250,9 +312,27 @@ class FlowVelocityConstraintRuntime:
             config=self.tubelet_config,
             flow_phase=(flow_phase if self.key_context is not None else None),
             key_context=self.key_context,
+            phase_code_override=(
+                1.0
+                if self.signed_trajectory_carrier_config is not None
+                else None
+            ),
         )
+        self._canonical_endpoint_key_direction = canonical_direction
+        if self._signed_trajectory_schedule is not None:
+            ac_code = self._signed_trajectory_schedule.codes[self._step_index]
+            canonical_direction = canonical_direction * (
+                1.0 if ac_code >= 0.0 else -1.0
+            )
+            phase_metadata.update(
+                self._signed_trajectory_schedule.metadata_for_step(
+                    self._step_index
+                )
+            )
         self._canonical_key_direction = canonical_direction
-        self._key_direction = self.latent_layout.from_canonical(canonical_direction)
+        self._key_direction = self.latent_layout.from_canonical(
+            canonical_direction
+        )
         self._key_metadata = {
             **phase_metadata,
             **self.latent_layout.as_dict(),
@@ -266,10 +346,16 @@ class FlowVelocityConstraintRuntime:
         flow_phase: float,
         delta_sigma: float,
         additional_weight: float = 0.0,
+        canonical_direction: Any | None = None,
     ) -> None:
         """累计可由同一 scheduler 网格重建的 endpoint joint code。"""
 
-        if self.key_context is None or self._canonical_key_direction is None:
+        active_direction = (
+            canonical_direction
+            if canonical_direction is not None
+            else self._canonical_key_direction
+        )
+        if self.key_context is None or active_direction is None:
             return
         schedule_weight = (
             abs(float(delta_sigma))
@@ -278,7 +364,7 @@ class FlowVelocityConstraintRuntime:
         )
         if schedule_weight <= 0.0:
             return
-        direction = self._canonical_key_direction.detach().float()
+        direction = active_direction.detach().float()
         if self._integrated_direction_accumulator is None:
             self._integrated_direction_accumulator = direction * 0.0
         self._integrated_direction_accumulator = (
@@ -328,8 +414,47 @@ class FlowVelocityConstraintRuntime:
                 cumulative_reference_energy=self._cumulative_reference_energy,
                 remaining_step_count=self.total_steps - self._step_index,
             )
+        self._ensure_signed_trajectory_schedule()
         direction = self._direction(sample, flow_phase=flow_phase)
-        if self.mechanism_config.velocity_constraint_enabled:
+        if (
+            self.mechanism_config.velocity_constraint_enabled
+            and self.signed_trajectory_carrier_config is not None
+        ):
+            if control_context is None or self._signed_trajectory_schedule is None:
+                raise RuntimeError(
+                    "signed trajectory runtime 缺少正式 schedule/control context"
+                )
+            endpoint_direction = self.latent_layout.from_canonical(
+                self._canonical_endpoint_key_direction
+            ).to(device=sample.device, dtype=sample.dtype)
+            constrained_velocity, velocity_record = (
+                apply_signed_trajectory_two_channel_constraint(
+                    model_output,
+                    sample,
+                    endpoint_direction,
+                    ac_code=self._signed_trajectory_schedule.codes[
+                        self._step_index
+                    ],
+                    flow_phase=flow_phase,
+                    config=self.velocity_config,
+                    tubelet_config=self.tubelet_config,
+                    carrier_config=self.signed_trajectory_carrier_config,
+                    control_context=control_context,
+                )
+            )
+            if "endpoint_control_cumulative_energy_after" in velocity_record:
+                self._cumulative_control_energy = float(
+                    velocity_record[
+                        "endpoint_control_cumulative_energy_after"
+                    ]
+                )
+            if "endpoint_reference_cumulative_energy_after" in velocity_record:
+                self._cumulative_reference_energy = float(
+                    velocity_record[
+                        "endpoint_reference_cumulative_energy_after"
+                    ]
+                )
+        elif self.mechanism_config.velocity_constraint_enabled:
             constrained_velocity, velocity_record = apply_velocity_field_constraint(
                 model_output,
                 sample,
@@ -389,6 +514,11 @@ class FlowVelocityConstraintRuntime:
                 flow_phase=flow_phase,
                 delta_sigma=delta_sigma,
                 additional_weight=terminal_integration_weight,
+                canonical_direction=(
+                    self._canonical_endpoint_key_direction
+                    if self.signed_trajectory_carrier_config is not None
+                    else None
+                ),
             )
 
         path_record = compute_path_step_observation(
@@ -424,7 +554,38 @@ class FlowVelocityConstraintRuntime:
             and step_record.get("path_quadrature_context_complete") is True
             and self.mechanism_config.velocity_constraint_enabled
             and self.mechanism_config.endpoint_control_enabled
-            and step_record.get("endpoint_control_formal_context_complete") is True
+            and (
+                (
+                    self.signed_trajectory_carrier_config is not None
+                    and step_record.get(
+                        "signed_trajectory_inactive_phase_noop"
+                    )
+                    is True
+                    and step_record.get(
+                        "signed_trajectory_inactive_phase_noop_context_complete"
+                    )
+                    is True
+                )
+                or step_record.get(
+                    "endpoint_control_formal_context_complete"
+                )
+                is True
+                or (
+                    self.signed_trajectory_carrier_config is not None
+                    and step_record.get(
+                        "signed_trajectory_joint_energy_guard_passed"
+                    )
+                    is True
+                    and step_record.get(
+                        "signed_trajectory_joint_norm_guard_passed"
+                    )
+                    is True
+                    and step_record.get(
+                        "signed_trajectory_ac_direction_guard_passed"
+                    )
+                    is True
+                )
+            )
         )
         self._step_records.append(step_record)
         self._endpoint_latent = sample_after.detach().clone()

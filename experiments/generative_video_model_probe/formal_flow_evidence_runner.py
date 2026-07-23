@@ -29,7 +29,9 @@ from runtime.core.digest import build_stable_digest
 from main.methods.state_space_watermark.endpoint_latent_detector import compute_endpoint_latent_evidence
 from main.methods.state_space_watermark.flow_tubelet_key_code import (
     FlowTubeletKeyContext,
+    FlowTubeletKeyCodeConfig,
     build_flow_tubelet_key_direction_like,
+    flow_phase_weight,
     flow_tubelet_key_context_digest,
 )
 from main.methods.state_space_watermark.flow_velocity_runtime import (
@@ -43,6 +45,10 @@ from main.methods.state_space_watermark.replay_inversion import (
     fit_replay_gaussian_likelihood_config,
     gaussian_replay_residual_likelihood,
     replay_step_reliability_weight,
+)
+from main.methods.state_space_watermark.signed_trajectory_carrier import (
+    SignedTrajectoryCarrierConfig,
+    build_signed_trajectory_schedule,
 )
 from main.methods.state_space_watermark.formal_detector import (
     FLOW_STATE_POSTERIOR_SCORE_SOURCE,
@@ -118,10 +124,17 @@ def _run_attacked_video_replay_for_model(
     key_context: FlowTubeletKeyContext,
     likelihood_config: ReplayGaussianLikelihoodConfig,
     replay_step_counts: tuple[int, ...] = (16, 20, 24),
+    signed_trajectory_carrier_config: (
+        SignedTrajectoryCarrierConfig | None
+    ) = None,
 ) -> WanFlowReplayResult | LTXFlowReplayResult:
     """按 pipeline 家族分派真实 attacked-video replay, 不允许回退到代理分数。"""
 
     if "LTX" in type(pipeline).__name__.upper():
+        if signed_trajectory_carrier_config is not None:
+            raise ValueError(
+                "minimal signed trajectory smoke 当前仅允许 Wan 主模型"
+            )
         return run_ltx_attacked_video_replay(
             pipeline,
             video_path,
@@ -139,6 +152,9 @@ def _run_attacked_video_replay_for_model(
         key_context=key_context,
         likelihood_config=likelihood_config,
         replay_step_counts=replay_step_counts,
+        signed_trajectory_carrier_config=(
+            signed_trajectory_carrier_config
+        ),
     )
 
 
@@ -209,10 +225,17 @@ def _evaluate_fixed_replay_hypothesis_for_key(
     prompt: str,
     key_text: str,
     key_context: FlowTubeletKeyContext,
+    signed_trajectory_carrier_config: (
+        SignedTrajectoryCarrierConfig | None
+    ) = None,
 ) -> tuple[Any, dict[str, float | int | None]]:
     """在同一 key 无关固定反演路径上评估候选 key, 防止循环构造观测。"""
 
     if isinstance(replay, LTXFlowReplayResult):
+        if signed_trajectory_carrier_config is not None:
+            raise ValueError(
+                "minimal signed trajectory smoke 当前仅允许 Wan 主模型"
+            )
         return evaluate_fixed_ltx_replay_hypothesis_for_key(
             pipeline,
             replay,
@@ -226,6 +249,9 @@ def _evaluate_fixed_replay_hypothesis_for_key(
         prompt=prompt,
         key_text=key_text,
         key_context=key_context,
+        signed_trajectory_carrier_config=(
+            signed_trajectory_carrier_config
+        ),
     )
 
 
@@ -375,6 +401,8 @@ def _replay_native_key_direction(
     key_text: str,
     key_context: FlowTubeletKeyContext,
     flow_phase: float,
+    phase_code_override: float | None = None,
+    carrier_sign: float = 1.0,
 ) -> Any:
     """在模型原生 replay 布局中构造同一 phase 的联合 tubelet code。"""
 
@@ -386,15 +414,20 @@ def _replay_native_key_direction(
             key_text=key_text,
             key_context=key_context,
             flow_phase=flow_phase,
+            phase_code_override=phase_code_override,
         )
-        return replay.latent_layout.from_canonical(canonical_direction)
+        return (
+            replay.latent_layout.from_canonical(canonical_direction)
+            * float(carrier_sign)
+        )
     direction, _metadata = build_flow_tubelet_key_direction_like(
         reference,
         key_text=key_text,
         key_context=key_context,
         flow_phase=flow_phase,
+        phase_code_override=phase_code_override,
     )
-    return direction
+    return direction * float(carrier_sign)
 
 
 def _normalized_projection(value: Any, direction: Any) -> float:
@@ -419,6 +452,9 @@ def build_flow_state_observation_sequence(
     trajectory: ReplayTrajectory | None = None,
     schedule: Iterable[Any] | None = None,
     key_context: FlowTubeletKeyContext | None = None,
+    signed_trajectory_carrier_config: (
+        SignedTrajectoryCarrierConfig | None
+    ) = None,
 ) -> list[dict[str, Any]]:
     """从固定 inversion 路径构造真实逐 phase 状态空间观测序列。"""
 
@@ -439,6 +475,33 @@ def build_flow_state_observation_sequence(
     grid_reliability = _time_grid_reliability(replay)
     coverage = float(replay.endpoint_evidence.coverage_ratio)
     observations: list[dict[str, Any]] = []
+    signed_schedule = None
+    if signed_trajectory_carrier_config is not None:
+        phases: list[float] = []
+        active_weights: list[float] = []
+        tubelet_config = FlowTubeletKeyCodeConfig()
+        for step_index in range(len(states) - 1):
+            delta_sigma = (
+                float(active_schedule[step_index + 1].sigma)
+                - float(active_schedule[step_index].sigma)
+            )
+            phase = normalized_flow_phase_from_sigma_interval(
+                sigma_grid,
+                step_index,
+            )
+            phases.append(phase)
+            active_weights.append(
+                abs(delta_sigma)
+                * flow_phase_weight(phase, tubelet_config)
+            )
+        signed_schedule = build_signed_trajectory_schedule(
+            key_text=key_text,
+            key_context_digest=flow_tubelet_key_context_digest(
+                active_key_context
+            ),
+            flow_phases=phases,
+            active_weights=active_weights,
+        )
     for step_index in range(len(states) - 1):
         delta_sigma = float(active_schedule[step_index + 1].sigma) - float(
             active_schedule[step_index].sigma
@@ -454,6 +517,15 @@ def build_flow_state_observation_sequence(
             key_text=key_text,
             key_context=active_key_context,
             flow_phase=phase,
+            phase_code_override=(
+                1.0 if signed_schedule is not None else None
+            ),
+            carrier_sign=(
+                1.0
+                if signed_schedule is None
+                or signed_schedule.codes[step_index] >= 0.0
+                else -1.0
+            ),
         ).to(device=states[0].device, dtype=states[0].dtype)
         displacement = states[step_index + 1] - states[step_index]
         velocity = displacement / delta_sigma
@@ -487,7 +559,7 @@ def build_flow_state_observation_sequence(
             0.0,
             min(1.0, 1.0 - abs(state_projection - unweighted_path_score)),
         )
-        observations.append({
+        observation = {
             "flow_state_observation_step_index": step_index,
             "flow_phase": round(phase, 8),
             "trajectory_delta_sigma": round(delta_sigma, 10),
@@ -542,7 +614,20 @@ def build_flow_state_observation_sequence(
                 10,
             ),
             "replay_likelihood_model_id": likelihood.likelihood_model_id,
-        })
+        }
+        if signed_schedule is not None:
+            observation.update(
+                signed_schedule.metadata_for_step(step_index)
+            )
+            observation["trajectory_carrier_magnitude_weight"] = abs(
+                signed_schedule.codes[step_index]
+            )
+            observation["path_score"] = round(
+                float(observation["path_score"])
+                * abs(signed_schedule.codes[step_index]),
+                8,
+            )
+        observations.append(observation)
     if not observations:
         raise RuntimeError("固定 replay 路径未形成有效状态空间观测")
     return observations

@@ -120,6 +120,7 @@ def compute_endpoint_latent_evidence(
     integration_weights: Sequence[float] | None = None,
     integrated_key_direction: Any | None = None,
     integrated_direction_formal_context_complete: bool = False,
+    phase_code_override: float | None = None,
 ) -> EndpointLatentEvidence:
     """使用生成阶段同一 schedule 积分 tubelet code 计算 endpoint 证据。
 
@@ -156,6 +157,7 @@ def compute_endpoint_latent_evidence(
                     float(value) for value in integration_weights or ()
                 ),
                 config=tubelet_config,
+                phase_code_override=phase_code_override,
             )
             mismatch = float(
                 (direction.detach().float() - expected.detach().float()).norm().item()
@@ -190,6 +192,7 @@ def compute_endpoint_latent_evidence(
             flow_phases=phases,
             integration_weights=weights,
             config=tubelet_config,
+            phase_code_override=phase_code_override,
         )
         formal_context_complete = bool(
             metadata["flow_tubelet_formal_context_complete"]

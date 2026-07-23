@@ -1,0 +1,62 @@
+{
+  "attacked_phase_execution_allowed": false,
+  "claim_support_status": "controlled_embedding_strength_profile_construction_only_not_paper_evidence",
+  "cross_project_integration_allowed": false,
+  "embedding_strength_selection_policy": "predeclared_single_factor_lambda_max_ladder_no_result_adaptive_selection",
+  "external_baseline_execution_allowed": false,
+  "fixed_fpr_evaluation_allowed": false,
+  "generation_execution_allowed": false,
+  "generation_model_id": "Wan-AI/Wan2.1-T2V-1.3B-Diffusers",
+  "height": 320,
+  "large_scale_generation_allowed": false,
+  "lambda_time_window": [
+    0.25,
+    0.75
+  ],
+  "maximum_planned_velocity_constraint_delta_ratio": 0.01,
+  "num_frames": 33,
+  "num_inference_steps": 8,
+  "paper_result_level": "controlled_embedding_strength_diagnostic",
+  "profile_id": "sstw_controlled_embedding_strength_profile",
+  "profile_scope": "existing_stage0d_failure_conditioned_four_source_single_factor_embedding_strength_plan_construction",
+  "prompt_limit": 2,
+  "prompt_suite_roles": [
+    "probe_paper"
+  ],
+  "required_source_controlled_embedding_profile_construction_allowed": true,
+  "required_source_pair_record_count": 60,
+  "required_source_owner_key_direction_preflight_status": "ready",
+  "required_source_summary_record_count": 72,
+  "required_source_trajectory_signal_diagnostic_decision": "embedding_or_replay_signal_not_separated_stop",
+  "required_source_trajectory_signal_profile_id": "sstw_trajectory_signal_localization_diagnostic",
+  "seed_limit": 2,
+  "seed_source_split": "calibration",
+  "stage_id": "controlled_embedding_strength_profile_construction",
+  "stage_progression_allowed": false,
+  "strength_levels": [
+    {
+      "embedding_strength_level_id": "reference_default",
+      "embedding_strength_multiplier": 1.0,
+      "flow_energy_budget_ratio": 0.000015,
+      "lambda_max": 0.12,
+      "velocity_norm_ratio_budget": 0.02
+    },
+    {
+      "embedding_strength_level_id": "moderate_increase",
+      "embedding_strength_multiplier": 2.0,
+      "flow_energy_budget_ratio": 0.000015,
+      "lambda_max": 0.24,
+      "velocity_norm_ratio_budget": 0.02
+    },
+    {
+      "embedding_strength_level_id": "high_increase",
+      "embedding_strength_multiplier": 4.0,
+      "flow_energy_budget_ratio": 0.000015,
+      "lambda_max": 0.48,
+      "velocity_norm_ratio_budget": 0.02
+    }
+  ],
+  "test_split_claims_allowed": false,
+  "time_grid_selection_allowed": false,
+  "width": 512
+}

@@ -2845,3 +2845,37 @@ Notebook 与 repository module 的跨边界数据
 | prompt_suite_prompt_count | metric | none | true | false | false | immutable snapshot 已验证并纳入摘要的 prompt suite 条目数。 |
 | attack_input_status | governance | none | true | false | false | attack inputs 对当前显式阶段为 ready 或 not applicable 的状态。 |
 | likelihood_calibration_input_status | governance | none | true | false | false | replay likelihood calibration 对当前显式阶段为 ready 或 not applicable 的状态。 |
+| embedding_strength_selection_policy | protocol | none | true | false | false | controlled embedding profile 的预声明单因子强度选择策略，禁止按结果自适应选点。 |
+| embedding_strength_level_id | protocol | none | true | false | false | controlled embedding plan 中 reference、moderate、high 或 clean control 的稳定强度标识。 |
+| embedding_strength_multiplier | protocol | none | true | false | false | 相对当前默认 lambda_max 的预声明强度倍数。 |
+| embedding_strength_control_role | protocol | none | true | false | false | 区分强度阶梯候选与同 prompt/seed clean reference。 |
+| maximum_planned_velocity_constraint_delta_ratio | governance | none | true | false | false | controlled embedding profile 对 lambda_max 与 velocity norm budget 乘积的预声明上限。 |
+| generation_execution_allowed | governance | none | true | false | false | construction-only profile 是否获得真实 GPU 生成执行授权；当前必须为 false。 |
+| controlled_embedding_plan_record_id | provenance | none | true | false | false | controlled embedding generation plan 单元的稳定身份摘要。 |
+| controlled_embedding_profile_construction_status | governance | none | true | false | false | controlled embedding profile 构建是否通过 source decision 与配置预检。 |
+| controlled_embedding_profile_construction_decision | governance | none | true | false | false | profile 已构建但生成未授权的受治理 construction 判定。 |
+| controlled_embedding_strength_level_count | metric | none | true | false | false | construction plan 中预声明的非 clean 强度层级数量。 |
+| controlled_embedding_plan_record_count | metric | none | true | false | false | construction plan 中强度候选与 clean 对照的记录总数。 |
+| source_trajectory_signal_diagnostic_decision | provenance | none | true | false | false | controlled embedding construction 消费的 Stage 0-D 判定类别。 |
+| source_trajectory_signal_decision_sha256 | provenance | none | true | false | false | controlled embedding construction 输入的 Stage 0-D decision 原始字节摘要。 |
+| attacked_phase_execution_allowed | governance | none | true | false | false | 当前诊断 profile 是否获准执行 attacked phase。 |
+| stage_progression_allowed | governance | none | true | false | false | 当前诊断或 construction profile 是否允许推进项目语义阶段。 |
+| time_grid_selection_allowed | governance | none | true | false | false | 当前 profile 是否允许根据结果选择 replay 或 generation time grid。 |
+| prompt_limit | protocol | none | true | false | false | 轻量 profile 计划选择的最大 prompt 数量。 |
+| seed_limit | protocol | none | true | false | false | 轻量 profile 计划选择的最大 seed 数量。 |
+| prompt_suite_roles | protocol | none | true | false | false | profile 允许消费的 prompt suite role 集合。 |
+| seed_source_split | protocol | none | true | false | false | controlled embedding construction 允许消费的 seed split。 |
+| num_frames | protocol | none | true | false | false | generation profile 计划使用的视频帧数。 |
+| height | protocol | none | true | false | false | generation profile 计划使用的视频高度。 |
+| width | protocol | none | true | false | false | generation profile 计划使用的视频宽度。 |
+| strength_levels | protocol | none | true | false | false | controlled embedding profile 的预声明强度层级对象集合。 |
+| required_source_controlled_embedding_profile_construction_allowed | governance | none | true | false | false | source Stage 0-D 必须显式允许 profile construction。 |
+| required_source_owner_key_direction_preflight_status | governance | none | true | false | false | source Stage 0-D 必须满足的 owner-key direction preflight 状态。 |
+| required_source_trajectory_signal_diagnostic_decision | governance | none | true | false | false | controlled embedding construction 接受的唯一 Stage 0-D 判定。 |
+| required_source_trajectory_signal_profile_id | protocol | none | true | false | false | controlled embedding construction 接受的 Stage 0-D profile ID。 |
+| required_source_summary_record_count | protocol | none | true | false | false | controlled embedding construction 要求的 source summary record 数。 |
+| required_source_pair_record_count | protocol | none | true | false | false | controlled embedding construction 要求的 source pair record 数。 |
+| input_sha256 | provenance | none | true | false | false | construction manifest 对全部输入文件原始字节摘要的映射。 |
+| immutable_input_snapshot_digest | provenance | none | true | false | false | immutable input snapshot 在移除自身摘要字段后的稳定内容摘要。 |
+| controlled_embedding_profile_builder_source_path | provenance | none | true | false | false | construction manifest 绑定的 controlled embedding profile builder 源文件路径。 |
+| controlled_embedding_profile_builder_source_sha256 | provenance | none | true | false | false | controlled embedding profile builder 实际源码字节摘要。 |

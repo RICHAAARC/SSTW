@@ -329,7 +329,6 @@ def _load_owner_key_preflight_scheduler(
         model_id,
         subfolder="scheduler",
         revision=revision,
-        local_files_only=True,
     )
     holder = type("OwnerKeySchedulerHolder", (), {})()
     holder.scheduler = scheduler

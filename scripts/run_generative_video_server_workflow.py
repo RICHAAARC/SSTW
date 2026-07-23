@@ -24,6 +24,11 @@ from workflows.modern_external_baseline_reference import (
     MODERN_EXTERNAL_BASELINE_BUILD_ORDER,
     run_default_modern_external_baseline_formal_reference_plan,
 )
+from workflows.colab_test_request import (
+    build_colab_test_runtime_preflight_decision,
+    build_colab_test_dry_run_plan,
+    run_colab_test_request,
+)
 from workflows.stage_package_sync import prepare_colab_stage_layout
 from workflows import generative_video_paper as probe_workflow
 from workflows.runtime_environment_preflight import (
@@ -36,6 +41,7 @@ from workflows.runtime_environment_preflight import (
 
 SERVER_PIPELINES = (
     "runtime_environment_preflight",
+    "colab_test",
     "method_mechanism_validation",
     "motion_threshold_calibration",
     "generative_video_generation",
@@ -53,6 +59,8 @@ PACKAGE_EXECUTION_MODE_AUTO = "auto"
 DEVELOPMENT_REPOSITORY_EXECUTION_MODE = "development_repository"
 PAPER_ARTIFACT_REBUILD_PACKAGE_EXECUTION_MODE = "paper_artifact_rebuild_package"
 METHOD_MECHANISM_VALIDATION_PROFILE = "method_mechanism_validation"
+COLAB_TEST_PROFILE = "colab_test"
+COLAB_TEST_PIPELINE = "colab_test"
 
 GENERATIVE_VIDEO_SPLIT_ROLE_ORDER = (
     "generative_video_generation",
@@ -63,6 +71,7 @@ GENERATIVE_VIDEO_SPLIT_ROLE_ORDER = (
 
 PIPELINE_ROLE_ORDER = {
     "runtime_environment_preflight": (),
+    "colab_test": (),
     "method_mechanism_validation": ("method_mechanism_validation",),
     "motion_threshold_calibration": ("motion_threshold_calibration",),
     "generative_video_generation": ("generative_video_generation",),
@@ -177,14 +186,15 @@ def _apply_server_environment(args: argparse.Namespace) -> None:
     os.environ["SSTW_INCLUDE_VIDEOS_IN_PACKAGE"] = _bool_text(args.include_videos)
     os.environ["SSTW_PACKAGE_EXECUTION_MODE"] = args.package_execution_mode
 
-    if args.model_id:
-        os.environ["SSTW_MODEL_ID"] = args.model_id
-    if args.model_revision:
-        os.environ["SSTW_MODEL_REVISION"] = args.model_revision
-    if args.cross_model_id:
-        os.environ["SSTW_CROSS_MODEL_ID"] = args.cross_model_id
-    if args.cross_model_revision:
-        os.environ["SSTW_CROSS_MODEL_REVISION"] = args.cross_model_revision
+    if args.pipeline != COLAB_TEST_PIPELINE:
+        if args.model_id:
+            os.environ["SSTW_MODEL_ID"] = args.model_id
+        if args.model_revision:
+            os.environ["SSTW_MODEL_REVISION"] = args.model_revision
+        if args.cross_model_id:
+            os.environ["SSTW_CROSS_MODEL_ID"] = args.cross_model_id
+        if args.cross_model_revision:
+            os.environ["SSTW_CROSS_MODEL_REVISION"] = args.cross_model_revision
     if args.semantic_model_id:
         os.environ["SSTW_SEMANTIC_MODEL_ID"] = args.semantic_model_id
     if args.semantic_frame_limit is not None:
@@ -394,24 +404,43 @@ def _run_external_baseline_references(args: argparse.Namespace) -> dict[str, Any
 def _run_pipeline(args: argparse.Namespace) -> dict[str, Any]:
     """按 pipeline 顺序运行服务器 workflow。"""
 
-    role_order = PIPELINE_ROLE_ORDER[args.pipeline]
-    rows: list[dict[str, Any]] = []
-    for role in role_order:
+    if args.pipeline == COLAB_TEST_PIPELINE:
         if args.dry_run:
-            if role == "external_baseline_formal_scoring":
-                rows.append({
-                    "notebook_role": role,
-                    "workflow_profile": args.workflow_profile,
-                    "baseline_ids": _baseline_ids_from_args(args),
-                    "stage_execution_kind": "external_baseline_formal_reference_helper",
-                })
-            else:
-                rows.append(_dry_run_role_plan(args, role))
-            continue
-        if role == "external_baseline_formal_scoring":
-            rows.append(_run_external_baseline_references(args))
+            rows = [
+                build_colab_test_dry_run_plan(
+                    args.colab_test_request_path,
+                    project_root=args.project_root,
+                )
+            ]
         else:
-            rows.append(_run_role(args, role))
+            rows = [
+                run_colab_test_request(
+                    args.colab_test_request_path,
+                    project_root=args.project_root,
+                    repo_root=args.repo_root,
+                    local_workspace_root=args.local_workspace_root,
+                    local_package_cache_root=args.local_package_cache_root,
+                )
+            ]
+    else:
+        rows = []
+        role_order = PIPELINE_ROLE_ORDER[args.pipeline]
+        for role in role_order:
+            if args.dry_run:
+                if role == "external_baseline_formal_scoring":
+                    rows.append({
+                        "notebook_role": role,
+                        "workflow_profile": args.workflow_profile,
+                        "baseline_ids": _baseline_ids_from_args(args),
+                        "stage_execution_kind": "external_baseline_formal_reference_helper",
+                    })
+                else:
+                    rows.append(_dry_run_role_plan(args, role))
+                continue
+            if role == "external_baseline_formal_scoring":
+                rows.append(_run_external_baseline_references(args))
+            else:
+                rows.append(_run_role(args, role))
     return {
         "manifest_kind": "generative_video_server_workflow_decision",
         "workflow_profile": args.workflow_profile,
@@ -422,8 +451,14 @@ def _run_pipeline(args: argparse.Namespace) -> dict[str, Any]:
         "dry_run": bool(args.dry_run),
         "include_videos": bool(args.include_videos),
         "runtime_environment_preflight": args.runtime_environment_preflight,
-        "resolved_main_generation_model_revision": args.model_revision or None,
-        "resolved_cross_generation_model_revision": args.cross_model_revision or None,
+        "resolved_main_generation_model_revision": (
+            None if args.pipeline == COLAB_TEST_PIPELINE else args.model_revision or None
+        ),
+        "resolved_cross_generation_model_revision": (
+            None
+            if args.pipeline == COLAB_TEST_PIPELINE
+            else args.cross_model_revision or None
+        ),
         "created_at_utc_filename": current_utc_time_for_filename(),
         "git_short_commit": current_short_commit(),
         "pipeline_results": rows,
@@ -431,6 +466,8 @@ def _run_pipeline(args: argparse.Namespace) -> dict[str, Any]:
         "claim_support_status": (
             "method_mechanism_validation_only_not_paper_evidence"
             if args.pipeline == METHOD_MECHANISM_VALIDATION_PROFILE
+            else "diagnostic_only_not_paper_evidence"
+            if args.pipeline == COLAB_TEST_PIPELINE
             else "server_workflow_runner_not_claim_evidence"
         ),
     }
@@ -463,6 +500,16 @@ def _run_runtime_environment_preflight(args: argparse.Namespace) -> dict[str, An
     return decision
 
 
+def _run_colab_test_runtime_preflight(args: argparse.Namespace) -> dict[str, Any]:
+    """执行非正式 Colab 测试的最小 GPU 与本地路径检查。"""
+
+    return build_colab_test_runtime_preflight_decision(
+        project_root=args.project_root,
+        local_workspace_root=args.local_workspace_root,
+        local_package_cache_root=args.local_package_cache_root,
+    )
+
+
 def _write_decision_if_requested(args: argparse.Namespace, decision: dict[str, Any]) -> Path | None:
     """按需写出服务器 workflow 运行清单。"""
 
@@ -482,10 +529,21 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--workflow-profile",
         default="probe_paper",
-        choices=[METHOD_MECHANISM_VALIDATION_PROFILE, "probe_paper", "pilot_paper", "full_paper"],
+        choices=[
+            COLAB_TEST_PROFILE,
+            METHOD_MECHANISM_VALIDATION_PROFILE,
+            "probe_paper",
+            "pilot_paper",
+            "full_paper",
+        ],
         help="运行层级",
     )
     parser.add_argument("--pipeline", default="paper_protocol_complete", choices=SERVER_PIPELINES, help="要执行的语义 pipeline")
+    parser.add_argument(
+        "--colab-test-request-path",
+        default="",
+        help="colab_test pipeline 的 Drive JSON 请求路径",
+    )
     parser.add_argument("--repo-root", default=".", help="SSTW 仓库根目录")
     parser.add_argument(
         "--package-execution-mode",
@@ -531,8 +589,17 @@ def main(argv: list[str] | None = None) -> int:
     mechanism_profile = args.workflow_profile == METHOD_MECHANISM_VALIDATION_PROFILE
     if mechanism_pipeline != mechanism_profile:
         parser.error(
-            "method_mechanism_validation pipeline and workflow profile must be selected together"
+            "method_mechanism_validation pipeline and workflow profile must be "
+            "selected together"
         )
+    colab_test_pipeline = args.pipeline == COLAB_TEST_PIPELINE
+    colab_test_profile = args.workflow_profile == COLAB_TEST_PROFILE
+    if colab_test_pipeline != colab_test_profile:
+        parser.error(
+            "colab_test pipeline and workflow profile must be selected together"
+        )
+    if args.pipeline == COLAB_TEST_PIPELINE and not args.colab_test_request_path:
+        parser.error("colab_test pipeline requires --colab-test-request-path")
     if mechanism_profile:
         args.cross_model_id = ""
         args.cross_model_revision = ""
@@ -540,17 +607,40 @@ def main(argv: list[str] | None = None) -> int:
     _apply_server_environment(args)
     _reset_local_workspace_if_requested(args)
     args.runtime_environment_preflight = {
+        "runtime_environment_preflight_kind": (
+            "colab_test_lightweight"
+            if args.pipeline == COLAB_TEST_PIPELINE
+            else "paper_runtime_environment_lock"
+        ),
         "runtime_environment_preflight_decision": "NOT_RUN_DRY_RUN",
-        "runtime_environment_lock_path": str(args.runtime_lock_path),
+        "runtime_environment_lock_path": (
+            None
+            if args.pipeline == COLAB_TEST_PIPELINE
+            else str(args.runtime_lock_path)
+        ),
+        "formal_runtime_lock_checked": False,
         "claim_support_status": "dry_run_plan_only_not_claim_evidence",
     }
     try:
         if not args.dry_run:
-            args.runtime_environment_preflight = _run_runtime_environment_preflight(args)
+            if args.pipeline == COLAB_TEST_PIPELINE:
+                args.runtime_environment_preflight = (
+                    _run_colab_test_runtime_preflight(args)
+                )
+            else:
+                args.runtime_environment_preflight = (
+                    _run_runtime_environment_preflight(args)
+                )
             if args.runtime_environment_preflight.get("runtime_environment_preflight_decision") != "PASS":
                 failures = args.runtime_environment_preflight.get("runtime_environment_preflight_failures") or []
+                preflight_label = (
+                    "Colab 测试轻量预检"
+                    if args.pipeline == COLAB_TEST_PIPELINE
+                    else "论文运行环境预检"
+                )
                 raise RuntimeError(
-                    f"论文运行环境预检未通过: {', '.join(str(item) for item in failures)}"
+                    f"{preflight_label}未通过: "
+                    f"{', '.join(str(item) for item in failures)}"
                 )
         decision = _run_pipeline(args)
     except Exception as exc:

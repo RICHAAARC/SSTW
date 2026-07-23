@@ -9,7 +9,71 @@ import sys
 
 import pytest
 
+import scripts.run_generative_video_server_workflow as server_workflow
 from scripts.run_generative_video_server_workflow import PIPELINE_ROLE_ORDER
+
+
+@pytest.mark.quick
+def test_colab_test_non_dry_run_routes_only_to_lightweight_preflight(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """非正式 Colab 测试不得调用论文环境锁预检。"""
+
+    observed: list[str] = []
+
+    def lightweight_preflight(args: object) -> dict[str, object]:
+        observed.append("lightweight")
+        return {
+            "runtime_environment_preflight_kind": "colab_test_lightweight",
+            "runtime_environment_preflight_decision": "PASS",
+            "runtime_environment_preflight_failures": [],
+            "formal_runtime_lock_checked": False,
+        }
+
+    def formal_preflight(args: object) -> dict[str, object]:
+        raise AssertionError("formal runtime preflight must not run")
+
+    monkeypatch.setattr(
+        server_workflow,
+        "_run_colab_test_runtime_preflight",
+        lightweight_preflight,
+    )
+    monkeypatch.setattr(
+        server_workflow,
+        "_run_runtime_environment_preflight",
+        formal_preflight,
+    )
+    monkeypatch.setattr(
+        server_workflow,
+        "_run_pipeline",
+        lambda args: {
+            "server_workflow_decision": "PASS",
+            "pipeline": "colab_test",
+        },
+    )
+
+    exit_code = server_workflow.main([
+        "--project-root",
+        str(tmp_path / "drive" / "SSTW"),
+        "--repo-root",
+        str(Path.cwd()),
+        "--workflow-profile",
+        "colab_test",
+        "--pipeline",
+        "colab_test",
+        "--colab-test-request-path",
+        str(tmp_path / "drive" / "SSTW" / "requests" / "request.json"),
+        "--local-workspace-root",
+        str(tmp_path / "content" / "workspace"),
+        "--local-package-cache-root",
+        str(tmp_path / "content" / "packages"),
+    ])
+
+    assert exit_code == 0
+    assert observed == ["lightweight"]
+    assert json.loads(capsys.readouterr().out)["pipeline"] == "colab_test"
 
 
 @pytest.mark.quick

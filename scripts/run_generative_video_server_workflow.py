@@ -466,7 +466,10 @@ def _run_pipeline(args: argparse.Namespace) -> dict[str, Any]:
         "claim_support_status": (
             "method_mechanism_validation_only_not_paper_evidence"
             if args.pipeline == METHOD_MECHANISM_VALIDATION_PROFILE
-            else "diagnostic_only_not_paper_evidence"
+            else rows[0].get(
+                "claim_support_status",
+                "colab_test_only_not_paper_evidence",
+            )
             if args.pipeline == COLAB_TEST_PIPELINE
             else "server_workflow_runner_not_claim_evidence"
         ),

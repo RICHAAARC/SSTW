@@ -160,6 +160,9 @@ Notebook 固定读取:
 然后只编辑请求文件。Notebook 本身只负责挂载 Drive、按 `repository.ref` checkout、
 安装受锁依赖、认证并调用服务器 CLI；请求不能传入任意命令、Python 模块或脚本路径。
 当前白名单测试为 `trajectory_signal_localization_diagnostic`。
+当 Stage 0-D source 未保留时，同一 Notebook 还可通过白名单
+`trajectory_replay_smoke_source_build` 请求，从已保留且包含视频的
+`method_mechanism_validation` ZIP 在 `/content` 重建 source。
 
 执行期间，source zip 先从 Drive 复制到 `/content/SSTW_colab_test_packages`，再解压到
 `/content/SSTW_colab_test_workspace`。模型推理、中间 records、视频、checkpoint 和诊断
@@ -173,6 +176,16 @@ Notebook 固定读取:
 `datasets/prompt_seed_suite.json`，其余 Stage 0-D 冻结依赖也由诊断 runner fail-closed
 检查。`attacked` 和 `decision` 还必须把上一步输出 zip 写入
 `resume_package_path`；这样只改请求 JSON 即可续跑，不需要改 Notebook。
+
+首次 source build 可从
+`configs/paper_workflow/colab_test_source_build_request_example.json` 复制请求。它只有在
+trajectory replay smoke 完成且 Stage 0-D immutable-input 校验达到 12 条 generation、
+24 条 attack 和 ready likelihood calibration 后，才写入：
+
+```text
+/content/drive/MyDrive/SSTW/inputs/trajectory_signal_localization/stage0d_source.zip
+/content/drive/MyDrive/SSTW/inputs/trajectory_signal_localization/stage0d_source_manifest.json
+```
 
 每次成功结果写入:
 

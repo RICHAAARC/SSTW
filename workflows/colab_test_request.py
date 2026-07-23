@@ -21,8 +21,13 @@ from evaluation.protocol.record_writer import write_json
 
 
 REQUEST_SCHEMA_VERSION = "sstw_colab_test_request_v1"
+TRAJECTORY_REPLAY_SOURCE_BUILD_TEST_ID = "trajectory_replay_smoke_source_build"
 TRAJECTORY_SIGNAL_TEST_ID = "trajectory_signal_localization_diagnostic"
-SUPPORTED_TEST_IDS = (TRAJECTORY_SIGNAL_TEST_ID,)
+SUPPORTED_TEST_IDS = (
+    TRAJECTORY_REPLAY_SOURCE_BUILD_TEST_ID,
+    TRAJECTORY_SIGNAL_TEST_ID,
+)
+TRAJECTORY_REPLAY_SOURCE_BUILD_PHASE = "source_build"
 SUPPORTED_TRAJECTORY_PHASES = (
     "no_attack",
     "attacked",
@@ -130,10 +135,15 @@ def load_colab_test_request(
         "parameters",
     )
     phase = str(parameters.get("phase") or "").strip()
-    if phase not in SUPPORTED_TRAJECTORY_PHASES:
+    supported_phases = (
+        (TRAJECTORY_REPLAY_SOURCE_BUILD_PHASE,)
+        if test_id == TRAJECTORY_REPLAY_SOURCE_BUILD_TEST_ID
+        else SUPPORTED_TRAJECTORY_PHASES
+    )
+    if phase not in supported_phases:
         raise ValueError(
-            f"trajectory diagnostic phase 不受支持: {phase!r}; "
-            f"允许值: {SUPPORTED_TRAJECTORY_PHASES}"
+            f"Colab test phase 不受支持: {phase!r}; "
+            f"允许值: {supported_phases}"
         )
     run_series_id = str(parameters.get("run_series_id") or "").strip()
     if not _SAFE_RUN_SERIES_ID.fullmatch(run_series_id):
@@ -152,6 +162,8 @@ def load_colab_test_request(
         "resume_package_path",
         required=phase in {"attacked", "decision"},
     )
+    if test_id == TRAJECTORY_REPLAY_SOURCE_BUILD_TEST_ID and resume_package:
+        raise ValueError("trajectory replay source build 不接受 resume package")
     return {
         "request_path": str(path),
         "request": payload,
@@ -290,6 +302,45 @@ def _default_trajectory_runner(
     return run_stage0d(source_root, output_root, phase=phase)
 
 
+def _default_trajectory_source_builder(
+    upstream_package: Path,
+    output_root: Path,
+) -> dict[str, Any]:
+    from experiments.generative_video_model_probe.trajectory_replay_smoke import (
+        run_trajectory_replay_smoke,
+    )
+
+    repository_root = Path(__file__).resolve().parents[1]
+    return run_trajectory_replay_smoke(
+        upstream_package,
+        output_root,
+        repository_root / "configs/protocol/sstw_minimal_trajectory_paper.json",
+    )
+
+
+def _default_trajectory_source_validator(
+    source_root: Path,
+    validation_output_root: Path,
+) -> dict[str, Any]:
+    from experiments.generative_video_model_probe.trajectory_signal_localization_diagnostic import (
+        build_immutable_input_snapshot,
+    )
+
+    repository_root = Path(__file__).resolve().parents[1]
+    config = json.loads(
+        (
+            repository_root
+            / "configs/protocol/sstw_trajectory_signal_localization_diagnostic.json"
+        ).read_text(encoding="utf-8-sig")
+    )
+    return build_immutable_input_snapshot(
+        source_root,
+        validation_output_root,
+        config,
+        phase="no_attack",
+    )
+
+
 def _source_generation_model_ids(source_root: Path) -> list[str]:
     """读取模型地址列表；有效性校验仍由测试 handler 负责。"""
 
@@ -317,6 +368,11 @@ def build_colab_test_dry_run_plan(
     """返回已校验的白名单 dry-run 计划，不解压或执行 GPU 工作。"""
 
     resolved = load_colab_test_request(request_path, project_root=project_root)
+    claim_support_status = (
+        "trajectory_replay_source_build_only_not_paper_evidence"
+        if resolved["test_id"] == TRAJECTORY_REPLAY_SOURCE_BUILD_TEST_ID
+        else "diagnostic_only_not_paper_evidence"
+    )
     return {
         "notebook_role": "colab_test",
         "test_id": resolved["test_id"],
@@ -326,7 +382,132 @@ def build_colab_test_dry_run_plan(
         "source_package_path": resolved["source_package_path"],
         "resume_package_path": resolved["resume_package_path"],
         "stage_execution_kind": "allowlisted_colab_test_request",
-        "claim_support_status": "diagnostic_only_not_paper_evidence",
+        "claim_support_status": claim_support_status,
+    }
+
+
+def _run_trajectory_replay_source_build(
+    resolved: Mapping[str, Any],
+    *,
+    project_root: Path,
+    workspace_root: Path,
+    cache_root: Path,
+    repository_commit: str,
+    run_id: str,
+    source_builder: Callable[..., dict[str, Any]],
+    source_validator: Callable[..., dict[str, Any]],
+) -> dict[str, Any]:
+    """在本地重建 Stage 0-D source，通过完整性校验后才发布 Drive。"""
+
+    drive_output_root = (
+        project_root / "inputs" / "trajectory_signal_localization"
+    )
+    drive_package_path = drive_output_root / "stage0d_source.zip"
+    manifest_path = drive_output_root / "stage0d_source_manifest.json"
+    existing_targets = [
+        path for path in (drive_package_path, manifest_path) if path.exists()
+    ]
+    if existing_targets:
+        raise FileExistsError(
+            "Stage 0-D source Drive 目标已存在，拒绝覆盖: "
+            + ", ".join(str(path) for path in existing_targets)
+        )
+
+    upstream_package = Path(str(resolved["source_package_path"]))
+    cached_upstream = cache_root / (
+        f"source_build_upstream_{resolved['run_series_id']}.zip"
+    )
+    cached_upstream.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(upstream_package, cached_upstream)
+
+    output_root = (
+        workspace_root
+        / "runs"
+        / str(resolved["test_id"])
+        / str(resolved["run_series_id"])
+    )
+    if output_root.exists():
+        raise FileExistsError(
+            f"trajectory replay source build 需要新的本地 output root: {output_root}"
+        )
+    source_build_decision = source_builder(cached_upstream, output_root)
+    validation_output_root = (
+        workspace_root
+        / "validation"
+        / str(resolved["run_series_id"])
+    )
+    snapshot = source_validator(output_root, validation_output_root)
+    required_snapshot = {
+        "immutable_input_preflight_status": "ready",
+        "immutable_input_scope": "full_replay_diagnostic_inputs",
+        "generation_record_count": 12,
+        "attack_record_count": 24,
+        "likelihood_calibration_input_status": "ready",
+    }
+    mismatches = [
+        name
+        for name, expected in required_snapshot.items()
+        if snapshot.get(name) != expected
+    ]
+    if mismatches:
+        raise RuntimeError(
+            "trajectory replay source build 输入快照未就绪: "
+            + ", ".join(mismatches)
+        )
+
+    generation_model_ids = _source_generation_model_ids(output_root)
+    local_result_root = cache_root / "results" / run_id
+    local_package_path = local_result_root / "stage0d_source.zip"
+    _write_zip(output_root, local_package_path)
+    manifest = {
+        "manifest_kind": "sstw_colab_test_source_package_manifest",
+        "request_schema_version": REQUEST_SCHEMA_VERSION,
+        "test_id": resolved["test_id"],
+        "phase": resolved["phase"],
+        "run_series_id": resolved["run_series_id"],
+        "run_id": run_id,
+        "created_at_utc": datetime.now(timezone.utc).isoformat(),
+        "repository_url": resolved["repository_url"],
+        "repository_ref": resolved["repository_ref"],
+        "repository_commit": repository_commit,
+        "generation_model_ids": generation_model_ids,
+        "request_path": resolved["request_path"],
+        "source_package_path": str(upstream_package),
+        "resume_package_path": "",
+        "drive_result_zip": str(drive_package_path),
+        "immutable_input_preflight_status": snapshot.get(
+            "immutable_input_preflight_status"
+        ),
+        "immutable_input_scope": snapshot.get("immutable_input_scope"),
+        "generation_record_count": snapshot.get("generation_record_count"),
+        "attack_record_count": snapshot.get("attack_record_count"),
+        "likelihood_calibration_input_status": snapshot.get(
+            "likelihood_calibration_input_status"
+        ),
+        "diagnostic_decision": source_build_decision,
+        "claim_support_status": (
+            "trajectory_replay_source_build_only_not_paper_evidence"
+        ),
+    }
+    local_manifest_path = local_result_root / "stage0d_source_manifest.json"
+    write_json(local_manifest_path, manifest)
+
+    drive_output_root.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(local_package_path, drive_package_path)
+    shutil.copy2(local_manifest_path, manifest_path)
+    return {
+        "notebook_role": "colab_test",
+        "test_id": resolved["test_id"],
+        "phase": resolved["phase"],
+        "run_series_id": resolved["run_series_id"],
+        "run_id": run_id,
+        "colab_test_status": "completed",
+        "drive_result_zip": str(drive_package_path),
+        "drive_result_manifest": str(manifest_path),
+        "diagnostic_decision": source_build_decision,
+        "claim_support_status": (
+            "trajectory_replay_source_build_only_not_paper_evidence"
+        ),
     }
 
 
@@ -338,6 +519,8 @@ def run_colab_test_request(
     local_workspace_root: str | Path,
     local_package_cache_root: str | Path,
     trajectory_runner: Callable[..., dict[str, Any]] | None = None,
+    trajectory_source_builder: Callable[..., dict[str, Any]] | None = None,
+    trajectory_source_validator: Callable[..., dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """执行一个白名单测试，并把唯一结果 zip 与 manifest 回写 Drive。"""
 
@@ -349,6 +532,23 @@ def run_colab_test_request(
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S_%f")
     repository_commit = _repository_commit(repository_root)
     run_id = f"{timestamp}_{repository_commit[:8]}"
+
+    if resolved["test_id"] == TRAJECTORY_REPLAY_SOURCE_BUILD_TEST_ID:
+        return _run_trajectory_replay_source_build(
+            resolved,
+            project_root=root,
+            workspace_root=workspace_root,
+            cache_root=cache_root,
+            repository_commit=repository_commit,
+            run_id=run_id,
+            source_builder=(
+                trajectory_source_builder or _default_trajectory_source_builder
+            ),
+            source_validator=(
+                trajectory_source_validator
+                or _default_trajectory_source_validator
+            ),
+        )
 
     source_package = Path(resolved["source_package_path"])
     cached_source = cache_root / f"source_{resolved['run_series_id']}.zip"

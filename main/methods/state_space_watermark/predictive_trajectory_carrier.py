@@ -27,6 +27,30 @@ PREDICTIVE_TRAJECTORY_MINIMUM_ACTIVE_PHASE_COUNT = 4
 PREDICTIVE_TRAJECTORY_MINIMUM_ACTIVE_CODE_MAGNITUDE = 0.25
 PREDICTIVE_TRAJECTORY_MINIMUM_WEIGHTED_CODE_ENERGY = 0.20
 PREDICTIVE_TRAJECTORY_MAXIMUM_ABSOLUTE_CODE_CORRELATION = 0.75
+PREDICTIVE_TRAJECTORY_BUDGET_GUARD_RELATIVE_TOLERANCE = 1e-5
+
+
+def _predictive_budget_guard_passed(
+    observed: float,
+    budget: float,
+) -> bool:
+    """容纳 GPU 浮点范数归约误差，同时拒绝实质预算超限。"""
+
+    actual = float(observed)
+    limit = float(budget)
+    if (
+        not math.isfinite(actual)
+        or not math.isfinite(limit)
+        or actual < 0.0
+        or limit < 0.0
+    ):
+        return False
+    return actual <= limit or math.isclose(
+        actual,
+        limit,
+        rel_tol=PREDICTIVE_TRAJECTORY_BUDGET_GUARD_RELATIVE_TOLERANCE,
+        abs_tol=1e-10,
+    )
 
 
 @dataclass(frozen=True)
@@ -516,10 +540,24 @@ def apply_predictive_trajectory_constraint(
     constrained = model_output + delta.to(dtype=model_output.dtype)
     actual_delta_norm = float(delta.norm().item())
     energy_increment = delta_sigma**2 * actual_delta_norm**2
-    norm_guard = actual_delta_norm <= joint_norm_budget + 1e-10
-    energy_guard = energy_increment <= remaining_energy + 1e-10
+    norm_guard = _predictive_budget_guard_passed(
+        actual_delta_norm,
+        joint_norm_budget,
+    )
+    energy_guard = _predictive_budget_guard_passed(
+        energy_increment,
+        remaining_energy,
+    )
     if not norm_guard or not energy_guard:
-        raise RuntimeError("predictive trajectory 最终预算 guard 失败")
+        raise RuntimeError(
+            "predictive trajectory 最终预算 guard 失败: "
+            f"delta_norm={actual_delta_norm:.12g}, "
+            f"norm_budget={joint_norm_budget:.12g}, "
+            f"energy_increment={energy_increment:.12g}, "
+            f"remaining_energy={remaining_energy:.12g}, "
+            f"relative_tolerance="
+            f"{PREDICTIVE_TRAJECTORY_BUDGET_GUARD_RELATIVE_TOLERANCE:.12g}"
+        )
     return constrained, {
         **record,
         "velocity_constraint_lambda": round(

@@ -10,6 +10,7 @@ import pytest
 
 import experiments.generative_video_model_probe.formal_flow_evidence_runner as formal_flow_runner
 import experiments.generative_video_model_probe.predictive_trajectory_synchronization_smoke as predictive_smoke_module
+import main.methods.state_space_watermark.predictive_trajectory_carrier as predictive_carrier_module
 import main.methods.state_space_watermark.wan_flow_replay_backend as wan_replay_module
 from experiments.generative_video_model_probe.predictive_trajectory_synchronization_smoke import (
     NONNEGATIVE_VARIANT,
@@ -406,6 +407,29 @@ def test_predictive_constraint_has_no_independent_endpoint_channel():
     assert (
         record["predictive_trajectory_observability_mode"]
         == "bounded_terminal_residual_from_phase_conditioned_carrier"
+    )
+
+
+def test_predictive_budget_guard_accepts_only_float_reduction_roundoff():
+    budget = 1.0
+    next_float32 = float(
+        np.nextafter(
+            np.float32(budget),
+            np.float32(np.inf),
+        )
+    )
+    assert next_float32 > budget + 1e-10
+    assert predictive_carrier_module._predictive_budget_guard_passed(
+        next_float32,
+        budget,
+    )
+    assert not predictive_carrier_module._predictive_budget_guard_passed(
+        budget * 1.00002,
+        budget,
+    )
+    assert not predictive_carrier_module._predictive_budget_guard_passed(
+        float("nan"),
+        budget,
     )
 
 

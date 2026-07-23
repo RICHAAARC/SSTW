@@ -224,9 +224,11 @@ fixed-FPR、external baseline，也不允许阶段推进。该测试仍使用同
 ```
 
 三组均固定 `lambda_max=0.12`、8-step generation 和单一 20-step replay。
-signed 组使用 schedule/key/context 绑定的带符号 AC code，并在真实 schedule 权重下
-中心化为零均值；独立小 DC endpoint 通道与 AC 通道共同占用原总强度和 Flow 能量
-预算。门禁只判断 signed correct-key/wrong-key trajectory、signed 相对非负 control
+signed 组使用 key/context 绑定、跨 grid 同源且在预声明中心 phase 区间发生一次
+符号翻转的 AC code，并在真实 schedule 权重下中心化为零均值；active code magnitude
+和 weighted code energy 另有 fail-closed 非塌缩检查。独立小 DC endpoint 通道与 AC
+通道共同占用原总强度和 Flow 能量预算。门禁只判断 signed correct-key/wrong-key
+trajectory、signed 相对非负 control
 的 path margin、replay reliability 与 endpoint 参考方向性。状态 posterior 仅保留
 `FlowEvidenceObservation` 接口，不在这 4 个身份上拟合；攻击、fixed-FPR、baseline、
 论文 claim 和阶段推进全部保持关闭。Notebook 无需修改。

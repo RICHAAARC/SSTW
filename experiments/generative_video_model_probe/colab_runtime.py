@@ -1275,6 +1275,9 @@ def run_colab_probe(
                     "trajectory_carrier_variant_id": item[
                         "trajectory_carrier_variant_id"
                     ],
+                    "signed_trajectory_carrier_id": item[
+                        "signed_trajectory_carrier_id"
+                    ],
                     "lambda_max": float(item["lambda_max"]),
                     "signed_trajectory_ac_allocation": float(
                         item["signed_trajectory_ac_allocation"]
@@ -1287,6 +1290,18 @@ def run_colab_probe(
                             "signed_trajectory_minimum_ac_direction_retained_cosine"
                         ]
                     ),
+                    "minimum_active_ac_code_magnitude": float(
+                        item["minimum_active_ac_code_magnitude"]
+                    ),
+                    "minimum_weighted_ac_code_energy": float(
+                        item["minimum_weighted_ac_code_energy"]
+                    ),
+                    "transition_phase_minimum": float(
+                        item["transition_phase_minimum"]
+                    ),
+                    "transition_phase_maximum": float(
+                        item["transition_phase_maximum"]
+                    ),
                 }
                 if item.get("signed_trajectory_plan_record_id")
                 else {}
@@ -1294,7 +1309,7 @@ def run_colab_probe(
             "watermark_key_derivation_id": WATERMARK_KEY_DERIVATION_ID,
             "watermark_key_id": authentication_key_id,
             "flow_phase_schedule_id": (
-                "key_context_schedule_bound_centered_binary_ac_with_small_dc"
+                "key_context_central_transition_centered_binary_ac_with_small_dc_v2"
                 if carrier_variant_id == "signed_balanced_ac"
                 else "sin_squared_middle_flow_phase"
             ),

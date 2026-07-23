@@ -29,6 +29,7 @@ from experiments.generative_video_model_probe.formal_flow_evidence_runner import
     _invoke_pipeline_loader,
     _load_pipeline,
     _prompt_text_by_id,
+    _run_attacked_video_replay_for_model,
     _validated_flow_key_context,
     _wrong_owner_generation_key,
     build_flow_state_observation_sequence,
@@ -191,6 +192,10 @@ def validate_minimal_signed_trajectory_config(
         ("ac_allocation", 0.75),
         ("dc_allocation", 0.25),
         ("minimum_ac_direction_retained_cosine", 0.25),
+        ("minimum_active_ac_code_magnitude", 0.25),
+        ("minimum_weighted_ac_code_energy", 0.20),
+        ("transition_phase_minimum", 0.45),
+        ("transition_phase_maximum", 0.55),
         ("minimum_signed_correct_over_wrong_trajectory_fraction", 0.75),
         ("minimum_signed_over_nonnegative_path_margin_fraction", 0.75),
         ("minimum_replay_reliability", 0.05),
@@ -406,11 +411,18 @@ def build_minimal_signed_trajectory_generation_plan(
                         else "flow_scheduler_velocity_constraint"
                     ),
                     "lambda_max": 0.12,
+                    "signed_trajectory_carrier_id": config[
+                        "signed_trajectory_carrier_id"
+                    ],
                     "signed_trajectory_ac_allocation": 0.75,
                     "signed_trajectory_dc_allocation": 0.25,
                     "signed_trajectory_minimum_ac_direction_retained_cosine": (
                         0.25
                     ),
+                    "minimum_active_ac_code_magnitude": 0.25,
+                    "minimum_weighted_ac_code_energy": 0.20,
+                    "transition_phase_minimum": 0.45,
+                    "transition_phase_maximum": 0.55,
                     "prompt_suite_role": source["prompt_suite_role"],
                     "seed_suite_role": source["seed_suite_role"],
                     "formal_method_variant_execution": False,

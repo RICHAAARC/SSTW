@@ -2889,11 +2889,21 @@ Notebook 与 repository module 的跨边界数据
 | signed_trajectory_ac_weighted_mean | metric | none | true | false | false | 二值原码在真实 schedule 权重下被移除的加权均值。 |
 | signed_trajectory_ac_weighted_residual | metric | none | true | false | false | 中心化 AC code 的加权和残差，必须接近零。 |
 | signed_trajectory_ac_zero_mean_verified | governance | none | true | false | false | AC trajectory channel 是否通过真实 schedule 加权零均值校验。 |
-| signed_trajectory_phase_bin | protocol | none | true | false | false | 当前连续规范 Flow phase 所属的固定 phase bin。 |
-| signed_trajectory_phase_offset | protocol | none | true | false | false | key/context 绑定的连续 phase-bin 符号函数循环偏移。 |
-| signed_trajectory_phase_pattern_reversed | protocol | none | true | false | false | key/context 绑定的连续 phase-bin 符号函数是否反向。 |
-| signed_trajectory_phase_pattern_polarity | protocol | none | true | false | false | key/context 绑定的连续 phase-bin 符号函数全局极性。 |
-| signed_trajectory_phase_function_digest | provenance | none | true | false | false | 与离散 generation/replay grid 无关的 key/context 连续 phase-bin 符号函数摘要。 |
+| signed_trajectory_phase_bin | protocol | none | true | false | false | 当前连续规范 Flow phase 所属的固定诊断 bin；v2 符号函数不依赖该离散 bin。 |
+| signed_trajectory_phase_offset | protocol | none | true | false | false | v1 phase-bin 载体历史记录中的 key/context 循环偏移；v2 不再写入。 |
+| signed_trajectory_phase_pattern_reversed | protocol | none | true | false | false | v1 phase-bin 载体历史记录中的反向标志；v2 不再写入。 |
+| signed_trajectory_phase_pattern_polarity | protocol | none | true | false | false | key/context 绑定的连续 phase 符号函数全局极性。 |
+| signed_trajectory_phase_function_digest | provenance | none | true | false | false | 与离散 generation/replay grid 无关的 key/context 连续 phase 符号函数摘要。 |
+| signed_trajectory_transition_phase | protocol | none | true | false | false | v2 key/context 绑定且跨 generation/replay grid 同源的连续中心符号翻转 phase。 |
+| signed_trajectory_transition_phase_minimum | protocol | none | true | false | false | v2 中心符号翻转 phase 的预声明下界 0.45。 |
+| signed_trajectory_transition_phase_maximum | protocol | none | true | false | false | v2 中心符号翻转 phase 的预声明上界 0.55。 |
+| signed_trajectory_minimum_active_code_magnitude | metric | none | true | false | false | 真实 schedule 中全部 active phase 经加权中心化后的最小 AC code 绝对值。 |
+| signed_trajectory_weighted_ac_code_energy | metric | none | true | false | false | 真实 active weights 下中心化 AC code 平方的加权均值。 |
+| signed_trajectory_carrier_noncollapse_verified | governance | none | true | false | false | active code magnitude 与 weighted code energy 是否同时满足预声明非塌缩门槛。 |
+| minimum_active_ac_code_magnitude | protocol | none | true | false | false | signed carrier 构造允许进入运行时的最小 active AC code 绝对值门槛。 |
+| minimum_weighted_ac_code_energy | protocol | none | true | false | false | signed carrier 构造允许进入运行时的最小 weighted AC code energy 门槛。 |
+| transition_phase_minimum | protocol | none | true | false | false | key/context 中心 transition phase 的冻结下界。 |
+| transition_phase_maximum | protocol | none | true | false | false | key/context 中心 transition phase 的冻结上界。 |
 | signed_trajectory_ac_allocation | protocol | none | true | false | false | 原总 lambda 预算中分配给 signed AC trajectory channel 的比例。 |
 | signed_trajectory_dc_allocation | protocol | none | true | false | false | 原总 lambda 预算中分配给独立 DC endpoint channel 的比例。 |
 | signed_trajectory_minimum_ac_direction_retained_cosine | protocol | none | true | false | false | 最终 AC+DC delta 相对实际 AC-only delta 必须保留的最小正方向余弦。 |

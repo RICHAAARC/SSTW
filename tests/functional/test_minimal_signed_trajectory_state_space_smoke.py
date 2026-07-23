@@ -9,6 +9,8 @@ from zipfile import ZipFile
 import numpy as np
 import pytest
 
+import experiments.generative_video_model_probe.formal_flow_evidence_runner as formal_flow_runner
+import experiments.generative_video_model_probe.minimal_signed_trajectory_state_space_smoke as signed_smoke_module
 from evaluation.protocol.record_writer import write_json, write_jsonl
 from experiments.generative_video_model_probe.minimal_signed_trajectory_state_space_smoke import (
     CLEAN_VARIANT,
@@ -25,6 +27,10 @@ from experiments.generative_video_model_probe.colab_runtime import (
     WAN21_PRIMARY_MODEL_ID,
 )
 from main.methods.state_space_watermark.signed_trajectory_carrier import (
+    SIGNED_TRAJECTORY_MINIMUM_ACTIVE_CODE_MAGNITUDE,
+    SIGNED_TRAJECTORY_MINIMUM_WEIGHTED_CODE_ENERGY,
+    SIGNED_TRAJECTORY_TRANSITION_PHASE_MAXIMUM,
+    SIGNED_TRAJECTORY_TRANSITION_PHASE_MINIMUM,
     SignedTrajectoryCarrierConfig,
     apply_signed_trajectory_two_channel_constraint,
     build_signed_trajectory_schedule,
@@ -340,7 +346,7 @@ def test_signed_schedule_is_deterministic_key_bound_and_weighted_zero_mean():
     assert any(value < 0.0 for value in first.codes)
 
 
-def test_generation_and_replay_grids_share_the_same_phase_bin_signs():
+def test_generation_and_replay_grids_share_the_same_continuous_phase_function():
     common = {
         "key_text": "owner-key-a",
         "key_context_digest": "b" * 64,
@@ -362,26 +368,41 @@ def test_generation_and_replay_grids_share_the_same_phase_bin_signs():
                 active_weights=weights,
             )
         )
-    raw_sign_by_bin: dict[int, int] = {}
-    for schedule in schedules:
+    for step_count, schedule in zip(
+        (8, 20, 40),
+        schedules,
+        strict=True,
+    ):
         assert any(code > 0.0 for code in schedule.codes)
         assert any(code < 0.0 for code in schedule.codes)
-        for phase_bin, raw_sign, weight in zip(
-            schedule.phase_bins,
+        assert (
+            SIGNED_TRAJECTORY_TRANSITION_PHASE_MINIMUM
+            <= schedule.transition_phase
+            <= SIGNED_TRAJECTORY_TRANSITION_PHASE_MAXIMUM
+        )
+        for phase, raw_sign, weight in zip(
+            [
+                (step_index + 0.5) / step_count
+                for step_index in range(step_count)
+            ],
             schedule.raw_signs,
             schedule.active_weights,
             strict=True,
         ):
             if weight <= 0.0:
+                assert raw_sign == 0
                 continue
-            if phase_bin in raw_sign_by_bin:
-                assert raw_sign == raw_sign_by_bin[phase_bin]
-            raw_sign_by_bin[phase_bin] = raw_sign
+            expected = schedule.phase_pattern_polarity * (
+                -1 if phase < schedule.transition_phase else 1
+            )
+            assert raw_sign == expected
     assert len({schedule.schedule_digest for schedule in schedules}) == 3
     assert len({schedule.phase_function_digest for schedule in schedules}) == 1
+    assert len({schedule.transition_phase for schedule in schedules}) == 1
+    assert len({schedule.phase_pattern_polarity for schedule in schedules}) == 1
 
 
-def test_wrong_key_changes_continuous_phase_bin_sign_function():
+def test_wrong_key_changes_continuous_transition_phase_function():
     phases = [(index + 0.5) / 40 for index in range(40)]
     weights = [
         1.0 if 0.25 <= phase <= 0.75 else 0.0
@@ -400,6 +421,13 @@ def test_wrong_key_changes_continuous_phase_bin_sign_function():
         active_weights=weights,
     )
     assert owner.phase_function_digest != wrong.phase_function_digest
+    assert (
+        owner.transition_phase,
+        owner.phase_pattern_polarity,
+    ) != (
+        wrong.transition_phase,
+        wrong.phase_pattern_polarity,
+    )
     assert owner.raw_signs != wrong.raw_signs
 
 
@@ -408,11 +436,17 @@ def test_signed_carrier_freezes_original_lambda_budget_partition():
     assert carrier.ac_allocation == 0.75
     assert carrier.dc_allocation == 0.25
     assert carrier.minimum_ac_direction_retained_cosine == 0.25
+    assert carrier.minimum_active_ac_code_magnitude == 0.25
+    assert carrier.minimum_weighted_ac_code_energy == 0.20
     with pytest.raises(ValueError):
         SignedTrajectoryCarrierConfig(ac_allocation=0.8, dc_allocation=0.3)
     with pytest.raises(ValueError):
         SignedTrajectoryCarrierConfig(
             minimum_ac_direction_retained_cosine=0.0
+        )
+    with pytest.raises(ValueError):
+        SignedTrajectoryCarrierConfig(
+            minimum_active_ac_code_magnitude=0.0
         )
 
 
@@ -450,30 +484,9 @@ def test_dc_scale_caps_an_opposing_channel_to_preserve_ac_direction():
 
 
 def test_small_negative_ac_code_is_not_reversed_by_dc_without_torch():
-    phases = [(index + 0.5) / 8 for index in range(8)]
     tubelet = FlowTubeletKeyCodeConfig()
-    weights = [
-        flow_phase_weight(phase, tubelet) / 8.0
-        for phase in phases
-    ]
-    schedule = build_signed_trajectory_schedule(
-        key_text="key5",
-        key_context_digest="a" * 64,
-        flow_phases=phases,
-        active_weights=weights,
-    )
-    active_negative = [
-        (phase, code)
-        for phase, code, weight in zip(
-            phases,
-            schedule.codes,
-            weights,
-            strict=True,
-        )
-        if weight > 0.0 and -0.2 < code < 0.0
-    ]
-    assert active_negative
-    flow_phase, ac_code = active_negative[0]
+    flow_phase = 0.5
+    ac_code = -0.17157287525380996
 
     generator = np.random.default_rng(seed=0)
     model_output = _NumpyTensor(generator.normal(size=(1, 2, 2, 2, 2)))
@@ -542,6 +555,117 @@ def test_small_negative_ac_code_is_not_reversed_by_dc_without_torch():
         record["signed_trajectory_final_joint_ac_direction_cosine"]
         >= 0.25 - 1e-10
     )
+
+
+@pytest.mark.parametrize(
+    "active_weights",
+    [
+        [
+            0.0,
+            0.0,
+            0.0,
+            0.0000304577,
+            0.0766090278,
+            0.1842684726,
+            0.0,
+            0.0,
+        ],
+        [
+            0.0,
+            0.0,
+            0.0,
+            0.00028453,
+            0.52562826,
+            0.87716228,
+            0.0,
+            0.0,
+        ],
+    ],
+)
+def test_real_wan_eight_step_schedule_cannot_collapse_major_active_codes(
+    active_weights: list[float],
+):
+    phases = [
+        0.02622873,
+        0.08483484,
+        0.15818745,
+        0.25268477,
+        0.37908065,
+        0.55699113,
+        0.82654963,
+        0.99553571,
+    ]
+    for key_text, context_digest in (
+        ("key5", "a" * 64),
+        ("owner-key-a", "b" * 64),
+        ("wrong-key-z", "c" * 64),
+        ("fourth-signed-identity", "d" * 64),
+    ):
+        schedule = build_signed_trajectory_schedule(
+            key_text=key_text,
+            key_context_digest=context_digest,
+            flow_phases=phases,
+            active_weights=active_weights,
+        )
+        active_indices = [
+            index
+            for index, weight in enumerate(active_weights)
+            if weight > 0.0
+        ]
+        assert active_indices == [3, 4, 5]
+        active_signs = [
+            schedule.raw_signs[index] for index in active_indices
+        ]
+        assert active_signs[0] == active_signs[1]
+        assert active_signs[2] == -active_signs[1]
+        assert (
+            schedule.minimum_active_code_magnitude
+            >= SIGNED_TRAJECTORY_MINIMUM_ACTIVE_CODE_MAGNITUDE
+        )
+        assert (
+            schedule.weighted_code_energy
+            >= SIGNED_TRAJECTORY_MINIMUM_WEIGHTED_CODE_ENERGY
+        )
+        assert min(
+            abs(schedule.codes[index]) for index in active_indices
+        ) >= 0.25
+        assert abs(
+            sum(
+                weight * code
+                for weight, code in zip(
+                    active_weights,
+                    schedule.codes,
+                    strict=True,
+                )
+            )
+        ) <= 1e-10
+        assert (
+            SIGNED_TRAJECTORY_TRANSITION_PHASE_MINIMUM
+            <= schedule.transition_phase
+            <= SIGNED_TRAJECTORY_TRANSITION_PHASE_MAXIMUM
+        )
+
+
+def test_signed_schedule_fails_closed_when_one_transition_side_loses_energy():
+    with pytest.raises(
+        RuntimeError,
+        match="active AC code magnitude",
+    ):
+        build_signed_trajectory_schedule(
+            key_text="owner-key-a",
+            key_context_digest="e" * 64,
+            flow_phases=[0.30, 0.40, 0.60],
+            active_weights=[0.0001, 0.0001, 1.0],
+        )
+
+
+def test_replay_entry_symbol_is_imported_from_formal_runner_and_callable():
+    assert (
+        signed_smoke_module._run_attacked_video_replay_for_model
+        is formal_flow_runner._run_attacked_video_replay_for_model
+    )
+    with pytest.raises(TypeError):
+        signed_smoke_module._run_attacked_video_replay_for_model()
 
 
 @pytest.mark.parametrize(
@@ -775,6 +899,10 @@ def test_two_channel_constraint_stays_within_joint_flow_energy_budget():
         ("prompt_limit", 3),
         ("phase_bin_count", 16),
         ("minimum_ac_direction_retained_cosine", 0.0),
+        ("minimum_active_ac_code_magnitude", 0.0),
+        ("minimum_weighted_ac_code_energy", 0.0),
+        ("transition_phase_minimum", 0.40),
+        ("transition_phase_maximum", 0.60),
         ("minimum_signed_correct_over_wrong_trajectory_fraction", 0.5),
         ("minimum_signed_over_nonnegative_path_margin_fraction", 0.5),
         ("minimum_replay_reliability", 0.0),
@@ -808,6 +936,24 @@ def test_generation_plan_is_exactly_four_identities_by_three_variants():
         row["trajectory_carrier_variant_id"] for row in plan
     } == {SIGNED_VARIANT, NONNEGATIVE_VARIANT, CLEAN_VARIANT}
     assert {row["lambda_max"] for row in plan} == {0.12}
+    assert {
+        row["signed_trajectory_carrier_id"] for row in plan
+    } == {
+        "key_context_central_transition_centered_binary_ac_v2"
+    }
+    assert {
+        row["minimum_active_ac_code_magnitude"] for row in plan
+    } == {0.25}
+    assert {
+        row["minimum_weighted_ac_code_energy"] for row in plan
+    } == {0.20}
+    assert {
+        (
+            row["transition_phase_minimum"],
+            row["transition_phase_maximum"],
+        )
+        for row in plan
+    } == {(0.45, 0.55)}
     assert all(row["stage_progression_allowed"] is False for row in plan)
     assert all(
         row["attacked_phase_execution_allowed"] is False for row in plan

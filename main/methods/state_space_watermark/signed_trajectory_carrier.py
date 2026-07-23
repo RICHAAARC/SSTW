@@ -19,9 +19,12 @@ from main.methods.state_space_watermark.velocity_field_constraint import (
 
 
 SIGNED_BALANCED_AC_CARRIER_ID = (
-    "key_context_schedule_bound_centered_binary_ac_v1"
+    "key_context_central_transition_centered_binary_ac_v2"
 )
-_PHASE_BIN_BASE_PATTERN = (1, 1, -1, 1, -1, -1, 1, -1)
+SIGNED_TRAJECTORY_TRANSITION_PHASE_MINIMUM = 0.45
+SIGNED_TRAJECTORY_TRANSITION_PHASE_MAXIMUM = 0.55
+SIGNED_TRAJECTORY_MINIMUM_ACTIVE_CODE_MAGNITUDE = 0.25
+SIGNED_TRAJECTORY_MINIMUM_WEIGHTED_CODE_ENERGY = 0.20
 
 
 @dataclass(frozen=True)
@@ -33,6 +36,12 @@ class SignedTrajectoryCarrierConfig:
     dc_allocation: float = 0.25
     phase_bin_count: int = 8
     minimum_ac_direction_retained_cosine: float = 0.25
+    minimum_active_ac_code_magnitude: float = (
+        SIGNED_TRAJECTORY_MINIMUM_ACTIVE_CODE_MAGNITUDE
+    )
+    minimum_weighted_ac_code_energy: float = (
+        SIGNED_TRAJECTORY_MINIMUM_WEIGHTED_CODE_ENERGY
+    )
 
     def __post_init__(self) -> None:
         if self.carrier_id != SIGNED_BALANCED_AC_CARRIER_ID:
@@ -59,6 +68,24 @@ class SignedTrajectoryCarrierConfig:
             raise ValueError(
                 "signed trajectory 最小 AC direction retained cosine 必须冻结为0.25"
             )
+        if not math.isclose(
+            float(self.minimum_active_ac_code_magnitude),
+            SIGNED_TRAJECTORY_MINIMUM_ACTIVE_CODE_MAGNITUDE,
+            rel_tol=0.0,
+            abs_tol=1e-12,
+        ):
+            raise ValueError(
+                "signed trajectory 最小 active AC code magnitude 必须冻结为0.25"
+            )
+        if not math.isclose(
+            float(self.minimum_weighted_ac_code_energy),
+            SIGNED_TRAJECTORY_MINIMUM_WEIGHTED_CODE_ENERGY,
+            rel_tol=0.0,
+            abs_tol=1e-12,
+        ):
+            raise ValueError(
+                "signed trajectory 最小 weighted AC code energy 必须冻结为0.20"
+            )
 
 
 @dataclass(frozen=True)
@@ -69,13 +96,16 @@ class SignedTrajectorySchedule:
     raw_signs: tuple[int, ...]
     active_weights: tuple[float, ...]
     phase_bins: tuple[int, ...]
-    phase_offset: int
-    phase_pattern_reversed: bool
+    transition_phase: float
+    transition_phase_minimum: float
+    transition_phase_maximum: float
     phase_pattern_polarity: int
     phase_function_digest: str
     schedule_digest: str
     weighted_mean: float
     weighted_residual: float
+    minimum_active_code_magnitude: float
+    weighted_code_energy: float
 
     def metadata_for_step(self, step_index: int) -> dict[str, Any]:
         index = int(step_index)
@@ -89,9 +119,15 @@ class SignedTrajectorySchedule:
                 10,
             ),
             "signed_trajectory_phase_bin": int(self.phase_bins[index]),
-            "signed_trajectory_phase_offset": int(self.phase_offset),
-            "signed_trajectory_phase_pattern_reversed": bool(
-                self.phase_pattern_reversed
+            "signed_trajectory_transition_phase": round(
+                float(self.transition_phase),
+                12,
+            ),
+            "signed_trajectory_transition_phase_minimum": float(
+                self.transition_phase_minimum
+            ),
+            "signed_trajectory_transition_phase_maximum": float(
+                self.transition_phase_maximum
             ),
             "signed_trajectory_phase_pattern_polarity": int(
                 self.phase_pattern_polarity
@@ -110,6 +146,22 @@ class SignedTrajectorySchedule:
             "signed_trajectory_ac_zero_mean_verified": (
                 abs(float(self.weighted_residual)) <= 1e-10
             ),
+            "signed_trajectory_minimum_active_code_magnitude": round(
+                float(self.minimum_active_code_magnitude),
+                10,
+            ),
+            "signed_trajectory_weighted_ac_code_energy": round(
+                float(self.weighted_code_energy),
+                10,
+            ),
+            "signed_trajectory_carrier_noncollapse_verified": bool(
+                float(self.minimum_active_code_magnitude)
+                + 1e-12
+                >= SIGNED_TRAJECTORY_MINIMUM_ACTIVE_CODE_MAGNITUDE
+                and float(self.weighted_code_energy)
+                + 1e-12
+                >= SIGNED_TRAJECTORY_MINIMUM_WEIGHTED_CODE_ENERGY
+            ),
         }
 
 
@@ -123,10 +175,11 @@ def build_signed_trajectory_schedule(
 ) -> SignedTrajectorySchedule:
     """把密钥二值原码中心化为真实 schedule 权重下严格零均值的 AC code。
 
-    二值原码由连续规范 Flow phase 的8个固定 bin 与 key/context phase offset
-    决定，不依赖离散 schedule 的 step index。因此 8-step generation 与
-    20-step replay 会在同一 phase bin 重建同一符号。每个真实 schedule 再减去
-    自身加权均值并统一缩放，不改变正负符号，同时使
+    二值原码在预声明中心区间 ``[0.45, 0.55]`` 内由 key/context 确定唯一
+    transition phase 和全局极性，不依赖离散 schedule 的 step index。因此
+    8-step generation 与20-step replay 重建同一连续符号函数，同时保证真实
+    Wan 中段主要权重跨越一次符号翻转。每个真实 schedule 再减去自身加权均值
+    并统一缩放，不改变正负符号，同时使
     ``sum(weight_t * code_t) == 0``。这避免 AC 轨迹码退化为 endpoint 累积
     能量；独立 DC 通道由运行时另行分配。
     """
@@ -153,24 +206,25 @@ def build_signed_trajectory_schedule(
         "flow_phases": [format(value, ".17g") for value in phases],
         "active_weights": [format(value, ".17g") for value in weights],
     }
-    public_schedule_digest = sha256(
-        json.dumps(
-            schedule_payload,
-            sort_keys=True,
-            separators=(",", ":"),
-        ).encode("utf-8")
-    ).hexdigest()
     phase_key_digest = sha256(
         (
             f"{SIGNED_BALANCED_AC_CARRIER_ID}::phase_function::"
             f"{key_text}::{key_context_digest}"
         ).encode("utf-8")
     ).digest()
-    phase_offset = int.from_bytes(phase_key_digest[:8], "big") % int(
-        phase_bin_count
+    transition_fraction = int.from_bytes(
+        phase_key_digest[:8],
+        "big",
+    ) / float(2**64 - 1)
+    transition_phase = (
+        SIGNED_TRAJECTORY_TRANSITION_PHASE_MINIMUM
+        + transition_fraction
+        * (
+            SIGNED_TRAJECTORY_TRANSITION_PHASE_MAXIMUM
+            - SIGNED_TRAJECTORY_TRANSITION_PHASE_MINIMUM
+        )
     )
-    phase_pattern_reversed = bool(phase_key_digest[8] & 1)
-    phase_pattern_polarity = 1 if phase_key_digest[9] & 1 else -1
+    phase_pattern_polarity = 1 if phase_key_digest[8] & 1 else -1
     phase_bins = [
         min(
             int(phase_bin_count) - 1,
@@ -180,26 +234,25 @@ def build_signed_trajectory_schedule(
     ]
     raw_signs = [0 for _ in phases]
     for index in active_indices:
-        pattern_index = (
-            phase_offset - phase_bins[index]
-            if phase_pattern_reversed
-            else phase_bins[index] + phase_offset
-        ) % int(phase_bin_count)
         raw_signs[index] = (
             phase_pattern_polarity
-            * int(_PHASE_BIN_BASE_PATTERN[pattern_index])
+            * (-1 if phases[index] < transition_phase else 1)
         )
     if len({raw_signs[index] for index in active_indices}) != 2:
         raise ValueError(
-            "signed trajectory active schedule 未跨越正负 phase bin"
+            "signed trajectory active schedule 未跨越中心 transition phase"
         )
     phase_function_payload = {
         "carrier_id": SIGNED_BALANCED_AC_CARRIER_ID,
         "key_context_digest": key_context_digest,
         "key_binding_digest": sha256(key_text.encode("utf-8")).hexdigest(),
-        "phase_bin_count": int(phase_bin_count),
-        "phase_offset": phase_offset,
-        "phase_pattern_reversed": phase_pattern_reversed,
+        "transition_phase": format(transition_phase, ".17g"),
+        "transition_phase_minimum": (
+            SIGNED_TRAJECTORY_TRANSITION_PHASE_MINIMUM
+        ),
+        "transition_phase_maximum": (
+            SIGNED_TRAJECTORY_TRANSITION_PHASE_MAXIMUM
+        ),
         "phase_pattern_polarity": phase_pattern_polarity,
     }
     phase_function_digest = sha256(
@@ -231,17 +284,40 @@ def build_signed_trajectory_schedule(
         value < 0.0 for value in codes
     ):
         raise RuntimeError("signed trajectory AC code 必须同时包含正负 phase")
+    minimum_active_code_magnitude = min(
+        abs(codes[index]) for index in active_indices
+    )
+    weighted_code_energy = sum(
+        weight * code * code
+        for weight, code in zip(weights, codes, strict=True)
+    ) / total_weight
+    if (
+        minimum_active_code_magnitude + 1e-12
+        < SIGNED_TRAJECTORY_MINIMUM_ACTIVE_CODE_MAGNITUDE
+    ):
+        raise RuntimeError(
+            "signed trajectory active AC code magnitude 退化"
+        )
+    if (
+        weighted_code_energy + 1e-12
+        < SIGNED_TRAJECTORY_MINIMUM_WEIGHTED_CODE_ENERGY
+    ):
+        raise RuntimeError("signed trajectory weighted AC code energy 退化")
 
     binding_payload = {
         **schedule_payload,
         "key_binding_digest": sha256(key_text.encode("utf-8")).hexdigest(),
         "raw_signs": raw_signs,
         "phase_bins": phase_bins,
-        "phase_offset": phase_offset,
-        "phase_pattern_reversed": phase_pattern_reversed,
+        "transition_phase": format(transition_phase, ".17g"),
         "phase_pattern_polarity": phase_pattern_polarity,
         "phase_function_digest": phase_function_digest,
         "codes": [format(value, ".17g") for value in codes],
+        "minimum_active_code_magnitude": format(
+            minimum_active_code_magnitude,
+            ".17g",
+        ),
+        "weighted_code_energy": format(weighted_code_energy, ".17g"),
     }
     binding_digest = sha256(
         json.dumps(
@@ -255,13 +331,20 @@ def build_signed_trajectory_schedule(
         raw_signs=tuple(raw_signs),
         active_weights=weights,
         phase_bins=tuple(phase_bins),
-        phase_offset=phase_offset,
-        phase_pattern_reversed=phase_pattern_reversed,
+        transition_phase=transition_phase,
+        transition_phase_minimum=(
+            SIGNED_TRAJECTORY_TRANSITION_PHASE_MINIMUM
+        ),
+        transition_phase_maximum=(
+            SIGNED_TRAJECTORY_TRANSITION_PHASE_MAXIMUM
+        ),
         phase_pattern_polarity=phase_pattern_polarity,
         phase_function_digest=phase_function_digest,
         schedule_digest=binding_digest,
         weighted_mean=weighted_mean,
         weighted_residual=residual,
+        minimum_active_code_magnitude=minimum_active_code_magnitude,
+        weighted_code_energy=weighted_code_energy,
     )
 
 

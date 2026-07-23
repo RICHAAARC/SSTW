@@ -26,9 +26,13 @@ SERVER_WORKFLOW_DECISION_MANIFEST_KIND = (
 )
 TRAJECTORY_REPLAY_SOURCE_BUILD_TEST_ID = "trajectory_replay_smoke_source_build"
 TRAJECTORY_SIGNAL_TEST_ID = "trajectory_signal_localization_diagnostic"
+CONTROLLED_EMBEDDING_STRENGTH_TEST_ID = (
+    "controlled_embedding_strength_diagnostic"
+)
 SUPPORTED_TEST_IDS = (
     TRAJECTORY_REPLAY_SOURCE_BUILD_TEST_ID,
     TRAJECTORY_SIGNAL_TEST_ID,
+    CONTROLLED_EMBEDDING_STRENGTH_TEST_ID,
 )
 TRAJECTORY_REPLAY_SOURCE_BUILD_PHASE = "source_build"
 SUPPORTED_TRAJECTORY_PHASES = (
@@ -36,6 +40,7 @@ SUPPORTED_TRAJECTORY_PHASES = (
     "attacked",
     "decision",
 )
+SUPPORTED_CONTROLLED_EMBEDDING_PHASES = ("no_attack",)
 EXPECTED_REPOSITORY_URL = "https://github.com/RICHAAARC/SSTW.git"
 _SAFE_REPOSITORY_REF = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._/-]*$")
 _SAFE_RUN_SERIES_ID = re.compile(r"^[a-z0-9][a-z0-9_-]{2,63}$")
@@ -138,11 +143,12 @@ def load_colab_test_request(
         "parameters",
     )
     phase = str(parameters.get("phase") or "").strip()
-    supported_phases = (
-        (TRAJECTORY_REPLAY_SOURCE_BUILD_PHASE,)
-        if test_id == TRAJECTORY_REPLAY_SOURCE_BUILD_TEST_ID
-        else SUPPORTED_TRAJECTORY_PHASES
-    )
+    if test_id == TRAJECTORY_REPLAY_SOURCE_BUILD_TEST_ID:
+        supported_phases = (TRAJECTORY_REPLAY_SOURCE_BUILD_PHASE,)
+    elif test_id == CONTROLLED_EMBEDDING_STRENGTH_TEST_ID:
+        supported_phases = SUPPORTED_CONTROLLED_EMBEDDING_PHASES
+    else:
+        supported_phases = SUPPORTED_TRAJECTORY_PHASES
     if phase not in supported_phases:
         raise ValueError(
             f"Colab test phase 不受支持: {phase!r}; "
@@ -167,6 +173,10 @@ def load_colab_test_request(
     )
     if test_id == TRAJECTORY_REPLAY_SOURCE_BUILD_TEST_ID and resume_package:
         raise ValueError("trajectory replay source build 不接受 resume package")
+    if test_id == CONTROLLED_EMBEDDING_STRENGTH_TEST_ID and resume_package:
+        raise ValueError(
+            "controlled embedding strength diagnostic 不接受 resume package"
+        )
     return {
         "request_path": str(path),
         "request": payload,
@@ -528,6 +538,20 @@ def _default_trajectory_source_validator(
     )
 
 
+def _default_controlled_embedding_runner(
+    source_root: Path,
+    output_root: Path,
+) -> dict[str, Any]:
+    from experiments.generative_video_model_probe.controlled_embedding_strength_diagnostic import (
+        run_controlled_embedding_strength_diagnostic,
+    )
+
+    return run_controlled_embedding_strength_diagnostic(
+        source_root,
+        output_root,
+    )
+
+
 def _source_generation_model_ids(source_root: Path) -> list[str]:
     """读取模型地址列表；有效性校验仍由测试 handler 负责。"""
 
@@ -543,6 +567,32 @@ def _source_generation_model_ids(source_root: Path) -> list[str]:
             for row in rows
             if row.get("generation_status") == "success"
             and str(row.get("generation_model_id") or "").strip()
+        }
+    )
+
+
+def _controlled_embedding_generation_model_ids(
+    source_root: Path,
+) -> list[str]:
+    candidates = list(
+        source_root.rglob("records/controlled_embedding_generation_plan.jsonl")
+    )
+    if len(candidates) != 1:
+        raise RuntimeError(
+            "controlled embedding input 必须唯一包含 construction plan"
+        )
+    rows = [
+        json.loads(line)
+        for line in candidates[0].read_text(
+            encoding="utf-8-sig"
+        ).splitlines()
+        if line.strip()
+    ]
+    return sorted(
+        {
+            str(row.get("generation_model_id") or "").strip()
+            for row in rows
+            if str(row.get("generation_model_id") or "").strip()
         }
     )
 
@@ -708,6 +758,7 @@ def run_colab_test_request(
     trajectory_runner: Callable[..., dict[str, Any]] | None = None,
     trajectory_source_builder: Callable[..., dict[str, Any]] | None = None,
     trajectory_source_validator: Callable[..., dict[str, Any]] | None = None,
+    controlled_embedding_runner: Callable[..., dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """执行一个白名单测试，并把唯一结果 zip 与 manifest 回写 Drive。"""
 
@@ -745,8 +796,14 @@ def run_colab_test_request(
     source_extract_root = workspace_root / "inputs" / resolved["run_series_id"]
     if not source_extract_root.exists():
         _safe_extract_zip(cached_source, source_extract_root)
-    source_root = _discover_stage0d_source_root(source_extract_root)
-    generation_model_ids = _source_generation_model_ids(source_root)
+    if resolved["test_id"] == CONTROLLED_EMBEDDING_STRENGTH_TEST_ID:
+        source_root = source_extract_root
+        generation_model_ids = _controlled_embedding_generation_model_ids(
+            source_root
+        )
+    else:
+        source_root = _discover_stage0d_source_root(source_extract_root)
+        generation_model_ids = _source_generation_model_ids(source_root)
 
     output_root = (
         workspace_root
@@ -765,12 +822,19 @@ def run_colab_test_request(
     else:
         output_root.mkdir(parents=True, exist_ok=False)
 
-    runner = trajectory_runner or _default_trajectory_runner
-    diagnostic_decision = runner(
-        source_root,
-        output_root,
-        phase=resolved["phase"],
-    )
+    if resolved["test_id"] == CONTROLLED_EMBEDDING_STRENGTH_TEST_ID:
+        runner = (
+            controlled_embedding_runner
+            or _default_controlled_embedding_runner
+        )
+        diagnostic_decision = runner(source_root, output_root)
+    else:
+        runner = trajectory_runner or _default_trajectory_runner
+        diagnostic_decision = runner(
+            source_root,
+            output_root,
+            phase=resolved["phase"],
+        )
     drive_output_root = (
         root / "diagnostic_tests" / resolved["test_id"] / run_id
     )

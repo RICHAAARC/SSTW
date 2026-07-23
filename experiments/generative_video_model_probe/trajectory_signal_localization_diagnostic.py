@@ -862,6 +862,18 @@ def execute_condition(
                             )
                         ),
                         "claim_support_status": config["claim_support_status"],
+                        **{
+                            name: source_row[name]
+                            for name in (
+                                "controlled_embedding_plan_record_id",
+                                "embedding_strength_level_id",
+                                "embedding_strength_multiplier",
+                                "lambda_max",
+                                "velocity_norm_ratio_budget",
+                                "flow_energy_budget_ratio",
+                            )
+                            if name in source_row
+                        },
                     }
                     summary = {
                         **summary_base,

@@ -1,0 +1,45 @@
+{
+  "attacked_phase_execution_allowed": false,
+  "claim_support_status": "controlled_embedding_strength_diagnostic_only_not_paper_evidence",
+  "cross_project_integration_allowed": false,
+  "execution_scope": "predeclared_16_record_no_attack_single_factor_lambda_max_diagnostic",
+  "external_baseline_execution_allowed": false,
+  "fixed_fpr_evaluation_allowed": false,
+  "generation_aligned_replay_step_count": 8,
+  "large_scale_generation_allowed": false,
+  "minimum_correct_over_wrong_fraction": 0.75,
+  "minimum_path_margin_gain_over_clean_fraction": 0.5,
+  "minimum_replay_reliability": 0.05,
+  "no_attack_video_condition_id": "no_attack_controlled_embedding_strength",
+  "paper_result_level": "controlled_embedding_strength_diagnostic",
+  "primary_replay_step_count": 20,
+  "profile_id": "sstw_controlled_embedding_strength_diagnostic",
+  "required_decision_replay_step_counts": [
+    20,
+    40
+  ],
+  "replay_grid_step_counts": [
+    8,
+    20,
+    40
+  ],
+  "required_construction_decision": "profile_constructed_generation_not_authorized",
+  "required_construction_plan_record_count": 16,
+  "required_construction_profile_id": "sstw_controlled_embedding_strength_profile",
+  "required_embedding_strength_level_ids": [
+    "reference_default",
+    "moderate_increase",
+    "high_increase",
+    "clean_unwatermarked_control"
+  ],
+  "required_generation_model_id": "Wan-AI/Wan2.1-T2V-1.3B-Diffusers",
+  "required_source_method_variants": [
+    "sstw_full_method",
+    "sstw_clean_unwatermarked_reference"
+  ],
+  "stage_id": "controlled_embedding_strength_no_attack_diagnostic",
+  "stage_progression_allowed": false,
+  "test_split_claims_allowed": false,
+  "time_grid_selection_allowed": false,
+  "trajectory_signal_fine_replay_step_count": 40
+}

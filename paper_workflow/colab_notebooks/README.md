@@ -159,7 +159,9 @@ Notebook 固定读取:
 `configs/paper_workflow/colab_test_request_example.json` 复制到该 Drive 路径，
 然后只编辑请求文件。Notebook 本身只负责挂载 Drive、按 `repository.ref` checkout、
 检查轻量兼容依赖、认证并调用服务器 CLI；请求不能传入任意命令、Python 模块或脚本路径。
-当前白名单测试为 `trajectory_signal_localization_diagnostic`。
+当前白名单测试包括 `trajectory_signal_localization_diagnostic`、
+`controlled_embedding_strength_diagnostic` 与仅用于重建输入的
+`trajectory_replay_smoke_source_build`。
 当 Stage 0-D source 未保留时，同一 Notebook 还可通过白名单
 `trajectory_replay_smoke_source_build` 请求，从已保留且包含视频的
 `method_mechanism_validation` ZIP 在 `/content` 重建 source。
@@ -185,6 +187,29 @@ fail-closed。实际检测版本只作为本次兼容性记录，不构成版本
 `datasets/prompt_seed_suite.json`，其余 Stage 0-D 冻结依赖也由诊断 runner fail-closed
 检查。`attacked` 和 `decision` 还必须把上一步输出 zip 写入
 `resume_package_path`；这样只改请求 JSON 即可续跑，不需要改 Notebook。
+
+受控 embedding 强度诊断使用
+`configs/paper_workflow/colab_test_controlled_embedding_strength_request_example.json`。
+它只接受 `phase=no_attack`，不接受 resume package。输入 ZIP 必须唯一包含：
+
+```text
+construction/artifacts/controlled_embedding_profile_construction_decision.json
+construction/artifacts/controlled_embedding_profile_construction_manifest.json
+construction/records/controlled_embedding_generation_plan.jsonl
+source/artifacts/trajectory_signal_diagnostic_decision.json
+source/artifacts/trajectory_signal_immutable_input_snapshot.json
+source/artifacts/trajectory_signal_diagnostic_manifest.json
+source/datasets/prompt_seed_suite.json
+source/records/trajectory_replay_smoke_likelihood_calibrations.jsonl
+```
+
+handler 会重新构建并核对 16 条 construction plan，另行写出仅限本次
+`2 prompts × 2 seeds × (lambda_max 0.12/0.24/0.48 + clean)` no-attack
+诊断的 execution decision。construction artifact 自身仍保持
+`generation_execution_allowed=false`。输出同时比较 trajectory、path、likelihood
+与 endpoint 的 correct/wrong 分离及 strength-over-clean 增益；不运行 attacked、
+fixed-FPR、external baseline，也不允许阶段推进。该测试仍使用同一固定 Notebook，
+只需替换 Drive request JSON 和 input ZIP。
 
 首次 source build 可从
 `configs/paper_workflow/colab_test_source_build_request_example.json` 复制请求。它只有在

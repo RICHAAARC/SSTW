@@ -303,3 +303,54 @@ def test_construction_rejects_prompt_suite_outside_immutable_snapshot(
             tmp_path / "output",
             CONFIG_PATH,
         )
+
+
+@pytest.mark.quick
+def test_construction_accepts_digest_bound_bundle_relocated_from_colab(
+    tmp_path: Path,
+) -> None:
+    source, snapshot_path, source_manifest, prompt_suite = _write_source_bundle(
+        tmp_path
+    )
+    snapshot = json.loads(snapshot_path.read_text(encoding="utf-8"))
+    prompt_digest = sha256(prompt_suite.read_bytes()).hexdigest()
+    snapshot["governed_input_sha256"] = {
+        (
+            "/content/SSTW_colab_test_workspace/inputs/stage0d_colab_001/"
+            "datasets/prompt_seed_suite.json"
+        ): prompt_digest
+    }
+    snapshot_payload = dict(snapshot)
+    snapshot_payload.pop("immutable_input_snapshot_digest", None)
+    snapshot["immutable_input_snapshot_digest"] = _stable_digest(snapshot_payload)
+    _write_json(snapshot_path, snapshot)
+
+    manifest = json.loads(source_manifest.read_text(encoding="utf-8"))
+    manifest["immutable_input_snapshot_digest"] = snapshot[
+        "immutable_input_snapshot_digest"
+    ]
+    manifest["output_sha256"] = {
+        (
+            "/content/SSTW_colab_test_workspace/runs/"
+            "trajectory_signal_localization_diagnostic/stage0d_colab_001/"
+            "artifacts/trajectory_signal_diagnostic_decision.json"
+        ): sha256(source.read_bytes()).hexdigest(),
+        (
+            "/content/SSTW_colab_test_workspace/runs/"
+            "trajectory_signal_localization_diagnostic/stage0d_colab_001/"
+            "artifacts/trajectory_signal_immutable_input_snapshot.json"
+        ): sha256(snapshot_path.read_bytes()).hexdigest(),
+    }
+    _write_json(source_manifest, manifest)
+
+    decision = construct_controlled_embedding_strength_profile(
+        source,
+        snapshot_path,
+        source_manifest,
+        prompt_suite,
+        tmp_path / "relocated_output",
+        CONFIG_PATH,
+    )
+
+    assert decision["controlled_embedding_profile_construction_status"] == "ready"
+    assert decision["controlled_embedding_plan_record_count"] == 16

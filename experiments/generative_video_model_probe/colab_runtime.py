@@ -22,6 +22,9 @@ from main.methods.state_space_watermark.authenticated_trajectory_sketch import (
     sign_authenticated_trajectory_sketch,
 )
 from main.methods.state_space_watermark.flow_velocity_runtime import FlowVelocityConstraintRuntime
+from main.methods.state_space_watermark.velocity_field_constraint import (
+    VelocityFieldConstraintConfig,
+)
 from main.methods.state_space_watermark.flow_tubelet_key_code import (
     FlowTubeletKeyContext,
 )
@@ -81,6 +84,9 @@ _HUGGINGFACE_COMMIT_PATTERN = re.compile(r"^[0-9a-fA-F]{40,64}$")
 
 PAPER_RESULT_PROFILES = {"probe_paper", "pilot_paper", "full_paper"}
 METHOD_MECHANISM_VALIDATION_PROFILE = "method_mechanism_validation"
+CONTROLLED_EMBEDDING_STRENGTH_DIAGNOSTIC_PROFILE = (
+    "controlled_embedding_strength_diagnostic"
+)
 METHOD_MECHANISM_VALIDATION_VARIANTS = (
     "sstw_full_method",
     "without_velocity_constraint",
@@ -129,6 +135,17 @@ PROFILE_SETTINGS = {
         "seed_suite_roles": ["full_paper"],
     },
     "method_mechanism_validation": {
+        "prompt_limit": 2,
+        "seed_limit": 2,
+        "num_inference_steps": 8,
+        "num_frames": 33,
+        "height": 320,
+        "width": 512,
+        "run_cross_model": False,
+        "prompt_suite_roles": ["probe_paper"],
+        "seed_suite_roles": ["probe_paper"],
+    },
+    CONTROLLED_EMBEDDING_STRENGTH_DIAGNOSTIC_PROFILE: {
         "prompt_limit": 2,
         "seed_limit": 2,
         "num_inference_steps": 8,
@@ -803,7 +820,11 @@ def _should_fail_fast_after_generation(profile: str, generation_status: str) -> 
     """最小机制验证失败后不重复执行其余同环境生成项。"""
 
     return (
-        profile == METHOD_MECHANISM_VALIDATION_PROFILE
+        profile
+        in {
+            METHOD_MECHANISM_VALIDATION_PROFILE,
+            CONTROLLED_EMBEDDING_STRENGTH_DIAGNOSTIC_PROFILE,
+        }
         and generation_status != "success"
     )
 
@@ -817,6 +838,12 @@ def run_colab_probe(
     *,
     model_revision: str | None = None,
     cross_model_revision: str | None = None,
+    generation_plan_override: list[Mapping[str, Any]] | None = None,
+    velocity_config_by_plan_record_id: Mapping[
+        str, VelocityFieldConstraintConfig
+    ]
+    | None = None,
+    pipeline_cache: dict[str, Any] | None = None,
 ) -> dict:
     """执行真实 Colab GPU 生成测试并写出 governed records。"""
     import torch
@@ -853,15 +880,41 @@ def run_colab_probe(
         model_id: model_revision,
         **({cross_model_id: cross_model_revision} if cross_model_id else {}),
     }
-    main_plan = _build_generation_plan(prompt_suite, profile, model_id, cross_model_id)
+    main_plan = (
+        [dict(item) for item in generation_plan_override]
+        if generation_plan_override is not None
+        else _build_generation_plan(prompt_suite, profile, model_id, cross_model_id)
+    )
     plan = main_plan + _build_internal_ablation_generation_plan(main_plan, profile)
+    if generation_plan_override is not None:
+        if profile != CONTROLLED_EMBEDDING_STRENGTH_DIAGNOSTIC_PROFILE:
+            raise ValueError(
+                "generation_plan_override 只允许 controlled embedding diagnostic"
+            )
+        plan_ids = [
+            str(item.get("controlled_embedding_plan_record_id") or "")
+            for item in plan
+        ]
+        if len(plan) != 16 or any(not value for value in plan_ids):
+            raise ValueError(
+                "controlled embedding generation override 必须包含16条带 plan ID 的记录"
+            )
+        if len(set(plan_ids)) != len(plan_ids):
+            raise ValueError("controlled embedding generation plan ID 必须唯一")
+        configured_ids = set(velocity_config_by_plan_record_id or {})
+        if configured_ids != set(plan_ids):
+            raise ValueError(
+                "controlled embedding velocity config 必须精确覆盖全部 plan ID"
+            )
     progress = ProgressReporter("flow_model_runtime_generation", len(plan), "video")
 
     generation_records: list[dict] = []
     trajectory_records: list[dict] = []
     trajectory_sketch_records: list[dict] = []
     quality_records: list[dict] = []
-    active_pipe_by_model: dict[str, Any] = {}
+    active_pipe_by_model: dict[str, Any] = (
+        pipeline_cache if pipeline_cache is not None else {}
+    )
 
     for index, item in enumerate(plan):
         progress.update(
@@ -906,7 +959,14 @@ def run_colab_probe(
                 sort_keys=True,
             ).encode("utf-8")
         ).hexdigest()
-        trace_id = f"trace_{index:04d}_{item['sample_role']}_{item['method_variant']}"
+        strength_level_id = str(
+            item.get("embedding_strength_level_id") or ""
+        )
+        strength_suffix = f"_{strength_level_id}" if strength_level_id else ""
+        trace_id = (
+            f"trace_{index:04d}_{item['sample_role']}_"
+            f"{item['method_variant']}{strength_suffix}"
+        )
         prompt_digest = sha256(item["prompt_text"].encode("utf-8")).hexdigest()
         sampler_signature = _scheduler_signature(pipe.scheduler)
         key_context = FlowTubeletKeyContext(
@@ -922,7 +982,7 @@ def run_colab_probe(
 
         video_path = output_root / "videos" / (
             f"{item['generation_model_id'].replace('/', '_')}_{item['prompt_id']}_{item['seed_id']}_"
-            f"{item['sample_role']}_{item['method_variant']}.mp4"
+            f"{item['sample_role']}_{item['method_variant']}{strength_suffix}.mp4"
         )
         started = time.time()
         try:
@@ -939,6 +999,13 @@ def run_colab_probe(
                 total_steps=int(settings["num_inference_steps"]),
                 mechanism_config=velocity_runtime_mechanism_for_method_variant(
                     str(item["method_variant"])
+                ),
+                velocity_config=(
+                    velocity_config_by_plan_record_id[
+                        str(item["controlled_embedding_plan_record_id"])
+                    ]
+                    if velocity_config_by_plan_record_id is not None
+                    else VelocityFieldConstraintConfig()
                 ),
                 latent_layout=latent_layout,
                 key_context=key_context,
@@ -957,6 +1024,19 @@ def run_colab_probe(
                     "sample_role": item["sample_role"],
                     "method_variant": item["method_variant"],
                     "watermark_embedding_status": item["watermark_embedding_status"],
+                    **(
+                        {
+                            "controlled_embedding_plan_record_id": item[
+                                "controlled_embedding_plan_record_id"
+                            ],
+                            "embedding_strength_level_id": item[
+                                "embedding_strength_level_id"
+                            ],
+                            "lambda_max": float(item["lambda_max"]),
+                        }
+                        if item.get("controlled_embedding_plan_record_id")
+                        else {}
+                    ),
                     **record,
                 }
                 for record in velocity_runtime.step_records
@@ -1061,7 +1141,33 @@ def run_colab_probe(
             "generation_sample_role": item["sample_role"],
             "method_variant": item["method_variant"],
             "watermark_embedding_status": item["watermark_embedding_status"],
-            "velocity_constraint_config_id": "flow_velocity_constraint_default",
+            "velocity_constraint_config_id": (
+                f"controlled_embedding_lambda_max_{float(item['lambda_max']):g}"
+                if item.get("controlled_embedding_plan_record_id")
+                else "flow_velocity_constraint_default"
+            ),
+            **(
+                {
+                    "controlled_embedding_plan_record_id": item[
+                        "controlled_embedding_plan_record_id"
+                    ],
+                    "embedding_strength_level_id": item[
+                        "embedding_strength_level_id"
+                    ],
+                    "embedding_strength_multiplier": float(
+                        item["embedding_strength_multiplier"]
+                    ),
+                    "lambda_max": float(item["lambda_max"]),
+                    "velocity_norm_ratio_budget": float(
+                        item["velocity_norm_ratio_budget"]
+                    ),
+                    "flow_energy_budget_ratio": float(
+                        item["flow_energy_budget_ratio"]
+                    ),
+                }
+                if item.get("controlled_embedding_plan_record_id")
+                else {}
+            ),
             "watermark_key_derivation_id": WATERMARK_KEY_DERIVATION_ID,
             "watermark_key_id": authentication_key_id,
             "flow_phase_schedule_id": "sin_squared_middle_flow_phase",
@@ -1197,7 +1303,7 @@ def run_colab_probe(
             emit_progress_event(
                 "flow_model_runtime_generation",
                 (
-                    "fail_fast | profile=method_mechanism_validation "
+                    f"fail_fast | profile={profile} "
                     f"prompt={item['prompt_id']} seed={item['seed_id']} "
                     f"method_variant={item['method_variant']} "
                     f"reason={failure_reason}"
@@ -1217,6 +1323,9 @@ def run_colab_probe(
     )
     progress.finish(f"success={success_count} failed={len(generation_records) - success_count}")
     mechanism_validation_profile = profile == METHOD_MECHANISM_VALIDATION_PROFILE
+    controlled_embedding_profile = (
+        profile == CONTROLLED_EMBEDDING_STRENGTH_DIAGNOSTIC_PROFILE
+    )
     successful_variants = {
         str(record.get("method_variant"))
         for record in generation_records
@@ -1247,18 +1356,30 @@ def run_colab_probe(
         and without_velocity_disabled
         and bool(trajectory_records)
     )
+    controlled_embedding_execution_ready = bool(
+        controlled_embedding_profile
+        and len(generation_records) == len(plan) == 16
+        and success_count == 16
+        and bool(trajectory_records)
+    )
 
     generation_records = [
         with_flow_evidence_protocol_defaults(
             record,
             trajectory_source_level="flow_scheduler_model_output_and_state_update"
-            if profile in PAPER_RESULT_PROFILES or mechanism_validation_profile
+            if (
+                profile in PAPER_RESULT_PROFILES
+                or mechanism_validation_profile
+                or controlled_embedding_profile
+            )
             else "callback_latent_trace"
             if record.get("trajectory_capture_status") == "captured"
             else "not_captured",
             claim_support_status=(
                 "method_mechanism_validation_only_not_paper_evidence"
                 if mechanism_validation_profile
+                else "controlled_embedding_strength_diagnostic_only_not_paper_evidence"
+                if controlled_embedding_profile
                 else "generation_evidence_only"
             ),
         )
@@ -1267,11 +1388,17 @@ def run_colab_probe(
     trajectory_records = with_flow_evidence_protocol_defaults_many(
         trajectory_records,
         trajectory_source_level="flow_scheduler_model_output_step"
-        if profile in PAPER_RESULT_PROFILES or mechanism_validation_profile
+        if (
+            profile in PAPER_RESULT_PROFILES
+            or mechanism_validation_profile
+            or controlled_embedding_profile
+        )
         else "callback_latent_step",
         claim_support_status=(
             "method_mechanism_validation_only_not_paper_evidence"
             if mechanism_validation_profile
+            else "controlled_embedding_strength_diagnostic_only_not_paper_evidence"
+            if controlled_embedding_profile
             else "trajectory_trace_evidence_only"
         ),
     )
@@ -1280,20 +1407,38 @@ def run_colab_probe(
         trajectory_source_level="not_applicable",
         claim_support_status="optional_quality_metric_status_only",
     )
-    external_records = run_external_baseline_status("configs/external_baselines/external_baselines.json")
-    external_baseline_audit = audit_external_baseline_records(external_records)
+    external_records = (
+        []
+        if controlled_embedding_profile
+        else run_external_baseline_status(
+            "configs/external_baselines/external_baselines.json"
+        )
+    )
+    external_baseline_audit = (
+        {
+            "external_baseline_execution_status": (
+                "not_run_controlled_embedding_diagnostic"
+            ),
+            "external_baseline_execution_allowed": False,
+        }
+        if controlled_embedding_profile
+        else audit_external_baseline_records(external_records)
+    )
     write_jsonl(output_root / "records" / "generation_records.jsonl", generation_records)
     write_jsonl(output_root / "records" / "trajectory_trace.jsonl", trajectory_records)
     write_jsonl(output_root / "records" / "trajectory_sketch_records.jsonl", trajectory_sketch_records)
-    write_jsonl(output_root / "records" / "quality_motion_semantic_records.jsonl", quality_records)
-    write_jsonl(output_root / "records" / "external_baseline_records.jsonl", external_records)
     write_csv(output_root / "tables" / "generation_runtime_table.csv", generation_records)
-    write_csv(output_root / "tables" / "external_baseline_status_table.csv", external_records)
-    write_json(output_root / "artifacts" / "external_baseline_status_decision.json", external_baseline_audit)
+    if not controlled_embedding_profile:
+        write_jsonl(output_root / "records" / "quality_motion_semantic_records.jsonl", quality_records)
+        write_jsonl(output_root / "records" / "external_baseline_records.jsonl", external_records)
+        write_csv(output_root / "tables" / "external_baseline_status_table.csv", external_records)
+        write_json(output_root / "artifacts" / "external_baseline_status_decision.json", external_baseline_audit)
     decision = {
         "stage_id": (
             METHOD_MECHANISM_VALIDATION_PROFILE
             if mechanism_validation_profile
+            else CONTROLLED_EMBEDDING_STRENGTH_DIAGNOSTIC_PROFILE
+            if controlled_embedding_profile
             else "generative_video_generation"
         ),
         "implementation_decision": (
@@ -1301,6 +1446,8 @@ def run_colab_probe(
             if (
                 mechanism_execution_ready
                 if mechanism_validation_profile
+                else controlled_embedding_execution_ready
+                if controlled_embedding_profile
                 else any(record["generation_status"] == "success" for record in generation_records)
             )
             else "FAIL"
@@ -1308,17 +1455,27 @@ def run_colab_probe(
         "mechanism_decision": (
             ("PASS" if mechanism_execution_ready else "FAIL")
             if mechanism_validation_profile
+            else (
+                "GENERATION_READY_NO_ATTACK_REPLAY_PENDING"
+                if controlled_embedding_execution_ready
+                else "FAIL"
+            )
+            if controlled_embedding_profile
             else "PENDING_FORMAL_DETECTION_AND_REPLAY"
         ),
         "claim_support_status": (
             "method_mechanism_validation_only_not_paper_evidence"
             if mechanism_validation_profile
+            else "controlled_embedding_strength_diagnostic_only_not_paper_evidence"
+            if controlled_embedding_profile
             else "generation_evidence_only"
         ),
         "details": {
             "formal_claim_status": (
                 "not_supported_method_mechanism_validation_only"
                 if mechanism_validation_profile
+                else "controlled_embedding_generation_only_no_attack_replay_pending"
+                if controlled_embedding_profile
                 else "velocity_path_generation_evidence_ready_detection_and_replay_pending"
             ),
             "generation_model_main_table_ready": any(record["generation_status"] == "success" for record in generation_records),
@@ -1334,7 +1491,15 @@ def run_colab_probe(
             ),
             "cross_model_validation_record_count": len(cross_model_records),
             "cross_model_validation_success_count": cross_model_success_count,
-            "external_baseline_comparison_status": "limitation_records_written",
+            "external_baseline_comparison_status": (
+                "not_run_out_of_scope"
+                if controlled_embedding_profile
+                else "limitation_records_written"
+            ),
+            "external_baseline_execution_status": external_baseline_audit.get(
+                "external_baseline_execution_status",
+                "status_records_only",
+            ),
             "gpu_name": gpu_name,
             "gpu_memory_mb": gpu_memory_mb,
         },

@@ -12,6 +12,7 @@ from zipfile import ZipFile
 import pytest
 
 from workflows.colab_test_request import (
+    CONTROLLED_EMBEDDING_STRENGTH_TEST_ID,
     REQUEST_SCHEMA_VERSION,
     TRAJECTORY_REPLAY_SOURCE_BUILD_TEST_ID,
     _safe_extract_zip,
@@ -70,6 +71,45 @@ def _source_build_request_payload(
             "phase": "source_build",
             "run_series_id": "stage0d_source_build_001",
             "source_package_path": str(upstream_package),
+            "resume_package_path": "",
+        },
+    }
+
+
+def _write_controlled_embedding_source_package(path: Path) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with ZipFile(path, "w") as archive:
+        archive.writestr(
+            "construction/records/controlled_embedding_generation_plan.jsonl",
+            "\n".join(
+                json.dumps(
+                    {
+                        "controlled_embedding_plan_record_id": f"plan-{index}",
+                        "generation_model_id": (
+                            "Wan-AI/Wan2.1-T2V-1.3B-Diffusers"
+                        ),
+                    }
+                )
+                for index in range(16)
+            )
+            + "\n",
+        )
+
+
+def _controlled_embedding_request_payload(
+    source_package: Path,
+) -> dict[str, object]:
+    return {
+        "request_schema_version": REQUEST_SCHEMA_VERSION,
+        "test_id": CONTROLLED_EMBEDDING_STRENGTH_TEST_ID,
+        "repository": {
+            "url": "https://github.com/RICHAAARC/SSTW.git",
+            "ref": "main",
+        },
+        "parameters": {
+            "phase": "no_attack",
+            "run_series_id": "controlled_embedding_lambda_001",
+            "source_package_path": str(source_package),
             "resume_package_path": "",
         },
     }
@@ -155,6 +195,41 @@ def test_colab_source_build_request_is_allowlisted_and_has_no_resume(
 
     payload["parameters"]["phase"] = "source_build"
     payload["parameters"]["resume_package_path"] = str(upstream_package)
+    _write_request(request_path, payload)
+    with pytest.raises(ValueError, match="不接受 resume package"):
+        load_colab_test_request(request_path, project_root=project_root)
+
+
+@pytest.mark.quick
+def test_controlled_embedding_request_is_no_attack_only_and_has_no_resume(
+    tmp_path: Path,
+) -> None:
+    project_root = tmp_path / "SSTW"
+    source_package = (
+        project_root
+        / "inputs"
+        / "controlled_embedding_strength"
+        / "controlled_embedding_strength_input.zip"
+    )
+    request_path = project_root / "requests" / "colab_test_request.json"
+    _write_controlled_embedding_source_package(source_package)
+    payload = _controlled_embedding_request_payload(source_package)
+    _write_request(request_path, payload)
+
+    resolved = load_colab_test_request(
+        request_path,
+        project_root=project_root,
+    )
+    assert resolved["test_id"] == CONTROLLED_EMBEDDING_STRENGTH_TEST_ID
+    assert resolved["phase"] == "no_attack"
+
+    payload["parameters"]["phase"] = "attacked"
+    _write_request(request_path, payload)
+    with pytest.raises(ValueError, match="phase 不受支持"):
+        load_colab_test_request(request_path, project_root=project_root)
+
+    payload["parameters"]["phase"] = "no_attack"
+    payload["parameters"]["resume_package_path"] = str(source_package)
     _write_request(request_path, payload)
     with pytest.raises(ValueError, match="不接受 resume package"):
         load_colab_test_request(request_path, project_root=project_root)
@@ -310,6 +385,82 @@ def test_colab_test_request_packages_and_resumes_without_notebook_changes(
         assert "artifacts/no_attack.json" in archive.namelist()
         assert "artifacts/attacked.json" in archive.namelist()
         assert "artifacts/decision.json" in archive.namelist()
+
+
+@pytest.mark.quick
+def test_controlled_embedding_handler_uses_same_notebook_packaging_path(
+    tmp_path: Path,
+) -> None:
+    project_root = tmp_path / "SSTW"
+    source_package = (
+        project_root
+        / "inputs"
+        / "controlled_embedding_strength"
+        / "controlled_embedding_strength_input.zip"
+    )
+    request_path = project_root / "requests" / "colab_test_request.json"
+    _write_controlled_embedding_source_package(source_package)
+    _write_request(
+        request_path,
+        _controlled_embedding_request_payload(source_package),
+    )
+
+    def fake_controlled_runner(
+        source_root: Path,
+        output_root: Path,
+    ) -> dict[str, object]:
+        assert (
+            source_root
+            / "construction"
+            / "records"
+            / "controlled_embedding_generation_plan.jsonl"
+        ).is_file()
+        assert project_root.resolve() not in output_root.resolve().parents
+        artifact = (
+            output_root
+            / "artifacts"
+            / "controlled_embedding_strength_diagnostic_decision.json"
+        )
+        artifact.parent.mkdir(parents=True, exist_ok=True)
+        artifact.write_text(
+            json.dumps(
+                {
+                    "controlled_embedding_strength_diagnostic_decision": (
+                        "lambda_increase_did_not_repair_path_signal_stop"
+                    ),
+                    "attacked_phase_executed": False,
+                    "stage_progression_allowed": False,
+                }
+            ),
+            encoding="utf-8",
+        )
+        return json.loads(artifact.read_text(encoding="utf-8"))
+
+    result = run_colab_test_request(
+        request_path,
+        project_root=project_root,
+        repo_root=Path.cwd(),
+        local_workspace_root=tmp_path / "workspace",
+        local_package_cache_root=tmp_path / "cache",
+        controlled_embedding_runner=fake_controlled_runner,
+    )
+
+    manifest = json.loads(
+        Path(result["drive_result_manifest"]).read_text(encoding="utf-8")
+    )
+    assert manifest["test_id"] == CONTROLLED_EMBEDDING_STRENGTH_TEST_ID
+    assert manifest["phase"] == "no_attack"
+    assert manifest["generation_model_ids"] == [
+        "Wan-AI/Wan2.1-T2V-1.3B-Diffusers"
+    ]
+    assert manifest["diagnostic_decision"][
+        "attacked_phase_executed"
+    ] is False
+    with ZipFile(result["drive_result_zip"]) as archive:
+        assert (
+            "artifacts/"
+            "controlled_embedding_strength_diagnostic_decision.json"
+        ) in archive.namelist()
 
 
 @pytest.mark.quick

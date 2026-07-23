@@ -11,7 +11,7 @@ from dataclasses import replace
 from hashlib import sha256
 import json
 import math
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 import shlex
 from typing import Any, Mapping
 
@@ -239,14 +239,31 @@ def validate_source_trajectory_signal_decision(
         )
 
 
-def _manifest_output_digest_for_path(
-    manifest: Mapping[str, Any],
+def _recorded_digest_for_relocated_path(
+    recorded_hashes: Mapping[str, Any],
     path: Path,
+    *,
+    logical_suffix: str,
 ) -> str | None:
-    for raw_path, digest in dict(manifest.get("output_sha256") or {}).items():
+    """Resolve a governed digest after a packaged artifact changes roots."""
+
+    suffix_parts = PurePosixPath(logical_suffix).parts
+    matches: list[str] = []
+    for raw_path, digest in dict(recorded_hashes).items():
         if Path(raw_path).resolve() == path.resolve():
-            return str(digest)
-    return None
+            matches.append(str(digest))
+            continue
+        recorded_parts = PurePosixPath(str(raw_path).replace("\\", "/")).parts
+        if len(recorded_parts) >= len(suffix_parts) and (
+            recorded_parts[-len(suffix_parts) :] == suffix_parts
+        ):
+            matches.append(str(digest))
+    unique = sorted(set(matches))
+    if len(unique) > 1:
+        raise ValueError(
+            f"governed artifact suffix 解析到冲突 digest: {logical_suffix}"
+        )
+    return unique[0] if unique else None
 
 
 def validate_source_trajectory_signal_bundle(
@@ -293,20 +310,31 @@ def validate_source_trajectory_signal_bundle(
         raise ValueError("source Stage 0-D manifest profile_id 不匹配")
     if manifest.get("immutable_input_snapshot_digest") != recorded_snapshot_digest:
         raise ValueError("source Stage 0-D manifest 未绑定 immutable snapshot digest")
-    for path in (decision_path, snapshot_path):
-        expected = _manifest_output_digest_for_path(manifest, path)
+    governed_outputs = dict(manifest.get("output_sha256") or {})
+    for path, logical_suffix in (
+        (
+            decision_path,
+            "artifacts/trajectory_signal_diagnostic_decision.json",
+        ),
+        (
+            snapshot_path,
+            "artifacts/trajectory_signal_immutable_input_snapshot.json",
+        ),
+    ):
+        expected = _recorded_digest_for_relocated_path(
+            governed_outputs,
+            path,
+            logical_suffix=logical_suffix,
+        )
         if expected is None or _sha256_file(path) != expected:
             raise ValueError(
                 f"source Stage 0-D manifest output digest 不匹配: {path.name}"
             )
     governed_inputs = dict(snapshot.get("governed_input_sha256") or {})
-    expected_prompt_digest = next(
-        (
-            str(digest)
-            for raw_path, digest in governed_inputs.items()
-            if Path(raw_path).resolve() == prompt_suite_path.resolve()
-        ),
-        None,
+    expected_prompt_digest = _recorded_digest_for_relocated_path(
+        governed_inputs,
+        prompt_suite_path,
+        logical_suffix="datasets/prompt_seed_suite.json",
     )
     if expected_prompt_digest is None or _sha256_file(prompt_suite_path) != (
         expected_prompt_digest

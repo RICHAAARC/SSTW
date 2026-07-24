@@ -52,6 +52,7 @@ from workflows.stage_package_sync import (
 )
 from experiments.generative_video_model_probe.colab_runtime import (
     LTX_VIDEO_CROSS_MODEL_ID,
+    PROMPT_ORTHOGONAL_STATE_TRAJECTORY_SMOKE_PROFILE,
     PROFILE_SETTINGS,
     _build_generation_plan,
     _should_fail_fast_after_generation,
@@ -347,6 +348,22 @@ def test_method_mechanism_validation_fails_fast_after_first_generation_error() -
         "success",
     )
     assert not _should_fail_fast_after_generation("probe_paper", "failed")
+
+
+@pytest.mark.quick
+def test_prompt_orthogonal_colab_runtime_profile_is_minimal_and_fail_fast():
+    runtime = PROFILE_SETTINGS[
+        PROMPT_ORTHOGONAL_STATE_TRAJECTORY_SMOKE_PROFILE
+    ]
+    assert runtime["prompt_limit"] == 2
+    assert runtime["seed_limit"] == 2
+    assert runtime["num_inference_steps"] == 8
+    assert runtime["num_frames"] == 33
+    assert runtime["run_cross_model"] is False
+    assert _should_fail_fast_after_generation(
+        PROMPT_ORTHOGONAL_STATE_TRAJECTORY_SMOKE_PROFILE,
+        "failed",
+    )
 
 
 @pytest.mark.quick

@@ -31,6 +31,23 @@ from main.methods.state_space_watermark.predictive_trajectory_carrier import (
     apply_predictive_trajectory_constraint,
     build_predictive_trajectory_schedule,
 )
+from main.methods.state_space_watermark.continuous_trajectory_code import (
+    ContinuousTrajectorySchedule,
+    build_continuous_trajectory_schedule,
+)
+from main.methods.state_space_watermark.state_rotation_operator import (
+    PROMPT_ORTHOGONAL_CANONICAL_PLANE_CONSTRUCTION_DEVICE,
+    PromptOrthogonalDirection,
+    PromptOrthogonalSubkeys,
+    build_prompt_orthogonal_state_direction,
+    build_state_rotation_plane_like,
+    derive_prompt_orthogonal_subkeys,
+)
+from main.methods.state_space_watermark.state_trajectory_injection import (
+    PROMPT_ORTHOGONAL_SCHEDULER_CONTROL_DTYPE,
+    PromptOrthogonalInjectionConfig,
+    apply_prompt_orthogonal_state_trajectory_injection,
+)
 from main.methods.state_space_watermark.velocity_field_constraint import (
     VelocityControlContext,
     VelocityFieldConstraintConfig,
@@ -96,6 +113,11 @@ class FlowVelocityConstraintRuntime:
     predictive_trajectory_carrier_config: (
         PredictiveTrajectoryCarrierConfig | None
     ) = None
+    prompt_orthogonal_master_key_text: str | None = None
+    prompt_orthogonal_injection_config: (
+        PromptOrthogonalInjectionConfig | None
+    ) = None
+    prompt_orthogonal_scheduler_float32_control: bool = False
     require_flow_scheduler: bool = True
 
     def __post_init__(self) -> None:
@@ -117,6 +139,16 @@ class FlowVelocityConstraintRuntime:
         self._signed_trajectory_schedule: SignedTrajectorySchedule | None = None
         self._predictive_trajectory_schedule: (
             PredictiveTrajectorySchedule | None
+        ) = None
+        self._prompt_orthogonal_subkeys: PromptOrthogonalSubkeys | None = None
+        self._prompt_orthogonal_schedule: (
+            ContinuousTrajectorySchedule | None
+        ) = None
+        self._prompt_orthogonal_state_rotation_plane: (
+            tuple[Any, Any, str] | None
+        ) = None
+        self._prompt_orthogonal_direction_result: (
+            PromptOrthogonalDirection | None
         ) = None
         self._canonical_endpoint_key_direction: Any | None = None
 
@@ -182,19 +214,59 @@ class FlowVelocityConstraintRuntime:
             raise RuntimeError(f"正式 velocity constraint 需要 FlowMatch scheduler, 当前为 {scheduler_name}")
         if self.total_steps <= 0:
             raise ValueError("total_steps 必须为正整数")
+        prompt_orthogonal_enabled = bool(
+            self.prompt_orthogonal_master_key_text is not None
+            or self.prompt_orthogonal_injection_config is not None
+        )
         if (
             (
                 self.signed_trajectory_carrier_config is not None
                 or self.predictive_trajectory_carrier_config is not None
+                or prompt_orthogonal_enabled
             )
             and self.key_context is None
         ):
             raise ValueError("trajectory carrier runtime 要求完整 key context")
-        if (
-            self.signed_trajectory_carrier_config is not None
-            and self.predictive_trajectory_carrier_config is not None
-        ):
-            raise ValueError("同一次 runtime 不得同时启用两种 trajectory carrier")
+        enabled_carrier_count = sum(
+            (
+                self.signed_trajectory_carrier_config is not None,
+                self.predictive_trajectory_carrier_config is not None,
+                prompt_orthogonal_enabled,
+            )
+        )
+        if enabled_carrier_count > 1:
+            raise ValueError("同一次 runtime 不得同时启用多种 trajectory carrier")
+        if prompt_orthogonal_enabled:
+            if (
+                self.prompt_orthogonal_master_key_text is None
+                or self.prompt_orthogonal_injection_config is None
+            ):
+                raise ValueError(
+                    "prompt-orthogonal runtime 要求 master key 与 injection config"
+                )
+            if (
+                self.mechanism_config.endpoint_control_enabled
+                or self.mechanism_config.terminal_endpoint_perturbation_enabled
+            ):
+                raise ValueError(
+                    "prompt-orthogonal runtime 禁止 endpoint/terminal control"
+                )
+            self._prompt_orthogonal_subkeys = (
+                derive_prompt_orthogonal_subkeys(
+                    self.prompt_orthogonal_master_key_text
+                )
+            )
+        if self.prompt_orthogonal_scheduler_float32_control:
+            if (
+                self.signed_trajectory_carrier_config is not None
+                or self.predictive_trajectory_carrier_config is not None
+                or self.mechanism_config.endpoint_control_enabled
+                or self.mechanism_config.terminal_endpoint_perturbation_enabled
+            ):
+                raise ValueError(
+                    "prompt-orthogonal FP32 scheduler control "
+                    "不得与旧 carrier/endpoint control 混用"
+                )
         self._original_step = self.scheduler.step
 
         def constrained_step(model_output: Any, timestep: Any, sample: Any, *args: Any, **kwargs: Any):
@@ -225,6 +297,14 @@ class FlowVelocityConstraintRuntime:
             if self._integrated_phase_schedule_bindings
             else None
         )
+        prompt_orthogonal_formal_context_complete = bool(
+            self.prompt_orthogonal_injection_config is not None
+            and self._step_records
+            and all(
+                record.get("flow_runtime_step_formal_context_complete") is True
+                for record in self._step_records
+            )
+        )
         return {
             "flow_tubelet_key_context_digest": self._key_context_digest(),
             "flow_integrated_phase_count": self._integrated_phase_count,
@@ -232,12 +312,16 @@ class FlowVelocityConstraintRuntime:
             "flow_integrated_key_direction_digest": integrated_digest,
             "flow_integrated_key_direction_ready": integrated is not None,
             "flow_runtime_formal_context_complete": bool(
-                self.key_context is not None
-                and integrated is not None
-                and self._step_records
-                and all(
-                    record.get("flow_runtime_step_formal_context_complete") is True
-                    for record in self._step_records
+                prompt_orthogonal_formal_context_complete
+                or (
+                    self.key_context is not None
+                    and integrated is not None
+                    and self._step_records
+                    and all(
+                        record.get("flow_runtime_step_formal_context_complete")
+                        is True
+                        for record in self._step_records
+                    )
                 )
             ),
         }
@@ -372,6 +456,130 @@ class FlowVelocityConstraintRuntime:
             )
         )
 
+    def _ensure_prompt_orthogonal_schedule(self) -> None:
+        """Bind the prompt-independent continuous function to real sigmas."""
+
+        if (
+            self.prompt_orthogonal_injection_config is None
+            or self._prompt_orthogonal_schedule is not None
+        ):
+            return
+        if self._prompt_orthogonal_subkeys is None:
+            raise RuntimeError("prompt-orthogonal runtime 缺少派生子 key")
+        sigma_grid = getattr(self.scheduler, "sigmas", None)
+        if sigma_grid is None or len(sigma_grid) != self.total_steps + 1:
+            raise RuntimeError(
+                "prompt-orthogonal runtime 要求完整 generation sigma grid"
+            )
+        phases: list[float] = []
+        weights: list[float] = []
+        for step_index in range(self.total_steps):
+            phase = normalized_flow_phase_from_sigma_interval(
+                sigma_grid,
+                step_index,
+            )
+            before_value = sigma_grid[step_index]
+            after_value = sigma_grid[step_index + 1]
+            before = (
+                float(before_value.detach().float().item())
+                if hasattr(before_value, "detach")
+                else float(before_value)
+            )
+            after = (
+                float(after_value.detach().float().item())
+                if hasattr(after_value, "detach")
+                else float(after_value)
+            )
+            phases.append(phase)
+            weights.append(
+                abs(after - before)
+                * flow_phase_weight(phase, self.tubelet_config)
+            )
+        self._prompt_orthogonal_schedule = (
+            build_continuous_trajectory_schedule(
+                trajectory_code_subkey=(
+                    self._prompt_orthogonal_subkeys.trajectory_code_subkey
+                ),
+                flow_phases=phases,
+                active_weights=weights,
+            )
+        )
+
+    def _prompt_orthogonal_direction(
+        self,
+        sample: Any,
+        model_output: Any,
+    ) -> Any:
+        if self._prompt_orthogonal_subkeys is None:
+            raise RuntimeError("prompt-orthogonal runtime 缺少派生子 key")
+        if self._prompt_orthogonal_state_rotation_plane is None:
+            self._prompt_orthogonal_state_rotation_plane = (
+                build_state_rotation_plane_like(
+                    sample.detach().float(),
+                    state_operator_subkey=(
+                        self._prompt_orthogonal_subkeys.state_operator_subkey
+                    ),
+                )
+            )
+        result = build_prompt_orthogonal_state_direction(
+            sample,
+            model_output,
+            state_operator_subkey=(
+                self._prompt_orthogonal_subkeys.state_operator_subkey
+            ),
+            state_rotation_plane=(
+                self._prompt_orthogonal_state_rotation_plane
+            ),
+        )
+        self._prompt_orthogonal_direction_result = result
+        schedule = self._prompt_orthogonal_schedule
+        if schedule is None:
+            raise RuntimeError("prompt-orthogonal runtime 缺少连续 schedule")
+        self._key_direction = result.direction.to(
+            device=sample.device,
+            dtype=sample.dtype,
+        )
+        self._canonical_key_direction = self.latent_layout.to_canonical(
+            self._key_direction
+        )
+        self._key_metadata = {
+            "prompt_orthogonal_domain_separation_digest": (
+                self._prompt_orthogonal_subkeys.domain_separation_digest
+            ),
+            "prompt_orthogonal_operator_plane_digest": (
+                result.operator_plane_digest
+            ),
+            "prompt_orthogonal_plane_construction_device": (
+                PROMPT_ORTHOGONAL_CANONICAL_PLANE_CONSTRUCTION_DEVICE
+            ),
+            "prompt_orthogonal_operator_rank": result.operator_rank,
+            "prompt_orthogonal_projection_retained_ratio": (
+                result.projection_retained_ratio
+            ),
+            "prompt_orthogonal_state_orthogonality_residual": (
+                result.state_orthogonality_residual
+            ),
+            "prompt_orthogonal_velocity_orthogonality_residual": (
+                result.velocity_orthogonality_residual
+            ),
+            "prompt_orthogonal_continuous_function_digest": (
+                schedule.continuous_function_digest
+            ),
+            "prompt_orthogonal_schedule_projection_digest": (
+                schedule.schedule_projection_digest
+            ),
+            "prompt_orthogonal_weighted_code_residual": (
+                schedule.weighted_residual
+            ),
+            "prompt_orthogonal_weighted_code_energy": (
+                schedule.weighted_code_energy
+            ),
+            "prompt_orthogonal_minimum_active_code_magnitude": (
+                schedule.minimum_active_code_magnitude
+            ),
+        }
+        return self._key_direction
+
     def _direction(self, sample: Any, *, flow_phase: float) -> Any:
         canonical_sample = self.latent_layout.to_canonical(sample)
         canonical_direction, phase_metadata = build_flow_tubelet_key_direction_like(
@@ -488,8 +696,118 @@ class FlowVelocityConstraintRuntime:
             )
         self._ensure_signed_trajectory_schedule()
         self._ensure_predictive_trajectory_schedule()
-        direction = self._direction(sample, flow_phase=flow_phase)
+        self._ensure_prompt_orthogonal_schedule()
+        if self.prompt_orthogonal_injection_config is not None:
+            direction = self._prompt_orthogonal_direction(
+                sample,
+                model_output,
+            )
+        else:
+            direction = self._direction(sample, flow_phase=flow_phase)
         if (
+            self.mechanism_config.velocity_constraint_enabled
+            and self.prompt_orthogonal_injection_config is not None
+        ):
+            if (
+                control_context is None
+                or self._prompt_orthogonal_schedule is None
+                or self._prompt_orthogonal_direction_result is None
+            ):
+                raise RuntimeError(
+                    "prompt-orthogonal runtime 缺少正式 schedule/control context"
+                )
+            constrained_velocity, injection_record = (
+                apply_prompt_orthogonal_state_trajectory_injection(
+                    model_output,
+                    sample,
+                    self._prompt_orthogonal_direction_result,
+                    continuous_code=(
+                        self._prompt_orthogonal_schedule.codes[
+                            self._step_index
+                        ]
+                    ),
+                    flow_phase=flow_phase,
+                    control_context=control_context,
+                    injection_config=(
+                        self.prompt_orthogonal_injection_config
+                    ),
+                    tubelet_config=self.tubelet_config,
+                    velocity_config=self.velocity_config,
+                )
+            )
+            velocity_record = {
+                "velocity_field_constraint_status": injection_record.status,
+                "velocity_field_source": (
+                    "scheduler_model_output_before_flow_match_step"
+                ),
+                "flow_phase": round(float(flow_phase), 8),
+                "flow_phase_weight": injection_record.flow_phase_weight,
+                "velocity_constraint_lambda": (
+                    self.prompt_orthogonal_injection_config.lambda_max
+                    * injection_record.flow_phase_weight
+                ),
+                "velocity_norm_before_constraint": (
+                    injection_record.velocity_norm_before
+                ),
+                "velocity_norm_after_constraint": (
+                    injection_record.velocity_norm_after
+                ),
+                "velocity_constraint_delta_norm": (
+                    injection_record.delta_norm
+                ),
+                "endpoint_control_enabled": False,
+                "endpoint_control_formal_context_complete": False,
+                "prompt_orthogonal_continuous_code": (
+                    injection_record.continuous_code
+                ),
+                "prompt_orthogonal_joint_norm_budget": (
+                    injection_record.joint_norm_budget
+                ),
+                "prompt_orthogonal_energy_limited_delta_norm": (
+                    injection_record.energy_limited_delta_norm
+                ),
+                "prompt_orthogonal_joint_scale": (
+                    injection_record.joint_scale
+                ),
+                "prompt_orthogonal_direction_cosine": (
+                    injection_record.direction_cosine
+                ),
+                "prompt_orthogonal_norm_guard_passed": (
+                    injection_record.norm_guard_passed
+                ),
+                "prompt_orthogonal_energy_guard_passed": (
+                    injection_record.energy_guard_passed
+                ),
+                "prompt_orthogonal_direction_guard_passed": (
+                    injection_record.direction_guard_passed
+                ),
+                "prompt_orthogonal_control_energy_increment": (
+                    injection_record.control_energy_increment
+                ),
+                "prompt_orthogonal_control_cumulative_energy_after": (
+                    injection_record.control_cumulative_energy_after
+                ),
+                "prompt_orthogonal_reference_energy_increment": (
+                    injection_record.reference_energy_increment
+                ),
+                "prompt_orthogonal_reference_cumulative_energy_after": (
+                    injection_record.reference_cumulative_energy_after
+                ),
+                "prompt_orthogonal_inactive_phase_noop": (
+                    injection_record.inactive_phase_noop
+                ),
+                "endpoint_quality_energy_guard_passed": bool(
+                    injection_record.inactive_phase_noop
+                    or injection_record.energy_guard_passed is True
+                ),
+            }
+            self._cumulative_control_energy = (
+                injection_record.control_cumulative_energy_after
+            )
+            self._cumulative_reference_energy = (
+                injection_record.reference_cumulative_energy_after
+            )
+        elif (
             self.mechanism_config.velocity_constraint_enabled
             and self.predictive_trajectory_carrier_config is not None
         ):
@@ -600,7 +918,15 @@ class FlowVelocityConstraintRuntime:
                 "endpoint_quality_energy_guard_passed": True,
             }
 
-        step_output = self._original_step(constrained_velocity, timestep, sample, *args, **kwargs)
+        if self.prompt_orthogonal_scheduler_float32_control:
+            constrained_velocity = constrained_velocity.detach().float()
+        step_output = self._original_step(
+            constrained_velocity,
+            timestep,
+            sample,
+            *args,
+            **kwargs,
+        )
         sample_after = self._first_sample(step_output)
         terminal_integration_weight = 0.0
         if (
@@ -620,7 +946,10 @@ class FlowVelocityConstraintRuntime:
             )
             terminal_integration_weight = endpoint_delta_norm
 
-        if delta_sigma is not None:
+        if (
+            delta_sigma is not None
+            and self.prompt_orthogonal_injection_config is None
+        ):
             self._accumulate_integrated_direction(
                 flow_phase=flow_phase,
                 delta_sigma=delta_sigma,
@@ -656,11 +985,35 @@ class FlowVelocityConstraintRuntime:
             "terminal_endpoint_perturbation_enabled": (
                 self.mechanism_config.terminal_endpoint_perturbation_enabled
             ),
+            "prompt_orthogonal_scheduler_control_dtype": (
+                PROMPT_ORTHOGONAL_SCHEDULER_CONTROL_DTYPE
+                if self.prompt_orthogonal_scheduler_float32_control
+                else "not_applicable"
+            ),
             **self._key_metadata,
             **velocity_record,
             **path_record,
         }
-        if self.predictive_trajectory_carrier_config is not None:
+        if self.prompt_orthogonal_injection_config is not None:
+            carrier_context_complete = bool(
+                step_record.get("prompt_orthogonal_inactive_phase_noop")
+                is True
+                or (
+                    step_record.get(
+                        "prompt_orthogonal_norm_guard_passed"
+                    )
+                    is True
+                    and step_record.get(
+                        "prompt_orthogonal_energy_guard_passed"
+                    )
+                    is True
+                    and step_record.get(
+                        "prompt_orthogonal_direction_guard_passed"
+                    )
+                    is True
+                )
+            )
+        elif self.predictive_trajectory_carrier_config is not None:
             carrier_context_complete = bool(
                 step_record.get("predictive_trajectory_inactive_phase_noop")
                 is True
@@ -714,7 +1067,11 @@ class FlowVelocityConstraintRuntime:
         step_record["flow_runtime_step_formal_context_complete"] = bool(
             self.key_context is not None
             and delta_sigma is not None
-            and step_record.get("flow_tubelet_formal_context_complete") is True
+            and (
+                self.prompt_orthogonal_injection_config is not None
+                or step_record.get("flow_tubelet_formal_context_complete")
+                is True
+            )
             and step_record.get("path_quadrature_context_complete") is True
             and self.mechanism_config.velocity_constraint_enabled
             and carrier_context_complete

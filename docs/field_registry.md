@@ -3048,3 +3048,101 @@ Notebook 与 repository module 的跨边界数据
 | spatial_key_fixed_to_owner | protocol | none | true | false | false | temporal isolation 是否在全部候选中固定空间 tubelet key 为 owner。 |
 | temporal_wrong_candidate_count | protocol | none | true | false | false | 每个身份实际使用的互异低相关 wrong temporal code 数，固定为8。 |
 | temporal_wrong_candidate_pool_count | protocol | none | true | false | false | fail-closed 搜索 wrong temporal codes 的预声明候选池大小，固定为32。 |
+| prompt_orthogonal_method_domain | protocol | none | true | false | false | 提示条件正交状态轨迹方法的稳定 KDF 方法域，不含 prompt、seed、model revision 或 step grid。 |
+| prompt_orthogonal_latent_layout_id | protocol | none | true | false | false | prompt-orthogonal 低秩状态算子使用的 latent layout 域。 |
+| prompt_orthogonal_operator_schema_id | protocol | none | true | false | false | rank-two antisymmetric state rotation 算子 schema。 |
+| prompt_orthogonal_operator_rank | protocol | none | true | false | false | prompt-orthogonal 状态旋转算子秩，首轮固定为2。 |
+| prompt_orthogonal_plane_construction_device | protocol | none | true | false | false | keyed rank-2 plane 的规范生成设备固定为 CPU，避免同 seed 的 CPU/CUDA RNG 流不同。 |
+| prompt_orthogonal_code_schema_id | protocol | none | true | false | false | 连续时间码的 KDF schema 域。 |
+| prompt_orthogonal_trajectory_code_id | protocol | none | true | false | false | 首轮两通道一阶谐波加权中心化连续码标识。 |
+| prompt_orthogonal_trajectory_code_dimension | protocol | none | true | false | false | synchronous vector demodulation 保留的时间码通道数，固定为2。 |
+| prompt_orthogonal_projection_tolerance | protocol | none | true | false | false | state/base-velocity nuisance 正交残差冻结容差。 |
+| prompt_orthogonal_minimum_retained_ratio | protocol | none | true | false | false | keyed state tangent 经 nuisance 投影后允许 active 的最小保留范数比例。 |
+| prompt_orthogonal_minimum_direction_cosine | protocol | none | true | false | false | 最终 AC-only delta 相对 signed keyed state direction 的最小余弦。 |
+| prompt_orthogonal_innovation_adapter_id | protocol | none | true | false | false | replay transition residual 使用的 scheduler-specific adapter 标识。 |
+| prompt_orthogonal_smoke_whitening_mode | protocol | none | true | false | false | 首轮 mechanism smoke 的冻结 whitening 模式；identity 表示未拟合且不得支持校准 claim。 |
+| prompt_orthogonal_demodulation_solver_id | protocol | none | true | false | false | 使用共同 scheduler/reliability weights 求解二维 basis Gram system 的 candidate-independent 解调器。 |
+| prompt_orthogonal_domain_separation_digest | provenance | none | true | false | false | 不含秘密子 key 的 method/layout/operator/code 公共域摘要。 |
+| prompt_orthogonal_operator_plane_digest | provenance | none | true | false | false | 不含秘密 key 或完整 plane tensor 的低秩状态算子绑定摘要。 |
+| prompt_orthogonal_negative_prompt_text_hash | provenance | none | true | false | false | prompt-orthogonal generation 与 replay 共同使用的 negative prompt 文本 SHA-256。 |
+| prompt_orthogonal_continuous_function_digest | provenance | none | true | false | false | 与 prompt、seed 和离散 generation/replay grid 无关的连续时间函数摘要。 |
+| prompt_orthogonal_schedule_projection_digest | provenance | none | true | false | false | 连续时间函数在当前真实 scheduler phases/weights 上投影后的摘要。 |
+| prompt_orthogonal_centered_basis_values | protocol | none | true | false | false | 在当前真实 active weights 下逐通道中心化、供 generation code 与 replay 解调共同使用的二维基函数值。 |
+| prompt_orthogonal_weighted_code_residual | metric | none | true | false | false | 连续码在真实 active weights 下中心化后的加权和残差。 |
+| prompt_orthogonal_weighted_code_energy | metric | none | true | false | false | 连续码在真实 active weights 下的加权平方能量。 |
+| prompt_orthogonal_minimum_active_code_magnitude | metric | none | true | false | false | 当前真实 schedule 中 active 连续码的最小绝对值。 |
+| prompt_orthogonal_projection_retained_ratio | metric | none | true | false | false | state tangent 经 state/base-velocity nuisance 投影后的范数保留比例。 |
+| prompt_orthogonal_state_orthogonality_residual | metric | none | true | false | false | 最终 keyed direction 与当前 latent state 的数值正交残差。 |
+| prompt_orthogonal_velocity_orthogonality_residual | metric | none | true | false | false | 最终 keyed direction 与 prompt-conditioned base velocity 的数值正交残差。 |
+| prompt_orthogonal_innovation_norm | metric | none | true | false | false | scheduler-aware replay transition residual 的范数。 |
+| prompt_orthogonal_innovation_relative_norm | metric | none | true | false | false | replay innovation norm 相对 base velocity norm 的比例。 |
+| prompt_orthogonal_replay_reliability_mode | protocol | none | true | false | false | 用同一步 base-predicted transition residual 计算、对所有候选共享的可靠性模式。 |
+| prompt_orthogonal_demodulation_vector | metric | none | true | false | false | synchronous demodulation 在标量 candidate score 之前保留的二维响应向量。 |
+| prompt_orthogonal_matched_amplitude | metric | none | true | false | false | demodulation vector 沿候选 codeword 的有符号幅度。 |
+| prompt_orthogonal_orthogonal_amplitude | metric | none | true | false | false | demodulation vector 沿候选 codeword 正交方向的幅度。 |
+| prompt_orthogonal_matched_cosine_score | metric | none | true | false | false | 二维 demodulation vector 与候选单位 codeword 的余弦匹配分数。 |
+| prompt_orthogonal_vector_context_complete | governance | none | true | false | false | 两通道向量、共同 scheduler/reliability weights 与冻结 whitening 是否完整。 |
+| prompt_orthogonal_continuous_code | metric | none | true | false | false | 当前真实 scheduler step 使用的加权中心化连续 AC code。 |
+| prompt_orthogonal_joint_norm_budget | metric | none | true | false | false | 相对原始 model velocity 计算的当前 prompt-orthogonal delta norm 上限。 |
+| prompt_orthogonal_energy_limited_delta_norm | metric | none | true | false | false | 当前剩余 Flow energy 能容纳的 prompt-orthogonal delta norm 上限。 |
+| prompt_orthogonal_joint_scale | metric | none | true | false | false | 为共同满足 norm 与 cumulative energy 预算施加的单一非负缩放。 |
+| prompt_orthogonal_direction_cosine | metric | none | true | false | false | 最终 delta 相对 signed state-dependent keyed direction 的余弦。 |
+| prompt_orthogonal_norm_guard_passed | governance | none | true | false | false | 最终 delta 是否满足冻结 velocity norm budget。 |
+| prompt_orthogonal_energy_guard_passed | governance | none | true | false | false | 最终 delta 是否满足冻结 cumulative Flow energy budget。 |
+| prompt_orthogonal_direction_guard_passed | governance | none | true | false | false | 最终 delta 是否保持冻结的 state-tangent 正方向。 |
+| prompt_orthogonal_control_energy_increment | metric | none | true | false | false | 当前 prompt-orthogonal step 的 scheduler-weighted控制能量增量。 |
+| prompt_orthogonal_control_cumulative_energy_after | metric | none | true | false | false | 当前 step 后 prompt-orthogonal 控制累计能量。 |
+| prompt_orthogonal_reference_energy_increment | metric | none | true | false | false | 当前 step 原始 model velocity 的参考 Flow 能量增量。 |
+| prompt_orthogonal_reference_cumulative_energy_after | metric | none | true | false | false | 当前 step 后原始 model velocity 的参考累计能量。 |
+| prompt_orthogonal_inactive_phase_noop | governance | none | true | false | false | phase window 外 code 为零时是否严格返回原 model output。 |
+| prompt_orthogonal_scheduler_control_dtype | protocol | none | true | false | false | 新方法 watermarked 与 clean 两组共同送入 FlowMatch scheduler 的 control dtype，固定为 float32。 |
+| prompt_orthogonal_plan_record_id | provenance | none | true | false | false | 2 prompts×2 seeds×watermarked/clean 冻结 generation plan 单元的稳定身份摘要。 |
+| prompt_orthogonal_candidate_role | protocol | none | true | false | false | shared fixed-trace replay 中当前候选是 correct owner 还是 wrong owner。 |
+| prompt_orthogonal_wrong_candidate_index | protocol | none | true | false | false | 当前 wrong-owner 候选的固定域分离索引；owner 为 null。 |
+| prompt_orthogonal_summary_record_id | provenance | none | true | false | false | 单视频、单候选 prompt-orthogonal 向量解调 summary 的稳定身份摘要。 |
+| prompt_orthogonal_minimum_projection_retained_ratio | metric | none | true | false | false | 当前候选在完整20步 replay 上的最小 state-tangent nuisance 投影保留率。 |
+| prompt_orthogonal_base_velocity_call_count | metric | none | true | false | false | 一个视频在既有 fixed trace 上完成全部候选评估的基础 velocity 调用数，固定为20而非候选数倍。 |
+| prompt_orthogonal_trace_construction_base_velocity_call_count | metric | none | true | false | false | 构造20步 key-independent reverse fixed trace 的基础 velocity 调用数，固定为20。 |
+| prompt_orthogonal_total_base_velocity_call_count | metric | none | true | false | false | 单视频 trace 构造与九候选共享评估的基础 velocity 总调用数，固定为40。 |
+| prompt_orthogonal_candidate_count | protocol | none | true | false | false | 每视频共同 fixed trace 上评估的 owner 加 wrong-owner 候选总数，固定为9。 |
+| prompt_orthogonal_key_independent_trace_complete | governance | none | true | false | false | 全部候选是否复用同一基础模型 velocity 与 replay state trace。 |
+| prompt_orthogonal_fixed_trace_key_independent | governance | none | true | false | false | reverse fixed trace 构造是否完全不接收或派生候选 key。 |
+| prompt_orthogonal_smoke_status | governance | none | true | false | false | 单个生成视频的 prompt-orthogonal replay 执行状态。 |
+| prompt_orthogonal_smoke_failure_reason | governance | none | true | false | false | 单视频 replay fail-closed 时的具体失败原因。 |
+| prompt_orthogonal_failure_record_id | provenance | none | true | false | false | 单视频 prompt-orthogonal replay 失败记录的稳定身份摘要。 |
+| prompt_orthogonal_owner_score | metric | none | true | false | false | 当前 identity 下 owner 候选的二维 matched-cosine 分数。 |
+| prompt_orthogonal_wrong_score | metric | none | true | false | false | 当前配对 wrong-owner 候选的二维 matched-cosine 分数。 |
+| prompt_orthogonal_owner_over_wrong_margin | metric | none | true | false | false | owner score 减单个 wrong-owner score。 |
+| prompt_orthogonal_owner_over_wrong | metric | none | true | false | false | owner 是否严格胜过当前 wrong-owner 候选；平分不算通过。 |
+| prompt_orthogonal_pair_record_id | provenance | none | true | false | false | watermarked identity 下 owner/wrong 候选配对记录摘要。 |
+| prompt_orthogonal_maximum_wrong_score | metric | none | true | false | false | 单 identity 八个 wrong-owner 候选中的最大 matched-cosine 分数。 |
+| prompt_orthogonal_owner_top1 | metric | none | true | false | false | owner 是否严格排名第一；平分不算通过。 |
+| prompt_orthogonal_owner_rank | metric | none | true | false | false | owner 在 owner 加八个 wrong-owner 候选中的严格降序名次。 |
+| prompt_orthogonal_identity_record_id | provenance | none | true | false | false | 单 prompt/seed/variant 的九候选排序记录摘要。 |
+| prompt_orthogonal_gate_ready | governance | none | true | false | false | coverage、wrong-key、prompt gap、reliability 与 clean control 门槛是否同时通过。 |
+| prompt_orthogonal_smoke_decision | governance | none | true | false | false | 通过仅允许设计独立 calibration，失败停止当前实例的方法机制分类。 |
+| prompt_orthogonal_owner_over_wrong_pair_fraction | metric | none | true | false | false | 四个 watermarked identities 共32个 owner/wrong 配对的正 margin 比例。 |
+| prompt_orthogonal_owner_top1_identity_fraction | metric | none | true | false | false | owner 严格 top-1 的 watermarked identity 比例。 |
+| prompt_orthogonal_pair_fraction_by_prompt | metric | none | true | false | false | 分 held-out prompt 汇总的 owner-over-wrong 正 margin 比例。 |
+| prompt_orthogonal_prompt_pair_fraction_gap | metric | none | true | false | false | 两个 held-out prompts 的 pair fraction 最大差，用于约束 prompt-dependent 干扰。 |
+| prompt_orthogonal_watermarked_over_clean_owner_fraction | metric | none | true | false | false | 同 prompt/seed 下 watermarked owner score 严格胜过 clean owner score 的比例。 |
+| prompt_orthogonal_clean_owner_top1_fraction | metric | none | true | false | false | clean control 中 owner 偶然严格排名第一的 identity 比例上限指标。 |
+| base_model_velocity_per_step_shared_across_candidates | governance | none | true | false | false | replay 是否每步仅调用一次基础模型 velocity 并供全部候选共享。 |
+| fixed_trace_base_velocity_call_count_per_video | protocol | none | true | false | false | 单视频构造20步 reverse fixed trace 的冻结基础模型调用数。 |
+| candidate_evaluation_base_velocity_call_count_per_video | protocol | none | true | false | false | 单视频在共享 trace 上评估九候选的冻结基础模型调用数。 |
+| total_base_velocity_call_count_per_video | protocol | none | true | false | false | 单视频 reverse trace 构造加共享候选评估的冻结基础模型总调用数，固定为40。 |
+| smoke_generation_record_count | protocol | none | true | false | false | 当前最小 mechanism smoke 冻结要求的 generation record 数。 |
+| wrong_owner_candidate_count | protocol | none | true | false | false | 每个 identity 固定评估的域分离 wrong-owner 候选数。 |
+| clean_identity_record_count | protocol | none | true | false | false | clean control 九候选排序记录的冻结期望数。 |
+| minimum_owner_over_wrong_pair_fraction | protocol | none | true | false | false | prompt-orthogonal mechanism smoke 预声明的最小 owner/wrong 正 margin 比例。 |
+| minimum_owner_top1_identity_fraction | protocol | none | true | false | false | prompt-orthogonal mechanism smoke 预声明的最小 owner top-1 identity 比例。 |
+| maximum_prompt_pair_fraction_gap | protocol | none | true | false | false | 两个 held-out prompts 允许的最大 pair fraction 差。 |
+| minimum_watermarked_over_clean_owner_fraction | protocol | none | true | false | false | watermarked owner score 必须严格胜过同 identity clean owner score 的最小比例。 |
+| maximum_clean_owner_top1_fraction | protocol | none | true | false | false | clean control 中 owner 偶然 top-1 的最大允许比例。 |
+| required_temporal_source_profile_id | provenance | none | true | false | false | 新路线允许消费的 temporal-code failure source profile。 |
+| required_temporal_source_decision | governance | none | true | false | false | 新路线前置要求的 temporal-code 明确失败分类。 |
+| required_temporal_source_summary_record_count | protocol | none | true | false | false | temporal-code source 必须实存的 summary 数。 |
+| required_temporal_source_pair_record_count | protocol | none | true | false | false | temporal-code source 必须实存的 pair 数。 |
+| required_temporal_source_identity_record_count | protocol | none | true | false | false | temporal-code source 必须实存的 identity 数。 |
+| required_temporal_source_failure_record_count | protocol | none | true | false | false | temporal-code source 必须实存的 runtime failure 数，冻结为0。 |
+| formal_result | governance | none | true | false | false | 当前 construction、smoke 或 recovery artifact 是否可视为正式结果。 |

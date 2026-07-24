@@ -6,6 +6,14 @@
 
 本目录保存 generative_video_model_probe 生成式视频模型探测的可审计运行入口。当前无 GPU 时只生成 blocked decision, 不生成正向机制结论。
 
+## Prompt-orthogonal state-trajectory smoke
+
+`prompt_orthogonal_state_trajectory_smoke.py` 是当前最小候选机制入口。它从已审核的
+controlled embedding 结果与明确失败的 temporal-code isolation 结果构建固定
+`2 prompts × 2 seeds × (watermarked + clean)` 计划；generation 使用8步，检测使用
+20步 key-independent fixed trace 和两通道向量解调。该入口仅由 `colab_test`
+白名单调用，结果始终 `formal_result=false` 且禁止阶段推进。
+
 ## Minimal trajectory replay smoke
 
 只执行已有4-source包的标准攻击与真实 VAE/replay 诊断:

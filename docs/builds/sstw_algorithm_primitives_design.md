@@ -1,10 +1,18 @@
 # SSTW 项目算法原语：状态空间同步 Flow Matching 轨迹水印
 
+> **路线状态（2026-07-24）**
+>
+> 本文档保留原始 SSTW 原语体系，用于追溯当前失败的 prompt-bound phase code、
+> 固定加性 key direction 与标量路径聚合路线。下一轮候选原语定义在
+> `docs/builds/prompt_orthogonal_state_trajectory_algorithm_primitives.md`。
+> 候选原语已完成本地实现和受治理 smoke 接线，但只有独立 GPU 证据通过后，才可替换
+> 本文档中的 canonical primitive；当前不得据此支持论文 claim 或阶段推进。
+
 ## 0. 文档定位
 
 本文档用于学术性说明 SSTW 项目的算法是什么、由哪些算法原语组成、体系创新性在哪里, 以及每个原语应通过哪些实验被验证。本文档可以独立阅读, 不要求读者先阅读 `sstw_method_mechanism_design.md`。
 
-SSTW 的目标不是给最终视频帧叠加一个后处理水印, 也不是用 DTW 或帧匹配恢复时间轴后再做普通检测。SSTW 的核心算法是:
+原始 SSTW 路线的目标不是给最终视频帧叠加一个后处理水印, 也不是用 DTW 或帧匹配恢复时间轴后再做普通检测。该历史路线的核心算法是:
 
 ```text
 在 Flow Matching 视频生成采样过程中, 用密钥条件弱约束改变速度场轨迹, 再用路径积分证据、终点证据和 replay 不确定性感知状态后验共同完成 fixed low-FPR 检测。

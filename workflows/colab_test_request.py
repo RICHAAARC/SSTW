@@ -38,6 +38,9 @@ PREDICTIVE_TRAJECTORY_SYNCHRONIZATION_SMOKE_TEST_ID = (
 TEMPORAL_CODE_ISOLATION_REPLAY_SMOKE_TEST_ID = (
     "temporal_code_isolation_replay_smoke"
 )
+PROMPT_ORTHOGONAL_STATE_TRAJECTORY_SMOKE_TEST_ID = (
+    "prompt_orthogonal_state_trajectory_smoke"
+)
 SUPPORTED_TEST_IDS = (
     TRAJECTORY_REPLAY_SOURCE_BUILD_TEST_ID,
     TRAJECTORY_SIGNAL_TEST_ID,
@@ -45,6 +48,7 @@ SUPPORTED_TEST_IDS = (
     MINIMAL_SIGNED_TRAJECTORY_STATE_SPACE_SMOKE_TEST_ID,
     PREDICTIVE_TRAJECTORY_SYNCHRONIZATION_SMOKE_TEST_ID,
     TEMPORAL_CODE_ISOLATION_REPLAY_SMOKE_TEST_ID,
+    PROMPT_ORTHOGONAL_STATE_TRAJECTORY_SMOKE_TEST_ID,
 )
 TRAJECTORY_REPLAY_SOURCE_BUILD_PHASE = "source_build"
 SUPPORTED_TRAJECTORY_PHASES = (
@@ -56,6 +60,7 @@ SUPPORTED_CONTROLLED_EMBEDDING_PHASES = ("no_attack",)
 SUPPORTED_MINIMAL_SIGNED_TRAJECTORY_PHASES = ("no_attack",)
 SUPPORTED_PREDICTIVE_TRAJECTORY_PHASES = ("no_attack",)
 SUPPORTED_TEMPORAL_CODE_ISOLATION_PHASES = ("no_attack",)
+SUPPORTED_PROMPT_ORTHOGONAL_STATE_TRAJECTORY_PHASES = ("no_attack",)
 EXPECTED_REPOSITORY_URL = "https://github.com/RICHAAARC/SSTW.git"
 _SAFE_REPOSITORY_REF = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._/-]*$")
 _SAFE_RUN_SERIES_ID = re.compile(r"^[a-z0-9][a-z0-9_-]{2,63}$")
@@ -168,6 +173,10 @@ def load_colab_test_request(
         supported_phases = SUPPORTED_PREDICTIVE_TRAJECTORY_PHASES
     elif test_id == TEMPORAL_CODE_ISOLATION_REPLAY_SMOKE_TEST_ID:
         supported_phases = SUPPORTED_TEMPORAL_CODE_ISOLATION_PHASES
+    elif test_id == PROMPT_ORTHOGONAL_STATE_TRAJECTORY_SMOKE_TEST_ID:
+        supported_phases = (
+            SUPPORTED_PROMPT_ORTHOGONAL_STATE_TRAJECTORY_PHASES
+        )
     else:
         supported_phases = SUPPORTED_TRAJECTORY_PHASES
     if phase not in supported_phases:
@@ -193,6 +202,7 @@ def load_colab_test_request(
         required=(
             phase in {"attacked", "decision"}
             or test_id == TEMPORAL_CODE_ISOLATION_REPLAY_SMOKE_TEST_ID
+            or test_id == PROMPT_ORTHOGONAL_STATE_TRAJECTORY_SMOKE_TEST_ID
         ),
     )
     if test_id == TRAJECTORY_REPLAY_SOURCE_BUILD_TEST_ID and resume_package:
@@ -280,6 +290,43 @@ def _discover_predictive_replay_source_root(
         raise RuntimeError(
             "predictive resume zip 必须唯一包含完整 smoke generation 根；"
             f"observed_roots={unique}"
+        )
+    return unique[0]
+
+
+def _discover_temporal_code_isolation_source_root(
+    extracted_root: Path,
+) -> Path:
+    """定位唯一、完整的 temporal-code failure 输入根。"""
+
+    candidates: list[Path] = []
+    for manifest_path in extracted_root.rglob(
+        "artifacts/temporal_code_isolation_smoke_manifest.json"
+    ):
+        candidate = manifest_path.parent.parent
+        if (
+            candidate.joinpath(
+                "artifacts/temporal_code_isolation_smoke_decision.json"
+            ).is_file()
+            and candidate.joinpath(
+                "records/temporal_code_isolation_summary_records.jsonl"
+            ).is_file()
+            and candidate.joinpath(
+                "records/temporal_code_isolation_pair_records.jsonl"
+            ).is_file()
+            and candidate.joinpath(
+                "records/temporal_code_isolation_identity_records.jsonl"
+            ).is_file()
+            and candidate.joinpath(
+                "records/temporal_code_isolation_failure_records.jsonl"
+            ).is_file()
+        ):
+            candidates.append(candidate.resolve())
+    unique = sorted(set(candidates))
+    if len(unique) != 1:
+        raise RuntimeError(
+            "prompt-orthogonal resume zip 必须唯一包含完整 temporal-code "
+            f"failure 根；observed_roots={unique}"
         )
     return unique[0]
 
@@ -662,6 +709,22 @@ def _default_temporal_code_isolation_runner(
     )
 
 
+def _default_prompt_orthogonal_state_trajectory_runner(
+    source_root: Path,
+    output_root: Path,
+    temporal_source_root: Path,
+) -> dict[str, Any]:
+    from experiments.generative_video_model_probe.prompt_orthogonal_state_trajectory_smoke import (
+        run_prompt_orthogonal_state_trajectory_smoke,
+    )
+
+    return run_prompt_orthogonal_state_trajectory_smoke(
+        source_root,
+        output_root,
+        temporal_source_root,
+    )
+
+
 def _source_generation_model_ids(source_root: Path) -> list[str]:
     """读取模型地址列表；有效性校验仍由测试 handler 负责。"""
 
@@ -903,6 +966,9 @@ def run_colab_test_request(
     temporal_code_isolation_runner: (
         Callable[..., dict[str, Any]] | None
     ) = None,
+    prompt_orthogonal_state_trajectory_runner: (
+        Callable[..., dict[str, Any]] | None
+    ) = None,
 ) -> dict[str, Any]:
     """执行一个白名单测试，并把唯一结果 zip 与 manifest 回写 Drive。"""
 
@@ -969,6 +1035,14 @@ def run_colab_test_request(
         generation_model_ids = (
             _minimal_signed_trajectory_generation_model_ids(source_root)
         )
+    elif (
+        resolved["test_id"]
+        == PROMPT_ORTHOGONAL_STATE_TRAJECTORY_SMOKE_TEST_ID
+    ):
+        source_root = source_extract_root
+        generation_model_ids = (
+            _minimal_signed_trajectory_generation_model_ids(source_root)
+        )
     else:
         source_root = _discover_stage0d_source_root(source_extract_root)
         generation_model_ids = _source_generation_model_ids(source_root)
@@ -980,6 +1054,7 @@ def run_colab_test_request(
         / resolved["run_series_id"]
     )
     predictive_replay_source_root: Path | None = None
+    temporal_code_isolation_source_root: Path | None = None
     if resolved["resume_package_path"]:
         resume_package = Path(resolved["resume_package_path"])
         cached_resume = cache_root / (
@@ -1002,6 +1077,23 @@ def run_colab_test_request(
                 _safe_extract_zip(cached_resume, resume_extract_root)
             predictive_replay_source_root = (
                 _discover_predictive_replay_source_root(
+                    resume_extract_root
+                )
+            )
+            output_root.mkdir(parents=True, exist_ok=False)
+        elif (
+            resolved["test_id"]
+            == PROMPT_ORTHOGONAL_STATE_TRAJECTORY_SMOKE_TEST_ID
+        ):
+            resume_extract_root = (
+                workspace_root
+                / "resume_inputs"
+                / resolved["run_series_id"]
+            )
+            if not resume_extract_root.exists():
+                _safe_extract_zip(cached_resume, resume_extract_root)
+            temporal_code_isolation_source_root = (
+                _discover_temporal_code_isolation_source_root(
                     resume_extract_root
                 )
             )
@@ -1055,6 +1147,23 @@ def run_colab_test_request(
             source_root,
             output_root,
             predictive_replay_source_root,
+        )
+    elif (
+        resolved["test_id"]
+        == PROMPT_ORTHOGONAL_STATE_TRAJECTORY_SMOKE_TEST_ID
+    ):
+        if temporal_code_isolation_source_root is None:
+            raise RuntimeError(
+                "prompt-orthogonal smoke 必须提供 temporal-code failure source"
+            )
+        runner = (
+            prompt_orthogonal_state_trajectory_runner
+            or _default_prompt_orthogonal_state_trajectory_runner
+        )
+        diagnostic_decision = runner(
+            source_root,
+            output_root,
+            temporal_code_isolation_source_root,
         )
     else:
         runner = trajectory_runner or _default_trajectory_runner

@@ -162,7 +162,9 @@ Notebook 固定读取:
 当前白名单测试包括 `trajectory_signal_localization_diagnostic`、
 `controlled_embedding_strength_diagnostic`、
 `minimal_signed_trajectory_state_space_smoke`、
-`predictive_trajectory_synchronization_smoke` 与仅用于重建输入的
+`predictive_trajectory_synchronization_smoke`、
+`temporal_code_isolation_replay_smoke`、
+`prompt_orthogonal_state_trajectory_smoke` 与仅用于重建输入的
 `trajectory_replay_smoke_source_build`。
 当 Stage 0-D source 未保留时，同一 Notebook 还可通过白名单
 `trajectory_replay_smoke_source_build` 请求，从已保留且包含视频的
@@ -256,6 +258,30 @@ correct/wrong 与 predictive/nonnegative
 margin；不再执行 endpoint gate、静态 path 投影 gate 或 state posterior。
 通过也只允许设计独立 calibration，攻击、fixed-FPR、baseline、论文 claim 和
 阶段推进仍全部关闭。Notebook 本身无需修改。
+
+时间码隔离失败后，新的 prompt-orthogonal state-trajectory 最小 smoke 使用
+`configs/paper_workflow/colab_test_prompt_orthogonal_state_trajectory_smoke_request_example.json`。
+它要求同时提供完整 controlled embedding 结果 ZIP 和完整 temporal-code isolation
+失败结果 ZIP，只接受 `phase=no_attack`。handler 固定生成：
+
+```text
+2 个 held-out prompts × 2 个 test seeds ×
+  (prompt_orthogonal_state_trajectory + clean_unwatermarked_control)
+= 8 videos
+```
+
+两组均使用 8-step generation；检测使用固定 20-step replay。watermarked 组采用
+prompt/seed/model/grid 无关的 owner master key、状态依赖 rank-2 反对称旋转方向、
+两通道连续平衡码和 AC-only `lambda_max=0.12` 注入，关闭 endpoint/DC。
+watermarked 与 clean 两组都以 FP32 control 进入 FlowMatch scheduler，避免 bf16
+量化吞掉微小 delta 或形成精度混杂。每个视频在
+同一 key-independent fixed trace 上评估一个 owner 和八个域分离 wrong-owner
+candidates；候选评估阶段基础模型每个 replay step 只调用一次，另用20次调用构造
+reverse fixed trace，单视频总计固定40次而不是按九候选重复反演。门禁固定检查 72 条 summary、
+32 条 watermarked owner/wrong pairs、4 条 watermarked identities、4 条 clean
+identities、prompt gap、replay reliability 及 watermarked-over-clean。通过也只允许
+设计独立 calibration；攻击、fixed-FPR、baseline、正式结果和阶段推进全部保持关闭。
+Notebook 与 failure recovery Cell 均不改。
 
 首次 source build 可从
 `configs/paper_workflow/colab_test_source_build_request_example.json` 复制请求。它只有在

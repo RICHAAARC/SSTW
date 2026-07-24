@@ -1,5 +1,18 @@
 # SSTW 方法机制设计：状态空间同步 Flow Matching 轨迹水印
 
+> **路线状态（2026-07-24）**
+>
+> 本文档保留 SSTW 原始 velocity/path/posterior 体系，作为历史设计基线和失败路线的
+> 可追溯来源。最新 `temporal_code_isolation_replay_smoke` 已否定当前
+> prompt-bound phase code 与单标量 `S_path_inv` 的组合实例；本文档中与
+> prompt 参与码字派生、固定加性方向、独立 DC/endpoint 通道或单标量主门禁相关的
+> 内容，不再代表下一轮候选实现。
+>
+> 当前候选路线定义在
+> `docs/builds/prompt_orthogonal_state_trajectory_method_design.md`。该候选路线已完成
+> 本地 P0--P9 与 Colab 白名单接线，但尚未执行 GPU 机制 smoke；不构成方法有效性、
+> 阶段推进或论文 claim。
+
 ## 0. 文档定位
 
 ### 0.1 独立阅读说明
@@ -8,7 +21,7 @@
 
 `sstw_algorithm_primitives_design.md` 是并列的学术化算法原语说明文档, 侧重回答“算法由哪些可复用原语组成、体系创新性在哪里、每个原语应如何被实验验证”。本文档则侧重回答“完整 SSTW 方法机制如何工作、哪些机制可以支撑论文主张、哪些失败边界必须降级”。两个文档互相引用时只能作为导航关系, 不能要求读者依赖另一个文档才能理解当前文档。
 
-本文档定义 **SSTW** 的最终方法机制。本文方法面向基于 Flow Matching、Rectified Flow 或 velocity-field sampler 的生成式视频模型，研究对象不是最终视频帧上的显式水印，也不是对视频片段进行显式时间对齐，而是：
+本文档记录 **SSTW** 的原始方法机制基线。该路线面向基于 Flow Matching、Rectified Flow 或 velocity-field sampler 的生成式视频模型，研究对象不是最终视频帧上的显式水印，也不是对视频片段进行显式时间对齐，而是：
 
 \[
 \boxed{

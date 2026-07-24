@@ -58,6 +58,7 @@ from main.methods.state_space_watermark.state_trajectory_injection import (
     PROMPT_ORTHOGONAL_SCHEDULER_CONTROL_DTYPE,
     PROMPT_ORTHOGONAL_VELOCITY_NORM_RATIO_BUDGET,
     PromptOrthogonalInjectionConfig,
+    PromptOrthogonalInjectionGuardError,
     apply_prompt_orthogonal_state_trajectory_injection,
 )
 from main.methods.state_space_watermark.trajectory_vector_demodulation import (
@@ -166,6 +167,76 @@ class _QuantizedNumpyTensor(_NumpyTensor):
     @property
     def dtype(self):
         return "quantized_test_dtype"
+
+
+class _Float32NumpyTensor:
+    """Minimal tensor substitute that preserves real NumPy FP32 rounding."""
+
+    def __init__(self, values):
+        self.values = np.asarray(values, dtype=np.float32)
+
+    @property
+    def shape(self):
+        return self.values.shape
+
+    @property
+    def dtype(self):
+        return self.values.dtype
+
+    def detach(self):
+        return self
+
+    def float(self):
+        return self
+
+    def norm(self):
+        return _Float32NumpyTensor(np.linalg.norm(self.values))
+
+    def square(self):
+        return _Float32NumpyTensor(np.square(self.values))
+
+    def sum(self):
+        return _Float32NumpyTensor(np.sum(self.values, dtype=np.float32))
+
+    def reshape(self, *shape):
+        return _Float32NumpyTensor(self.values.reshape(*shape))
+
+    def clamp_min(self, minimum):
+        return _Float32NumpyTensor(
+            np.maximum(self.values, np.float32(minimum))
+        )
+
+    def item(self):
+        return self.values.item()
+
+    def __add__(self, other):
+        return _Float32NumpyTensor(self.values + self._values(other))
+
+    def __sub__(self, other):
+        return _Float32NumpyTensor(self.values - self._values(other))
+
+    def __truediv__(self, other):
+        return _Float32NumpyTensor(self.values / self._values(other))
+
+    def __mul__(self, other):
+        return _Float32NumpyTensor(self.values * self._values(other))
+
+    def __rmul__(self, other):
+        return self.__mul__(other)
+
+    def __matmul__(self, other):
+        return _Float32NumpyTensor(
+            np.asarray(
+                self.values @ self._values(other),
+                dtype=np.float32,
+            )
+        )
+
+    @staticmethod
+    def _values(value):
+        if isinstance(value, (_Float32NumpyTensor, _NumpyTensor)):
+            return value.values
+        return value
 
 
 def _subkeys(master_key: str = "owner-master-key-material"):
@@ -551,6 +622,13 @@ def test_budgeted_injection_inactive_phase_is_exact_noop():
     assert record.inactive_phase_noop is True
     assert record.endpoint_control_enabled is False
     assert record.norm_guard_passed is None
+    assert record.finite_precision_projection_scale == 0.0
+    assert record.finite_precision_projection_attempt_count == 0
+    assert record.finite_precision_backoff_count == 0
+    assert (
+        record.finite_precision_projection_status
+        == "inactive_flow_phase_noop"
+    )
 
 
 def test_budgeted_injection_keeps_scheduler_control_in_float32():
@@ -587,6 +665,247 @@ def test_budgeted_injection_keeps_scheduler_control_in_float32():
     assert constrained.values[0] > 3.0
     assert record.delta_norm > 0.0
     assert record.direction_guard_passed is True
+
+
+def test_budgeted_injection_projects_actual_float32_delta_inside_wan_edge_budget():
+    from main.methods.state_space_watermark.state_rotation_operator import (
+        PromptOrthogonalDirection,
+    )
+
+    phase = 0.25268477
+    rng = np.random.default_rng(0)
+    base_values = rng.standard_normal(100_000).astype(np.float32)
+    direction_values = rng.standard_normal(100_000).astype(np.float32)
+    direction_values = (
+        direction_values / np.linalg.norm(direction_values)
+    ).astype(np.float32)
+    base_norm = float(np.linalg.norm(base_values))
+    schedule_weight = flow_phase_weight(
+        phase,
+        FlowTubeletKeyCodeConfig(),
+    )
+    joint_norm_budget = (
+        base_norm
+        * PROMPT_ORTHOGONAL_VELOCITY_NORM_RATIO_BUDGET
+        * PROMPT_ORTHOGONAL_LAMBDA_MAX
+        * schedule_weight
+    )
+    legacy_candidate = (
+        direction_values * np.float32(joint_norm_budget)
+    ).astype(np.float32)
+    legacy_actual_delta = (
+        (base_values + legacy_candidate).astype(np.float32) - base_values
+    ).astype(np.float32)
+    legacy_actual_norm = float(np.linalg.norm(legacy_actual_delta))
+    assert legacy_actual_norm > joint_norm_budget * (1.0 + 1e-5)
+
+    model_output = _Float32NumpyTensor(base_values)
+    keyed_direction = PromptOrthogonalDirection(
+        direction=_Float32NumpyTensor(direction_values),
+        operator_plane_digest="a" * 64,
+        operator_rank=2,
+        state_tangent_norm=1.0,
+        projected_tangent_norm=1.0,
+        projection_retained_ratio=1.0,
+        state_orthogonality_residual=0.0,
+        velocity_orthogonality_residual=0.0,
+        active=True,
+    )
+    constrained, record = apply_prompt_orthogonal_state_trajectory_injection(
+        model_output,
+        _Float32NumpyTensor(np.zeros_like(base_values)),
+        keyed_direction,
+        continuous_code=1.0,
+        flow_phase=phase,
+        control_context=VelocityControlContext(
+            delta_sigma=-0.1,
+            cumulative_control_energy=0.0,
+            cumulative_reference_energy=0.0,
+            remaining_step_count=8,
+        ),
+    )
+    actual_delta = constrained.values - base_values
+    assert np.linalg.norm(actual_delta) > 0.0
+    assert record.norm_guard_passed is True
+    assert record.energy_guard_passed is True
+    assert record.direction_guard_passed is True
+    assert (
+        record.direction_cosine
+        >= PROMPT_ORTHOGONAL_DIRECTION_COSINE_MINIMUM
+    )
+    assert record.delta_norm <= record.joint_norm_budget
+    assert record.finite_precision_projection_scale < 1.0
+    assert record.finite_precision_backoff_count >= 1
+    assert record.finite_precision_projection_attempt_count > 1
+    assert (
+        record.finite_precision_projection_status
+        == "bounded_actual_delta_backoff_pass"
+    )
+
+
+def test_budgeted_injection_does_not_backoff_normal_midphase_float32_delta():
+    from main.methods.state_space_watermark.state_rotation_operator import (
+        PromptOrthogonalDirection,
+    )
+
+    rng = np.random.default_rng(19)
+    base_values = rng.standard_normal(4096).astype(np.float32)
+    direction_values = rng.standard_normal(4096).astype(np.float32)
+    direction_values = (
+        direction_values / np.linalg.norm(direction_values)
+    ).astype(np.float32)
+    constrained, record = apply_prompt_orthogonal_state_trajectory_injection(
+        _Float32NumpyTensor(base_values),
+        _Float32NumpyTensor(np.zeros_like(base_values)),
+        PromptOrthogonalDirection(
+            direction=_Float32NumpyTensor(direction_values),
+            operator_plane_digest="b" * 64,
+            operator_rank=2,
+            state_tangent_norm=1.0,
+            projected_tangent_norm=1.0,
+            projection_retained_ratio=1.0,
+            state_orthogonality_residual=0.0,
+            velocity_orthogonality_residual=0.0,
+            active=True,
+        ),
+        continuous_code=0.5,
+        flow_phase=0.5,
+        control_context=VelocityControlContext(
+            delta_sigma=-0.1,
+            cumulative_control_energy=0.0,
+            cumulative_reference_energy=0.0,
+            remaining_step_count=8,
+        ),
+    )
+    assert np.linalg.norm(constrained.values - base_values) > 0.0
+    assert record.norm_guard_passed is True
+    assert record.energy_guard_passed is True
+    assert record.direction_guard_passed is True
+    assert record.finite_precision_projection_scale == pytest.approx(1.0)
+    assert record.finite_precision_projection_attempt_count == 1
+    assert record.finite_precision_backoff_count == 0
+    assert (
+        record.finite_precision_projection_status
+        == "direct_actual_delta_pass"
+    )
+
+
+def test_budgeted_injection_projects_actual_float32_delta_inside_energy_budget():
+    from main.methods.state_space_watermark.state_rotation_operator import (
+        PromptOrthogonalDirection,
+    )
+
+    rng = np.random.default_rng(31)
+    base_values = rng.standard_normal(100_000).astype(np.float32)
+    direction_values = rng.standard_normal(100_000).astype(np.float32)
+    direction_values = (
+        direction_values / np.linalg.norm(direction_values)
+    ).astype(np.float32)
+    interval = -0.1
+    reference_increment = interval**2 * float(
+        np.square(base_values).sum(dtype=np.float32)
+    )
+    total_energy_budget = (
+        PROMPT_ORTHOGONAL_FLOW_ENERGY_BUDGET_RATIO
+        * reference_increment
+        * 8
+    )
+    target_energy_limited_norm = 0.0003
+    remaining_energy = (
+        interval**2 * target_energy_limited_norm**2
+    )
+    cumulative_control_energy = total_energy_budget - remaining_energy
+    legacy_intended_delta = (
+        direction_values * np.float32(target_energy_limited_norm)
+    ).astype(np.float32)
+    legacy_actual_delta = (
+        (base_values + legacy_intended_delta).astype(np.float32)
+        - base_values
+    ).astype(np.float32)
+    legacy_energy_increment = interval**2 * float(
+        np.linalg.norm(legacy_actual_delta)
+    ) ** 2
+    assert legacy_energy_increment > remaining_energy
+
+    constrained, record = apply_prompt_orthogonal_state_trajectory_injection(
+        _Float32NumpyTensor(base_values),
+        _Float32NumpyTensor(np.zeros_like(base_values)),
+        PromptOrthogonalDirection(
+            direction=_Float32NumpyTensor(direction_values),
+            operator_plane_digest="e" * 64,
+            operator_rank=2,
+            state_tangent_norm=1.0,
+            projected_tangent_norm=1.0,
+            projection_retained_ratio=1.0,
+            state_orthogonality_residual=0.0,
+            velocity_orthogonality_residual=0.0,
+            active=True,
+        ),
+        continuous_code=1.0,
+        flow_phase=0.5,
+        control_context=VelocityControlContext(
+            delta_sigma=interval,
+            cumulative_control_energy=cumulative_control_energy,
+            cumulative_reference_energy=0.0,
+            remaining_step_count=8,
+        ),
+    )
+    assert np.linalg.norm(constrained.values - base_values) > 0.0
+    assert record.norm_guard_passed is True
+    assert record.energy_guard_passed is True
+    assert record.direction_guard_passed is True
+    assert record.control_energy_increment <= remaining_energy
+    assert record.finite_precision_projection_scale < 1.0
+    assert record.finite_precision_backoff_count >= 1
+    assert (
+        record.finite_precision_projection_status
+        == "bounded_actual_delta_backoff_pass"
+    )
+
+
+def test_budgeted_injection_fails_closed_with_structured_float32_diagnostics():
+    from main.methods.state_space_watermark.state_rotation_operator import (
+        PromptOrthogonalDirection,
+    )
+
+    rng = np.random.default_rng(7)
+    base_values = rng.standard_normal(100_000).astype(np.float32)
+    direction_values = rng.standard_normal(100_000).astype(np.float32)
+    direction_values = (
+        direction_values / np.linalg.norm(direction_values)
+    ).astype(np.float32)
+    with pytest.raises(PromptOrthogonalInjectionGuardError) as caught:
+        apply_prompt_orthogonal_state_trajectory_injection(
+            _Float32NumpyTensor(base_values),
+            _Float32NumpyTensor(np.zeros_like(base_values)),
+            PromptOrthogonalDirection(
+                direction=_Float32NumpyTensor(direction_values),
+                operator_plane_digest="c" * 64,
+                operator_rank=2,
+                state_tangent_norm=1.0,
+                projected_tangent_norm=1.0,
+                projection_retained_ratio=1.0,
+                state_orthogonality_residual=0.0,
+                velocity_orthogonality_residual=0.0,
+                active=True,
+            ),
+            continuous_code=1.0,
+            flow_phase=0.251,
+            control_context=VelocityControlContext(
+                delta_sigma=-0.1,
+                cumulative_control_energy=0.0,
+                cumulative_reference_energy=0.0,
+                remaining_step_count=8,
+            ),
+        )
+    diagnostics = caught.value.diagnostics
+    assert diagnostics["candidate_delta_norm"] > 0.0
+    assert diagnostics["actual_delta_norm"] > 0.0
+    assert diagnostics["joint_norm_budget"] > 0.0
+    assert diagnostics["direction_guard_passed"] is False
+    assert diagnostics["finite_precision_projection_attempt_count"] == 1
+    assert diagnostics["finite_precision_backoff_count"] == 0
+    assert "direction_guard_passed" in str(caught.value)
 
 
 @pytest.mark.parametrize(
@@ -845,6 +1164,17 @@ def test_torch_prompt_orthogonal_runtime_executes_real_scheduler_hook():
         record["prompt_orthogonal_norm_guard_passed"] is True
         and record["prompt_orthogonal_energy_guard_passed"] is True
         and record["prompt_orthogonal_direction_guard_passed"] is True
+        and record[
+            "prompt_orthogonal_finite_precision_projection_status"
+        ]
+        in {
+            "direct_actual_delta_pass",
+            "bounded_actual_delta_backoff_pass",
+        }
+        and record[
+            "prompt_orthogonal_finite_precision_projection_attempt_count"
+        ]
+        >= 1
         for record in active
     )
 

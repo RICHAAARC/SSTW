@@ -341,6 +341,11 @@ B_{\mathrm{trajectory}}.
 - inactive phase 严格返回原始 model output；
 - 最终 delta 与 prompt-orthogonal state direction 保持正向；
 - norm 与 cumulative energy 记录基于原始 model output 到最终 output；
+- analytic delta 在 FP32 `base + delta` 后若因舍入略超预算，只允许通过
+  冻结、有界、确定性的 actual-delta backoff 投影回原预算，并保留最大已观测
+  可行非零控制；不得放宽 norm/energy/cosine guard；
+- direct/backoff 状态、candidate/actual norm、最终 projection scale 与评估次数
+  必须进入 step record；
 - generation trace 保存连续 code 和 operator digests，但不保存 key。
 
 ### 6.4 失败语义
@@ -348,12 +353,16 @@ B_{\mathrm{trajectory}}.
 - active code 非零但 direction inactive；
 - final delta 方向翻转；
 - norm/energy 超限；
+- 冻结 backoff 搜索内不存在同时满足 direction/norm/energy 的可表示非零
+  FP32 delta；
 - scheduler weight 缺失；
 - generation/replay function digest 不同。
 
 ### 6.5 轻量测试
 
 - NumPy substitute 验证最终 delta；
+- NumPy FP32 substitute 覆盖真实 Wan edge-of-window 低权重下的
+  `base + delta - base` 舍入与 bounded backoff；
 - torch integration 验证真实 tensor；
 - zero/inactive code 严格 no-op；
 - cumulative energy 单调；
@@ -681,7 +690,10 @@ P1 的 keyed plane 始终在 CPU 规范生成后再搬到 generation/replay 设�
 CPU 与 CUDA RNG 仅凭同 seed 假定数值同源。
 P4 的 watermarked 与 clean model output 均以 FP32 control 进入 FlowMatch scheduler；
 guard 衡量原始 model output 到最终 scheduler control 的实测差值，禁止先在 FP32
-声明通过、再把微小 delta 量化回 bf16。
+声明通过、再把微小 delta 量化回 bf16。若实测 delta 因 FP32 加法舍入略超原冻结
+预算，只能在不改变 `lambda_max`、phase window 或 guard 阈值的前提下执行确定性
+actual-delta backoff；无非零可行解时必须输出不含 key/tensor 的标量诊断并
+fail-closed。
 
 ## 14. 实现前冻结清单
 

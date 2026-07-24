@@ -3086,6 +3086,12 @@ Notebook 与 repository module 的跨边界数据
 | prompt_orthogonal_joint_norm_budget | metric | none | true | false | false | 相对原始 model velocity 计算的当前 prompt-orthogonal delta norm 上限。 |
 | prompt_orthogonal_energy_limited_delta_norm | metric | none | true | false | false | 当前剩余 Flow energy 能容纳的 prompt-orthogonal delta norm 上限。 |
 | prompt_orthogonal_joint_scale | metric | none | true | false | false | 为共同满足 norm 与 cumulative energy 预算施加的单一非负缩放。 |
+| prompt_orthogonal_candidate_delta_norm | metric | none | true | false | false | 有限精度投影前、按连续码和冻结 norm budget 构造的候选 delta 范数。 |
+| prompt_orthogonal_intended_delta_norm_before_projection | metric | none | true | false | false | 应用 analytic joint scale 后、尚未执行实际 FP32 delta 投影的目标范数。 |
+| prompt_orthogonal_finite_precision_projection_scale | metric | none | true | false | false | 施加到 analytic delta 上、使实际 FP32 delta 同时满足 direction/norm/energy guard 的最终非负比例。 |
+| prompt_orthogonal_finite_precision_projection_attempt_count | metric | none | true | false | false | 实际 FP32 delta 从直接检查、确定性 backoff 到有界上界细化的总评估次数。 |
+| prompt_orthogonal_finite_precision_backoff_count | metric | none | true | false | false | 实际 FP32 delta 在找到首个非零可行控制前执行的确定性预算回退次数。 |
+| prompt_orthogonal_finite_precision_projection_status | governance | none | true | false | false | 当前 step 是直接通过、经有界 actual-delta backoff 通过，还是合法 inactive no-op。 |
 | prompt_orthogonal_direction_cosine | metric | none | true | false | false | 最终 delta 相对 signed state-dependent keyed direction 的余弦。 |
 | prompt_orthogonal_norm_guard_passed | governance | none | true | false | false | 最终 delta 是否满足冻结 velocity norm budget。 |
 | prompt_orthogonal_energy_guard_passed | governance | none | true | false | false | 最终 delta 是否满足冻结 cumulative Flow energy budget。 |

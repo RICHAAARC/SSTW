@@ -321,6 +321,12 @@ v_t^{\mathrm{wm}}=v_t+\delta v_{K,t}.
 2. cumulative scheduler-weighted energy guard；
 3. state-tangent/nuisance-orthogonality guard。
 
+三类 guard 均以送入 scheduler 的实际 FP32 control 与原始 velocity 的差值为准。
+edge-of-window 的微小 analytic delta 若因 `base + delta` 舍入略超原预算，只允许
+在冻结预算与方向阈值内做有界、确定性的 actual-delta backoff，并选择搜索到的
+最大可行非零控制；搜索无解时必须带安全标量诊断 fail-closed，不得把 active
+step 静默改为 no-op，也不得放宽阈值。
+
 候选路线明确移除：
 
 - 独立 DC allocation；

@@ -209,6 +209,27 @@ def _generation_execution_fixture(root: Path) -> dict:
                 "prompt_orthogonal_direction_guard_passed": (
                     True if watermarked else None
                 ),
+                "prompt_orthogonal_finite_precision_projection_status": (
+                    "direct_actual_delta_pass" if watermarked else None
+                ),
+                "prompt_orthogonal_finite_precision_projection_scale": (
+                    1.0 if watermarked else None
+                ),
+                "prompt_orthogonal_finite_precision_projection_attempt_count": (
+                    1 if watermarked else None
+                ),
+                "prompt_orthogonal_candidate_delta_norm": (
+                    0.1 if watermarked else None
+                ),
+                "prompt_orthogonal_intended_delta_norm_before_projection": (
+                    0.1 if watermarked else None
+                ),
+                "velocity_constraint_delta_norm": (
+                    0.1 if watermarked else 0.0
+                ),
+                "prompt_orthogonal_finite_precision_backoff_count": (
+                    0 if watermarked else None
+                ),
                 "endpoint_control_enabled": False,
             }
         )

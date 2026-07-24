@@ -769,6 +769,24 @@ class FlowVelocityConstraintRuntime:
                 "prompt_orthogonal_joint_scale": (
                     injection_record.joint_scale
                 ),
+                "prompt_orthogonal_candidate_delta_norm": (
+                    injection_record.candidate_delta_norm
+                ),
+                "prompt_orthogonal_intended_delta_norm_before_projection": (
+                    injection_record.intended_delta_norm_before_projection
+                ),
+                "prompt_orthogonal_finite_precision_projection_scale": (
+                    injection_record.finite_precision_projection_scale
+                ),
+                "prompt_orthogonal_finite_precision_projection_attempt_count": (
+                    injection_record.finite_precision_projection_attempt_count
+                ),
+                "prompt_orthogonal_finite_precision_backoff_count": (
+                    injection_record.finite_precision_backoff_count
+                ),
+                "prompt_orthogonal_finite_precision_projection_status": (
+                    injection_record.finite_precision_projection_status
+                ),
                 "prompt_orthogonal_direction_cosine": (
                     injection_record.direction_cosine
                 ),

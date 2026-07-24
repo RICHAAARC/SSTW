@@ -529,6 +529,47 @@ def validate_prompt_orthogonal_generation_execution(
         row.get("prompt_orthogonal_norm_guard_passed") is not True
         or row.get("prompt_orthogonal_energy_guard_passed") is not True
         or row.get("prompt_orthogonal_direction_guard_passed") is not True
+        or row.get("prompt_orthogonal_finite_precision_projection_status")
+        not in {
+            "direct_actual_delta_pass",
+            "bounded_actual_delta_backoff_pass",
+        }
+        or not (
+            0.0
+            < float(
+                row.get(
+                    "prompt_orthogonal_finite_precision_projection_scale",
+                    0.0,
+                )
+            )
+            <= 1.0
+        )
+        or int(
+            row.get(
+                "prompt_orthogonal_finite_precision_projection_attempt_count",
+                0,
+            )
+        )
+        < 1
+        or float(
+            row.get("prompt_orthogonal_candidate_delta_norm", 0.0)
+        )
+        <= 0.0
+        or float(
+            row.get(
+                "prompt_orthogonal_intended_delta_norm_before_projection",
+                0.0,
+            )
+        )
+        <= 0.0
+        or float(row.get("velocity_constraint_delta_norm", 0.0)) <= 0.0
+        or int(
+            row.get(
+                "prompt_orthogonal_finite_precision_backoff_count",
+                -1,
+            )
+        )
+        < 0
         or row.get("endpoint_control_enabled") is not False
         for row in active
     ):

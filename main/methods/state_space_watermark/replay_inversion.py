@@ -287,6 +287,52 @@ def replay_step_reliability_weight(
     return max(0.0, min(1.0, exp(-0.5 * normalized_residual)))
 
 
+def replay_step_null_reliability_weight(
+    trajectory: ReplayTrajectory,
+    state_index: int,
+    *,
+    config: ReplayGaussianLikelihoodConfig | None = None,
+) -> float:
+    """返回与候选 key 无关的 null-forward 路径可靠性权重。
+
+    correct/wrong key 的 matched-path 比较必须共享同一组权重，否则候选 forward
+    hypothesis 的拟合差异会混入路径投影。该权重只使用固定 reverse observation
+    与基础模型 null forward state，不读取候选 key、标签或最终检测分数。
+    """
+
+    index = int(state_index)
+    if index < 0 or index >= len(trajectory.reverse_states):
+        raise IndexError("replay state index 超出固定轨迹范围")
+    if (
+        len(trajectory.forward_states) != len(trajectory.reverse_states)
+        or len(trajectory.null_forward_states) != len(trajectory.reverse_states)
+    ):
+        raise ValueError("候选、null 与固定 reverse replay 轨迹长度必须一致")
+    active_config = config or ReplayGaussianLikelihoodConfig(
+        relative_observation_noise_standard_deviation=(
+            trajectory.relative_observation_noise_standard_deviation
+        ),
+        likelihood_model_id=trajectory.replay_likelihood_model_id,
+        calibration_protocol=(
+            trajectory.replay_likelihood_calibration_protocol
+        ),
+        calibration_cluster_count=(
+            trajectory.replay_likelihood_calibration_cluster_count
+        ),
+    )
+    likelihood = gaussian_replay_residual_likelihood(
+        trajectory.null_forward_states[index],
+        trajectory.null_forward_states[index],
+        trajectory.reverse_states[index],
+        config=active_config,
+    )
+    normalized_residual = (
+        likelihood.candidate_residual_mean_squared_error
+        / max(likelihood.observation_noise_variance, 1e-12)
+    )
+    return max(0.0, min(1.0, exp(-0.5 * normalized_residual)))
+
+
 def _relative_error(left: Any, right: Any) -> float:
     difference = (left.detach().float() - right.detach().float()).norm()
     denominator = right.detach().float().norm().clamp_min(1e-8)

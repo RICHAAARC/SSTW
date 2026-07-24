@@ -17,7 +17,6 @@ from experiments.generative_video_model_probe.colab_runtime import (
     validate_generation_model_provenance,
 )
 from experiments.generative_video_model_probe.formal_flow_evidence_runner import (
-    _evaluate_fixed_replay_hypothesis_for_key,
     _generation_key,
     _invoke_pipeline_loader,
     _load_pipeline,
@@ -56,6 +55,7 @@ from main.methods.state_space_watermark.velocity_field_constraint import (
 )
 from main.methods.state_space_watermark.wan_flow_replay_backend import (
     predictive_schedule_for_replay,
+    score_replay_trajectory_for_key,
 )
 
 
@@ -67,6 +67,22 @@ RECORD_VERSION = "predictive_trajectory_synchronization_smoke"
 PREDICTIVE_VARIANT = "predictive_signed_phase_code"
 NONNEGATIVE_VARIANT = "nonnegative_phase_control"
 WRONG_OWNER_KEY_CONTROL_CANDIDATE_COUNT = 32
+PRIMARY_PATH_STATISTIC = "S_path_inv"
+PATH_RELIABILITY_MODE = "null_forward_key_independent"
+SPATIAL_ONLY_WRONG_ROLE = "wrong_owner_spatial_key_only"
+TEMPORAL_ONLY_WRONG_ROLE = "wrong_owner_temporal_code_only"
+JOINT_PATH_COMPARISON = (
+    "correct_owner_key_over_wrong_owner_key_predictive_path"
+)
+SPATIAL_ONLY_PATH_COMPARISON = (
+    "correct_owner_key_over_spatial_only_wrong_key_predictive_path"
+)
+TEMPORAL_ONLY_PATH_COMPARISON = (
+    "correct_owner_key_over_temporal_only_wrong_code_predictive_path"
+)
+SIGNED_OVER_CONTROL_PATH_COMPARISON = (
+    "predictive_signed_over_nonnegative_path_margin"
+)
 
 
 def validate_predictive_trajectory_config(
@@ -131,6 +147,10 @@ def validate_predictive_trajectory_config(
         "wrong_owner_key_control_candidate_count": (
             WRONG_OWNER_KEY_CONTROL_CANDIDATE_COUNT
         ),
+        "primary_predictive_path_statistic": PRIMARY_PATH_STATISTIC,
+        "predictive_path_reliability_mode": PATH_RELIABILITY_MODE,
+        "smoke_summary_record_count": 24,
+        "smoke_pair_record_count": 20,
     }
     mismatches = [
         name for name, expected in exact.items() if config.get(name) != expected
@@ -154,8 +174,19 @@ def validate_predictive_trajectory_config(
             "maximum_absolute_code_correlation",
             PREDICTIVE_TRAJECTORY_MAXIMUM_ABSOLUTE_CODE_CORRELATION,
         ),
-        ("minimum_predictive_correct_over_wrong_fraction", 0.75),
-        ("minimum_predictive_over_nonnegative_margin_fraction", 0.75),
+        ("minimum_predictive_correct_over_wrong_path_fraction", 0.75),
+        (
+            "minimum_predictive_over_nonnegative_path_margin_fraction",
+            0.75,
+        ),
+        (
+            "minimum_predictive_correct_over_spatial_only_wrong_fraction",
+            0.75,
+        ),
+        (
+            "minimum_predictive_correct_over_temporal_only_wrong_fraction",
+            0.75,
+        ),
         ("minimum_replay_reliability", 0.05),
     )
     allowed_fields = (
@@ -436,6 +467,49 @@ def validate_predictive_generation_execution(
         )
 
 
+def _validated_predictive_path_evidence(
+    path_evidence: Mapping[str, Any],
+    config: Mapping[str, Any],
+) -> dict[str, Any]:
+    """将 replay path evidence 收敛为 fail-closed smoke summary 字段。"""
+
+    primary_field = str(config["primary_predictive_path_statistic"])
+    try:
+        primary_score = float(path_evidence[primary_field])
+        velocity_score = float(path_evidence["S_velocity"])
+        step_count = int(path_evidence["path_observation_step_count"])
+    except (KeyError, TypeError, ValueError) as exc:
+        raise RuntimeError("predictive replay path evidence 数值字段不完整") from exc
+    if not math.isfinite(primary_score) or not math.isfinite(velocity_score):
+        raise RuntimeError("predictive replay path evidence 包含非有限数值")
+    if (
+        step_count != int(config["replay_step_count"])
+        or path_evidence.get("path_quadrature_context_complete") is not True
+        or path_evidence.get("replay_joint_schedule_context_complete") is not True
+        or path_evidence.get("path_replay_weighted_aggregation_applied")
+        is not True
+        or path_evidence.get("path_replay_reliability_mode")
+        != config["predictive_path_reliability_mode"]
+    ):
+        raise RuntimeError(
+            "predictive replay path evidence 未保持固定网格、求积与 key-independent 权重"
+        )
+    return {
+        "predictive_replay_path_score": primary_score,
+        "predictive_replay_velocity_score": velocity_score,
+        "predictive_replay_path_observation_step_count": step_count,
+        "predictive_replay_path_quadrature_context_complete": True,
+        "predictive_replay_joint_schedule_context_complete": True,
+        "predictive_replay_path_weighted_aggregation_applied": True,
+        "predictive_replay_path_reliability_mode": path_evidence[
+            "path_replay_reliability_mode"
+        ],
+        "predictive_replay_spatial_temporal_key_decoupled": bool(
+            path_evidence.get("path_spatial_temporal_key_decoupled")
+        ),
+    }
+
+
 def _execute_replay(
     output_root: Path,
     config: Mapping[str, Any],
@@ -572,25 +646,99 @@ def _execute_replay(
                 if active_carrier is not None
                 else None
             )
-            wrong_trajectory, _wrong_path = (
-                _evaluate_fixed_replay_hypothesis_for_key(
-                    pipeline,
-                    replay,
-                    prompt=prompt,
-                    key_text=wrong_key,
-                    key_context=key_context,
-                    predictive_trajectory_carrier_config=active_carrier,
-                    endpoint_control_enabled=False,
-                )
+            shared_path_kwargs = {
+                "tubelet_config": tubelet,
+                "likelihood_config": likelihood,
+                "key_context": key_context,
+                "predictive_trajectory_carrier_config": active_carrier,
+                "path_reliability_mode": config[
+                    "predictive_path_reliability_mode"
+                ],
+            }
+            correct_path = score_replay_trajectory_for_key(
+                correct_trajectory,
+                replay.primary_schedule,
+                key_text=correct_key,
+                **shared_path_kwargs,
             )
-            for key_role, trajectory in (
-                ("correct_owner_key", correct_trajectory),
-                ("wrong_owner_key", wrong_trajectory),
-            ):
+            wrong_path = score_replay_trajectory_for_key(
+                correct_trajectory,
+                replay.primary_schedule,
+                key_text=wrong_key,
+                **shared_path_kwargs,
+            )
+            candidates: list[
+                tuple[str, Any | None, Mapping[str, Any], str, str]
+            ] = [
+                (
+                    "correct_owner_key",
+                    correct_trajectory,
+                    correct_path,
+                    "owner_key",
+                    (
+                        "owner_key"
+                        if active_carrier is not None
+                        else "not_applicable"
+                    ),
+                ),
+                (
+                    "wrong_owner_key",
+                    None,
+                    wrong_path,
+                    "wrong_owner_key",
+                    (
+                        "wrong_owner_key"
+                        if active_carrier is not None
+                        else "not_applicable"
+                    ),
+                ),
+            ]
+            if active_carrier is not None:
+                candidates.extend(
+                    [
+                        (
+                            SPATIAL_ONLY_WRONG_ROLE,
+                            None,
+                            score_replay_trajectory_for_key(
+                                correct_trajectory,
+                                replay.primary_schedule,
+                                key_text=wrong_key,
+                                trajectory_carrier_key_text=correct_key,
+                                **shared_path_kwargs,
+                            ),
+                            "wrong_owner_key",
+                            "owner_key",
+                        ),
+                        (
+                            TEMPORAL_ONLY_WRONG_ROLE,
+                            None,
+                            score_replay_trajectory_for_key(
+                                correct_trajectory,
+                                replay.primary_schedule,
+                                key_text=correct_key,
+                                trajectory_carrier_key_text=wrong_key,
+                                **shared_path_kwargs,
+                            ),
+                            "owner_key",
+                            "wrong_owner_key",
+                        ),
+                    ]
+                )
+            for (
+                key_role,
+                trajectory,
+                path_evidence,
+                spatial_key_role,
+                temporal_code_key_role,
+            ) in candidates:
                 summary_base = {
                     **base,
                     "candidate_key_role": key_role,
                 }
+                path_fields = _validated_predictive_path_evidence(
+                    path_evidence,
+                    config,
+                )
                 summaries.append(
                     {
                         **summary_base,
@@ -599,13 +747,20 @@ def _execute_replay(
                         ),
                         "predictive_replay_log_likelihood_ratio": (
                             trajectory.replay_log_likelihood_ratio
+                            if trajectory is not None
+                            else None
                         ),
                         "predictive_replay_cycle_relative_error": (
                             trajectory.candidate_cycle_relative_error
+                            if trajectory is not None
+                            else None
                         ),
                         "predictive_null_cycle_relative_error": (
                             trajectory.null_cycle_relative_error
+                            if trajectory is not None
+                            else None
                         ),
+                        **path_fields,
                         "trajectory_global_reliability": (
                             replay.replay_uncertainty.replay_reliability
                         ),
@@ -614,6 +769,13 @@ def _execute_replay(
                         ),
                         "predictive_wrong_owner_key_control_candidate_index": (
                             wrong_key_candidate_index
+                        ),
+                        "predictive_replay_spatial_key_role": spatial_key_role,
+                        "predictive_replay_temporal_code_key_role": (
+                            temporal_code_key_role
+                        ),
+                        "predictive_endpoint_llr_role": (
+                            "diagnostic_only_not_gate"
                         ),
                         "metric_status": (
                             "measured_predictive_trajectory_synchronization_smoke"
@@ -634,6 +796,44 @@ def _execute_replay(
 def _fraction(values: Iterable[bool]) -> float:
     rows = list(values)
     return sum(bool(value) for value in rows) / len(rows) if rows else 0.0
+
+
+def _shared_wrong_key_candidate_index(
+    rows: Iterable[Mapping[str, Any]],
+) -> int | None:
+    values = [
+        row.get("predictive_wrong_owner_key_control_candidate_index")
+        for row in rows
+    ]
+    if any(value is None for value in values):
+        return None
+    parsed = [int(value) for value in values]
+    return parsed[0] if len(set(parsed)) == 1 else None
+
+
+def _predictive_summary_path_ready(
+    row: Mapping[str, Any],
+    config: Mapping[str, Any],
+) -> bool:
+    try:
+        score = float(row["predictive_replay_path_score"])
+    except (KeyError, TypeError, ValueError):
+        return False
+    return bool(
+        math.isfinite(score)
+        and row.get(
+            "predictive_replay_path_quadrature_context_complete"
+        )
+        is True
+        and row.get("predictive_replay_joint_schedule_context_complete")
+        is True
+        and row.get(
+            "predictive_replay_path_weighted_aggregation_applied"
+        )
+        is True
+        and row.get("predictive_replay_path_reliability_mode")
+        == config["predictive_path_reliability_mode"]
+    )
 
 
 def build_predictive_pair_records(
@@ -664,32 +864,31 @@ def build_predictive_pair_records(
             )
             if correct is None or wrong is None:
                 continue
-            candidate_index_values = [
-                int(row["predictive_wrong_owner_key_control_candidate_index"])
-                for row in (correct, wrong)
-                if row.get(
-                    "predictive_wrong_owner_key_control_candidate_index"
-                )
-                is not None
-            ]
-            if (
-                len(candidate_index_values) != 2
-                or len(set(candidate_index_values)) != 1
-            ):
+            candidate_index = _shared_wrong_key_candidate_index(
+                (correct, wrong)
+            )
+            if candidate_index is None:
                 continue
-            candidate_index = candidate_index_values[0]
-            margin = float(
-                correct["predictive_replay_log_likelihood_ratio"]
-            ) - float(wrong["predictive_replay_log_likelihood_ratio"])
+            margin = float(correct["predictive_replay_path_score"]) - float(
+                wrong["predictive_replay_path_score"]
+            )
+            endpoint_margin: float | None = None
+            if (
+                correct.get("predictive_replay_log_likelihood_ratio")
+                is not None
+                and wrong.get("predictive_replay_log_likelihood_ratio")
+                is not None
+            ):
+                endpoint_margin = float(
+                    correct["predictive_replay_log_likelihood_ratio"]
+                ) - float(wrong["predictive_replay_log_likelihood_ratio"])
             base = {
                 "record_version": RECORD_VERSION,
                 "profile_id": PROFILE_ID,
                 "prompt_id": prompt_id,
                 "seed_id": seed_id,
                 "trajectory_carrier_variant_id": variant,
-                "comparison_kind": (
-                    "correct_owner_key_over_wrong_owner_key_predictive_llr"
-                ),
+                "comparison_kind": JOINT_PATH_COMPARISON,
             }
             pairs.append(
                 {
@@ -697,7 +896,10 @@ def build_predictive_pair_records(
                     "predictive_trajectory_pair_record_id": (
                         _stable_digest(base)
                     ),
-                    "correct_over_wrong_predictive_llr_margin": margin,
+                    "correct_over_wrong_predictive_path_margin": margin,
+                    "correct_over_wrong_predictive_endpoint_llr_margin": (
+                        endpoint_margin
+                    ),
                     "predictive_wrong_owner_key_control_candidate_index": (
                         candidate_index
                     ),
@@ -710,6 +912,60 @@ def build_predictive_pair_records(
             margins[(prompt_id, seed_id, variant)] = (
                 margin,
                 candidate_index,
+            )
+        correct = by_key.get(
+            (prompt_id, seed_id, PREDICTIVE_VARIANT, "correct_owner_key")
+        )
+        if correct is None:
+            continue
+        for role, comparison_kind, margin_field in (
+            (
+                SPATIAL_ONLY_WRONG_ROLE,
+                SPATIAL_ONLY_PATH_COMPARISON,
+                "correct_over_spatial_only_wrong_predictive_path_margin",
+            ),
+            (
+                TEMPORAL_ONLY_WRONG_ROLE,
+                TEMPORAL_ONLY_PATH_COMPARISON,
+                "correct_over_temporal_only_wrong_predictive_path_margin",
+            ),
+        ):
+            comparison = by_key.get(
+                (prompt_id, seed_id, PREDICTIVE_VARIANT, role)
+            )
+            if comparison is None:
+                continue
+            candidate_index = _shared_wrong_key_candidate_index(
+                (correct, comparison)
+            )
+            if candidate_index is None:
+                continue
+            margin = float(correct["predictive_replay_path_score"]) - float(
+                comparison["predictive_replay_path_score"]
+            )
+            base = {
+                "record_version": RECORD_VERSION,
+                "profile_id": PROFILE_ID,
+                "prompt_id": prompt_id,
+                "seed_id": seed_id,
+                "trajectory_carrier_variant_id": PREDICTIVE_VARIANT,
+                "comparison_kind": comparison_kind,
+            }
+            pairs.append(
+                {
+                    **base,
+                    "predictive_trajectory_pair_record_id": (
+                        _stable_digest(base)
+                    ),
+                    margin_field: margin,
+                    "predictive_wrong_owner_key_control_candidate_index": (
+                        candidate_index
+                    ),
+                    "minimum_pair_reliability": min(
+                        float(correct["trajectory_global_reliability"]),
+                        float(comparison["trajectory_global_reliability"]),
+                    ),
+                }
             )
     for prompt_id, seed_id in identities:
         signed_entry = margins.get(
@@ -731,9 +987,7 @@ def build_predictive_pair_records(
             "seed_id": seed_id,
             "trajectory_carrier_variant_id": PREDICTIVE_VARIANT,
             "control_trajectory_carrier_variant_id": NONNEGATIVE_VARIANT,
-            "comparison_kind": (
-                "predictive_signed_over_nonnegative_llr_margin"
-            ),
+            "comparison_kind": SIGNED_OVER_CONTROL_PATH_COMPARISON,
         }
         pairs.append(
             {
@@ -741,7 +995,7 @@ def build_predictive_pair_records(
                 "predictive_trajectory_pair_record_id": (
                     _stable_digest(base)
                 ),
-                "predictive_over_nonnegative_llr_margin_gain": (
+                "predictive_over_nonnegative_path_margin_gain": (
                     signed - control
                 ),
                 "predictive_wrong_owner_key_control_candidate_index": (
@@ -765,23 +1019,50 @@ def build_predictive_decision(
         row
         for row in pair_rows
         if row.get("comparison_kind")
-        == "correct_owner_key_over_wrong_owner_key_predictive_llr"
+        == JOINT_PATH_COMPARISON
         and row.get("trajectory_carrier_variant_id")
         == PREDICTIVE_VARIANT
     ]
     gains = [
         row
         for row in pair_rows
-        if row.get("comparison_kind")
-        == "predictive_signed_over_nonnegative_llr_margin"
+        if row.get("comparison_kind") == SIGNED_OVER_CONTROL_PATH_COMPARISON
+    ]
+    spatial_only_pairs = [
+        row
+        for row in pair_rows
+        if row.get("comparison_kind") == SPATIAL_ONLY_PATH_COMPARISON
+    ]
+    temporal_only_pairs = [
+        row
+        for row in pair_rows
+        if row.get("comparison_kind") == TEMPORAL_ONLY_PATH_COMPARISON
     ]
     correct_fraction = _fraction(
-        float(row["correct_over_wrong_predictive_llr_margin"]) > 0.0
+        float(row["correct_over_wrong_predictive_path_margin"]) > 0.0
         for row in signed_pairs
     )
     gain_fraction = _fraction(
-        float(row["predictive_over_nonnegative_llr_margin_gain"]) > 0.0
+        float(row["predictive_over_nonnegative_path_margin_gain"]) > 0.0
         for row in gains
+    )
+    spatial_only_fraction = _fraction(
+        float(
+            row[
+                "correct_over_spatial_only_wrong_predictive_path_margin"
+            ]
+        )
+        > 0.0
+        for row in spatial_only_pairs
+    )
+    temporal_only_fraction = _fraction(
+        float(
+            row[
+                "correct_over_temporal_only_wrong_predictive_path_margin"
+            ]
+        )
+        > 0.0
+        for row in temporal_only_pairs
     )
     reliability = min(
         (float(row["minimum_pair_reliability"]) for row in signed_pairs),
@@ -816,24 +1097,48 @@ def build_predictive_decision(
             for values in signed_correlations.values()
         )
     )
+    path_evidence_ready = bool(
+        len(summary_rows) == int(config["smoke_summary_record_count"])
+        and all(
+            _predictive_summary_path_ready(row, config)
+            for row in summary_rows
+        )
+    )
     coverage_ready = bool(
-        len(summary_rows) == 16
-        and len(pair_rows) == 12
+        len(summary_rows) == int(config["smoke_summary_record_count"])
+        and len(pair_rows) == int(config["smoke_pair_record_count"])
         and len(signed_pairs) == 4
         and len(gains) == 4
+        and len(spatial_only_pairs) == 4
+        and len(temporal_only_pairs) == 4
         and not failure_rows
     )
     gate_ready = bool(
         coverage_ready
         and code_separation_ready
+        and path_evidence_ready
         and correct_fraction
         >= float(
-            config["minimum_predictive_correct_over_wrong_fraction"]
+            config[
+                "minimum_predictive_correct_over_wrong_path_fraction"
+            ]
         )
         and gain_fraction
         >= float(
             config[
-                "minimum_predictive_over_nonnegative_margin_fraction"
+                "minimum_predictive_over_nonnegative_path_margin_fraction"
+            ]
+        )
+        and spatial_only_fraction
+        >= float(
+            config[
+                "minimum_predictive_correct_over_spatial_only_wrong_fraction"
+            ]
+        )
+        and temporal_only_fraction
+        >= float(
+            config[
+                "minimum_predictive_correct_over_temporal_only_wrong_fraction"
             ]
         )
         and reliability >= float(config["minimum_replay_reliability"])
@@ -852,9 +1157,16 @@ def build_predictive_decision(
         "predictive_trajectory_smoke_decision": classification,
         "predictive_trajectory_gate_ready": gate_ready,
         "coverage_ready": coverage_ready,
+        "predictive_path_evidence_ready": path_evidence_ready,
         "predictive_code_separation_ready": code_separation_ready,
-        "predictive_correct_over_wrong_fraction": correct_fraction,
-        "predictive_over_nonnegative_margin_fraction": gain_fraction,
+        "predictive_correct_over_wrong_path_fraction": correct_fraction,
+        "predictive_over_nonnegative_path_margin_fraction": gain_fraction,
+        "predictive_correct_over_spatial_only_wrong_fraction": (
+            spatial_only_fraction
+        ),
+        "predictive_correct_over_temporal_only_wrong_fraction": (
+            temporal_only_fraction
+        ),
         "minimum_replay_reliability": reliability,
         "predictive_wrong_owner_key_control_candidate_count": int(
             config["wrong_owner_key_control_candidate_count"]
@@ -863,8 +1175,15 @@ def build_predictive_decision(
         "pair_record_count": len(pair_rows),
         "failure_record_count": len(failure_rows),
         "detector_semantics": (
-            "frozen_key_independent_inversion_keyed_forward_replay_llr"
+            "frozen_key_independent_inversion_signed_path_projection"
         ),
+        "primary_predictive_path_statistic": config[
+            "primary_predictive_path_statistic"
+        ],
+        "predictive_path_reliability_mode": config[
+            "predictive_path_reliability_mode"
+        ],
+        "predictive_endpoint_llr_role": "diagnostic_only_not_gate",
         "endpoint_gate_executed": False,
         "state_space_posterior_executed": False,
         "attacked_phase_executed": False,
@@ -876,6 +1195,116 @@ def build_predictive_decision(
     }
 
 
+def _reuse_predictive_generation_for_replay_only(
+    replay_source_root: str | Path,
+    output_root: Path,
+    plan: Iterable[Mapping[str, Any]],
+) -> dict[str, Any]:
+    """从已完成 smoke 包复用生成视频，只重新执行 detector/replay。"""
+
+    source_root = Path(replay_source_root).resolve()
+    manifest_path = (
+        source_root
+        / "artifacts"
+        / "predictive_trajectory_smoke_manifest.json"
+    )
+    decision_path = (
+        source_root
+        / "artifacts"
+        / "predictive_trajectory_smoke_decision.json"
+    )
+    manifest = _read_json(manifest_path)
+    prior_decision = _read_json(decision_path)
+    if (
+        manifest.get("profile_id") != PROFILE_ID
+        or int(manifest.get("generation_record_count") or -1) != 8
+        or manifest.get("formal_result") is not False
+        or manifest.get("stage_progression_allowed") is not False
+        or prior_decision.get("profile_id") != PROFILE_ID
+        or prior_decision.get("formal_result") is not False
+        or prior_decision.get("stage_progression_allowed") is not False
+        or int(prior_decision.get("failure_record_count", -1)) != 0
+    ):
+        raise RuntimeError(
+            "predictive replay-only 输入不是完整、非正式且未推进阶段的 smoke 包"
+        )
+    generation_result = manifest.get("generation_result")
+    if not isinstance(generation_result, Mapping):
+        raise RuntimeError("predictive replay-only 输入缺少 generation result")
+    expected_plan_ids = {
+        str(row["predictive_trajectory_plan_record_id"]) for row in plan
+    }
+    source_plan_rows = _read_jsonl(
+        source_root
+        / "records"
+        / "predictive_trajectory_generation_plan.jsonl"
+    )
+    if {
+        str(row.get("predictive_trajectory_plan_record_id") or "")
+        for row in source_plan_rows
+    } != expected_plan_ids:
+        raise RuntimeError(
+            "predictive replay-only 输入 generation plan 与当前冻结计划不一致"
+        )
+    generation_rows = _read_jsonl(
+        source_root / "records" / "generation_records.jsonl"
+    )
+    if (
+        len(generation_rows) != 8
+        or {
+            str(row.get("predictive_trajectory_plan_record_id") or "")
+            for row in generation_rows
+        }
+        != expected_plan_ids
+    ):
+        raise RuntimeError(
+            "predictive replay-only 输入 generation records 不完整"
+        )
+    rebound_rows: list[dict[str, Any]] = []
+    for row in generation_rows:
+        source_video = source_root / "videos" / Path(
+            str(row.get("video_path") or "")
+        ).name
+        if source_video.is_symlink() or not source_video.is_file():
+            raise RuntimeError(
+                "predictive replay-only 输入缺少普通 generation video"
+            )
+        target_video = output_root / "videos" / source_video.name
+        target_video.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(source_video, target_video)
+        rebound_rows.append(
+            {
+                **row,
+                "video_path": str(target_video),
+                "predictive_generation_reused_for_replay_only": True,
+            }
+        )
+    write_jsonl(
+        output_root / "records" / "generation_records.jsonl",
+        rebound_rows,
+    )
+    write_jsonl(
+        output_root / "records" / "trajectory_trace.jsonl",
+        _read_jsonl(source_root / "records" / "trajectory_trace.jsonl"),
+    )
+    for relative_path in (
+        Path("artifacts/generation_manifest.json"),
+        Path("artifacts/generative_video_colab_runtime_decision.json"),
+        Path("records/trajectory_sketch_records.jsonl"),
+        Path("tables/generation_runtime_table.csv"),
+    ):
+        source_path = source_root / relative_path
+        if source_path.is_file() and not source_path.is_symlink():
+            target_path = output_root / relative_path
+            target_path.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(source_path, target_path)
+    return {
+        **dict(generation_result),
+        "output_root": str(output_root),
+        "generation_reused_for_replay_only": True,
+    }
+
+
 def run_predictive_trajectory_synchronization_smoke(
     input_root: str | Path,
     output_root: str | Path,
@@ -883,6 +1312,7 @@ def run_predictive_trajectory_synchronization_smoke(
     *,
     generation_runner: Any = _run_generation,
     pipeline_loader: Any = _load_pipeline,
+    replay_source_root: str | Path | None = None,
 ) -> dict[str, Any]:
     config = _read_json(config_path)
     validate_predictive_trajectory_config(config)
@@ -906,7 +1336,10 @@ def run_predictive_trajectory_synchronization_smoke(
             "record_version": RECORD_VERSION,
             "profile_id": PROFILE_ID,
             "execution_preflight_status": "ready",
-            "generation_execution_allowed": True,
+            "generation_execution_allowed": replay_source_root is None,
+            "generation_reuse_for_replay_only": (
+                replay_source_root is not None
+            ),
             "generation_record_count": 8,
             "generation_step_count": 20,
             "replay_step_count": 20,
@@ -915,6 +1348,13 @@ def run_predictive_trajectory_synchronization_smoke(
             "predictive_wrong_owner_key_control_candidate_count": int(
                 config["wrong_owner_key_control_candidate_count"]
             ),
+            "primary_predictive_path_statistic": config[
+                "primary_predictive_path_statistic"
+            ],
+            "predictive_path_reliability_mode": config[
+                "predictive_path_reliability_mode"
+            ],
+            "predictive_endpoint_llr_role": "diagnostic_only_not_gate",
             "endpoint_gate_execution_allowed": False,
             "state_space_posterior_execution_allowed": False,
             "attacked_phase_execution_allowed": False,
@@ -938,11 +1378,19 @@ def run_predictive_trajectory_synchronization_smoke(
         shutil.copy2(source_path, target)
 
     pipeline_cache: dict[str, Any] = {}
-    generation_result = generation_runner(
-        validated,
-        output,
-        plan,
-        pipeline_cache=pipeline_cache,
+    generation_result = (
+        _reuse_predictive_generation_for_replay_only(
+            replay_source_root,
+            output,
+            plan,
+        )
+        if replay_source_root is not None
+        else generation_runner(
+            validated,
+            output,
+            plan,
+            pipeline_cache=pipeline_cache,
+        )
     )
     validate_predictive_generation_execution(
         output,
@@ -992,11 +1440,13 @@ def run_predictive_trajectory_synchronization_smoke(
                 "",
                 f"- Decision: `{decision['predictive_trajectory_smoke_decision']}`",
                 f"- Gate ready: `{decision['predictive_trajectory_gate_ready']}`",
-                f"- Correct-over-wrong fraction: `{decision['predictive_correct_over_wrong_fraction']}`",
-                f"- Predictive-over-control fraction: `{decision['predictive_over_nonnegative_margin_fraction']}`",
+                f"- Correct-over-wrong path fraction: `{decision['predictive_correct_over_wrong_path_fraction']}`",
+                f"- Predictive-over-control path fraction: `{decision['predictive_over_nonnegative_path_margin_fraction']}`",
+                f"- Correct-over-spatial-only wrong fraction: `{decision['predictive_correct_over_spatial_only_wrong_fraction']}`",
+                f"- Correct-over-temporal-only wrong fraction: `{decision['predictive_correct_over_temporal_only_wrong_fraction']}`",
                 f"- Minimum replay reliability: `{decision['minimum_replay_reliability']}`",
                 "",
-                "该结果只判断 keyed forward replay 预测同步，不是论文证据。",
+                "该结果只判断 fixed-inversion signed path 同步，不是论文证据。",
             ]
         )
         + "\n",
@@ -1013,6 +1463,13 @@ def run_predictive_trajectory_synchronization_smoke(
             "summary_record_count": len(summaries),
             "pair_record_count": len(pairs),
             "failure_record_count": len(failures),
+            "primary_predictive_path_statistic": config[
+                "primary_predictive_path_statistic"
+            ],
+            "predictive_path_reliability_mode": config[
+                "predictive_path_reliability_mode"
+            ],
+            "predictive_endpoint_llr_role": "diagnostic_only_not_gate",
             "endpoint_gate_executed": False,
             "state_space_posterior_executed": False,
             "attacked_phase_executed": False,

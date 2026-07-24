@@ -33,6 +33,7 @@ from main.methods.state_space_watermark.replay_inversion import (
     estimate_replay_uncertainty,
     evaluate_candidate_on_fixed_inversion,
     replay_step_reliability_weight,
+    replay_step_null_reliability_weight,
     run_key_independent_inversion_hypothesis,
 )
 from main.methods.state_space_watermark.signed_trajectory_carrier import (
@@ -542,14 +543,35 @@ def score_replay_trajectory_for_key(
     predictive_trajectory_carrier_config: (
         PredictiveTrajectoryCarrierConfig | None
     ) = None,
+    trajectory_carrier_key_text: str | None = None,
+    path_reliability_mode: str = "candidate_forward",
 ) -> dict[str, Any]:
     """在不重复模型推理的情况下为另一把 key 重算 replay 路径证据。
 
     固定反演路径只由 attacked-video endpoint 和基础 Wan velocity 决定。候选 key
     仅用于读取该路径的投影, 因而 clean negative 的多 key 校准不会重新构造观测。
+    ``trajectory_carrier_key_text`` 允许在同一固定路径上只替换空间 key 或时间码
+    key；``null_forward_key_independent`` 则保证所有候选共享同一组 null 权重。
     """
 
+    if path_reliability_mode not in {
+        "candidate_forward",
+        "null_forward_key_independent",
+    }:
+        raise ValueError("未知 replay path reliability mode")
+    if (
+        trajectory_carrier_key_text is not None
+        and signed_trajectory_carrier_config is None
+        and predictive_trajectory_carrier_config is None
+    ):
+        raise ValueError("仅时序 carrier replay 允许独立指定 carrier key")
     tubelet_config = tubelet_config or FlowTubeletKeyCodeConfig()
+    carrier_key_text = trajectory_carrier_key_text or key_text
+    reliability_function = (
+        replay_step_null_reliability_weight
+        if path_reliability_mode == "null_forward_key_independent"
+        else replay_step_reliability_weight
+    )
     states = trajectory.reverse_states
     if len(states) != len(schedule):
         raise RuntimeError("replay states 与 Flow schedule 长度不一致")
@@ -557,7 +579,7 @@ def score_replay_trajectory_for_key(
     signed_schedule = (
         _signed_schedule_for_replay(
             schedule,
-            key_text=key_text,
+            key_text=carrier_key_text,
             key_context=key_context,
             tubelet_config=tubelet_config,
         )
@@ -568,7 +590,7 @@ def score_replay_trajectory_for_key(
     predictive_schedule = (
         predictive_schedule_for_replay(
             schedule,
-            key_text=key_text,
+            key_text=carrier_key_text,
             key_context=key_context,
             tubelet_config=tubelet_config,
         )
@@ -607,7 +629,7 @@ def score_replay_trajectory_for_key(
             delta_sigma=delta_sigma,
         ).as_dict()
         step_record.update(direction_metadata)
-        step_record["replay_reliability_weight"] = replay_step_reliability_weight(
+        step_record["replay_reliability_weight"] = reliability_function(
             trajectory,
             step_index + 1,
             config=likelihood_config,
@@ -629,6 +651,11 @@ def score_replay_trajectory_for_key(
     aggregated["replay_joint_schedule_context_complete"] = bool(
         aggregated["flow_tubelet_formal_context_complete"]
         and aggregated.get("path_quadrature_context_complete") is True
+    )
+    aggregated["path_replay_reliability_mode"] = path_reliability_mode
+    aggregated["path_spatial_temporal_key_decoupled"] = bool(
+        trajectory_carrier_key_text is not None
+        and trajectory_carrier_key_text != key_text
     )
     return aggregated
 

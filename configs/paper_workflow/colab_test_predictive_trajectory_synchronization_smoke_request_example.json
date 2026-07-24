@@ -1,8 +1,8 @@
 {
   "parameters": {
     "phase": "no_attack",
-    "resume_package_path": "",
-    "run_series_id": "predictive_trajectory_sync_smoke",
+    "resume_package_path": "/content/drive/MyDrive/SSTW/inputs/predictive_trajectory_synchronization/predictive_trajectory_result.zip",
+    "run_series_id": "predictive_trajectory_path_replay",
     "source_package_path": "/content/drive/MyDrive/SSTW/inputs/predictive_trajectory_synchronization/controlled_embedding_result.zip"
   },
   "repository": {

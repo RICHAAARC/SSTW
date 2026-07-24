@@ -198,13 +198,6 @@ def load_colab_test_request(
         raise ValueError(
             "minimal signed trajectory smoke 不接受 resume package"
         )
-    if (
-        test_id == PREDICTIVE_TRAJECTORY_SYNCHRONIZATION_SMOKE_TEST_ID
-        and resume_package
-    ):
-        raise ValueError(
-            "predictive trajectory synchronization smoke 不接受 resume package"
-        )
     return {
         "request_path": str(path),
         "request": payload,
@@ -244,6 +237,39 @@ def _discover_stage0d_source_root(extracted_root: Path) -> Path:
         raise RuntimeError(
             "输入 zip 必须唯一包含 records/generation_records.jsonl 与 "
             f"datasets/prompt_seed_suite.json；observed_roots={unique}"
+        )
+    return unique[0]
+
+
+def _discover_predictive_replay_source_root(
+    extracted_root: Path,
+) -> Path:
+    """定位唯一的 predictive smoke generation/replay-only 输入根。"""
+
+    candidates: list[Path] = []
+    for manifest_path in extracted_root.rglob(
+        "artifacts/predictive_trajectory_smoke_manifest.json"
+    ):
+        candidate = manifest_path.parent.parent
+        if (
+            candidate.joinpath(
+                "artifacts/predictive_trajectory_smoke_decision.json"
+            ).is_file()
+            and candidate.joinpath(
+                "records/predictive_trajectory_generation_plan.jsonl"
+            ).is_file()
+            and candidate.joinpath(
+                "records/generation_records.jsonl"
+            ).is_file()
+            and candidate.joinpath("records/trajectory_trace.jsonl").is_file()
+            and candidate.joinpath("videos").is_dir()
+        ):
+            candidates.append(candidate.resolve())
+    unique = sorted(set(candidates))
+    if len(unique) != 1:
+        raise RuntimeError(
+            "predictive resume zip 必须唯一包含完整 smoke generation 根；"
+            f"observed_roots={unique}"
         )
     return unique[0]
 
@@ -597,6 +623,7 @@ def _default_minimal_signed_trajectory_runner(
 def _default_predictive_trajectory_runner(
     source_root: Path,
     output_root: Path,
+    replay_source_root: Path | None = None,
 ) -> dict[str, Any]:
     from experiments.generative_video_model_probe.predictive_trajectory_synchronization_smoke import (
         run_predictive_trajectory_synchronization_smoke,
@@ -605,6 +632,7 @@ def _default_predictive_trajectory_runner(
     return run_predictive_trajectory_synchronization_smoke(
         source_root,
         output_root,
+        replay_source_root=replay_source_root,
     )
 
 
@@ -914,13 +942,31 @@ def run_colab_test_request(
         / resolved["test_id"]
         / resolved["run_series_id"]
     )
+    predictive_replay_source_root: Path | None = None
     if resolved["resume_package_path"]:
         resume_package = Path(resolved["resume_package_path"])
         cached_resume = cache_root / (
             f"resume_{resolved['run_series_id']}_{resolved['phase']}.zip"
         )
         shutil.copy2(resume_package, cached_resume)
-        if not output_root.exists():
+        if (
+            resolved["test_id"]
+            == PREDICTIVE_TRAJECTORY_SYNCHRONIZATION_SMOKE_TEST_ID
+        ):
+            resume_extract_root = (
+                workspace_root
+                / "resume_inputs"
+                / resolved["run_series_id"]
+            )
+            if not resume_extract_root.exists():
+                _safe_extract_zip(cached_resume, resume_extract_root)
+            predictive_replay_source_root = (
+                _discover_predictive_replay_source_root(
+                    resume_extract_root
+                )
+            )
+            output_root.mkdir(parents=True, exist_ok=False)
+        elif not output_root.exists():
             _safe_extract_zip(cached_resume, output_root)
     else:
         output_root.mkdir(parents=True, exist_ok=False)
@@ -948,7 +994,11 @@ def run_colab_test_request(
             predictive_trajectory_runner
             or _default_predictive_trajectory_runner
         )
-        diagnostic_decision = runner(source_root, output_root)
+        diagnostic_decision = (
+            runner(source_root, output_root, predictive_replay_source_root)
+            if predictive_replay_source_root is not None
+            else runner(source_root, output_root)
+        )
     else:
         runner = trajectory_runner or _default_trajectory_runner
         diagnostic_decision = runner(

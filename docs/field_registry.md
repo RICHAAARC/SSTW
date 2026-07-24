@@ -2980,14 +2980,36 @@ Notebook 与 repository module 的跨边界数据
 | predictive_replay_log_likelihood_ratio | metric | none | true | false | false | frozen inversion 初态下 keyed forward replay 相对 null 的逐维 LLR。 |
 | predictive_replay_cycle_relative_error | metric | none | true | false | false | keyed forward replay 对视频 endpoint 的相对循环误差。 |
 | predictive_null_cycle_relative_error | metric | none | true | false | false | 同一 frozen inversion 初态下基础模型 null replay 的相对循环误差。 |
+| path_replay_reliability_mode | protocol | none | true | false | false | replay path 求积采用 candidate-forward 或 null-forward key-independent 可靠性权重的模式。 |
+| path_spatial_temporal_key_decoupled | protocol | none | true | false | false | 当前 path hypothesis 是否把空间 tubelet key 与时间 carrier key 解耦。 |
+| predictive_replay_path_score | metric | none | true | false | false | fixed inversion 上按候选空间/时间 key 重建的 signed `S_path_inv` matched-path 分数。 |
+| predictive_replay_velocity_score | metric | none | true | false | false | fixed inversion 上同一候选假设的 `S_velocity` 辅助分数。 |
+| predictive_replay_path_observation_step_count | metric | none | true | false | false | predictive candidate path statistic 使用的真实 replay step 数，固定为20。 |
+| predictive_replay_path_quadrature_context_complete | governance | none | true | false | false | predictive path evidence 是否具有完整 delta-sigma 求积上下文。 |
+| predictive_replay_joint_schedule_context_complete | governance | none | true | false | false | predictive path evidence 是否同时绑定 Flow schedule、空间 key 与 carrier schedule。 |
+| predictive_replay_path_weighted_aggregation_applied | governance | none | true | false | false | predictive path evidence 是否实际应用冻结的逐步可靠性与 carrier magnitude 权重。 |
+| predictive_replay_path_reliability_mode | protocol | none | true | false | false | predictive smoke 固定使用的 null-forward key-independent path reliability 模式。 |
+| predictive_replay_spatial_temporal_key_decoupled | protocol | none | true | false | false | 当前 predictive summary 是否为 spatial-only 或 temporal-only 解耦对照。 |
+| predictive_replay_spatial_key_role | protocol | none | true | false | false | 当前 path hypothesis 的空间 tubelet key 角色。 |
+| predictive_replay_temporal_code_key_role | protocol | none | true | false | false | 当前 path hypothesis 的 predictive 时间码 key 角色。 |
+| predictive_endpoint_llr_role | governance | none | true | false | false | keyed-forward endpoint LLR 在修复后 smoke 中固定仅作诊断、不进入主 gate。 |
+| predictive_generation_reused_for_replay_only | provenance | none | true | false | false | generation record 是否来自已验证 smoke 包并仅为 detector replay 复用。 |
+| generation_reuse_for_replay_only | protocol | none | true | false | false | execution decision 是否禁止新生成并复用既有八个视频执行 replay-only。 |
 | predictive_trajectory_summary_record_id | provenance | none | true | false | false | predictive candidate replay summary 的稳定身份摘要。 |
 | predictive_trajectory_pair_record_id | provenance | none | true | false | false | predictive correct/wrong 或 signed/control 配对记录摘要。 |
-| correct_over_wrong_predictive_llr_margin | metric | none | true | false | false | owner-key keyed-forward LLR 减 wrong-key keyed-forward LLR。 |
-| predictive_over_nonnegative_llr_margin_gain | metric | none | true | false | false | predictive signed correct/wrong LLR margin 减 nonnegative control margin。 |
-| predictive_correct_over_wrong_fraction | metric | none | true | false | false | predictive signed LLR margin 为正的四个 held-out 身份比例。 |
-| predictive_over_nonnegative_margin_fraction | metric | none | true | false | false | predictive signed LLR margin 优于 nonnegative control 的 held-out 身份比例。 |
+| correct_over_wrong_predictive_path_margin | metric | none | true | false | false | owner-key `S_path_inv` 减 joint wrong-owner 空间与时间 key 的 `S_path_inv`。 |
+| correct_over_wrong_predictive_endpoint_llr_margin | metric | none | true | false | false | owner-key endpoint LLR 减 joint wrong-owner endpoint LLR；仅作诊断。 |
+| correct_over_spatial_only_wrong_predictive_path_margin | metric | none | true | false | false | owner-key path score 减仅替换空间 tubelet key 的 path score。 |
+| correct_over_temporal_only_wrong_predictive_path_margin | metric | none | true | false | false | owner-key path score 减仅替换 predictive 时间码 key 的 path score。 |
+| predictive_over_nonnegative_path_margin_gain | metric | none | true | false | false | predictive signed correct/wrong path margin 减 nonnegative control path margin。 |
+| predictive_correct_over_wrong_path_fraction | metric | none | true | false | false | predictive signed joint wrong-key path margin 为正的四个 held-out 身份比例。 |
+| predictive_over_nonnegative_path_margin_fraction | metric | none | true | false | false | predictive signed path margin 优于 nonnegative control 的 held-out 身份比例。 |
+| predictive_correct_over_spatial_only_wrong_fraction | metric | none | true | false | false | correct path score 胜过 spatial-only wrong-key control 的四身份比例。 |
+| predictive_correct_over_temporal_only_wrong_fraction | metric | none | true | false | false | correct path score 胜过 temporal-code-only wrong-key control 的四身份比例。 |
+| predictive_path_evidence_ready | governance | none | true | false | false | 24 条 summary 是否全部具有20步、完整求积、共同 key-independent 权重的有限 path score。 |
+| primary_predictive_path_statistic | protocol | none | true | false | false | predictive smoke 预声明进入主 gate 的 path statistic，固定为 `S_path_inv`。 |
 | predictive_code_separation_ready | governance | none | true | false | false | 四身份 owner/wrong predictive 时间码相关性是否均未超过预声明上限。 |
-| predictive_trajectory_gate_ready | governance | none | true | false | false | code separation、keyed-forward LLR、control margin 与 replay reliability 是否共同通过。 |
+| predictive_trajectory_gate_ready | governance | none | true | false | false | path context、joint/spatial/temporal key 对照、nonnegative control 与 replay reliability 是否共同通过。 |
 | predictive_trajectory_smoke_decision | governance | none | true | false | false | predictive synchronization smoke 通过仅允许 calibration 设计，失败停止当前 blind trajectory 方法。 |
 | predictive_trajectory_smoke_status | governance | none | true | false | false | 单个 predictive generation/replay 身份的执行状态。 |
 | predictive_trajectory_smoke_failure_reason | governance | none | true | false | false | predictive 身份执行失败时的具体 fail-closed 原因。 |

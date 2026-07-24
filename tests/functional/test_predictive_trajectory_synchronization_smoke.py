@@ -32,6 +32,12 @@ from main.methods.state_space_watermark.predictive_trajectory_carrier import (
     build_predictive_trajectory_schedule,
     predictive_trajectory_weighted_code_correlation,
 )
+from main.methods.state_space_watermark.replay_inversion import (
+    FlowSchedulePoint,
+    ReplayGaussianLikelihoodConfig,
+    replay_step_null_reliability_weight,
+    replay_step_reliability_weight,
+)
 from main.methods.state_space_watermark.velocity_field_constraint import (
     VelocityControlContext,
     VelocityFieldConstraintConfig,
@@ -80,6 +86,9 @@ class _NumpyTensor:
 
     def square(self):
         return _NumpyTensor(np.square(self.values))
+
+    def pow(self, exponent):
+        return _NumpyTensor(np.power(self.values, exponent))
 
     def sum(self):
         return _NumpyTensor(np.sum(self.values))
@@ -321,6 +330,177 @@ def test_predictive_replay_dispatch_preserves_endpoint_disabled_control(
     assert observed == [("run", False), ("evaluate", False)]
 
 
+def test_predictive_replay_writes_joint_spatial_and_temporal_path_controls(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    records = tmp_path / "records"
+    datasets = tmp_path / "datasets"
+    videos = tmp_path / "videos"
+    for path in (records, datasets, videos):
+        path.mkdir()
+    generation_rows = []
+    for variant in (PREDICTIVE_VARIANT, NONNEGATIVE_VARIANT):
+        video = videos / f"{variant}.mp4"
+        video.write_bytes(b"video")
+        generation_rows.append(
+            {
+                "generation_status": "success",
+                "generation_model_id": "model",
+                "prompt_id": "prompt",
+                "seed_id": "seed",
+                "trajectory_trace_id": f"trace-{variant}",
+                "predictive_trajectory_plan_record_id": f"plan-{variant}",
+                "trajectory_carrier_variant_id": variant,
+                "method_variant": f"method-{variant}",
+                "video_path": str(video),
+            }
+        )
+    records.joinpath("generation_records.jsonl").write_text(
+        "".join(json.dumps(row) + "\n" for row in generation_rows),
+        encoding="utf-8",
+    )
+    datasets.joinpath("prompt_seed_suite.json").write_text(
+        json.dumps(
+            {
+                "prompts": [
+                    {"prompt_id": "prompt", "prompt_text": "prompt text"}
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    context = FlowTubeletKeyContext(
+        prompt_digest="a" * 64,
+        sampler_signature="scheduler:test",
+    )
+
+    class FakeTrajectory:
+        replay_log_likelihood_ratio = 0.1
+        candidate_cycle_relative_error = 0.2
+        null_cycle_relative_error = 0.3
+
+    class FakeUncertainty:
+        replay_reliability = 0.8
+
+    class FakeReplay:
+        replay_trajectories = (FakeTrajectory(),)
+        primary_schedule = (object(),)
+        replay_uncertainty = FakeUncertainty()
+
+    class FakePipeline:
+        scheduler = object()
+
+    monkeypatch.setattr(
+        predictive_smoke_module,
+        "validate_generation_model_provenance",
+        lambda _row: "revision",
+    )
+    monkeypatch.setattr(
+        predictive_smoke_module,
+        "_validated_flow_key_context",
+        lambda *_args, **_kwargs: context,
+    )
+    monkeypatch.setattr(
+        predictive_smoke_module,
+        "_generation_key",
+        lambda _row: "owner-key",
+    )
+    monkeypatch.setattr(
+        predictive_smoke_module,
+        "_wrong_owner_generation_key",
+        lambda *_args, **_kwargs: "wrong-key",
+    )
+    monkeypatch.setattr(
+        predictive_smoke_module,
+        "_run_attacked_video_replay_for_model",
+        lambda *_args, **_kwargs: FakeReplay(),
+    )
+    monkeypatch.setattr(
+        predictive_smoke_module,
+        "predictive_schedule_for_replay",
+        lambda *_args, **_kwargs: object(),
+    )
+    monkeypatch.setattr(
+        predictive_smoke_module,
+        "predictive_trajectory_weighted_code_correlation",
+        lambda *_args, **_kwargs: 0.2,
+    )
+
+    def fake_score(
+        _trajectory,
+        _schedule,
+        *,
+        key_text,
+        predictive_trajectory_carrier_config,
+        trajectory_carrier_key_text=None,
+        **_kwargs,
+    ):
+        if predictive_trajectory_carrier_config is None:
+            score = 1.0 if key_text == "owner-key" else 0.2
+        elif key_text == "owner-key" and trajectory_carrier_key_text is None:
+            score = 2.0
+        elif key_text == "wrong-key" and trajectory_carrier_key_text is None:
+            score = 0.5
+        elif (
+            key_text == "wrong-key"
+            and trajectory_carrier_key_text == "owner-key"
+        ):
+            score = 1.0
+        else:
+            score = 1.2
+        return {
+            "S_path_inv": score,
+            "S_velocity": score / 2.0,
+            "path_observation_step_count": 20,
+            "path_quadrature_context_complete": True,
+            "replay_joint_schedule_context_complete": True,
+            "path_replay_weighted_aggregation_applied": True,
+            "path_replay_reliability_mode": (
+                "null_forward_key_independent"
+            ),
+            "path_spatial_temporal_key_decoupled": (
+                trajectory_carrier_key_text is not None
+            ),
+        }
+
+    monkeypatch.setattr(
+        predictive_smoke_module,
+        "score_replay_trajectory_for_key",
+        fake_score,
+    )
+    summaries, failures = predictive_smoke_module._execute_replay(
+        tmp_path,
+        _config(),
+        likelihood=object(),
+        pipeline_loader=lambda *_args, **_kwargs: FakePipeline(),
+    )
+    assert failures == []
+    assert len(summaries) == 6
+    predictive_rows = [
+        row
+        for row in summaries
+        if row["trajectory_carrier_variant_id"] == PREDICTIVE_VARIANT
+    ]
+    assert {
+        row["candidate_key_role"] for row in predictive_rows
+    } == {
+        "correct_owner_key",
+        "wrong_owner_key",
+        "wrong_owner_spatial_key_only",
+        "wrong_owner_temporal_code_only",
+    }
+    assert {
+        row["candidate_key_role"]: row["predictive_replay_path_score"]
+        for row in predictive_rows
+    } == {
+        "correct_owner_key": 2.0,
+        "wrong_owner_key": 0.5,
+        "wrong_owner_spatial_key_only": 1.0,
+        "wrong_owner_temporal_code_only": 1.2,
+    }
+
+
 def test_wan_fixed_replay_inherits_endpoint_disabled_result(
     monkeypatch: pytest.MonkeyPatch,
 ):
@@ -376,6 +556,164 @@ def test_wan_fixed_replay_inherits_endpoint_disabled_result(
     )
     assert hypothesis == "hypothesis"
     assert observed["endpoint_control_enabled"] is False
+
+
+def test_predictive_path_score_decouples_spatial_and_temporal_keys(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    observed = {}
+
+    class FakeSchedule:
+        codes = (1.0,)
+
+        @staticmethod
+        def metadata_for_step(_step_index):
+            return {
+                "predictive_trajectory_phase_function_digest": "digest"
+            }
+
+    class FakeObservation:
+        @staticmethod
+        def as_dict():
+            return {
+                "path_projection_normalized": 0.5,
+                "path_quadrature_context_complete": True,
+            }
+
+    def fake_predictive_schedule(_schedule, *, key_text, **_kwargs):
+        observed["carrier_key"] = key_text
+        return FakeSchedule()
+
+    monkeypatch.setattr(
+        wan_replay_module,
+        "predictive_schedule_for_replay",
+        fake_predictive_schedule,
+    )
+
+    def fake_direction(_state, *, key_text, **_kwargs):
+        observed["spatial_key"] = key_text
+        return _NumpyTensor([1.0]), {
+            "flow_tubelet_formal_context_complete": True
+        }
+
+    monkeypatch.setattr(
+        wan_replay_module,
+        "build_flow_tubelet_key_direction_like",
+        fake_direction,
+    )
+    monkeypatch.setattr(
+        wan_replay_module,
+        "compute_path_step_observation",
+        lambda *_args, **_kwargs: FakeObservation(),
+    )
+    monkeypatch.setattr(
+        wan_replay_module,
+        "aggregate_path_observations",
+        lambda _records: {
+            "S_path_inv": 0.25,
+            "S_velocity": 0.5,
+            "path_observation_step_count": 1,
+            "path_quadrature_context_complete": True,
+            "path_replay_weighted_aggregation_applied": True,
+        },
+    )
+    monkeypatch.setattr(
+        wan_replay_module,
+        "replay_step_null_reliability_weight",
+        lambda *_args, **_kwargs: observed.setdefault(
+            "null_weight_used",
+            0.75,
+        ),
+    )
+    monkeypatch.setattr(
+        wan_replay_module,
+        "replay_step_reliability_weight",
+        lambda *_args, **_kwargs: pytest.fail(
+            "candidate-forward reliability must not be used"
+        ),
+    )
+
+    class FakeTrajectory:
+        reverse_states = (
+            _NumpyTensor([0.0]),
+            _NumpyTensor([1.0]),
+        )
+
+    evidence = wan_replay_module.score_replay_trajectory_for_key(
+        FakeTrajectory(),
+        (
+            FlowSchedulePoint(timestep=1.0, sigma=1.0),
+            FlowSchedulePoint(timestep=0.0, sigma=0.0),
+        ),
+        key_text="spatial-key",
+        trajectory_carrier_key_text="temporal-key",
+        key_context=FlowTubeletKeyContext(
+            prompt_digest="a" * 64,
+            sampler_signature="scheduler:test",
+        ),
+        likelihood_config=object(),
+        predictive_trajectory_carrier_config=(
+            PredictiveTrajectoryCarrierConfig()
+        ),
+        path_reliability_mode="null_forward_key_independent",
+    )
+    assert observed == {
+        "carrier_key": "temporal-key",
+        "spatial_key": "spatial-key",
+        "null_weight_used": 0.75,
+    }
+    assert evidence["path_replay_reliability_mode"] == (
+        "null_forward_key_independent"
+    )
+    assert evidence["path_spatial_temporal_key_decoupled"] is True
+    assert evidence["replay_joint_schedule_context_complete"] is True
+
+
+def test_null_replay_path_weight_is_candidate_key_independent():
+    config = ReplayGaussianLikelihoodConfig(
+        relative_observation_noise_standard_deviation=0.5
+    )
+
+    class FakeTrajectory:
+        reverse_states = (
+            _NumpyTensor([0.0]),
+            _NumpyTensor([1.0]),
+        )
+        null_forward_states = (
+            _NumpyTensor([0.0]),
+            _NumpyTensor([0.9]),
+        )
+
+        def __init__(self, candidate_value):
+            self.forward_states = (
+                _NumpyTensor([0.0]),
+                _NumpyTensor([candidate_value]),
+            )
+
+    first = FakeTrajectory(1.0)
+    second = FakeTrajectory(-4.0)
+    assert replay_step_null_reliability_weight(
+        first,
+        1,
+        config=config,
+    ) == pytest.approx(
+        replay_step_null_reliability_weight(
+            second,
+            1,
+            config=config,
+        )
+    )
+    assert replay_step_reliability_weight(
+        first,
+        1,
+        config=config,
+    ) != pytest.approx(
+        replay_step_reliability_weight(
+            second,
+            1,
+            config=config,
+        )
+    )
 
 
 def test_predictive_constraint_has_no_independent_endpoint_channel():
@@ -443,8 +781,23 @@ def test_predictive_budget_guard_accepts_only_float_reduction_roundoff():
         ("minimum_active_phase_count", 2),
         ("maximum_absolute_code_correlation", 1.0),
         ("wrong_owner_key_control_candidate_count", 16),
-        ("minimum_predictive_correct_over_wrong_fraction", 0.5),
-        ("minimum_predictive_over_nonnegative_margin_fraction", 0.5),
+        ("minimum_predictive_correct_over_wrong_path_fraction", 0.5),
+        (
+            "minimum_predictive_over_nonnegative_path_margin_fraction",
+            0.5,
+        ),
+        (
+            "minimum_predictive_correct_over_spatial_only_wrong_fraction",
+            0.5,
+        ),
+        (
+            "minimum_predictive_correct_over_temporal_only_wrong_fraction",
+            0.5,
+        ),
+        ("primary_predictive_path_statistic", "S_velocity"),
+        ("predictive_path_reliability_mode", "candidate_forward"),
+        ("smoke_summary_record_count", 16),
+        ("smoke_pair_record_count", 12),
         ("minimum_replay_reliability", 0.0),
         ("endpoint_gate_execution_allowed", True),
         ("stage_progression_allowed", True),
@@ -621,12 +974,143 @@ def test_predictive_generation_validation_accepts_complete_20_step_records(
     )
 
 
+def test_predictive_replay_only_reuses_generation_without_old_detector_records(
+    tmp_path: Path,
+):
+    source = tmp_path / "prior"
+    output = tmp_path / "output"
+    output.mkdir()
+    plan = [
+        {
+            "predictive_trajectory_plan_record_id": f"plan-{index}",
+            "trajectory_carrier_variant_id": (
+                PREDICTIVE_VARIANT if index < 4 else NONNEGATIVE_VARIANT
+            ),
+        }
+        for index in range(8)
+    ]
+    source.joinpath("artifacts").mkdir(parents=True)
+    source.joinpath("records").mkdir(parents=True)
+    source.joinpath("videos").mkdir(parents=True)
+    source.joinpath(
+        "artifacts",
+        "predictive_trajectory_smoke_manifest.json",
+    ).write_text(
+        json.dumps(
+            {
+                "profile_id": (
+                    "sstw_predictive_trajectory_synchronization_smoke"
+                ),
+                "generation_record_count": 8,
+                "formal_result": False,
+                "stage_progression_allowed": False,
+                "generation_result": {
+                    "decision": {
+                        "implementation_decision": "PASS",
+                        "mechanism_decision": (
+                            "GENERATION_READY_NO_ATTACK_REPLAY_PENDING"
+                        ),
+                    },
+                    "generation_record_count": 8,
+                    "trajectory_record_count": 160,
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    source.joinpath(
+        "artifacts",
+        "predictive_trajectory_smoke_decision.json",
+    ).write_text(
+        json.dumps(
+            {
+                "profile_id": (
+                    "sstw_predictive_trajectory_synchronization_smoke"
+                ),
+                "formal_result": False,
+                "stage_progression_allowed": False,
+                "failure_record_count": 0,
+            }
+        ),
+        encoding="utf-8",
+    )
+    source.joinpath(
+        "records",
+        "predictive_trajectory_generation_plan.jsonl",
+    ).write_text(
+        "".join(json.dumps(row) + "\n" for row in plan),
+        encoding="utf-8",
+    )
+    generation_rows = []
+    for index, row in enumerate(plan):
+        video = source / "videos" / f"video-{index}.mp4"
+        video.write_bytes(f"video-{index}".encode())
+        generation_rows.append(
+            {
+                **row,
+                "generation_status": "success",
+                "video_path": f"/content/old/videos/{video.name}",
+            }
+        )
+    source.joinpath("records", "generation_records.jsonl").write_text(
+        "".join(json.dumps(row) + "\n" for row in generation_rows),
+        encoding="utf-8",
+    )
+    source.joinpath("records", "trajectory_trace.jsonl").write_text(
+        "".join(
+            json.dumps(
+                {
+                    "predictive_trajectory_plan_record_id": (
+                        f"plan-{index // 20}"
+                    )
+                }
+            )
+            + "\n"
+            for index in range(160)
+        ),
+        encoding="utf-8",
+    )
+    source.joinpath(
+        "records",
+        "predictive_trajectory_summary_records.jsonl",
+    ).write_text('{"old_detector_record": true}\n', encoding="utf-8")
+
+    result = (
+        predictive_smoke_module._reuse_predictive_generation_for_replay_only(
+            source,
+            output,
+            plan,
+        )
+    )
+    rebound = [
+        json.loads(line)
+        for line in output.joinpath(
+            "records",
+            "generation_records.jsonl",
+        ).read_text(encoding="utf-8").splitlines()
+    ]
+    assert result["generation_reused_for_replay_only"] is True
+    assert len(rebound) == 8
+    assert all(
+        row["predictive_generation_reused_for_replay_only"] is True
+        and Path(row["video_path"]).is_relative_to(output)
+        and Path(row["video_path"]).is_file()
+        for row in rebound
+    )
+    assert not output.joinpath(
+        "records",
+        "predictive_trajectory_summary_records.jsonl",
+    ).exists()
+
+
 def _summary(
     prompt_id: str,
     seed_id: str,
     variant: str,
     key_role: str,
-    llr: float,
+    path_score: float,
+    *,
+    llr: float = 0.0,
 ) -> dict:
     return {
         "prompt_id": prompt_id,
@@ -634,6 +1118,15 @@ def _summary(
         "trajectory_carrier_variant_id": variant,
         "candidate_key_role": key_role,
         "predictive_replay_log_likelihood_ratio": llr,
+        "predictive_replay_path_score": path_score,
+        "predictive_replay_velocity_score": path_score,
+        "predictive_replay_path_observation_step_count": 20,
+        "predictive_replay_path_quadrature_context_complete": True,
+        "predictive_replay_joint_schedule_context_complete": True,
+        "predictive_replay_path_weighted_aggregation_applied": True,
+        "predictive_replay_path_reliability_mode": (
+            "null_forward_key_independent"
+        ),
         "trajectory_global_reliability": 0.8,
         "predictive_wrong_owner_key_control_candidate_index": 2,
         "predictive_owner_wrong_weighted_code_correlation": (
@@ -642,7 +1135,7 @@ def _summary(
     }
 
 
-def test_predictive_gate_uses_only_forward_llr_control_and_reliability():
+def _complete_path_summaries() -> list[dict]:
     summaries = []
     for index in range(4):
         prompt_id = f"prompt_{index // 2}"
@@ -661,6 +1154,7 @@ def test_predictive_gate_uses_only_forward_llr_control_and_reliability():
                         variant,
                         "correct_owner_key",
                         margin,
+                        llr=-10.0,
                     ),
                     _summary(
                         prompt_id,
@@ -668,9 +1162,29 @@ def test_predictive_gate_uses_only_forward_llr_control_and_reliability():
                         variant,
                         "wrong_owner_key",
                         0.0,
+                        llr=10.0,
                     ),
                 ]
             )
+        for role, margin in (
+            ("wrong_owner_spatial_key_only", 0.8 if index < 3 else -0.1),
+            ("wrong_owner_temporal_code_only", 0.7 if index < 3 else -0.2),
+        ):
+            summaries.append(
+                _summary(
+                    prompt_id,
+                    seed_id,
+                    PREDICTIVE_VARIANT,
+                    role,
+                    signed_margin - margin,
+                    llr=100.0,
+                )
+            )
+    return summaries
+
+
+def test_predictive_gate_uses_signed_path_not_endpoint_llr():
+    summaries = _complete_path_summaries()
     pairs = build_predictive_pair_records(summaries)
     decision = build_predictive_decision(
         summaries,
@@ -678,41 +1192,31 @@ def test_predictive_gate_uses_only_forward_llr_control_and_reliability():
         [],
         _config(),
     )
-    assert len(pairs) == 12
-    assert decision["predictive_correct_over_wrong_fraction"] == 0.75
+    assert len(pairs) == 20
+    assert decision["predictive_correct_over_wrong_path_fraction"] == 0.75
     assert (
-        decision["predictive_over_nonnegative_margin_fraction"] == 0.75
+        decision["predictive_over_nonnegative_path_margin_fraction"] == 0.75
     )
+    assert (
+        decision["predictive_correct_over_spatial_only_wrong_fraction"]
+        == 0.75
+    )
+    assert (
+        decision["predictive_correct_over_temporal_only_wrong_fraction"]
+        == 0.75
+    )
+    assert decision["predictive_path_evidence_ready"] is True
     assert decision["predictive_trajectory_gate_ready"] is True
+    assert decision["predictive_endpoint_llr_role"] == (
+        "diagnostic_only_not_gate"
+    )
     assert decision["endpoint_gate_executed"] is False
     assert decision["state_space_posterior_executed"] is False
     assert decision["stage_progression_allowed"] is False
 
 
 def test_predictive_gate_fails_closed_when_code_correlation_is_missing():
-    summaries = []
-    for index in range(4):
-        prompt_id = f"prompt_{index // 2}"
-        seed_id = f"seed_{index % 2}"
-        for variant in (PREDICTIVE_VARIANT, NONNEGATIVE_VARIANT):
-            summaries.extend(
-                [
-                    _summary(
-                        prompt_id,
-                        seed_id,
-                        variant,
-                        "correct_owner_key",
-                        1.0,
-                    ),
-                    _summary(
-                        prompt_id,
-                        seed_id,
-                        variant,
-                        "wrong_owner_key",
-                        0.0,
-                    ),
-                ]
-            )
+    summaries = _complete_path_summaries()
     summaries[0]["predictive_owner_wrong_weighted_code_correlation"] = None
     decision = build_predictive_decision(
         summaries,
@@ -722,6 +1226,40 @@ def test_predictive_gate_fails_closed_when_code_correlation_is_missing():
     )
     assert decision["coverage_ready"] is True
     assert decision["predictive_code_separation_ready"] is False
+    assert decision["predictive_trajectory_gate_ready"] is False
+
+
+def test_predictive_gate_fails_closed_when_path_context_is_incomplete():
+    summaries = _complete_path_summaries()
+    summaries[0][
+        "predictive_replay_path_quadrature_context_complete"
+    ] = False
+    decision = build_predictive_decision(
+        summaries,
+        build_predictive_pair_records(summaries),
+        [],
+        _config(),
+    )
+    assert decision["coverage_ready"] is True
+    assert decision["predictive_path_evidence_ready"] is False
+    assert decision["predictive_trajectory_gate_ready"] is False
+
+
+def test_predictive_gate_requires_temporal_only_wrong_control():
+    summaries = _complete_path_summaries()
+    for row in summaries:
+        if row["candidate_key_role"] == "wrong_owner_temporal_code_only":
+            row["predictive_replay_path_score"] = 100.0
+    decision = build_predictive_decision(
+        summaries,
+        build_predictive_pair_records(summaries),
+        [],
+        _config(),
+    )
+    assert (
+        decision["predictive_correct_over_temporal_only_wrong_fraction"]
+        == 0.0
+    )
     assert decision["predictive_trajectory_gate_ready"] is False
 
 
@@ -740,7 +1278,7 @@ def test_predictive_control_gain_rejects_mismatched_wrong_key_identity():
     pairs = build_predictive_pair_records(summaries)
     assert all(
         row["comparison_kind"]
-        != "predictive_signed_over_nonnegative_llr_margin"
+        != "predictive_signed_over_nonnegative_path_margin"
         for row in pairs
     )
 
@@ -820,7 +1358,98 @@ def test_predictive_request_dispatches_without_notebook_change(
     assert Path(result["drive_result_zip"]).is_file()
 
 
-def test_predictive_request_rejects_resume(tmp_path: Path):
+def test_predictive_request_dispatches_replay_only_resume(
+    tmp_path: Path,
+):
+    drive_root = tmp_path / "drive" / "SSTW"
+    input_root = drive_root / "inputs"
+    input_root.mkdir(parents=True)
+    source_zip = input_root / "controlled.zip"
+    resume_zip = input_root / "predictive_result.zip"
+    with ZipFile(source_zip, "w") as archive:
+        archive.writestr(
+            "controlled/records/generation_records.jsonl",
+            json.dumps(
+                {
+                    "generation_status": "success",
+                    "generation_model_id": (
+                        "Wan-AI/Wan2.1-T2V-1.3B-Diffusers"
+                    ),
+                }
+            )
+            + "\n",
+        )
+    with ZipFile(resume_zip, "w") as archive:
+        for name in (
+            "prior/artifacts/predictive_trajectory_smoke_manifest.json",
+            "prior/artifacts/predictive_trajectory_smoke_decision.json",
+        ):
+            archive.writestr(name, "{}")
+        for name in (
+            "prior/records/predictive_trajectory_generation_plan.jsonl",
+            "prior/records/generation_records.jsonl",
+            "prior/records/trajectory_trace.jsonl",
+        ):
+            archive.writestr(name, "{}\n")
+        archive.writestr("prior/videos/video.mp4", "video")
+    request_path = drive_root / "requests" / "colab_test_request.json"
+    request_path.parent.mkdir(parents=True)
+    request_path.write_text(
+        json.dumps(
+            {
+                "request_schema_version": "sstw_colab_test_request_v1",
+                "test_id": (
+                    PREDICTIVE_TRAJECTORY_SYNCHRONIZATION_SMOKE_TEST_ID
+                ),
+                "repository": {
+                    "url": "https://github.com/RICHAAARC/SSTW.git",
+                    "ref": "main",
+                },
+                "parameters": {
+                    "phase": "no_attack",
+                    "run_series_id": "predictive_path_replay",
+                    "source_package_path": str(source_zip),
+                    "resume_package_path": str(resume_zip),
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    observed = {}
+
+    def fake_runner(
+        _source: Path,
+        output: Path,
+        replay_source: Path,
+    ) -> dict:
+        observed["replay_source"] = replay_source
+        output.joinpath("artifacts").mkdir(parents=True)
+        output.joinpath("artifacts", "decision.json").write_text(
+            "{}",
+            encoding="utf-8",
+        )
+        return {
+            "predictive_trajectory_smoke_decision": (
+                "predictive_trajectory_gate_failed_stop_method"
+            ),
+            "stage_progression_allowed": False,
+            "formal_result": False,
+        }
+
+    result = run_colab_test_request(
+        request_path,
+        project_root=drive_root,
+        repo_root=Path.cwd(),
+        local_workspace_root=tmp_path / "content" / "workspace",
+        local_package_cache_root=tmp_path / "content" / "cache",
+        predictive_trajectory_runner=fake_runner,
+    )
+    assert observed["replay_source"].name == "prior"
+    assert Path(result["drive_result_zip"]).is_file()
+    assert result["diagnostic_decision"]["formal_result"] is False
+
+
+def test_predictive_request_accepts_replay_only_resume(tmp_path: Path):
     drive_root = tmp_path / "drive" / "SSTW"
     source = drive_root / "inputs" / "source.zip"
     resume = drive_root / "inputs" / "resume.zip"
@@ -851,5 +1480,5 @@ def test_predictive_request_rejects_resume(tmp_path: Path):
         ),
         encoding="utf-8",
     )
-    with pytest.raises(ValueError, match="不接受 resume"):
-        load_colab_test_request(request_path, project_root=drive_root)
+    loaded = load_colab_test_request(request_path, project_root=drive_root)
+    assert loaded["resume_package_path"] == str(resume.resolve())

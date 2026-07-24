@@ -3128,6 +3128,63 @@ Notebook 与 repository module 的跨边界数据
 | prompt_orthogonal_gate_ready | governance | none | true | false | false | coverage、wrong-key、prompt gap、reliability 与 clean control 门槛是否同时通过。 |
 | prompt_orthogonal_smoke_decision | governance | none | true | false | false | 通过仅允许设计独立 calibration，失败停止当前实例的方法机制分类。 |
 | prompt_orthogonal_owner_over_wrong_pair_fraction | metric | none | true | false | false | 四个 watermarked identities 共32个 owner/wrong 配对的正 margin 比例。 |
+| impulse_observability_method_id | protocol | none | true | false | false | Observer-Synchronized State-Space Trajectory Watermark construction 合同的稳定方法标识。 |
+| construction_feature_encoder_id | protocol | none | true | false | false | 候选密钥无关的公开 construction feature encoder 标识。 |
+| construction_feature_encoder_revision | protocol | none | true | false | false | 在 impulse 运行前冻结的 construction feature 算法 revision。 |
+| construction_feature_schema_digest | provenance | none | true | false | false | 绑定解码、resize、时空聚合、layer/tensor、输出维数和 normalization 的 feature schema 摘要。 |
+| construction_feature_probe_ids | provenance | none | true | false | false | 14个 output feature 行从各自 governed per-video record 携带的 probe ID；必须与冻结 plan 和 A_actual 完全同序。 |
+| construction_feature_row_binding_digest | provenance | none | true | false | false | 单视频 probe ID、feature schema digest 与256维 little-endian float64 feature bytes 的 SHA-256 完整性绑定；不得从待检汇总矩阵事后重算。 |
+| construction_feature_row_identity_binding_status | governance | none | true | false | false | output feature IDs 无重复/缺失/未知且 feature、A_actual、冻结 plan 三方顺序与行摘要全部一致时为 ready。 |
+| impulse_probe_id | provenance | none | true | false | false | 14-video construction plan 中 clean 或 signed interval impulse 的稳定身份。 |
+| impulse_probe_role | protocol | none | true | false | false | 当前计划项是 clean runtime repeat 还是 signed interval impulse。 |
+| impulse_stage_index | protocol | none | true | false | false | 当前 impulse 所属 Flow macro interval，固定为0、1、2之一。 |
+| impulse_state_channel_index | protocol | none | true | false | false | 当前 interval block 内的二维水印状态通道索引。 |
+| impulse_polarity | protocol | none | true | false | false | 当前 impulse 的 signed polarity；clean 为0，impulse 为正1或负1。 |
+| impulse_nominal_signed_amplitude | protocol | none | true | false | false | 在既有正式预算内预声明的 signed probe amplitude，不代表实际注入。 |
+| impulse_intended_signed_exposure_by_step | metric | none | true | false | false | 由冻结 waveform、norm/energy budget 和有符号 delta sigma 重算的逐步 state-update intended exposure。 |
+| impulse_actual_signed_exposure_by_step | metric | none | true | false | false | `delta_sigma * <actual FP32 delta_v,target basis>` 定义的逐步 state-update exposure。 |
+| impulse_actual_channel_exposure_by_step | metric | none | true | false | false | `delta_sigma` 乘实际 FP32 delta 在六个 basis 坐标上的逐步有符号 state exposure，用于验证 leakage 与聚合一致性。 |
+| impulse_intended_actual_ratio_by_step | metric | none | true | false | false | 非零 intended step 上 actual exposure 相对 intended exposure 的逐步比例。 |
+| impulse_actual_exposure_vector | metric | none | true | false | false | compression gates 通过后组装的六维 interval/channel actual exposure；失败时不得写作充分统计。 |
+| impulse_waveform_schema_digest | provenance | none | true | false | 绑定全部 impulse 共同使用的预冻结 step-wise waveform schema。 |
+| impulse_positive_negative_waveform_symmetry | metric | none | true | false | false | positive actual waveform 与 sign-inverted negative actual waveform 的余弦。 |
+| impulse_positive_negative_amplitude_asymmetry | metric | none | true | false | false | 同通道正负 actual exposure 范数的相对不对称。 |
+| impulse_cross_channel_leakage_ratio | metric | none | true | false | false | 非目标五通道 exposure 范数相对目标通道有符号 exposure 幅度的比例。 |
+| impulse_actual_design_rank | metric | none | true | false | false | 六维实际设计矩阵 A_actual 的数值 rank。 |
+| impulse_actual_design_condition_number | metric | none | true | false | false | 六维实际设计矩阵 A_actual 的条件数。 |
+| impulse_actual_design_compression_allowed | governance | none | true | false | false | waveform、symmetry、leakage、step guards、rank 与 condition 是否允许把逐步设计压缩为六维。 |
+| impulse_transfer_checkpoint_id | protocol | none | true | false | false | 当前 construction transfer 属于 latent、decoded、saved-video、reencoded、output-feature 或 replay-diagnostic checkpoint。 |
+| impulse_output_feature_snr | metric | none | true | false | false | 单 impulse output response 相对 clean-A/B 最低运行噪声参考的信噪比。 |
+| impulse_noise_normalized_minimum_singular_value | metric | none | true | false | false | output transfer 的最小奇异值相对 clean-A/B 噪声参考的归一化值。 |
+| impulse_output_transfer_effective_rank | metric | none | true | false | false | output-feature transfer 在冻结噪声门槛下的有效 rank。 |
+| impulse_sample_internal_observability_gate_ready | governance | none | true | false | false | Gate A 的 actual design、SNR、奇异值、rank、condition、反对称和链路检查是否共同通过。 |
+| impulse_cross_identity_identifiability_gate_ready | governance | none | true | false | false | Gate B 在预声明公共坐标下的阶段/符号、principal angles、Gram、transfer error 与 owner/wrong output selectivity 是否共同通过。 |
+| impulse_composite_order_identifiability_gate_ready | governance | none | true | false | false | Gate C 的 ordered/permuted composite、叠加、抵消、预算和非质量解释检查是否共同通过。 |
+| construction_basis_digest | provenance | none | true | false | false | CPU canonical KDF/PRF/Gram-Schmidt 后六列 little-endian float32 basis bytes 的 SHA-256；不得随结果序列化 basis 本体。 |
+| construction_basis_wrong_key_candidate_index | protocol | none | true | false | false | construction-only 预冻结 wrong-key derivation index；当前只允许0且不得按结果选择。 |
+| impulse_flow_step_indices | protocol | none | true | false | false | 精确绑定 Wan 8-step Flow schedule 的0到7顺序索引。 |
+| impulse_flow_phase_by_step | provenance | none | true | false | false | 从冻结相邻 sigma 区间中点计算的8个连续 Flow phase。 |
+| impulse_delta_sigma_by_step | provenance | none | true | false | false | 冻结 FlowMatchEulerDiscreteScheduler 8步 state update 的有符号 delta sigma。 |
+| impulse_macro_interval_index_by_step | protocol | none | true | false | false | 八个 scheduler step 到三个 Flow 宏区间的预声明 assignment。 |
+| impulse_intended_velocity_waveform_by_step | protocol | none | true | false | false | 运行前冻结、位于 velocity norm multiplier coordinate 的8维宏区间 waveform。 |
+| impulse_reference_base_velocity_norm_by_step | metric | none | true | false | false | runtime adapter 从每步 FP32 base velocity 重算的 L2 norm，用于 norm/energy budget。 |
+| impulse_remaining_control_energy_before_step | metric | none | true | false | false | 由参考能量、累计实际控制能量和冻结 Flow energy ratio 重算的逐步剩余预算。 |
+| impulse_actual_velocity_basis_coordinate_by_step | metric | none | true | false | false | 从实际 FP32 delta 对目标 construction basis 列重算的有符号 velocity coordinate。 |
+| impulse_actual_channel_velocity_coordinate_by_step | metric | none | true | false | false | 实际 FP32 delta 对全部六列 basis 的逐步 signed velocity coordinates。 |
+| impulse_runtime_adapter_schema_digest | provenance | none | true | false | false | 绑定 FP32 actual delta、basis coordinate、base norm、remaining energy 和 guard 重算语义。 |
+| construction_feature_input_frame_count | protocol | none | true | false | false | output feature 输入必须恰好33帧；不符 fail-closed，禁止 resize。 |
+| construction_feature_input_spatial_shape | protocol | none | true | false | false | output feature 输入必须是512×320 RGB24。 |
+| construction_feature_encode_strategy | protocol | none | true | false | false | 绑定现有 Wan output-side CPU-resident spatiotemporal streaming encode 符号、dtype 与 tile/chunk 参数。 |
+| construction_feature_l2_zero_epsilon | protocol | none | true | false | false | 256维 output feature L2 normalization 的预声明 zero rejection epsilon。 |
+| impulse_clean_repeat_distance | metric | none | true | false | false | Gate A 中 output feature clean-A 与 clean-B 的 L2 距离。 |
+| impulse_finite_noise_floor | metric | none | true | false | false | `max(clean_distance/sqrt(2),1e-6)`；禁止 zero-noise 产生无限统计。 |
+| impulse_minimum_absolute_output_response | metric | none | true | false | false | 六个正负中心响应列 L2 norm 的最小值，独立于 noise-normalized 指标。 |
+| impulse_minimum_absolute_response_singular_value | metric | none | true | false | false | 六列中心响应矩阵的绝对最小奇异值，用于阻止零噪声自动通过。 |
+| impulse_positive_negative_antisymmetry_cosine | metric | none | true | false | false | 六个 clean-centered positive 与 sign-inverted negative response cosine 的最小值。 |
+| impulse_positive_negative_antisymmetry_residual_ratio | metric | none | true | false | false | 六个正负 clean-centered response 和向量相对总响应 norm 的最大残差比例。 |
+| impulse_transfer_checkpoint_representation | protocol | none | true | false | false | 绑定 latent/decoded/saved/reencoded/output/replay checkpoint 的固定维数、pooling 与 normalization。 |
+| impulse_replay_diagnostic_required | governance | none | true | false | false | 固定为 false；replay 缺失不阻断 output-only Gate A，且不得支持 positive。 |
+| impulse_primary_checkpoint_chain_ready | governance | none | true | false | false | 五个冻结 primary checkpoint 是否全部完成；不包含可选 replay diagnostic。 |
 | prompt_orthogonal_owner_top1_identity_fraction | metric | none | true | false | false | owner 严格 top-1 的 watermarked identity 比例。 |
 | prompt_orthogonal_pair_fraction_by_prompt | metric | none | true | false | false | 分 held-out prompt 汇总的 owner-over-wrong 正 margin 比例。 |
 | prompt_orthogonal_prompt_pair_fraction_gap | metric | none | true | false | false | 两个 held-out prompts 的 pair fraction 最大差，用于约束 prompt-dependent 干扰。 |

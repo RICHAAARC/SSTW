@@ -38,6 +38,7 @@ from evaluation.protocol.impulse_observability_contract import (
     estimate_construction_transfer,
     evaluate_gate_a_statistics,
     extract_construction_output_feature_from_normalized_latent,
+    extract_construction_reencoded_summary_from_normalized_latent,
     flow_schedule_waveform_schema_digest,
     load_impulse_observability_config,
     runtime_adapter_schema_digest,
@@ -293,6 +294,9 @@ def test_canonical_impulse_observability_config_is_frozen() -> None:
     )
     assert config["execution_identity"]["num_inference_steps"] == 8
     assert config["execution_identity"]["seed_value"] == 2201
+    assert config["execution_identity"]["positive_prompt_text_sha256"] == (
+        "c4f3a636c9c4393ebf98448f2c30c6648f7e9141a2886bac0cd950001ec03980"
+    )
 
 
 def test_construction_feature_schema_is_key_independent_and_digest_bound() -> None:
@@ -355,6 +359,11 @@ def test_phi_construction_numpy_reference_freezes_pooling_and_l2() -> None:
     feature = extract_construction_output_feature_from_normalized_latent(
         latent
     )
+    reencoded = (
+        extract_construction_reencoded_summary_from_normalized_latent(latent)
+    )
+    assert reencoded.shape == (256,)
+    assert np.allclose(reencoded, np.asarray(expected, dtype=np.float64))
     expected_array = np.asarray(expected, dtype=np.float64)
     expected_array /= np.linalg.norm(expected_array)
     assert feature.dtype == np.float64
@@ -492,6 +501,10 @@ def test_intended_control_uses_state_update_polarity_and_both_budgets() -> None:
         (("observer_execution_allowed",), True),
         (("training_or_finetuning_allowed",), True),
         (("execution_identity", "num_inference_steps"), 20),
+        (
+            ("execution_identity", "positive_prompt_text_sha256"),
+            "0" * 64,
+        ),
         (("time_axes", "video_frame_time_analysis_allowed"), True),
         (("stage_basis", "construction"), "B_K_j_equals_U_K_R_j"),
         (
@@ -557,6 +570,20 @@ def test_intended_control_uses_state_update_polarity_and_both_budgets() -> None:
                 "test_identity_procrustes_allowed",
             ),
             True,
+        ),
+        (
+            (
+                "authorization_state_machine",
+                "impulse_triage_execution_allowed",
+            ),
+            False,
+        ),
+        (
+            (
+                "authorization_state_machine",
+                "current_state",
+            ),
+            "sample_internal_causal_observability_gate",
         ),
         (
             (
@@ -771,6 +798,78 @@ def test_trace_rejects_nonfinite_or_out_of_range_direction_cosine() -> None:
         ),
     )
     with pytest.raises(ValueError, match=r"\[-1,1\]"):
+        assemble_actual_design_matrix(config, traces)
+
+
+def test_trace_rejects_active_waveform_with_zero_feasible_control() -> None:
+    config = _config()
+    traces = list(_valid_traces(config))
+    trace = traces[0]
+
+    def replace_first(values: tuple, replacement: object) -> tuple:
+        return (replacement, *values[1:])
+
+    zero_channels = (0.0,) * STAGE_BASIS_RANK
+    traces[0] = replace(
+        trace,
+        reference_base_velocity_norm_by_step=replace_first(
+            trace.reference_base_velocity_norm_by_step,
+            0.0,
+        ),
+        remaining_control_energy_before_step_by_step=replace_first(
+            trace.remaining_control_energy_before_step_by_step,
+            0.0,
+        ),
+        reference_energy_increment_by_step=replace_first(
+            trace.reference_energy_increment_by_step,
+            0.0,
+        ),
+        reference_cumulative_energy_by_step=replace_first(
+            trace.reference_cumulative_energy_by_step,
+            0.0,
+        ),
+        intended_delta_norm_by_step=replace_first(
+            trace.intended_delta_norm_by_step,
+            0.0,
+        ),
+        actual_velocity_basis_coordinate_by_step=replace_first(
+            trace.actual_velocity_basis_coordinate_by_step,
+            0.0,
+        ),
+        actual_channel_velocity_coordinate_by_step=replace_first(
+            trace.actual_channel_velocity_coordinate_by_step,
+            zero_channels,
+        ),
+        intended_signed_exposure_by_step=replace_first(
+            trace.intended_signed_exposure_by_step,
+            0.0,
+        ),
+        actual_signed_exposure_by_step=replace_first(
+            trace.actual_signed_exposure_by_step,
+            0.0,
+        ),
+        actual_channel_exposure_by_step=replace_first(
+            trace.actual_channel_exposure_by_step,
+            zero_channels,
+        ),
+        actual_exposure_vector=tuple(
+            np.asarray(trace.actual_exposure_vector)
+            - np.asarray(trace.actual_channel_exposure_by_step[0])
+        ),
+        delta_norm_by_step=replace_first(
+            trace.delta_norm_by_step,
+            0.0,
+        ),
+        projection_scale_by_step=replace_first(
+            trace.projection_scale_by_step,
+            0.0,
+        ),
+        cumulative_energy_by_step=replace_first(
+            trace.cumulative_energy_by_step,
+            0.0,
+        ),
+    )
+    with pytest.raises(ValueError, match="可行非零 intended control"):
         assemble_actual_design_matrix(config, traces)
 
 
@@ -1293,11 +1392,11 @@ def test_primary_gate_and_future_authorizations_remain_closed() -> None:
         "construction_diagnostic_only"
     )
     assert config["authorization_state_machine"]["current_state"] == (
-        "construction_contract_local_audit"
+        "impulse_triage_execution_authorized_pending_user_colab_run"
     )
     assert config["authorization_state_machine"][
         "impulse_triage_execution_allowed"
-    ] is False
+    ] is True
     assert config["authorization_state_machine"][
         "batch_observer_design_allowed"
     ] is False

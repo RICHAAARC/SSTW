@@ -25,8 +25,8 @@
     "batch_observer_design_allowed": false,
     "composite_order_gate_execution_allowed": false,
     "cross_identity_confirmation_allowed": false,
-    "current_state": "construction_contract_local_audit",
-    "impulse_triage_execution_allowed": false,
+    "current_state": "impulse_triage_execution_authorized_pending_user_colab_run",
+    "impulse_triage_execution_allowed": true,
     "key_selectivity_construction_allowed": false,
     "state_dynamics_design_allowed": false,
     "states": [
@@ -34,6 +34,7 @@
       "independent_readonly_audit",
       "commit_push_authorization_pending",
       "impulse_triage_execution_authorization_pending",
+      "impulse_triage_execution_authorized_pending_user_colab_run",
       "sample_internal_causal_observability_gate",
       "cross_identity_construction_confirmation_pending",
       "key_selectivity_construction_pending",
@@ -41,7 +42,7 @@
       "state_dynamics_and_batch_observer_design_pending"
     ]
   },
-  "claim_support_status": "construction_contract_only_not_method_evidence",
+  "claim_support_status": "construction_runtime_ready_pending_colab_not_method_evidence",
   "clean_repeat_count": 2,
   "construction_basis": {
     "basis_column_count": 6,
@@ -132,6 +133,7 @@
     "height": 320,
     "initial_noise_binding": "single_torch_generator_manual_seed",
     "negative_prompt_text_sha256": "798a65de2dd61dffee2b6d5229d1167e4c0aa7053948562ae53dff3d1c0d0d11",
+    "positive_prompt_text_sha256": "c4f3a636c9c4393ebf98448f2c30c6648f7e9141a2886bac0cd950001ec03980",
     "num_frames": 33,
     "num_inference_steps": 8,
     "prompt_id": "probe_paper_paper_master_prompt_003",
@@ -333,11 +335,14 @@
   "prompt_conditioned_replay_role": "construction_diagnostic_only",
   "runtime_adapter_contract": {
     "actual_delta_recomputed_from_float32_constrained_minus_base": true,
+    "actual_direction_coordinate_definition": "float64_dot_actual_float32_delta_with_float64_unit_normalized_effective_float32_basis_direction",
     "actual_velocity_basis_coordinates_recomputed_from_actual_delta": true,
-    "adapter_schema_digest": "b35d8a9b4f268ee13e0a5686c320acd6e9db0f3a47f0c6a26481cfe2d40513ee",
+    "adapter_schema_digest": "9bc8560cd6ee57be42d064d18b81aa4b3270f2a55f83431dd2cd67e2f4f2017d",
     "adapter_schema_id": "impulse_runtime_actual_delta_exposure_adapter",
     "caller_guard_boolean_trusted_without_recompute": false,
     "cumulative_energy_recomputed_from_delta_sigma_and_actual_delta_norm": true,
+    "direction_cosine_definition": "state_update_sign_times_target_effective_coordinate_div_float64_actual_delta_norm_with_machine_roundoff_clamp",
+    "effective_basis_direction_definition": "float32_cast_of_float64_unit_normalized_canonical_float32_column",
     "reference_base_velocity_norm_required": true,
     "remaining_flow_energy_required": true
   },

@@ -164,7 +164,8 @@ Notebook 固定读取:
 `minimal_signed_trajectory_state_space_smoke`、
 `predictive_trajectory_synchronization_smoke`、
 `temporal_code_isolation_replay_smoke`、
-`prompt_orthogonal_state_trajectory_smoke` 与仅用于重建输入的
+`prompt_orthogonal_state_trajectory_smoke`、
+`output_feature_impulse_observability_construction` 与仅用于重建输入的
 `trajectory_replay_smoke_source_build`。
 当 Stage 0-D source 未保留时，同一 Notebook 还可通过白名单
 `trajectory_replay_smoke_source_build` 请求，从已保留且包含视频的
@@ -172,9 +173,10 @@ Notebook 固定读取:
 
 该非正式入口使用 Colab 当前自带的 torch、CUDA 和 NumPy，不安装
 `requirements/paper_runtime_lock.txt`，也不以正式论文环境版本作为门禁。Cell 3
-调用 `scripts/bootstrap_colab_test_runtime.py` 做能力探测；只有缺少 Wan/LTX pipeline
-加载或视频 I/O 所需依赖时，才安装
-`requirements/colab_test_runtime_compatibility.txt`。安装过程用当前 torch 与 NumPy
+调用 `scripts/bootstrap_colab_test_runtime.py` 做能力探测；缺少 Wan/LTX pipeline
+加载或视频 I/O 所需依赖，或 diffusers 版本不符合 construction 合同时，才安装
+`requirements/colab_test_runtime_compatibility.txt`。该轻量 overlay 为 construction
+固定 `diffusers==0.35.2`，环境版本不同也会触发 overlay。安装过程用当前 torch 与 NumPy
 版本生成 constraints，禁止替换 Colab 核心计算栈，因此正常情况下不需要重启内核。
 若原生 torch 或 NumPy 缺失、补齐依赖失败或关键 import 仍失败，bootstrap 会
 fail-closed。实际检测版本只作为本次兼容性记录，不构成版本唯一性或论文复现门禁。
@@ -214,6 +216,19 @@ handler 会重新构建并核对 16 条 construction plan，另行写出仅限�
 与 endpoint 的 correct/wrong 分离及 strength-over-clean 增益；不运行 attacked、
 fixed-FPR、external baseline，也不允许阶段推进。该测试仍使用同一固定 Notebook，
 只需替换 Drive request JSON 和 input ZIP。
+
+首次 output-feature impulse observability Gate A triage 使用
+`configs/paper_workflow/colab_test_output_feature_impulse_observability_construction_request_example.json`。
+它只接受 `phase=gate_a`，不接受 resume package。输入 ZIP 必须唯一包含冻结
+`prompt_seed_suite.json`，其中 prompt003 的正负文本 SHA-256 与 seed2201 必须和 construction config
+精确一致。handler 在 `/content` 本地生成 clean-A、clean-B、6 positive、6 negative
+共14个视频，完成实际 FP32 exposure、五个 checkpoint、output-side Wan VAE
+streaming re-encode 和 Gate A 后，才由既有 packager 向 Drive 写一个结果 ZIP 与
+一个最小 manifest。Gate A PASS 只允许后续设计第二 independent identity；FAIL
+停止当前 carrier/feature。两种结果都保持 `formal_result=false` 和
+`stage_progression_allowed=false`，不运行 replay、wrong-key、Gate B/C、observer、
+攻击、fixed-FPR 或 baseline。运行仍使用同一个固定 Notebook，不在 Cell 中增加
+方法逻辑。
 
 最小带符号轨迹 smoke 使用
 `configs/paper_workflow/colab_test_minimal_signed_trajectory_state_space_smoke_request_example.json`。

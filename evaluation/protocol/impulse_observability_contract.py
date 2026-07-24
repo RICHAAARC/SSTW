@@ -423,6 +423,36 @@ def build_construction_stage_basis(
     )
 
 
+def effective_construction_basis_directions(
+    basis: ConstructionStageBasis,
+) -> np.ndarray:
+    """Return the frozen FP32 directions used for injection and coordinates.
+
+    The canonical basis is serialized as float32 after float64
+    orthonormalization.  Its serialized columns are therefore only
+    approximately unit length.  Runtime injection first normalizes those
+    serialized columns in float64 and casts the result once to float32.  All
+    actual-delta coordinates use the same effective directions, normalized
+    again in float64 only for the dot-product measurement.
+    """
+
+    values = np.asarray(basis.values, dtype=np.float32)
+    if values.shape != (math.prod(CONSTRUCTION_LATENT_LAYOUT_SHAPE), STAGE_BASIS_RANK):
+        raise ValueError("construction effective basis shape 未冻结")
+    values64 = values.astype(np.float64)
+    norms = np.linalg.norm(values64, axis=0)
+    if (
+        not np.all(np.isfinite(values64))
+        or not np.all(np.isfinite(norms))
+        or np.any(norms <= 1e-12)
+    ):
+        raise ValueError("construction effective basis 含退化方向")
+    effective = np.asarray(values64 / norms, dtype="<f4")
+    if not np.all(np.isfinite(effective)):
+        raise ValueError("construction effective basis float32 cast 非有限")
+    return np.ascontiguousarray(effective)
+
+
 def compute_intended_impulse_control(
     *,
     probe_state_update_polarity: int,
@@ -499,12 +529,10 @@ def compute_intended_impulse_control(
     )
 
 
-def extract_construction_output_feature_from_normalized_latent(
+def extract_construction_reencoded_summary_from_normalized_latent(
     normalized_wan_latent: np.ndarray,
-    *,
-    zero_rejection_epsilon: float = 1e-12,
 ) -> np.ndarray:
-    """Reference NumPy phi_construction pooling after frozen Wan VAE encode."""
+    """Return the frozen 256-D unnormalized re-encoded checkpoint."""
 
     latent = np.asarray(normalized_wan_latent)
     if latent.shape != CONSTRUCTION_LATENT_LAYOUT_SHAPE:
@@ -535,6 +563,21 @@ def extract_construction_output_feature_from_normalized_latent(
     vector = np.asarray(pooled, dtype=np.float64)
     if vector.shape != (CONSTRUCTION_FEATURE_OUTPUT_DIMENSION,):
         raise AssertionError("phi_construction pooling dimension 组装失败")
+    if not np.all(np.isfinite(vector)):
+        raise ValueError("T_reencoded pooling 含非有限值")
+    return vector
+
+
+def extract_construction_output_feature_from_normalized_latent(
+    normalized_wan_latent: np.ndarray,
+    *,
+    zero_rejection_epsilon: float = 1e-12,
+) -> np.ndarray:
+    """Reference NumPy phi_construction pooling after frozen Wan VAE encode."""
+
+    vector = extract_construction_reencoded_summary_from_normalized_latent(
+        normalized_wan_latent
+    )
     norm = float(np.linalg.norm(vector))
     epsilon = float(zero_rejection_epsilon)
     if (
@@ -567,7 +610,7 @@ def validate_impulse_observability_config(
         "profile_id": IMPULSE_OBSERVABILITY_PROFILE_ID,
         "method_id": OBSERVER_SYNCHRONIZED_METHOD_ID,
         "claim_support_status": (
-            "construction_contract_only_not_method_evidence"
+            "construction_runtime_ready_pending_colab_not_method_evidence"
         ),
         "formal_result": False,
         "stage_progression_allowed": False,
@@ -850,6 +893,9 @@ def validate_impulse_observability_config(
         "negative_prompt_text_sha256": (
             "798a65de2dd61dffee2b6d5229d1167e4c0aa7053948562ae53dff3d1c0d0d11"
         ),
+        "positive_prompt_text_sha256": (
+            "c4f3a636c9c4393ebf98448f2c30c6648f7e9141a2886bac0cd950001ec03980"
+        ),
         "num_frames": 33,
         "num_inference_steps": 8,
         "prompt_id": "probe_paper_paper_master_prompt_003",
@@ -934,13 +980,24 @@ def validate_impulse_observability_config(
     adapter = config.get("runtime_adapter_contract")
     required_adapter = {
         "actual_delta_recomputed_from_float32_constrained_minus_base": True,
+        "actual_direction_coordinate_definition": (
+            "float64_dot_actual_float32_delta_with_float64_unit_normalized_"
+            "effective_float32_basis_direction"
+        ),
         "actual_velocity_basis_coordinates_recomputed_from_actual_delta": True,
         "adapter_schema_digest": (
-            "b35d8a9b4f268ee13e0a5686c320acd6e9db0f3a47f0c6a26481cfe2d40513ee"
+            "9bc8560cd6ee57be42d064d18b81aa4b3270f2a55f83431dd2cd67e2f4f2017d"
         ),
         "adapter_schema_id": CONSTRUCTION_RUNTIME_ADAPTER_SCHEMA_ID,
         "caller_guard_boolean_trusted_without_recompute": False,
         "cumulative_energy_recomputed_from_delta_sigma_and_actual_delta_norm": True,
+        "direction_cosine_definition": (
+            "state_update_sign_times_target_effective_coordinate_div_"
+            "float64_actual_delta_norm_with_machine_roundoff_clamp"
+        ),
+        "effective_basis_direction_definition": (
+            "float32_cast_of_float64_unit_normalized_canonical_float32_column"
+        ),
         "reference_base_velocity_norm_required": True,
         "remaining_flow_energy_required": True,
     }
@@ -1155,19 +1212,22 @@ def validate_impulse_observability_config(
 
     gates = config.get("authorization_state_machine")
     required_gates = {
-        "current_state": "construction_contract_local_audit",
+        "current_state": (
+            "impulse_triage_execution_authorized_pending_user_colab_run"
+        ),
         "states": [
             "construction_contract_local_audit",
             "independent_readonly_audit",
             "commit_push_authorization_pending",
             "impulse_triage_execution_authorization_pending",
+            "impulse_triage_execution_authorized_pending_user_colab_run",
             "sample_internal_causal_observability_gate",
             "cross_identity_construction_confirmation_pending",
             "key_selectivity_construction_pending",
             "composite_trajectory_order_identifiability_pending",
             "state_dynamics_and_batch_observer_design_pending",
         ],
-        "impulse_triage_execution_allowed": False,
+        "impulse_triage_execution_allowed": True,
         "cross_identity_confirmation_allowed": False,
         "key_selectivity_construction_allowed": False,
         "composite_order_gate_execution_allowed": False,
@@ -1554,8 +1614,13 @@ def _validate_trace_schedule_and_budget(
             raise ValueError(
                 f"{trace.probe_id} step {step_index} control cumulative energy 未重算"
             )
-        actual_active = control.intended_delta_norm > 1e-15
-        if actual_active:
+        scheduled_active = abs(expected_waveform[step_index]) > 1e-15
+        if scheduled_active:
+            if control.intended_delta_norm <= 1e-15:
+                raise ValueError(
+                    f"{trace.probe_id} step {step_index} active waveform "
+                    "不存在可行非零 intended control"
+                )
             if (
                 actual_norm <= 0.0
                 or actual_norm

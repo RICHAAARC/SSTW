@@ -41,6 +41,9 @@ TEMPORAL_CODE_ISOLATION_REPLAY_SMOKE_TEST_ID = (
 PROMPT_ORTHOGONAL_STATE_TRAJECTORY_SMOKE_TEST_ID = (
     "prompt_orthogonal_state_trajectory_smoke"
 )
+OUTPUT_FEATURE_IMPULSE_OBSERVABILITY_CONSTRUCTION_TEST_ID = (
+    "output_feature_impulse_observability_construction"
+)
 SUPPORTED_TEST_IDS = (
     TRAJECTORY_REPLAY_SOURCE_BUILD_TEST_ID,
     TRAJECTORY_SIGNAL_TEST_ID,
@@ -49,6 +52,7 @@ SUPPORTED_TEST_IDS = (
     PREDICTIVE_TRAJECTORY_SYNCHRONIZATION_SMOKE_TEST_ID,
     TEMPORAL_CODE_ISOLATION_REPLAY_SMOKE_TEST_ID,
     PROMPT_ORTHOGONAL_STATE_TRAJECTORY_SMOKE_TEST_ID,
+    OUTPUT_FEATURE_IMPULSE_OBSERVABILITY_CONSTRUCTION_TEST_ID,
 )
 TRAJECTORY_REPLAY_SOURCE_BUILD_PHASE = "source_build"
 SUPPORTED_TRAJECTORY_PHASES = (
@@ -61,6 +65,7 @@ SUPPORTED_MINIMAL_SIGNED_TRAJECTORY_PHASES = ("no_attack",)
 SUPPORTED_PREDICTIVE_TRAJECTORY_PHASES = ("no_attack",)
 SUPPORTED_TEMPORAL_CODE_ISOLATION_PHASES = ("no_attack",)
 SUPPORTED_PROMPT_ORTHOGONAL_STATE_TRAJECTORY_PHASES = ("no_attack",)
+SUPPORTED_OUTPUT_FEATURE_IMPULSE_OBSERVABILITY_PHASES = ("gate_a",)
 EXPECTED_REPOSITORY_URL = "https://github.com/RICHAAARC/SSTW.git"
 _SAFE_REPOSITORY_REF = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._/-]*$")
 _SAFE_RUN_SERIES_ID = re.compile(r"^[a-z0-9][a-z0-9_-]{2,63}$")
@@ -177,6 +182,13 @@ def load_colab_test_request(
         supported_phases = (
             SUPPORTED_PROMPT_ORTHOGONAL_STATE_TRAJECTORY_PHASES
         )
+    elif (
+        test_id
+        == OUTPUT_FEATURE_IMPULSE_OBSERVABILITY_CONSTRUCTION_TEST_ID
+    ):
+        supported_phases = (
+            SUPPORTED_OUTPUT_FEATURE_IMPULSE_OBSERVABILITY_PHASES
+        )
     else:
         supported_phases = SUPPORTED_TRAJECTORY_PHASES
     if phase not in supported_phases:
@@ -217,6 +229,14 @@ def load_colab_test_request(
     ):
         raise ValueError(
             "minimal signed trajectory smoke 不接受 resume package"
+        )
+    if (
+        test_id
+        == OUTPUT_FEATURE_IMPULSE_OBSERVABILITY_CONSTRUCTION_TEST_ID
+        and resume_package
+    ):
+        raise ValueError(
+            "output-feature impulse observability 不接受 resume package"
         )
     return {
         "request_path": str(path),
@@ -725,6 +745,20 @@ def _default_prompt_orthogonal_state_trajectory_runner(
     )
 
 
+def _default_output_feature_impulse_observability_runner(
+    source_root: Path,
+    output_root: Path,
+) -> dict[str, Any]:
+    from experiments.generative_video_model_probe.output_feature_impulse_observability_construction import (
+        run_output_feature_impulse_observability_construction,
+    )
+
+    return run_output_feature_impulse_observability_construction(
+        source_root,
+        output_root,
+    )
+
+
 def _source_generation_model_ids(source_root: Path) -> list[str]:
     """读取模型地址列表；有效性校验仍由测试 handler 负责。"""
 
@@ -969,6 +1003,9 @@ def run_colab_test_request(
     prompt_orthogonal_state_trajectory_runner: (
         Callable[..., dict[str, Any]] | None
     ) = None,
+    output_feature_impulse_observability_runner: (
+        Callable[..., dict[str, Any]] | None
+    ) = None,
 ) -> dict[str, Any]:
     """执行一个白名单测试，并把唯一结果 zip 与 manifest 回写 Drive。"""
 
@@ -1043,6 +1080,14 @@ def run_colab_test_request(
         generation_model_ids = (
             _minimal_signed_trajectory_generation_model_ids(source_root)
         )
+    elif (
+        resolved["test_id"]
+        == OUTPUT_FEATURE_IMPULSE_OBSERVABILITY_CONSTRUCTION_TEST_ID
+    ):
+        source_root = source_extract_root
+        generation_model_ids = [
+            "Wan-AI/Wan2.1-T2V-1.3B-Diffusers"
+        ]
     else:
         source_root = _discover_stage0d_source_root(source_extract_root)
         generation_model_ids = _source_generation_model_ids(source_root)
@@ -1165,6 +1210,15 @@ def run_colab_test_request(
             output_root,
             temporal_code_isolation_source_root,
         )
+    elif (
+        resolved["test_id"]
+        == OUTPUT_FEATURE_IMPULSE_OBSERVABILITY_CONSTRUCTION_TEST_ID
+    ):
+        runner = (
+            output_feature_impulse_observability_runner
+            or _default_output_feature_impulse_observability_runner
+        )
+        diagnostic_decision = runner(source_root, output_root)
     else:
         runner = trajectory_runner or _default_trajectory_runner
         diagnostic_decision = runner(

@@ -1,9 +1,9 @@
 # 非正式 colab_test 的最小兼容依赖。
 #
 # 本文件不固定或安装 torch / torchvision / numpy。bootstrap 会保留 Colab
-# 当前核心计算栈，只在能力探测失败时补齐以下模型加载与视频 I/O 依赖。
+# 当前核心计算栈；在能力探测失败或冻结 diffusers 版本不匹配时补齐以下依赖。
 accelerate>=1.10.1
-diffusers>=0.35.2
+diffusers==0.35.2
 ftfy>=6.3.1
 huggingface-hub>=0.34.4
 imageio>=2.37.0

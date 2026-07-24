@@ -9,11 +9,16 @@ import pytest
 from scripts.bootstrap_colab_test_runtime import bootstrap_colab_test_runtime
 
 
-def _versions(*, torch: str = "2.7.1", numpy: str = "2.0.2") -> dict[str, str]:
+def _versions(
+    *,
+    torch: str = "2.7.1",
+    numpy: str = "2.0.2",
+    diffusers: str = "0.35.2",
+) -> dict[str, str]:
     return {
         "torch": torch,
         "numpy": numpy,
-        "diffusers": "0.36.0",
+        "diffusers": diffusers,
         "transformers": "4.53.0",
     }
 
@@ -23,7 +28,7 @@ def test_colab_test_runtime_uses_ready_native_environment_without_install(
     tmp_path: Path,
 ) -> None:
     requirements_path = tmp_path / "compatibility.txt"
-    requirements_path.write_text("diffusers>=0.35.2\n", encoding="utf-8")
+    requirements_path.write_text("diffusers==0.35.2\n", encoding="utf-8")
 
     def unexpected_install(
         path: Path,
@@ -41,6 +46,10 @@ def test_colab_test_runtime_uses_ready_native_environment_without_install(
     assert decision["runtime_compatibility_decision"] == "PASS"
     assert decision["runtime_source"] == "native_colab_environment"
     assert decision["compatibility_install_executed"] is False
+    assert decision["required_compatibility_versions"] == {
+        "diffusers": "0.35.2"
+    }
+    assert decision["initial_incompatible_versions"] == {}
     assert decision["formal_runtime_lock_checked"] is False
     assert decision["protected_core_versions"] == {
         "torch": "2.7.1",
@@ -53,7 +62,7 @@ def test_colab_test_runtime_installs_only_after_failed_capability_probe(
     tmp_path: Path,
 ) -> None:
     requirements_path = tmp_path / "compatibility.txt"
-    requirements_path.write_text("diffusers>=0.35.2\n", encoding="utf-8")
+    requirements_path.write_text("diffusers==0.35.2\n", encoding="utf-8")
     probe_rows = iter(
         (
             {"ready": False, "return_code": 1, "stderr_tail": "missing diffusers"},
@@ -85,11 +94,76 @@ def test_colab_test_runtime_installs_only_after_failed_capability_probe(
 
 
 @pytest.mark.quick
+def test_colab_test_runtime_overlays_wrong_diffusers_version_even_when_imports_work(
+    tmp_path: Path,
+) -> None:
+    requirements_path = tmp_path / "compatibility.txt"
+    requirements_path.write_text("diffusers==0.35.2\n", encoding="utf-8")
+    version_rows = iter(
+        (
+            _versions(diffusers="0.36.0"),
+            _versions(diffusers="0.35.2"),
+        )
+    )
+    observed: dict[str, object] = {}
+
+    def install(
+        path: Path,
+        protected: dict[str, str],
+    ) -> dict[str, object]:
+        observed["path"] = path
+        observed["protected"] = protected
+        return {"return_code": 0}
+
+    decision = bootstrap_colab_test_runtime(
+        requirements_path=requirements_path,
+        version_reader=lambda: next(version_rows),
+        probe_runner=lambda: {
+            "ready": True,
+            "return_code": 0,
+            "stderr_tail": "",
+        },
+        install_runner=install,
+    )
+
+    assert decision["compatibility_install_executed"] is True
+    assert decision["initial_incompatible_versions"] == {
+        "diffusers": {
+            "required": "0.35.2",
+            "observed": "0.36.0",
+        }
+    }
+    assert observed["protected"] == {
+        "torch": "2.7.1",
+        "numpy": "2.0.2",
+    }
+
+
+@pytest.mark.quick
+def test_colab_test_runtime_rejects_overlay_that_does_not_fix_diffusers(
+    tmp_path: Path,
+) -> None:
+    requirements_path = tmp_path / "compatibility.txt"
+    requirements_path.write_text("diffusers==0.35.2\n", encoding="utf-8")
+    with pytest.raises(RuntimeError, match="未满足冻结依赖版本"):
+        bootstrap_colab_test_runtime(
+            requirements_path=requirements_path,
+            version_reader=lambda: _versions(diffusers="0.36.0"),
+            probe_runner=lambda: {
+                "ready": True,
+                "return_code": 0,
+                "stderr_tail": "",
+            },
+            install_runner=lambda _path, _protected: {"return_code": 0},
+        )
+
+
+@pytest.mark.quick
 def test_colab_test_runtime_fails_if_bootstrap_changes_native_core(
     tmp_path: Path,
 ) -> None:
     requirements_path = tmp_path / "compatibility.txt"
-    requirements_path.write_text("diffusers>=0.35.2\n", encoding="utf-8")
+    requirements_path.write_text("diffusers==0.35.2\n", encoding="utf-8")
     version_rows = iter((_versions(), _versions(torch="2.8.0")))
     probe_rows = iter(
         (
@@ -121,3 +195,4 @@ def test_colab_test_compatibility_requirements_do_not_pin_core_stack() -> None:
     assert "torch" not in requirement_names
     assert "torchvision" not in requirement_names
     assert "numpy" not in requirement_names
+    assert "diffusers==0.35.2" in source

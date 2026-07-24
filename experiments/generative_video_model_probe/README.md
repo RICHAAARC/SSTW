@@ -9,6 +9,11 @@
 ## Prompt-orthogonal state-trajectory smoke
 
 `prompt_orthogonal_state_trajectory_smoke.py` 保留为已执行候选路线及历史 control。
+`output_feature_impulse_observability_construction.py` 是独立的首次14-video Gate A
+construction runner：只生成单 identity signed impulses，记录实际 FP32 exposure，
+经保存视频和冻结 Wan output-side VAE 构建五个 checkpoints，并调用审核过的
+`A_actual`/Gate A evaluator。它不实现 replay、wrong-key、Gate B/C、observer、
+attack、fixed-FPR、baseline、正式结果或阶段推进。
 它从已审核的
 controlled embedding 结果与明确失败的 temporal-code isolation 结果构建固定
 `2 prompts × 2 seeds × (watermarked + clean)` 计划；generation 使用8步，检测使用

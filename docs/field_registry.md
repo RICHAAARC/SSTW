@@ -3131,16 +3131,48 @@ Notebook 与 repository module 的跨边界数据
 | impulse_observability_method_id | protocol | none | true | false | false | Observer-Synchronized State-Space Trajectory Watermark construction 合同的稳定方法标识。 |
 | construction_feature_encoder_id | protocol | none | true | false | false | 候选密钥无关的公开 construction feature encoder 标识。 |
 | construction_feature_encoder_revision | protocol | none | true | false | false | 在 impulse 运行前冻结的 construction feature 算法 revision。 |
+| construction_feature_encode_execution_dtype | protocol | none | true | false | false | output-side Wan VAE streaming encode 实际使用的冻结执行 dtype，当前为 bfloat16。 |
 | construction_feature_schema_digest | provenance | none | true | false | false | 绑定解码、resize、时空聚合、layer/tensor、输出维数和 normalization 的 feature schema 摘要。 |
 | construction_feature_probe_ids | provenance | none | true | false | false | 14个 output feature 行从各自 governed per-video record 携带的 probe ID；必须与冻结 plan 和 A_actual 完全同序。 |
 | construction_feature_row_binding_digest | provenance | none | true | false | false | 单视频 probe ID、feature schema digest 与256维 little-endian float64 feature bytes 的 SHA-256 完整性绑定；不得从待检汇总矩阵事后重算。 |
 | construction_feature_row_identity_binding_status | governance | none | true | false | false | output feature IDs 无重复/缺失/未知且 feature、A_actual、冻结 plan 三方顺序与行摘要全部一致时为 ready。 |
 | impulse_probe_id | provenance | none | true | false | false | 14-video construction plan 中 clean 或 signed interval impulse 的稳定身份。 |
+| impulse_probe_plan_index | protocol | none | true | false | false | 当前 probe 在冻结14-video计划中的零基顺序；所有 generation/checkpoint/feature records 必须一致。 |
 | impulse_probe_role | protocol | none | true | false | false | 当前计划项是 clean runtime repeat 还是 signed interval impulse。 |
 | impulse_stage_index | protocol | none | true | false | false | 当前 impulse 所属 Flow macro interval，固定为0、1、2之一。 |
 | impulse_state_channel_index | protocol | none | true | false | false | 当前 interval block 内的二维水印状态通道索引。 |
 | impulse_polarity | protocol | none | true | false | false | 当前 impulse 的 signed polarity；clean 为0，impulse 为正1或负1。 |
 | impulse_nominal_signed_amplitude | protocol | none | true | false | false | 在既有正式预算内预声明的 signed probe amplitude，不代表实际注入。 |
+| impulse_generation_record_id | provenance | none | true | false | false | 单个14-video probe generation record 的稳定摘要。 |
+| positive_prompt_text_sha256 | provenance | none | true | false | false | Gate A 冻结 positive prompt UTF-8 文本的 SHA-256；source、14条 generation、decision 与 manifest 必须一致。 |
+| negative_prompt_text_sha256 | provenance | none | true | false | false | Gate A 冻结 negative prompt UTF-8 文本的 SHA-256；source 与14条 generation records 必须一致。 |
+| impulse_flow_step_index | protocol | none | true | false | false | 当前 actual exposure record 对应的冻结8-step scheduler 索引。 |
+| impulse_flow_phase | provenance | none | true | false | false | 当前 scheduler sigma 区间中点映射到连续 Flow time 的冻结 phase。 |
+| impulse_delta_sigma | provenance | none | true | false | false | 当前 Flow scheduler step 的有符号 state-update measure。 |
+| impulse_macro_interval_index | protocol | none | true | false | false | 当前 step 所属早/中/晚 Flow macro interval 索引。 |
+| impulse_intended_velocity_waveform | protocol | none | true | false | false | 当前 probe/step 的冻结 unit temporal waveform 值。 |
+| impulse_reference_base_velocity_norm | metric | none | true | false | false | 施加控制前实际 FP32 model output 的 L2 norm。 |
+| impulse_remaining_control_energy_before_step | metric | none | true | false | false | 按冻结 Flow-energy ratio 和实际 reference energy 重算的当前剩余控制能量。 |
+| impulse_reference_energy_increment | metric | none | true | false | false | 当前 step 的 `delta_sigma^2 * base_velocity_norm^2` reference energy。 |
+| impulse_reference_cumulative_energy | metric | none | true | false | false | 当前视频到本 step 为止累计的 reference Flow energy。 |
+| impulse_intended_delta_norm | metric | none | true | false | false | norm 与 Flow-energy 两种预算共同限制后的 intended FP32 delta norm。 |
+| impulse_actual_velocity_basis_coordinate | metric | none | true | false | false | actual FP32 delta 对 canonical float32 列经冻结 float64-unit-normalize、float32 cast 后的有效方向所作 float64 dot target coordinate。 |
+| impulse_actual_channel_velocity_coordinate | metric | none | true | false | false | actual FP32 delta 对六个同一定义有效 basis directions 的完整 float64 signed velocity coordinates。 |
+| impulse_intended_signed_exposure | metric | none | true | false | false | 当前 step 的 `delta_sigma * intended target velocity coordinate`。 |
+| impulse_actual_signed_exposure | metric | none | true | false | false | 当前 step 的 `delta_sigma * actual target FP32 velocity coordinate`。 |
+| impulse_actual_channel_exposure | metric | none | true | false | false | 当前 step 六列 actual state-update exposures，用于重算 leakage 和 A_actual。 |
+| impulse_actual_delta_norm | metric | none | true | false | false | scheduler 实际接收的 `(constrained.float-base.float)` L2 norm。 |
+| impulse_actual_projection_scale | metric | none | true | false | false | actual delta norm 相对 intended delta norm 的实测比例。 |
+| impulse_finite_precision_projection_scale | metric | none | true | false | false | 有界 FP32 backoff 搜索最终选择的 intended-delta 缩放。 |
+| impulse_finite_precision_projection_attempt_count | metric | none | true | false | false | 当前 step 有界实际-delta投影的 evaluation 次数。 |
+| impulse_finite_precision_backoff_count | metric | none | true | false | false | 当前 step 为满足严格实际 norm/energy guard 执行的 backoff 次数。 |
+| impulse_finite_precision_projection_status | governance | none | true | false | false | 当前 step 是 direct pass、bounded backoff pass 或 inactive exact no-op。 |
+| impulse_cumulative_control_energy | metric | none | true | false | false | 当前视频截至本 step 的实际 FP32 control Flow energy。 |
+| impulse_actual_direction_cosine | metric | none | true | false | false | actual FP32 delta 与目标 signed construction basis direction 的 cosine。 |
+| impulse_norm_guard_passed | governance | none | true | false | false | 当前实际 FP32 delta norm 是否严格不超过冻结 intended norm budget。 |
+| impulse_energy_guard_passed | governance | none | true | false | false | 当前实际 FP32 control energy 是否严格不超过冻结 remaining Flow-energy budget。 |
+| impulse_direction_guard_passed | governance | none | true | false | false | 当前实际 FP32 delta direction cosine 是否通过冻结阈值。 |
+| impulse_inactive_exact_noop | governance | none | true | false | false | 当前非目标 interval/clean step 是否保持 model output 对象和值不变。 |
 | impulse_intended_signed_exposure_by_step | metric | none | true | false | false | 由冻结 waveform、norm/energy budget 和有符号 delta sigma 重算的逐步 state-update intended exposure。 |
 | impulse_actual_signed_exposure_by_step | metric | none | true | false | false | `delta_sigma * <actual FP32 delta_v,target basis>` 定义的逐步 state-update exposure。 |
 | impulse_actual_channel_exposure_by_step | metric | none | true | false | false | `delta_sigma` 乘实际 FP32 delta 在六个 basis 坐标上的逐步有符号 state exposure，用于验证 leakage 与聚合一致性。 |
@@ -3154,6 +3186,17 @@ Notebook 与 repository module 的跨边界数据
 | impulse_actual_design_condition_number | metric | none | true | false | false | 六维实际设计矩阵 A_actual 的条件数。 |
 | impulse_actual_design_compression_allowed | governance | none | true | false | false | waveform、symmetry、leakage、step guards、rank 与 condition 是否允许把逐步设计压缩为六维。 |
 | impulse_transfer_checkpoint_id | protocol | none | true | false | false | 当前 construction transfer 属于 latent、decoded、saved-video、reencoded、output-feature 或 replay-diagnostic checkpoint。 |
+| impulse_transfer_checkpoint_record_id | provenance | none | true | false | false | 单 probe、单 checkpoint governed record 的稳定摘要。 |
+| impulse_transfer_checkpoint_dimension | protocol | none | true | false | false | 当前 checkpoint 按冻结 representation 预声明的向量维数。 |
+| impulse_transfer_checkpoint_values | metric | none | true | false | false | 当前 checkpoint 的有限数值向量；Gate A 仅消费 T_output_feature。 |
+| impulse_transfer_checkpoint_source_path | provenance | none | true | false | false | 当前 checkpoint 的真实来源路径或 generation latent 来源标识。 |
+| impulse_transfer_checkpoint_source_status | governance | none | true | false | false | checkpoint 是否由实际 final latent/pre-save/save回读/reencode/feature步骤完成。 |
+| construction_feature_record_id | provenance | none | true | false | false | 单视频 governed output feature record 的稳定摘要。 |
+| construction_feature_values | metric | none | true | false | false | 按冻结 schema 提取并 L2 归一化的256维候选密钥无关 output feature。 |
+| output_feature_impulse_observability_construction_decision | governance | none | true | false | false | Gate A construction 的 runtime failure、sample-internal pass 或当前 carrier/feature stop 分类。 |
+| impulse_observability_failure_reason | governance | none | true | false | false | runtime、actual-design compression、checkpoint 或 feature validation fail-closed 的可定位原因。 |
+| same_initial_generator_state_verified | governance | none | true | false | false | 14个 plan item 是否在每次 pipeline 调用前具有同一个重新构造的 GPU generator 初态摘要。 |
+| cross_identity_confirmation_design_allowed | governance | none | true | false | false | 仅 Gate A 真实 PASS 后允许设计第二 independent identity；不等于允许执行 Gate B。 |
 | impulse_output_feature_snr | metric | none | true | false | false | 单 impulse output response 相对 clean-A/B 最低运行噪声参考的信噪比。 |
 | impulse_noise_normalized_minimum_singular_value | metric | none | true | false | false | output transfer 的最小奇异值相对 clean-A/B 噪声参考的归一化值。 |
 | impulse_output_transfer_effective_rank | metric | none | true | false | false | output-feature transfer 在冻结噪声门槛下的有效 rank。 |

@@ -24,6 +24,8 @@
 canonical construction identity 固定为：
 
 - prompt `probe_paper_paper_master_prompt_003`；
+- positive prompt UTF-8 SHA-256
+  `c4f3a636c9c4393ebf98448f2c30c6648f7e9141a2886bac0cd950001ec03980`；
 - seed `probe_paper_paper_master_test_seed_01` / value `2201`；
 - generation model `Wan-AI/Wan2.1-T2V-1.3B-Diffusers`，revision
   `0fad780a534b6463e45facd96134c9f345acfa5b`；
@@ -107,7 +109,12 @@ a^{\rm actual}_{i,t,k}
 因此 velocity control 符号显式包含 `sign(delta_sigma)`，不能直接对调用者提供的
 数值求和。trace 还必须包含 base velocity norm、remaining energy、actual velocity
 basis coordinates、direction cosine、norm/energy guard；冻结 adapter 从实际 FP32
-delta 重算这些量，不信任 caller boolean。
+delta 重算这些量，不信任 caller boolean。canonical basis 的序列化 float32 列先以
+float64 norm 归一化并单次 cast 为 FP32 effective direction；注入和六通道坐标共同
+使用这一方向。坐标与 actual norm 均以 float64 reduction 计算，direction cosine
+只允许机器舍入范围内的 `[-1,1]` clamp。非零 waveform 是 scheduled active：若
+base norm、剩余能量或实际 FP32 可表示控制导致非零控制不存在，必须 fail-closed，
+不得改写为 inactive no-op。
 
 actual/intended ratio 逐 step 计算。intended 为零但 actual 非零时立即失败。所有
 cumulative energy 必须有限、非负且单调。
@@ -277,6 +284,8 @@ independent_readonly_audit
 commit_push_authorization_pending
   ↓ 提交推送完成且用户另行授权GPU
 impulse_triage_execution_authorization_pending
+  ↓ runner/handler审核完成，等待用户执行固定Notebook
+impulse_triage_execution_authorized_pending_user_colab_run
   ↓ 14-video真实运行
 sample_internal_causal_observability_gate
   ├─ FAIL → stop current carrier/feature
@@ -290,4 +299,8 @@ sample_internal_causal_observability_gate
                             └─ PASS → state_dynamics_and_batch_observer_design_pending
 ```
 
-当前停在第一行。本地 tests/harness 只审核合同与轻量数学原语，不授权状态迁移。
+当前实现目标停在
+`impulse_triage_execution_authorized_pending_user_colab_run`：这只表示首次
+14-video runner/handler 已获实现授权并等待用户执行，不表示 Gate A 已运行或通过。
+本地 tests/harness 只审核合同、runner wiring 与轻量数学原语，不提供 construction
+observability 证据。

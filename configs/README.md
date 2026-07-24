@@ -22,5 +22,6 @@ CPU canonical basis KDF、现有 Wan VAE streaming output extractor、五个 pri
 checkpoint 与可选 replay diagnostic，以及有限 noise floor 的 Gate A 精确公式。
 output feature 还必须由每视频 governed record 提供冻结 probe ID 与行绑定摘要；
 14行、A_actual 和 plan 的身份与顺序必须精确一致，禁止事后按矩阵位置贴标签。
-该配置当前没有 GPU runner 或 Notebook handler；`impulse_triage_execution_allowed`
-保持 false，不能从本地 construction tests 推导方法有效性或阶段推进。
+该配置现在允许由既有薄 Notebook 调用独立 Gate A construction handler；
+`impulse_triage_execution_allowed=true` 只表示入口已获授权并等待用户 Colab
+运行。本地 tests 不能据此写成 Gate A 已执行、方法有效或阶段推进。

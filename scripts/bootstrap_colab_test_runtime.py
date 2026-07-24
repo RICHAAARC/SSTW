@@ -18,6 +18,9 @@ DEFAULT_REQUIREMENTS_PATH = (
     REPO_ROOT / "requirements" / "colab_test_runtime_compatibility.txt"
 )
 PROTECTED_DISTRIBUTIONS = ("torch", "numpy")
+REQUIRED_COMPATIBILITY_VERSIONS = {
+    "diffusers": "0.35.2",
+}
 OBSERVED_DISTRIBUTIONS = (
     "torch",
     "torchvision",
@@ -155,8 +158,16 @@ def bootstrap_colab_test_runtime(
         )
 
     initial_probe = probe_runner()
+    incompatible_versions = {
+        name: {
+            "required": required,
+            "observed": before_versions.get(name),
+        }
+        for name, required in REQUIRED_COMPATIBILITY_VERSIONS.items()
+        if before_versions.get(name) != required
+    }
     install_result: dict[str, Any] | None = None
-    if not initial_probe.get("ready"):
+    if not initial_probe.get("ready") or incompatible_versions:
         protected_versions = {
             name: str(before_versions[name])
             for name in PROTECTED_DISTRIBUTIONS
@@ -187,6 +198,23 @@ def bootstrap_colab_test_runtime(
             "Colab 当前环境仍不满足 SSTW colab_test runtime imports: "
             + str(final_probe.get("stderr_tail") or "unknown import failure")
         )
+    remaining_incompatible_versions = {
+        name: {
+            "required": required,
+            "observed": after_versions.get(name),
+        }
+        for name, required in REQUIRED_COMPATIBILITY_VERSIONS.items()
+        if after_versions.get(name) != required
+    }
+    if remaining_incompatible_versions:
+        raise RuntimeError(
+            "Colab compatibility overlay 未满足冻结依赖版本: "
+            + json.dumps(
+                remaining_incompatible_versions,
+                ensure_ascii=False,
+                sort_keys=True,
+            )
+        )
 
     return {
         "manifest_kind": "sstw_colab_test_runtime_compatibility_decision",
@@ -198,6 +226,10 @@ def bootstrap_colab_test_runtime(
             else "native_colab_environment"
         ),
         "compatibility_install_executed": install_result is not None,
+        "required_compatibility_versions": dict(
+            REQUIRED_COMPATIBILITY_VERSIONS
+        ),
+        "initial_incompatible_versions": incompatible_versions,
         "formal_runtime_lock_checked": False,
         "protected_core_distributions": list(PROTECTED_DISTRIBUTIONS),
         "protected_core_versions": {

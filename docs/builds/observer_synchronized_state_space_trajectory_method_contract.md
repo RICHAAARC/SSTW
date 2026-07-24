@@ -11,7 +11,7 @@ Observer-Synchronized State-Space Trajectory Watermarking
 当前状态仅为：
 
 ```text
-construction_contract_local_audit
+impulse_triage_execution_authorized_pending_user_colab_run
 ```
 
 它不是旧 prompt-orthogonal 路线的改名，也不覆盖该路线的真实失败。旧路线及其
@@ -27,7 +27,8 @@ recovery/result 必须保留为历史 control。历史结果只能支持：
 - `formal_result=false`；
 - `stage_progression_allowed=false`；
 - 不支持 paper claim；
-- 不授权 GPU、Colab、Drive 更新或 Notebook 修改；
+- 本状态只授权准备既有薄 Notebook 可调用的 runner/handler；本次实现不启动 GPU、
+  不更新 Drive、不修改 Notebook，真实 Colab 仍须审核提交后由用户执行；
 - 不授权实现 observer、正式 LLR、攻击、pilot、fixed-FPR 或 baseline。
 
 ## 1. 研究问题与结构分离
@@ -95,7 +96,10 @@ latent layout 固定为 Wan `[1,16,9,40,64]`，按 C-order 展平，\(D=368640\)
    再按固定 Box-Muller 顺序形成 float64 normal matrix；
 4. 按列0到5执行 float64 modified Gram-Schmidt；
 5. 每列绝对值最大坐标必须为正，随后转 little-endian float32；
-6. 六列 C-order bytes 的 SHA-256 为 basis digest；只保存 digest，不把 basis 写入结果。
+6. 六列 C-order bytes 的 SHA-256 为 basis digest；只保存 digest，不把 basis 写入结果；
+7. runtime 从上述 canonical float32 列以 float64 norm 归一化、单次 cast 为 FP32
+   effective directions；注入与坐标测量共同使用该方向，坐标和 actual norm 均用
+   float64 reduction，禁止混用 raw float32 列与另外归一化的注入方向。
 
 预冻结 wrong key 只允许 HMAC domain-separated index `0`，不得从候选结果选择。
 每阶段使用不同的二维选择器：
@@ -305,9 +309,11 @@ a^{\rm actual}_{t,k}=
 \]
 
 未来 runtime adapter 必须绑定 digest
-`b35d8a9b4f268ee13e0a5686c320acd6e9db0f3a47f0c6a26481cfe2d40513ee`，
+`9bc8560cd6ee57be42d064d18b81aa4b3270f2a55f83431dd2cd67e2f4f2017d`，
 并重算 reference base norm、remaining energy 和 caller guard；不得信任一个自报
-boolean。
+boolean。只有 waveform 精确为零才允许 inactive exact no-op；非零 waveform 下若
+base norm、remaining energy、intended control 或实际 FP32 delta 退化为零，必须
+结构化 fail-closed。
 
 每一步必须记录：
 
@@ -369,11 +375,12 @@ matched-dynamic score
 当前只允许：
 
 ```text
-合同编写与本地审计
+完成14-video Gate A runner/handler
 → 独立只读审核
 → 可能授权提交推送
-→ 之后才可能授权14-video Colab triage
+→ 用户之后运行固定 Colab Notebook
 ```
 
-当前不允许提交、推送、GPU、Colab、Drive 或 Notebook 变更。本地 pytest/harness
-通过只证明合同实现一致，不证明 construction observability 或方法有效性。
+当前任务仍不允许提交、推送、GPU、Colab、Drive 或 Notebook 变更。本地
+pytest/harness 通过只证明合同和执行入口一致，不证明 construction observability
+或方法有效性。真实 Gate A 结果无论 PASS/FAIL 都保持非正式且不得阶段推进。

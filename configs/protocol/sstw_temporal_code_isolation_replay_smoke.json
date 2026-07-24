@@ -1,0 +1,49 @@
+{
+  "attacked_phase_execution_allowed": false,
+  "claim_support_status": "temporal_code_isolation_replay_smoke_only_not_paper_evidence",
+  "cross_project_integration_allowed": false,
+  "external_baseline_execution_allowed": false,
+  "fixed_fpr_evaluation_allowed": false,
+  "heldout_prompt_ids": [
+    "probe_paper_paper_master_prompt_003",
+    "probe_paper_paper_master_prompt_004"
+  ],
+  "heldout_seed_ids": [
+    "probe_paper_paper_master_test_seed_01",
+    "probe_paper_paper_master_test_seed_02"
+  ],
+  "identity_record_count": 4,
+  "lambda_max": 0.12,
+  "large_scale_generation_allowed": false,
+  "maximum_absolute_code_correlation": 0.75,
+  "maximum_prompt_temporal_pair_fraction_gap": 0.25,
+  "minimum_replay_reliability": 0.05,
+  "minimum_temporal_owner_over_wrong_pair_fraction": 0.75,
+  "minimum_temporal_owner_top1_identity_fraction": 0.75,
+  "no_attack_only": true,
+  "pair_record_count": 32,
+  "paper_result_level": "temporal_code_isolation_replay_smoke",
+  "predictive_path_reliability_mode": "null_forward_key_independent",
+  "predictive_trajectory_carrier_id": "key_context_balanced_multisegment_predictive_carrier",
+  "primary_predictive_path_statistic": "S_path_inv",
+  "profile_id": "sstw_temporal_code_isolation_replay_smoke",
+  "replay_generation_record_count": 4,
+  "replay_step_count": 20,
+  "required_generation_model_id": "Wan-AI/Wan2.1-T2V-1.3B-Diffusers",
+  "required_predictive_source_decision": "predictive_trajectory_gate_failed_stop_method",
+  "required_predictive_source_pair_record_count": 20,
+  "required_predictive_source_profile_id": "sstw_predictive_trajectory_synchronization_smoke",
+  "required_predictive_source_summary_record_count": 24,
+  "required_source_controlled_embedding_decision": "lambda_increase_did_not_repair_path_signal_stop",
+  "required_source_profile_id": "sstw_controlled_embedding_strength_diagnostic",
+  "source_generation_record_count": 8,
+  "stage_progression_allowed": false,
+  "summary_record_count": 36,
+  "temporal_wrong_candidate_count": 8,
+  "temporal_wrong_candidate_pool_count": 32,
+  "test_split_claims_allowed": false,
+  "trajectory_carrier_variant_ids": [
+    "predictive_signed_phase_code",
+    "nonnegative_phase_control"
+  ]
+}

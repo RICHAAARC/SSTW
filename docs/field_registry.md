@@ -3017,3 +3017,34 @@ Notebook 与 repository module 的跨边界数据
 | state_space_posterior_executed | governance | none | true | false | false | 当前诊断是否拟合或执行状态空间 posterior；predictive smoke 固定为 false。 |
 | endpoint_gate_execution_allowed | governance | none | true | false | false | 当前 execution decision 是否允许 endpoint 门禁；predictive smoke 固定为 false。 |
 | state_space_posterior_execution_allowed | governance | none | true | false | false | 当前 execution decision 是否允许拟合状态空间 posterior；predictive smoke 固定为 false。 |
+| temporal_code_isolation_summary_record_id | provenance | none | true | false | false | 固定 owner 空间 basis 后，单个 owner/wrong temporal-code path summary 的稳定身份摘要。 |
+| temporal_code_isolation_pair_record_id | provenance | none | true | false | false | owner 时间码与单个 wrong 时间码 `S_path_inv` 配对记录摘要。 |
+| temporal_code_isolation_identity_record_id | provenance | none | true | false | false | 单个 prompt/seed 的8候选时间码排序诊断记录摘要。 |
+| temporal_code_candidate_role | protocol | none | true | false | false | temporal isolation summary 的 owner 或 wrong temporal-code 角色。 |
+| temporal_code_candidate_index | protocol | none | true | false | false | 固定32候选池中当前 wrong temporal code 的预声明索引；owner 为 null。 |
+| temporal_code_signature_digest | provenance | none | true | false | false | 当前候选在真实20步 schedule 上的 raw signs 与中心化 codes 摘要，不记录 key 材料。 |
+| temporal_code_phase_function_digest | provenance | none | true | false | false | 当前候选 key/context 绑定的 predictive phase function 摘要。 |
+| temporal_code_spatial_key_role | protocol | none | true | false | false | temporal isolation 中固定为空间 owner key 的 hypothesis 角色。 |
+| temporal_code_weighted_correlation_to_owner | metric | none | true | false | false | wrong temporal code 与 owner temporal code 在同一真实 schedule 上的加权相关性。 |
+| owner_over_wrong_temporal_path_margin | metric | none | true | false | false | 空间 key 固定为 owner 时，owner 时间码 `S_path_inv` 减单个 wrong 时间码分数。 |
+| temporal_owner_path_score | metric | none | true | false | false | 单个 prompt/seed 下 owner 时间码的固定反演 `S_path_inv`。 |
+| maximum_wrong_temporal_path_score | metric | none | true | false | false | 单个 prompt/seed 的8个互异低相关 wrong temporal code 中最大 `S_path_inv`。 |
+| minimum_owner_over_wrong_temporal_path_margin | metric | none | true | false | false | owner 时间码相对8个 wrong temporal codes 的最小 path margin。 |
+| temporal_owner_rank | metric | none | true | false | false | owner 时间码在 owner 加8个 wrong temporal codes 中的严格降序名次；平分不计胜。 |
+| temporal_owner_top1 | metric | none | true | false | false | owner 时间码是否严格胜过同身份全部8个 wrong temporal codes。 |
+| temporal_owner_percentile | metric | none | true | false | false | owner 时间码严格胜过的 wrong temporal-code 比例。 |
+| temporal_owner_over_wrong_candidate_fraction | metric | none | true | false | false | 单个 prompt/seed 内 owner 时间码严格胜过8个 wrong temporal codes 的比例。 |
+| temporal_owner_over_wrong_pair_fraction | metric | none | true | false | false | owner 时间码 path margin 为正的32候选配对总体比例。 |
+| temporal_owner_top1_identity_fraction | metric | none | true | false | false | owner 时间码严格排名第一的四个 held-out 身份比例。 |
+| temporal_owner_over_wrong_pair_fraction_by_prompt | metric | none | true | false | false | 分 prompt 汇总的 owner-over-wrong temporal-code 正 margin 比例。 |
+| temporal_owner_over_wrong_pair_fraction_prompt_gap | metric | none | true | false | false | 两个 held-out prompts 的 temporal pair fraction 最大差，用于检测 prompt-dependent 干扰。 |
+| temporal_path_evidence_ready | governance | none | true | false | false | 36条 temporal isolation summaries 是否全部具有完整20步固定反演 path 上下文。 |
+| temporal_candidate_separation_ready | governance | none | true | false | false | 每个身份是否具有8个索引、签名均互异且相关性不超过0.75的 wrong temporal codes。 |
+| temporal_code_isolation_gate_ready | governance | none | true | false | false | 多候选时间码排序、总体配对、prompt gap、reliability 与 coverage 是否共同通过。 |
+| temporal_code_isolation_smoke_decision | governance | none | true | false | false | 通过仅允许设计新的精简 generation，失败停止当前时间状态码实例。 |
+| temporal_code_isolation_status | governance | none | true | false | false | 单个 signed 视频 temporal isolation replay 的执行状态。 |
+| temporal_code_isolation_failure_reason | governance | none | true | false | false | 单个 temporal isolation replay fail-closed 的具体原因。 |
+| replayed_video_count | protocol | none | true | false | false | temporal isolation 固定实际执行 inversion 的 signed 视频数，固定为4。 |
+| spatial_key_fixed_to_owner | protocol | none | true | false | false | temporal isolation 是否在全部候选中固定空间 tubelet key 为 owner。 |
+| temporal_wrong_candidate_count | protocol | none | true | false | false | 每个身份实际使用的互异低相关 wrong temporal code 数，固定为8。 |
+| temporal_wrong_candidate_pool_count | protocol | none | true | false | false | fail-closed 搜索 wrong temporal codes 的预声明候选池大小，固定为32。 |

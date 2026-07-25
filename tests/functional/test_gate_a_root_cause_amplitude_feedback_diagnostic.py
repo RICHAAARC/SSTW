@@ -999,6 +999,13 @@ def _build_historical_fail_source(
         "_package_version",
         lambda _name: "0.35.2",
     )
+    monkeypatch.setattr(
+        construction_module,
+        "_repository_commit",
+        lambda: _config()["historical_gate_a_source_binding"][
+            "repository_commit"
+        ],
+    )
 
     def generation_executor(config: dict, **kwargs) -> ConstructionGenerationBatch:
         batch = helpers["_generation_batch"](

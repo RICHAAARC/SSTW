@@ -19,6 +19,13 @@ attack、fixed-FPR、baseline、正式结果或阶段推进。
 二阶 common、后续 feedback 与 decode/output mismatch 候选；历史 `.12` 只读且
 不重跑。所有分类允许多因或不确定，始终 `gate_a_pass=false`、非正式且禁止阶段推进。
 
+`existing_six_video_spatiotemporal_signed_response_diagnostic.py` 不生成视频，
+只安全解压并精确验证完整 f06a0934 六视频结果，在 CPU 上从真实保存的 RGB24
+逐帧计算固定 video-time signed response。它只输出
+`temporal_feature_salvage_candidate`、`carrier_redesign_required_candidate`
+或不确定/多候选诊断；不接 server handler、Notebook、GPU、Drive，也不把诊断
+写成 Gate A 或方法证据。
+
 ## Prompt-orthogonal state-trajectory smoke
 
 `prompt_orthogonal_state_trajectory_smoke.py` 保留为已执行候选路线及历史 control。

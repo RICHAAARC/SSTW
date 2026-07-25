@@ -31,3 +31,10 @@ Gate A FAIL 后的独立六视频根因判别：只运行一个预声明 `lambda
 以完整 commit `47485be2...` Gate A FAIL 包作为只读 `.12` 基线，比较 early0/late0
 在 latent、decode、save、re-encode 与 output feature 的 odd/common scaling。
 它不重跑 `.12`，不重试 Gate A，也不允许跨 identity、observer、攻击或阶段推进。
+
+`protocol/sstw_existing_six_video_spatiotemporal_signed_response_diagnostic.json`
+冻结对上述完整六视频结果的 CPU-only、只读分析：逐帧完整 RGB24、固定三等长
+video-time 区间和固定区间内相邻帧差分都使用同一 clean-centered odd/common
+公式与既有 signed gate。source commit、完整文件快照、六项顺序与视频摘要均精确
+绑定；单帧偶然通过不能形成候选，分析不得自动选择 feature、重试 Gate A、执行
+frozen-feedback、更新 Drive 或推进阶段。

@@ -11,7 +11,7 @@ Observer-Synchronized State-Space Trajectory Watermarking
 当前状态仅为：
 
 ```text
-impulse_triage_execution_authorized_pending_user_colab_run
+current_distributed_carrier_global_feature_gate_a_failed_stop
 ```
 
 它不是旧 prompt-orthogonal 路线的改名，也不覆盖该路线的真实失败。旧路线及其
@@ -27,8 +27,9 @@ recovery/result 必须保留为历史 control。历史结果只能支持：
 - `formal_result=false`；
 - `stage_progression_allowed=false`；
 - 不支持 paper claim；
-- 本状态只授权准备既有薄 Notebook 可调用的 runner/handler；本次实现不启动 GPU、
-  不更新 Drive、不修改 Notebook，真实 Colab 仍须审核提交后由用户执行；
+- 真实14视频 Gate A 与后续固定半幅六视频诊断均已执行，Gate A FAIL 保持不变；
+- 当前只授权对既有六个保存视频做候选密钥无关的 CPU-only 时空 signed-response
+  分析，并冻结后续实验规范；不授权新的 GPU/Colab/Drive 操作；
 - 不授权实现 observer、正式 LLR、攻击、pilot、fixed-FPR 或 baseline。
 
 ## 1. 研究问题与结构分离
@@ -63,7 +64,7 @@ prompt-conditioned replay 只能作为 construction diagnostic。即使 replay �
 | 时间轴 | 当前职责 |
 |---|---|
 | Flow/diffusion time \(t\) | 本轮唯一主动设计轴，分为3个宏观区间 |
-| video frame time \(\tau\) | 仅由冻结 output extractor 做全局聚合，不研究顺序鲁棒性 |
+| video frame time \(\tau\) | 既有失败结果的 CPU-only 逐帧/固定三区间/相邻差分诊断；尚非 primary feature |
 
 Flow 区间固定为：
 
@@ -73,8 +74,10 @@ I_1=[\tfrac13,\tfrac23),\quad
 I_2=[\tfrac23,1].
 \]
 
-首轮不得加入删帧、插帧、DTW、变帧率、frame-time alignment 或攻击。冻结 extractor
-对文件顺序中的全部解码帧做单一全局均值，并不构成 video-time 分析或鲁棒性证据。
+首轮不得加入删帧、插帧、DTW、变帧率、frame-time alignment 或攻击。旧冻结
+extractor 对文件顺序中的全部解码帧做单一全局均值；该表示已在真实 Gate A 中失败，
+且不构成 video-time 分析或鲁棒性证据。现有六视频的逐帧诊断只用于决定下一次
+最小 construction 测什么，不能事后选出新的正式 feature。
 
 ## 3. 独立水印状态与阶段 block
 
@@ -190,6 +193,52 @@ SHA256(
 - confirmation identity 只能 apply，不能重新拟合 extractor。
 
 此时只能称 construction feature，不能称 observer。
+
+### 4.1 真实 Gate A 后的方法决策
+
+真实结果已经停止下列组合继续进入 Gate A：
+
+```text
+distributed random 3×2 latent carrier
++ global latent-time mean/L2 Wan VAE feature
+```
+
+这不是停止独立低维水印状态、output-only primary 或 Flow-time trajectory 的研究
+方向；停止的是该 carrier/feature 组合。固定半幅诊断显示 late six-basis latent
+仍有 signed response，但保存视频与 output feature 由 common/even response 主导；
+early latent 同时受到后续 feedback 混淆。该证据只支持多候选根因，不支持唯一归因。
+
+下一候选冻结为：
+
+```text
+output/decoder-Jacobian-aligned public carrier dictionary
++ key-controlled combination
++ video-time-preserving public feature
+```
+
+公开 dictionary 与 public feature 必须在运行前冻结且候选密钥无关；key 只能控制
+预冻结 dictionary 的组合系数，不能按结果选择 atom、frame、block、channel、band
+或 layer。新 feature 禁止对每个视频单独做 L2 方向归一化；尺度必须来自独立 clean
+calibration identity 的 fixed whitening/normalization，并在 held-out identity 上
+只 apply。
+
+identity 职责严格分离：
+
+1. construction identity A：定义 public dictionary、clean calibration 与 fixed
+   whitening；
+2. held-out Gate A identity B：只检验因果 signed observability，不重新拟合；
+3. Gate B identity C：只做跨 identity confirmation，不混回 A/B。
+
+状态维数按成本与可证伪性依次推进：
+
+```text
+2 stages × 1 dimension
+→ 3 stages × 1 dimension
+→ 3 stages × 2 dimensions
+```
+
+前一项未通过不得扩维。\(F_K/G_K\)、observer、matched-dynamic score 与任何 LLR
+仍全部后置于新的 construction A/B/C 证据。
 
 ## 5. 端到端传递链
 
@@ -375,12 +424,14 @@ matched-dynamic score
 当前只允许：
 
 ```text
-完成14-video Gate A runner/handler
+验证完整 f06a0934 六视频 result
+→ CPU-only 逐帧/固定三区间/相邻差分 signed-response 分析
+→ 冻结下一次 frozen-feedback 与 carrier/feature redesign 规范
 → 独立只读审核
-→ 可能授权提交推送
-→ 用户之后运行固定 Colab Notebook
 ```
 
 当前任务仍不允许提交、推送、GPU、Colab、Drive 或 Notebook 变更。本地
 pytest/harness 通过只证明合同和执行入口一致，不证明 construction observability
-或方法有效性。真实 Gate A 结果无论 PASS/FAIL 都保持非正式且不得阶段推进。
+或方法有效性。CPU 分析不得自动选择新 feature；真实 Gate A FAIL 保持不变。
+任何 frozen-feedback 执行、Jacobian-aligned dictionary construction 或新 identity
+运行都必须另行实现、审核并由用户授权。

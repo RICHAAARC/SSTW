@@ -1,0 +1,154 @@
+{
+  "profile_id": "sstw_existing_six_video_spatiotemporal_signed_response_diagnostic",
+  "method_id": "observer_synchronized_state_space_trajectory_watermarking",
+  "analysis_role": "existing_six_video_read_only_root_cause_triage",
+  "execution_authorized": true,
+  "cpu_only": true,
+  "source_binding": {
+    "repository_commit": "f06a0934e4c346e2a6c7c43e4db9d47e6fac0579",
+    "profile_id": "sstw_gate_a_root_cause_amplitude_feedback_diagnostic",
+    "record_version": "gate_a_root_cause_amplitude_feedback_diagnostic_v1",
+    "manifest_kind": "gate_a_root_cause_amplitude_feedback_diagnostic_manifest",
+    "decision": "candidate_explanations_recorded_no_gate_change",
+    "config_digest": "e1a89a4ebc3d30d9007c49ad1b6532da0ee55d53959bc41de24add1c6ca57a43",
+    "source_snapshot_digest": "4d5ccdc50394b017948ab10bb677d8d4ddf81cbb21fbc42ab71f36d5ba675b55",
+    "source_file_count": 26,
+    "historical_gate_a_source_snapshot_digest": "9797f2acbb2c381653b86887c3bc69d579aec49a2ae6b2a2e14285fdde627316",
+    "historical_repository_commit": "47485be2b6f734014b74f73e797174b911d2aeb5",
+    "construction_basis_digest": "d985db67557d6b472a23634aee5d74a3878c8b0738835fd41acee5c82cee8aad",
+    "construction_feature_schema_digest": "9ee107f5a9a4d2434fa96265a55bdbee11e6a97c064da741cf6505177ae7ce26",
+    "impulse_waveform_schema_digest": "0d8fc01ce4756cf532f6828aba9c17f77de87a1ac5f1a71e8a63e45ed8a0585d",
+    "impulse_runtime_adapter_schema_digest": "9bc8560cd6ee57be42d064d18b81aa4b3270f2a55f83431dd2cd67e2f4f2017d",
+    "generation_record_count": 6,
+    "trajectory_step_record_count": 48,
+    "actual_exposure_trace_count": 4,
+    "checkpoint_record_count": 30,
+    "feature_record_count": 6,
+    "plan_ids": [
+      "clean_start",
+      "positive_early_flow_channel_0",
+      "negative_early_flow_channel_0",
+      "positive_late_flow_channel_0",
+      "negative_late_flow_channel_0",
+      "clean_end"
+    ],
+    "video_sha256_by_probe": {
+      "clean_start": "12fe929db7c3153ebd8f9ad0bc9017121d8ac9dada1a076cb28e21c49b7fbf72",
+      "positive_early_flow_channel_0": "a9b70ec78118452baac5917b7d17dfcd2faa6cd8b20452a8aa77d1f4cce10b81",
+      "negative_early_flow_channel_0": "e82e79be13616445188a9ffb8200bce4b7216eb1b5681c4a33868bbed9fedf04",
+      "positive_late_flow_channel_0": "005892b792a321b11c78362eff2a84c4fca687aafc6343e68a4000376dadd1de",
+      "negative_late_flow_channel_0": "1ce88b628484d19f4f4d2f7b93eb19639ebfefd684b25c71dc65f67692ca147d",
+      "clean_end": "12fe929db7c3153ebd8f9ad0bc9017121d8ac9dada1a076cb28e21c49b7fbf72"
+    },
+    "same_initial_generator_state_required": true,
+    "clean_all_frozen_representations_equal_required": true,
+    "gate_a_pass_required": false,
+    "formal_result_required": false,
+    "stage_progression_allowed_required": false
+  },
+  "analysis_plan": {
+    "video_count": 6,
+    "frame_count": 33,
+    "height": 320,
+    "width": 512,
+    "channel_count": 3,
+    "pixel_dtype": "uint8",
+    "pixel_normalization": "float64_rgb24_div_255",
+    "clean_intercept": "arithmetic_mean_clean_start_clean_end",
+    "per_frame_full_rgb_enabled": true,
+    "video_frame_intervals": [
+      {
+        "interval_id": "early_video_time",
+        "frame_start": 0,
+        "frame_stop": 11
+      },
+      {
+        "interval_id": "middle_video_time",
+        "frame_start": 11,
+        "frame_stop": 22
+      },
+      {
+        "interval_id": "late_video_time",
+        "frame_start": 22,
+        "frame_stop": 33
+      }
+    ],
+    "adjacent_frame_difference_enabled": true,
+    "adjacent_difference_intervals": [
+      {
+        "interval_id": "early_video_time",
+        "difference_start": 0,
+        "difference_stop": 10
+      },
+      {
+        "interval_id": "middle_video_time",
+        "difference_start": 11,
+        "difference_stop": 21
+      },
+      {
+        "interval_id": "late_video_time",
+        "difference_start": 22,
+        "difference_stop": 32
+      }
+    ],
+    "spatial_block_analysis_enabled": false,
+    "candidate_key_independent": true,
+    "runtime_frame_block_channel_band_selection_allowed": false,
+    "statistics_formulas": {
+      "positive_centered": "positive_minus_clean_intercept",
+      "negative_centered": "negative_minus_clean_intercept",
+      "odd": "half_times_positive_centered_minus_negative_centered",
+      "common": "half_times_positive_centered_plus_negative_centered",
+      "common_odd_ratio": "common_l2_norm_div_max_odd_l2_norm_epsilon",
+      "antisymmetry_cosine": "cosine_positive_centered_vs_negative_negative_centered",
+      "antisymmetry_residual": "norm_positive_centered_plus_negative_centered_div_sum_centered_norms"
+    },
+    "norm_denominator_epsilon": 1e-15
+  },
+  "signed_response_gate": {
+    "minimum_antisymmetry_cosine": 0.9,
+    "maximum_antisymmetry_residual": 0.25,
+    "maximum_common_odd_ratio": 0.5,
+    "minimum_odd_norm": 1e-12
+  },
+  "classification_contract": {
+    "representation_families": [
+      "frame_interval_full_rgb24",
+      "adjacent_difference_interval_full_rgb24"
+    ],
+    "all_three_intervals_required_per_family": true,
+    "both_flow_stage_pairs_required": true,
+    "single_frame_or_single_transition_pass_insufficient": true,
+    "candidate_classifications": [
+      "temporal_feature_salvage_candidate",
+      "carrier_redesign_required_candidate",
+      "multiple_candidates",
+      "indeterminate"
+    ],
+    "automatic_feature_selection_allowed": false,
+    "unique_root_cause_claim_allowed": false,
+    "historical_gate_a_failure_override_allowed": false
+  },
+  "authorization_boundary": {
+    "gate_a_retry": false,
+    "gate_a_pass": false,
+    "cross_identity_confirmation_allowed": false,
+    "gate_b_execution_allowed": false,
+    "gate_c_execution_allowed": false,
+    "wrong_key_execution_allowed": false,
+    "observer_execution_allowed": false,
+    "state_dynamics_design_allowed": false,
+    "frozen_feedback_diagnostic_execution_allowed": false,
+    "gpu_execution_allowed": false,
+    "colab_execution_allowed": false,
+    "drive_update_allowed": false,
+    "attack_execution_allowed": false,
+    "fixed_fpr_execution_allowed": false,
+    "external_baseline_execution_allowed": false,
+    "paper_claim_allowed": false,
+    "automatic_followup_execution_allowed": false
+  },
+  "formal_result": false,
+  "stage_progression_allowed": false,
+  "claim_support_status": "existing_six_video_spatiotemporal_diagnostic_only_not_method_evidence"
+}

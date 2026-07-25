@@ -3313,3 +3313,43 @@ Notebook 与 repository module 的跨边界数据
 | frozen_feedback_diagnostic_design_allowed | governance | none | true | false | false | 仅允许后续另起 frozen-feedback 诊断设计；不授权执行。 |
 | carrier_feature_redesign_allowed | governance | none | true | false | false | 仅允许后续另起 carrier/feature redesign；不授权执行或阶段推进。 |
 | formal_result | governance | none | true | false | false | 当前 construction、smoke 或 recovery artifact 是否可视为正式结果。 |
+| spatiotemporal_signed_response_diagnostic_decision | governance | none | true | false | false | 既有六视频只读 CPU 分析的完成、输入阻断或运行失败分类；不得写成 Gate A 重试或方法证据。 |
+| source_repository_commit | provenance | none | true | false | false | 只读六视频诊断输入所绑定的完整仓库 commit。 |
+| source_config_digest | provenance | none | true | false | false | 只读六视频诊断输入的冻结根因诊断 config 摘要。 |
+| source_snapshot_digest | provenance | none | true | false | false | 完整输入目录内全部预期文件的路径、大小与 SHA-256 canonical 快照摘要；不是外部签名。 |
+| source_gate_a_pass_preserved | governance | none | true | false | false | 固定为 false，确认离线分析未覆盖历史 Gate A FAIL。 |
+| source_clean_all_frozen_representations_equal | provenance | none | true | false | false | 源结果中 clean_start/end 在全部冻结表示上的精确相等性是否通过。 |
+| spatiotemporal_record_count | protocol | none | true | false | false | 逐帧、固定帧区间、逐相邻帧差分和固定差分区间记录总数。 |
+| spatiotemporal_signed_response_record_id | provenance | none | true | false | false | 由 pair、表示、固定区间或样本索引和统计值绑定的稳定记录 ID。 |
+| spatiotemporal_pair_id | protocol | none | true | false | false | 只读分析中的 `early_flow_channel_0` 或 `late_flow_channel_0` 正负 pair。 |
+| spatiotemporal_representation_id | protocol | none | true | false | false | 固定为逐帧 RGB24、帧区间 RGB24、相邻帧差分或差分区间 RGB24 表示之一。 |
+| spatiotemporal_segment_id | protocol | none | true | false | false | 固定 frame/transition 索引或 early/middle/late video-time 区间身份。 |
+| spatiotemporal_sample_start | protocol | none | true | false | false | 当前表示切片在其帧或相邻差分轴上的 inclusive 起始索引。 |
+| spatiotemporal_sample_stop | protocol | none | true | false | false | 当前表示切片在其帧或相邻差分轴上的 exclusive 终止索引。 |
+| spatiotemporal_source_frame_start | protocol | none | true | false | false | 当前表示实际覆盖的源视频帧 inclusive 起始索引。 |
+| spatiotemporal_source_frame_stop | protocol | none | true | false | false | 当前表示实际覆盖的源视频帧 exclusive 终止索引。 |
+| spatiotemporal_positive_centered_norm | metric | none | true | false | false | positive probe 相对 clean_start/end 算术均值截距的完整切片 L2 norm。 |
+| spatiotemporal_negative_centered_norm | metric | none | true | false | false | negative probe 相对 clean_start/end 算术均值截距的完整切片 L2 norm。 |
+| spatiotemporal_odd_norm | metric | none | true | false | false | 当前固定切片 `0.5*(delta_plus-delta_minus)` 的 L2 norm。 |
+| spatiotemporal_common_norm | metric | none | true | false | false | 当前固定切片 `0.5*(delta_plus+delta_minus)` 的 L2 norm。 |
+| spatiotemporal_common_odd_ratio | metric | none | true | false | false | 当前固定切片 common norm 除以 odd norm；低于冻结分辨率时不可比较。 |
+| spatiotemporal_antisymmetry_cosine | metric | none | true | false | false | 当前固定切片 `cos(delta_plus,-delta_minus)`。 |
+| spatiotemporal_antisymmetry_residual | metric | none | true | false | false | 当前固定切片 `norm(delta_plus+delta_minus)/(norm(delta_plus)+norm(delta_minus))`。 |
+| spatiotemporal_statistics_finite | metric | none | true | false | false | 当前固定切片全部必需 odd/common 统计是否有限。 |
+| spatiotemporal_signed_response_gate_passed | governance | none | true | false | false | 当前固定切片是否同时满足既有 cosine、residual、common/odd 和绝对 odd 下限。 |
+| temporal_feature_salvage_candidate | governance | none | true | false | false | 两个 Flow-stage pair 在同一预声明 video-time 表示族的三个连续固定区间全部通过时记录的重构候选；不是 feature 选择或 Gate A PASS。 |
+| carrier_redesign_required_candidate | governance | none | true | false | false | 两个预声明 video-time 表示族均无稳定跨 pair/跨区间 signed response 时记录的重构候选。 |
+| multiple_candidates | governance | none | true | false | false | 多个预冻结诊断候选同时满足时的显式非唯一分类。 |
+| stable_interval_representation_families | governance | none | true | false | false | 满足两个 pair 与全部三个固定 video-time 区间门槛的预声明表示族列表。 |
+| family_gate_summaries | governance | none | true | false | false | 每个预声明 interval 表示族的预期记录数、通过数和稳定性摘要。 |
+| single_frame_or_single_transition_pass_sufficient | governance | none | true | false | false | 固定为 false，禁止单帧、单相邻差分或事后选中的局部偶然通过支持 salvage candidate。 |
+| automatic_feature_selection_allowed | governance | none | true | false | false | 固定为 false，CPU 诊断不得自动采用、调参或发布新的 output feature。 |
+| cpu_only | governance | none | true | false | false | 当前分析是否冻结为仅 CPU 读取既有结果，不调用生成模型。 |
+| source_read_only | governance | none | true | false | false | 当前分析是否不修改、覆盖或重打包 source result。 |
+| gpu_execution_allowed | governance | none | true | false | false | 当前只读分析是否允许 GPU 执行；固定为 false。 |
+| colab_execution_allowed | governance | none | true | false | false | 当前只读分析是否允许 Colab 执行；固定为 false。 |
+| drive_update_allowed | governance | none | true | false | false | 当前只读分析是否允许更新 Google Drive；固定为 false。 |
+| frozen_feedback_diagnostic_execution_allowed | governance | none | true | false | false | 当前阶段是否允许执行 frozen-feedback 诊断；仅完成规范时固定为 false。 |
+| feedback_isolation_candidate | governance | none | true | false | false | frozen-feedback 设计中 early/late full latent 均恢复 signed response 时的非唯一 isolation 候选；不得写成反馈根因证明。 |
+| decoder_carrier_mismatch_candidate | governance | none | true | false | false | frozen-feedback 设计中 latent signed 但至少一个 post-latent checkpoint 失败时必须并列记录的 decoder/carrier mismatch 候选。 |
+| stop_current_additive_random_carrier | governance | none | true | false | false | 关闭 model feedback 后 early/late full latent 仍均未恢复 signed response 时停止当前 additive random carrier 的设计结论。 |

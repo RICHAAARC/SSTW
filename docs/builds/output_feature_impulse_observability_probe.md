@@ -305,3 +305,14 @@ sample_internal_causal_observability_gate
 区分幅度、feedback 与 carrier/feature mismatch 候选。该诊断不是 Gate A 重试，
 本地 tests/harness 也仍只审核合同和 wiring，不提供 construction observability
 或方法有效性证据。
+
+固定半幅六视频已在 commit `f06a0934...` 上真实完成。实际 exposure 接近严格半幅，
+但保存 RGB 与 output feature 的 odd/common 未按局部线性缩放；late latent
+six-basis 仍 signed，而 output feature common-dominated；early latent 同时受
+feedback 候选混淆。结果只支持多候选根因，Gate A FAIL 不变。
+
+下一步首先对这六个既有 MP4 做候选密钥无关的 CPU-only 逐帧、固定三区间和相邻帧
+差分分析。该分析不得事后选择 feature；若固定 video-time aggregations 也不能在
+early/late 同时满足原 signed gate，则正式停止当前 distributed random 3×2 carrier
++ global latent-time mean/L2 feature 组合，转入 public decoder-Jacobian-aligned
+dictionary 与 fixed-whitened video-time feature 的独立 construction 设计。

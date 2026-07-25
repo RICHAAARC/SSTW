@@ -166,6 +166,7 @@ Notebook 固定读取:
 `temporal_code_isolation_replay_smoke`、
 `prompt_orthogonal_state_trajectory_smoke`、
 `gate_a_root_cause_amplitude_feedback_diagnostic`、
+`frozen_feedback_signed_response_diagnostic`、
 `output_feature_impulse_observability_construction` 与仅用于重建输入的
 `trajectory_replay_smoke_source_build`。
 当 Stage 0-D source 未保留时，同一 Notebook 还可通过白名单
@@ -252,6 +253,28 @@ CPU artifact，历史缺失的 full-latent 比较明确标为 unavailable。所�
 最多只允许设计后续 frozen-feedback diagnostic 或 carrier/feature redesign。
 模型、视频和临时 Gram 数组全部先在 `/content` 完成，成功后仍只写单 ZIP+manifest；
 固定 Notebook 不变。
+
+关闭 model feedback 的五输出判别使用
+`configs/paper_workflow/colab_test_frozen_feedback_signed_response_diagnostic_request_example.json`。
+它只接受 `phase=frozen_feedback_diagnostic`，不接受 resume package；source
+必须是完整 commit `f06a0934...` 六视频 root-cause 结果 ZIP，而不是 recovery、
+partial 或旧 `/content` 文件。handler 先精确绑定该历史 `.06` normal-feedback
+FAIL，再只运行一次 clean Wan trajectory。8 个 clean scheduler step 在
+guidance 5 下对应8个 CFG-combined velocity 与16次 cond/uncond transformer
+forward；四条 `+/- early0`、`+/- late0` counterfactual 从同一 initial latent
+开始，使用独立 FlowMatch scheduler clone 和共享 clean base-velocity/reference
+energy trace，counterfactual transformer forward 固定为0。
+
+五项依次完成 full final latent、同一 generation VAE decode、MP4 保存与 RGB24
+回读、同一 output-side VAE re-encode 和冻结 output feature。完整 clean trace
+tensor、pre-save decoded 与 RGB24 工作数组只在 `/content` 临时存在；五个 final
+latent NPZ、视频、governed records、decision 和 manifest 才进入最终本地结果包。
+分类严格复用冻结的 signed-response 真值表，且始终
+`gate_a_pass=false`、`formal_result=false`、
+`stage_progression_allowed=false`、`unique_root_cause_claim_allowed=false`。
+结果只可能记录 feedback isolation、decoder/carrier mismatch、停止当前 additive
+random carrier 或 indeterminate 候选，不自动执行后续设计。成功后仍只把一个 ZIP
+与一个最小 manifest 从 `/content` 写入 Drive，固定 Notebook 不含方法逻辑。
 
 最小带符号轨迹 smoke 使用
 `configs/paper_workflow/colab_test_minimal_signed_trajectory_state_space_smoke_request_example.json`。

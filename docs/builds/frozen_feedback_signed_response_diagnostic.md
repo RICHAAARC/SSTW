@@ -2,8 +2,10 @@
 
 ## 1. 状态
 
-本文只冻结下一次最小实验的方法合同，不实现 runner、handler、Notebook 或 GPU
-执行。任何执行仍需独立实现、代码审核和用户授权。
+本文冻结最小实验的方法合同。commit `8704717...` 之后的 construction-only
+实现通过独立 experiment runner 与既有 `colab_test` 白名单接入；固定 Notebook
+保持不变。代码完成与本地审核不等于 GPU 结果，真实 Colab 执行仍需完成独立代码审核、
+提交推送、Drive 请求准备和用户运行。
 
 它不是 Gate A 重试。所有未来产物仍必须：
 
@@ -52,6 +54,14 @@ z_{t+1}^{p}
 \(v_\theta(z_t^p,t,prompt)\)。因此 signed 输出之间的差异只来自固定 additive
 control，不包含后续 model feedback。
 
+这里“8步 clean model trace”必须区分两个计数：每个 scheduler step 形成一个
+CFG-combined base velocity，所以逻辑 denoiser call 为8；diffusers 0.35.2 的
+guidance 5 对 conditional/unconditional 分别 forward，所以实际 transformer
+forward invocation 为16。两者都必须记录并绑定到step，counterfactual 两种调用数
+均为0。四条 counterfactual 各使用独立 FlowMatch scheduler clone；执行前先用同一
+clean trace 做一次 no-control clone replay，并要求 final latent 与 pipeline clean
+final latent exact array equal。
+
 五项均须完成 final latent、同一 VAE decode、同一保存编码、RGB24 回读、同一
 VAE re-encode 与冻结 public diagnostic summaries。不得把未保存 latent 当作
 output-only positive。
@@ -86,7 +96,23 @@ output diagnostic summary 全部通过。
 不得由结果降低阈值、改变幅度、选择单帧/单块、追加 sixth video 或直接实现新
 feature。
 
-## 5. 授权边界
+## 5. 历史 source 与 Colab 自包含边界
+
+`feedback_isolation_candidate` 必须绑定完整 f06a0934 `.06` normal-feedback
+root-cause FAIL。request 的 `source_package_path` 显式指向该完整 ZIP；handler
+复制到 `/content` 后精确验证 commit、source snapshot、decision、plan/counts、
+视频 SHA、clean equality、basis/feature/waveform/adapter digest，并重算 early/late
+full-latent signed gate 均为 false。recovery、partial、PASS 或隐式
+`/tmp`/旧 workspace 不可替代。
+
+prompt003 正负文本、SHA-256 与 seed2201 直接冻结在 exact config；owner basis
+由认证 key 重建且 digest 必须与历史 source 一致。clean trace full tensor、
+pre-save decoded 与 RGB24 工作数组只在本次 `/content` runtime 暂存并在打包前
+删除；五个 full final latent NPZ、五个视频、Gram sufficient statistics、records、
+decision 与 manifest进入唯一结果 ZIP。latent 与 replay/internal checkpoint 不能
+冒充 output-only positive。
+
+## 6. 授权边界
 
 该实验即使未来完成，也不授权 Gate B/C、wrong-key、observer、\(F_K/G_K\)、
 state dynamics、attack、fixed-FPR、baseline 或 paper claim。其唯一用途是选择：
@@ -97,3 +123,7 @@ state dynamics、attack、fixed-FPR、baseline 或 paper claim。其唯一用途
 停止当前 additive random carrier 并进入
 output/decoder-Jacobian-aligned public dictionary 设计
 ```
+
+无论候选为何，`gate_a_pass=false`、`formal_result=false`、
+`stage_progression_allowed=false`、`unique_root_cause_claim_allowed=false`；
+候选只允许后续另行设计，不授权自动执行。

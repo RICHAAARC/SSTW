@@ -1,0 +1,14 @@
+{
+  "request_schema_version": "sstw_colab_test_request_v1",
+  "test_id": "frozen_feedback_signed_response_diagnostic",
+  "repository": {
+    "url": "https://github.com/RICHAAARC/SSTW.git",
+    "ref": "REPLACE_WITH_FULL_COMMIT_SHA"
+  },
+  "parameters": {
+    "phase": "frozen_feedback_diagnostic",
+    "run_series_id": "frozen_feedback_signed_response",
+    "source_package_path": "/content/drive/MyDrive/SSTW/inputs/frozen_feedback_signed_response/gate_a_root_cause_amplitude_feedback_complete_result.zip",
+    "resume_package_path": ""
+  }
+}

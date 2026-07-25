@@ -26,6 +26,15 @@ attack、fixed-FPR、baseline、正式结果或阶段推进。
 或不确定/多候选诊断；不接 server handler、Notebook、GPU、Drive，也不把诊断
 写成 Gate A 或方法证据。
 
+`frozen_feedback_signed_response_diagnostic.py` 是下一步独立五输出
+construction-only 判别：显式消费并验证完整 f06a0934 normal-feedback FAIL，
+只运行一条8-step clean Wan trajectory，并把其 CFG-combined base velocity
+共享给正负 early0/late0 四条独立 scheduler replay。四条counterfactual均不再
+调用 transformer。五项依次完成 full latent、decode、真实MP4 RGB24回读、
+output-side VAE re-encode 和公开summary，再按冻结真值表记录feedback isolation、
+decoder/carrier mismatch、停止当前additive carrier或indeterminate候选。该入口
+不是Gate A重试，所有结果固定非正式、Gate A false且禁止阶段推进。
+
 ## Prompt-orthogonal state-trajectory smoke
 
 `prompt_orthogonal_state_trajectory_smoke.py` 保留为已执行候选路线及历史 control。

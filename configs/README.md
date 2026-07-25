@@ -38,3 +38,10 @@ video-time 区间和固定区间内相邻帧差分都使用同一 clean-centered
 公式与既有 signed gate。source commit、完整文件快照、六项顺序与视频摘要均精确
 绑定；单帧偶然通过不能形成候选，分析不得自动选择 feature、重试 Gate A、执行
 frozen-feedback、更新 Drive 或推进阶段。
+
+`protocol/sstw_frozen_feedback_signed_response_diagnostic.json` 冻结五输出
+feedback-isolation construction：完整 f06a0934 normal-feedback FAIL 是显式
+只读source；一次clean 8-step denoising产生共享base-velocity trace，四条正负
+early0/late0 counterfactual不再调用模型。配置精确绑定16次CFG component
+forward、32条branch update、`lambda=.06`、实际FP32预算与五层response gate。
+任意结果都保持Gate A/formal/stage false，只能记录预声明的非唯一根因候选。

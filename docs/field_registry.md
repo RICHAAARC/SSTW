@@ -3353,3 +3353,92 @@ Notebook 与 repository module 的跨边界数据
 | feedback_isolation_candidate | governance | none | true | false | false | frozen-feedback 设计中 early/late full latent 均恢复 signed response 时的非唯一 isolation 候选；不得写成反馈根因证明。 |
 | decoder_carrier_mismatch_candidate | governance | none | true | false | false | frozen-feedback 设计中 latent signed 但至少一个 post-latent checkpoint 失败时必须并列记录的 decoder/carrier mismatch 候选。 |
 | stop_current_additive_random_carrier | governance | none | true | false | false | 关闭 model feedback 后 early/late full latent 仍均未恢复 signed response 时停止当前 additive random carrier 的设计结论。 |
+| frozen_feedback_signed_response_diagnostic_decision | governance | none | true | false | false | 五输出 frozen-feedback construction 的完成分类或 fail-closed runtime/input failure；不是 Gate A PASS。 |
+| frozen_feedback_failure_reason | governance | none | true | false | false | frozen-feedback construction 失败时的非敏感、可定位原因。 |
+| frozen_feedback_plan_ids | protocol | none | true | false | false | 精确五输出顺序：clean、正负 early0、正负 late0。 |
+| frozen_feedback_output_count | protocol | none | true | false | false | 本诊断实际完成并验证的视频输出数；冻结为5。 |
+| clean_scheduler_step_count | protocol | none | true | false | false | 唯一 clean denoising trajectory 的 Flow scheduler step 数；冻结为8。 |
+| clean_logical_denoiser_call_count | protocol | none | true | false | false | 产生 CFG-combined clean base velocity 的逻辑 denoiser evaluation 数；冻结为8。 |
+| clean_transformer_forward_invocation_count | protocol | none | true | false | false | guidance 5 下 conditional/unconditional 的实际 transformer forward 总数；冻结为16。 |
+| clean_transformer_forward_invocation_index | protocol | none | true | false | false | clean trajectory 中底层 transformer forward 的0基顺序索引。 |
+| clean_logical_denoiser_step_index | protocol | none | true | false | false | 当前 conditional/unconditional forward 所绑定的 clean scheduler step。 |
+| clean_cfg_component | protocol | none | true | false | false | 当前 clean transformer forward 是 conditional 或 unconditional 分量。 |
+| clean_transformer_hidden_shape | provenance | none | true | false | false | clean transformer hidden-state 输入的完整 shape。 |
+| clean_transformer_hidden_dtype | provenance | none | true | false | false | clean transformer hidden-state 输入 dtype。 |
+| clean_transformer_hidden_array_sha256 | provenance | none | true | false | false | clean transformer hidden-state 原dtype bytes SHA-256。 |
+| clean_transformer_timestep_shape | provenance | none | true | false | false | clean transformer timestep 输入 shape。 |
+| clean_transformer_timestep_dtype | provenance | none | true | false | false | clean transformer timestep 输入 dtype。 |
+| clean_transformer_timestep_array_sha256 | provenance | none | true | false | false | clean transformer timestep 原dtype bytes SHA-256。 |
+| clean_transformer_call_record_id | provenance | none | true | false | false | clean CFG component、step binding、输入摘要和非正式边界的稳定记录ID。 |
+| counterfactual_transformer_call | protocol | none | true | false | false | 当前 transformer call 是否来自counterfactual；全部clean call固定为false。 |
+| clean_velocity_trace_record_id | provenance | none | true | false | false | 一个 clean state/base-velocity/scheduler step 与两次CFG forward绑定的稳定记录ID。 |
+| clean_trace_step_index | protocol | none | true | false | false | clean velocity trace 的0基 Flow step。 |
+| clean_trace_flow_phase | metric | none | true | false | false | clean trace 当前step的冻结连续Flow phase。 |
+| clean_trace_delta_sigma | metric | none | true | false | false | clean trace 当前step的冻结 scheduler state-update measure。 |
+| clean_trace_macro_interval_index | protocol | none | true | false | false | clean trace 当前step所属 early/middle/late Flow macro interval。 |
+| clean_trace_timestep | metric | none | true | false | false | 实际 Wan scheduler timestep 标量。 |
+| clean_trace_state_before_shape | provenance | none | true | false | false | clean scheduler step 前 latent state shape。 |
+| clean_trace_state_before_dtype | provenance | none | true | false | false | clean scheduler step 前 latent state dtype。 |
+| clean_trace_state_before_array_sha256 | provenance | none | true | false | false | clean scheduler step 前 state 原dtype bytes SHA-256。 |
+| clean_trace_base_velocity_shape | provenance | none | true | false | false | CFG-combined clean base velocity shape。 |
+| clean_trace_base_velocity_dtype | provenance | none | true | false | false | CFG-combined clean base velocity dtype。 |
+| clean_trace_base_velocity_array_sha256 | provenance | none | true | false | false | CFG-combined clean base velocity 原dtype bytes SHA-256。 |
+| clean_trace_base_velocity_norm | metric | none | true | false | false | 实际 clean base velocity 的FP32 L2 norm。 |
+| clean_trace_reference_energy_increment | metric | none | true | false | false | 当前step `delta_sigma^2 * clean_base_velocity_norm^2`。 |
+| clean_trace_reference_cumulative_energy | metric | none | true | false | false | clean trace 到当前step的累计 reference Flow energy。 |
+| clean_trace_state_after_shape | provenance | none | true | false | false | clean scheduler step 后 latent state shape。 |
+| clean_trace_state_after_dtype | provenance | none | true | false | false | clean scheduler step 后 latent state dtype。 |
+| clean_trace_state_after_array_sha256 | provenance | none | true | false | false | clean scheduler step 后 state 原dtype bytes SHA-256。 |
+| clean_trace_transformer_forward_invocation_start | protocol | none | true | false | false | 当前clean step绑定的forward半开区间起点。 |
+| clean_trace_transformer_forward_invocation_stop | protocol | none | true | false | false | 当前clean step绑定的forward半开区间终点。 |
+| clean_trace_cfg_combined_velocity_ready | governance | none | true | false | false | 当前step是否捕获实际CFG-combined clean base velocity。 |
+| shared_clean_velocity_trace_digest | provenance | none | true | false | false | 初末latent、8条clean trace与16条forward记录ID的稳定摘要。 |
+| shared_clean_velocity_trace_verified | governance | none | true | false | false | 四条counterfactual是否全部绑定同一完整clean velocity/reference-energy trace。 |
+| shared_initial_latent_digest_random | provenance | none | true | false | true | 五输出共享的seeded initial latent原dtype bytes摘要。 |
+| same_initial_latent_verified | governance | none | true | false | false | 五输出是否从同一clean initial latent开始。 |
+| counterfactual_branch_count | protocol | none | true | false | false | 正负early0与正负late0离线branch数；冻结为4。 |
+| counterfactual_logical_denoiser_call_count | protocol | none | true | false | false | counterfactual逻辑denoiser evaluation数；冻结为0。 |
+| counterfactual_transformer_forward_call_count | protocol | none | true | false | false | counterfactual底层transformer forward数；冻结为0。 |
+| counterfactual_step_record_count | protocol | none | true | false | false | 四branch各8步的governed record总数；冻结为32。 |
+| counterfactual_control_active | protocol | none | true | false | false | 当前branch step是否位于预声明stage waveform active window。 |
+| counterfactual_clean_velocity_trace_record_id | provenance | none | true | false | false | 当前branch step所绑定的clean velocity trace record ID。 |
+| counterfactual_clean_base_velocity_array_sha256 | provenance | none | true | false | false | 当前branch step复用的clean base velocity bytes摘要。 |
+| counterfactual_state_before_array_sha256 | provenance | none | true | false | false | counterfactual scheduler update前state原dtype bytes摘要。 |
+| counterfactual_state_after_array_sha256 | provenance | none | true | false | false | counterfactual scheduler update后state原dtype bytes摘要。 |
+| counterfactual_update_recomputation_equal | governance | none | true | false | false | scheduler clone输出是否与冻结Flow Euler公式逐值相等。 |
+| counterfactual_model_feedback_allowed | governance | none | true | false | false | 固定为false，禁止以counterfactual state再次调用模型。 |
+| counterfactual_step_record_id | provenance | none | true | false | false | branch身份、clean trace binding、实际control、guard和state-update的稳定记录ID。 |
+| offline_clean_replay_final_latent_sha256 | provenance | none | true | false | false | 独立scheduler clone用clean trace重放所得final latent摘要。 |
+| offline_clean_replay_exact_match_verified | governance | none | true | false | false | offline no-control replay是否与pipeline clean final latent exact array equal。 |
+| frozen_feedback_generation_record_id | provenance | none | true | false | false | 五输出生成身份、共享trace、视频与非正式边界的稳定记录ID。 |
+| frozen_feedback_diagnostic_representation_id | protocol | none | true | false | false | 不参与主signed gate的诊断表示ID，例如final-latent basis6 projection。 |
+| frozen_feedback_latent_six_basis_projection_values | metric | none | true | false | false | full final latent在六个owner construction basis方向上的有符号投影。 |
+| frozen_feedback_latent_l2_norm_in_signed_gate | governance | none | true | false | false | 固定为false，禁止天然sign-even的latent L2 norm进入signed判据。 |
+| frozen_feedback_latent_basis_projection_record_id | provenance | none | true | false | false | per-video basis6投影与basis digest的稳定记录ID。 |
+| frozen_feedback_full_representation_checkpoint_id | protocol | none | true | false | false | full-array Gram统计对应的latent、decoded或saved RGB24 checkpoint。 |
+| frozen_feedback_full_representation_row_ids | protocol | none | true | false | false | full-array Gram精确五行身份与顺序。 |
+| frozen_feedback_full_representation_gram_values | metric | none | true | false | false | 从本地full arrays流式计算的5×5 float64 Gram sufficient statistics。 |
+| frozen_feedback_full_representation_gram_shape | protocol | none | true | false | false | full representation Gram shape，冻结为5×5。 |
+| frozen_feedback_full_representation_gram_dtype | protocol | none | true | false | false | full representation Gram accumulator dtype，冻结为float64。 |
+| frozen_feedback_full_representation_source_array_sha256 | provenance | none | true | false | false | Gram每行所绑定的full-array SHA-256映射。 |
+| frozen_feedback_full_representation_gram_record_id | provenance | none | true | false | false | Gram、行身份和source array摘要的稳定记录ID。 |
+| frozen_feedback_pair_id | protocol | none | true | false | false | `early_flow_channel_0`或`late_flow_channel_0` signed pair。 |
+| frozen_feedback_checkpoint_id | protocol | none | true | false | false | 五个冻结response checkpoint之一。 |
+| frozen_feedback_clean_distance | metric | none | true | false | false | 单clean截距合同下固定为0；不冒充正式noise floor。 |
+| frozen_feedback_positive_centered_norm | metric | none | true | false | false | positive response相对唯一clean的L2 norm。 |
+| frozen_feedback_negative_centered_norm | metric | none | true | false | false | negative response相对唯一clean的L2 norm。 |
+| frozen_feedback_odd_norm | metric | none | true | false | false | `0.5*(delta_plus-delta_minus)`的L2 norm。 |
+| frozen_feedback_common_norm | metric | none | true | false | false | `0.5*(delta_plus+delta_minus)`的L2 norm。 |
+| frozen_feedback_common_odd_ratio | metric | none | true | false | false | common norm除以odd norm，低于冻结分辨率时不可比较。 |
+| frozen_feedback_antisymmetry_cosine | metric | none | true | false | false | `cos(delta_plus,-delta_minus)`。 |
+| frozen_feedback_antisymmetry_residual | metric | none | true | false | false | `norm(delta_plus+delta_minus)/(norm(delta_plus)+norm(delta_minus))`。 |
+| frozen_feedback_statistics_finite | metric | none | true | false | false | 当前pair/checkpoint全部必需统计是否有限。 |
+| frozen_feedback_signed_response_gate_passed | governance | none | true | false | false | 当前pair/checkpoint是否满足预冻结cosine、residual、common/odd与odd floor。 |
+| frozen_feedback_response_record_id | provenance | none | true | false | false | pair、checkpoint、odd/common统计与gate结论的稳定记录ID。 |
+| clean_coverage_and_guards_ready | governance | none | true | false | false | 仅在五输出、8 clean steps、16 clean forwards、32 branch steps、全部trace与guards完整时为true。 |
+| early_full_final_latent_signed | governance | none | true | false | false | early0 full final latent是否通过冻结signed response gate。 |
+| late_full_final_latent_signed | governance | none | true | false | false | late0 full final latent是否通过冻结signed response gate。 |
+| all_post_latent_checkpoints_signed | governance | none | true | false | false | 两pair的decoded、saved RGB24、reencoded和output feature是否全部通过。 |
+| historical_normal_feedback_full_latent_gate_by_pair | governance | none | true | false | false | 受绑定f06 normal-feedback source中early/late full-latent signed gate apply-only结果。 |
+| historical_normal_feedback_gate_a_fail_preserved | governance | none | true | false | false | 固定为true，确认本诊断未覆盖历史Gate A FAIL。 |
+| historical_source_apply_only | governance | none | true | false | false | 历史normal-feedback结果只作为已冻结对照，禁止训练、调阈值或重分类为成功。 |

@@ -1,0 +1,198 @@
+{
+  "profile_id": "sstw_frozen_feedback_signed_response_construction_diagnostic",
+  "method_id": "observer_synchronized_state_space_trajectory_watermarking",
+  "diagnostic_role": "construction_only_feedback_isolation_not_gate_a_retry",
+  "execution_authorized": true,
+  "base_construction_contract": {
+    "config_path": "configs/protocol/sstw_output_feature_impulse_observability_construction.json",
+    "config_digest": "46e2961a952238f5a43e653eb185af7d62fb6484010fafc10f8cf14a096bd660",
+    "construction_basis_digest_bound_at_runtime": true,
+    "construction_feature_schema_digest": "9ee107f5a9a4d2434fa96265a55bdbee11e6a97c064da741cf6505177ae7ce26",
+    "waveform_schema_digest": "0d8fc01ce4756cf532f6828aba9c17f77de87a1ac5f1a71e8a63e45ed8a0585d",
+    "runtime_adapter_schema_digest": "9bc8560cd6ee57be42d064d18b81aa4b3270f2a55f83431dd2cd67e2f4f2017d"
+  },
+  "historical_normal_feedback_source": {
+    "required": true,
+    "validator_config_path": "configs/protocol/sstw_existing_six_video_spatiotemporal_signed_response_diagnostic.json",
+    "validator_config_digest": "855ab6a5c734630f147b2e4d1520a8a6134360251e4aee1f3a3b8b797d540fd4",
+    "repository_commit": "f06a0934e4c346e2a6c7c43e4db9d47e6fac0579",
+    "source_snapshot_digest": "4d5ccdc50394b017948ab10bb677d8d4ddf81cbb21fbc42ab71f36d5ba675b55",
+    "decision": "candidate_explanations_recorded_no_gate_change",
+    "gate_a_pass": false,
+    "formal_result": false,
+    "stage_progression_allowed": false,
+    "frozen_feedback_diagnostic_design_allowed": true,
+    "normal_feedback_full_latent_signed_gate_by_pair": {
+      "early_flow_channel_0": false,
+      "late_flow_channel_0": false
+    },
+    "normal_feedback_result_is_apply_only_control": true,
+    "normal_feedback_source_can_be_recovery_or_partial": false
+  },
+  "execution_identity": {
+    "prompt_suite_id": "sstw_nested_paper_prompt_seed_universe_v1",
+    "prompt_id": "probe_paper_paper_master_prompt_003",
+    "prompt_text": "Three brightly colored boxes travel on a conveyor belt from left to right across the entire frame, fixed camera, each box remains large and easy to track.",
+    "positive_prompt_text_sha256": "c4f3a636c9c4393ebf98448f2c30c6648f7e9141a2886bac0cd950001ec03980",
+    "negative_prompt_text": "static image, frozen conveyor, subtle motion, blurry, jittery, distorted",
+    "negative_prompt_text_sha256": "798a65de2dd61dffee2b6d5229d1167e4c0aa7053948562ae53dff3d1c0d0d11",
+    "seed_id": "probe_paper_paper_master_test_seed_01",
+    "seed_value": 2201,
+    "generation_model_id": "Wan-AI/Wan2.1-T2V-1.3B-Diffusers",
+    "generation_model_revision": "0fad780a534b6463e45facd96134c9f345acfa5b",
+    "diffusers_version": "0.35.2",
+    "scheduler_id": "wan21_flow_match_euler_discrete_scheduler_shift_3",
+    "scheduler_signature": "FlowMatchEulerDiscreteScheduler:a63b40d76d729371591d03526e14d24359c732866c07f51e4cc5f918f4941d2b",
+    "num_inference_steps": 8,
+    "num_frames": 33,
+    "height": 320,
+    "width": 512,
+    "guidance_scale": 5.0,
+    "fps": 8,
+    "video_exporter": "diffusers.utils.export_to_video",
+    "video_encoder_backend": "imageio_ffmpeg",
+    "initial_noise_binding": "single_torch_generator_manual_seed"
+  },
+  "five_output_plan": {
+    "video_count": 5,
+    "ordered_probe_ids": [
+      "clean",
+      "positive_early_flow_channel_0",
+      "negative_early_flow_channel_0",
+      "positive_late_flow_channel_0",
+      "negative_late_flow_channel_0"
+    ],
+    "clean_probe_count": 1,
+    "counterfactual_probe_count": 4,
+    "stage_indices": [
+      0,
+      2
+    ],
+    "channel_index": 0,
+    "lambda_max": 0.06,
+    "additional_identity_allowed": false,
+    "additional_channel_allowed": false,
+    "additional_strength_allowed": false,
+    "additional_grid_allowed": false,
+    "clean_repeat_allowed": false,
+    "composite_allowed": false
+  },
+  "clean_trace_contract": {
+    "scheduler_step_count": 8,
+    "classifier_free_guidance_forward_calls_per_step": 2,
+    "clean_transformer_forward_call_count": 16,
+    "counterfactual_transformer_forward_call_count": 0,
+    "clean_state_and_base_velocity_captured_each_step": true,
+    "clean_trace_temporary_full_tensor_retention": "local_runtime_only_deleted_before_result_packaging",
+    "governed_clean_trace_record": "shape_dtype_sha256_norm_timestep_delta_sigma_and_call_binding",
+    "counterfactual_initial_latent": "exact_clean_initial_latent",
+    "counterfactual_base_velocity": "exact_clean_cfg_combined_base_velocity_by_step",
+    "counterfactual_reference_energy": "exact_clean_base_velocity_reference_energy_by_step",
+    "counterfactual_model_feedback_allowed": false,
+    "counterfactual_state_update_formula": "flow_match_euler_scheduler_clone_step_with_clean_base_velocity_plus_actual_control",
+    "independent_scheduler_clone_per_counterfactual": true,
+    "offline_clean_replay_required": true,
+    "offline_clean_replay_match": "exact_array_equal_to_pipeline_clean_final_latent"
+  },
+  "control_contract": {
+    "lambda_max": 0.06,
+    "velocity_norm_ratio_budget": 0.02,
+    "flow_energy_budget_ratio": 0.000015,
+    "minimum_direction_cosine": 0.999,
+    "endpoint_control_enabled": false,
+    "active_waveform_zero_control_allowed": false,
+    "inactive_waveform_exact_noop_required": true,
+    "actual_delta_definition": "float32_constrained_minus_float32_clean_base_velocity",
+    "state_update_polarity_coordinate": true,
+    "norm_and_energy_budget_relaxation_allowed": false
+  },
+  "checkpoint_contract": {
+    "ordered_checkpoint_ids": [
+      "T_final_latent_full",
+      "T_decoded_full_rgb_float32",
+      "T_saved_video_full_rgb24",
+      "T_reencoded",
+      "T_output_feature"
+    ],
+    "output_derived_checkpoint_ids": [
+      "T_saved_video_full_rgb24",
+      "T_reencoded",
+      "T_output_feature"
+    ],
+    "final_latent_artifact": "compressed_float32_npz_in_local_result_package",
+    "pre_save_decoded_temporary_array": "local_runtime_only_deleted_after_statistics",
+    "saved_rgb24_temporary_array": "local_runtime_only_deleted_after_statistics",
+    "full_representation_statistics": "chunked_gram_sufficient_statistics",
+    "latent_internal_positive_claim_allowed": false,
+    "norm_denominator_epsilon": 1e-15
+  },
+  "signed_response_gate": {
+    "minimum_antisymmetry_cosine": 0.9,
+    "maximum_antisymmetry_residual": 0.25,
+    "maximum_common_odd_ratio": 0.5,
+    "minimum_odd_norm": 1e-12,
+    "statistics_formulas": {
+      "clean_intercept": "single_clean_output",
+      "positive_centered": "positive_minus_clean",
+      "negative_centered": "negative_minus_clean",
+      "odd": "half_times_positive_centered_minus_negative_centered",
+      "common": "half_times_positive_centered_plus_negative_centered",
+      "common_odd_ratio": "common_l2_norm_div_max_odd_l2_norm_epsilon",
+      "antisymmetry_cosine": "cosine_positive_centered_vs_negative_negative_centered",
+      "antisymmetry_residual": "norm_positive_centered_plus_negative_centered_div_sum_centered_norms"
+    }
+  },
+  "classification_contract": {
+    "classifier_symbol": "classify_frozen_feedback_signed_response_design",
+    "candidate_classifications": [
+      "feedback_isolation_candidate",
+      "decoder_carrier_mismatch_candidate",
+      "multiple_candidates",
+      "stop_current_additive_random_carrier",
+      "indeterminate_stop"
+    ],
+    "full_final_latent_pairs_required": [
+      "early_flow_channel_0",
+      "late_flow_channel_0"
+    ],
+    "post_latent_checkpoint_ids": [
+      "T_decoded_full_rgb_float32",
+      "T_saved_video_full_rgb24",
+      "T_reencoded",
+      "T_output_feature"
+    ],
+    "unique_root_cause_claim_allowed": false,
+    "automatic_followup_execution_allowed": false
+  },
+  "authorization_boundary": {
+    "gate_a_retry": false,
+    "gate_a_pass": false,
+    "gate_b_execution_allowed": false,
+    "gate_c_execution_allowed": false,
+    "cross_identity_confirmation_allowed": false,
+    "key_selectivity_execution_allowed": false,
+    "wrong_key_execution_allowed": false,
+    "observer_execution_allowed": false,
+    "state_dynamics_design_allowed": false,
+    "state_dynamics_execution_allowed": false,
+    "f_k_g_k_design_allowed": false,
+    "llr_execution_allowed": false,
+    "composite_execution_allowed": false,
+    "attack_execution_allowed": false,
+    "pilot_execution_allowed": false,
+    "fixed_fpr_execution_allowed": false,
+    "external_baseline_execution_allowed": false,
+    "training_or_finetuning_allowed": false,
+    "automatic_feature_selection_allowed": false,
+    "strength_sweep_allowed": false,
+    "grid_sweep_allowed": false,
+    "identity_sweep_allowed": false,
+    "channel_sweep_allowed": false,
+    "automatic_followup_execution_allowed": false,
+    "paper_claim_allowed": false,
+    "formal_result": false,
+    "stage_progression_allowed": false
+  },
+  "claim_support_status": "frozen_feedback_signed_response_construction_diagnostic_only_not_method_evidence",
+  "notebook_change_allowed": false
+}

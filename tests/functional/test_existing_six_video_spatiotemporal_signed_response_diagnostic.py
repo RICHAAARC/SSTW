@@ -573,7 +573,9 @@ def test_frozen_feedback_spec_is_design_only_and_has_exact_outputs() -> None:
         assert f"`{probe_id}`" in text
     assert "共享 clean base-velocity trace" in text
     assert "禁止用 \\(z_t^p\\) 再调用模型" in text
-    assert "不实现 runner" in text
+    assert "construction-only" in text
+    assert "既有 `colab_test` 白名单接入" in text
+    assert "固定 Notebook" in text
     assert "formal_result=false" in text
     assert "stage_progression_allowed=false" in text
     assert "feedback_nonlinearity_primary_candidate" not in text

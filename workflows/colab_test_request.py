@@ -47,6 +47,9 @@ OUTPUT_FEATURE_IMPULSE_OBSERVABILITY_CONSTRUCTION_TEST_ID = (
 GATE_A_ROOT_CAUSE_AMPLITUDE_FEEDBACK_DIAGNOSTIC_TEST_ID = (
     "gate_a_root_cause_amplitude_feedback_diagnostic"
 )
+FROZEN_FEEDBACK_SIGNED_RESPONSE_DIAGNOSTIC_TEST_ID = (
+    "frozen_feedback_signed_response_diagnostic"
+)
 SUPPORTED_TEST_IDS = (
     TRAJECTORY_REPLAY_SOURCE_BUILD_TEST_ID,
     TRAJECTORY_SIGNAL_TEST_ID,
@@ -57,6 +60,7 @@ SUPPORTED_TEST_IDS = (
     PROMPT_ORTHOGONAL_STATE_TRAJECTORY_SMOKE_TEST_ID,
     OUTPUT_FEATURE_IMPULSE_OBSERVABILITY_CONSTRUCTION_TEST_ID,
     GATE_A_ROOT_CAUSE_AMPLITUDE_FEEDBACK_DIAGNOSTIC_TEST_ID,
+    FROZEN_FEEDBACK_SIGNED_RESPONSE_DIAGNOSTIC_TEST_ID,
 )
 TRAJECTORY_REPLAY_SOURCE_BUILD_PHASE = "source_build"
 SUPPORTED_TRAJECTORY_PHASES = (
@@ -72,6 +76,9 @@ SUPPORTED_PROMPT_ORTHOGONAL_STATE_TRAJECTORY_PHASES = ("no_attack",)
 SUPPORTED_OUTPUT_FEATURE_IMPULSE_OBSERVABILITY_PHASES = ("gate_a",)
 SUPPORTED_GATE_A_ROOT_CAUSE_DIAGNOSTIC_PHASES = (
     "root_cause_diagnostic",
+)
+SUPPORTED_FROZEN_FEEDBACK_SIGNED_RESPONSE_PHASES = (
+    "frozen_feedback_diagnostic",
 )
 EXPECTED_REPOSITORY_URL = "https://github.com/RICHAAARC/SSTW.git"
 _SAFE_REPOSITORY_REF = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._/-]*$")
@@ -201,6 +208,11 @@ def load_colab_test_request(
         == GATE_A_ROOT_CAUSE_AMPLITUDE_FEEDBACK_DIAGNOSTIC_TEST_ID
     ):
         supported_phases = SUPPORTED_GATE_A_ROOT_CAUSE_DIAGNOSTIC_PHASES
+    elif (
+        test_id
+        == FROZEN_FEEDBACK_SIGNED_RESPONSE_DIAGNOSTIC_TEST_ID
+    ):
+        supported_phases = SUPPORTED_FROZEN_FEEDBACK_SIGNED_RESPONSE_PHASES
     else:
         supported_phases = SUPPORTED_TRAJECTORY_PHASES
     if phase not in supported_phases:
@@ -257,6 +269,15 @@ def load_colab_test_request(
     ):
         raise ValueError(
             "Gate A root-cause diagnostic 只接受 source 中的完整历史 FAIL 包"
+        )
+    if (
+        test_id
+        == FROZEN_FEEDBACK_SIGNED_RESPONSE_DIAGNOSTIC_TEST_ID
+        and resume_package
+    ):
+        raise ValueError(
+            "frozen-feedback diagnostic 只接受 source 中的完整 "
+            "normal-feedback FAIL 包"
         )
     return {
         "request_path": str(path),
@@ -793,6 +814,20 @@ def _default_gate_a_root_cause_diagnostic_runner(
     )
 
 
+def _default_frozen_feedback_signed_response_runner(
+    source_root: Path,
+    output_root: Path,
+) -> dict[str, Any]:
+    from experiments.generative_video_model_probe.frozen_feedback_signed_response_diagnostic import (
+        run_frozen_feedback_signed_response_diagnostic,
+    )
+
+    return run_frozen_feedback_signed_response_diagnostic(
+        source_root,
+        output_root,
+    )
+
+
 def _source_generation_model_ids(source_root: Path) -> list[str]:
     """读取模型地址列表；有效性校验仍由测试 handler 负责。"""
 
@@ -1070,6 +1105,9 @@ def run_colab_test_request(
     gate_a_root_cause_diagnostic_runner: (
         Callable[..., dict[str, Any]] | None
     ) = None,
+    frozen_feedback_signed_response_runner: (
+        Callable[..., dict[str, Any]] | None
+    ) = None,
 ) -> dict[str, Any]:
     """执行一个白名单测试，并把唯一结果 zip 与 manifest 回写 Drive。"""
 
@@ -1155,6 +1193,14 @@ def run_colab_test_request(
     elif (
         resolved["test_id"]
         == GATE_A_ROOT_CAUSE_AMPLITUDE_FEEDBACK_DIAGNOSTIC_TEST_ID
+    ):
+        source_root = source_extract_root
+        generation_model_ids = (
+            _impulse_observability_generation_model_ids(source_root)
+        )
+    elif (
+        resolved["test_id"]
+        == FROZEN_FEEDBACK_SIGNED_RESPONSE_DIAGNOSTIC_TEST_ID
     ):
         source_root = source_extract_root
         generation_model_ids = (
@@ -1298,6 +1344,15 @@ def run_colab_test_request(
         runner = (
             gate_a_root_cause_diagnostic_runner
             or _default_gate_a_root_cause_diagnostic_runner
+        )
+        diagnostic_decision = runner(source_root, output_root)
+    elif (
+        resolved["test_id"]
+        == FROZEN_FEEDBACK_SIGNED_RESPONSE_DIAGNOSTIC_TEST_ID
+    ):
+        runner = (
+            frozen_feedback_signed_response_runner
+            or _default_frozen_feedback_signed_response_runner
         )
         diagnostic_decision = runner(source_root, output_root)
     else:

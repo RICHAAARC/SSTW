@@ -6,25 +6,28 @@
 
 本目录保存 generative_video_model_probe 生成式视频模型探测的可审计运行入口。当前无 GPU 时只生成 blocked decision, 不生成正向机制结论。
 
-## Prompt-orthogonal state-trajectory smoke
+## Output-feature impulse observability
 
-`prompt_orthogonal_state_trajectory_smoke.py` 保留为已执行候选路线及历史 control。
 `output_feature_impulse_observability_construction.py` 是独立的首次14-video Gate A
 construction runner：只生成单 identity signed impulses，记录实际 FP32 exposure，
 经保存视频和冻结 Wan output-side VAE 构建五个 checkpoints，并调用审核过的
 `A_actual`/Gate A evaluator。它不实现 replay、wrong-key、Gate B/C、observer、
 attack、fixed-FPR、baseline、正式结果或阶段推进。
+
+`gate_a_root_cause_amplitude_feedback_diagnostic.py` 保留该真实 Gate A FAIL，
+并运行独立的六视频 `lambda=.06` 根因判别。它只比较 early0/late0 的一阶 odd、
+二阶 common、后续 feedback 与 decode/output mismatch 候选；历史 `.12` 只读且
+不重跑。所有分类允许多因或不确定，始终 `gate_a_pass=false`、非正式且禁止阶段推进。
+
+## Prompt-orthogonal state-trajectory smoke
+
+`prompt_orthogonal_state_trajectory_smoke.py` 保留为已执行候选路线及历史 control。
 它从已审核的
 controlled embedding 结果与明确失败的 temporal-code isolation 结果构建固定
 `2 prompts × 2 seeds × (watermarked + clean)` 计划；generation 使用8步，检测使用
 20步 key-independent fixed trace 和两通道向量解调。该入口仅由 `colab_test`
 白名单调用，结果始终 `formal_result=false` 且禁止阶段推进；真实 FAIL 不得被后续
 候选路线覆盖或改写成成功结果。
-
-新的 output-feature impulse observability 工作当前只有
-`evaluation/protocol/impulse_observability_contract.py`、
-construction config 与文档合同；本目录尚无对应 GPU runner。只有独立只读审核、
-提交推送和用户另行 GPU 授权完成后，才可能设计固定14-video triage 入口。
 
 ## Minimal trajectory replay smoke
 

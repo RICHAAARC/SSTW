@@ -165,6 +165,7 @@ Notebook 固定读取:
 `predictive_trajectory_synchronization_smoke`、
 `temporal_code_isolation_replay_smoke`、
 `prompt_orthogonal_state_trajectory_smoke`、
+`gate_a_root_cause_amplitude_feedback_diagnostic`、
 `output_feature_impulse_observability_construction` 与仅用于重建输入的
 `trajectory_replay_smoke_source_build`。
 当 Stage 0-D source 未保留时，同一 Notebook 还可通过白名单
@@ -229,6 +230,28 @@ streaming re-encode 和 Gate A 后，才由既有 packager 向 Drive 写一个�
 `stage_progression_allowed=false`，不运行 replay、wrong-key、Gate B/C、observer、
 攻击、fixed-FPR 或 baseline。运行仍使用同一个固定 Notebook，不在 Cell 中增加
 方法逻辑。
+
+Gate A FAIL 后的最小根因判别使用
+`configs/paper_workflow/colab_test_gate_a_root_cause_amplitude_feedback_diagnostic_request_example.json`。
+它只接受 `phase=root_cause_diagnostic`，并要求 `source_package_path` 是完整
+commit `47485be2...` Gate A FAIL result ZIP；recovery/partial/PASS 或 resume 包
+均被拒绝。handler 不重跑 `.12`，只以同一 prompt/seed/noise/model/scheduler/basis
+生成固定 `.06` 六视频：
+
+```text
+clean_start
++/- early_flow channel_0
++/- late_flow channel_0
+clean_end
+```
+
+输出比较实际 exposure、latent six-basis、decode、saved RGB24、re-encode 与
+output feature 的 odd/common scaling；full final latent 仅在新 `.06` 内部保留
+CPU artifact，历史缺失的 full-latent 比较明确标为 unavailable。所有分类仍固定
+`gate_a_pass=false`、`formal_result=false`、`stage_progression_allowed=false`，
+最多只允许设计后续 frozen-feedback diagnostic 或 carrier/feature redesign。
+模型、视频和临时 Gram 数组全部先在 `/content` 完成，成功后仍只写单 ZIP+manifest；
+固定 Notebook 不变。
 
 最小带符号轨迹 smoke 使用
 `configs/paper_workflow/colab_test_minimal_signed_trajectory_state_space_smoke_request_example.json`。

@@ -3251,4 +3251,65 @@ Notebook 与 repository module 的跨边界数据
 | required_temporal_source_pair_record_count | protocol | none | true | false | false | temporal-code source 必须实存的 pair 数。 |
 | required_temporal_source_identity_record_count | protocol | none | true | false | false | temporal-code source 必须实存的 identity 数。 |
 | required_temporal_source_failure_record_count | protocol | none | true | false | false | temporal-code source 必须实存的 runtime failure 数，冻结为0。 |
+| gate_a_root_cause_diagnostic_decision | governance | none | true | false | false | Gate A FAIL 后独立幅度/feedback 诊断的 runtime failure 或候选解释已记录分类；不得写成 Gate A PASS。 |
+| historical_gate_a_source_status | governance | none | true | false | false | `.12` 历史输入是否为完整、内部一致且明确 FAIL 的 Gate A result，而非 recovery/partial。 |
+| historical_source_snapshot_digest | provenance | none | true | false | false | 本次安全解压历史输入中预期 records/artifacts/videos 的路径、大小和 SHA-256 内容快照摘要；不是外部签名。 |
+| historical_repository_commit | provenance | none | true | false | false | 只读 `.12` Gate A FAIL 输入绑定的仓库 commit，冻结为首次真实 construction commit。 |
+| historical_gate_a_decision | governance | none | true | false | false | 历史 source 中必须保留的 `sample_internal_causal_observability_gate_failed_stop`。 |
+| historical_gate_a_pass | governance | none | true | false | false | 固定为 false；后续根因诊断不得覆盖历史 Gate A FAIL。 |
+| diagnostic_lambda_max | protocol | none | true | false | false | 根因诊断唯一新增的预声明半幅 `0.06`，按实际每步预算重算。 |
+| historical_lambda_max | protocol | none | true | false | false | 只读历史 Gate A 基线的 `0.12` 幅度；诊断不得重新执行。 |
+| historical_lambda_rerun_executed | governance | none | true | false | false | 固定为 false，确认本轮只生成 `.06` 六视频。 |
+| root_cause_array_capture_record_id | provenance | none | true | false | false | 单视频 CPU final-latent artifact 与 pre-save decoded 数组摘要记录的稳定 ID。 |
+| final_latent_artifact_sha256 | provenance | none | true | false | false | 本地完成后纳入结果包的单视频 float32 full final latent NPZ 文件摘要。 |
+| final_latent_array_sha256 | provenance | none | true | false | false | 单视频 full final latent C-order float32 bytes 摘要。 |
+| pre_save_decoded_array_sha256 | provenance | none | true | false | false | 临时 pre-save full float32 decoded frames 的 C-order bytes 摘要；数组完成 Gram 后删除。 |
+| root_cause_full_gram_record_id | provenance | none | true | false | false | full latent/pre-save/saved RGB24 六行表示 Gram sufficient statistics 的稳定记录 ID。 |
+| row_probe_ids | protocol | none | true | false | false | full-representation Gram matrix 精确绑定的六视频 probe 顺序。 |
+| gram_matrix | metric | none | true | false | false | 对 full representation 以 float64 chunked dot 形成的 6×6 Gram sufficient statistics。 |
+| gram_accumulator_dtype | protocol | none | true | false | false | full representation Gram 的累计 dtype，冻结为 float64。 |
+| gram_chunk_size | protocol | none | true | false | false | 避免高维 full tensor/pixel 一次性 float64 复制的固定 chunk 元素数。 |
+| root_cause_pair_id | protocol | none | true | false | false | 根因诊断的 `early_flow_channel_0` 或 `late_flow_channel_0` 正负 pair 身份。 |
+| root_cause_checkpoint_id | protocol | none | true | false | false | odd/common 统计所属 latent、decoded、saved、reencoded 或 output feature 表示。 |
+| root_cause_clean_distance | metric | none | true | false | false | clean_start 与 clean_end 在当前 checkpoint 表示中的 L2 距离，仅用于顺序漂移参考。 |
+| root_cause_positive_centered_norm | metric | none | true | false | false | positive probe 相对冻结 clean 均值截距的 L2 norm。 |
+| root_cause_negative_centered_norm | metric | none | true | false | false | negative probe 相对冻结 clean 均值截距的 L2 norm。 |
+| root_cause_odd_norm | metric | none | true | false | false | clean-centered `0.5*(delta_plus-delta_minus)` 的 L2 norm。 |
+| root_cause_common_norm | metric | none | true | false | false | clean-centered `0.5*(delta_plus+delta_minus)` 的 L2 norm。 |
+| root_cause_common_odd_ratio | metric | none | true | false | false | common norm 除以 odd norm；odd 低于预声明分辨率时为不可比较。 |
+| root_cause_antisymmetry_cosine | metric | none | true | false | false | `cos(delta_plus,-delta_minus)`，与 Gate A signed antisymmetry 语义一致。 |
+| root_cause_antisymmetry_residual | metric | none | true | false | false | `norm(delta_plus+delta_minus)/(norm(delta_plus)+norm(delta_minus))`。 |
+| root_cause_statistics_finite | metric | none | true | false | false | 当前 paired response 的全部必需数值是否有限。 |
+| root_cause_actual_amplitude_ratio | metric | none | true | false | false | `.06` 与 `.12` 同 pair 的实际 signed exposure 平均幅值比；只有预冻结半幅窗口内才可比较 scaling。 |
+| root_cause_actual_amplitude_ratio_ready | metric | none | true | false | false | actual amplitude ratio 是否位于预冻结 `[0.45,0.55]` 比较窗口。 |
+| root_cause_odd_ratio_to_full | metric | none | true | false | false | 半幅 odd norm 相对历史 full-amplitude odd norm 的 apply-only 比率。 |
+| root_cause_common_ratio_to_full | metric | none | true | false | false | 半幅 common norm 相对历史 full-amplitude common norm 的 apply-only 比率。 |
+| root_cause_normalized_odd_scaling | metric | none | true | false | false | odd ratio 除以实际 amplitude ratio；局部一阶理想值为1。 |
+| root_cause_normalized_common_scaling | metric | none | true | false | false | common ratio 除以实际 amplitude ratio 的平方；二阶理想值为1。 |
+| root_cause_antisymmetry_cosine_improvement | metric | none | true | false | false | 半幅相对历史全幅 antisymmetry cosine 的 apply-only 改善量。 |
+| root_cause_antisymmetry_residual_improvement | metric | none | true | false | false | 历史全幅 residual 减去半幅 residual 的 apply-only 改善量。 |
+| root_cause_local_linear_scaling_ready | metric | none | true | false | false | 当前 pair/checkpoint 是否满足全部预冻结局部线性候选条件。 |
+| root_cause_comparison_status | governance | none | true | false | false | 当前 half/full comparison 为 ready 或因幅度/响应下限不可解释。 |
+| candidate_classification | governance | none | true | false | false | decision 中封装全部预冻结根因候选与污染有效性的结构化对象。 |
+| clean_order_drift_diagnostic | governance | none | true | false | false | decision 中封装 clean_start/end 各层相等性与顺序污染候选的结构化对象。 |
+| candidate_classifications | governance | none | true | false | false | 可重叠的局部线性、量化/观测下限、feedback、carrier/feature mismatch、顺序污染或不确定候选列表。 |
+| local_linear_support_candidate | governance | none | true | false | false | output feature 的 half/full odd/common scaling 与反对称改善是否满足预冻结候选条件。 |
+| quantization_or_observation_floor_candidate | governance | none | true | false | false | half odd 是否呈预冻结 collapse 或 plateau；不能单独证明 BF16 根因。 |
+| feedback_nonlinearity_candidate | governance | none | true | false | false | early 相对 late latent signed response 是否呈预冻结恶化模式。 |
+| carrier_decoder_feature_mismatch_candidate | governance | none | true | false | false | late latent 仍 signed 而 decoded/saved/output 转为 common-dominated 的候选。 |
+| half_actual_amplitude_by_pair | metric | none | true | false | false | early0/late0 在 `.06` 运行中的实际 signed exposure 平均幅值映射。 |
+| unique_root_cause_claim_allowed | governance | none | true | false | false | 固定为 false，禁止由本诊断强制唯一归因。 |
+| classification_status | governance | none | true | false | false | 单候选、多候选、污染不可判定或一般不可判定状态。 |
+| generation_order_state_pollution_candidate | governance | none | true | false | false | clean_start/clean_end 的 full latent、pre-save 或 saved-video 摘要不一致时记录的顺序状态污染候选。 |
+| clean_start_end_video_sha256_equal | provenance | none | true | false | false | clean_start/end 最终 MP4 bytes 是否一致。 |
+| clean_start_end_final_latent_array_sha256_equal | provenance | none | true | false | false | clean_start/end full final latent float32 array bytes 是否一致。 |
+| clean_start_end_pre_save_decoded_array_sha256_equal | provenance | none | true | false | false | clean_start/end pre-save decoded float32 array bytes 是否一致。 |
+| clean_start_end_reencoded_checkpoint_equal | provenance | none | true | false | false | clean_start/end frozen reencoded checkpoint 是否逐值一致。 |
+| clean_start_end_output_feature_equal | provenance | none | true | false | false | clean_start/end frozen 256D output feature 是否逐值一致。 |
+| clean_repeat_role | protocol | none | true | false | false | 固定为顺序漂移与 pipeline 状态污染检查，不是正式噪声分布。 |
+| clean_repeat_formal_noise_distribution | governance | none | true | false | false | 固定为 false，禁止把两个 clean 冒充正式噪声分布。 |
+| clean_intercept_and_pair_classification_valid | governance | none | true | false | false | clean_start/end 完全一致时才为 true；为 false 时 amplitude/feedback/mismatch 分类失效且后续设计授权关闭。 |
+| contamination_reason | governance | none | true | false | false | 顺序污染使均值截距和按序正负 pair 不可解释时的固定非敏感原因。 |
+| frozen_feedback_diagnostic_design_allowed | governance | none | true | false | false | 仅允许后续另起 frozen-feedback 诊断设计；不授权执行。 |
+| carrier_feature_redesign_allowed | governance | none | true | false | false | 仅允许后续另起 carrier/feature redesign；不授权执行或阶段推进。 |
 | formal_result | governance | none | true | false | false | 当前 construction、smoke 或 recovery artifact 是否可视为正式结果。 |

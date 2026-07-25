@@ -44,6 +44,9 @@ PROMPT_ORTHOGONAL_STATE_TRAJECTORY_SMOKE_TEST_ID = (
 OUTPUT_FEATURE_IMPULSE_OBSERVABILITY_CONSTRUCTION_TEST_ID = (
     "output_feature_impulse_observability_construction"
 )
+GATE_A_ROOT_CAUSE_AMPLITUDE_FEEDBACK_DIAGNOSTIC_TEST_ID = (
+    "gate_a_root_cause_amplitude_feedback_diagnostic"
+)
 SUPPORTED_TEST_IDS = (
     TRAJECTORY_REPLAY_SOURCE_BUILD_TEST_ID,
     TRAJECTORY_SIGNAL_TEST_ID,
@@ -53,6 +56,7 @@ SUPPORTED_TEST_IDS = (
     TEMPORAL_CODE_ISOLATION_REPLAY_SMOKE_TEST_ID,
     PROMPT_ORTHOGONAL_STATE_TRAJECTORY_SMOKE_TEST_ID,
     OUTPUT_FEATURE_IMPULSE_OBSERVABILITY_CONSTRUCTION_TEST_ID,
+    GATE_A_ROOT_CAUSE_AMPLITUDE_FEEDBACK_DIAGNOSTIC_TEST_ID,
 )
 TRAJECTORY_REPLAY_SOURCE_BUILD_PHASE = "source_build"
 SUPPORTED_TRAJECTORY_PHASES = (
@@ -66,6 +70,9 @@ SUPPORTED_PREDICTIVE_TRAJECTORY_PHASES = ("no_attack",)
 SUPPORTED_TEMPORAL_CODE_ISOLATION_PHASES = ("no_attack",)
 SUPPORTED_PROMPT_ORTHOGONAL_STATE_TRAJECTORY_PHASES = ("no_attack",)
 SUPPORTED_OUTPUT_FEATURE_IMPULSE_OBSERVABILITY_PHASES = ("gate_a",)
+SUPPORTED_GATE_A_ROOT_CAUSE_DIAGNOSTIC_PHASES = (
+    "root_cause_diagnostic",
+)
 EXPECTED_REPOSITORY_URL = "https://github.com/RICHAAARC/SSTW.git"
 _SAFE_REPOSITORY_REF = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._/-]*$")
 _SAFE_RUN_SERIES_ID = re.compile(r"^[a-z0-9][a-z0-9_-]{2,63}$")
@@ -189,6 +196,11 @@ def load_colab_test_request(
         supported_phases = (
             SUPPORTED_OUTPUT_FEATURE_IMPULSE_OBSERVABILITY_PHASES
         )
+    elif (
+        test_id
+        == GATE_A_ROOT_CAUSE_AMPLITUDE_FEEDBACK_DIAGNOSTIC_TEST_ID
+    ):
+        supported_phases = SUPPORTED_GATE_A_ROOT_CAUSE_DIAGNOSTIC_PHASES
     else:
         supported_phases = SUPPORTED_TRAJECTORY_PHASES
     if phase not in supported_phases:
@@ -237,6 +249,14 @@ def load_colab_test_request(
     ):
         raise ValueError(
             "output-feature impulse observability 不接受 resume package"
+        )
+    if (
+        test_id
+        == GATE_A_ROOT_CAUSE_AMPLITUDE_FEEDBACK_DIAGNOSTIC_TEST_ID
+        and resume_package
+    ):
+        raise ValueError(
+            "Gate A root-cause diagnostic 只接受 source 中的完整历史 FAIL 包"
         )
     return {
         "request_path": str(path),
@@ -759,6 +779,20 @@ def _default_output_feature_impulse_observability_runner(
     )
 
 
+def _default_gate_a_root_cause_diagnostic_runner(
+    source_root: Path,
+    output_root: Path,
+) -> dict[str, Any]:
+    from experiments.generative_video_model_probe.gate_a_root_cause_amplitude_feedback_diagnostic import (
+        run_gate_a_root_cause_amplitude_feedback_diagnostic,
+    )
+
+    return run_gate_a_root_cause_amplitude_feedback_diagnostic(
+        source_root,
+        output_root,
+    )
+
+
 def _source_generation_model_ids(source_root: Path) -> list[str]:
     """读取模型地址列表；有效性校验仍由测试 handler 负责。"""
 
@@ -811,6 +845,33 @@ def _minimal_signed_trajectory_generation_model_ids(
     if len(candidates) != 1:
         raise RuntimeError(
             "minimal signed trajectory input 必须唯一包含 generation records"
+        )
+    rows = [
+        json.loads(line)
+        for line in candidates[0].read_text(
+            encoding="utf-8-sig"
+        ).splitlines()
+        if line.strip()
+    ]
+    return sorted(
+        {
+            str(row.get("generation_model_id") or "").strip()
+            for row in rows
+            if row.get("generation_status") == "success"
+            and str(row.get("generation_model_id") or "").strip()
+        }
+    )
+
+
+def _impulse_observability_generation_model_ids(
+    source_root: Path,
+) -> list[str]:
+    candidates = list(
+        source_root.rglob("records/impulse_generation_records.jsonl")
+    )
+    if len(candidates) != 1:
+        raise RuntimeError(
+            "impulse observability input 必须唯一包含 generation records"
         )
     rows = [
         json.loads(line)
@@ -1006,6 +1067,9 @@ def run_colab_test_request(
     output_feature_impulse_observability_runner: (
         Callable[..., dict[str, Any]] | None
     ) = None,
+    gate_a_root_cause_diagnostic_runner: (
+        Callable[..., dict[str, Any]] | None
+    ) = None,
 ) -> dict[str, Any]:
     """执行一个白名单测试，并把唯一结果 zip 与 manifest 回写 Drive。"""
 
@@ -1088,6 +1152,14 @@ def run_colab_test_request(
         generation_model_ids = [
             "Wan-AI/Wan2.1-T2V-1.3B-Diffusers"
         ]
+    elif (
+        resolved["test_id"]
+        == GATE_A_ROOT_CAUSE_AMPLITUDE_FEEDBACK_DIAGNOSTIC_TEST_ID
+    ):
+        source_root = source_extract_root
+        generation_model_ids = (
+            _impulse_observability_generation_model_ids(source_root)
+        )
     else:
         source_root = _discover_stage0d_source_root(source_extract_root)
         generation_model_ids = _source_generation_model_ids(source_root)
@@ -1217,6 +1289,15 @@ def run_colab_test_request(
         runner = (
             output_feature_impulse_observability_runner
             or _default_output_feature_impulse_observability_runner
+        )
+        diagnostic_decision = runner(source_root, output_root)
+    elif (
+        resolved["test_id"]
+        == GATE_A_ROOT_CAUSE_AMPLITUDE_FEEDBACK_DIAGNOSTIC_TEST_ID
+    ):
+        runner = (
+            gate_a_root_cause_diagnostic_runner
+            or _default_gate_a_root_cause_diagnostic_runner
         )
         diagnostic_decision = runner(source_root, output_root)
     else:

@@ -136,6 +136,7 @@ class ConstructionGenerationBatch:
     trajectory_step_records: tuple[Mapping[str, Any], ...]
     exposure_traces: tuple[ActualImpulseExposureTrace, ...]
     checkpoint_records: tuple[Mapping[str, Any], ...]
+    diagnostic_capture_records: tuple[Mapping[str, Any], ...] = ()
 
 
 @dataclass(frozen=True)
@@ -1432,8 +1433,14 @@ def execute_real_impulse_generation(
     output_root: Path,
     plan: Sequence[ImpulseProbePlanRecord],
     basis: ConstructionStageBasis,
+    diagnostic_capture: Callable[..., Sequence[Mapping[str, Any]]] | None = None,
 ) -> ConstructionGenerationBatch:
-    """Generate the frozen 14 videos with one cached Wan pipeline."""
+    """Generate an audited impulse plan with one cached Wan pipeline.
+
+    The default path remains the frozen 14-video Gate A construction.  A
+    diagnostic may provide a CPU-side capture callback; this hook cannot alter
+    the scheduler control, generation result, or governed Gate A checkpoints.
+    """
 
     import torch
 
@@ -1485,6 +1492,7 @@ def execute_real_impulse_generation(
     step_records: list[dict[str, Any]] = []
     exposure_traces: list[ActualImpulseExposureTrace] = []
     checkpoint_records: list[dict[str, Any]] = []
+    diagnostic_capture_records: list[Mapping[str, Any]] = []
     videos_root = output_root / "videos"
     videos_root.mkdir(parents=True, exist_ok=True)
 
@@ -1536,6 +1544,18 @@ def execute_real_impulse_generation(
                 runtime.final_latent,
                 basis,
             )
+            if diagnostic_capture is not None:
+                diagnostic_capture_records.extend(
+                    diagnostic_capture(
+                        probe=probe,
+                        plan_index=plan_index,
+                        final_latent=runtime.final_latent,
+                        decoded_frames=decoded_frames,
+                        video_path=video_path,
+                        video_sha256=video_digest,
+                        basis=basis,
+                    )
+                )
             exposure_trace = runtime.build_exposure_trace()
             if exposure_trace is not None:
                 exposure_traces.append(exposure_trace)
@@ -1615,6 +1635,13 @@ def execute_real_impulse_generation(
                 exposure_traces,
                 checkpoint_records,
             )
+            # Diagnostic callbacks must finish CPU capture before this point.
+            # Release per-video outputs and final-latent references so only the
+            # cached pipeline persists across the next generation.
+            del decoded_frames
+            del result
+            del runtime
+            gc.collect()
         except Exception as exc:
             failure_record = {
                 "record_version": RECORD_VERSION,
@@ -1646,6 +1673,7 @@ def execute_real_impulse_generation(
         trajectory_step_records=tuple(step_records),
         exposure_traces=tuple(exposure_traces),
         checkpoint_records=tuple(checkpoint_records),
+        diagnostic_capture_records=tuple(diagnostic_capture_records),
     )
     del pipe
     gc.collect()

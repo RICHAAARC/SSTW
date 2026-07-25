@@ -299,8 +299,9 @@ sample_internal_causal_observability_gate
                             └─ PASS → state_dynamics_and_batch_observer_design_pending
 ```
 
-当前实现目标停在
-`impulse_triage_execution_authorized_pending_user_colab_run`：这只表示首次
-14-video runner/handler 已获实现授权并等待用户执行，不表示 Gate A 已运行或通过。
-本地 tests/harness 只审核合同、runner wiring 与轻量数学原语，不提供 construction
-observability 证据。
+首次14-video runner 已在 commit `47485be2...` 上真实执行并得到 Gate A FAIL；
+该失败必须保留，不能由后续候选路线覆盖或改写为成功。当前只允许另起独立的
+`Gate A root-cause amplitude/feedback diagnostic`，用固定半幅和只读历史 FAIL
+区分幅度、feedback 与 carrier/feature mismatch 候选。该诊断不是 Gate A 重试，
+本地 tests/harness 也仍只审核合同和 wiring，不提供 construction observability
+或方法有效性证据。

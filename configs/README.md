@@ -22,6 +22,12 @@ CPU canonical basis KDF、现有 Wan VAE streaming output extractor、五个 pri
 checkpoint 与可选 replay diagnostic，以及有限 noise floor 的 Gate A 精确公式。
 output feature 还必须由每视频 governed record 提供冻结 probe ID 与行绑定摘要；
 14行、A_actual 和 plan 的身份与顺序必须精确一致，禁止事后按矩阵位置贴标签。
-该配置现在允许由既有薄 Notebook 调用独立 Gate A construction handler；
-`impulse_triage_execution_allowed=true` 只表示入口已获授权并等待用户 Colab
-运行。本地 tests 不能据此写成 Gate A 已执行、方法有效或阶段推进。
+该配置曾允许由既有薄 Notebook 调用独立 Gate A construction handler；真实
+14-video 运行已得到 FAIL 并作为历史 control 保留。config 中的 execution flag
+不构成重跑授权，本地 tests 也不能据此写成方法有效或阶段推进。
+
+`protocol/sstw_gate_a_root_cause_amplitude_feedback_diagnostic.json` 冻结首次
+Gate A FAIL 后的独立六视频根因判别：只运行一个预声明 `lambda=.06` 半幅，
+以完整 commit `47485be2...` Gate A FAIL 包作为只读 `.12` 基线，比较 early0/late0
+在 latent、decode、save、re-encode 与 output feature 的 odd/common scaling。
+它不重跑 `.12`，不重试 Gate A，也不允许跨 identity、observer、攻击或阶段推进。

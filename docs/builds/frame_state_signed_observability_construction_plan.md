@@ -14,16 +14,18 @@ construction 合同。权威算法语义仍以：
 当前状态严格为：
 
 ```text
-local_runtime_primitives_implemented_execution_contract_frozen
+gate0_runner_implemented_execution_pending_explicit_user_colab_run
 formal_result=false
 stage_progression_allowed=false
 runtime_implementation_authorized=true
 ```
 
-本计划允许公开 atom、NumPy scheduler-state control、output feature、T0 与 Gate 0
-统计的本地核心原语。它没有实现视频生成 runner、Wan/diffusers adapter、
-observer、Notebook handler 或 Colab request，也不授权 construction 执行、GPU、
-Colab、Drive、攻击、fixed-FPR、baseline 或 paper claim。
+本计划已实现公开 atom、NumPy scheduler-state control、output feature、T0 与
+Gate 0 统计的本地核心原语，以及最薄 Wan/diffusers adapter、8-video runner 与
+既有薄 Colab request handler。config 的 execution flags 只允许用户在独立代码
+审核后显式运行这一项 Gate 0 construction；本地测试不会自动执行 GPU 或更新
+Drive。Notebook 保持固定，observer、攻击、fixed-FPR、baseline、paper claim 与
+stage progression 仍全部禁止。
 
 ## 1. 本轮要回答的唯一问题
 
@@ -89,7 +91,7 @@ context digest 或 digest 自身递归纳入 protocol object 的路径。
 本合同冻结摘要为：
 
 ```text
-69099dd2ac0044900d8ac8ce9eeb0d9c553ee5b6d38572f3479506c4ae2088a6
+31a3332a05ffeea853ce43495ca100c8fa065f96d7fd53aaf6cb0aeac6c00af4
 ```
 
 validator 必须同时：
@@ -159,8 +161,8 @@ construction 使用 prompt003/seed2201，identity A 使用独立 frame-state
 prompt/seed2202；两者的正负 prompt 文本 SHA-256、模型 revision、diffusers
 0.35.2、scheduler signature、guidance 5、exporter 与 encoder backend 均精确绑定。
 每个 probe 都重新以同一 identity seed 建 generator，禁止连续消费 RNG；C0
-records 不得回流到 A。身份已不含 placeholder，但
-`construction_execution_allowed` 仍为 false，因为本批只有本地原语，没有 runner。
+records 不得回流到 A。身份已不含 placeholder。runner 已实现，但只有显式
+allowlisted Colab request 才构成一次执行请求，提交或本地测试本身不构成运行授权。
 
 \(C_0\) 在 design contract 中承担以下 construction 职责，但这不是执行授权：
 
@@ -247,6 +249,12 @@ float32；clamp 属于 Jacobian 路径。对 postprocessed frames `[11,22)` 按�
 视频 primary feature 相同的4×4 cell 和 RGB 顺序形成528维 local temporal
 surrogate。它不读取保存编码结果，只用于公开 atom construction；saved-video
 readback 仍是 primary Gate 边界。
+
+Jacobian 的 VAE decode 明确关闭 spatial tiling：每次 JVP/VJP 使用一个
+untiled full-frame autograd graph，并在 product 返回后释放；atom 完成或异常时
+恢复 pipeline 原有 tiling 状态，供后续无梯度视频 decode 使用。该边界既避免
+tiled decode 将多个 tile/时间分支的 autograd graph 同时保活，也冻结了会改变
+局部 Jacobian 数值的 decode 路径；不得由 runtime adapter 自行选择。
 
 该 atom 可以依赖 \(C_0\) clean final latent 作为 construction reference，
 但不能依赖 candidate key、identity \(A\) 或运行后 Gate 得分。保存视频编码不可
@@ -479,14 +487,20 @@ evaluator 在冻结 \(10^{-6}\) clean floor 下现场重算全部向量与派生
 - config 可被 strict loader 读取；
 - protocol digest 非递归且可重算；
 - public context canonical bytes 可 fail-closed 验证；
-- 8项 plan 可确定性重建；
+- 8项 plan 可确定性重建并由 runner 精确执行；
 - 公开 atom 的 SHA256 Rademacher、8次 callback power iteration、post-weight、
   sign canonicalization 与单-array NPZ 可在 CPU 上确定性执行；
 - 真实8-step schedule、严格 FP32 NumPy control 与 actual exposure 可计算；
 - 三个 checkpoint、C0 T0、A apply-only prediction 与冻结 Gate 0 evaluator
   可在轻量数组上执行；
 - mutation、额外字段、重复 JSON key、float 和非 canonical context 被拒绝；
+- Wan/diffusers 0.35.2 adapter 在真实 scheduler hook 中调用同一 frame-state
+  control core，并将实际8步 delta/exposure 写入 governed records；
+- C0 clean-A 后只构造一次 public atom artifact，C0 估计 T0，identity A 只
+  apply 该 atom/T0/feature/threshold；
+- 既有薄 Colab request 可在 `/content` 本地完成运行后再发布单 ZIP+manifest；
 - README 和 field registry 与合同一致。
 
-它不是 Wan adapter 或 carrier runner 已实现，不代表视频已生成、Gate 0 已执行
-或方法有效。下一独立任务在审核提交后才能设计最薄 GPU runner。
+它不代表视频已生成、Gate 0 已执行或方法有效。真实 Wan API、Jacobian 构造峰值
+显存与 Gate 0 结果仍必须由用户在代码审核通过后运行 Colab 才能验证；PASS 最多
+允许设计下一双窗口 Gate A，FAIL 则停止当前 carrier/feature。

@@ -32,7 +32,7 @@ from evaluation.protocol.frame_state_signed_observability_contract import (
 CONFIG_PATH = Path(DEFAULT_CONFIG_PATH)
 NONCE = "0123456789abcdef0123456789abcdef"
 EXPECTED_PUBLIC_CONTEXT_DIGEST = (
-    "81cc66d02ff1bbe37e429e222171fd47c3c2ff90cb00a80d3c19925207c67ee7"
+    "0fa7e58c0222c382abb7d51caebb32a435e78b7c66d183e4fb4f1c2601bceee0"
 )
 pytestmark = pytest.mark.quick
 
@@ -52,11 +52,16 @@ def test_loads_frozen_design_only_contract() -> None:
     assert config["authorization_boundary"][
         "runtime_implementation_authorized"
     ] is True
-    assert all(
-        value is False
+    assert {
+        key
         for key, value in config["authorization_boundary"].items()
-        if key.endswith("_allowed")
-    )
+        if key.endswith("_allowed") and value is True
+    } == {
+        "colab_execution_allowed",
+        "construction_execution_allowed",
+        "gpu_execution_allowed",
+        "runner_implementation_allowed",
+    }
     assert config["authorization_boundary"]["formal_result"] is False
     assert (
         config["authorization_boundary"]["stage_progression_allowed"] is False
@@ -182,6 +187,7 @@ def test_public_dictionary_construction_is_unique_and_not_keyed() -> None:
         "one_half_to_closed_zero_one"
     )
     assert dictionary["construction_surrogate_clamp_in_jacobian"] is True
+    assert dictionary["decoder_spatial_tiling_enabled_in_jacobian"] is False
     assert dictionary["construction_surrogate_value_range"] == (
         "closed_zero_one"
     )
@@ -203,6 +209,7 @@ def test_public_dictionary_construction_is_unique_and_not_keyed() -> None:
             "raw_vae_decode_sample",
         ),
         ("construction_surrogate_clamp_in_jacobian", False),
+        ("decoder_spatial_tiling_enabled_in_jacobian", True),
         ("unit_norm_float32_absolute_tolerance_millionths", 1000),
     ],
 )
@@ -317,10 +324,10 @@ def test_protocol_mutation_with_recomputed_self_digest_still_fails() -> None:
 @pytest.mark.parametrize(
     ("field", "value"),
     [
-        ("gpu_execution_allowed", True),
-        ("colab_execution_allowed", True),
-        ("construction_execution_allowed", True),
-        ("runner_implementation_allowed", True),
+        ("gpu_execution_allowed", False),
+        ("colab_execution_allowed", False),
+        ("construction_execution_allowed", False),
+        ("runner_implementation_allowed", False),
         ("observer_implementation_allowed", True),
         ("formal_result", True),
         ("stage_progression_allowed", True),
@@ -514,11 +521,11 @@ def test_builds_exact_eight_item_identity_isolated_plan() -> None:
         "central_video_frame_window"
     }
     assert {row.state_dimension_index for row in plan} == {0}
-    assert all(row.execution_authorized is False for row in plan)
+    assert all(row.execution_authorized is True for row in plan)
     assert all(row.formal_result is False for row in plan)
     assert all(row.stage_progression_allowed is False for row in plan)
     assert frame_state_probe_plan_digest(plan, config) == (
-        "bee85afe0969e4c95eec180acea9ca7f056d77925045744aaa3817b5568e0665"
+        "b8cf4baf18128e6dc3691f8a3a549f73ee9827b777aa56e5a0163aad9a408666"
     )
 
 
@@ -528,7 +535,7 @@ def test_reordered_or_mutated_probe_plan_is_rejected() -> None:
     reordered = deepcopy(plan)
     reordered[2], reordered[3] = reordered[3], reordered[2]
     mutated = deepcopy(plan)
-    mutated[6] = replace(mutated[6], execution_authorized=True)
+    mutated[6] = replace(mutated[6], execution_authorized=False)
 
     with pytest.raises(ValueError, match="精确一致"):
         validate_frame_state_probe_plan(reordered, config)

@@ -50,6 +50,9 @@ GATE_A_ROOT_CAUSE_AMPLITUDE_FEEDBACK_DIAGNOSTIC_TEST_ID = (
 FROZEN_FEEDBACK_SIGNED_RESPONSE_DIAGNOSTIC_TEST_ID = (
     "frozen_feedback_signed_response_diagnostic"
 )
+FRAME_STATE_SIGNED_OBSERVABILITY_CONSTRUCTION_TEST_ID = (
+    "frame_state_signed_observability_construction"
+)
 SUPPORTED_TEST_IDS = (
     TRAJECTORY_REPLAY_SOURCE_BUILD_TEST_ID,
     TRAJECTORY_SIGNAL_TEST_ID,
@@ -61,6 +64,7 @@ SUPPORTED_TEST_IDS = (
     OUTPUT_FEATURE_IMPULSE_OBSERVABILITY_CONSTRUCTION_TEST_ID,
     GATE_A_ROOT_CAUSE_AMPLITUDE_FEEDBACK_DIAGNOSTIC_TEST_ID,
     FROZEN_FEEDBACK_SIGNED_RESPONSE_DIAGNOSTIC_TEST_ID,
+    FRAME_STATE_SIGNED_OBSERVABILITY_CONSTRUCTION_TEST_ID,
 )
 TRAJECTORY_REPLAY_SOURCE_BUILD_PHASE = "source_build"
 SUPPORTED_TRAJECTORY_PHASES = (
@@ -80,6 +84,7 @@ SUPPORTED_GATE_A_ROOT_CAUSE_DIAGNOSTIC_PHASES = (
 SUPPORTED_FROZEN_FEEDBACK_SIGNED_RESPONSE_PHASES = (
     "frozen_feedback_diagnostic",
 )
+SUPPORTED_FRAME_STATE_SIGNED_OBSERVABILITY_PHASES = ("gate0",)
 EXPECTED_REPOSITORY_URL = "https://github.com/RICHAAARC/SSTW.git"
 _SAFE_REPOSITORY_REF = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._/-]*$")
 _SAFE_RUN_SERIES_ID = re.compile(r"^[a-z0-9][a-z0-9_-]{2,63}$")
@@ -213,6 +218,11 @@ def load_colab_test_request(
         == FROZEN_FEEDBACK_SIGNED_RESPONSE_DIAGNOSTIC_TEST_ID
     ):
         supported_phases = SUPPORTED_FROZEN_FEEDBACK_SIGNED_RESPONSE_PHASES
+    elif (
+        test_id
+        == FRAME_STATE_SIGNED_OBSERVABILITY_CONSTRUCTION_TEST_ID
+    ):
+        supported_phases = SUPPORTED_FRAME_STATE_SIGNED_OBSERVABILITY_PHASES
     else:
         supported_phases = SUPPORTED_TRAJECTORY_PHASES
     if phase not in supported_phases:
@@ -229,7 +239,10 @@ def load_colab_test_request(
         parameters.get("source_package_path"),
         root,
         "source_package_path",
-        required=True,
+        required=(
+            test_id
+            != FRAME_STATE_SIGNED_OBSERVABILITY_CONSTRUCTION_TEST_ID
+        ),
     )
     resume_package = _path_within_project_root(
         parameters.get("resume_package_path"),
@@ -279,6 +292,14 @@ def load_colab_test_request(
             "frozen-feedback diagnostic 只接受 source 中的完整 "
             "normal-feedback FAIL 包"
         )
+    if (
+        test_id
+        == FRAME_STATE_SIGNED_OBSERVABILITY_CONSTRUCTION_TEST_ID
+        and (source_package or resume_package)
+    ):
+        raise ValueError(
+            "frame-state Gate 0 是自包含 construction，不接受 source/resume package"
+        )
     return {
         "request_path": str(path),
         "request": payload,
@@ -287,7 +308,7 @@ def load_colab_test_request(
         "repository_ref": repository_ref,
         "phase": phase,
         "run_series_id": run_series_id,
-        "source_package_path": str(source_package),
+        "source_package_path": str(source_package) if source_package else "",
         "resume_package_path": str(resume_package) if resume_package else "",
     }
 
@@ -828,6 +849,16 @@ def _default_frozen_feedback_signed_response_runner(
     )
 
 
+def _default_frame_state_signed_observability_runner(
+    output_root: Path,
+) -> dict[str, Any]:
+    from experiments.generative_video_model_probe.frame_state_signed_observability_construction import (
+        run_frame_state_signed_observability_construction,
+    )
+
+    return run_frame_state_signed_observability_construction(output_root)
+
+
 def _source_generation_model_ids(source_root: Path) -> list[str]:
     """读取模型地址列表；有效性校验仍由测试 handler 负责。"""
 
@@ -1108,6 +1139,9 @@ def run_colab_test_request(
     frozen_feedback_signed_response_runner: (
         Callable[..., dict[str, Any]] | None
     ) = None,
+    frame_state_signed_observability_runner: (
+        Callable[..., dict[str, Any]] | None
+    ) = None,
 ) -> dict[str, Any]:
     """执行一个白名单测试，并把唯一结果 zip 与 manifest 回写 Drive。"""
 
@@ -1137,14 +1171,31 @@ def run_colab_test_request(
             ),
         )
 
-    source_package = Path(resolved["source_package_path"])
-    cached_source = cache_root / f"source_{resolved['run_series_id']}.zip"
-    cached_source.parent.mkdir(parents=True, exist_ok=True)
-    if not cached_source.exists():
-        shutil.copy2(source_package, cached_source)
-    source_extract_root = workspace_root / "inputs" / resolved["run_series_id"]
-    if not source_extract_root.exists():
-        _safe_extract_zip(cached_source, source_extract_root)
+    self_contained_frame_state = (
+        resolved["test_id"]
+        == FRAME_STATE_SIGNED_OBSERVABILITY_CONSTRUCTION_TEST_ID
+    )
+    source_package: Path | None = None
+    if self_contained_frame_state:
+        source_root = repository_root
+        generation_model_ids = [
+            "Wan-AI/Wan2.1-T2V-1.3B-Diffusers"
+        ]
+    else:
+        source_package = Path(resolved["source_package_path"])
+        cached_source = cache_root / (
+            f"source_{resolved['run_series_id']}.zip"
+        )
+        cached_source.parent.mkdir(parents=True, exist_ok=True)
+        if not cached_source.exists():
+            shutil.copy2(source_package, cached_source)
+        source_extract_root = (
+            workspace_root / "inputs" / resolved["run_series_id"]
+        )
+        if not source_extract_root.exists():
+            _safe_extract_zip(cached_source, source_extract_root)
+        source_root = source_extract_root
+        generation_model_ids = []
     if resolved["test_id"] == CONTROLLED_EMBEDDING_STRENGTH_TEST_ID:
         source_root = source_extract_root
         generation_model_ids = _controlled_embedding_generation_model_ids(
@@ -1206,6 +1257,8 @@ def run_colab_test_request(
         generation_model_ids = (
             _impulse_observability_generation_model_ids(source_root)
         )
+    elif self_contained_frame_state:
+        pass
     else:
         source_root = _discover_stage0d_source_root(source_extract_root)
         generation_model_ids = _source_generation_model_ids(source_root)
@@ -1272,6 +1325,15 @@ def run_colab_test_request(
             or _default_controlled_embedding_runner
         )
         diagnostic_decision = runner(source_root, output_root)
+    elif (
+        resolved["test_id"]
+        == FRAME_STATE_SIGNED_OBSERVABILITY_CONSTRUCTION_TEST_ID
+    ):
+        runner = (
+            frame_state_signed_observability_runner
+            or _default_frame_state_signed_observability_runner
+        )
+        diagnostic_decision = runner(output_root)
     elif (
         resolved["test_id"]
         == MINIMAL_SIGNED_TRAJECTORY_STATE_SPACE_SMOKE_TEST_ID
@@ -1385,7 +1447,9 @@ def run_colab_test_request(
         "repository_commit": repository_commit,
         "generation_model_ids": generation_model_ids,
         "request_path": resolved["request_path"],
-        "source_package_path": str(source_package),
+        "source_package_path": (
+            "" if source_package is None else str(source_package)
+        ),
         "resume_package_path": resolved["resume_package_path"],
         "drive_result_zip": str(drive_package_path),
         "diagnostic_decision": diagnostic_decision,

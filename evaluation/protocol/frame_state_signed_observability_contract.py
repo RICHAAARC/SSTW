@@ -21,11 +21,11 @@ DEFAULT_CONFIG_PATH = (
 PROFILE_ID = "sstw_frame_state_signed_observability_construction"
 METHOD_ID = "frame_state_synchronized_generative_flow_video_watermark"
 CONTRACT_STATE = (
-    "local_runtime_primitives_implemented_execution_contract_frozen"
+    "gate0_runner_implemented_execution_pending_explicit_user_colab_run"
 )
 PUBLIC_CONTEXT_SCHEMA_ID = "sstw_frame_state_public_context_v1"
 FROZEN_PROTOCOL_DIGEST = (
-    "69099dd2ac0044900d8ac8ce9eeb0d9c553ee5b6d38572f3479506c4ae2088a6"
+    "31a3332a05ffeea853ce43495ca100c8fa065f96d7fd53aaf6cb0aeac6c00af4"
 )
 
 _LOWER_HEX_32 = re.compile(r"[0-9a-f]{32}\Z")
@@ -34,17 +34,19 @@ _LOWER_HEX_64 = re.compile(r"[0-9a-f]{64}\Z")
 EXPECTED_AUTHORIZATION_BOUNDARY = {
     "attack_execution_allowed": False,
     "baseline_execution_allowed": False,
-    "claim_support_status": "local_runtime_primitives_only_not_method_evidence",
-    "colab_execution_allowed": False,
-    "construction_execution_allowed": False,
+    "claim_support_status": (
+        "gate0_execution_pending_user_colab_run_not_method_evidence"
+    ),
+    "colab_execution_allowed": True,
+    "construction_execution_allowed": True,
     "drive_update_allowed": False,
     "fixed_fpr_execution_allowed": False,
     "formal_result": False,
-    "gpu_execution_allowed": False,
+    "gpu_execution_allowed": True,
     "notebook_handler_implementation_allowed": False,
     "observer_implementation_allowed": False,
     "paper_claim_allowed": False,
-    "runner_implementation_allowed": False,
+    "runner_implementation_allowed": True,
     "runtime_implementation_authorized": True,
     "stage_progression_allowed": False,
 }
@@ -523,6 +525,7 @@ def validate_frame_state_signed_observability_config(
         ),
         "decoder_library_version": "diffusers_0.35.2",
         "decoder_model_revision_source": "video_contract_model_revision",
+        "decoder_spatial_tiling_enabled_in_jacobian": False,
         "temporal_weight_application": (
             "after_eight_iterations_multiply_restricted_slices_then_"
             "global_float32_l2_normalize_before_sign_canonicalization"
@@ -918,7 +921,7 @@ def build_frame_state_probe_plan(
                     public_context_binding=(
                         "one_pre_embedding_nonce_shared_within_identity"
                     ),
-                    execution_authorized=False,
+                    execution_authorized=True,
                     formal_result=False,
                     stage_progression_allowed=False,
                 )

@@ -39,16 +39,19 @@ handler 或 GPU 授权。未来不得复用本 config 的 Gate A 名称或 execu
 carrier atom、时间保持的保存视频 RGB24 feature、`C0/A` 两个隔离 identity 和
 精确 `4+4` probe 计划。公开 NPZ 的单一 array/shape、固定 SHA-256 Rademacher
 初始化与受限-support 8轮 Jacobian power iteration 后时间加权方向（不声称精确
-leading singular）、scheduler `delta_sigma` state-update
+leading singular）、Jacobian 期间关闭 spatial tiling 且随后恢复的确定 decode
+边界、scheduler `delta_sigma` state-update
 signed exposure、有限 clean floor 和 `T0` apply-only prediction 公式均在
 `protocol_contract` 内冻结。latent/decoded/saved 三个 checkpoint 的 exact
 representation 与公共 signed gate matrix 也已固定；唯一 T0 transfer gates 只
 适用于 saved-video 528D primary。C0/A 的不同 prompt/seed、相同初噪声规则、
 模型/scheduler/exporter，以及真实8-step sigma/delta-sigma 和独立 late-tapered
 Flow waveform 已精确冻结；本地公开 atom、NumPy FP32 control/exposure、feature、
-T0 与 gate 原语已实现。仅 `runtime_implementation_authorized=true`；construction
-执行、runner、Notebook、GPU、Colab、Drive、observer、攻击、fixed-FPR、baseline
-和 paper claim 仍全部为 false。本 config 不是视频运行或 Gate 0 结果。
+T0 与 gate 原语已实现。最薄 Wan runner 与既有 `colab_test` request handler 也已
+接通，config 状态为“runner implemented、等待用户显式 Colab Gate 0 运行”。
+execution flags 只允许该8-video construction；Notebook 无逻辑变更，observer、
+攻击、fixed-FPR、baseline、paper claim、formal result 与 stage progression
+仍全部为 false。本 config 和本地测试都不是视频运行或 Gate 0 结果。
 
 `protocol/sstw_gate_a_root_cause_amplitude_feedback_diagnostic.json` 冻结首次
 Gate A FAIL 后的独立六视频根因判别：只运行一个预声明 `lambda=.06` 半幅，

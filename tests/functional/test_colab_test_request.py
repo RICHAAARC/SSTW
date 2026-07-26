@@ -13,6 +13,7 @@ import pytest
 
 from workflows.colab_test_request import (
     CONTROLLED_EMBEDDING_STRENGTH_TEST_ID,
+    FRAME_STATE_SIGNED_OBSERVABILITY_CONSTRUCTION_TEST_ID,
     REQUEST_SCHEMA_VERSION,
     TRAJECTORY_REPLAY_SOURCE_BUILD_TEST_ID,
     _safe_extract_zip,
@@ -110,6 +111,23 @@ def _controlled_embedding_request_payload(
             "phase": "no_attack",
             "run_series_id": "controlled_embedding_lambda_001",
             "source_package_path": str(source_package),
+            "resume_package_path": "",
+        },
+    }
+
+
+def _frame_state_request_payload() -> dict[str, object]:
+    return {
+        "request_schema_version": REQUEST_SCHEMA_VERSION,
+        "test_id": FRAME_STATE_SIGNED_OBSERVABILITY_CONSTRUCTION_TEST_ID,
+        "repository": {
+            "url": "https://github.com/RICHAAARC/SSTW.git",
+            "ref": "a54d69b1d1b227f3fc037b7ddd8aa9604a4a5e03",
+        },
+        "parameters": {
+            "phase": "gate0",
+            "run_series_id": "frame_state_signed_observability_gate0",
+            "source_package_path": "",
             "resume_package_path": "",
         },
     }
@@ -461,6 +479,90 @@ def test_controlled_embedding_handler_uses_same_notebook_packaging_path(
             "artifacts/"
             "controlled_embedding_strength_diagnostic_decision.json"
         ) in archive.namelist()
+
+
+@pytest.mark.quick
+def test_frame_state_gate0_is_self_contained_and_uses_single_zip_packaging(
+    tmp_path: Path,
+) -> None:
+    project_root = tmp_path / "SSTW"
+    request_path = project_root / "requests" / "colab_test_request.json"
+    _write_request(request_path, _frame_state_request_payload())
+
+    resolved = load_colab_test_request(
+        request_path,
+        project_root=project_root,
+    )
+    assert resolved["source_package_path"] == ""
+    assert resolved["resume_package_path"] == ""
+    assert build_colab_test_dry_run_plan(
+        request_path,
+        project_root=project_root,
+    )["phase"] == "gate0"
+
+    def fake_runner(output_root: Path) -> dict[str, object]:
+        assert project_root.resolve() not in output_root.resolve().parents
+        artifact = (
+            output_root / "frame_state_signed_observability_decision.json"
+        )
+        artifact.write_text(
+            json.dumps(
+                {
+                    "frame_state_gate0_ready": False,
+                    "formal_result": False,
+                    "stage_progression_allowed": False,
+                }
+            ),
+            encoding="utf-8",
+        )
+        return {
+            "frame_state_gate0_decision": (
+                "gate0_fail_stop_current_carrier_or_feature"
+            ),
+            "formal_result": False,
+            "stage_progression_allowed": False,
+        }
+
+    result = run_colab_test_request(
+        request_path,
+        project_root=project_root,
+        repo_root=Path.cwd(),
+        local_workspace_root=tmp_path / "content" / "workspace",
+        local_package_cache_root=tmp_path / "content" / "packages",
+        frame_state_signed_observability_runner=fake_runner,
+    )
+    manifest = json.loads(
+        Path(result["drive_result_manifest"]).read_text(encoding="utf-8")
+    )
+    assert manifest["source_package_path"] == ""
+    assert manifest["resume_package_path"] == ""
+    assert manifest["generation_model_ids"] == [
+        "Wan-AI/Wan2.1-T2V-1.3B-Diffusers"
+    ]
+    with ZipFile(result["drive_result_zip"]) as archive:
+        assert archive.namelist() == [
+            "frame_state_signed_observability_decision.json"
+        ]
+
+
+def test_frame_state_gate0_rejects_source_resume_and_wrong_phase(
+    tmp_path: Path,
+) -> None:
+    project_root = tmp_path / "SSTW"
+    request_path = project_root / "requests" / "colab_test_request.json"
+    source = project_root / "inputs" / "unexpected.zip"
+    _write_source_package(source)
+    payload = _frame_state_request_payload()
+    payload["parameters"]["source_package_path"] = str(source)
+    _write_request(request_path, payload)
+    with pytest.raises(ValueError, match="自包含"):
+        load_colab_test_request(request_path, project_root=project_root)
+
+    payload = _frame_state_request_payload()
+    payload["parameters"]["phase"] = "no_attack"
+    _write_request(request_path, payload)
+    with pytest.raises(ValueError, match="phase"):
+        load_colab_test_request(request_path, project_root=project_root)
 
 
 @pytest.mark.quick

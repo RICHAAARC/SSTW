@@ -3442,7 +3442,7 @@ Notebook 与 repository module 的跨边界数据
 | historical_normal_feedback_full_latent_gate_by_pair | governance | none | true | false | false | 受绑定f06 normal-feedback source中early/late full-latent signed gate apply-only结果。 |
 | historical_normal_feedback_gate_a_fail_preserved | governance | none | true | false | false | 固定为true，确认本诊断未覆盖历史Gate A FAIL。 |
 | historical_source_apply_only | governance | none | true | false | false | 历史normal-feedback结果只作为已冻结对照，禁止训练、调阈值或重分类为成功。 |
-| contract_state | governance | none | true | false | false | 当前方法或协议合同的语义状态；帧状态首轮本地原语批次固定为 `local_runtime_primitives_implemented_execution_contract_frozen`。 |
+| contract_state | governance | none | true | false | false | 当前方法或协议合同的语义状态；帧状态首轮 runner 批次固定为 `gate0_runner_implemented_execution_pending_explicit_user_colab_run`。 |
 | protocol_contract | protocol | none | true | false | false | protocol digest 唯一绑定的稳定、无运行值合同投影。 |
 | protocol_digest | provenance | none | true | false | false | `canonical_json(protocol_contract)` 的 SHA-256；不得递归包含自身、public context 或 nonce。 |
 | context_schema_id | protocol | none | true | false | false | public context exact schema 身份。 |
@@ -3529,3 +3529,51 @@ Notebook 与 repository module 的跨边界数据
 | feature_output_centering | protocol | none | true | false | false | local output feature 返回 raw uncentered representation。 |
 | construction_transfer_clean_intercept_source | protocol | none | true | false | false | C0 transfer intercept 使用 construction clean-A/B 算术均值。 |
 | signed_gate_clean_intercept_source | protocol | none | true | false | false | 公共 signed gates 使用当前 identity 自身 clean-A/B 算术均值。 |
+| frame_state_probe_plan_index | provenance | none | true | false | false | Gate 0 精确8项 plan 中当前视频/step/checkpoint 的零基序号。 |
+| frame_state_identity_role | protocol | none | true | false | false | governed runtime row 属于 C0 construction 或 held-out identity A。 |
+| frame_state_probe_id | provenance | none | true | false | false | 与冻结 Gate 0 plan exact-order 绑定的 probe ID。 |
+| frame_state_signed_state_coefficient | protocol | none | true | false | false | 当前 probe 在 scheduler state-update 坐标中的 -1/0/+1 系数。 |
+| frame_state_generation_record_id | provenance | none | true | false | false | 单条 frame-state generation governed record 的稳定摘要。 |
+| frame_state_flow_step_index | provenance | none | true | false | false | 真实8-step Flow schedule 中当前 step index。 |
+| frame_state_delta_sigma | metric | none | true | false | false | 当前真实 scheduler step 的 `next_sigma-current_sigma`。 |
+| frame_state_waveform | metric | none | true | false | false | 当前 step 的冻结 late-tapered waveform 系数。 |
+| frame_state_actual_delta_sha256 | provenance | none | true | false | false | 实际 float32 `(constrained-base)` C-order bytes 的 SHA-256；不保存 tensor 值。 |
+| frame_state_actual_delta_norm | metric | none | true | false | false | 实际 float32 scheduler velocity delta 的 L2 norm。 |
+| frame_state_intended_delta_norm | metric | none | true | false | false | 在 norm/energy 两预算下当前 step 的 intended delta norm。 |
+| frame_state_joint_norm_budget | metric | none | true | false | false | 当前 step 冻结 lambda/ratio/waveform 给出的 joint norm budget。 |
+| frame_state_remaining_energy | metric | none | true | false | false | 当前 step 注入前的剩余 Flow control energy。 |
+| frame_state_energy_increment | metric | none | true | false | false | 当前实际 delta 产生的 `delta_sigma^2 * norm^2` energy increment。 |
+| frame_state_direction_cosine | metric | none | true | false | false | 实际 float32 delta 与冻结 signed public atom 的方向 cosine；inactive 为 null。 |
+| frame_state_projection_scale | metric | none | true | false | false | strict finite-precision backoff 选中的实际 projection scale。 |
+| frame_state_projection_attempt_count | metric | none | true | false | false | 有界 FP32 projection/backoff 的确定性尝试次数。 |
+| frame_state_projection_status | governance | none | true | false | false | 当前 step 为 exact no-op、direct pass 或 bounded-backoff pass。 |
+| frame_state_inactive_exact_noop | governance | none | true | false | false | clean/zero 或非active step 是否保持 exact float32 no-op。 |
+| frame_state_signed_state_update_exposure | metric | none | true | false | false | 当前 step 重算的 `delta_sigma * dot(actual_delta,public_atom)`。 |
+| frame_state_step_record_id | provenance | none | true | false | false | 单条 frame-state scheduler step governed record 的稳定摘要。 |
+| frame_state_checkpoint_id | protocol | none | true | false | false | Gate 0 三层 checkpoint ID。 |
+| frame_state_checkpoint_dimension | protocol | none | true | false | false | 当前 checkpoint exact representation dimension，固定为1或528。 |
+| frame_state_checkpoint_values | metric | none | true | false | false | 未中心化的 raw scalar/528D checkpoint values。 |
+| frame_state_checkpoint_source_boundary | provenance | none | true | false | false | final-latent、pre-save decoded 或 saved RGB24 readback 的精确边界。 |
+| frame_state_checkpoint_record_id | provenance | none | true | false | false | 单条 frame-state checkpoint governed record 的稳定摘要。 |
+| frame_state_clean_noise_norm | metric | none | true | false | false | 当前 identity/checkpoint clean-A/B 差的半 L2 norm。 |
+| frame_state_odd_norm | metric | none | true | false | false | 当前 identity/checkpoint signed odd response norm。 |
+| frame_state_common_norm | metric | none | true | false | false | 当前 identity/checkpoint sign-even common response norm。 |
+| frame_state_antisymmetry_cosine | metric | none | true | false | false | 当前 identity/checkpoint 正负 centered response 的 antisymmetry cosine。 |
+| frame_state_antisymmetry_residual | metric | none | true | false | false | 当前 identity/checkpoint 冻结公式的 antisymmetry residual。 |
+| frame_state_common_odd_ratio | metric | none | true | false | false | 当前 identity/checkpoint common norm 与 odd norm 比值。 |
+| frame_state_odd_clean_noise_ratio | metric | none | true | false | false | 当前 identity/checkpoint odd norm 与有下限 clean noise 比值。 |
+| frame_state_statistics_finite | governance | none | true | false | false | 当前 signed statistics 全部派生标量是否有限；false 形成正常方法 stop 而非 PASS。 |
+| frame_state_signed_gate_ready | governance | none | true | false | false | 当前 identity/checkpoint 是否同时通过四项公共 signed gates。 |
+| frame_state_statistics_record_id | provenance | none | true | false | false | 单条 Gate 0 signed statistics governed record 的稳定摘要。 |
+| frame_state_gate0_decision | governance | none | true | false | false | Gate 0 PASS-design-only、method stop 或 runtime recovery-only 决策。 |
+| frame_state_gate0_ready | governance | none | true | false | false | C0 readiness、A 三checkpoint和saved-video T0 gates是否全部通过。 |
+| frame_state_construction_readiness | governance | none | true | false | false | C0 三checkpoint公共 signed gates的 construction-only readiness。 |
+| frame_state_checkpoint_signed_gate_ready | governance | none | true | false | false | identity A 三checkpoint公共 signed gate readiness map。 |
+| frame_state_transfer_direction_cosine | metric | none | true | false | false | identity A saved-video observed odd 与 C0 T0 apply-only prediction cosine。 |
+| frame_state_transfer_relative_error | metric | none | true | false | false | identity A saved-video observed odd 与 C0 T0 prediction 相对误差。 |
+| frame_state_primary_transfer_gate_ready | governance | none | true | false | false | saved-video primary 两项 T0 apply-only gates 是否共同通过。 |
+| frame_state_t0_sha256 | provenance | none | true | false | false | construction-only T0 float64 NPY artifact 的文件摘要。 |
+| frame_state_probe_plan_digest | provenance | none | true | false | false | execution-authorized精确8项 Gate 0 plan 的 canonical digest。 |
+| frame_state_failure_reason | governance | none | true | false | false | runtime/contract fail-closed 的安全标量错误说明。 |
+| next_double_window_gate_a_design_allowed | governance | none | true | false | false | Gate 0 PASS 后是否仅允许设计下一双窗口 Gate A。 |
+| next_double_window_gate_a_execution_allowed | governance | none | true | false | false | 下一双窗口 Gate A 是否可自动执行；当前固定为false。 |

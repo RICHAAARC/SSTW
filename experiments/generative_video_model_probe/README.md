@@ -31,15 +31,19 @@ generative Flow time
 Gate 公式；dictionary 只称固定8次迭代后时间加权的 Jacobian-aligned direction，
 三层公共 signed gates 与 saved-video-only T0 gates 也有 exact applicability。
 CPU/NumPy 层现已实现 atom、strict FP32 control、528D feature、C0 T0 与 A
-apply-only Gate 0 原语，并冻结互异 C0/A execution identities。当前仍无 Wan
-adapter、runner、observer 或 GPU 结果；construction/GPU/Colab 执行授权为 false，
-不能由现有 server/Notebook 调用。旧
+apply-only Gate 0 原语，并冻结互异 C0/A execution identities。
+`frame_state_signed_observability_construction.py` 将这些原语接到真实
+diffusers 0.35.2 Wan scheduler：精确执行 C0/A 各4项、C0 clean-A 后构造一次
+public atom（Jacobian decode 固定 untiled，完成后恢复 VAE tiling）、逐step重算
+actual exposure，并由 C0 估计唯一 saved-video T0 后在 A
+apply-only。入口已加入既有薄 `colab_test` request；Notebook 不含科学逻辑且未改。
+真实 GPU/API/显存和 Gate 0 结果仍待用户显式 Colab 运行，任何 PASS/FAIL 均非正式
+且禁止 stage progression。旧
 output-feature impulse observability、root-cause、spatiotemporal 和
 frozen-feedback runner 均保留为 Flow-stage-indexed carrier/feature 的历史
 construction/负对照，不得作为帧状态同步已通过的证据。下一实现必须从一个
-视频时间窗口、一个 signed 状态维度的独立 execution identity 冻结与代码审核
-完成并通过本地审计开始；不能直接实现时间攻击或完整 observer。下一独立任务
-才允许在用户授权下实现最薄 GPU runner。
+视频时间窗口、一个 signed 状态维度的 Gate 0 结果开始；不能直接实现时间攻击或
+完整 observer。
 
 ## Output-feature impulse observability
 

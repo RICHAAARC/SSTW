@@ -2,21 +2,21 @@
   "authorization_boundary": {
     "attack_execution_allowed": false,
     "baseline_execution_allowed": false,
-    "claim_support_status": "local_runtime_primitives_only_not_method_evidence",
-    "colab_execution_allowed": false,
-    "construction_execution_allowed": false,
+    "claim_support_status": "gate0_execution_pending_user_colab_run_not_method_evidence",
+    "colab_execution_allowed": true,
+    "construction_execution_allowed": true,
     "drive_update_allowed": false,
     "fixed_fpr_execution_allowed": false,
     "formal_result": false,
-    "gpu_execution_allowed": false,
+    "gpu_execution_allowed": true,
     "notebook_handler_implementation_allowed": false,
     "observer_implementation_allowed": false,
     "paper_claim_allowed": false,
-    "runner_implementation_allowed": false,
+    "runner_implementation_allowed": true,
     "runtime_implementation_authorized": true,
     "stage_progression_allowed": false
   },
-  "contract_state": "local_runtime_primitives_implemented_execution_contract_frozen",
+  "contract_state": "gate0_runner_implemented_execution_pending_explicit_user_colab_run",
   "execution_identity_contract": {
     "construction_identity": {
       "guidance_scale_denominator": 1,
@@ -92,6 +92,7 @@
       "decoder_latent_denormalization_formula": "latent_times_vae_config_latents_std_plus_vae_config_latents_mean",
       "decoder_library_version": "diffusers_0.35.2",
       "decoder_model_revision_source": "video_contract_model_revision",
+      "decoder_spatial_tiling_enabled_in_jacobian": false,
       "dictionary_artifact_array_count": 1,
       "dictionary_artifact_array_key": "frame_state_public_atom",
       "dictionary_artifact_array_shape": [
@@ -495,5 +496,5 @@
       "width": 512
     }
   },
-  "protocol_digest": "69099dd2ac0044900d8ac8ce9eeb0d9c553ee5b6d38572f3479506c4ae2088a6"
+  "protocol_digest": "31a3332a05ffeea853ce43495ca100c8fa065f96d7fd53aaf6cb0aeac6c00af4"
 }

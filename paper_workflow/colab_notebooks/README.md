@@ -167,6 +167,7 @@ Notebook 固定读取:
 `prompt_orthogonal_state_trajectory_smoke`、
 `gate_a_root_cause_amplitude_feedback_diagnostic`、
 `frozen_feedback_signed_response_diagnostic`、
+`frame_state_signed_observability_construction`、
 `output_feature_impulse_observability_construction` 与仅用于重建输入的
 `trajectory_replay_smoke_source_build`。
 当 Stage 0-D source 未保留时，同一 Notebook 还可通过白名单
@@ -187,6 +188,14 @@ fail-closed。实际检测版本只作为本次兼容性记录，不构成版本
 `/content/SSTW_colab_test_workspace`。模型推理、中间 records、视频、checkpoint 和诊断
 产物只读写 `/content`；只有 runner 成功返回且本地结果 zip 已完整生成后，才创建 Drive
 归档目录并复制最终 ZIP 与 manifest。不得把 Drive 目录作为 runtime `output_root`。
+
+`frame_state_signed_observability_construction` 是自包含的8-video Gate 0
+construction：request 的 `source_package_path` 与 `resume_package_path` 必须为空。
+它在 `/content` 完成 C0 public atom、8项生成、三层 checkpoint、C0 T0 与
+identity-A apply-only Gate 0，再由同一 packager 写单一 ZIP+manifest。固定 Notebook
+不需新增 Cell；运行前只需把
+`configs/paper_workflow/colab_test_frame_state_signed_observability_request_example.json`
+复制为 Drive request，并把 `repository.ref` 替换为审核后完整 commit。
 
 `no_attack` 请求需要一个位于 Drive `SSTW/` 根内的冻结 source zip。`run_series_id`
 用于固定同一条 `no_attack -> attacked -> decision` 诊断链的本地逻辑路径，整条链中

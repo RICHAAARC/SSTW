@@ -925,31 +925,93 @@ def _run_one_counterfactual(
     return state.detach().cpu(), tuple(records), trace
 
 
-def _decode_wan_final_latent(pipe: Any, final_latent: Any) -> np.ndarray:
+def _run_wan_decode_no_grad(
+    pipe: Any,
+    *,
+    torch_module: Any,
+    normalize_latent: Callable[[], Any],
+    phase_observer: Callable[[str], None] | None = None,
+) -> Any:
+    """Mirror WanPipeline's no-grad decode and hook cleanup boundary."""
+
+    try:
+        with torch_module.no_grad():
+            try:
+                if phase_observer is not None:
+                    phase_observer("start")
+                normalized = normalize_latent()
+                video = pipe.vae.decode(normalized, return_dict=False)[0]
+                frames = pipe.video_processor.postprocess_video(
+                    video,
+                    output_type="np",
+                )
+                if phase_observer is not None:
+                    phase_observer("finish")
+                return frames
+            except Exception:
+                if phase_observer is not None:
+                    phase_observer("failure")
+                raise
+    finally:
+        pipe.maybe_free_model_hooks()
+
+
+def _cuda_memory_progress_fields(torch_module: Any) -> str:
+    """Return scalar-only CUDA memory diagnostics for progress events."""
+
+    gib = float(1024**3)
+    try:
+        allocated = float(torch_module.cuda.memory_allocated()) / gib
+        reserved = float(torch_module.cuda.memory_reserved()) / gib
+        maximum = float(torch_module.cuda.max_memory_allocated()) / gib
+        return (
+            f"allocated_gib={allocated:.3f} "
+            f"reserved_gib={reserved:.3f} "
+            f"max_allocated_gib={maximum:.3f} "
+            f"grad_enabled={str(torch_module.is_grad_enabled()).lower()}"
+        )
+    except Exception as exc:
+        return (
+            "cuda_memory_status=unavailable "
+            f"cuda_memory_error_type={type(exc).__name__} "
+            f"grad_enabled={str(torch_module.is_grad_enabled()).lower()}"
+        )
+
+
+def _decode_wan_final_latent(
+    pipe: Any,
+    final_latent: Any,
+    *,
+    phase_observer: Callable[[str], None] | None = None,
+) -> np.ndarray:
     """Mirror diffusers 0.35.2 WanPipeline's public VAE decode path."""
 
     import torch
 
     if _package_version("diffusers") != "0.35.2":
         raise RuntimeError("frozen-feedback decode 要求 diffusers==0.35.2")
-    device = getattr(pipe, "_execution_device", torch.device("cuda"))
-    latent = final_latent.to(device=device, dtype=pipe.vae.dtype)
-    mean = (
-        torch.tensor(pipe.vae.config.latents_mean)
-        .view(1, pipe.vae.config.z_dim, 1, 1, 1)
-        .to(latent.device, latent.dtype)
-    )
-    inverse_std = (
-        1.0
-        / torch.tensor(pipe.vae.config.latents_std)
-        .view(1, pipe.vae.config.z_dim, 1, 1, 1)
-        .to(latent.device, latent.dtype)
-    )
-    normalized = latent / inverse_std + mean
-    video = pipe.vae.decode(normalized, return_dict=False)[0]
-    frames = pipe.video_processor.postprocess_video(
-        video,
-        output_type="np",
+
+    def normalize_latent() -> Any:
+        device = getattr(pipe, "_execution_device", torch.device("cuda"))
+        latent = final_latent.to(device=device, dtype=pipe.vae.dtype)
+        mean = (
+            torch.tensor(pipe.vae.config.latents_mean)
+            .view(1, pipe.vae.config.z_dim, 1, 1, 1)
+            .to(latent.device, latent.dtype)
+        )
+        inverse_std = (
+            1.0
+            / torch.tensor(pipe.vae.config.latents_std)
+            .view(1, pipe.vae.config.z_dim, 1, 1, 1)
+            .to(latent.device, latent.dtype)
+        )
+        return latent / inverse_std + mean
+
+    frames = _run_wan_decode_no_grad(
+        pipe,
+        torch_module=torch,
+        normalize_latent=normalize_latent,
+        phase_observer=phase_observer,
     )
     value = np.asarray(frames[0], dtype=np.float32)
     if (
@@ -1160,6 +1222,7 @@ def execute_real_frozen_feedback_generation(
         _scheduler_signature,
         _select_dtype,
     )
+    from runtime.core.progress import emit_progress_event
 
     if not torch.cuda.is_available():
         raise RuntimeError("frozen-feedback diagnostic 需要 Colab CUDA GPU")
@@ -1330,7 +1393,22 @@ def execute_real_frozen_feedback_generation(
                         basis=basis,
                     )
                 )
-                decoded = _decode_wan_final_latent(pipe, final_latent)
+
+                def observe_decode_phase(phase: str) -> None:
+                    emit_progress_event(
+                        "frozen_feedback_wan_vae_decode",
+                        (
+                            f"{phase} | output={plan_index + 1}/{len(plan)} "
+                            f"probe={probe.probe_id} "
+                            f"{_cuda_memory_progress_fields(torch)}"
+                        ),
+                    )
+
+                decoded = _decode_wan_final_latent(
+                    pipe,
+                    final_latent,
+                    phase_observer=observe_decode_phase,
+                )
                 decoded_path = (
                     decoded_root / f"{plan_index:02d}_{probe.probe_id}.npy"
                 )

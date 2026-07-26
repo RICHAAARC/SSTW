@@ -32,8 +32,10 @@ from evaluation.protocol.impulse_observability_contract import (
     load_impulse_observability_config,
 )
 from experiments.generative_video_model_probe.frozen_feedback_signed_response_diagnostic import (
+    _cuda_memory_progress_fields,
     _full_array_checkpoint_records,
     _relabel_feature_batch,
+    _run_wan_decode_no_grad,
     _stable_digest,
     _tensor_digest,
     _validate_feature_batch,
@@ -371,6 +373,146 @@ def test_tensor_digest_materializes_logical_c_order_storage(
         FakeTensor(np.array([8.0], dtype=np.float32))
     ) != _tensor_digest(
         FakeTensor(np.array([7.0], dtype=np.float32))
+    )
+
+
+@pytest.mark.quick
+def test_wan_decode_helper_disables_grad_and_reapplies_hooks() -> None:
+    class FakeNoGrad:
+        def __init__(self, torch_module: SimpleNamespace) -> None:
+            self.torch_module = torch_module
+            self.previous = True
+
+        def __enter__(self) -> None:
+            self.previous = self.torch_module.grad_enabled
+            self.torch_module.grad_enabled = False
+
+        def __exit__(self, *args: object) -> None:
+            self.torch_module.grad_enabled = self.previous
+
+    fake_torch = SimpleNamespace(grad_enabled=True)
+    fake_torch.no_grad = lambda: FakeNoGrad(fake_torch)
+    fake_torch.is_grad_enabled = lambda: fake_torch.grad_enabled
+    calls: list[str] = []
+
+    class FakeVae:
+        def decode(self, value: str, *, return_dict: bool) -> tuple[str]:
+            assert fake_torch.is_grad_enabled() is False
+            assert value == "normalized"
+            assert return_dict is False
+            calls.append("decode")
+            return ("video",)
+
+    class FakeProcessor:
+        def postprocess_video(
+            self,
+            value: str,
+            *,
+            output_type: str,
+        ) -> str:
+            assert fake_torch.is_grad_enabled() is False
+            assert value == "video"
+            assert output_type == "np"
+            calls.append("postprocess")
+            return "frames"
+
+    pipe = SimpleNamespace(
+        vae=FakeVae(),
+        video_processor=FakeProcessor(),
+        maybe_free_model_hooks=lambda: calls.append("hooks"),
+    )
+    phases: list[tuple[str, bool]] = []
+
+    def normalize_latent() -> str:
+        assert fake_torch.is_grad_enabled() is False
+        calls.append("normalize")
+        return "normalized"
+
+    for _ in range(5):
+        result = _run_wan_decode_no_grad(
+            pipe,
+            torch_module=fake_torch,
+            normalize_latent=normalize_latent,
+            phase_observer=lambda phase: phases.append(
+                (phase, fake_torch.is_grad_enabled())
+            ),
+        )
+        assert result == "frames"
+        assert fake_torch.is_grad_enabled() is True
+
+    assert calls == ["normalize", "decode", "postprocess", "hooks"] * 5
+    assert phases == [("start", False), ("finish", False)] * 5
+
+
+@pytest.mark.quick
+def test_wan_decode_helper_cleans_hooks_and_grad_after_exception() -> None:
+    class FakeNoGrad:
+        def __init__(self, torch_module: SimpleNamespace) -> None:
+            self.torch_module = torch_module
+
+        def __enter__(self) -> None:
+            self.torch_module.grad_enabled = False
+
+        def __exit__(self, *args: object) -> None:
+            self.torch_module.grad_enabled = True
+
+    fake_torch = SimpleNamespace(grad_enabled=True)
+    fake_torch.no_grad = lambda: FakeNoGrad(fake_torch)
+    fake_torch.is_grad_enabled = lambda: fake_torch.grad_enabled
+    calls: list[str] = []
+
+    class FailingVae:
+        def decode(self, value: str, *, return_dict: bool) -> tuple[str]:
+            assert fake_torch.is_grad_enabled() is False
+            raise RuntimeError("planned decode failure")
+
+    pipe = SimpleNamespace(
+        vae=FailingVae(),
+        video_processor=SimpleNamespace(),
+        maybe_free_model_hooks=lambda: calls.append("hooks"),
+    )
+    phases: list[tuple[str, bool]] = []
+    with pytest.raises(RuntimeError, match="planned decode failure"):
+        _run_wan_decode_no_grad(
+            pipe,
+            torch_module=fake_torch,
+            normalize_latent=lambda: "normalized",
+            phase_observer=lambda phase: phases.append(
+                (phase, fake_torch.is_grad_enabled())
+            ),
+        )
+    assert phases == [("start", False), ("failure", False)]
+    assert calls == ["hooks"]
+    assert fake_torch.is_grad_enabled() is True
+
+
+@pytest.mark.quick
+def test_cuda_memory_progress_is_scalar_only_and_nonblocking() -> None:
+    gib = 1024**3
+    fake_torch = SimpleNamespace(
+        cuda=SimpleNamespace(
+            memory_allocated=lambda: 2 * gib,
+            memory_reserved=lambda: 3 * gib,
+            max_memory_allocated=lambda: 4 * gib,
+        ),
+        is_grad_enabled=lambda: False,
+    )
+    assert _cuda_memory_progress_fields(fake_torch) == (
+        "allocated_gib=2.000 reserved_gib=3.000 "
+        "max_allocated_gib=4.000 grad_enabled=false"
+    )
+
+    failing_torch = SimpleNamespace(
+        cuda=SimpleNamespace(
+            memory_allocated=lambda: (_ for _ in ()).throw(
+                RuntimeError("planned memory query failure")
+            )
+        ),
+        is_grad_enabled=lambda: False,
+    )
+    assert _cuda_memory_progress_fields(failing_torch) == (
+        "cuda_memory_status=unavailable "
+        "cuda_memory_error_type=RuntimeError grad_enabled=false"
     )
 
 

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from hashlib import sha256
+from types import SimpleNamespace
 
 import numpy as np
 import pytest
@@ -17,6 +18,7 @@ from diffusers import FlowMatchEulerDiscreteScheduler
 from experiments.generative_video_model_probe.frozen_feedback_signed_response_diagnostic import (
     CleanTrace,
     CleanTraceStep,
+    _run_wan_decode_no_grad,
     _tensor_digest,
     _validate_offline_clean_replay,
 )
@@ -125,3 +127,45 @@ def test_tensor_digest_handles_stride_zero_scalar_and_noncontiguous(
         assert _tensor_digest(logical) == expected
     if torch.cuda.is_available():
         assert _tensor_digest(logical.cuda()) == _tensor_digest(logical)
+
+
+def test_wan_decode_helper_matches_torch_no_grad_semantics() -> None:
+    observed: list[tuple[str, bool]] = []
+    hook_calls: list[str] = []
+
+    class TorchVae:
+        def decode(
+            self,
+            value: torch.Tensor,
+            *,
+            return_dict: bool,
+        ) -> tuple[torch.Tensor]:
+            observed.append(("decode", torch.is_grad_enabled()))
+            assert return_dict is False
+            return (value * 2.0,)
+
+    class TorchProcessor:
+        def postprocess_video(
+            self,
+            value: torch.Tensor,
+            *,
+            output_type: str,
+        ) -> torch.Tensor:
+            observed.append(("postprocess", torch.is_grad_enabled()))
+            assert output_type == "np"
+            return value + 1.0
+
+    pipe = SimpleNamespace(
+        vae=TorchVae(),
+        video_processor=TorchProcessor(),
+        maybe_free_model_hooks=lambda: hook_calls.append("hooks"),
+    )
+    source = torch.tensor([1.0], requires_grad=True)
+    result = _run_wan_decode_no_grad(
+        pipe,
+        torch_module=torch,
+        normalize_latent=lambda: source * 3.0,
+    )
+    assert observed == [("decode", False), ("postprocess", False)]
+    assert result.requires_grad is False
+    assert hook_calls == ["hooks"]

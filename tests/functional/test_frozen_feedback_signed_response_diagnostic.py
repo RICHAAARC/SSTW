@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import replace
+from hashlib import sha256
 import inspect
 import json
 from pathlib import Path
@@ -34,6 +35,7 @@ from experiments.generative_video_model_probe.frozen_feedback_signed_response_di
     _full_array_checkpoint_records,
     _relabel_feature_batch,
     _stable_digest,
+    _tensor_digest,
     _validate_feature_batch,
     _validate_historical_source,
     execute_real_frozen_feedback_generation,
@@ -293,6 +295,83 @@ def test_real_executor_has_one_clean_pipeline_call_and_no_branch_model_call() ->
     assert ".transformer" not in branch_source
     assert "clone.step(" in branch_source
     assert "clean_step.base_velocity" in branch_source
+
+
+@pytest.mark.quick
+def test_tensor_digest_materializes_logical_c_order_storage(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class FakeTensor:
+        def __init__(self, value: np.ndarray) -> None:
+            self.value = value
+            self.dtype = value.dtype
+
+        def detach(self) -> "FakeTensor":
+            return self
+
+        def to(self, *, device: str) -> "FakeTensor":
+            assert device == "cpu"
+            return self
+
+        def numel(self) -> int:
+            return int(self.value.size)
+
+        def reshape(self, *shape: int) -> "FakeTensor":
+            return FakeTensor(self.value.reshape(*shape))
+
+        def copy_(self, other: "FakeTensor") -> "FakeTensor":
+            np.copyto(self.value, other.value)
+            return self
+
+        def view(self, dtype: np.dtype) -> "FakeTensor":
+            return FakeTensor(self.value.view(dtype))
+
+        def numpy(self) -> np.ndarray:
+            return self.value
+
+    fake_torch = SimpleNamespace(
+        uint8=np.dtype(np.uint8),
+        empty=lambda size, dtype, device: FakeTensor(
+            np.empty(size, dtype=dtype)
+        ),
+    )
+    monkeypatch.setitem(sys.modules, "torch", fake_torch)
+
+    logical = np.array(
+        [[1.0, 2.0], [3.0, 4.0]],
+        dtype=np.float32,
+    )
+    noncontiguous = np.array(
+        [[1.0, 3.0], [2.0, 4.0]],
+        dtype=np.float32,
+    ).T
+    assert not noncontiguous.flags.c_contiguous
+    expected = sha256(logical.tobytes(order="C")).hexdigest()
+    assert _tensor_digest(FakeTensor(logical)) == expected
+    assert _tensor_digest(FakeTensor(noncontiguous)) == expected
+
+    singleton_base = np.array([7.0], dtype=np.float32)
+    stride_zero_singleton = np.lib.stride_tricks.as_strided(
+        singleton_base,
+        shape=(1,),
+        strides=(0,),
+    )
+    assert stride_zero_singleton.strides == (0,)
+    assert _tensor_digest(FakeTensor(stride_zero_singleton)) == (
+        _tensor_digest(
+            FakeTensor(np.array([7.0], dtype=np.float32))
+        )
+    )
+    assert _tensor_digest(
+        FakeTensor(np.array(7.0, dtype=np.float32))
+    ) == _tensor_digest(
+        FakeTensor(np.array([7.0], dtype=np.float32))
+    )
+    assert _tensor_digest(
+        FakeTensor(np.array([8.0], dtype=np.float32))
+    ) != _tensor_digest(
+        FakeTensor(np.array([7.0], dtype=np.float32))
+    )
 
 
 @pytest.mark.quick

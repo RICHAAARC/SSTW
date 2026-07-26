@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+from hashlib import sha256
+
+import numpy as np
 import pytest
 
 
@@ -80,3 +83,45 @@ def test_offline_clean_scheduler_clone_is_exact_array_equal() -> None:
         runtime_config,
         device=torch.device("cpu"),
     ) == _tensor_digest(state)
+
+
+@pytest.mark.parametrize("dtype", (torch.float32, torch.bfloat16))
+def test_tensor_digest_handles_stride_zero_scalar_and_noncontiguous(
+    dtype: torch.dtype,
+) -> None:
+    contiguous_singleton = torch.tensor([1.25], dtype=dtype)
+    stride_zero_singleton = torch.tensor(
+        [1.25],
+        dtype=dtype,
+    ).expand(3)[:1]
+    assert stride_zero_singleton.shape == (1,)
+    assert stride_zero_singleton.stride() == (0,)
+    assert _tensor_digest(stride_zero_singleton) == _tensor_digest(
+        contiguous_singleton
+    )
+    assert _tensor_digest(torch.tensor(1.25, dtype=dtype)) == (
+        _tensor_digest(contiguous_singleton)
+    )
+
+    logical = torch.tensor(
+        [[1.0, 2.0], [3.0, 4.0]],
+        dtype=dtype,
+    )
+    noncontiguous = torch.tensor(
+        [[1.0, 3.0], [2.0, 4.0]],
+        dtype=dtype,
+    ).t()
+    assert not noncontiguous.is_contiguous()
+    assert torch.equal(logical, noncontiguous)
+    assert _tensor_digest(noncontiguous) == _tensor_digest(logical)
+    assert _tensor_digest(
+        torch.tensor([2.25], dtype=dtype)
+    ) != _tensor_digest(contiguous_singleton)
+
+    if dtype == torch.float32:
+        expected = sha256(
+            np.asarray(logical.numpy(), dtype=np.float32).tobytes(order="C")
+        ).hexdigest()
+        assert _tensor_digest(logical) == expected
+    if torch.cuda.is_available():
+        assert _tensor_digest(logical.cuda()) == _tensor_digest(logical)

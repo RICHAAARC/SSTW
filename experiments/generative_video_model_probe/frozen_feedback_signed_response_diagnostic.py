@@ -136,12 +136,18 @@ def _repository_commit() -> str:
 
 
 def _tensor_digest(value: Any) -> str:
-    """Implementation split out for lightweight tests and readable errors."""
+    """Hash logical C-order tensor bytes without changing the tensor dtype."""
 
     import torch
 
-    tensor = value.detach().contiguous()
-    raw = tensor.view(torch.uint8).cpu().numpy().tobytes(order="C")
+    source = value.detach()
+    tensor = torch.empty(
+        source.numel(),
+        dtype=source.dtype,
+        device="cpu",
+    )
+    tensor.copy_(source.reshape(-1))
+    raw = tensor.view(torch.uint8).numpy().tobytes(order="C")
     return sha256(raw).hexdigest()
 
 

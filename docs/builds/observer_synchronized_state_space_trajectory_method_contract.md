@@ -2,13 +2,35 @@
 
 ## 0. 文档状态与证据边界
 
+### 0.1 主路线时间轴纠正
+
+本文件主体记录并保留历史的 **Flow-stage-indexed construction**、真实 Gate A FAIL
+及其后续根因诊断合同。它不再作为 SSTW 当前主路线的完整方法定义。
+
+当前主路线的方法设计决策已经调整为：
+
+```text
+视频帧/窗口时间：定义低维水印状态演化和同步目标
+生成 Flow 时间：只负责把整条帧状态轨迹写入视频
+```
+
+新的规范文档为：
+
+- `docs/builds/frame_state_synchronized_generative_flow_video_watermark_method_design.md`
+- `docs/builds/frame_state_synchronized_generative_flow_video_watermark_algorithm_primitives.md`
+
+本文件以下历史 Gate A 使用 Flow early/middle/late 作为主动设计轴，并使用
+latent-time global mean feature。其 FAIL 只否定对应 carrier/feature construction，
+不能冒充新帧状态路线的执行结果，也不能被新路线覆盖为成功。时间轴调整是新路线
+的方法设计决策，不是该历史 FAIL 直接证明的实验结论。
+
 本文定义一个独立候选方向：
 
 ```text
 Observer-Synchronized State-Space Trajectory Watermarking
 ```
 
-当前状态仅为：
+本文记录的历史冻结点状态仅为：
 
 ```text
 current_distributed_carrier_global_feature_gate_a_failed_stop
@@ -22,15 +44,21 @@ recovery/result 必须保留为历史 control。历史结果只能支持：
 - 真实 owner 失败只说明当前状态依赖载波在该回放观测下不可识别；
 - 不能据此声称抽象的状态空间水印可行或不可行。
 
-本文和配套轻量代码均满足：
+在该历史冻结点，本文和配套轻量代码均满足：
 
 - `formal_result=false`；
 - `stage_progression_allowed=false`；
 - 不支持 paper claim；
 - 真实14视频 Gate A 与后续固定半幅六视频诊断均已执行，Gate A FAIL 保持不变；
-- 当前只授权对既有六个保存视频做候选密钥无关的 CPU-only 时空 signed-response
+- 当时只授权对既有六个保存视频做候选密钥无关的 CPU-only 时空 signed-response
   分析，并冻结后续实验规范；不授权新的 GPU/Colab/Drive 操作；
 - 不授权实现 observer、正式 LLR、攻击、pilot、fixed-FPR 或 baseline。
+
+上述“当时授权”只描述本历史合同冻结时的边界，不构成现行授权。现行主路线边界以
+`docs/builds/frame_state_synchronized_generative_flow_video_watermark_algorithm_primitives.md`
+和
+`docs/builds/frame_state_synchronized_generative_flow_video_watermark_method_design.md`
+为准。
 
 ## 1. 研究问题与结构分离
 
@@ -419,9 +447,9 @@ matched-dynamic score
 
 没有这三个消融，不得把阶段顺序可辨识写成状态动力学贡献。
 
-## 9. 当前授权状态
+## 9. 历史冻结点授权状态
 
-当前只允许：
+本节只记录该历史冻结点当时允许的只读/CPU 分析边界：
 
 ```text
 验证完整 f06a0934 六视频 result
@@ -430,8 +458,9 @@ matched-dynamic score
 → 独立只读审核
 ```
 
-当前任务仍不允许提交、推送、GPU、Colab、Drive 或 Notebook 变更。本地
+该历史冻结点任务不允许提交、推送、GPU、Colab、Drive 或 Notebook 变更。本地
 pytest/harness 通过只证明合同和执行入口一致，不证明 construction observability
 或方法有效性。CPU 分析不得自动选择新 feature；真实 Gate A FAIL 保持不变。
 任何 frozen-feedback 执行、Jacobian-aligned dictionary construction 或新 identity
-运行都必须另行实现、审核并由用户授权。
+运行都必须另行实现、审核并由用户授权。该段不授予现行主路线的 config、runner、
+observer、GPU、Colab、Drive 或 Notebook 操作权限。

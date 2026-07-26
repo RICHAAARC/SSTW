@@ -6,6 +6,30 @@
 
 本目录保存 generative_video_model_probe 生成式视频模型探测的可审计运行入口。当前无 GPU 时只生成 blocked decision, 不生成正向机制结论。
 
+## Frame-state synchronized generative-Flow video watermark
+
+SSTW 当前主路线把两条时间轴严格分开：
+
+```text
+video frame/window time
+  → 定义低维水印状态、插帧/删帧/变速同步
+
+generative Flow time
+  → 只负责在冻结视频生成模型的采样过程中写入整条帧状态轨迹
+```
+
+方法设计和算法原语分别见：
+
+- `docs/builds/frame_state_synchronized_generative_flow_video_watermark_method_design.md`
+- `docs/builds/frame_state_synchronized_generative_flow_video_watermark_algorithm_primitives.md`
+
+当前尚无该路线的 runner、config、observer 或 GPU 结果。旧
+output-feature impulse observability、root-cause、spatiotemporal 和
+frozen-feedback runner 均保留为 Flow-stage-indexed carrier/feature 的历史
+construction/负对照，不得作为帧状态同步已通过的证据。下一实现必须从一个
+视频时间窗口、一个 signed 状态维度的 Gate 0 合同与 config design 开始；Gate 0
+config 尚未创建、冻结或授权，不能直接实现 runner、时间攻击或完整 observer。
+
 ## Output-feature impulse observability
 
 `output_feature_impulse_observability_construction.py` 是独立的首次14-video Gate A

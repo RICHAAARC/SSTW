@@ -26,6 +26,13 @@ output feature 还必须由每视频 governed record 提供冻结 probe ID 与�
 14-video 运行已得到 FAIL 并作为历史 control 保留。config 中的 execution flag
 不构成重跑授权，本地 tests 也不能据此写成方法有效或阶段推进。
 
+该历史 config 使用 Flow early/middle/late 作为 carrier 设计轴，不是当前主路线
+“视频帧状态同步＋生成 Flow 嵌入”的执行配置。当前主路线只在
+`docs/builds/frame_state_synchronized_generative_flow_video_watermark_method_design.md`
+及配套 algorithm primitives 中形成设计合同；尚未新增 config、runner、Notebook
+handler 或 GPU 授权。Gate 0 config 尚未创建、冻结或授权；未来不得复用本 config
+的 Gate A 名称或 execution flag 冒充帧状态路线已进入执行阶段。
+
 `protocol/sstw_gate_a_root_cause_amplitude_feedback_diagnostic.json` 冻结首次
 Gate A FAIL 后的独立六视频根因判别：只运行一个预声明 `lambda=.06` 半幅，
 以完整 commit `47485be2...` Gate A FAIL 包作为只读 `.12` 基线，比较 early0/late0

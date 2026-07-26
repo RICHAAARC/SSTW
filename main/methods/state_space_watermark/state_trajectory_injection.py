@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 import json
 import math
-from typing import Any
+from typing import Any, Callable, Protocol
 
 from main.methods.state_space_watermark.flow_tubelet_key_code import (
     FlowTubeletKeyCodeConfig,
@@ -138,6 +138,138 @@ class _FinitePrecisionDeltaSelection:
     attempt_count: int
     backoff_count: int
     status: str
+
+
+class FinitePrecisionProjectionEvaluation(Protocol):
+    """Backend-neutral scalar view used by the frozen projection search."""
+
+    projection_scale: float
+    actual_delta_norm: float
+    energy_increment: float
+    direction_guard_passed: bool
+    norm_guard_passed: bool
+    energy_guard_passed: bool
+
+    @property
+    def all_guards_passed(self) -> bool: ...
+
+
+@dataclass(frozen=True)
+class FinitePrecisionProjectionSearchResult:
+    """Result of the shared strict bounded-backoff search."""
+
+    evaluation: FinitePrecisionProjectionEvaluation
+    initial_evaluation: FinitePrecisionProjectionEvaluation
+    attempt_count: int
+    backoff_count: int
+    status: str
+    feasible: bool
+
+
+def search_strict_finite_precision_projection(
+    evaluate: Callable[[float], FinitePrecisionProjectionEvaluation],
+    *,
+    joint_norm_budget: float,
+    remaining_energy: float,
+) -> FinitePrecisionProjectionSearchResult:
+    """Search the largest observed feasible scale without relaxing a guard."""
+
+    attempt_count = 1
+    backoff_count = 0
+    initial = evaluate(1.0)
+    if initial.all_guards_passed:
+        return FinitePrecisionProjectionSearchResult(
+            evaluation=initial,
+            initial_evaluation=initial,
+            attempt_count=attempt_count,
+            backoff_count=backoff_count,
+            status="direct_actual_delta_pass",
+            feasible=True,
+        )
+    if not initial.direction_guard_passed:
+        return FinitePrecisionProjectionSearchResult(
+            evaluation=initial,
+            initial_evaluation=initial,
+            attempt_count=attempt_count,
+            backoff_count=backoff_count,
+            status="direction_guard_fail_closed",
+            feasible=False,
+        )
+
+    previous_infeasible = initial
+    feasible: FinitePrecisionProjectionEvaluation | None = None
+    upper_infeasible_scale = 1.0
+    for _ in range(PROMPT_ORTHOGONAL_FINITE_PRECISION_MAX_BACKOFF_COUNT):
+        correction_candidates: list[float] = []
+        if not previous_infeasible.norm_guard_passed:
+            correction_candidates.append(
+                float(joint_norm_budget)
+                / max(previous_infeasible.actual_delta_norm, 1e-30)
+            )
+        if not previous_infeasible.energy_guard_passed:
+            correction_candidates.append(
+                math.sqrt(
+                    float(remaining_energy)
+                    / max(previous_infeasible.energy_increment, 1e-30)
+                )
+            )
+        if not correction_candidates:
+            break
+        correction = min(correction_candidates)
+        step_factor = min(
+            PROMPT_ORTHOGONAL_FINITE_PRECISION_BACKOFF_SAFETY_FACTOR,
+            correction
+            * PROMPT_ORTHOGONAL_FINITE_PRECISION_BACKOFF_SAFETY_FACTOR,
+        )
+        next_scale = previous_infeasible.projection_scale * step_factor
+        if (
+            not math.isfinite(next_scale)
+            or next_scale <= 0.0
+            or next_scale >= previous_infeasible.projection_scale
+        ):
+            break
+        upper_infeasible_scale = previous_infeasible.projection_scale
+        backoff_count += 1
+        attempt_count += 1
+        trial = evaluate(next_scale)
+        if trial.all_guards_passed:
+            feasible = trial
+            break
+        previous_infeasible = trial
+        if not trial.direction_guard_passed:
+            break
+
+    if feasible is None:
+        return FinitePrecisionProjectionSearchResult(
+            evaluation=previous_infeasible,
+            initial_evaluation=initial,
+            attempt_count=attempt_count,
+            backoff_count=backoff_count,
+            status="no_representable_nonzero_control_fail_closed",
+            feasible=False,
+        )
+
+    best = feasible
+    for _ in range(PROMPT_ORTHOGONAL_FINITE_PRECISION_REFINEMENT_COUNT):
+        midpoint = 0.5 * (
+            best.projection_scale + upper_infeasible_scale
+        )
+        if midpoint <= best.projection_scale:
+            break
+        attempt_count += 1
+        trial = evaluate(midpoint)
+        if trial.all_guards_passed:
+            best = trial
+        else:
+            upper_infeasible_scale = midpoint
+    return FinitePrecisionProjectionSearchResult(
+        evaluation=best,
+        initial_evaluation=initial,
+        attempt_count=attempt_count,
+        backoff_count=backoff_count,
+        status="bounded_actual_delta_backoff_pass",
+        feasible=True,
+    )
 
 
 class PromptOrthogonalInjectionGuardError(RuntimeError):
@@ -283,32 +415,27 @@ def _select_finite_precision_delta(
 ) -> _FinitePrecisionDeltaSelection:
     """Select the largest observed feasible FP32 control on a fixed search."""
 
-    attempt_count = 1
-    backoff_count = 0
-    initial = _evaluate_finite_precision_delta(
-        base=base,
-        intended_delta=intended_delta,
-        signed_unit_direction=signed_unit_direction,
-        projection_scale=1.0,
-        interval=interval,
+    search = search_strict_finite_precision_projection(
+        lambda scale: _evaluate_finite_precision_delta(
+            base=base,
+            intended_delta=intended_delta,
+            signed_unit_direction=signed_unit_direction,
+            projection_scale=scale,
+            interval=interval,
+            joint_norm_budget=joint_norm_budget,
+            remaining_energy=remaining_energy,
+            minimum_direction_cosine=minimum_direction_cosine,
+        ),
         joint_norm_budget=joint_norm_budget,
         remaining_energy=remaining_energy,
-        minimum_direction_cosine=minimum_direction_cosine,
     )
-    if initial.all_guards_passed:
-        return _FinitePrecisionDeltaSelection(
-            evaluation=initial,
-            attempt_count=attempt_count,
-            backoff_count=backoff_count,
-            status="direct_actual_delta_pass",
-        )
-    if not initial.direction_guard_passed:
+    if not search.feasible:
         raise PromptOrthogonalInjectionGuardError(
             _guard_failure_diagnostics(
-                evaluation=initial,
-                initial_evaluation=initial,
-                attempt_count=attempt_count,
-                backoff_count=backoff_count,
+                evaluation=search.evaluation,
+                initial_evaluation=search.initial_evaluation,
+                attempt_count=search.attempt_count,
+                backoff_count=search.backoff_count,
                 candidate_delta_norm=candidate_delta_norm,
                 intended_delta_norm_before_projection=(
                     intended_delta_norm_before_projection
@@ -320,105 +447,11 @@ def _select_finite_precision_delta(
                 continuous_code=continuous_code,
             )
         )
-
-    previous_infeasible = initial
-    feasible: _FinitePrecisionDeltaEvaluation | None = None
-    upper_infeasible_scale = 1.0
-    for _ in range(PROMPT_ORTHOGONAL_FINITE_PRECISION_MAX_BACKOFF_COUNT):
-        correction_candidates: list[float] = []
-        if not previous_infeasible.norm_guard_passed:
-            correction_candidates.append(
-                float(joint_norm_budget)
-                / max(previous_infeasible.actual_delta_norm, 1e-30)
-            )
-        if not previous_infeasible.energy_guard_passed:
-            correction_candidates.append(
-                math.sqrt(
-                    float(remaining_energy)
-                    / max(previous_infeasible.energy_increment, 1e-30)
-                )
-            )
-        if not correction_candidates:
-            break
-        correction = min(correction_candidates)
-        step_factor = min(
-            PROMPT_ORTHOGONAL_FINITE_PRECISION_BACKOFF_SAFETY_FACTOR,
-            correction
-            * PROMPT_ORTHOGONAL_FINITE_PRECISION_BACKOFF_SAFETY_FACTOR,
-        )
-        next_scale = previous_infeasible.projection_scale * step_factor
-        if (
-            not math.isfinite(next_scale)
-            or next_scale <= 0.0
-            or next_scale >= previous_infeasible.projection_scale
-        ):
-            break
-        upper_infeasible_scale = previous_infeasible.projection_scale
-        backoff_count += 1
-        attempt_count += 1
-        trial = _evaluate_finite_precision_delta(
-            base=base,
-            intended_delta=intended_delta,
-            signed_unit_direction=signed_unit_direction,
-            projection_scale=next_scale,
-            interval=interval,
-            joint_norm_budget=joint_norm_budget,
-            remaining_energy=remaining_energy,
-            minimum_direction_cosine=minimum_direction_cosine,
-        )
-        if trial.all_guards_passed:
-            feasible = trial
-            break
-        previous_infeasible = trial
-        if not trial.direction_guard_passed:
-            break
-
-    if feasible is None:
-        raise PromptOrthogonalInjectionGuardError(
-            _guard_failure_diagnostics(
-                evaluation=previous_infeasible,
-                initial_evaluation=initial,
-                attempt_count=attempt_count,
-                backoff_count=backoff_count,
-                candidate_delta_norm=candidate_delta_norm,
-                intended_delta_norm_before_projection=(
-                    intended_delta_norm_before_projection
-                ),
-                joint_norm_budget=joint_norm_budget,
-                remaining_energy=remaining_energy,
-                flow_phase=flow_phase,
-                schedule_weight=schedule_weight,
-                continuous_code=continuous_code,
-            )
-        )
-
-    best = feasible
-    for _ in range(PROMPT_ORTHOGONAL_FINITE_PRECISION_REFINEMENT_COUNT):
-        midpoint = 0.5 * (
-            best.projection_scale + upper_infeasible_scale
-        )
-        if midpoint <= best.projection_scale:
-            break
-        attempt_count += 1
-        trial = _evaluate_finite_precision_delta(
-            base=base,
-            intended_delta=intended_delta,
-            signed_unit_direction=signed_unit_direction,
-            projection_scale=midpoint,
-            interval=interval,
-            joint_norm_budget=joint_norm_budget,
-            remaining_energy=remaining_energy,
-            minimum_direction_cosine=minimum_direction_cosine,
-        )
-        if trial.all_guards_passed:
-            best = trial
-        else:
-            upper_infeasible_scale = midpoint
     return _FinitePrecisionDeltaSelection(
-        evaluation=best,
-        attempt_count=attempt_count,
-        backoff_count=backoff_count,
-        status="bounded_actual_delta_backoff_pass",
+        evaluation=search.evaluation,
+        attempt_count=search.attempt_count,
+        backoff_count=search.backoff_count,
+        status=search.status,
     )
 
 

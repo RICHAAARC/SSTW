@@ -32,7 +32,7 @@ from evaluation.protocol.frame_state_signed_observability_contract import (
 CONFIG_PATH = Path(DEFAULT_CONFIG_PATH)
 NONCE = "0123456789abcdef0123456789abcdef"
 EXPECTED_PUBLIC_CONTEXT_DIGEST = (
-    "b69c41a26b9ed98176d69db1845a58bf1830dab43da4b013541dd77bc463a936"
+    "81cc66d02ff1bbe37e429e222171fd47c3c2ff90cb00a80d3c19925207c67ee7"
 )
 pytestmark = pytest.mark.quick
 
@@ -49,10 +49,13 @@ def test_loads_frozen_design_only_contract() -> None:
     assert config["contract_state"] == CONTRACT_STATE
     assert config["protocol_digest"] == FROZEN_PROTOCOL_DIGEST
     assert config["authorization_boundary"] == EXPECTED_AUTHORIZATION_BOUNDARY
+    assert config["authorization_boundary"][
+        "runtime_implementation_authorized"
+    ] is True
     assert all(
         value is False
         for key, value in config["authorization_boundary"].items()
-        if key.endswith("_allowed") or key.endswith("_authorized")
+        if key.endswith("_allowed")
     )
     assert config["authorization_boundary"]["formal_result"] is False
     assert (
@@ -200,6 +203,7 @@ def test_public_dictionary_construction_is_unique_and_not_keyed() -> None:
             "raw_vae_decode_sample",
         ),
         ("construction_surrogate_clamp_in_jacobian", False),
+        ("unit_norm_float32_absolute_tolerance_millionths", 1000),
     ],
 )
 def test_dictionary_algorithm_mutations_fail_semantically_before_frozen_digest(
@@ -249,15 +253,51 @@ def test_hidden_protocol_execution_authorization_is_rejected_before_digest() -> 
         validate_frame_state_signed_observability_config(config)
 
 
-def test_runtime_placeholders_are_excluded_but_exactly_frozen() -> None:
+def test_execution_identities_are_exact_but_excluded_from_protocol_digest() -> None:
     config = _load_raw_config()
     original_digest = canonical_json_digest(config["protocol_contract"])
-    config["execution_identity_contract"][
-        "construction_prompt_id_placeholder"
+    config["execution_identity_contract"]["construction_identity"][
+        "prompt_id"
     ] = "caller_value"
 
     assert canonical_json_digest(config["protocol_contract"]) == original_digest
     with pytest.raises(ValueError, match="execution_identity_contract"):
+        validate_frame_state_signed_observability_config(config)
+
+
+def test_execution_identities_are_distinct_and_have_no_placeholders() -> None:
+    identities = load_frame_state_signed_observability_config()[
+        "execution_identity_contract"
+    ]
+    construction = identities["construction_identity"]
+    signed = identities["signed_observability_identity"]
+
+    assert construction["prompt_id"] != signed["prompt_id"]
+    assert construction["seed_id"] != signed["seed_id"]
+    assert construction["seed_value"] != signed["seed_value"]
+    assert identities["identity_record_backflow_allowed"] is False
+    assert "_placeholder" not in json.dumps(identities, sort_keys=True)
+
+
+@pytest.mark.parametrize(
+    ("path", "value"),
+    [
+        (("construction_identity", "prompt_text"), "tampered"),
+        (("signed_observability_identity", "seed_value"), 2201),
+        (("identity_record_backflow_allowed",), True),
+    ],
+)
+def test_execution_identity_mutations_fail_closed(
+    path: tuple[str, ...],
+    value: object,
+) -> None:
+    config = _load_raw_config()
+    target = config["execution_identity_contract"]
+    for key in path[:-1]:
+        target = target[key]
+    target[path[-1]] = value
+
+    with pytest.raises(ValueError, match="execution_identity_contract|C0/A"):
         validate_frame_state_signed_observability_config(config)
 
 
@@ -291,6 +331,15 @@ def test_authorization_mutations_fail_closed(field: str, value: bool) -> None:
     config = _load_raw_config()
     config["authorization_boundary"][field] = value
 
+    with pytest.raises(ValueError, match="authorization_boundary"):
+        validate_frame_state_signed_observability_config(config)
+
+
+def test_local_runtime_primitive_authorization_cannot_be_removed_or_expanded() -> None:
+    config = _load_raw_config()
+    config["authorization_boundary"]["runtime_implementation_authorized"] = (
+        False
+    )
     with pytest.raises(ValueError, match="authorization_boundary"):
         validate_frame_state_signed_observability_config(config)
 
@@ -525,6 +574,46 @@ def test_actual_exposure_is_scheduler_state_update_signed() -> None:
         "actual_delta_velocity_and_public_dictionary_atom"
     )
     assert flow["actual_signed_exposure_accumulation_dtype"] == "float64"
+    schedule = flow["flow_schedule_contract"]
+    assert schedule["step_indices"] == list(range(8))
+    assert schedule["active_step_indices"] == [4, 5, 6]
+    assert schedule["waveform_by_step_millionths"] == [
+        0,
+        0,
+        0,
+        0,
+        250000,
+        1000000,
+        500000,
+        0,
+    ]
+    assert schedule["historical_flow_stage_waveform_reuse"] is False
+    assert schedule["implicit_all_one_waveform"] is False
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("active_step_indices", [3, 4, 5]),
+        ("sigma_grid_decimal", ["1.0"] * 9),
+        ("waveform_by_step_millionths", [1000000] * 8),
+        ("historical_flow_stage_waveform_reuse", True),
+    ],
+)
+def test_flow_schedule_mutations_fail_closed(
+    field: str,
+    value: object,
+) -> None:
+    config = _load_raw_config()
+    config["protocol_contract"]["flow_injection_contract"][
+        "flow_schedule_contract"
+    ][field] = value
+    config["protocol_digest"] = canonical_json_digest(
+        config["protocol_contract"]
+    )
+
+    with pytest.raises(ValueError, match="flow_schedule_contract"):
+        validate_frame_state_signed_observability_config(config)
 
 
 def test_gate_noise_and_t0_prediction_formulas_are_frozen() -> None:

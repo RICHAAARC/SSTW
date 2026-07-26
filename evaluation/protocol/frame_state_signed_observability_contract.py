@@ -1,7 +1,7 @@
 """Static contract primitives for frame-state signed observability.
 
-This module validates a design-only protocol.  It does not implement a model,
-carrier runtime, observer, GPU runner, Colab handler, or stage transition.
+This module validates the frozen local-primitives execution contract.  It does
+not implement a model, GPU runner, Colab handler, observer, or stage transition.
 """
 
 from __future__ import annotations
@@ -20,10 +20,12 @@ DEFAULT_CONFIG_PATH = (
 )
 PROFILE_ID = "sstw_frame_state_signed_observability_construction"
 METHOD_ID = "frame_state_synchronized_generative_flow_video_watermark"
-CONTRACT_STATE = "method_contract_design_only"
+CONTRACT_STATE = (
+    "local_runtime_primitives_implemented_execution_contract_frozen"
+)
 PUBLIC_CONTEXT_SCHEMA_ID = "sstw_frame_state_public_context_v1"
 FROZEN_PROTOCOL_DIGEST = (
-    "b57b1d620850296509e4e8d55749cea8f7b3ca849cb10ed908c0470715221b6f"
+    "69099dd2ac0044900d8ac8ce9eeb0d9c553ee5b6d38572f3479506c4ae2088a6"
 )
 
 _LOWER_HEX_32 = re.compile(r"[0-9a-f]{32}\Z")
@@ -32,7 +34,7 @@ _LOWER_HEX_64 = re.compile(r"[0-9a-f]{64}\Z")
 EXPECTED_AUTHORIZATION_BOUNDARY = {
     "attack_execution_allowed": False,
     "baseline_execution_allowed": False,
-    "claim_support_status": "method_contract_design_only_not_method_evidence",
+    "claim_support_status": "local_runtime_primitives_only_not_method_evidence",
     "colab_execution_allowed": False,
     "construction_execution_allowed": False,
     "drive_update_allowed": False,
@@ -43,23 +45,64 @@ EXPECTED_AUTHORIZATION_BOUNDARY = {
     "observer_implementation_allowed": False,
     "paper_claim_allowed": False,
     "runner_implementation_allowed": False,
-    "runtime_implementation_authorized": False,
+    "runtime_implementation_authorized": True,
     "stage_progression_allowed": False,
 }
 
-EXPECTED_EXECUTION_IDENTITY_PLACEHOLDERS = {
-    "construction_prompt_id_placeholder":
-        "pending_separate_execution_identity_freeze",
-    "construction_seed_id_placeholder":
-        "pending_separate_execution_identity_freeze",
-    "construction_seed_value_placeholder":
-        "pending_separate_execution_identity_freeze",
-    "signed_observability_prompt_id_placeholder":
-        "pending_separate_execution_identity_freeze",
-    "signed_observability_seed_id_placeholder":
-        "pending_separate_execution_identity_freeze",
-    "signed_observability_seed_value_placeholder":
-        "pending_separate_execution_identity_freeze",
+EXPECTED_EXECUTION_IDENTITY_CONTRACT = {
+    "construction_identity": {
+        "guidance_scale_denominator": 1,
+        "guidance_scale_numerator": 5,
+        "initial_noise_rule":
+            "new_torch_generator_manual_seed_per_probe_same_seed_within_identity",
+        "negative_prompt_text":
+            "static image, frozen conveyor, subtle motion, blurry, jittery, distorted",
+        "negative_prompt_text_sha256":
+            "798a65de2dd61dffee2b6d5229d1167e4c0aa7053948562ae53dff3d1c0d0d11",
+        "prompt_id": "probe_paper_paper_master_prompt_003",
+        "prompt_text": (
+            "Three brightly colored boxes travel on a conveyor belt from left "
+            "to right across the entire frame, fixed camera, each box remains "
+            "large and easy to track."
+        ),
+        "prompt_text_sha256":
+            "c4f3a636c9c4393ebf98448f2c30c6648f7e9141a2886bac0cd950001ec03980",
+        "seed_id": "frame_state_construction_seed_2201",
+        "seed_value": 2201,
+    },
+    "execution_common": {
+        "diffusers_version": "0.35.2",
+        "model_id": "Wan-AI/Wan2.1-T2V-1.3B-Diffusers",
+        "model_revision": "0fad780a534b6463e45facd96134c9f345acfa5b",
+        "scheduler_id": "wan21_flow_match_euler_discrete_scheduler_shift_3",
+        "scheduler_signature": (
+            "FlowMatchEulerDiscreteScheduler:"
+            "a63b40d76d729371591d03526e14d24359c732866c07f51e4cc5f918f4941d2b"
+        ),
+        "video_encoder_backend": "imageio_ffmpeg",
+        "video_exporter": "diffusers.utils.export_to_video",
+    },
+    "identity_record_backflow_allowed": False,
+    "signed_observability_identity": {
+        "guidance_scale_denominator": 1,
+        "guidance_scale_numerator": 5,
+        "initial_noise_rule":
+            "new_torch_generator_manual_seed_per_probe_same_seed_within_identity",
+        "negative_prompt_text":
+            "static image, frozen conveyor, subtle motion, blurry, jittery, distorted",
+        "negative_prompt_text_sha256":
+            "798a65de2dd61dffee2b6d5229d1167e4c0aa7053948562ae53dff3d1c0d0d11",
+        "prompt_id": "sstw_frame_state_gate0_prompt_001",
+        "prompt_text": (
+            "Four red toy cars travel steadily from right to left across a "
+            "bright tabletop, fixed camera, each car remains large and easy "
+            "to track."
+        ),
+        "prompt_text_sha256":
+            "84c550acb01548c57f64bd0c9bc14e2ddec701cf9ed4c8cbea1603e66c691703",
+        "seed_id": "frame_state_signed_observability_seed_2202",
+        "seed_value": 2202,
+    },
 }
 
 EXPECTED_TOP_LEVEL_KEYS = {
@@ -296,14 +339,31 @@ def validate_frame_state_signed_observability_config(
         "authorization_boundary",
     )
 
-    placeholders = config.get("execution_identity_contract")
-    if not isinstance(placeholders, Mapping):
+    execution_identity = config.get("execution_identity_contract")
+    if not isinstance(execution_identity, Mapping):
         raise TypeError("execution_identity_contract 必须是 object")
     _require_exact_mapping(
-        placeholders,
-        EXPECTED_EXECUTION_IDENTITY_PLACEHOLDERS,
+        execution_identity,
+        EXPECTED_EXECUTION_IDENTITY_CONTRACT,
         "execution_identity_contract",
     )
+    construction_execution = execution_identity["construction_identity"]
+    signed_execution = execution_identity["signed_observability_identity"]
+    if (
+        construction_execution["prompt_id"] == signed_execution["prompt_id"]
+        or construction_execution["seed_id"] == signed_execution["seed_id"]
+        or construction_execution["seed_value"] == signed_execution["seed_value"]
+    ):
+        raise ValueError("C0/A prompt 与 seed 必须严格不同")
+    for identity in (construction_execution, signed_execution):
+        if sha256(identity["prompt_text"].encode("utf-8")).hexdigest() != (
+            identity["prompt_text_sha256"]
+        ):
+            raise ValueError("execution identity positive prompt digest 不匹配")
+        if sha256(identity["negative_prompt_text"].encode("utf-8")).hexdigest() != (
+            identity["negative_prompt_text_sha256"]
+        ):
+            raise ValueError("execution identity negative prompt digest 不匹配")
 
     protocol_contract = config.get("protocol_contract")
     if not isinstance(protocol_contract, Mapping):
@@ -384,6 +444,12 @@ def validate_frame_state_signed_observability_config(
         "dictionary_zero_outside_restricted_latent_time_indices"
     ) is not True:
         raise ValueError("public dictionary 必须在受限 latent-time 外严格为零")
+    if dictionary.get(
+        "unit_norm_float32_absolute_tolerance_millionths"
+    ) != 20:
+        raise ValueError("public dictionary float32 unit-norm tolerance 不匹配")
+    if dictionary.get("unit_norm_required") is not True:
+        raise ValueError("public dictionary unit norm 必须强制")
     if dictionary.get("power_iteration_initialization_keyed") is not False:
         raise ValueError("public dictionary 初始化不得依赖 key")
     if dictionary.get("power_iteration_initialization_algorithm") != (
@@ -587,6 +653,60 @@ def validate_frame_state_signed_observability_config(
         raise ValueError("actual signed exposure 公式不匹配")
     if flow.get("actual_signed_exposure_accumulation_dtype") != "float64":
         raise ValueError("actual signed exposure 必须以 float64 累加")
+    schedule = flow.get("flow_schedule_contract")
+    if not isinstance(schedule, Mapping):
+        raise TypeError("flow_schedule_contract 必须是 object")
+    expected_schedule = {
+        "active_step_indices": [4, 5, 6],
+        "active_window_id": "late_tapered_preterminal_frame_state_write",
+        "delta_sigma_by_step_decimal": [
+            "-0.052457451820373535",
+            "-0.06475478410720825",
+            "-0.08195042610168457",
+            "-0.10704421997070312",
+            "-0.14574754238128662",
+            "-0.21007341146469116",
+            "-0.32904359698295593",
+            "-0.008928571827709675",
+        ],
+        "flow_phase_by_step_decimal": [
+            "0.026228725910186768",
+            "0.08483484387397766",
+            "0.15818744897842407",
+            "0.2526847720146179",
+            "0.3790806531906128",
+            "0.5569911301136017",
+            "0.8265496320091188",
+            "0.9955357140861452",
+        ],
+        "historical_flow_stage_waveform_reuse": False,
+        "implicit_all_one_waveform": False,
+        "sigma_grid_decimal": [
+            "1.0",
+            "0.9475425481796265",
+            "0.8827877640724182",
+            "0.8008373379707336",
+            "0.6937931180000305",
+            "0.5480455756187439",
+            "0.33797216415405273",
+            "0.008928571827709675",
+            "0.0",
+        ],
+        "step_count": 8,
+        "step_indices": list(range(8)),
+        "waveform_by_step_millionths": [
+            0, 0, 0, 0, 250000, 1000000, 500000, 0
+        ],
+        "waveform_definition": (
+            "fixed_late_tapered_preterminal_three_step_write_"
+            "not_derived_from_run_results"
+        ),
+    }
+    _require_exact_mapping(
+        schedule,
+        expected_schedule,
+        "flow_schedule_contract",
+    )
 
     transfer = protocol_contract.get("transfer_estimation_contract")
     if not isinstance(transfer, Mapping):

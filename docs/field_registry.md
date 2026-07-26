@@ -3442,7 +3442,7 @@ Notebook 与 repository module 的跨边界数据
 | historical_normal_feedback_full_latent_gate_by_pair | governance | none | true | false | false | 受绑定f06 normal-feedback source中early/late full-latent signed gate apply-only结果。 |
 | historical_normal_feedback_gate_a_fail_preserved | governance | none | true | false | false | 固定为true，确认本诊断未覆盖历史Gate A FAIL。 |
 | historical_source_apply_only | governance | none | true | false | false | 历史normal-feedback结果只作为已冻结对照，禁止训练、调阈值或重分类为成功。 |
-| contract_state | governance | none | true | false | false | 当前方法或协议合同的语义状态；帧状态首轮固定为 `method_contract_design_only`。 |
+| contract_state | governance | none | true | false | false | 当前方法或协议合同的语义状态；帧状态首轮本地原语批次固定为 `local_runtime_primitives_implemented_execution_contract_frozen`。 |
 | protocol_contract | protocol | none | true | false | false | protocol digest 唯一绑定的稳定、无运行值合同投影。 |
 | protocol_digest | provenance | none | true | false | false | `canonical_json(protocol_contract)` 的 SHA-256；不得递归包含自身、public context 或 nonce。 |
 | context_schema_id | protocol | none | true | false | false | public context exact schema 身份。 |
@@ -3451,19 +3451,23 @@ Notebook 与 repository module 的跨边界数据
 | state_clock_rate_denominator | protocol | none | true | false | false | public frame-state clock rate 的正整数分母。 |
 | state_window_count | protocol | none | true | false | false | public context 声明的水印状态窗口数；首轮 signed observability 固定为1。 |
 | context_digest | provenance | none | true | false | false | exact public context canonical JSON bytes 的 SHA-256。 |
-| authorization_boundary | governance | none | true | false | false | design-only config 中执行、claim 和阶段权限的精确 fail-closed 集合。 |
-| runtime_implementation_authorized | governance | none | true | false | false | 当前合同是否允许实现 runtime；帧状态 Gate 0 设计固定为 false。 |
-| construction_execution_allowed | governance | none | true | false | false | 当前 config 是否允许执行 construction；身份占位未关闭前固定为 false。 |
+| authorization_boundary | governance | none | true | false | false | config 中本地原语、执行、claim 和阶段权限的精确 fail-closed 集合。 |
+| runtime_implementation_authorized | governance | none | true | false | false | 当前合同是否允许实现本地核心 runtime primitives；帧状态 Gate 0 本批固定为 true，不等于 construction/GPU 执行授权。 |
+| construction_execution_allowed | governance | none | true | false | false | 当前 config 是否允许执行视频 construction；本批无 runner，固定为 false。 |
 | runner_implementation_allowed | governance | none | true | false | false | 当前 config 是否允许新增 GPU/server runner；固定为 false。 |
 | observer_implementation_allowed | governance | none | true | false | false | 当前 config 是否允许实现完整 observer；固定为 false。 |
 | notebook_handler_implementation_allowed | governance | none | true | false | false | 当前 config 是否允许新增或修改 Notebook handler；固定为 false。 |
-| execution_identity_contract | protocol | none | false | false | false | 尚未授权的 C0/A prompt/seed identity 占位字段容器；具体占位字段必须以 `_placeholder` 结尾。 |
-| construction_prompt_id_placeholder | placeholder | _placeholder | false | false | true | C0 prompt identity 未冻结占位。 |
-| construction_seed_id_placeholder | placeholder | _placeholder | false | false | true | C0 seed identity 未冻结占位。 |
-| construction_seed_value_placeholder | placeholder | _placeholder | false | false | true | C0 seed value 未冻结占位。 |
-| signed_observability_prompt_id_placeholder | placeholder | _placeholder | false | false | true | identity A prompt 未冻结占位。 |
-| signed_observability_seed_id_placeholder | placeholder | _placeholder | false | false | true | identity A seed identity 未冻结占位。 |
-| signed_observability_seed_value_placeholder | placeholder | _placeholder | false | false | true | identity A seed value 未冻结占位。 |
+| execution_identity_contract | protocol | none | false | false | false | protocol digest 外独立精确冻结的 C0/A prompt、seed、初噪声、模型、scheduler 与 exporter identity；两 identity 禁止 records 回流。 |
+| identity_record_backflow_allowed | governance | none | false | false | false | C0 记录是否可回流到 held-out identity A；固定为 false。 |
+| prompt_text_sha256 | provenance | none | false | false | false | 当前 execution identity 正 prompt UTF-8 文本摘要。 |
+| negative_prompt_text_sha256 | provenance | none | false | false | false | 当前 execution identity negative prompt UTF-8 文本摘要。 |
+| initial_noise_rule | protocol | none | false | false | false | 每个 probe 重建同 seed generator、同 identity 四项共享初噪声的冻结规则。 |
+| flow_schedule_contract | protocol | none | true | false | false | protocol digest 内冻结的真实8-step sigma/phase/delta-sigma、active window 与逐步 waveform。 |
+| sigma_grid_decimal | protocol | none | true | false | false | 9项 scheduler sigma grid 的冻结 decimal-string 表示。 |
+| delta_sigma_by_step_decimal | protocol | none | true | false | false | 8项 float32 scheduler `next_sigma-current_sigma` 的冻结 decimal-string 表示。 |
+| flow_phase_by_step_decimal | protocol | none | true | false | false | 8项冻结 Flow phase decimal-string 表示。 |
+| waveform_by_step_millionths | protocol | none | true | false | false | 新 frame-state late-tapered write waveform 的8项整数 millionths；非历史 stage waveform、非隐式全1。 |
+| active_step_indices | protocol | none | true | false | false | frame-state write 的唯一 active Flow step indices；冻结为 `[4,5,6]`。 |
 | identity_role | protocol | none | true | false | false | 当前 probe 属于 construction identity 或 signed-observability apply-only identity。 |
 | probe_ids | protocol | none | true | false | false | config 中冻结的有序 probe ID 集合。 |
 | probe_polarities | protocol | none | true | false | false | 与 probe IDs 同序的 zero/positive/negative signed state 系数。 |
@@ -3476,6 +3480,7 @@ Notebook 与 repository module 的跨边界数据
 | dictionary_artifact_array_key | protocol | none | true | false | false | 公开 NPZ 中唯一 carrier array 的冻结 key，首轮为 `frame_state_public_atom`。 |
 | dictionary_artifact_array_shape | protocol | none | true | false | false | 公开 carrier array 的完整 Wan latent shape；受限 latent-time 外严格为零。 |
 | dictionary_artifact_array_count | protocol | none | true | false | false | 公开 NPZ 的 array 数量；固定为1，禁止夹带第二套 atom。 |
+| unit_norm_float32_absolute_tolerance_millionths | protocol | none | true | false | false | public atom 使用冻结 float32 L2 reduction 后的 unit-norm 绝对容差；固定为20 millionths。 |
 | atom_sign_tie_break_rule | protocol | none | true | false | false | 最大绝对值坐标并列时以最低 C-order flat index 固定 atom 正负号。 |
 | power_iteration_initialization_algorithm | protocol | none | true | false | false | 公开、非 keyed 的 SHA-256 counter Rademacher 初始化及 bit/counter 顺序。 |
 | power_iteration_initialization_bit_mapping | protocol | none | true | false | false | SHA-256 bit 到 Rademacher 正负值的冻结映射。 |

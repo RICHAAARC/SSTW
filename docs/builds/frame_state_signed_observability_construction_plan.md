@@ -14,15 +14,16 @@ construction 合同。权威算法语义仍以：
 当前状态严格为：
 
 ```text
-method_contract_design_only
+local_runtime_primitives_implemented_execution_contract_frozen
 formal_result=false
 stage_progression_allowed=false
-runtime_implementation_authorized=false
+runtime_implementation_authorized=true
 ```
 
-本计划只允许静态 config、canonicalization、validator 和轻量测试。它没有实现
-carrier runtime、视频生成 runner、observer、Notebook handler 或 Colab request，
-也不授权 GPU、Colab、Drive、攻击、fixed-FPR、baseline 或 paper claim。
+本计划允许公开 atom、NumPy scheduler-state control、output feature、T0 与 Gate 0
+统计的本地核心原语。它没有实现视频生成 runner、Wan/diffusers adapter、
+observer、Notebook handler 或 Colab request，也不授权 construction 执行、GPU、
+Colab、Drive、攻击、fixed-FPR、baseline 或 paper claim。
 
 ## 1. 本轮要回答的唯一问题
 
@@ -88,7 +89,7 @@ context digest 或 digest 自身递归纳入 protocol object 的路径。
 本合同冻结摘要为：
 
 ```text
-b57b1d620850296509e4e8d55749cea8f7b3ca849cb10ed908c0470715221b6f
+69099dd2ac0044900d8ac8ce9eeb0d9c553ee5b6d38572f3479506c4ae2088a6
 ```
 
 validator 必须同时：
@@ -153,12 +154,13 @@ prompt、seed、initial latent、内部 Flow trace 和 carrier trace 不得进�
 | 7 | \(A\) | `signed_observability_negative` | -1 | apply-only negative response |
 
 同一 identity 内四项必须使用相同 prompt、seed、initial noise、模型 revision、
-scheduler 和 public context。\(C_0\) 与 \(A\) 的 prompt/seed 必须不同，并在未来
-独立 execution contract 中冻结。
-
-当前 config 只包含以 `_placeholder` 结尾的身份占位字段。占位字段阻止 runtime
-执行，不支持 claim；不得由 runner 临时填充。用户另行授权 execution identity
-冻结前，`construction_execution_allowed` 保持 false。
+scheduler 和 public context。\(C_0\) 与 \(A\) 已冻结为不同 prompt 与不同 seed：
+construction 使用 prompt003/seed2201，identity A 使用独立 frame-state
+prompt/seed2202；两者的正负 prompt 文本 SHA-256、模型 revision、diffusers
+0.35.2、scheduler signature、guidance 5、exporter 与 encoder backend 均精确绑定。
+每个 probe 都重新以同一 identity seed 建 generator，禁止连续消费 RNG；C0
+records 不得回流到 A。身份已不含 placeholder，但
+`construction_execution_allowed` 仍为 false，因为本批只有本地原语，没有 runner。
 
 \(C_0\) 在 design contract 中承担以下 construction 职责，但这不是执行授权：
 
@@ -365,11 +367,39 @@ constrained_velocity_float32 - base_velocity_float32
 
 重算，并同时满足局部窗口预算和全局预算。
 
-本 design-only 批次尚未冻结真实8-step `sigma` trace 和 \(w(\tau)\) waveform；
-`scheduler_id` 与 `num_inference_steps` 不能被调用方解释为可自行选择的默认值。
-它们必须在未来独立、经审核的 execution contract 中逐步冻结并进入更新后的
-protocol digest。在此之前，actual exposure 公式只是方法合同，runtime 必须保持
-禁止；不得用隐式全1 waveform 或历史 Flow-stage schedule 补空。
+本批已把 diffusers 0.35.2 / shift=3 的真实8-step `sigma_grid`、逐步
+`delta_sigma` 与 `flow_phase` 以 decimal string 冻结进 protocol digest。新的
+frame-state write waveform 不是历史 early/middle/late stage waveform，也不是
+隐式全1：仅 step indices `[4,5,6]` active，millionths 权重精确为
+`[250000,1000000,500000]`，其余 step 为0。该 late tapered preterminal window
+在 coarse state 形成后写入，并避开 terminal 极小 interval；它是单一预声明
+schedule，不是 strength/grid sweep。未来 adapter 必须逐项匹配，不能自行推导默认。
+
+`main/methods/state_space_watermark/frame_state_observability.py` 实现 NumPy
+actual-control primitive。它与既有 prompt-orthogonal 实现共享同一个严格
+finite-precision bounded-backoff search 和 `actual<=budget` guard；所有测量来自
+真实 float32 `(constrained-base)`。active 若没有可表示的非零控制则 fail-closed，
+clean 或 waveform=0 通过同一入口返回原对象和 exact-zero delta。
+核心 `build_flow_schedule` 即使收到相同 active indices，也会逐值拒绝任意
+sigma 或 waveform 变体；step-level control 还必须匹配冻结 step dataclass 与
+`remaining_step_count=8-step_index`，调用方不能靠伪造局部 schedule 扩大预算。
+scheduler base velocity 与 final latent 在入口必须已经是冻结 shape、finite、
+C-contiguous float32；禁止先 cast 再验证。由此 clean/inactive 返回的原对象与
+active 输出处于同一 float32 数值合同，float64 或 NaN 在控制/投影前即被拒绝。
+
+public atom 的 initialization、每次 callback 输出、support projection、每轮
+normalization 与 post-weight normalization 都严格为 float32；generic Jacobian
+callback 的 shape、dtype、finite 任一漂移立即拒绝，禁止静默 cast。atom
+normalization 与预算 norm 均使用 C-order float32 `numpy.linalg.norm` reduction；
+artifact unit norm 的冻结绝对容差为 \(20\times10^{-6}\)。
+direction cosine 则用同一对实际 float32 vectors 的
+float64 dot 与两侧 float64 norm 计算，只允许在 Cauchy 边界外不超过 \(10^{-12}\)
+的 machine roundoff clamp，最终记录必须位于闭区间 \([-1,1]\)。
+8步 actual exposure aggregation 也不信任 per-step scalar：它逐行重建冻结
+schedule，验证实际 delta 的 float32 shape/finite、inactive exact-zero 与 active
+nonzero/projection 语义，再从 public atom 和 actual delta 重算
+`delta_sigma * dot(actual_delta, atom)`；任何自报 exposure、delta、waveform 或
+norm 不一致均 fail-closed。
 
 ## 9. Checkpoints 与 Gate 0
 
@@ -437,6 +467,11 @@ transfer relative error 固定为
 即使未来 Gate 0 PASS，也只允许设计双窗口 Gate A，不支持 observer、攻击、
 fixed-FPR、baseline、paper claim 或项目阶段推进。
 
+Gate evaluator 不接收调用方组装的 cosine、residual 或 ratio。其输入必须是每个
+checkpoint 的 clean-A、clean-B、positive、negative 四个 raw float64 vectors；
+evaluator 在冻结 \(10^{-6}\) clean floor 下现场重算全部向量与派生量并验证 finite。
+因此替换 dataclass 标量、修改 noise floor 或注入 NaN 都不能形成 PASS。
+
 ## 10. 当前完成定义
 
 本任务完成只意味着：
@@ -445,7 +480,13 @@ fixed-FPR、baseline、paper claim 或项目阶段推进。
 - protocol digest 非递归且可重算；
 - public context canonical bytes 可 fail-closed 验证；
 - 8项 plan 可确定性重建；
+- 公开 atom 的 SHA256 Rademacher、8次 callback power iteration、post-weight、
+  sign canonicalization 与单-array NPZ 可在 CPU 上确定性执行；
+- 真实8-step schedule、严格 FP32 NumPy control 与 actual exposure 可计算；
+- 三个 checkpoint、C0 T0、A apply-only prediction 与冻结 Gate 0 evaluator
+  可在轻量数组上执行；
 - mutation、额外字段、重复 JSON key、float 和非 canonical context 被拒绝；
 - README 和 field registry 与合同一致。
 
-它不是 carrier 已实现、视频已生成、Gate 0 已执行或方法有效性证据。
+它不是 Wan adapter 或 carrier runner 已实现，不代表视频已生成、Gate 0 已执行
+或方法有效。下一独立任务在审核提交后才能设计最薄 GPU runner。

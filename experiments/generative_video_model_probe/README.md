@@ -23,19 +23,23 @@ generative Flow time
 - `docs/builds/frame_state_synchronized_generative_flow_video_watermark_method_design.md`
 - `docs/builds/frame_state_synchronized_generative_flow_video_watermark_algorithm_primitives.md`
 
-当前已有该路线的 design-only
+当前已有该路线的
 `configs/protocol/sstw_frame_state_signed_observability_construction.json` 和
-静态合同。合同已唯一冻结公开单-array NPZ dictionary 的初始化/shape、真实
-`delta_sigma` scheduler-state signed exposure，以及 clean-noise/T0 apply-only
+本地核心合同。合同已唯一冻结公开单-array NPZ dictionary 的初始化/shape、真实
+8-step sigma/`delta_sigma`/late-tapered waveform、scheduler-state signed exposure，
+以及 clean-noise/T0 apply-only
 Gate 公式；dictionary 只称固定8次迭代后时间加权的 Jacobian-aligned direction，
 三层公共 signed gates 与 saved-video-only T0 gates 也有 exact applicability。
-当前仍无 runner、observer 或 GPU 结果。该 config 的 execution identity
-保持 `_placeholder`，全部执行授权为 false，不能由现有 server/Notebook 调用。旧
+CPU/NumPy 层现已实现 atom、strict FP32 control、528D feature、C0 T0 与 A
+apply-only Gate 0 原语，并冻结互异 C0/A execution identities。当前仍无 Wan
+adapter、runner、observer 或 GPU 结果；construction/GPU/Colab 执行授权为 false，
+不能由现有 server/Notebook 调用。旧
 output-feature impulse observability、root-cause、spatiotemporal 和
 frozen-feedback runner 均保留为 Flow-stage-indexed carrier/feature 的历史
 construction/负对照，不得作为帧状态同步已通过的证据。下一实现必须从一个
 视频时间窗口、一个 signed 状态维度的独立 execution identity 冻结与代码审核
-开始；不能直接实现 runner、时间攻击或完整 observer。
+完成并通过本地审计开始；不能直接实现时间攻击或完整 observer。下一独立任务
+才允许在用户授权下实现最薄 GPU runner。
 
 ## Output-feature impulse observability
 

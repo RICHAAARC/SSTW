@@ -30,8 +30,25 @@ output feature 还必须由每视频 governed record 提供冻结 probe ID 与�
 “视频帧状态同步＋生成 Flow 嵌入”的执行配置。当前主路线只在
 `docs/builds/frame_state_synchronized_generative_flow_video_watermark_method_design.md`
 及配套 algorithm primitives 中形成设计合同；尚未新增 config、runner、Notebook
-handler 或 GPU 授权。Gate 0 config 尚未创建、冻结或授权；未来不得复用本 config
-的 Gate A 名称或 execution flag 冒充帧状态路线已进入执行阶段。
+handler 或 GPU 授权。未来不得复用本 config 的 Gate A 名称或 execution flag
+冒充帧状态路线已进入执行阶段。
+
+`protocol/sstw_frame_state_signed_observability_construction.json` 是当前帧状态
+主路线的首个 design-only Gate 0 合同：只冻结非递归 `protocol_contract`
+摘要、public context schema、单个中心视频窗口、一个公开 decoder-Jacobian
+carrier atom、时间保持的保存视频 RGB24 feature、`C0/A` 两个隔离 identity 和
+精确 `4+4` probe 计划。公开 NPZ 的单一 array/shape、固定 SHA-256 Rademacher
+初始化与受限-support 8轮 Jacobian power iteration 后时间加权方向（不声称精确
+leading singular）、scheduler `delta_sigma` state-update
+signed exposure、有限 clean floor 和 `T0` apply-only prediction 公式均在
+`protocol_contract` 内冻结。latent/decoded/saved 三个 checkpoint 的 exact
+representation 与公共 signed gate matrix 也已固定；唯一 T0 transfer gates 只
+适用于 saved-video 528D primary。execution identity 仍是 `_placeholder`，全部 runtime、
+runner、Notebook、GPU、Colab、Drive、observer、攻击、fixed-FPR、baseline 和
+paper claim 授权均为 false。本 config 只允许 strict static validator 和轻量测试，
+不是已实现 carrier、可执行 construction 或 Gate 0 结果。真实8-step sigma trace
+与 Flow-time waveform 仍须在未来独立 execution contract 中冻结，当前不得由
+runner 使用隐式默认值补齐。
 
 `protocol/sstw_gate_a_root_cause_amplitude_feedback_diagnostic.json` 冻结首次
 Gate A FAIL 后的独立六视频根因判别：只运行一个预声明 `lambda=.06` 半幅，

@@ -23,12 +23,19 @@ generative Flow time
 - `docs/builds/frame_state_synchronized_generative_flow_video_watermark_method_design.md`
 - `docs/builds/frame_state_synchronized_generative_flow_video_watermark_algorithm_primitives.md`
 
-当前尚无该路线的 runner、config、observer 或 GPU 结果。旧
+当前已有该路线的 design-only
+`configs/protocol/sstw_frame_state_signed_observability_construction.json` 和
+静态合同。合同已唯一冻结公开单-array NPZ dictionary 的初始化/shape、真实
+`delta_sigma` scheduler-state signed exposure，以及 clean-noise/T0 apply-only
+Gate 公式；dictionary 只称固定8次迭代后时间加权的 Jacobian-aligned direction，
+三层公共 signed gates 与 saved-video-only T0 gates 也有 exact applicability。
+当前仍无 runner、observer 或 GPU 结果。该 config 的 execution identity
+保持 `_placeholder`，全部执行授权为 false，不能由现有 server/Notebook 调用。旧
 output-feature impulse observability、root-cause、spatiotemporal 和
 frozen-feedback runner 均保留为 Flow-stage-indexed carrier/feature 的历史
 construction/负对照，不得作为帧状态同步已通过的证据。下一实现必须从一个
-视频时间窗口、一个 signed 状态维度的 Gate 0 合同与 config design 开始；Gate 0
-config 尚未创建、冻结或授权，不能直接实现 runner、时间攻击或完整 observer。
+视频时间窗口、一个 signed 状态维度的独立 execution identity 冻结与代码审核
+开始；不能直接实现 runner、时间攻击或完整 observer。
 
 ## Output-feature impulse observability
 

@@ -1,0 +1,407 @@
+{
+  "authorization_boundary": {
+    "attack_execution_allowed": false,
+    "baseline_execution_allowed": false,
+    "claim_support_status": "method_contract_design_only_not_method_evidence",
+    "colab_execution_allowed": false,
+    "construction_execution_allowed": false,
+    "drive_update_allowed": false,
+    "fixed_fpr_execution_allowed": false,
+    "formal_result": false,
+    "gpu_execution_allowed": false,
+    "notebook_handler_implementation_allowed": false,
+    "observer_implementation_allowed": false,
+    "paper_claim_allowed": false,
+    "runner_implementation_allowed": false,
+    "runtime_implementation_authorized": false,
+    "stage_progression_allowed": false
+  },
+  "contract_state": "method_contract_design_only",
+  "execution_identity_contract": {
+    "construction_prompt_id_placeholder": "pending_separate_execution_identity_freeze",
+    "construction_seed_id_placeholder": "pending_separate_execution_identity_freeze",
+    "construction_seed_value_placeholder": "pending_separate_execution_identity_freeze",
+    "signed_observability_prompt_id_placeholder": "pending_separate_execution_identity_freeze",
+    "signed_observability_seed_id_placeholder": "pending_separate_execution_identity_freeze",
+    "signed_observability_seed_value_placeholder": "pending_separate_execution_identity_freeze"
+  },
+  "method_id": "frame_state_synchronized_generative_flow_video_watermark",
+  "profile_id": "sstw_frame_state_signed_observability_construction",
+  "protocol_contract": {
+    "carrier_dictionary_contract": {
+      "atom_count": 1,
+      "atom_dtype": "float32",
+      "atom_sign_rule": "largest_absolute_coordinate_positive",
+      "atom_sign_tie_break_rule": "lowest_c_order_flat_index",
+      "candidate_key_independent": true,
+      "construction_direction_claim": "fixed_eight_iteration_temporally_weighted_decoder_jacobian_aligned_not_exact_leading_singular",
+      "construction_method": "public_wan_vae_decoder_local_jacobian_fixed_eight_iteration_temporally_weighted_direction",
+      "construction_reference": "construction_identity_clean_a_final_latent",
+      "construction_target": "decoded_local_temporal_feature_surrogate_for_saved_video_gate",
+      "construction_surrogate_clamp_in_jacobian": true,
+      "construction_surrogate_decode_boundary": "wan_vae_decode_sample_then_exact_video_processor_denormalization_mirror",
+      "construction_surrogate_feature_dimension": 528,
+      "construction_surrogate_feature_id": "pre_save_postprocessed_float32_framewise_four_by_four_cell_mean",
+      "construction_surrogate_geometry_source": "local_output_feature_contract_except_float32_pre_save",
+      "construction_surrogate_frame_indices": [
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21
+      ],
+      "construction_surrogate_postprocess_formula": "clamp_raw_vae_decode_sample_div_two_plus_one_half_to_closed_zero_one",
+      "construction_surrogate_tensor_layout": "batch_frame_height_width_channel",
+      "construction_surrogate_value_range": "closed_zero_one",
+      "decoder_autograd_dtype": "float32",
+      "decoder_class": "AutoencoderKLWan",
+      "decoder_latent_denormalization_formula": "latent_times_vae_config_latents_std_plus_vae_config_latents_mean",
+      "decoder_library_version": "diffusers_0.35.2",
+      "decoder_model_revision_source": "video_contract_model_revision",
+      "dictionary_artifact_array_count": 1,
+      "dictionary_artifact_array_key": "frame_state_public_atom",
+      "dictionary_artifact_array_shape": [
+        1,
+        16,
+        9,
+        40,
+        64
+      ],
+      "dictionary_artifact_byte_order": "little_endian",
+      "dictionary_id": "frame_state_public_decoder_jacobian_dictionary",
+      "dictionary_zero_outside_restricted_latent_time_indices": true,
+      "key_specific_learning_allowed": false,
+      "latent_layout": [
+        1,
+        16,
+        9,
+        40,
+        64
+      ],
+      "power_iteration_count": 8,
+      "power_iteration_initialization_algorithm": "sha256_domain_nul_u64be_counter_bits_msb_first_rademacher",
+      "power_iteration_initialization_bit_mapping": "zero_to_negative_one_one_to_positive_one",
+      "power_iteration_initialization_counter_start": 0,
+      "power_iteration_initialization_domain": "sstw_frame_state_public_decoder_jacobian_atom",
+      "power_iteration_initialization_domain_encoding": "utf8",
+      "power_iteration_initialization_keyed": false,
+      "power_iteration_initialization_coordinate_order": "compact_restricted_support_c_order_batch_channel_restricted_time_height_width_equivalent_full_c_order_skip_non_support",
+      "power_iteration_initialization_digest_stream": "concatenate_sha256_digest_bits_without_padding_until_support_filled",
+      "power_iteration_initialization_support": "restricted_latent_time_indices_only",
+      "power_iteration_normalization": "float32_l2_each_iteration",
+      "power_iteration_operator": "restricted_support_projection_times_decoder_local_surrogate_jacobian_transpose_times_jacobian_times_restricted_support_projection",
+      "power_iteration_postrun_iteration_selection_allowed": false,
+      "power_iteration_zero_norm_fail_closed": true,
+      "restricted_latent_time_indices": [
+        3,
+        4,
+        5
+      ],
+      "restricted_latent_time_weights_millionths": [
+        250000,
+        500000,
+        250000
+      ],
+      "temporal_weight_application": "after_eight_iterations_multiply_restricted_slices_then_global_float32_l2_normalize_before_sign_canonicalization",
+      "dictionary_artifact_digest_algorithm": "sha256_little_endian_float32_c_order_bytes",
+      "dictionary_artifact_format": "public_npz_with_exact_shape_dtype_and_array_digest",
+      "per_video_dictionary_duplication_allowed": false,
+      "public_dictionary_artifact_required": true,
+      "unit_norm_required": true
+    },
+    "checkpoint_contract": {
+      "common_signed_gate_identity_roles": [
+        "construction_identity",
+        "signed_observability_identity"
+      ],
+      "construction_identity_signed_gate_role": "construction_readiness_only_not_gate0_pass",
+      "checkpoint_specs": [
+        {
+          "centering_formula": "identity_clean_a_clean_b_arithmetic_mean_in_checkpoint_coordinates",
+          "checkpoint_id": "final_latent_carrier_projection",
+          "feature_dimension": 1,
+          "flatten_order": "scalar",
+          "raw_feature_formula": "float64_dot_c_order_final_latent_float32_with_public_atom_float32",
+          "source_boundary": "final_latent_float32_before_vae_decode",
+          "signed_gate_ids": [
+            "antisymmetry_cosine",
+            "antisymmetry_residual",
+            "common_odd_ratio",
+            "odd_clean_noise_ratio"
+          ],
+          "transfer_gate_ids": [],
+          "value_dtype": "float64"
+        },
+        {
+          "centering_formula": "identity_clean_a_clean_b_arithmetic_mean_in_checkpoint_coordinates",
+          "checkpoint_id": "decoded_local_temporal_feature",
+          "feature_dimension": 528,
+          "flatten_order": "frame_then_cell_row_then_cell_column_then_channel",
+          "raw_feature_formula": "float64_four_by_four_cell_means_of_postprocessed_float32_zero_one_frames",
+          "source_boundary": "vae_decode_then_exact_video_processor_denormalization_before_video_export",
+          "signed_gate_ids": [
+            "antisymmetry_cosine",
+            "antisymmetry_residual",
+            "common_odd_ratio",
+            "odd_clean_noise_ratio"
+          ],
+          "transfer_gate_ids": [],
+          "value_dtype": "float64"
+        },
+        {
+          "centering_formula": "identity_clean_a_clean_b_arithmetic_mean_in_checkpoint_coordinates",
+          "checkpoint_id": "saved_video_local_temporal_feature",
+          "feature_dimension": 528,
+          "flatten_order": "frame_then_cell_row_then_cell_column_then_channel",
+          "raw_feature_formula": "float64_four_by_four_cell_means_of_saved_rgb24_div_255",
+          "source_boundary": "saved_video_rgb24_readback",
+          "signed_gate_ids": [
+            "antisymmetry_cosine",
+            "antisymmetry_residual",
+            "common_odd_ratio",
+            "odd_clean_noise_ratio"
+          ],
+          "transfer_gate_ids": [
+            "t0_transfer_direction_cosine",
+            "t0_transfer_relative_error"
+          ],
+          "value_dtype": "float64"
+        }
+      ],
+      "checkpoint_ids": [
+        "final_latent_carrier_projection",
+        "decoded_local_temporal_feature",
+        "saved_video_local_temporal_feature"
+      ],
+      "gate0_decision_identity_role": "signed_observability_identity",
+      "primary_t0_apply_only_gate_identity_role": "signed_observability_identity",
+      "primary_t0_estimation_identity_role": "construction_identity",
+      "primary_transfer_gate_ids": [
+        "t0_transfer_direction_cosine",
+        "t0_transfer_relative_error"
+      ],
+      "primary_checkpoint_id": "saved_video_local_temporal_feature",
+      "require_all_checkpoint_signed_gates": true,
+      "require_primary_checkpoint_transfer_gates": true,
+      "saved_video_is_primary_output_boundary": true
+    },
+    "construction_identity_contract": {
+      "dictionary_construction_scope": "construction_identity_design_responsibility_only",
+      "feature_selection_allowed": false,
+      "identity_role": "construction_identity",
+      "probe_ids": [
+        "construction_clean_a",
+        "construction_clean_b",
+        "construction_positive",
+        "construction_negative"
+      ],
+      "probe_polarities": [
+        0,
+        0,
+        1,
+        -1
+      ],
+      "same_initial_noise_within_identity": true,
+      "transfer_estimation_scope": "construction_identity_design_responsibility_only",
+      "whitening_selection_allowed": false
+    },
+    "flow_injection_contract": {
+      "actual_signed_exposure_accumulation_dtype": "float64",
+      "actual_signed_exposure_formula": "sum_flow_steps_delta_sigma_times_inner_product_actual_delta_velocity_and_public_dictionary_atom",
+      "actual_delta_formula": "constrained_velocity_float32_minus_base_velocity_float32",
+      "actual_delta_measurement_dtype": "float32",
+      "active_actual_delta_nonzero_required": true,
+      "carrier_control_dtype": "float32",
+      "clean_exact_noop_required": true,
+      "flow_energy_budget_denominator": 1000000,
+      "flow_energy_budget_numerator": 15,
+      "intended_velocity_sign_formula": "signed_state_coefficient_times_sign_delta_sigma",
+      "lambda_denominator": 100,
+      "lambda_numerator": 12,
+      "local_window_energy_budget_required": true,
+      "probe_polarity_coordinate": "scheduler_state_update_coordinate",
+      "scheduler_delta_sigma_formula": "next_sigma_minus_current_sigma",
+      "scheduler_state_dtype": "float32",
+      "total_energy_budget_required": true,
+      "transformer_compute_dtype": "bfloat16",
+      "velocity_norm_ratio_denominator": 100,
+      "velocity_norm_ratio_numerator": 2,
+      "zero_control_same_numeric_path_required": true
+    },
+    "local_output_feature_contract": {
+      "candidate_key_independent": true,
+      "cell_grid_columns": 4,
+      "cell_grid_rows": 4,
+      "channel_order": "rgb",
+      "construction_transfer_clean_intercept_source": "construction_clean_a_clean_b_arithmetic_mean",
+      "feature_dimension": 528,
+      "feature_dtype": "float64",
+      "feature_flatten_order": "frame_then_cell_row_then_cell_column_then_channel",
+      "feature_id": "saved_rgb24_framewise_four_by_four_cell_mean",
+      "feature_output_centering": "none_raw_representation",
+      "frame_order_preserved": true,
+      "input_pixel_format": "rgb24",
+      "input_scale_denominator": 255,
+      "per_video_l2_normalization_allowed": false,
+      "postrun_feature_selection_allowed": false,
+      "spatial_cell_boundary_rule": "floor_i_size_div_4_to_floor_i_plus_1_size_div_4",
+      "signed_gate_clean_intercept_source": "current_identity_clean_a_clean_b_arithmetic_mean",
+      "temporal_aggregation": "none_framewise_concatenation",
+      "video_window_frame_indices": [
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21
+      ],
+      "whitening": "identity_matrix_no_data_fitting"
+    },
+    "method_contract": {
+      "embedding_schedule_clock": "generative_flow_time",
+      "method_id": "frame_state_synchronized_generative_flow_video_watermark",
+      "primary_detection_inputs": [
+        "video",
+        "key",
+        "public_context_record"
+      ],
+      "watermark_state_clock": "video_frame_window_time"
+    },
+    "protocol_digest_contract": {
+      "algorithm": "sha256",
+      "canonical_json_allow_floats": false,
+      "canonical_json_encoding": "utf_8",
+      "canonical_json_integer_rule": "base_10_no_leading_zero",
+      "canonical_json_key_order": "unicode_code_point",
+      "canonical_json_normalize_unicode": false,
+      "canonical_json_separators": [
+        ",",
+        ":"
+      ],
+      "canonical_projection": "protocol_contract_only",
+      "excluded_runtime_fields": [
+        "protocol_digest",
+        "public_context_record",
+        "public_nonce_random",
+        "context_digest",
+        "execution_identity_contract",
+        "authorization_boundary",
+        "runtime_records",
+        "runtime_paths",
+        "timestamps"
+      ]
+    },
+    "public_context_contract": {
+      "canonical_json_allow_floats": false,
+      "canonical_json_encoding": "utf_8",
+      "canonical_json_integer_rule": "base_10_no_leading_zero",
+      "canonical_json_key_order": "unicode_code_point",
+      "canonical_json_normalize_unicode": false,
+      "canonical_json_separators": [
+        ",",
+        ":"
+      ],
+      "context_digest_algorithm": "sha256",
+      "context_schema_id": "sstw_frame_state_public_context_v1",
+      "exact_key_order_independent_set": [
+        "context_schema_id",
+        "method_id",
+        "protocol_digest",
+        "public_nonce_random",
+        "state_clock_rate_denominator",
+        "state_clock_rate_numerator",
+        "state_window_count"
+      ],
+      "method_id": "frame_state_synchronized_generative_flow_video_watermark",
+      "protocol_digest_source": "validated_protocol_contract_canonical_json_sha256",
+      "public_nonce_hex_character_count": 32,
+      "public_nonce_generated_before_embedding": true,
+      "public_nonce_resampling_allowed": false,
+      "state_clock_rate_denominator": 1,
+      "state_clock_rate_numerator": 8,
+      "state_window_count": 1,
+      "transport": "explicit_public_sidecar_or_manifest_record"
+    },
+    "signed_observability_gate_contract": {
+      "antisymmetry_cosine_formula": "cosine_positive_centered_vs_negative_negative_centered",
+      "antisymmetry_residual_formula": "l2_positive_plus_negative_minus_two_clean_intercept_div_sum_centered_norms",
+      "clean_intercept_formula": "arithmetic_mean_clean_a_clean_b",
+      "clean_noise_denominator_formula": "max_clean_noise_norm_and_frozen_floor",
+      "clean_noise_floor_denominator": 1000000,
+      "clean_noise_floor_numerator": 1,
+      "clean_noise_norm_formula": "one_half_l2_clean_a_minus_clean_b",
+      "common_odd_ratio_formula": "l2_common_div_l2_odd",
+      "maximum_antisymmetry_residual_millionths": 250000,
+      "maximum_common_odd_ratio_millionths": 500000,
+      "maximum_transfer_relative_error_millionths": 500000,
+      "minimum_antisymmetry_cosine_millionths": 900000,
+      "minimum_odd_clean_noise_ratio_millionths": 3000000,
+      "minimum_transfer_direction_cosine_millionths": 900000,
+      "odd_clean_noise_ratio_formula": "l2_odd_div_max_clean_noise_norm_and_frozen_floor",
+      "odd_response_formula": "one_half_positive_minus_negative",
+      "stop_current_carrier_or_feature_on_failure": true,
+      "transfer_direction_cosine_formula": "cosine_observed_odd_vs_t0_times_half_actual_exposure_difference",
+      "transfer_relative_error_formula": "l2_observed_odd_minus_prediction_div_max_l2_observed_odd_and_frozen_floor",
+      "transfer_prediction_uses_actual_signed_exposure": true
+    },
+    "signed_observability_identity_contract": {
+      "dictionary_apply_only": true,
+      "feature_apply_only": true,
+      "identity_role": "signed_observability_identity",
+      "probe_ids": [
+        "signed_observability_clean_a",
+        "signed_observability_clean_b",
+        "signed_observability_positive",
+        "signed_observability_negative"
+      ],
+      "probe_polarities": [
+        0,
+        0,
+        1,
+        -1
+      ],
+      "same_initial_noise_within_identity": true,
+      "threshold_apply_only": true,
+      "transfer_apply_only": true,
+      "whitening_apply_only": true
+    },
+    "transfer_estimation_contract": {
+      "actual_signed_exposure_required": true,
+      "actual_signed_exposure_zero_denominator_fail_closed": true,
+      "checkpoint_id": "saved_video_local_temporal_feature",
+      "conceptual_operator_independently_identifiable": false,
+      "construction_identity_only": true,
+      "estimated_object": "restricted_transfer_t0_equals_h0_d0",
+      "estimator": "positive_negative_center_difference_div_actual_signed_exposure_difference",
+      "independent_h0_artifact_allowed": false,
+      "signed_observability_prediction_formula": "t0_times_one_half_positive_minus_negative_actual_signed_exposure",
+      "transfer_column_count": 1,
+      "transfer_feature_dimension": 528
+    },
+    "video_contract": {
+      "fps": 8,
+      "frame_count": 33,
+      "height": 320,
+      "latent_time_count": 9,
+      "latent_to_video_window_mapping": "floor_video_frame_index_times_latent_time_count_div_frame_count",
+      "model_id": "Wan-AI/Wan2.1-T2V-1.3B-Diffusers",
+      "model_revision": "0fad780a534b6463e45facd96134c9f345acfa5b",
+      "num_inference_steps": 8,
+      "scheduler_id": "wan21_flow_match_euler_discrete_scheduler_shift_3",
+      "video_window_id": "central_video_frame_window",
+      "width": 512
+    }
+  },
+  "protocol_digest": "b57b1d620850296509e4e8d55749cea8f7b3ca849cb10ed908c0470715221b6f"
+}

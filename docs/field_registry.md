@@ -3442,3 +3442,85 @@ Notebook 与 repository module 的跨边界数据
 | historical_normal_feedback_full_latent_gate_by_pair | governance | none | true | false | false | 受绑定f06 normal-feedback source中early/late full-latent signed gate apply-only结果。 |
 | historical_normal_feedback_gate_a_fail_preserved | governance | none | true | false | false | 固定为true，确认本诊断未覆盖历史Gate A FAIL。 |
 | historical_source_apply_only | governance | none | true | false | false | 历史normal-feedback结果只作为已冻结对照，禁止训练、调阈值或重分类为成功。 |
+| contract_state | governance | none | true | false | false | 当前方法或协议合同的语义状态；帧状态首轮固定为 `method_contract_design_only`。 |
+| protocol_contract | protocol | none | true | false | false | protocol digest 唯一绑定的稳定、无运行值合同投影。 |
+| protocol_digest | provenance | none | true | false | false | `canonical_json(protocol_contract)` 的 SHA-256；不得递归包含自身、public context 或 nonce。 |
+| context_schema_id | protocol | none | true | false | false | public context exact schema 身份。 |
+| public_nonce_random | provenance | _random | true | false | false | 嵌入前生成一次并随视频公开提供的128-bit nonce小写hex；不得按结果重采样。 |
+| state_clock_rate_numerator | protocol | none | true | false | false | public frame-state clock rate 的正整数分子。 |
+| state_clock_rate_denominator | protocol | none | true | false | false | public frame-state clock rate 的正整数分母。 |
+| state_window_count | protocol | none | true | false | false | public context 声明的水印状态窗口数；首轮 signed observability 固定为1。 |
+| context_digest | provenance | none | true | false | false | exact public context canonical JSON bytes 的 SHA-256。 |
+| authorization_boundary | governance | none | true | false | false | design-only config 中执行、claim 和阶段权限的精确 fail-closed 集合。 |
+| runtime_implementation_authorized | governance | none | true | false | false | 当前合同是否允许实现 runtime；帧状态 Gate 0 设计固定为 false。 |
+| construction_execution_allowed | governance | none | true | false | false | 当前 config 是否允许执行 construction；身份占位未关闭前固定为 false。 |
+| runner_implementation_allowed | governance | none | true | false | false | 当前 config 是否允许新增 GPU/server runner；固定为 false。 |
+| observer_implementation_allowed | governance | none | true | false | false | 当前 config 是否允许实现完整 observer；固定为 false。 |
+| notebook_handler_implementation_allowed | governance | none | true | false | false | 当前 config 是否允许新增或修改 Notebook handler；固定为 false。 |
+| execution_identity_contract | protocol | none | false | false | false | 尚未授权的 C0/A prompt/seed identity 占位字段容器；具体占位字段必须以 `_placeholder` 结尾。 |
+| construction_prompt_id_placeholder | placeholder | _placeholder | false | false | true | C0 prompt identity 未冻结占位。 |
+| construction_seed_id_placeholder | placeholder | _placeholder | false | false | true | C0 seed identity 未冻结占位。 |
+| construction_seed_value_placeholder | placeholder | _placeholder | false | false | true | C0 seed value 未冻结占位。 |
+| signed_observability_prompt_id_placeholder | placeholder | _placeholder | false | false | true | identity A prompt 未冻结占位。 |
+| signed_observability_seed_id_placeholder | placeholder | _placeholder | false | false | true | identity A seed identity 未冻结占位。 |
+| signed_observability_seed_value_placeholder | placeholder | _placeholder | false | false | true | identity A seed value 未冻结占位。 |
+| identity_role | protocol | none | true | false | false | 当前 probe 属于 construction identity 或 signed-observability apply-only identity。 |
+| probe_ids | protocol | none | true | false | false | config 中冻结的有序 probe ID 集合。 |
+| probe_polarities | protocol | none | true | false | false | 与 probe IDs 同序的 zero/positive/negative signed state 系数。 |
+| actual_signed_exposure_required | governance | none | true | false | false | transfer estimation 是否强制使用 scheduler-state coordinate 的实际有符号 exposure。 |
+| estimated_object | protocol | none | true | false | false | construction 实际估计对象；首轮固定为受限传递 `T0=H0D0`。 |
+| public_dictionary_artifact_required | governance | none | true | false | false | 公开 carrier dictionary 是否必须作为独立可读取 artifact 提供；固定为 true。 |
+| dictionary_artifact_format | protocol | none | true | false | false | 公开 dictionary artifact 的 exact shape/dtype/digest 绑定格式。 |
+| dictionary_artifact_digest_algorithm | provenance | none | true | false | false | 公开 dictionary float32 little-endian C-order values 的 SHA-256 规则。 |
+| per_video_dictionary_duplication_allowed | governance | none | true | false | false | 是否允许在每视频 record 中复制或另建 dictionary；固定为 false。 |
+| dictionary_artifact_array_key | protocol | none | true | false | false | 公开 NPZ 中唯一 carrier array 的冻结 key，首轮为 `frame_state_public_atom`。 |
+| dictionary_artifact_array_shape | protocol | none | true | false | false | 公开 carrier array 的完整 Wan latent shape；受限 latent-time 外严格为零。 |
+| dictionary_artifact_array_count | protocol | none | true | false | false | 公开 NPZ 的 array 数量；固定为1，禁止夹带第二套 atom。 |
+| atom_sign_tie_break_rule | protocol | none | true | false | false | 最大绝对值坐标并列时以最低 C-order flat index 固定 atom 正负号。 |
+| power_iteration_initialization_algorithm | protocol | none | true | false | false | 公开、非 keyed 的 SHA-256 counter Rademacher 初始化及 bit/counter 顺序。 |
+| power_iteration_initialization_bit_mapping | protocol | none | true | false | false | SHA-256 bit 到 Rademacher 正负值的冻结映射。 |
+| power_iteration_initialization_counter_start | protocol | none | true | false | false | SHA-256 expansion counter 的冻结起点；固定为0。 |
+| power_iteration_initialization_domain_encoding | protocol | none | true | false | false | 公开 initialization domain 转换为摘要输入时固定使用 UTF-8。 |
+| power_iteration_initialization_support | protocol | none | true | false | false | 初始化只填充受限 latent-time support，其余位置严格为零。 |
+| power_iteration_operator | protocol | none | true | false | false | 固定受限 support 投影包围的 decoder local-surrogate Jacobian transpose-times-Jacobian operator。 |
+| construction_surrogate_feature_id | protocol | none | true | false | false | decoder Jacobian construction 使用的 pre-save float32 local temporal surrogate。 |
+| construction_surrogate_frame_indices | protocol | none | true | false | false | construction surrogate 的固定11帧窗口，必须与 primary saved-video feature 对齐。 |
+| construction_surrogate_geometry_source | protocol | none | true | false | false | surrogate 复用 primary local feature 几何、但位于 pre-save float32 decoded boundary。 |
+| feature_flatten_order | protocol | none | true | false | false | local temporal feature 的 frame/cell-row/cell-column/channel 拼接顺序。 |
+| dictionary_construction_scope | governance | none | true | false | false | C0 在 design contract 中承担 dictionary construction 职责；不是 runtime execution authorization。 |
+| transfer_estimation_scope | governance | none | true | false | false | C0 在 design contract 中承担 T0 estimation 职责；不是 runtime execution authorization。 |
+| probe_polarity_coordinate | protocol | none | true | false | false | 正负 probe 系数定义的坐标；首轮固定为 scheduler state-update coordinate。 |
+| scheduler_delta_sigma_formula | protocol | none | true | false | false | state update measure 的冻结定义 `next_sigma-current_sigma`。 |
+| intended_velocity_sign_formula | protocol | none | true | false | false | 将 state-update probe 极性映射为 velocity sign 的冻结规则。 |
+| actual_signed_exposure_formula | metric | none | true | false | false | 逐 Flow step 累加 `delta_sigma * <actual_delta_velocity,public_atom>` 的公式。 |
+| actual_signed_exposure_accumulation_dtype | protocol | none | true | false | false | 跨 Flow step 的实际有符号 exposure 累加 dtype；固定为 float64。 |
+| clean_noise_norm_formula | metric | none | true | false | false | clean-A/B feature 差的半 L2 norm。 |
+| clean_noise_denominator_formula | metric | none | true | false | false | clean-noise gate 分母取 clean norm 与冻结绝对 floor 的最大值。 |
+| transfer_direction_cosine_formula | metric | none | true | false | false | identity A observed odd 与 `T0 * half(actual exposure difference)` 预测的 cosine。 |
+| transfer_relative_error_formula | metric | none | true | false | false | identity A observed odd 与冻结 T0 预测之间的相对 L2 error 公式。 |
+| actual_signed_exposure_zero_denominator_fail_closed | governance | none | true | false | false | C0 正负实际 exposure 差为零时禁止估计 T0。 |
+| signed_observability_prediction_formula | protocol | none | true | false | false | identity A 使用 C0 T0 和自身实际正负 exposure 差的 apply-only odd prediction。 |
+| construction_direction_claim | governance | none | true | false | false | public atom 只声称固定8次迭代后时间加权的 decoder-Jacobian-aligned direction，不声称精确 leading singular/eigenvector。 |
+| power_iteration_initialization_coordinate_order | protocol | none | true | false | false | Rademacher bits 填充 restricted support 时的 compact C-order 坐标遍历规则。 |
+| power_iteration_initialization_digest_stream | protocol | none | true | false | false | 相邻 SHA-256 digest bits 无 padding 连续拼接直至 restricted support 填满。 |
+| construction_surrogate_decode_boundary | protocol | none | true | false | false | Jacobian target 从 Wan VAE decode sample 到 exact video-processor denormalization mirror 的边界。 |
+| construction_surrogate_clamp_in_jacobian | governance | none | true | false | false | `clamp(raw/2+1/2,0,1)` 是否属于 Jacobian graph；固定为true。 |
+| construction_surrogate_postprocess_formula | protocol | none | true | false | false | pre-save surrogate 的 exact [0,1] denormalization/clamp 公式。 |
+| decoder_latent_denormalization_formula | protocol | none | true | false | false | Wan final latent 在 VAE decode 前按 config mean/std 还原的冻结公式。 |
+| checkpoint_specs | protocol | none | true | false | false | frame-state Gate 0 三个 checkpoint 的有序 exact representation、dimension、centering 与 gate applicability matrix。 |
+| centering_formula | protocol | none | true | false | false | 当前 checkpoint 在自身坐标内使用 identity clean-A/B 算术均值中心化。 |
+| raw_feature_formula | protocol | none | true | false | false | 当前 checkpoint 未中心化表示的精确计算公式。 |
+| source_boundary | protocol | none | true | false | false | 当前 checkpoint 表示对应的 final-latent、pre-save decode 或 saved-video readback 边界。 |
+| signed_gate_ids | protocol | none | true | false | false | 当前 checkpoint 必须应用的公共 signed morphology/noise gate IDs。 |
+| transfer_gate_ids | protocol | none | true | false | false | 当前 checkpoint 适用的 T0 transfer gate IDs；前两层为空，saved-video primary 为两项。 |
+| primary_transfer_gate_ids | protocol | none | true | false | false | saved-video primary 独占的 T0 direction cosine 与 relative-error gate 集合。 |
+| require_primary_checkpoint_transfer_gates | governance | none | true | false | false | 唯一 primary checkpoint 是否必须同时通过全部 T0 transfer gates。 |
+| transfer_feature_dimension | protocol | none | true | false | false | 唯一 T0 的 output dimension；首轮 saved-video primary 固定为528。 |
+| common_signed_gate_identity_roles | protocol | none | true | false | false | 公共 signed morphology/noise gates 分别在 C0 与 A 的自身 clean-centered 坐标内计算。 |
+| construction_identity_signed_gate_role | governance | none | true | false | false | C0 的公共 signed gate 只形成 construction readiness，不产生 Gate 0 PASS。 |
+| gate0_decision_identity_role | governance | none | true | false | false | 最终 Gate 0 decision 固定由 held-out signed-observability identity A 决定。 |
+| primary_t0_estimation_identity_role | protocol | none | true | false | false | 唯一 saved-video T0 只由 construction identity C0 估计。 |
+| primary_t0_apply_only_gate_identity_role | protocol | none | true | false | false | saved-video T0 transfer gates 只在 identity A 上 apply-only。 |
+| feature_output_centering | protocol | none | true | false | false | local output feature 返回 raw uncentered representation。 |
+| construction_transfer_clean_intercept_source | protocol | none | true | false | false | C0 transfer intercept 使用 construction clean-A/B 算术均值。 |
+| signed_gate_clean_intercept_source | protocol | none | true | false | false | 公共 signed gates 使用当前 identity 自身 clean-A/B 算术均值。 |

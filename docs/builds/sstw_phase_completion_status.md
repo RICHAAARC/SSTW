@@ -1,8 +1,29 @@
-# SSTW 当前工程进度状态
+# SSTW 历史 paper-profile 工程进度快照
 
-本文档只记录当前主干工程状态, 不保存已移除的历史门禁、proxy postprocess 产物或旧 Notebook 编排。若需要考古历史提交, 应使用 Git 历史, 不应把旧状态文档作为当前构建依据。
+> [!CAUTION]
+> **Historical / legacy status — 不是当前 SSTW 方法状态基线。**
+>
+> 本文保留旧 paper-profile 工程状态，不能用于判断当前方法完成度或授权执行。当前
+> 唯一权威入口：
+>
+> - `docs/builds/frame_state_synchronized_generative_flow_video_watermark_method_design.md`
+> - `docs/builds/frame_state_synchronized_generative_flow_video_watermark_algorithm_primitives.md`
+>
+> 当前机制链是 `payload M → PRC drive u_n → low-dimensional state dynamics s_n
+> → DiT Patch/3D-RoPE or relative-attention carrier → inference-time Flow velocity
+> deflection → output-side Patch-relation observation → clock path + state observer
+> → key-conditioned trajectory evidence`。真实 Gate 0 FAIL 只否定历史
+> `decoder-Jacobian additive atom + local RGB mean feature + held-out transfer`
+> 组合；Patch-relation 主机制尚未实现或运行。generic public low-frequency
+> carrier bank 仅为待审 baseline / fallback。
+> 以下正文中所有“当前”“正式”“基线”“候选”“下一轮”等表述都只描述本文
+> 保存的历史快照，不代表现行 SSTW 状态、方法入口或执行授权。
 
-## 当前主干门禁
+本文档只记录该历史 paper-profile 工程快照，不保存已移除的更早门禁、proxy
+postprocess 产物或旧 Notebook 编排。若需要考古历史提交，应使用 Git 历史；本
+文档不能作为现行 SSTW 构建依据。
+
+## 历史主干门禁
 
 ```text
 protocol_governance
@@ -13,7 +34,7 @@ protocol_governance
 -> submission_freeze
 ```
 
-## 当前正式 Notebook 顺序
+## 历史正式 Notebook 顺序
 
 ```text
 motion_threshold_calibration_colab.ipynb  # 仅在缺少 motion threshold artifact 时运行
@@ -27,7 +48,7 @@ motion_threshold_calibration_colab.ipynb  # 仅在缺少 motion threshold artifa
 -> paper_gate_and_package_colab.ipynb
 ```
 
-## 当前正式证据来源
+## 历史正式证据来源
 
 - SSTW 本方法 detection 由 `runtime_detection_colab` 产出正式 video-content detector records。
 - external baseline 由各自 formal reference Notebook 在项目内完成 clone / build / run / adapt / record, 再由 `formal_comparison_scoring_colab` 统一转写为 `metric_status = measured_formal`。
@@ -37,9 +58,12 @@ motion_threshold_calibration_colab.ipynb  # 仅在缺少 motion threshold artifa
 
 ## 非主干后处理边界
 
-当前仓库只保留正式 paper profile 流程。非主干 proxy 后处理入口、旧矩阵补造入口和旧小样本 claim gate 不属于当前工程能力, 不得作为当前构建、门禁或论文结果依据。旧落盘文件如出现在 Google Drive 历史结果包中, 只能视为历史遗留输入, 不能支持当前 paper profile gate。
+该历史快照中的仓库只保留当时的正式 paper profile 流程。非主干 proxy 后处理
+入口、旧矩阵补造入口和旧小样本 claim gate 不属于该历史快照的工程能力，也不得
+作为现行 SSTW 构建、门禁或论文结果依据。旧落盘文件如出现在 Google Drive 历史
+结果包中，只能视为历史遗留输入，不能支持现行方法门禁。
 
-## 当前完成判断口径
+## 历史完成判断口径
 
 - `probe_paper`: `target_fpr = 0.1`, 用于小样本论文闭合验证, 产物结构必须与后续层级同构。
 - `pilot_paper`: `target_fpr = 0.01`, 用于中等规模稳定性验证。

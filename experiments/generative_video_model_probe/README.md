@@ -1,31 +1,43 @@
 # Generative Video Model Probe
 
-> 完整论文机制的实现顺序、三层 Claim 证据链和 fail-closed 规则见
-> `docs/builds/complete_paper_mechanism_implementation.md`。三个 paper profile 使用同一机制,
-> `probe_paper` 也必须在 FPR=0.1 下闭合 Claim-1、Claim-2 和不降级的 Claim-3。
-
 本目录保存 generative_video_model_probe 生成式视频模型探测的可审计运行入口。当前无 GPU 时只生成 blocked decision, 不生成正向机制结论。
 
-## Frame-state synchronized generative-Flow video watermark
+## 当前方法唯一入口
 
-SSTW 当前主路线把两条时间轴严格分开：
-
-```text
-video frame/window time
-  → 定义低维水印状态、插帧/删帧/变速同步
-
-generative Flow time
-  → 只负责在冻结视频生成模型的采样过程中写入整条帧状态轨迹
-```
-
-方法设计和算法原语分别见：
+当前 SSTW 方法只以下列两份文档为权威入口：
 
 - `docs/builds/frame_state_synchronized_generative_flow_video_watermark_method_design.md`
 - `docs/builds/frame_state_synchronized_generative_flow_video_watermark_algorithm_primitives.md`
 
-当前已有该路线的
+机制链固定为：
+
+```text
+payload M
+-> PRC drive u_n
+-> low-dimensional state dynamics s_n
+-> DiT Patch/3D-RoPE or relative-attention carrier
+-> inference-time Flow velocity deflection
+-> output-side Patch-relation observation
+-> clock path + state observer
+-> key-conditioned trajectory evidence
+```
+
+该 Patch-relation 主机制尚未实现、接入本目录 runner 或执行真实 GPU 运行。
+真实 Gate 0 FAIL 只否定历史
+`decoder-Jacobian additive atom + local RGB mean feature + held-out transfer`
+组合；它不是 Patch-relation embedding、clock path、state observer 或
+state-space synchronization 的失败结果。generic public low-frequency carrier
+bank 仅是待审 baseline / fallback，不是当前主方法。
+
+历史 paper-profile 的实施顺序与 Claim 闭合规则仍保存在
+`docs/builds/complete_paper_mechanism_implementation.md`，但该文档只用于历史
+参考，不是当前方法入口或 Patch-relation 执行计划。
+
+## 历史 decoder-Jacobian Gate 0 路线
+
+下述实现保留为已执行历史路线和失败证据，不再作为当前方法基线。它使用
 `configs/protocol/sstw_frame_state_signed_observability_construction.json` 和
-本地核心合同。合同已唯一冻结公开单-array NPZ dictionary 的初始化/shape、真实
+本地核心合同，冻结公开单-array NPZ dictionary 的初始化/shape、真实
 8-step sigma/`delta_sigma`/late-tapered waveform、scheduler-state signed exposure，
 以及 clean-noise/T0 apply-only
 Gate 公式；dictionary 只称固定8次迭代后时间加权的 Jacobian-aligned direction，
@@ -36,14 +48,14 @@ apply-only Gate 0 原语，并冻结互异 C0/A execution identities。
 diffusers 0.35.2 Wan scheduler：精确执行 C0/A 各4项、C0 clean-A 后构造一次
 public atom（Jacobian decode 固定 untiled，完成后恢复 VAE tiling）、逐step重算
 actual exposure，并由 C0 估计唯一 saved-video T0 后在 A
-apply-only。入口已加入既有薄 `colab_test` request；Notebook 不含科学逻辑且未改。
-真实 GPU/API/显存和 Gate 0 结果仍待用户显式 Colab 运行，任何 PASS/FAIL 均非正式
-且禁止 stage progression。旧
+apply-only。入口曾加入既有薄 `colab_test` request；Notebook 不含科学逻辑且未改。
+该路线真实 Colab Gate 0 已 FAIL：latent signed gate 通过，但 decoded/saved
+feature 与 held-out transfer 未通过。该结论只停止这一
+decoder-Jacobian additive atom 与 local RGB mean feature 的组合，结果非正式且
+禁止 stage progression。旧
 output-feature impulse observability、root-cause、spatiotemporal 和
 frozen-feedback runner 均保留为 Flow-stage-indexed carrier/feature 的历史
-construction/负对照，不得作为帧状态同步已通过的证据。下一实现必须从一个
-视频时间窗口、一个 signed 状态维度的 Gate 0 结果开始；不能直接实现时间攻击或
-完整 observer。
+construction/负对照，不得作为当前 Patch-relation 路线已通过或已失败的证据。
 
 ## Output-feature impulse observability
 
@@ -71,7 +83,7 @@ construction-only 判别：显式消费并验证完整 f06a0934 normal-feedback 
 共享给正负 early0/late0 四条独立 scheduler replay。四条counterfactual均不再
 调用 transformer。五项依次完成 full latent、decode、真实MP4 RGB24回读、
 output-side VAE re-encode 和公开summary，再按冻结真值表记录feedback isolation、
-decoder/carrier mismatch、停止当前additive carrier或indeterminate候选。该入口
+decoder/carrier mismatch、停止该历史 additive carrier 或 indeterminate 候选。该入口
 不是Gate A重试，所有结果固定非正式、Gate A false且禁止阶段推进。
 
 ## Prompt-orthogonal state-trajectory smoke

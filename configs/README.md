@@ -2,6 +2,35 @@
 
 此目录保存论文实验配置模板。
 
+## 当前方法配置边界
+
+当前 SSTW 方法的唯一权威入口是：
+
+- `docs/builds/frame_state_synchronized_generative_flow_video_watermark_method_design.md`
+- `docs/builds/frame_state_synchronized_generative_flow_video_watermark_algorithm_primitives.md`
+
+当前机制链固定为：
+
+```text
+payload M
+-> PRC drive u_n
+-> low-dimensional state dynamics s_n
+-> DiT Patch/3D-RoPE or relative-attention carrier
+-> inference-time Flow velocity deflection
+-> output-side Patch-relation observation
+-> clock path + state observer
+-> key-conditioned trajectory evidence
+```
+
+这条 Patch-relation 路线尚无执行 config、runner 或真实运行结果。真实 Gate 0
+FAIL 只否定历史
+`decoder-Jacobian additive atom + local RGB mean feature + held-out transfer`
+组合，不是 Patch-relation embedding、observer 或状态空间同步的结果。generic
+public low-frequency carrier bank 仅为待审 baseline / fallback，不属于当前主方法。
+
+下列配置说明保留历史实验和诊断边界；任何既有 execution flag 都不能授权或冒充
+当前 Patch-relation 路线已进入执行。
+
 `protocol/sstw_minimal_trajectory_paper.json` 是独立的 calibration-only replay
 smoke profile。它不继承或修改 probe/pilot/full 的公共 top-tier 契约，只允许
 已有4-source包、full/endpoint-only/clean、H.264/temporal crop 和单一20步 replay。
@@ -33,8 +62,8 @@ output feature 还必须由每视频 governed record 提供冻结 probe ID 与�
 handler 或 GPU 授权。未来不得复用本 config 的 Gate A 名称或 execution flag
 冒充帧状态路线已进入执行阶段。
 
-`protocol/sstw_frame_state_signed_observability_construction.json` 是当前帧状态
-主路线的首个 Gate 0 本地原语与 execution 合同：冻结非递归 `protocol_contract`
+`protocol/sstw_frame_state_signed_observability_construction.json` 是已执行并失败的
+历史 frame-state Gate 0 本地原语与 execution 合同：冻结非递归 `protocol_contract`
 摘要、public context schema、单个中心视频窗口、一个公开 decoder-Jacobian
 carrier atom、时间保持的保存视频 RGB24 feature、`C0/A` 两个隔离 identity 和
 精确 `4+4` probe 计划。公开 NPZ 的单一 array/shape、固定 SHA-256 Rademacher
@@ -47,11 +76,12 @@ representation 与公共 signed gate matrix 也已固定；唯一 T0 transfer ga
 适用于 saved-video 528D primary。C0/A 的不同 prompt/seed、相同初噪声规则、
 模型/scheduler/exporter，以及真实8-step sigma/delta-sigma 和独立 late-tapered
 Flow waveform 已精确冻结；本地公开 atom、NumPy FP32 control/exposure、feature、
-T0 与 gate 原语已实现。最薄 Wan runner 与既有 `colab_test` request handler 也已
-接通，config 状态为“runner implemented、等待用户显式 Colab Gate 0 运行”。
-execution flags 只允许该8-video construction；Notebook 无逻辑变更，observer、
+T0 与 gate 原语已实现。最薄 Wan runner 与既有 `colab_test` request handler 曾
+用于真实8-video运行；该运行的 latent signed gate 通过，但 decoded/saved feature
+与 held-out transfer 未通过，因此本组合已经 Gate 0 FAIL。其 execution flags
+不构成重跑或当前方法授权；Notebook 无逻辑变更，observer、
 攻击、fixed-FPR、baseline、paper claim、formal result 与 stage progression
-仍全部为 false。本 config 和本地测试都不是视频运行或 Gate 0 结果。
+仍全部为 false。本 config 和本地测试也不能作为当前 Patch-relation 方法结果。
 
 `protocol/sstw_gate_a_root_cause_amplitude_feedback_diagnostic.json` 冻结首次
 Gate A FAIL 后的独立六视频根因判别：只运行一个预声明 `lambda=.06` 半幅，

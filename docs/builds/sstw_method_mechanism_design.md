@@ -1,5 +1,23 @@
 # SSTW 方法机制设计：状态空间同步 Flow Matching 轨迹水印
 
+> [!CAUTION]
+> **Historical / legacy document — 不是当前 SSTW 方法基线。**
+>
+> 本文只保留历史设计与失败边界，不再提供当前方法导航或执行授权。当前唯一权威入口：
+>
+> - `docs/builds/frame_state_synchronized_generative_flow_video_watermark_method_design.md`
+> - `docs/builds/frame_state_synchronized_generative_flow_video_watermark_algorithm_primitives.md`
+>
+> 当前机制链是 `payload M → PRC drive u_n → low-dimensional state dynamics s_n
+> → DiT Patch/3D-RoPE or relative-attention carrier → inference-time Flow velocity
+> deflection → output-side Patch-relation observation → clock path + state observer
+> → key-conditioned trajectory evidence`。真实 Gate 0 FAIL 只否定历史
+> `decoder-Jacobian additive atom + local RGB mean feature + held-out transfer`
+> 组合；Patch-relation 主机制尚未实现或运行。generic public low-frequency
+> carrier bank 仅为待审 baseline / fallback。
+> 以下正文中所有“当前”“正式”“基线”“候选”“下一轮”等表述都只描述本文
+> 保存的历史快照，不代表现行 SSTW 状态、方法入口或执行授权。
+
 > **路线状态（2026-07-24）**
 >
 > 本文档保留 SSTW 原始 velocity/path/posterior 体系，作为历史设计基线和失败路线的
@@ -8,9 +26,9 @@
 > prompt 参与码字派生、固定加性方向、独立 DC/endpoint 通道或单标量主门禁相关的
 > 内容，不再代表下一轮候选实现。
 >
-> 当前候选路线定义在
+> 该历史时点的候选路线定义在
 > `docs/builds/prompt_orthogonal_state_trajectory_method_design.md`。该候选路线已完成
-> 本地 P0--P9 与 Colab 白名单接线，但尚未执行 GPU 机制 smoke；不构成方法有效性、
+> 本地 P0--P9 与 Colab 白名单接线，但在该历史时点尚未执行 GPU 机制 smoke；不构成方法有效性、
 > 阶段推进或论文 claim。
 
 ## 0. 文档定位

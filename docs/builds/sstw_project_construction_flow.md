@@ -1,6 +1,24 @@
 # SSTW 项目整体构建流程指引：状态空间同步 Flow Matching 轨迹水印
 
-> 当前实现基线以 `docs/builds/complete_paper_mechanism_implementation.md` 为准。
+> [!CAUTION]
+> **Historical / legacy document — 不是当前 SSTW 方法基线。**
+>
+> 本文只保留历史项目流程，不再提供当前方法导航或执行授权。当前唯一权威入口：
+>
+> - `docs/builds/frame_state_synchronized_generative_flow_video_watermark_method_design.md`
+> - `docs/builds/frame_state_synchronized_generative_flow_video_watermark_algorithm_primitives.md`
+>
+> 当前机制链是 `payload M → PRC drive u_n → low-dimensional state dynamics s_n
+> → DiT Patch/3D-RoPE or relative-attention carrier → inference-time Flow velocity
+> deflection → output-side Patch-relation observation → clock path + state observer
+> → key-conditioned trajectory evidence`。真实 Gate 0 FAIL 只否定历史
+> `decoder-Jacobian additive atom + local RGB mean feature + held-out transfer`
+> 组合；Patch-relation 主机制尚未实现或运行。generic public low-frequency
+> carrier bank 仅为待审 baseline / fallback。
+> 以下正文中所有“当前”“正式”“基线”“候选”“下一轮”等表述都只描述本文
+> 保存的历史快照，不代表现行 SSTW 状态、方法入口或执行授权。
+
+> 该历史流程当时的实现基线以 `docs/builds/complete_paper_mechanism_implementation.md` 为准。
 > 本文档后半部分保留的早期 proxy、preflight 或 claim 收缩讨论仅是历史设计记录,
 > 不属于 `probe_paper`、`pilot_paper` 或 `full_paper` 的可执行正式阶段。正式阶段
 > 只接受真实 velocity constraint、key 无关固定 inversion、校准概率后验、逐视频

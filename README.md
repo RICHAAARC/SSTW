@@ -6,9 +6,40 @@ SSTW 是一个面向生成式视频水印论文实验的 governed research proje
 可脱离 Notebook 的阶段编排位于 `workflows/`, 普通 GPU 服务器由
 `scripts/run_generative_video_server_workflow.py` 运行同一流程。
 
-## 主干门禁
+## 当前方法唯一入口
 
-当前主干门禁为:
+当前 SSTW 方法只以下列两份文档为权威入口：
+
+- `docs/builds/frame_state_synchronized_generative_flow_video_watermark_method_design.md`
+- `docs/builds/frame_state_synchronized_generative_flow_video_watermark_algorithm_primitives.md`
+
+当前机制链固定为：
+
+```text
+payload M
+-> PRC drive u_n
+-> low-dimensional state dynamics s_n
+-> DiT Patch/3D-RoPE or relative-attention carrier
+-> inference-time Flow velocity deflection
+-> output-side Patch-relation observation
+-> clock path + state observer
+-> key-conditioned trajectory evidence
+```
+
+该 Patch-relation 主机制目前仍处于设计阶段，尚未实现或运行。真实 Gate 0 FAIL
+只否定已经执行的
+`decoder-Jacobian additive atom + local RGB mean feature + held-out transfer`
+组合，不能解释为 Patch-relation embedding、clock path、state observer 或
+state-space synchronization 已失败。generic public low-frequency carrier bank
+仅是待审的 baseline / fallback，不是当前主方法。
+
+下文保留的 paper profile、Notebook 与历史 runner 说明是既有工程能力导航，不得
+替代上述两份权威文档，也不得据此推断当前 Patch-relation 路线已获执行、阶段推进
+或论文 claim 授权。
+
+## 历史 paper-profile 门禁（非当前 Patch-relation 执行计划）
+
+以下门禁只描述仓库保留的历史 paper-profile 工程快照：
 
 ```text
 protocol_governance
@@ -29,7 +60,7 @@ protocol_governance
 
 三个 paper profile 只能在样本规模、统计功效和 target FPR 上不同。attack 协议、baseline 接口、公平校准、内部消融、图表构建和门禁逻辑必须保持同构。
 
-## 推荐 Colab / Notebook 流程
+## 历史 paper-profile Colab / Notebook 流程
 
 Notebook 说明见:
 
@@ -37,7 +68,7 @@ Notebook 说明见:
 paper_workflow/colab_notebooks/README.md
 ```
 
-从零开始的正式顺序为:
+该历史流程当时定义的顺序为:
 
 ```text
 motion_threshold_calibration_colab.ipynb  # 仅当 motion calibration artifact 缺失或需要重校准时运行
@@ -59,9 +90,9 @@ motion_threshold_calibration_colab.ipynb  # 仅当 motion calibration artifact �
 4. 5 个 external baseline Notebook 在 `generative_video_generation_colab`、`runtime_attack_colab` 和 `runtime_detection_colab` 阶段包都完成后可以并行运行, 但每个 baseline 只打包自己的 official bundle。
 5. `formal_comparison_scoring_colab.ipynb` 必须等待 5 个 baseline official reference 阶段包全部完成后再运行。
 
-## 无 Notebook 的服务器运行入口
+## 历史 paper-profile 的无 Notebook 服务器入口
 
-首次接入 GPU 时先运行最小机制验证。该 profile 使用 2 个 prompt × 2 个 seed,
+该历史流程首次接入 GPU 时使用最小机制验证。该 profile 使用 2 个 prompt × 2 个 seed,
 对每组生成 full method、without velocity、endpoint-only 和 clean reference,
 共 16 个视频；输出只证明机制执行路径可用, 不属于论文证据。结果根目录必须位于
 仓库外:

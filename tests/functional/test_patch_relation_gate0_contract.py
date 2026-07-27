@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 from dataclasses import replace
+from hashlib import sha256
 import json
+import math
 from pathlib import Path
 
 import numpy as np
@@ -37,6 +39,36 @@ from main.methods.state_space_watermark.patch_relation_carrier import (
     fit_c0_whitening,
     frozen_method_boundary,
     validate_public_patch_relation_descriptor,
+)
+from main.methods.state_space_watermark.patch_relation_wan_runtime import (
+    FLOW_ENERGY_BUDGET_RATIO,
+    LAMBDA_MAX,
+    VELOCITY_NORM_RATIO_BUDGET,
+    CfgRopeApplicationPair,
+    WanRopeBranchApplicationRecord,
+    measure_cfg_state_update_numpy,
+    validate_cfg_rope_application_pair,
+)
+from main.methods.state_space_watermark import (
+    patch_relation_wan_runtime as runtime_module,
+)
+from experiments.generative_video_model_probe.patch_relation_gate0_construction import (
+    GovernedPatchRelationStep,
+    PatchRelationProbeMeasurement,
+    PatchRelationRuntimeBatch,
+    _output_binding_digest,
+    _feature_record,
+    _generation_record,
+    _governed_step_from_measurement,
+    _require_native_bfloat16_runtime,
+    _step_record,
+    _validate_c0_artifact,
+    _validate_runtime_batch,
+    _write_c0_artifact,
+    run_patch_relation_gate0_construction,
+)
+from experiments.generative_video_model_probe import (
+    patch_relation_gate0_construction as runner_module,
 )
 
 
@@ -87,8 +119,8 @@ def test_frozen_config_digest_plan_and_authorization() -> None:
         "negative",
     ] * 2
     assert [row.signed_state_coefficient for row in plan] == [0, 0, 1, -1] * 2
-    assert plan[0].identity_placeholder != plan[4].identity_placeholder
-    assert all(not row.execution_authorized for row in plan)
+    assert plan[0].identity_id != plan[4].identity_id
+    assert all(row.execution_authorized for row in plan)
     assert all(value is False for value in frozen_method_boundary().values())
     mutated = json.loads(json.dumps(config))
     mutated["protocol_contract"]["rope_phase_contract"][
@@ -98,11 +130,86 @@ def test_frozen_config_digest_plan_and_authorization() -> None:
         build_patch_relation_gate0_plan(mutated)
 
 
+class _FakeCudaBfloat16:
+    def __init__(
+        self,
+        *,
+        native_supported: bool = True,
+        capability: tuple[int, int] = (8, 0),
+    ) -> None:
+        self.native_supported = native_supported
+        self.capability = capability
+        self.including_emulation_values: list[bool] = []
+
+    def is_bf16_supported(self, *, including_emulation: bool = True) -> bool:
+        self.including_emulation_values.append(including_emulation)
+        return True if including_emulation else self.native_supported
+
+    def get_device_capability(self) -> tuple[int, int]:
+        return self.capability
+
+
+class _FakeTorchBfloat16:
+    def __init__(self, cuda: object) -> None:
+        self.cuda = cuda
+        self.bfloat16 = object()
+        self.float16 = object()
+
+
+def test_native_bfloat16_preflight_disables_emulation_and_requires_exact_dtype() -> None:
+    cuda = _FakeCudaBfloat16()
+    torch = _FakeTorchBfloat16(cuda)
+    _require_native_bfloat16_runtime(
+        torch,
+        selected_dtype=torch.bfloat16,
+    )
+    assert cuda.including_emulation_values == [False]
+
+    emulated_only = _FakeCudaBfloat16(native_supported=False)
+    torch_emulated = _FakeTorchBfloat16(emulated_only)
+    with pytest.raises(RuntimeError, match="原生bfloat16"):
+        _require_native_bfloat16_runtime(
+            torch_emulated,
+            selected_dtype=torch_emulated.bfloat16,
+        )
+    with pytest.raises(RuntimeError, match="selected dtype"):
+        _require_native_bfloat16_runtime(
+            torch,
+            selected_dtype=torch.float16,
+        )
+    old_gpu = _FakeTorchBfloat16(
+        _FakeCudaBfloat16(capability=(7, 5))
+    )
+    with pytest.raises(RuntimeError, match="compute capability"):
+        _require_native_bfloat16_runtime(
+            old_gpu,
+            selected_dtype=old_gpu.bfloat16,
+        )
+
+
+def test_native_bfloat16_preflight_rejects_legacy_torch_signature() -> None:
+    class LegacyCuda:
+        @staticmethod
+        def is_bf16_supported() -> bool:
+            return True
+
+        @staticmethod
+        def get_device_capability() -> tuple[int, int]:
+            return (8, 0)
+
+    torch = _FakeTorchBfloat16(LegacyCuda())
+    with pytest.raises(RuntimeError, match="including_emulation=False"):
+        _require_native_bfloat16_runtime(
+            torch,
+            selected_dtype=torch.bfloat16,
+        )
+
+
 @pytest.mark.parametrize(
     "mutation",
     [
         lambda value: value["authorization_boundary"].__setitem__(
-            "gpu_execution_allowed", True
+            "gpu_execution_allowed", False
         ),
         lambda value: value["protocol_contract"]["rope_phase_contract"].__setitem__(
             "phase_budget_radians_decimal", "0.03125"
@@ -133,6 +240,73 @@ def test_rehashed_mutation_still_rejected(tmp_path: Path) -> None:
         config["protocol_digest"] = protocol_digest(config["protocol_contract"])
 
     with pytest.raises(ValueError, match="RoPE phase contract"):
+        load_patch_relation_gate0_config(_write_mutation(tmp_path, mutate))
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    [
+        lambda contract: contract["execution_identity_contract"][
+            "construction_identity_c0"
+        ].__setitem__("seed_value", 1276),
+        lambda contract: contract["execution_identity_contract"][
+            "gate0_identity_a"
+        ].__setitem__(
+            "prompt_text",
+            contract["execution_identity_contract"]["construction_identity_c0"][
+                "prompt_text"
+            ],
+        ),
+        lambda contract: contract["gate0_runtime_execution_contract"].__setitem__(
+            "transformer_cache_enabled", True
+        ),
+        lambda contract: contract["gate0_runtime_execution_contract"].__setitem__(
+            "scheduler_consumes", "base_cfg_velocity"
+        ),
+        lambda contract: contract["gate0_runtime_execution_contract"][
+            "sigma_grid_decimal"
+        ].__setitem__(1, "0.9"),
+        lambda contract: contract["gate0_runtime_execution_contract"][
+            "timestep_by_step_decimal"
+        ].__setitem__(1, "947.5"),
+        lambda contract: contract["gate0_runtime_execution_contract"].__setitem__(
+            "transformer_bfloat16_output_cast_to_float32_before_pipeline_cfg",
+            False,
+        ),
+        lambda contract: contract["gate0_runtime_execution_contract"].__setitem__(
+            "scheduler_returned_controlled_next_state_and_counterfactual_base_next_state_revalidated",
+            False,
+        ),
+        lambda contract: contract["gate0_runtime_execution_contract"].__setitem__(
+            "scheduler_internal_step_index_before_after_progression_required",
+            False,
+        ),
+        lambda contract: contract["gate0_runtime_execution_contract"].__setitem__(
+            "cuda_native_bfloat16_check_including_emulation_false_required",
+            False,
+        ),
+        lambda contract: contract["gate0_runtime_execution_contract"].__setitem__(
+            "minimum_cuda_compute_capability_major",
+            7,
+        ),
+        lambda contract: contract["gate0_runtime_execution_contract"].__setitem__(
+            "selected_pipeline_dtype_exact_torch_bfloat16_required",
+            False,
+        ),
+        lambda contract: contract["gate0_runtime_execution_contract"][
+            "probe_order"
+        ].reverse(),
+    ],
+)
+def test_rehashed_execution_identity_and_schedule_mutations_fail_closed(
+    tmp_path: Path,
+    mutation,
+) -> None:
+    def mutate(config: dict) -> None:
+        mutation(config["protocol_contract"])
+        config["protocol_digest"] = protocol_digest(config["protocol_contract"])
+
+    with pytest.raises(ValueError):
         load_patch_relation_gate0_config(_write_mutation(tmp_path, mutate))
 
 
@@ -367,6 +541,21 @@ def test_c0_transfer_and_identity_a_apply_only_pass() -> None:
     assert not result.observer_implementation_allowed
 
 
+def test_c0_artifact_readback_rejects_nonprimary_member_mutation(
+    tmp_path: Path,
+) -> None:
+    _descriptor, construction, _clean, _odd = _c0_construction()
+    path = tmp_path / "c0.npz"
+    _write_c0_artifact(path, construction)
+    _validate_c0_artifact(path, construction)
+    with np.load(path, allow_pickle=False) as payload:
+        members = {name: payload[name].copy() for name in payload.files}
+    members["observed_common"].reshape(-1)[0] = 1.0
+    np.savez(path, **members)
+    with pytest.raises(ValueError, match="readback"):
+        _validate_c0_artifact(path, construction)
+
+
 def test_asymmetric_raw_vectors_lock_signed_statistic_formulas() -> None:
     clean = np.zeros(FEATURE_SHAPE, dtype="<f8")
     positive_whitened = np.zeros(FEATURE_SHAPE, dtype="<f8")
@@ -478,3 +667,621 @@ def test_bad_exposure_common_response_and_forged_transfer_fail_closed() -> None:
             positive_exposure=PHASE_BUDGET_RADIANS,
             negative_exposure=-PHASE_BUDGET_RADIANS,
         )
+
+
+def _fake_rope_pair(
+    *,
+    probe_id: str,
+    step_index: int,
+    control_role: str,
+    coefficient: int,
+) -> CfgRopeApplicationPair:
+    descriptor_digest = build_public_patch_relation_descriptor().descriptor_digest
+    rows = []
+    for branch_index, branch_role in enumerate(
+        ("conditional", "unconditional")
+    ):
+        rows.append(
+            WanRopeBranchApplicationRecord(
+                probe_id=probe_id,
+                step_index=step_index,
+                control_role=control_role,
+                cfg_branch_role=branch_role,
+                cfg_branch_order_index=branch_index,
+                signed_coefficient=coefficient,
+                input_binding_digest="1" * 64,
+                descriptor_digest=descriptor_digest,
+                rope_call_attempt_count=1,
+                successful_rope_call_count=1,
+                expected_rope_call_count=1,
+                scope_completed_successfully=True,
+                clean_exact_noop=coefficient == 0,
+            )
+        )
+    return validate_cfg_rope_application_pair(rows[0], rows[1])
+
+
+def _fake_governed_steps(
+    probe_id: str,
+    coefficient: int,
+    deltas: tuple[float, ...],
+) -> tuple[GovernedPatchRelationStep, ...]:
+    rows = []
+    cumulative_reference = 0.0
+    cumulative_control = 0.0
+    shape = runtime_module.SCHEDULER_VELOCITY_SHAPE
+    for step_index, delta in enumerate(deltas):
+        base_conditional = np.full(shape, 1.0, dtype="<f4")
+        base_unconditional = np.full(shape, 0.5, dtype="<f4")
+        controlled_conditional = base_conditional.copy()
+        controlled_unconditional = base_unconditional.copy()
+        if coefficient != 0:
+            offset = np.float32(coefficient * 1e-4)
+            controlled_conditional = np.ascontiguousarray(
+                controlled_conditional + offset,
+                dtype="<f4",
+            )
+            controlled_unconditional = np.ascontiguousarray(
+                controlled_unconditional + offset,
+                dtype="<f4",
+            )
+        base_cfg = np.ascontiguousarray(
+            base_unconditional
+            + np.float32(5.0)
+            * np.subtract(
+                base_conditional,
+                base_unconditional,
+                dtype=np.float32,
+            ),
+            dtype="<f4",
+        )
+        controlled_cfg = np.ascontiguousarray(
+            controlled_unconditional
+            + np.float32(5.0)
+            * np.subtract(
+                controlled_conditional,
+                controlled_unconditional,
+                dtype=np.float32,
+            ),
+            dtype="<f4",
+        )
+        sample = np.ones(shape, dtype="<f4")
+        base_next = np.ascontiguousarray(
+            sample + np.float32(delta) * base_cfg,
+            dtype="<f4",
+        )
+        controlled_next = np.ascontiguousarray(
+            sample + np.float32(delta) * controlled_cfg,
+            dtype="<f4",
+        )
+        base_pair = _fake_rope_pair(
+            probe_id=probe_id,
+            step_index=step_index,
+            control_role="base",
+            coefficient=0,
+        )
+        controlled_pair = _fake_rope_pair(
+            probe_id=probe_id,
+            step_index=step_index,
+            control_role="controlled",
+            coefficient=coefficient,
+        )
+        measurement = measure_cfg_state_update_numpy(
+            base_pair=base_pair,
+            controlled_pair=controlled_pair,
+            base_conditional_velocity=base_conditional,
+            base_unconditional_velocity=base_unconditional,
+            controlled_conditional_velocity=controlled_conditional,
+            controlled_unconditional_velocity=controlled_unconditional,
+            scheduler_consumed_velocity=controlled_cfg,
+            scheduler_sample=sample,
+            scheduler_base_next_state=base_next,
+            scheduler_controlled_next_state=controlled_next,
+            delta_sigma=delta,
+            cumulative_reference_energy_before_step=cumulative_reference,
+            cumulative_control_energy_before_step=cumulative_control,
+            remaining_step_count=8 - step_index,
+        )
+        rows.append(
+            _governed_step_from_measurement(
+                measurement,
+                base_pair=base_pair,
+                controlled_pair=controlled_pair,
+                conditional_encoder_digest="2" * 64,
+                unconditional_encoder_digest="3" * 64,
+            )
+        )
+        cumulative_reference += measurement.reference_energy_increment
+        cumulative_control += measurement.energy_increment
+    return tuple(rows)
+
+
+def _fake_saved_rgb24(
+    coefficient: int,
+    *,
+    invert_negative: bool = False,
+) -> np.ndarray:
+    video = np.zeros((33, 320, 512, 3), dtype=np.uint8)
+    if coefficient == 0:
+        return video
+    gradient = np.broadcast_to(
+        np.arange(PATCH_SIZE_PIXELS, dtype=np.uint8)[None, :, None] * 8,
+        (PATCH_SIZE_PIXELS, PATCH_SIZE_PIXELS, 3),
+    )
+    row, column = (
+        PATCH_A_TOKEN_COORDINATE
+        if coefficient > 0 or invert_negative
+        else PATCH_B_TOKEN_COORDINATE
+    )
+    for frame_index in range(11, 22):
+        video[
+            frame_index,
+            row * PATCH_SIZE_PIXELS : (row + 1) * PATCH_SIZE_PIXELS,
+            column * PATCH_SIZE_PIXELS : (column + 1) * PATCH_SIZE_PIXELS,
+            :,
+        ] = gradient
+    return np.ascontiguousarray(video)
+
+
+def _install_fake_velocity_shape(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    small_shape = (1, 1, 1, 1, 2)
+    monkeypatch.setattr(
+        runtime_module,
+        "SCHEDULER_VELOCITY_SHAPE",
+        small_shape,
+    )
+    monkeypatch.setattr(
+        runner_module,
+        "SCHEDULER_VELOCITY_SHAPE",
+        small_shape,
+    )
+
+
+def _install_fake_video_reader(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _install_fake_velocity_shape(monkeypatch)
+    monkeypatch.setattr(
+        runner_module,
+        "_read_saved_rgb24_file",
+        lambda path: np.load(Path(path).with_suffix(".npy")),
+    )
+
+
+def _fake_patch_relation_runtime(
+    config,
+    plan,
+    output_root: Path,
+    *,
+    fail_gate: bool = False,
+) -> PatchRelationRuntimeBatch:
+    runtime = config["protocol_contract"]["gate0_runtime_execution_contract"]
+    deltas = tuple(
+        float(value) for value in runtime["delta_sigma_by_step_decimal"]
+    )
+    measurements = []
+    generation_records = []
+    step_records = []
+    feature_records = []
+    for probe in plan:
+        coefficient = probe.signed_state_coefficient
+        saved = _fake_saved_rgb24(
+            coefficient,
+            invert_negative=bool(
+                fail_gate
+                and probe.identity_role == "gate0_identity_a"
+                and coefficient == -1
+            ),
+        )
+        feature = extract_saved_rgb24_patch_relation_feature(saved)
+        steps = _fake_governed_steps(probe.probe_id, coefficient, deltas)
+        exposure = math.fsum(
+            step.signed_state_update_exposure for step in steps
+        )
+        video = (
+            output_root
+            / "videos"
+            / f"{probe.plan_index:02d}_{probe.probe_id}.mp4"
+        )
+        video.parent.mkdir(parents=True, exist_ok=True)
+        video.write_bytes(probe.probe_id.encode("utf-8"))
+        np.save(video.with_suffix(".npy"), saved)
+        video_sha = sha256(video.read_bytes()).hexdigest()
+        saved_digest = sha256(saved.tobytes(order="C")).hexdigest()
+        feature_digest = sha256(feature.tobytes(order="C")).hexdigest()
+        output_binding = _output_binding_digest(
+            probe,
+            video_sha256=video_sha,
+            saved_rgb24_digest=saved_digest,
+            feature_digest=feature_digest,
+        )
+        measurement = PatchRelationProbeMeasurement(
+            plan_index=probe.plan_index,
+            identity_role=probe.identity_role,
+            probe_id=probe.probe_id,
+            signed_coefficient=coefficient,
+            generator_state_digest_random=(
+                "a" * 64
+                if probe.identity_role == "construction_c0"
+                else "b" * 64
+            ),
+            initial_hidden_state_digest_random=(
+                "c" * 64
+                if probe.identity_role == "construction_c0"
+                else "d" * 64
+            ),
+            video_path=str(video),
+            video_sha256=video_sha,
+            saved_rgb24_digest=saved_digest,
+            output_binding_digest=output_binding,
+            feature=feature,
+            steps=steps,
+            actual_signed_exposure=exposure,
+        )
+        measurements.append(measurement)
+        step_records.extend(_step_record(probe, step) for step in steps)
+        feature_records.append(
+            _feature_record(
+                probe,
+                feature,
+                video_sha256=video_sha,
+                saved_rgb24_digest=saved_digest,
+                output_binding_digest=output_binding,
+            )
+        )
+        generation_records.append(
+            _generation_record(
+                config,
+                probe,
+                measurement,
+                generation_runtime_sec=0.0,
+            )
+        )
+    return PatchRelationRuntimeBatch(
+        measurements=tuple(measurements),
+        generation_records=tuple(generation_records),
+        step_records=tuple(step_records),
+        feature_records=tuple(feature_records),
+    )
+
+
+@pytest.mark.quick
+def test_fake_patch_relation_runner_writes_8_64_8_nonformal_gate(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _install_fake_video_reader(monkeypatch)
+    output = tmp_path / "run"
+    decision = run_patch_relation_gate0_construction(
+        output,
+        runtime_executor=lambda config, plan, root: (
+            _fake_patch_relation_runtime(config, plan, root)
+        ),
+    )
+    assert decision["patch_relation_gate0_ready"] is True
+    assert decision["generation_record_count"] == 8
+    assert decision["trajectory_step_record_count"] == 64
+    assert decision["feature_record_count"] == 8
+    assert decision["next_double_window_gate_a_design_allowed"] is True
+    assert decision["next_double_window_gate_a_execution_allowed"] is False
+    assert decision["formal_result"] is False
+    assert decision["stage_progression_allowed"] is False
+    assert (output / "artifacts/patch_relation_c0_construction.npz").is_file()
+
+
+def test_runtime_batch_rejects_forged_exposure_and_step_schedule(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _install_fake_video_reader(monkeypatch)
+    config = load_patch_relation_gate0_config()
+    plan = build_patch_relation_gate0_plan(config)
+    batch = _fake_patch_relation_runtime(config, plan, tmp_path / "source")
+    first = batch.measurements[0]
+    forged_exposure = replace(
+        first,
+        actual_signed_exposure=first.actual_signed_exposure + 1.0,
+    )
+    with pytest.raises(ValueError, match="exposure aggregation"):
+        _validate_runtime_batch(
+            config,
+            plan,
+            replace(
+                batch,
+                measurements=(forged_exposure, *batch.measurements[1:]),
+            ),
+            output_root=tmp_path / "source",
+        )
+    forged_step = replace(first.steps[0], remaining_step_count=7)
+    forged_measurement = replace(
+        first,
+        steps=(forged_step, *first.steps[1:]),
+    )
+    with pytest.raises(ValueError, match="governed step"):
+        _validate_runtime_batch(
+            config,
+            plan,
+            replace(
+                batch,
+                measurements=(forged_measurement, *batch.measurements[1:]),
+            ),
+            output_root=tmp_path / "source",
+        )
+
+
+@pytest.mark.parametrize(
+    ("mutation", "match"),
+    [
+        (
+            lambda step: replace(
+                step,
+                actual_delta_norm=0.5,
+                norm_budget=1.0,
+                norm_guard_passed=True,
+            ),
+            "governed step",
+        ),
+        (
+            lambda step: replace(
+                step,
+                state_update_delta_norm=0.5,
+                energy_increment=0.25,
+                remaining_flow_energy=1.0,
+                energy_guard_passed=True,
+            ),
+            "governed step",
+        ),
+        (
+            lambda step: replace(
+                step,
+                state_update_direction_dot=(
+                    -step.direction_actual_norm
+                    * step.direction_intended_norm
+                ),
+                direction_cosine=1.0,
+                direction_guard_passed=True,
+            ),
+            "governed step",
+        ),
+    ],
+)
+def test_runtime_batch_recomputes_budget_energy_and_direction_guards(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    mutation,
+    match: str,
+) -> None:
+    _install_fake_video_reader(monkeypatch)
+    config = load_patch_relation_gate0_config()
+    plan = build_patch_relation_gate0_plan(config)
+    batch = _fake_patch_relation_runtime(config, plan, tmp_path / "source")
+    signed_index = 2
+    signed = batch.measurements[signed_index]
+    forged_step = mutation(signed.steps[0])
+    forged = replace(
+        signed,
+        steps=(forged_step, *signed.steps[1:]),
+    )
+    with pytest.raises(ValueError, match=match):
+        _validate_runtime_batch(
+            config,
+            plan,
+            replace(
+                batch,
+                measurements=(
+                    *batch.measurements[:signed_index],
+                    forged,
+                    *batch.measurements[signed_index + 1 :],
+                ),
+            ),
+            output_root=tmp_path / "source",
+        )
+
+
+def test_runtime_batch_rejects_coordinated_transition_statistic_forgery(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Raw-transition seal rejects the exact scalar/budget coordination attack."""
+
+    _install_fake_video_reader(monkeypatch)
+    config = load_patch_relation_gate0_config()
+    plan = build_patch_relation_gate0_plan(config)
+    output = tmp_path / "source"
+    batch = _fake_patch_relation_runtime(config, plan, output)
+    measurement_index = 2
+    step_offset = measurement_index * 8
+    signed = batch.measurements[measurement_index]
+    original = signed.steps[0]
+    seal = original._validated_transition_seal
+    assert seal is not None
+    assert not hasattr(seal, "payload")
+    assert not hasattr(seal, "__dict__")
+    with pytest.raises(AttributeError):
+        seal.payload = ("forged",)
+    assert not hasattr(runner_module, "_seal_validated_transition")
+    forged_base_state_norm = 0.052457
+    forged_state_norm = 5.2457e-8
+    forged_reference_increment = forged_base_state_norm**2
+    forged_projected_reference = (
+        original.cumulative_reference_energy_before_step
+        + forged_reference_increment * original.remaining_step_count
+    )
+    forged_total_budget = (
+        FLOW_ENERGY_BUDGET_RATIO * forged_projected_reference
+    )
+    forged_remaining = max(
+        0.0,
+        forged_total_budget
+        - original.cumulative_control_energy_before_step,
+    )
+    forged = replace(
+        original,
+        base_velocity_norm=1000.0,
+        intended_delta_norm=0.5,
+        actual_delta_norm=0.5,
+        base_state_update_norm=forged_base_state_norm,
+        intended_state_update_norm=forged_state_norm,
+        state_update_delta_norm=forged_state_norm,
+        state_update_direction_dot=forged_state_norm**2,
+        direction_actual_norm=forged_state_norm,
+        direction_intended_norm=forged_state_norm,
+        norm_budget=(
+            1000.0 * VELOCITY_NORM_RATIO_BUDGET * LAMBDA_MAX
+        ),
+        reference_energy_increment=forged_reference_increment,
+        projected_reference_energy=forged_projected_reference,
+        total_flow_energy_budget=forged_total_budget,
+        remaining_flow_energy=forged_remaining,
+        energy_increment=forged_state_norm**2,
+        direction_cosine=1.0,
+        signed_state_update_exposure=forged_state_norm,
+        norm_guard_passed=True,
+        energy_guard_passed=True,
+        direction_guard_passed=True,
+    )
+    forged_measurement = replace(
+        signed,
+        steps=(forged, *signed.steps[1:]),
+        actual_signed_exposure=(
+            signed.actual_signed_exposure
+            - original.signed_state_update_exposure
+            + forged.signed_state_update_exposure
+        ),
+    )
+    forged_step_records = list(batch.step_records)
+    forged_step_records[step_offset] = _step_record(
+        plan[measurement_index],
+        forged,
+    )
+    with pytest.raises(ValueError, match="transition数组验证seal"):
+        _validate_runtime_batch(
+            config,
+            plan,
+            replace(
+                batch,
+                measurements=(
+                    *batch.measurements[:measurement_index],
+                    forged_measurement,
+                    *batch.measurements[measurement_index + 1 :],
+                ),
+                step_records=tuple(forged_step_records),
+            ),
+            output_root=output,
+        )
+
+
+def test_runtime_batch_requires_exact_output_video_path(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _install_fake_video_reader(monkeypatch)
+    config = load_patch_relation_gate0_config()
+    plan = build_patch_relation_gate0_plan(config)
+    output = tmp_path / "source"
+    batch = _fake_patch_relation_runtime(config, plan, output)
+    outside = tmp_path / "outside.mp4"
+    outside.write_bytes(Path(batch.measurements[0].video_path).read_bytes())
+    forged = replace(batch.measurements[0], video_path=str(outside))
+    with pytest.raises(ValueError, match="video path/SHA"):
+        _validate_runtime_batch(
+            config,
+            plan,
+            replace(
+                batch,
+                measurements=(forged, *batch.measurements[1:]),
+            ),
+            output_root=output,
+        )
+
+
+def test_runtime_batch_rejects_invalid_mp4_even_with_self_reported_feature(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _install_fake_velocity_shape(monkeypatch)
+    config = load_patch_relation_gate0_config()
+    plan = build_patch_relation_gate0_plan(config)
+    output = tmp_path / "source"
+    batch = _fake_patch_relation_runtime(config, plan, output)
+    with pytest.raises(ValueError, match="RGB24 MP4 回读失败"):
+        _validate_runtime_batch(
+            config,
+            plan,
+            batch,
+            output_root=output,
+        )
+
+
+def test_runtime_batch_rejects_changed_video_with_coordinated_feature_record(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _install_fake_video_reader(monkeypatch)
+    config = load_patch_relation_gate0_config()
+    plan = build_patch_relation_gate0_plan(config)
+    output = tmp_path / "source"
+    batch = _fake_patch_relation_runtime(config, plan, output)
+    first = batch.measurements[0]
+    video_path = Path(first.video_path)
+    video_path.write_bytes(b"changed-video-content")
+    changed_saved = _fake_saved_rgb24(1)
+    np.save(video_path.with_suffix(".npy"), changed_saved)
+    changed_feature = extract_saved_rgb24_patch_relation_feature(changed_saved)
+    changed_rgb_digest = sha256(
+        changed_saved.tobytes(order="C")
+    ).hexdigest()
+    changed_feature_record = _feature_record(
+        plan[0],
+        changed_feature,
+        video_sha256=first.video_sha256,
+        saved_rgb24_digest=changed_rgb_digest,
+        output_binding_digest=first.output_binding_digest,
+    )
+    forged = replace(
+        first,
+        feature=changed_feature,
+        saved_rgb24_digest=changed_rgb_digest,
+    )
+    with pytest.raises(ValueError, match="video path/SHA"):
+        _validate_runtime_batch(
+            config,
+            plan,
+            replace(
+                batch,
+                measurements=(forged, *batch.measurements[1:]),
+                feature_records=(
+                    changed_feature_record,
+                    *batch.feature_records[1:],
+                ),
+            ),
+            output_root=output,
+        )
+
+
+@pytest.mark.quick
+def test_patch_relation_method_gate_failure_is_normal_nonformal_stop(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _install_fake_video_reader(monkeypatch)
+    output = tmp_path / "run"
+    decision = run_patch_relation_gate0_construction(
+        output,
+        runtime_executor=lambda config, plan, root: (
+            _fake_patch_relation_runtime(
+                config,
+                plan,
+                root,
+                fail_gate=True,
+            )
+        ),
+    )
+    assert decision["patch_relation_gate0_ready"] is False
+    assert decision["patch_relation_gate0_decision"] == (
+        "gate0_fail_stop_current_patch_relation_carrier_or_feature"
+    )
+    assert decision["formal_result"] is False
+    assert decision["stage_progression_allowed"] is False

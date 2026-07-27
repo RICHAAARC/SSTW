@@ -1,12 +1,12 @@
-# Patch-relation Gate 0 本地合同与算法原语
+# Patch-relation Gate 0 真实 runner 合同
 
-状态：`local_patch_relation_gate0_runtime_adapter_only`
+状态：`patch_relation_gate0_runner_implemented_pending_user_colab_run`
 
 本文件从属于两份现行权威文档，冲突时
 `frame_state_synchronized_generative_flow_video_watermark_algorithm_primitives.md`
-优先于 method design。本批在既有 CPU/NumPy 原语之上实现最薄、局部且
-异常安全的 Wan RoPE runtime adapter 与 CFG/state-update 测量边界；没有
-runner、GPU、Colab、Notebook、Drive 或模型执行授权。
+优先于 method design。本批把已审核 CPU/NumPy 原语与 Wan RoPE adapter 接成
+最薄8视频 runner，并接入固定 `colab_test` 请求入口。实现完成不等于已运行；
+真实 GPU/Colab 仍只由用户显式启动，Notebook 不承载方法逻辑。
 
 ## 1. 证据边界
 
@@ -160,10 +160,19 @@ q_{n}=\mathrm{DCT}(P_a)-\mathrm{DCT}(P_b)\in\mathbb R^6.
 时间平均，不做逐视频 L2，不使用4×4 RGB mean 作为 primary，也不依据 key 或
 Gate identity 选择 patch、channel、frequency 或 frame。
 
-## 5. C0 construction 与 identity A
+## 5. C0 construction、governed schedule 与 identity A
 
-本批 identity 仍是 `_placeholder`，因此执行禁止。未来必须冻结不同的 C0/A
-prompt、seed、initial noise 与用途；A 不得回流 C0。
+冻结身份为：
+
+- C0：`probe_paper_paper_master_prompt_005` /
+  `probe_paper_paper_master_calibration_seed_03=1275`；
+- identity A：`probe_paper_paper_master_prompt_006` /
+  `probe_paper_paper_master_test_seed_03=2275`。
+
+两者 prompt 文本、negative prompt、SHA-256 与 seed 均进入 protocol digest。
+每项 probe 都重新构造同 seed generator；同 identity 的4项 initial noise 必须
+相同，C0/A 必须不同。历史 decoder-Jacobian 结果不得回流选择 relation、
+feature、threshold 或身份。
 
 C0 精确四项：`clean_a, clean_b, positive, negative`。C0 只冻结：
 
@@ -180,20 +189,40 @@ whitening center 是 C0 clean A/B 的逐坐标均值；scale 是
 base_cfg = base_uncond + 5*(base_cond-base_uncond)
 controlled_cfg = controlled_uncond + 5*(controlled_cond-controlled_uncond)
 intended_delta = controlled_cfg-base_cfg
-constrained = base_cfg+intended_delta
+controlled branch outputs = float32(real BF16 transformer outputs)
+constrained = controlled_cfg  # pipeline与scheduler实际消费的同一FP32数组
 actual_delta = constrained-base_cfg
-actual_state_update_delta = delta_sigma*actual_delta
+base_next = frozen_euler_step(sample,base_cfg)
+controlled_next = real_scheduler_returned_prev_sample
+actual_state_update_delta = controlled_next-base_next
 ```
 
-以上全部在 C-contiguous FP32 scheduler coordinate 内完成。`delta_sigma` 先
-按 scheduler contract canonicalize 为 float32，随后必须是未来 governed Flow
-scheduler 提供的有限负值；当前本地 adapter 不冻结或伪造完整 sigma schedule。
+以上全部在 C-contiguous FP32 scheduler coordinate 内完成；runner 在模型加载
+前必须用 `torch.cuda.is_bf16_supported(including_emulation=False)` 验证原生
+BF16、验证CUDA compute capability major至少为8，并确认pipeline selected dtype
+exact为`torch.bfloat16`；旧torch签名、仿真BF16或FP16选择均fail-closed。
+runner不会让BF16 branch-combine舍入成为scheduler实际路径，并冻结逐step真实
+8-step sigma grid：
+
+```text
+1.0, 0.9475425482, 0.8827877641, 0.8008373380,
+0.6937931180, 0.5480455756, 0.3379721642, 0.0089285718, 0.0
+```
+
+每个 `delta_sigma=next-current` canonicalize 为 float32，并与 scheduler 暴露的
+实际 grid 精确一致；实际传入scheduler的timestep还必须逐项等于
+`scheduler.timesteps[step_index]`和冻结的`sigma*1000`行。scheduler内部
+step index在调用前后必须分别为冻结的当前/下一行；重复、错位timestep或内部
+index漂移均fail-closed。remaining count 固定为 `8-step_index`。runner 从 step 0
+开始顺序累计 reference/control energy，不接受 caller 自报 remaining budget。
 norm budget 沿用
 `||base_cfg||*0.02*0.12`，Flow energy increment 为
-`delta_sigma^2*||actual_delta||^2`。本地边界从未来 governed adapter 提供的
+`||controlled_next-base_next||^2`；reference increment同样从实际
+`base_next-sample`重算。两条next-state还必须与冻结Euler FP32公式exact一致，
+否则不得形成记录。本地边界从未来 governed adapter 提供的
 cumulative reference/control energy 与正 remaining-step count 重算 projected
 reference、总预算和 remaining energy，不接受任意 caller remaining-budget。
-direction guard 比较 actual state-update delta 与
+direction guard 比较真实next-state差与
 `delta_sigma*intended_delta`，阈值保持0.999，不放宽预算。clean 必须 exact
 zero actual delta；active 必须严格非零。
 
@@ -203,15 +232,24 @@ zero actual delta；active 必须严格非零。
 e
 =
 \operatorname{sign}(c)\,
-|\Delta\sigma|\,
-\|\Delta v_{\mathrm{actual}}\|_2.
+\|x^{controlled}_{next}-x^{base}_{next}\|_2.
 \]
 
-它使用 actual FP32 delta 而不是名义 phase；但当前本地 adapter 无法证明
-`delta_sigma` 与累计能量/remaining-step 的完整 governed schedule provenance，
-因此所有 adapter record 仍为 `local_contract_only`、
-`execution_evidence_allowed=false`。当前本地 C0/Gate 原语继续只接受有限、
-正负方向正确的 caller scalar 做公式验证，不能形成 execution evidence。定义：
+它使用scheduler返回值绑定的actual FP32 state update而不是名义 phase或仅
+velocity公式。局部 measurement 仍明确不是execution evidence；只有 runner
+同时验证冻结 schedule/timestep/internal index、cond/uncond两支、
+base/controlled同输入、scheduler实际消费的 controlled CFG与返回next-state、
+累计能量和完整8-step coverage 后，才提升为本次 non-formal construction
+step record。每步提升前，统一validator必须直接消费该步
+`base_cfg/controlled_cfg/sample/base_next/controlled_next`的实际FP32数组，
+重算所有velocity/state-update norm、direction、energy、exposure和guard；
+随后只签发进程内、不可序列化的validated seal并立即释放大数组。batch验证同时
+要求seal仍由同进程签发且所有sufficient statistics未变，不能通过协调修改
+scalar、budget、guard、record或无密钥digest绕过。五个scheduler/transition
+digest也必须由该factory直接从已验证数组的C-order bytes重算，不接受caller
+参数。此seal仅是正常caller与`dataclasses.replace`场景的同进程一致性
+capability，不是抵抗能够任意monkeypatch Python模块私有状态的密码学认证。
+定义：
 
 \[
 T_{\mathrm{rel}}
@@ -271,30 +309,49 @@ C0 signed gate 只决定构造是否可冻结；identity A 全部门禁通过才
 diagnostic readiness。即使通过，也最多允许另行设计双窗口 Gate A，不能自动
 执行。
 
-## 7. 状态机与禁止事项
+## 7. runner、Colab 与禁止事项
 
 ```text
-local contract + NumPy primitives
+local contract + NumPy/runtime adapter
+-> reviewed runner + exact schedule/identity binding
 -> independent read-only audit
 -> possible commit/push authorization
--> local scoped Wan runtime adapter + strict CFG/state-update boundary
--> independent read-only audit
--> separate future governed runner/schedule binding
--> separate user-authorized GPU run
+-> user updates request.ref and runs the unchanged thin Notebook
+-> local /content run completes
+-> one result ZIP + one minimal manifest copied to Drive
 ```
 
-当前始终：
+runner 对每个 denoising step 按官方 `conditional -> unconditional` 外部顺序，
+在每一支内执行 `base zero -> controlled 0/+/-`，共4次 transformer forward。
+cache 必须关闭，避免同一 outer cache context 污染 base/controlled。正式
+scheduler 只消费 controlled CFG；base 只用于同输入 counterfactual 测量。
+clean 也走完整4-forward路径并要求 exact no-op。
+
+精确视频顺序为：
+
+```text
+C0 clean-A, clean-B, positive, negative,
+A  clean-A, clean-B, positive, negative
+```
+
+每视频形成8条step record、一个保存视频SHA与一个`11x6` feature record；完整
+coverage 为8 generation / 64 step / 8 feature。C0只拟合 whitening/T_rel，
+A严格apply-only。方法 Gate FAIL 是正常的 non-formal stop 并可打包；runtime
+或合同异常进入既有 recovery-only 路径。成功输出只在 `/content` 本地完整后，
+由现有 packager 复制单 ZIP + manifest 到 Drive。
+
+当前授权：
 
 ```text
 formal_result=false
 stage_progression_allowed=false
-runtime_implementation_authorized=false
-gpu_execution_allowed=false
-colab_execution_allowed=false
-runner/notebook/Drive=false
+runtime_implementation_authorized=true
+runner_implementation_allowed=true
+construction/gpu/colab execution=true
+notebook handler/Drive direct write=false
 observer/attack/fixed-FPR/baseline/paper claim=false
 ```
 
-本地 pytest/harness 只证明合同、算法原语与 adapter 边界自洽，不是
-Patch-relation 方法结果。fake/NumPy 测试也不能证明真实 Wan hook、CUDA device
-或 Flow schedule 已完成端到端运行。
+这些 true 仅表示提交后可由用户显式运行已审核入口，不表示本轮已启动 GPU。
+本地 pytest/harness 只证明合同、runner与adapter边界自洽，不是 Patch-relation
+Gate 0 或方法结果。真实 Wan hook、CUDA峰值和端到端输出仍待用户 Colab 首跑。

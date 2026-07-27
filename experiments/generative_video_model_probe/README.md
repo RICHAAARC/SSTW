@@ -22,7 +22,8 @@ payload M
 -> key-conditioned trajectory evidence
 ```
 
-该 Patch-relation 主机制尚未实现、接入本目录 runner 或执行真实 GPU 运行。
+该 Patch-relation 主机制的首个 Gate 0 construction runner 已实现，但尚未由用户
+执行真实 GPU 运行，后续 clock/state observer 仍未实现。
 真实 Gate 0 FAIL 只否定历史
 `decoder-Jacobian additive atom + local RGB mean feature + held-out transfer`
 组合；它不是 Patch-relation embedding、clock path、state observer 或
@@ -32,11 +33,19 @@ bank 仅是待审 baseline / fallback，不是当前主方法。
 当前主路线的首个本地合同位于
 `configs/protocol/sstw_patch_relation_gate0_construction.json`，配套
 `main/methods/state_space_watermark/patch_relation_carrier.py` 与
-`evaluation/protocol/patch_relation_gate0_contract.py`。它只实现公开 zero-sum
-Patch relation、Wan temporal RoPE phase tuple 的 NumPy 数学、保存视频逐帧
-Patch-pair DCT relation feature、C0 `T_rel` 与 identity A apply-only Gate 0
-统计。本目录尚无对应 experiment runner 或 server handler；不得把该本地合同
-解释为端到端实现、GPU 结果或执行授权。
+`evaluation/protocol/patch_relation_gate0_contract.py`。它冻结公开 zero-sum
+Patch relation、Wan temporal RoPE phase tuple、保存视频逐帧 Patch-pair DCT
+relation feature、C0 `T_rel` 与 identity A apply-only Gate 0 统计。
+`patch_relation_gate0_construction.py` 将这些原语接到真实 diffusers 0.35.2
+Wan：精确执行 C0/A 各4项，每step对 cond/uncond 分支分别运行 zero-relation
+base 与受控 relation，重算 scheduler 实际消费的 FP32 CFG velocity、预算、
+真实返回next-state差、预算、state-update exposure 与冻结
+timestep/internal-index输入绑定，再从精确输出目录中的MP4 RGB24回读重构
+feature与输出绑定。
+`colab_test` 只提供固定 Notebook 的 request-driven 薄路由；成功包在 `/content`
+完整生成后才写单 ZIP+manifest 到 Drive，runtime失败保持 recovery-only。
+当前状态只是 runner implemented / pending user Colab run，不得解释为端到端
+方法结果或 Gate 0 已执行。
 
 历史 paper-profile 的实施顺序与 Claim 闭合规则仍保存在
 `docs/builds/complete_paper_mechanism_implementation.md`，但该文档只用于历史

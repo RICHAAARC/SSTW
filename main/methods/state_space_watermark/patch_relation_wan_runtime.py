@@ -4,7 +4,8 @@ The adapter is deliberately narrower than an experiment runner.  It provides:
 
 * an exception-safe, one-forward scope around ``transformer.rope.forward``;
 * exact conditional/unconditional CFG branch binding; and
-* a strict NumPy boundary that recomputes the FP32 scheduler velocity delta.
+* a strict NumPy boundary that recomputes the FP32 CFG velocity and binds the
+  realized update to the scheduler's controlled/base next-state difference.
 
 No function in this module authorizes model execution, produces Gate evidence,
 or turns caller-provided scheduler provenance into a governed runtime record.
@@ -44,7 +45,7 @@ MINIMUM_DIRECTION_COSINE = 0.999
 EXPECTED_ROPE_CALLS_PER_BRANCH = 1
 CFG_BRANCH_ORDER = ("conditional", "unconditional")
 RUNTIME_ADAPTER_PROTOCOL_DIGEST = (
-    "be8574c59b2b2fa3479f841a685d61aa4a028a860e255188a9a1f8e4fe380cd6"
+    "454e380c2900b9bd989ff8f95c3c0563545037650331f941b33eee650c0a0ddc"
 )
 
 _LOWER_HEX_64 = re.compile(r"[0-9a-f]{64}\Z")
@@ -93,7 +94,7 @@ class CfgRopeApplicationPair:
 
 @dataclass(frozen=True)
 class CfgStateUpdateMeasurement:
-    """Strict local measurement of a CFG-combined scheduler FP32 delta."""
+    """Strict measurement bound to the scheduler's actual FP32 next state."""
 
     probe_id: str
     step_index: int
@@ -104,12 +105,22 @@ class CfgStateUpdateMeasurement:
     intended_delta_velocity: np.ndarray
     constrained_velocity: np.ndarray
     actual_delta_velocity: np.ndarray
+    scheduler_sample: np.ndarray
+    base_next_state: np.ndarray
+    controlled_next_state: np.ndarray
+    base_state_update_delta: np.ndarray
+    intended_state_update_delta: np.ndarray
     actual_state_update_delta: np.ndarray
     delta_sigma: float
     base_velocity_norm: float
     intended_delta_norm: float
     actual_delta_norm: float
+    base_state_update_norm: float
+    intended_state_update_norm: float
     state_update_delta_norm: float
+    state_update_direction_dot: float
+    direction_actual_norm: float
+    direction_intended_norm: float
     norm_budget: float
     cumulative_reference_energy_before_step: float
     cumulative_control_energy_before_step: float
@@ -651,17 +662,23 @@ def measure_cfg_state_update_numpy(
     base_unconditional_velocity: np.ndarray,
     controlled_conditional_velocity: np.ndarray,
     controlled_unconditional_velocity: np.ndarray,
+    scheduler_consumed_velocity: np.ndarray,
+    scheduler_sample: np.ndarray,
+    scheduler_base_next_state: np.ndarray,
+    scheduler_controlled_next_state: np.ndarray,
     delta_sigma: float,
     cumulative_reference_energy_before_step: float,
     cumulative_control_energy_before_step: float,
     remaining_step_count: int,
 ) -> CfgStateUpdateMeasurement:
-    """Recompute the actual FP32 CFG velocity and Euler state-update delta.
+    """Recompute FP32 CFG and bind it to the scheduler's returned next state.
 
-    The schedule scalars are strict future governed runtime-adapter inputs.
-    This local function recomputes the unchanged Flow-energy formula but cannot
-    establish their full-schedule provenance, so its result explicitly remains
-    ineligible as execution evidence.
+    The caller must supply both the actual controlled scheduler result and a
+    counterfactual base result computed with the same frozen Euler/dtype
+    semantics.  This local function checks both against the formula, then uses
+    their realized difference for direction, energy, and signed exposure.  It
+    still cannot establish full-schedule provenance and remains ineligible as
+    execution evidence until promoted by the governed runner.
     """
 
     validated_base = validate_cfg_rope_application_pair(
@@ -727,25 +744,81 @@ def measure_cfg_state_update_numpy(
     )
     base_cfg = _cfg_combine(base_cond, base_uncond)
     controlled_cfg = _cfg_combine(controlled_cond, controlled_uncond)
+    consumed_cfg = _require_velocity(
+        scheduler_consumed_velocity,
+        "scheduler consumed CFG velocity",
+    )
+    sample = _require_velocity(scheduler_sample, "scheduler sample")
+    base_next = _require_velocity(
+        scheduler_base_next_state,
+        "scheduler base next state",
+    )
+    controlled_next = _require_velocity(
+        scheduler_controlled_next_state,
+        "scheduler controlled next state",
+    )
+    if not np.array_equal(consumed_cfg, controlled_cfg):
+        raise ValueError(
+            "scheduler consumed CFG velocity 与 controlled FP32 CFG 不一致"
+        )
     intended_delta = np.ascontiguousarray(
         np.subtract(controlled_cfg, base_cfg, dtype=np.float32),
         dtype="<f4",
     )
-    constrained = np.ascontiguousarray(
-        np.add(base_cfg, intended_delta, dtype=np.float32),
-        dtype="<f4",
-    )
+    # The official scheduler consumes the controlled CFG output itself.  Keep
+    # that exact FP32 array as the constrained velocity instead of reconstructing
+    # it through base+(controlled-base), which can differ by one ULP.
+    constrained = np.ascontiguousarray(consumed_cfg, dtype="<f4")
     actual_delta = np.ascontiguousarray(
         np.subtract(constrained, base_cfg, dtype=np.float32),
         dtype="<f4",
     )
+    intended_state_update = np.ascontiguousarray(
+        np.multiply(intended_delta, np.float32(interval), dtype=np.float32),
+        dtype="<f4",
+    )
+    expected_base_next = np.ascontiguousarray(
+        np.add(
+            sample,
+            np.multiply(base_cfg, np.float32(interval), dtype=np.float32),
+            dtype=np.float32,
+        ),
+        dtype="<f4",
+    )
+    expected_controlled_next = np.ascontiguousarray(
+        np.add(
+            sample,
+            np.multiply(
+                controlled_cfg,
+                np.float32(interval),
+                dtype=np.float32,
+            ),
+            dtype=np.float32,
+        ),
+        dtype="<f4",
+    )
+    if (
+        not np.array_equal(base_next, expected_base_next)
+        or not np.array_equal(controlled_next, expected_controlled_next)
+    ):
+        raise ValueError("scheduler next-state 与冻结Euler FP32语义不一致")
+    base_state_update = np.ascontiguousarray(
+        np.subtract(base_next, sample, dtype=np.float32),
+        dtype="<f4",
+    )
+    controlled_state_update = np.ascontiguousarray(
+        np.subtract(controlled_next, sample, dtype=np.float32),
+        dtype="<f4",
+    )
     state_update_delta = np.ascontiguousarray(
-        np.multiply(actual_delta, np.float32(interval), dtype=np.float32),
+        np.subtract(controlled_next, base_next, dtype=np.float32),
         dtype="<f4",
     )
     base_norm = _float32_norm(base_cfg)
     intended_norm = _float32_norm(intended_delta)
     actual_norm = _float32_norm(actual_delta)
+    base_state_update_norm = _float32_norm(base_state_update)
+    intended_state_update_norm = _float32_norm(intended_state_update)
     state_update_norm = _float32_norm(state_update_delta)
     if not all(
         math.isfinite(value)
@@ -753,6 +826,8 @@ def measure_cfg_state_update_numpy(
             base_norm,
             intended_norm,
             actual_norm,
+            base_state_update_norm,
+            intended_state_update_norm,
             state_update_norm,
         )
     ):
@@ -760,7 +835,7 @@ def measure_cfg_state_update_numpy(
     norm_budget = (
         base_norm * VELOCITY_NORM_RATIO_BUDGET * LAMBDA_MAX
     )
-    reference_increment = interval**2 * base_norm**2
+    reference_increment = base_state_update_norm**2
     projected_reference = (
         cumulative_reference
         + reference_increment * remaining_step_count
@@ -772,7 +847,7 @@ def measure_cfg_state_update_numpy(
         0.0,
         total_flow_energy_budget - cumulative_control,
     )
-    energy_increment = interval**2 * actual_norm**2
+    energy_increment = state_update_norm**2
     norm_guard = _budget_guard_passed(actual_norm, norm_budget)
     energy_guard = _budget_guard_passed(energy_increment, remaining)
 
@@ -783,6 +858,7 @@ def measure_cfg_state_update_numpy(
             or np.count_nonzero(intended_delta) != 0
             or np.count_nonzero(actual_delta) != 0
             or np.count_nonzero(state_update_delta) != 0
+            or not np.array_equal(base_next, controlled_next)
         ):
             raise PatchRelationRuntimeGuardError(
                 {
@@ -801,12 +877,22 @@ def measure_cfg_state_update_numpy(
             intended_delta_velocity=intended_delta,
             constrained_velocity=constrained,
             actual_delta_velocity=actual_delta,
+            scheduler_sample=sample,
+            base_next_state=base_next,
+            controlled_next_state=controlled_next,
+            base_state_update_delta=base_state_update,
+            intended_state_update_delta=intended_state_update,
             actual_state_update_delta=state_update_delta,
             delta_sigma=interval,
             base_velocity_norm=base_norm,
             intended_delta_norm=0.0,
             actual_delta_norm=0.0,
+            base_state_update_norm=base_state_update_norm,
+            intended_state_update_norm=0.0,
             state_update_delta_norm=0.0,
+            state_update_direction_dot=0.0,
+            direction_actual_norm=0.0,
+            direction_intended_norm=0.0,
             norm_budget=norm_budget,
             cumulative_reference_energy_before_step=cumulative_reference,
             cumulative_control_energy_before_step=cumulative_control,
@@ -834,10 +920,19 @@ def measure_cfg_state_update_numpy(
                 "step_index": base_pair.step_index,
             }
         )
-    intended_state_update = np.ascontiguousarray(
-        np.multiply(intended_delta, np.float32(interval), dtype=np.float32),
-        dtype="<f4",
+    actual_direction_values = state_update_delta.astype(
+        np.float64,
+        copy=False,
+    ).reshape(-1)
+    intended_direction_values = intended_state_update.astype(
+        np.float64,
+        copy=False,
+    ).reshape(-1)
+    direction_dot = float(
+        np.dot(actual_direction_values, intended_direction_values)
     )
+    direction_actual_norm = float(np.linalg.norm(actual_direction_values))
+    direction_intended_norm = float(np.linalg.norm(intended_direction_values))
     direction_cosine = _safe_cosine(
         state_update_delta,
         intended_state_update,
@@ -859,9 +954,7 @@ def measure_cfg_state_update_numpy(
                 "step_index": base_pair.step_index,
             }
         )
-    signed_exposure = (
-        float(coefficient) * abs(interval) * actual_norm
-    )
+    signed_exposure = float(coefficient) * state_update_norm
     return CfgStateUpdateMeasurement(
         probe_id=base_pair.probe_id,
         step_index=base_pair.step_index,
@@ -872,12 +965,22 @@ def measure_cfg_state_update_numpy(
         intended_delta_velocity=intended_delta,
         constrained_velocity=constrained,
         actual_delta_velocity=actual_delta,
+        scheduler_sample=sample,
+        base_next_state=base_next,
+        controlled_next_state=controlled_next,
+        base_state_update_delta=base_state_update,
+        intended_state_update_delta=intended_state_update,
         actual_state_update_delta=state_update_delta,
         delta_sigma=interval,
         base_velocity_norm=base_norm,
         intended_delta_norm=intended_norm,
         actual_delta_norm=actual_norm,
+        base_state_update_norm=base_state_update_norm,
+        intended_state_update_norm=intended_state_update_norm,
         state_update_delta_norm=state_update_norm,
+        state_update_direction_dot=direction_dot,
+        direction_actual_norm=direction_actual_norm,
+        direction_intended_norm=direction_intended_norm,
         norm_budget=norm_budget,
         cumulative_reference_energy_before_step=cumulative_reference,
         cumulative_control_energy_before_step=cumulative_control,
@@ -894,3 +997,105 @@ def measure_cfg_state_update_numpy(
         direction_guard_passed=direction_guard,
         clean_exact_noop=False,
     )
+
+
+def validate_cfg_state_update_measurement_numpy(
+    measurement: CfgStateUpdateMeasurement,
+    *,
+    base_pair: CfgRopeApplicationPair,
+    controlled_pair: CfgRopeApplicationPair,
+) -> CfgStateUpdateMeasurement:
+    """Rebuild every transition statistic from the retained raw FP32 arrays.
+
+    This validator intentionally routes the already-combined base/controlled
+    CFG arrays through the same measurement function as identical cond/uncond
+    branches.  That preserves the exact combined values while independently
+    rebuilding scheduler next states, velocity/state-update norms, direction,
+    energy, exposure, and guards.  A caller cannot make coordinated scalar
+    edits pass without also presenting the original transition arrays.
+    """
+
+    if not isinstance(measurement, CfgStateUpdateMeasurement):
+        raise TypeError("CFG state-update measurement 类型不匹配")
+    rebuilt = measure_cfg_state_update_numpy(
+        base_pair=base_pair,
+        controlled_pair=controlled_pair,
+        base_conditional_velocity=measurement.base_cfg_velocity,
+        base_unconditional_velocity=measurement.base_cfg_velocity,
+        controlled_conditional_velocity=measurement.controlled_cfg_velocity,
+        controlled_unconditional_velocity=measurement.controlled_cfg_velocity,
+        scheduler_consumed_velocity=measurement.constrained_velocity,
+        scheduler_sample=measurement.scheduler_sample,
+        scheduler_base_next_state=measurement.base_next_state,
+        scheduler_controlled_next_state=measurement.controlled_next_state,
+        delta_sigma=measurement.delta_sigma,
+        cumulative_reference_energy_before_step=(
+            measurement.cumulative_reference_energy_before_step
+        ),
+        cumulative_control_energy_before_step=(
+            measurement.cumulative_control_energy_before_step
+        ),
+        remaining_step_count=measurement.remaining_step_count,
+    )
+    array_fields = (
+        "base_cfg_velocity",
+        "controlled_cfg_velocity",
+        "intended_delta_velocity",
+        "constrained_velocity",
+        "actual_delta_velocity",
+        "scheduler_sample",
+        "base_next_state",
+        "controlled_next_state",
+        "base_state_update_delta",
+        "intended_state_update_delta",
+        "actual_state_update_delta",
+    )
+    scalar_fields = (
+        "probe_id",
+        "step_index",
+        "signed_coefficient",
+        "input_binding_digest",
+        "delta_sigma",
+        "base_velocity_norm",
+        "intended_delta_norm",
+        "actual_delta_norm",
+        "base_state_update_norm",
+        "intended_state_update_norm",
+        "state_update_delta_norm",
+        "state_update_direction_dot",
+        "direction_actual_norm",
+        "direction_intended_norm",
+        "norm_budget",
+        "cumulative_reference_energy_before_step",
+        "cumulative_control_energy_before_step",
+        "remaining_step_count",
+        "reference_energy_increment",
+        "projected_reference_energy",
+        "total_flow_energy_budget",
+        "remaining_flow_energy",
+        "energy_increment",
+        "direction_cosine",
+        "signed_state_update_exposure",
+        "norm_guard_passed",
+        "energy_guard_passed",
+        "direction_guard_passed",
+        "clean_exact_noop",
+        "local_contract_only",
+        "execution_evidence_allowed",
+        "formal_result",
+        "stage_progression_allowed",
+    )
+    if any(
+        not np.array_equal(
+            getattr(measurement, field_name),
+            getattr(rebuilt, field_name),
+        )
+        for field_name in array_fields
+    ) or any(
+        getattr(measurement, field_name) != getattr(rebuilt, field_name)
+        for field_name in scalar_fields
+    ):
+        raise ValueError(
+            "CFG state-update measurement 与原始transition数组重建不一致"
+        )
+    return measurement

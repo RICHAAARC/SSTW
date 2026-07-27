@@ -1,9 +1,10 @@
-"""Fail-closed local contract for the first Patch-relation Gate 0 primitive.
+"""Fail-closed contract for the first Patch-relation Gate 0 execution.
 
-This module validates one exact design/local-primitives/runtime-adapter config
-and constructs the design-only C0/A probe plan.  It implements and validates
-only the local adapter contract; it does not authorize or execute a real model
-runtime, GPU, Colab, a runner, an observer, or stage progression.
+This module validates one exact design/runtime config and constructs the
+predeclared C0/A probe plan.  The runner is implemented and may execute only
+after an explicit user Colab run; results remain non-formal and cannot advance
+the stage or authorize an observer, attack, fixed-FPR evaluation, or paper
+claim.
 """
 
 from __future__ import annotations
@@ -15,12 +16,13 @@ from pathlib import Path
 import re
 from typing import Any, Mapping
 
+import numpy as np
+
 from main.methods.state_space_watermark.patch_relation_carrier import (
     FEATURE_SCHEMA_ID,
     PHASE_BUDGET_RADIANS,
     RELATION_DESCRIPTOR_ID,
     build_public_patch_relation_descriptor,
-    frozen_method_boundary,
 )
 from main.methods.state_space_watermark.patch_relation_wan_runtime import (
     CFG_GUIDANCE_SCALE,
@@ -36,9 +38,11 @@ from main.methods.state_space_watermark.patch_relation_wan_runtime import (
 DEFAULT_CONFIG_PATH = "configs/protocol/sstw_patch_relation_gate0_construction.json"
 PROFILE_ID = "sstw_patch_relation_gate0_construction"
 METHOD_ID = "frame_state_synchronized_generative_flow_video_watermark"
-CONTRACT_STATE = "local_patch_relation_gate0_runtime_adapter_only"
+CONTRACT_STATE = (
+    "patch_relation_gate0_runner_implemented_pending_user_colab_run"
+)
 FROZEN_PROTOCOL_DIGEST = (
-    "be8574c59b2b2fa3479f841a685d61aa4a028a860e255188a9a1f8e4fe380cd6"
+    "454e380c2900b9bd989ff8f95c3c0563545037650331f941b33eee650c0a0ddc"
 )
 _LOWER_HEX_64 = re.compile(r"[0-9a-f]{64}\Z")
 
@@ -51,11 +55,22 @@ EXPECTED_TOP_LEVEL_KEYS = {
     "protocol_digest",
 }
 EXPECTED_AUTHORIZATION_BOUNDARY = {
-    **frozen_method_boundary(),
-    "construction_execution_allowed": False,
+    "runtime_implementation_authorized": True,
+    "construction_execution_allowed": True,
+    "gpu_execution_allowed": True,
+    "colab_execution_allowed": True,
+    "runner_implementation_allowed": True,
+    "notebook_handler_implementation_allowed": False,
+    "drive_update_allowed": False,
+    "observer_implementation_allowed": False,
+    "attack_execution_allowed": False,
+    "fixed_fpr_execution_allowed": False,
+    "baseline_execution_allowed": False,
+    "paper_claim_allowed": False,
+    "formal_result": False,
+    "stage_progression_allowed": False,
     "claim_support_status": (
-        "local_contract_numpy_primitives_and_runtime_adapter_only_"
-        "not_method_evidence"
+        "gate0_execution_pending_user_colab_run_not_method_evidence"
     ),
 }
 EXPECTED_PROTOCOL_SECTIONS = {
@@ -67,12 +82,14 @@ EXPECTED_PROTOCOL_SECTIONS = {
     "coefficient_derivation_contract",
     "output_feature_contract",
     "construction_and_gate_contract",
+    "execution_identity_contract",
+    "gate0_runtime_execution_contract",
     "method_scope",
 }
 EXPECTED_PROBE_ROLES = ("clean_a", "clean_b", "positive", "negative")
 EXPECTED_ACTUAL_SIGNED_EXPOSURE_INPUT = (
-    "local_runtime_adapter_realized_cfg_velocity_state_update_measurement_"
-    "requires_future_governed_schedule_binding_not_execution_evidence"
+    "governed_runner_realized_scheduler_next_state_difference_with_exact_"
+    "frozen_schedule_timestep_and_internal_index_binding"
 )
 EXPECTED_WAN_RUNTIME_ADAPTER_CONTRACT = {
     "diffusers_version": DIFFUSERS_VERSION,
@@ -97,7 +114,7 @@ EXPECTED_WAN_RUNTIME_ADAPTER_CONTRACT = {
         "main.methods.state_space_watermark.patch_relation_wan_runtime"
     ),
     "runtime_adapter_implemented": True,
-    "runtime_adapter_execution_allowed": False,
+    "runtime_adapter_execution_allowed": True,
     "scoped_rope_output_contract": {
         "scope": "one_transformer_forward_branch_only",
         "expected_rope_call_attempts": 1,
@@ -121,6 +138,10 @@ EXPECTED_WAN_RUNTIME_ADAPTER_CONTRACT = {
             "cfg_velocity=unconditional+guidance_scale*"
             "(conditional-unconditional)_all_float32"
         ),
+        "transformer_branch_output_cast_before_pipeline_cfg": (
+            "base_and_controlled_branch_velocity_explicit_float32_before_"
+            "official_pipeline_cfg"
+        ),
         "same_relation_control_on_conditional_and_unconditional": True,
         "base_control_coefficient": 0,
         "input_state_timestep_and_probe_binding_must_match": True,
@@ -129,7 +150,8 @@ EXPECTED_WAN_RUNTIME_ADAPTER_CONTRACT = {
     "scheduler_state_update_measurement_contract": {
         "scheduler_velocity_shape": [1, 16, 9, 40, 64],
         "branch_velocity_dtype_after_transformer_cast": (
-            "little_endian_float32"
+            "real_transformer_bfloat16_output_explicitly_cast_to_float32_"
+            "before_pipeline_cfg"
         ),
         "base_cfg_velocity": (
             "float32_cfg_combine_base_conditional_and_unconditional"
@@ -141,17 +163,30 @@ EXPECTED_WAN_RUNTIME_ADAPTER_CONTRACT = {
             "controlled_cfg_velocity_minus_base_cfg_velocity_float32"
         ),
         "constrained_velocity": (
-            "base_cfg_velocity_plus_intended_delta_velocity_float32"
+            "controlled_cfg_velocity_exact_scheduler_model_output_float32"
         ),
         "actual_delta_velocity": (
             "constrained_velocity_minus_base_cfg_velocity_float32"
         ),
         "delta_sigma_requirement": (
-            "future_governed_flow_scheduler_input_canonicalized_to_float32_"
-            "must_be_finite_and_negative"
+            "governed_runner_exact_frozen_flow_scheduler_input_"
+            "canonicalized_to_float32_must_be_finite_and_negative"
+        ),
+        "scheduler_sample": (
+            "actual_scheduler_input_sample_cast_to_float32_by_official_"
+            "FlowMatchEuler_step"
+        ),
+        "base_next_state": (
+            "counterfactual_float32_sample_plus_delta_sigma_times_base_cfg_"
+            "velocity_same_frozen_euler_semantics"
+        ),
+        "controlled_next_state": (
+            "actual_scheduler_returned_prev_sample_float32_bound_to_"
+            "controlled_cfg_velocity"
         ),
         "actual_state_update_delta": (
-            "float32_delta_sigma_times_actual_delta_velocity"
+            "controlled_next_state_minus_base_next_state_float32_after_"
+            "scheduler_output_cast"
         ),
         "lambda_max_decimal": format(LAMBDA_MAX, ".2f"),
         "velocity_norm_ratio_budget_decimal": format(
@@ -167,11 +202,11 @@ EXPECTED_WAN_RUNTIME_ADAPTER_CONTRACT = {
             "times_lambda_max"
         ),
         "schedule_energy_context": (
-            "future_governed_inputs_cumulative_reference_energy_cumulative_"
-            "control_energy_and_positive_remaining_step_count"
+            "governed_runner_recomputed_cumulative_reference_energy_"
+            "cumulative_control_energy_and_exact_remaining_step_count"
         ),
         "reference_energy_increment": (
-            "delta_sigma_squared_times_base_cfg_velocity_l2_squared"
+            "actual_base_next_state_minus_scheduler_sample_l2_squared"
         ),
         "projected_reference_energy": (
             "cumulative_reference_energy_plus_reference_energy_increment_"
@@ -185,7 +220,7 @@ EXPECTED_WAN_RUNTIME_ADAPTER_CONTRACT = {
             "energy"
         ),
         "energy_increment": (
-            "delta_sigma_squared_times_actual_delta_velocity_l2_squared"
+            "actual_state_update_delta_l2_squared"
         ),
         "direction_cosine": (
             "safe_cosine_actual_state_update_delta_vs_delta_sigma_times_"
@@ -196,12 +231,13 @@ EXPECTED_WAN_RUNTIME_ADAPTER_CONTRACT = {
             ".3f",
         ),
         "signed_state_update_exposure": (
-            "signed_coefficient_times_absolute_delta_sigma_times_"
-            "actual_delta_velocity_l2"
+            "signed_coefficient_times_actual_state_update_delta_l2"
         ),
         "active_zero_actual_delta_allowed": False,
         "clean_exact_noop_required": True,
         "local_measurement_is_execution_evidence": False,
+        "governed_step_record_requires_runner_schedule_and_scheduler_"
+        "consumption_revalidation": True,
     },
     "attention_bias_fallback_allowed": False,
     "direct_additive_velocity_or_latent_carrier_allowed": False,
@@ -253,19 +289,179 @@ EXPECTED_STATISTICS_AND_TRANSFER_FORMULA_CONTRACT = {
         "max(l2(flatten_C(observed_odd)),1e-12)"
     ),
 }
+EXPECTED_EXECUTION_IDENTITY_CONTRACT = {
+    "execution_common": {
+        "model_id": "Wan-AI/Wan2.1-T2V-1.3B-Diffusers",
+        "model_revision": "0fad780a534b6463e45facd96134c9f345acfa5b",
+        "diffusers_version": "0.35.2",
+        "scheduler_id": "wan21_flow_match_euler_discrete_scheduler_shift_3",
+        "scheduler_signature": (
+            "FlowMatchEulerDiscreteScheduler:"
+            "a63b40d76d729371591d03526e14d24359c732866c07f51e4cc5f918f4941d2b"
+        ),
+        "flow_shift_decimal": "3.0",
+        "num_inference_steps": 8,
+        "num_frames": 33,
+        "height": 320,
+        "width": 512,
+        "guidance_scale_decimal": "5.0",
+        "fps": 8,
+        "video_encoder_backend": "imageio_ffmpeg",
+        "video_exporter": "diffusers.utils.export_to_video",
+    },
+    "construction_identity_c0": {
+        "identity_id": "patch_relation_construction_identity_c0",
+        "prompt_id": "probe_paper_paper_master_prompt_005",
+        "prompt_text": (
+            "A large blue flag sweeps from the lower left to the upper right "
+            "across most of the image, fixed camera, wide amplitude motion, "
+            "high contrast indoor background."
+        ),
+        "prompt_text_sha256": (
+            "3829af00523428c3013ee2393830d2311b664c4eb7c2e3b932982430b99d23bd"
+        ),
+        "negative_prompt_text": (
+            "static image, frozen cloth, tiny flag, weak motion, blurry, "
+            "jittery, distorted"
+        ),
+        "negative_prompt_text_sha256": (
+            "32d7fd6487d8da472af022a61ed114ec11278a6100f04a997df2129024257cc0"
+        ),
+        "seed_id": "probe_paper_paper_master_calibration_seed_03",
+        "seed_value": 1275,
+        "initial_noise_rule": (
+            "new_torch_generator_manual_seed_per_probe_same_seed_within_"
+            "identity"
+        ),
+    },
+    "gate0_identity_a": {
+        "identity_id": "patch_relation_gate0_identity_a",
+        "prompt_id": "probe_paper_paper_master_prompt_006",
+        "prompt_text": (
+            "A red toy train moves along a circular track around a yellow "
+            "tower, fixed camera, the train occupies a large foreground area "
+            "and visibly changes position every frame."
+        ),
+        "prompt_text_sha256": (
+            "2323d9045f96945cec4a935aea41bbf950bcb2257f44f1540386089ceeeb99c1"
+        ),
+        "negative_prompt_text": (
+            "static image, frozen train, subtle motion, tiny object, blurry, "
+            "jittery, distorted"
+        ),
+        "negative_prompt_text_sha256": (
+            "528c33a7ed958ca70add888f83232410f820e532d0053a80151202195b6940ab"
+        ),
+        "seed_id": "probe_paper_paper_master_test_seed_03",
+        "seed_value": 2275,
+        "initial_noise_rule": (
+            "new_torch_generator_manual_seed_per_probe_same_seed_within_"
+            "identity"
+        ),
+    },
+    "identities_must_be_distinct": True,
+    "same_initial_noise_within_identity": True,
+    "identity_a_record_backflow_allowed": False,
+    "historical_decoder_jacobian_result_selection_backflow_allowed": False,
+}
+EXPECTED_GATE0_RUNTIME_EXECUTION_CONTRACT = {
+    "test_id": "patch_relation_gate0_construction",
+    "phase": "gate0",
+    "probe_order": [
+        "construction_c0_clean_a",
+        "construction_c0_clean_b",
+        "construction_c0_positive",
+        "construction_c0_negative",
+        "gate0_identity_a_clean_a",
+        "gate0_identity_a_clean_b",
+        "gate0_identity_a_positive",
+        "gate0_identity_a_negative",
+    ],
+    "signed_coefficients": [0, 0, 1, -1, 0, 0, 1, -1],
+    "sigma_grid_decimal": [
+        "1.0",
+        "0.9475425481796265",
+        "0.8827877640724182",
+        "0.8008373379707336",
+        "0.6937931180000305",
+        "0.5480455756187439",
+        "0.33797216415405273",
+        "0.008928571827709675",
+        "0.0",
+    ],
+    "delta_sigma_by_step_decimal": [
+        "-0.052457451820373535",
+        "-0.06475478410720825",
+        "-0.08195042610168457",
+        "-0.10704421997070312",
+        "-0.14574754238128662",
+        "-0.21007341146469116",
+        "-0.32904359698295593",
+        "-0.008928571827709675",
+    ],
+    "timestep_by_step_decimal": [
+        "1000.0",
+        "947.5425415039062",
+        "882.7877807617188",
+        "800.8373413085938",
+        "693.7930908203125",
+        "548.0455932617188",
+        "337.97216796875",
+        "8.928571701049805",
+    ],
+    "transformer_external_branch_order_per_step": [
+        "conditional",
+        "unconditional",
+    ],
+    "base_then_controlled_forward_per_branch": True,
+    "transformer_forward_count_per_step": 4,
+    "transformer_cache_must_be_disabled": True,
+    "base_and_controlled_share_exact_hidden_timestep_encoder_input_per_"
+    "branch": True,
+    "scheduler_consumes_controlled_cfg_velocity_only": True,
+    "transformer_bfloat16_output_cast_to_float32_before_pipeline_cfg": True,
+    "scheduler_model_output_revalidated_against_measured_controlled_cfg": True,
+    "scheduler_returned_controlled_next_state_and_counterfactual_base_next_"
+    "state_revalidated": True,
+    "scheduler_timestep_exact_frozen_row_required": True,
+    "scheduler_internal_step_index_before_after_progression_required": True,
+    "cuda_bfloat16_capability_checked_before_model_load": True,
+    "cuda_native_bfloat16_check_including_emulation_false_required": True,
+    "minimum_cuda_compute_capability_major": 8,
+    "selected_pipeline_dtype_exact_torch_bfloat16_required": True,
+    "remaining_step_count_formula": "8_minus_step_index",
+    "cumulative_reference_and_control_energy_recomputed_in_step_order": True,
+    "step_input_binding_digest": (
+        "sha256_canonical_probe_identity_step_hidden_timestep_and_branch_"
+        "encoder_tensor_signatures"
+    ),
+    "clean_probe_runs_same_base_and_controlled_forward_path": True,
+    "clean_exact_noop_required": True,
+    "output_video_shape_rgb24": [33, 320, 512, 3],
+    "output_feature_shape": [11, 6],
+    "expected_generation_record_count": 8,
+    "expected_step_record_count": 64,
+    "expected_feature_record_count": 8,
+    "c0_fits_whitening_and_T_rel_only": True,
+    "identity_a_apply_only": True,
+    "method_gate_failure_is_normal_nonformal_stop": True,
+    "runtime_or_contract_failure_is_recovery_only": True,
+    "successful_run_published_after_local_completion_as_single_zip_and_"
+    "manifest": True,
+}
 
 
 @dataclass(frozen=True)
 class PatchRelationProbePlanRecord:
     plan_index: int
     identity_role: str
-    identity_placeholder: str
+    identity_id: str
     probe_id: str
     probe_role: str
     signed_state_coefficient: int
     relation_id: str
     feature_schema_id: str
-    execution_authorized: bool = False
+    execution_authorized: bool = True
     formal_result: bool = False
     stage_progression_allowed: bool = False
 
@@ -444,19 +640,18 @@ def _validate_contract_semantics(contract: Mapping[str, Any]) -> None:
         raise ValueError("key/context coefficient derivation contract 不匹配")
 
     gate = contract["construction_and_gate_contract"]
-    c0_placeholder = gate["construction_identity_c0_placeholder"]
-    a_placeholder = gate["gate0_identity_a_placeholder"]
     if (
-        not c0_placeholder.endswith("execution_forbidden")
-        or not a_placeholder.endswith("execution_forbidden")
-        or c0_placeholder == a_placeholder
+        gate["construction_identity_c0"]
+        != "patch_relation_construction_identity_c0"
+        or gate["gate0_identity_a"] != "patch_relation_gate0_identity_a"
+        or gate["construction_identity_c0"] == gate["gate0_identity_a"]
     ):
-        raise ValueError("C0/A placeholder identity 必须区分")
+        raise ValueError("C0/A execution identity 必须冻结且区分")
     if gate["probe_roles_per_identity"] != list(EXPECTED_PROBE_ROLES):
         raise ValueError("probe roles 不匹配")
     if (
         gate["identity_backflow_allowed"] is not False
-        or gate["c0_gate0_evidence_allowed"] is not False
+        or gate["c0_gate0_evidence_allowed"] is not True
         or gate["gate0_refit_or_reselection_allowed"] is not False
         or gate["automatic_next_execution_allowed"] is not False
     ):
@@ -481,20 +676,71 @@ def _validate_contract_semantics(contract: Mapping[str, Any]) -> None:
     }:
         raise ValueError("transfer gate thresholds 不匹配")
 
+    identities = contract["execution_identity_contract"]
+    if identities != EXPECTED_EXECUTION_IDENTITY_CONTRACT:
+        raise ValueError("Patch-relation execution identity contract 不匹配")
+    for role in ("construction_identity_c0", "gate0_identity_a"):
+        identity = identities[role]
+        if sha256(identity["prompt_text"].encode("utf-8")).hexdigest() != (
+            identity["prompt_text_sha256"]
+        ):
+            raise ValueError(f"{role} prompt text digest 不匹配")
+        if sha256(
+            identity["negative_prompt_text"].encode("utf-8")
+        ).hexdigest() != identity["negative_prompt_text_sha256"]:
+            raise ValueError(f"{role} negative prompt digest 不匹配")
+    if (
+        identities["construction_identity_c0"]["prompt_id"]
+        == identities["gate0_identity_a"]["prompt_id"]
+        or identities["construction_identity_c0"]["seed_value"]
+        == identities["gate0_identity_a"]["seed_value"]
+    ):
+        raise ValueError("C0/A prompt 与 seed 必须同时隔离")
+
+    runtime_execution = contract["gate0_runtime_execution_contract"]
+    if runtime_execution != EXPECTED_GATE0_RUNTIME_EXECUTION_CONTRACT:
+        raise ValueError("Patch-relation governed runner contract 不匹配")
+    sigma = tuple(
+        float(value) for value in runtime_execution["sigma_grid_decimal"]
+    )
+    deltas = tuple(
+        float(value)
+        for value in runtime_execution["delta_sigma_by_step_decimal"]
+    )
+    timesteps = tuple(
+        float(value)
+        for value in runtime_execution["timestep_by_step_decimal"]
+    )
+    if len(sigma) != 9 or len(deltas) != 8 or len(timesteps) != 8:
+        raise ValueError("Gate0 frozen Flow schedule 长度不匹配")
+    if any(
+        float(np.float32(sigma[index + 1] - sigma[index]))
+        != float(np.float32(deltas[index]))
+        for index in range(8)
+    ):
+        raise ValueError("Gate0 frozen delta_sigma 与 sigma grid 不一致")
+    if any(
+        float(np.float32(sigma[index] * 1000.0))
+        != float(np.float32(timesteps[index]))
+        for index in range(8)
+    ):
+        raise ValueError("Gate0 frozen timestep 与 sigma row 不一致")
+
     method_scope = contract["method_scope"]
     if method_scope != {
         "payload_prc_state_dynamics_implemented": False,
         "local_wan_rope_runtime_adapter_implemented": True,
         "local_cfg_state_update_measurement_adapter_implemented": True,
-        "flow_velocity_deflection_runtime_implemented": False,
-        "output_encoder_runtime_adapter_implemented": False,
+        "flow_velocity_deflection_runtime_implemented": True,
+        "output_encoder_runtime_adapter_implemented": True,
+        "gate0_runner_implemented": True,
         "clock_path_implemented": False,
         "state_observer_implemented": False,
         "wrong_key_detection_implemented": False,
         "attack_or_fixed_fpr_implemented": False,
         "checked_in_outputs_allowed": False,
     }:
-        raise ValueError("method scope 必须只开放本地 adapter 实现状态")
+        raise ValueError("method scope 必须精确开放 Gate0 runner 实现状态")
     build_public_patch_relation_descriptor()
 
 
@@ -518,10 +764,18 @@ def build_patch_relation_gate0_plan(
         raise ValueError("plan 必须消费已验证冻结 config")
     _require_exact_keys(contract, EXPECTED_PROTOCOL_SECTIONS, "plan protocol_contract")
     _validate_contract_semantics(contract)
-    gate = config["protocol_contract"]["construction_and_gate_contract"]
+    execution_identities = config["protocol_contract"][
+        "execution_identity_contract"
+    ]
     identities = (
-        ("construction_c0", gate["construction_identity_c0_placeholder"]),
-        ("gate0_identity_a", gate["gate0_identity_a_placeholder"]),
+        (
+            "construction_c0",
+            execution_identities["construction_identity_c0"]["identity_id"],
+        ),
+        (
+            "gate0_identity_a",
+            execution_identities["gate0_identity_a"]["identity_id"],
+        ),
     )
     coefficients = {
         "clean_a": 0,
@@ -530,13 +784,13 @@ def build_patch_relation_gate0_plan(
         "negative": -1,
     }
     records: list[PatchRelationProbePlanRecord] = []
-    for identity_role, placeholder in identities:
+    for identity_role, identity_id in identities:
         for probe_role in EXPECTED_PROBE_ROLES:
             records.append(
                 PatchRelationProbePlanRecord(
                     plan_index=len(records),
                     identity_role=identity_role,
-                    identity_placeholder=placeholder,
+                    identity_id=identity_id,
                     probe_id=f"{identity_role}_{probe_role}",
                     probe_role=probe_role,
                     signed_state_coefficient=coefficients[probe_role],

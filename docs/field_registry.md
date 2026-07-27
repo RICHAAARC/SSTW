@@ -3577,3 +3577,66 @@ Notebook 与 repository module 的跨边界数据
 | frame_state_failure_reason | governance | none | true | false | false | runtime/contract fail-closed 的安全标量错误说明。 |
 | next_double_window_gate_a_design_allowed | governance | none | true | false | false | Gate 0 PASS 后是否仅允许设计下一双窗口 Gate A。 |
 | next_double_window_gate_a_execution_allowed | governance | none | true | false | false | 下一双窗口 Gate A 是否可自动执行；当前固定为false。 |
+| patch_relation_probe_plan_index | provenance | none | true | false | false | Patch-relation Gate 0 精确8项计划中的零基序号。 |
+| patch_relation_identity_role | protocol | none | true | false | false | 当前记录属于 C0 construction 或 held-out identity A。 |
+| patch_relation_identity_id | provenance | none | true | false | false | 当前冻结 execution identity 的公开稳定ID。 |
+| patch_relation_probe_id | provenance | none | true | false | false | 与冻结8项计划 exact-order 绑定的 probe ID。 |
+| patch_relation_probe_role | protocol | none | true | false | false | 当前 probe 的 clean-A、clean-B、positive 或 negative 角色。 |
+| patch_relation_signed_coefficient | protocol | none | true | false | false | 当前 probe 的 zero/positive/negative RoPE relation 系数。 |
+| patch_relation_step_index | provenance | none | true | false | false | 真实8-step Flow schedule 中的当前step。 |
+| patch_relation_input_binding_digest | provenance | none | true | false | false | 从实际 latent/timestep/probe/identity 重算的公共输入摘要。 |
+| patch_relation_conditional_encoder_digest | provenance | none | true | false | false | conditional encoder input 与公共输入绑定后的摘要。 |
+| patch_relation_unconditional_encoder_digest | provenance | none | true | false | false | unconditional encoder input 与公共输入绑定后的摘要。 |
+| patch_relation_base_rope_pair_digest | provenance | none | true | false | false | 同step zero-relation cond/uncond 两支完整scope records摘要。 |
+| patch_relation_controlled_rope_pair_digest | provenance | none | true | false | false | 同step controlled-relation cond/uncond 两支完整scope records摘要。 |
+| patch_relation_delta_sigma | metric | none | true | false | false | 当前真实 scheduler 的 `next_sigma-current_sigma`。 |
+| patch_relation_base_velocity_norm | metric | none | true | false | false | zero-relation FP32 CFG-combined velocity norm。 |
+| patch_relation_intended_delta_norm | metric | none | true | false | false | 同输入 base/controlled CFG 差得到的 intended delta norm。 |
+| patch_relation_actual_delta_norm | metric | none | true | false | false | scheduler消费前重算的实际 FP32 velocity delta norm。 |
+| patch_relation_base_state_update_norm | metric | none | true | false | false | 从冻结sample与counterfactual base next-state差重算的FP32 norm。 |
+| patch_relation_intended_state_update_norm | metric | none | true | false | false | `delta_sigma * intended_delta_velocity` 的FP32 norm。 |
+| patch_relation_state_update_delta_norm | metric | none | true | false | false | 真实controlled scheduler next-state与counterfactual base next-state差的norm。 |
+| patch_relation_state_update_direction_dot | metric | none | true | false | false | actual与intended state-update方向的float64 dot。 |
+| patch_relation_direction_actual_norm | metric | none | true | false | false | direction guard使用的actual state-update float64 norm。 |
+| patch_relation_direction_intended_norm | metric | none | true | false | false | direction guard使用的intended state-update float64 norm。 |
+| patch_relation_norm_budget | metric | none | true | false | false | 当前step冻结 velocity-ratio 预算。 |
+| patch_relation_cumulative_reference_energy_before_step | metric | none | true | false | false | 当前step前已累计的reference Flow energy。 |
+| patch_relation_cumulative_control_energy_before_step | metric | none | true | false | false | 当前step前已累计的control Flow energy。 |
+| patch_relation_remaining_step_count | protocol | none | true | false | false | 当前step在冻结8-step schedule中的剩余计数。 |
+| patch_relation_reference_energy_increment | metric | none | true | false | false | 当前base CFG velocity的Flow reference energy增量。 |
+| patch_relation_projected_reference_energy | metric | none | true | false | false | 用冻结剩余步数投影的reference energy。 |
+| patch_relation_total_flow_energy_budget | metric | none | true | false | false | 冻结Flow energy ratio对应的总control预算。 |
+| patch_relation_remaining_flow_energy | metric | none | true | false | false | 当前step注入前的剩余control energy。 |
+| patch_relation_energy_increment | metric | none | true | false | false | 实际FP32 delta的Flow control energy增量。 |
+| patch_relation_direction_cosine | metric | none | true | false | false | 实际delta与intended base/control方向的cosine；clean为null。 |
+| patch_relation_signed_state_update_exposure | metric | none | true | false | false | 从真实FP32 delta与 `delta_sigma` 重算的signed exposure。 |
+| patch_relation_norm_guard_passed | governance | none | true | false | false | 当前实际delta是否通过冻结norm budget。 |
+| patch_relation_energy_guard_passed | governance | none | true | false | false | 当前实际delta是否通过冻结Flow energy budget。 |
+| patch_relation_direction_guard_passed | governance | none | true | false | false | signed delta是否通过冻结direction guard；clean为null。 |
+| patch_relation_clean_exact_noop | governance | none | true | false | false | clean probe在完整base/controlled数值路径上是否exact no-op。 |
+| patch_relation_actual_delta_digest | provenance | none | true | false | false | 实际FP32 delta C-order bytes的SHA-256。 |
+| patch_relation_scheduler_consumed_velocity_digest | provenance | none | true | false | false | 正式scheduler实际消费的controlled CFG velocity摘要。 |
+| patch_relation_scheduler_sample_digest | provenance | none | true | false | false | 正式scheduler入口FP32 sample的C-order摘要。 |
+| patch_relation_scheduler_base_next_state_digest | provenance | none | true | false | false | 同一sample上的counterfactual base Euler next-state摘要。 |
+| patch_relation_scheduler_controlled_next_state_digest | provenance | none | true | false | false | 正式scheduler实际返回controlled next-state摘要。 |
+| patch_relation_actual_state_update_digest | provenance | none | true | false | false | controlled/base next-state实际差的C-order摘要。 |
+| patch_relation_step_record_id | provenance | none | true | false | false | 单条Patch-relation governed step record稳定摘要。 |
+| patch_relation_feature_schema_id | protocol | none | true | false | false | 冻结11x6保存视频Patch-DCT relation feature schema。 |
+| patch_relation_feature_shape | protocol | none | true | false | false | Patch-relation feature固定shape `[11,6]`。 |
+| patch_relation_feature_values | metric | none | true | false | false | 保存视频RGB24回读得到的未中心化float64 relation feature。 |
+| patch_relation_feature_digest | provenance | none | true | false | false | Patch-relation feature C-order bytes的SHA-256。 |
+| patch_relation_saved_rgb24_digest | provenance | none | true | false | false | 从精确MP4回读的`[33,320,512,3]` uint8 C-order RGB24摘要。 |
+| patch_relation_output_binding_digest | provenance | none | true | false | false | plan identity、MP4 SHA、RGB24摘要、feature schema与feature摘要的稳定绑定。 |
+| patch_relation_feature_record_id | provenance | none | true | false | false | 单视频Patch-relation feature governed record摘要。 |
+| patch_relation_actual_signed_exposure | metric | none | true | false | false | 单视频8步signed state-update exposure的float64累加值。 |
+| patch_relation_generation_record_id | provenance | none | true | false | false | 单视频Patch-relation generation governed record摘要。 |
+| patch_relation_gate0_decision | governance | none | true | false | false | Gate0 method PASS-design-only、method stop或runtime recovery-only决策。 |
+| patch_relation_gate0_ready | governance | none | true | false | false | C0 readiness与identity A apply-only Gate0是否共同通过。 |
+| patch_relation_c0_construction_ready | governance | none | true | false | false | C0 signed gate与T_rel construction是否ready。 |
+| patch_relation_c0_statistics | metric | none | true | false | false | C0冻结signed statistics标量集合。 |
+| patch_relation_gate0_signed_gate_ready | governance | none | true | false | false | identity A saved-output signed morphology/noise gate是否通过。 |
+| patch_relation_transfer_direction_cosine | metric | none | true | false | false | A observed odd与C0 `T_rel` apply-only prediction的cosine。 |
+| patch_relation_transfer_relative_error | metric | none | true | false | false | A observed odd与C0 `T_rel` prediction的相对误差。 |
+| patch_relation_c0_construction_digest | provenance | none | true | false | false | C0 whitening/statistics/transfer construction的稳定摘要。 |
+| patch_relation_c0_artifact_sha256 | provenance | none | true | false | false | 完整C0 NPZ artifact文件SHA-256。 |
+| patch_relation_failure_reason | governance | none | true | false | false | runtime/contract fail-closed的安全标量错误说明。 |

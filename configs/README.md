@@ -22,20 +22,24 @@ payload M
 -> key-conditioned trajectory evidence
 ```
 
-这条 Patch-relation 路线尚无执行 config、runner 或真实运行结果。真实 Gate 0
-FAIL 只否定历史
+这条 Patch-relation 路线已有首个精确 Gate 0 execution config 和薄 runner，
+但尚未由用户执行真实 Colab/GPU 运行，也没有方法结果。真实历史 Gate 0 FAIL 只否定
+历史
 `decoder-Jacobian additive atom + local RGB mean feature + held-out transfer`
 组合，不是 Patch-relation embedding、observer 或状态空间同步的结果。generic
 public low-frequency carrier bank 仅为待审 baseline / fallback，不属于当前主方法。
 
-`protocol/sstw_patch_relation_gate0_construction.json` 是当前主路线首个独立、
-design/local-primitives-only 合同：冻结 diffusers 0.35.2 Wan
+`protocol/sstw_patch_relation_gate0_construction.json` 是当前主路线首个独立
+Gate 0 construction 合同：冻结 diffusers 0.35.2 Wan
 `transformer.rope` 输出后的单一 temporal 3D-RoPE phase-pair 写入点、一个公开
 zero-sum Patch pair、保存视频 RGB24 的逐帧 Patch-pair DCT relation feature，
-以及 C0 构造 `T_rel` / identity A apply-only 的最小 Gate 0 数学。它尚未实现
-runtime adapter、runner、GPU/Colab/Notebook/Drive，所有正式结果、stage、
-observer、攻击、fixed-FPR、baseline execution 与 paper claim 授权均为 false。
-本地 NumPy 测试不构成 Patch-relation 方法证据。
+以及 C0 构造 `T_rel` / identity A apply-only 的最小 Gate 0 数学。当前已实现
+受限 RoPE runtime adapter、精确8视频 runner 与既有薄 `colab_test` request
+路由；执行仍须用户显式运行原固定 Notebook。运行全程先在 `/content` 完成，
+成功后才由既有 packager 写单 ZIP+manifest 到 Drive；失败恢复仍是非正式
+recovery-only。所有 formal result、stage、observer、攻击、fixed-FPR、
+baseline execution 与 paper claim 授权均为 false。本地 NumPy/fake 测试不构成
+Patch-relation 方法或 GPU 证据。
 
 下列配置说明保留历史实验和诊断边界；任何既有 execution flag 都不能授权或冒充
 当前 Patch-relation 路线已进入执行。

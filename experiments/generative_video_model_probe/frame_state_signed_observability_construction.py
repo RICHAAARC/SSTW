@@ -54,6 +54,7 @@ from main.methods.state_space_watermark.frame_state_observability import (
     read_public_frame_state_atom,
     write_public_frame_state_atom,
 )
+from runtime.core.progress import emit_progress_event
 
 
 DEFAULT_CONFIG_PATH = (
@@ -561,8 +562,10 @@ def torch_jacobian_gram_product(
     direction: Any,
     *,
     torch_module: Any,
+    phase_observer: Callable[[str], None] | None = None,
+    phase_cleanup: Callable[[str], None] | None = None,
 ) -> Any:
-    """Compute one exact autograd J^T J product without changing dtype."""
+    """Compute exact J^T Jv with true forward AD and an offloaded VJP."""
 
     if reference.dtype != torch_module.float32 or direction.dtype != (
         torch_module.float32
@@ -570,23 +573,162 @@ def torch_jacobian_gram_product(
         raise ValueError("Jacobian reference/direction 必须精确为 float32")
     if reference.shape != direction.shape:
         raise ValueError("Jacobian reference/direction shape 不一致")
-    _, tangent = torch_module.autograd.functional.jvp(
-        feature_function,
-        reference,
-        direction,
-        create_graph=False,
-        strict=True,
-    )
-    _, product = torch_module.autograd.functional.vjp(
-        feature_function,
-        reference,
-        v=tangent.detach(),
-        create_graph=False,
-        strict=True,
-    )
-    if product.dtype != torch_module.float32 or product.shape != reference.shape:
-        raise RuntimeError("Jacobian Gram product dtype/shape 漂移")
-    return product
+    if getattr(reference, "device", None) != getattr(direction, "device", None):
+        raise ValueError("Jacobian reference/direction device 不一致")
+    if not callable(getattr(getattr(torch_module, "func", None), "jvp", None)):
+        raise RuntimeError(
+            "frame-state public atom phase=true_forward_jvp "
+            "error_type=UnsupportedForwardAD"
+        )
+    autograd = getattr(torch_module, "autograd", None)
+    graph = getattr(autograd, "graph", None)
+    if not callable(getattr(autograd, "grad", None)) or not callable(
+        getattr(graph, "save_on_cpu", None)
+    ):
+        raise RuntimeError(
+            "frame-state public atom phase=reverse_vjp_saved_tensor_cpu_offload "
+            "error_type=UnsupportedSavedTensorOffload"
+        )
+
+    def observe(phase: str) -> None:
+        if phase_observer is not None:
+            phase_observer(phase)
+
+    def cleanup(phase: str) -> None:
+        if phase_cleanup is not None:
+            phase_cleanup(phase)
+
+    def require_finite_float32(value: Any, *, label: str) -> None:
+        if value.dtype != torch_module.float32:
+            raise RuntimeError(f"{label} dtype 漂移")
+        try:
+            finite = bool(torch_module.isfinite(value).all().item())
+        except Exception as exc:
+            raise RuntimeError(f"{label} finite 检查失败") from exc
+        if not finite:
+            raise RuntimeError(f"{label} 包含非有限值")
+
+    require_finite_float32(reference, label="Jacobian reference")
+    require_finite_float32(direction, label="Jacobian direction")
+    primal = None
+    tangent = None
+    tangent_for_vjp = None
+    leaf = None
+    feature = None
+    product = None
+    returned_product = None
+    try:
+        cleanup("jvp_pre")
+        jvp_error: BaseException | None = None
+        try:
+            with torch_module.no_grad():
+                observe("jvp_start")
+                primal, tangent = torch_module.func.jvp(
+                    feature_function,
+                    (reference.detach(),),
+                    (direction.detach(),),
+                    strict=True,
+                )
+                observe("jvp_finish")
+            if primal.shape != tangent.shape:
+                raise RuntimeError(
+                    "true forward JVP primal/tangent shape 不一致"
+                )
+            require_finite_float32(
+                primal,
+                label="true forward JVP primal",
+            )
+            require_finite_float32(
+                tangent,
+                label="true forward JVP tangent",
+            )
+            tangent_for_vjp = tangent.detach()
+        except BaseException as exc:
+            wrapped_error = RuntimeError(
+                "frame-state public atom phase=true_forward_jvp "
+                f"error_type={type(exc).__name__}"
+            )
+            jvp_error = wrapped_error
+            raise wrapped_error from exc
+        finally:
+            primal = None
+            tangent = None
+            try:
+                cleanup("jvp_post")
+            except BaseException as cleanup_error:
+                if jvp_error is not None:
+                    jvp_error.add_note(
+                        "jvp_post cleanup error_type="
+                        f"{type(cleanup_error).__name__}"
+                    )
+                else:
+                    raise
+
+        cleanup("vjp_pre")
+        vjp_error: BaseException | None = None
+        try:
+            leaf = reference.detach().clone().requires_grad_(True)
+            with torch_module.enable_grad():
+                observe("vjp_start")
+                with graph.save_on_cpu(pin_memory=False):
+                    feature = feature_function(leaf)
+                require_finite_float32(feature, label="reverse VJP feature")
+                if feature.shape != tangent_for_vjp.shape:
+                    raise RuntimeError(
+                        "reverse VJP feature/tangent shape 不一致"
+                    )
+                (product,) = autograd.grad(
+                    outputs=feature,
+                    inputs=leaf,
+                    grad_outputs=tangent_for_vjp,
+                    retain_graph=False,
+                    create_graph=False,
+                    allow_unused=False,
+                )
+                observe("vjp_finish")
+            if product.shape != reference.shape:
+                raise RuntimeError("Jacobian Gram product shape 漂移")
+            require_finite_float32(product, label="Jacobian Gram product")
+            if getattr(product, "grad_fn", None) is not None:
+                raise RuntimeError(
+                    "Jacobian Gram product 不得保留 autograd graph"
+                )
+            if getattr(leaf, "grad", None) is not None:
+                raise RuntimeError(
+                    "autograd.grad 不得写入 reference leaf.grad"
+                )
+            returned_product = product.detach()
+        except BaseException as exc:
+            wrapped_error = RuntimeError(
+                "frame-state public atom "
+                "phase=reverse_vjp_saved_tensor_cpu_offload "
+                f"error_type={type(exc).__name__}"
+            )
+            vjp_error = wrapped_error
+            raise wrapped_error from exc
+        finally:
+            tangent_for_vjp = None
+            leaf = None
+            feature = None
+            product = None
+            try:
+                cleanup("vjp_post")
+            except BaseException as cleanup_error:
+                if vjp_error is not None:
+                    vjp_error.add_note(
+                        "vjp_post cleanup error_type="
+                        f"{type(cleanup_error).__name__}"
+                    )
+                else:
+                    raise
+        return returned_product
+    finally:
+        primal = None
+        tangent = None
+        tangent_for_vjp = None
+        leaf = None
+        feature = None
+        product = None
 
 
 def _torch_local_temporal_surrogate(decoded: Any) -> Any:
@@ -615,6 +757,276 @@ def _torch_local_temporal_surrogate(decoded: Any) -> Any:
     return torch.stack(values, dim=1).reshape(-1)
 
 
+def _cuda_public_atom_progress_fields(torch_module: Any) -> str:
+    """Return scalar-only CUDA memory fields for non-governed progress."""
+
+    gib = float(1024**3)
+    host_fields = _host_memory_progress_fields()
+    try:
+        allocated = float(torch_module.cuda.memory_allocated()) / gib
+        reserved = float(torch_module.cuda.memory_reserved()) / gib
+        maximum = float(torch_module.cuda.max_memory_allocated()) / gib
+        free_bytes, total_bytes = torch_module.cuda.mem_get_info()
+        return (
+            f"allocated_gib={allocated:.3f} "
+            f"reserved_gib={reserved:.3f} "
+            f"max_allocated_gib={maximum:.3f} "
+            f"free_gib={float(free_bytes) / gib:.3f} "
+            f"total_gib={float(total_bytes) / gib:.3f} "
+            f"grad_enabled={str(torch_module.is_grad_enabled()).lower()} "
+            f"{host_fields}"
+        )
+    except Exception as exc:
+        return (
+            "cuda_memory_status=unavailable "
+            f"cuda_memory_error_type={type(exc).__name__} "
+            f"grad_enabled={str(torch_module.is_grad_enabled()).lower()} "
+            f"{host_fields}"
+        )
+
+
+def _host_memory_progress_fields() -> str:
+    """Read process RSS and host availability from Linux procfs."""
+
+    try:
+        status_fields: dict[str, int] = {}
+        for line in Path("/proc/self/status").read_text(
+            encoding="utf-8",
+        ).splitlines():
+            if line.startswith("VmRSS:"):
+                status_fields["rss_kib"] = int(line.split()[1])
+                break
+        memory_fields: dict[str, int] = {}
+        for line in Path("/proc/meminfo").read_text(
+            encoding="utf-8",
+        ).splitlines():
+            if line.startswith("MemAvailable:"):
+                memory_fields["available_kib"] = int(line.split()[1])
+                break
+        if set(status_fields) != {"rss_kib"} or set(memory_fields) != {
+            "available_kib"
+        }:
+            raise ValueError("procfs memory fields missing")
+        kib_per_gib = float(1024**2)
+        return (
+            f"process_rss_gib={status_fields['rss_kib'] / kib_per_gib:.3f} "
+            "host_available_gib="
+            f"{memory_fields['available_kib'] / kib_per_gib:.3f}"
+        )
+    except Exception as exc:
+        return (
+            "host_memory_status=unavailable "
+            f"host_memory_error_type={type(exc).__name__}"
+        )
+
+
+def _emit_public_atom_progress(
+    torch_module: Any,
+    *,
+    iteration_index: int,
+    phase: str,
+) -> None:
+    if phase == "jvp_start":
+        try:
+            torch_module.cuda.reset_peak_memory_stats()
+        except Exception:
+            pass
+    try:
+        emit_progress_event(
+            "frame_state_public_atom_construction",
+            (
+                f"iteration={iteration_index}/8 phase={phase} "
+                f"{_cuda_public_atom_progress_fields(torch_module)}"
+            ),
+        )
+    except Exception:
+        # Progress is deliberately non-governed and cannot alter the
+        # mathematical execution or mask its failure.
+        pass
+
+
+def _synchronize_release_cuda(torch_module: Any) -> None:
+    """Finish pending CUDA work, then release unreachable cached storage."""
+
+    torch_module.cuda.synchronize()
+    gc.collect()
+    torch_module.cuda.empty_cache()
+
+
+def _clear_wan_vae_cache(vae: Any, *, phase: str) -> None:
+    clear_cache = getattr(vae, "clear_cache", None)
+    if not callable(clear_cache):
+        raise RuntimeError(
+            f"frame-state public atom phase={phase} "
+            "error_type=MissingWanVaeClearCache"
+        )
+    try:
+        clear_cache()
+    except Exception as exc:
+        raise RuntimeError(
+            f"frame-state public atom phase={phase} "
+            f"error_type={type(exc).__name__}"
+        ) from exc
+
+
+def _clear_wan_vae_phase_and_release(
+    vae: Any,
+    torch_module: Any,
+    *,
+    phase: str,
+) -> None:
+    """Clear causal caches and release unreachable CUDA storage."""
+
+    cleanup_error: Exception | None = None
+    try:
+        _clear_wan_vae_cache(vae, phase=phase)
+    except Exception as exc:
+        cleanup_error = exc
+    try:
+        _synchronize_release_cuda(torch_module)
+    except Exception as exc:
+        cleanup_error = cleanup_error or exc
+    if cleanup_error is not None:
+        raise cleanup_error
+
+
+@contextmanager
+def _wan_jacobian_math_sdpa(torch_module: Any):
+    """Limit only the Jacobian boundary to forward-AD-compatible math SDPA."""
+
+    attention = getattr(getattr(torch_module, "nn", None), "attention", None)
+    kernel = getattr(attention, "sdpa_kernel", None)
+    backend_type = getattr(attention, "SDPBackend", None)
+    math_backend = getattr(backend_type, "MATH", None)
+    if not callable(kernel) or math_backend is None:
+        raise RuntimeError(
+            "frame-state public atom phase=math_sdpa_context "
+            "error_type=UnsupportedMathSdpaContext"
+        )
+    try:
+        manager = kernel(math_backend)
+    except Exception as exc:
+        raise RuntimeError(
+            "frame-state public atom phase=math_sdpa_context "
+            f"error_type={type(exc).__name__}"
+        ) from exc
+    try:
+        manager.__enter__()
+    except Exception as exc:
+        raise RuntimeError(
+            "frame-state public atom phase=math_sdpa_context "
+            f"error_type={type(exc).__name__}"
+        ) from exc
+    active_error: BaseException | None = None
+    exit_arguments: tuple[Any, Any, Any] = (None, None, None)
+    try:
+        yield
+    except BaseException as exc:
+        active_error = exc
+        exit_arguments = (type(exc), exc, exc.__traceback__)
+        raise
+    finally:
+        try:
+            manager.__exit__(*exit_arguments)
+        except BaseException as cleanup_error:
+            if active_error is not None:
+                active_error.add_note(
+                    "math SDPA restore error_type="
+                    f"{type(cleanup_error).__name__}"
+                )
+            else:
+                raise
+
+
+@contextmanager
+def _wan_vae_eval_frozen_parameters(vae: Any):
+    """Freeze VAE parameters for input-only AD and restore all prior state."""
+
+    parameters = tuple(vae.parameters())
+    prior_training = bool(vae.training)
+    prior_requires_grad = tuple(
+        bool(parameter.requires_grad) for parameter in parameters
+    )
+    if any(getattr(parameter, "grad", None) is not None for parameter in parameters):
+        raise RuntimeError("Wan VAE parameter.grad 必须在 Jacobian 前为空")
+    vae.eval()
+    for parameter in parameters:
+        parameter.requires_grad_(False)
+    if bool(vae.training) or any(
+        bool(parameter.requires_grad) for parameter in parameters
+    ):
+        raise RuntimeError("Wan VAE eval/frozen parameter 边界未建立")
+    active_error: BaseException | None = None
+    try:
+        yield
+    except BaseException as exc:
+        active_error = exc
+        raise
+    finally:
+        cleanup_error: BaseException | None = None
+        if any(
+            getattr(parameter, "grad", None) is not None
+            for parameter in parameters
+        ):
+            cleanup_error = RuntimeError(
+                "Wan VAE Jacobian 不得产生 parameter.grad"
+            )
+        try:
+            for parameter, requires_grad in zip(
+                parameters,
+                prior_requires_grad,
+                strict=True,
+            ):
+                parameter.requires_grad_(requires_grad)
+            vae.train(prior_training)
+            if tuple(
+                bool(parameter.requires_grad) for parameter in parameters
+            ) != prior_requires_grad or bool(vae.training) is not prior_training:
+                raise RuntimeError(
+                    "Wan VAE parameter/training 状态恢复失败"
+                )
+        except BaseException as exc:
+            cleanup_error = cleanup_error or exc
+        if cleanup_error is not None:
+            if active_error is not None:
+                active_error.add_note(
+                    "VAE parameter/training cleanup error_type="
+                    f"{type(cleanup_error).__name__}"
+                )
+            else:
+                raise cleanup_error
+
+
+@contextmanager
+def _wan_pipeline_public_atom_offload_state(pipe: Any):
+    """Remove dispatch hooks only for atom AD, then restore CPU offload."""
+
+    remove_hooks = getattr(pipe, "remove_all_hooks", None)
+    enable_offload = getattr(pipe, "enable_model_cpu_offload", None)
+    if not callable(remove_hooks) or not callable(enable_offload):
+        raise RuntimeError(
+            "frame-state public atom 缺少 pipeline offload state API"
+        )
+    remove_hooks()
+    active_error: BaseException | None = None
+    try:
+        yield
+    except BaseException as exc:
+        active_error = exc
+        raise
+    finally:
+        try:
+            enable_offload()
+        except BaseException as cleanup_error:
+            if active_error is not None:
+                active_error.add_note(
+                    "pipeline offload restore error_type="
+                    f"{type(cleanup_error).__name__}"
+                )
+            else:
+                raise
+
+
 @contextmanager
 def _wan_jacobian_untiled_decode(vae: Any):
     """Freeze one untiled Jacobian decode and restore the VAE memory policy."""
@@ -638,18 +1050,36 @@ def _wan_jacobian_untiled_decode(vae: Any):
     vae.disable_tiling()
     if bool(vae.use_tiling):
         raise RuntimeError("Wan VAE Jacobian spatial tiling 未关闭")
+    active_error: BaseException | None = None
     try:
         yield
+    except BaseException as exc:
+        active_error = exc
+        raise
     finally:
-        if prior_enabled:
-            vae.enable_tiling(**prior_parameters)
-        else:
-            vae.disable_tiling()
-        if bool(vae.use_tiling) is not prior_enabled:
-            raise RuntimeError("Wan VAE Jacobian tiling 状态恢复失败")
-        for name, value in prior_parameters.items():
-            if int(getattr(vae, name)) != value:
-                raise RuntimeError("Wan VAE Jacobian tiling 参数恢复失败")
+        cleanup_error: BaseException | None = None
+        try:
+            if prior_enabled:
+                vae.enable_tiling(**prior_parameters)
+            else:
+                vae.disable_tiling()
+            if bool(vae.use_tiling) is not prior_enabled:
+                raise RuntimeError("Wan VAE Jacobian tiling 状态恢复失败")
+            for name, value in prior_parameters.items():
+                if int(getattr(vae, name)) != value:
+                    raise RuntimeError(
+                        "Wan VAE Jacobian tiling 参数恢复失败"
+                    )
+        except BaseException as exc:
+            cleanup_error = exc
+        if cleanup_error is not None:
+            if active_error is not None:
+                active_error.add_note(
+                    "VAE tiling restore error_type="
+                    f"{type(cleanup_error).__name__}"
+                )
+            else:
+                raise cleanup_error
 
 
 def _construct_real_public_atom(
@@ -662,63 +1092,150 @@ def _construct_real_public_atom(
 
     if _package_version("diffusers") != "0.35.2":
         raise RuntimeError("frame-state public atom 要求 diffusers==0.35.2")
-    if hasattr(pipe, "remove_all_hooks"):
-        pipe.remove_all_hooks()
-    vae = pipe.vae.to(device="cuda", dtype=torch.float32)
-    vae.eval()
-    reference = clean_final_latent.detach().to(
-        device="cuda",
-        dtype=torch.float32,
-    )
-    if tuple(reference.shape) != LATENT_SHAPE:
-        raise RuntimeError("C0 clean-A final latent shape 不匹配")
-    mean = torch.tensor(
-        vae.config.latents_mean,
-        dtype=torch.float32,
-        device=reference.device,
-    ).view(1, vae.config.z_dim, 1, 1, 1)
-    std = torch.tensor(
-        vae.config.latents_std,
-        dtype=torch.float32,
-        device=reference.device,
-    ).view(1, vae.config.z_dim, 1, 1, 1)
+    vae = pipe.vae
+    reference = None
+    mean = None
+    std = None
+    feature_function = None
+    callback = None
+    active_error: BaseException | None = None
+    with _wan_pipeline_public_atom_offload_state(pipe):
+        try:
+            vae.to(device="cuda", dtype=torch.float32)
+            reference = clean_final_latent.detach().to(
+                device="cuda",
+                dtype=torch.float32,
+            )
+            if tuple(reference.shape) != LATENT_SHAPE:
+                raise RuntimeError("C0 clean-A final latent shape 不匹配")
+            mean = torch.tensor(
+                vae.config.latents_mean,
+                dtype=torch.float32,
+                device=reference.device,
+            ).view(1, vae.config.z_dim, 1, 1, 1)
+            std = torch.tensor(
+                vae.config.latents_std,
+                dtype=torch.float32,
+                device=reference.device,
+            ).view(1, vae.config.z_dim, 1, 1, 1)
 
-    def feature_function(latent: Any) -> Any:
-        decoded = vae.decode(
-            latent * std + mean,
-            return_dict=False,
-        )[0]
-        return _torch_local_temporal_surrogate(decoded)
+            def feature_function(latent: Any) -> Any:
+                decoded = vae.decode(
+                    latent * std + mean,
+                    return_dict=False,
+                )[0]
+                return _torch_local_temporal_surrogate(decoded)
 
-    def callback(direction: np.ndarray) -> np.ndarray:
-        direction_tensor = torch.from_numpy(direction).to(
-            device=reference.device,
-            dtype=torch.float32,
-        )
-        product = torch_jacobian_gram_product(
-            feature_function,
-            reference,
-            direction_tensor,
-            torch_module=torch,
-        )
-        result = np.ascontiguousarray(
-            product.detach().cpu().numpy(),
-            dtype=np.float32,
-        )
-        del product
-        gc.collect()
-        torch.cuda.empty_cache()
-        return result
+            iteration_index = 0
 
-    try:
-        with _wan_jacobian_untiled_decode(vae):
-            return build_public_frame_state_atom(callback)
-    finally:
-        vae.to("cpu")
-        gc.collect()
-        torch.cuda.empty_cache()
-        if hasattr(pipe, "enable_model_cpu_offload"):
-            pipe.enable_model_cpu_offload()
+            def callback(direction: np.ndarray) -> np.ndarray:
+                nonlocal iteration_index
+                iteration_index += 1
+                if iteration_index > 8:
+                    raise RuntimeError("public atom iteration 超过冻结8次")
+                direction_tensor = torch.from_numpy(direction).to(
+                    device=reference.device,
+                    dtype=torch.float32,
+                )
+                product = None
+                active_callback_error: BaseException | None = None
+                try:
+                    product = torch_jacobian_gram_product(
+                        feature_function,
+                        reference,
+                        direction_tensor,
+                        torch_module=torch,
+                        phase_observer=lambda phase: (
+                            _emit_public_atom_progress(
+                                torch,
+                                iteration_index=iteration_index,
+                                phase=phase,
+                            )
+                        ),
+                        phase_cleanup=lambda phase: (
+                            _clear_wan_vae_phase_and_release(
+                                vae,
+                                torch,
+                                phase=f"{phase}_cache_clear",
+                            )
+                        ),
+                    )
+                    return np.ascontiguousarray(
+                        product.detach().cpu().numpy(),
+                        dtype=np.float32,
+                    )
+                except BaseException as exc:
+                    active_callback_error = exc
+                    raise
+                finally:
+                    direction_tensor = None
+                    product = None
+                    cleanup_error: BaseException | None = None
+                    try:
+                        _clear_wan_vae_phase_and_release(
+                            vae,
+                            torch,
+                            phase="iteration_cleanup_cache_clear",
+                        )
+                    except BaseException as exc:
+                        cleanup_error = exc
+                    _emit_public_atom_progress(
+                        torch,
+                        iteration_index=iteration_index,
+                        phase="cleanup_finish",
+                    )
+                    if cleanup_error is not None:
+                        if active_callback_error is not None:
+                            active_callback_error.add_note(
+                                "iteration cleanup error_type="
+                                f"{type(cleanup_error).__name__}"
+                            )
+                        else:
+                            raise cleanup_error
+
+            with _wan_vae_eval_frozen_parameters(vae):
+                with _wan_jacobian_untiled_decode(vae):
+                    with _wan_jacobian_math_sdpa(torch):
+                        atom = build_public_frame_state_atom(callback)
+            if iteration_index != 8:
+                raise RuntimeError("public atom 未精确完成冻结8次 iteration")
+            return atom
+        except BaseException as exc:
+            active_error = exc
+            raise
+        finally:
+            feature_function = None
+            callback = None
+            reference = None
+            mean = None
+            std = None
+            cleanup_error: Exception | None = None
+            try:
+                _clear_wan_vae_cache(
+                    vae,
+                    phase="public_atom_outer_finally_cache_clear",
+                )
+            except Exception as exc:
+                cleanup_error = exc
+            try:
+                vae.to("cpu")
+            except Exception as exc:
+                cleanup_error = cleanup_error or exc
+            try:
+                _synchronize_release_cuda(torch)
+            except Exception as exc:
+                cleanup_error = cleanup_error or exc
+            if cleanup_error is not None:
+                if active_error is not None and hasattr(
+                    active_error,
+                    "add_note",
+                ):
+                    active_error.add_note(
+                        "public atom cleanup error_type="
+                        f"{type(cleanup_error).__name__}"
+                    )
+                elif active_error is None:
+                    raise cleanup_error
 
 
 class FrameStateSchedulerAdapter:
@@ -924,7 +1441,7 @@ def execute_real_frame_state_gate0(
                 atom=atom,
             )
             with adapter:
-                result = pipe(
+                pipeline_result = pipe(
                     prompt=identity["prompt_text"],
                     negative_prompt=identity["negative_prompt_text"],
                     generator=generator,
@@ -935,10 +1452,13 @@ def execute_real_frame_state_gate0(
                     guidance_scale=5.0,
                     output_type="latent",
                 )
-            returned = result.frames
-            if isinstance(returned, (list, tuple)):
-                returned = returned[0]
-            returned = returned.detach().float().cpu()
+            returned_device = pipeline_result.frames
+            if isinstance(returned_device, (list, tuple)):
+                returned_device = returned_device[0]
+            returned = returned_device.detach().float().cpu()
+            del pipeline_result, returned_device
+            gc.collect()
+            torch.cuda.empty_cache()
             if (
                 adapter.final_latent is None
                 or not torch.equal(returned, adapter.final_latent)
@@ -1059,6 +1579,10 @@ def execute_real_frame_state_gate0(
                 output_root / "records" / "frame_state_checkpoint_records.jsonl",
                 checkpoint_records,
             )
+            decoded = None
+            saved = None
+            final_latent = None
+            gc.collect()
         return FrameStateRuntimeBatch(
             public_atom=public_atom,
             public_atom_path=str(atom_path),

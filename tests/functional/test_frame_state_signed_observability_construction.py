@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+from contextlib import nullcontext
 from dataclasses import replace
 from hashlib import sha256
+import inspect
 import json
 from pathlib import Path
+from types import SimpleNamespace
 
 import numpy as np
 import pytest
@@ -18,10 +21,20 @@ from experiments.generative_video_model_probe.frame_state_signed_observability_c
     FrameStateRuntimeBatch,
     ProbeMeasurement,
     _checkpoint_record,
+    _clear_wan_vae_phase_and_release,
+    _construct_real_public_atom,
     _generation_record,
+    _host_memory_progress_fields,
     _step_record,
+    _wan_jacobian_math_sdpa,
     _wan_jacobian_untiled_decode,
+    _wan_pipeline_public_atom_offload_state,
+    _wan_vae_eval_frozen_parameters,
     run_frame_state_signed_observability_construction,
+    torch_jacobian_gram_product,
+)
+from experiments.generative_video_model_probe.frozen_feedback_signed_response_diagnostic import (
+    _run_wan_decode_no_grad,
 )
 from main.methods.state_space_watermark.frame_state_observability import (
     LATENT_SHAPE,
@@ -53,6 +66,53 @@ class _FakeWanVaeTiling:
             setattr(self, name, value)
 
 
+class _FakeParameter:
+    def __init__(self, requires_grad: bool) -> None:
+        self.requires_grad = requires_grad
+        self.grad = None
+
+    def requires_grad_(self, value: bool):
+        self.requires_grad = bool(value)
+        return self
+
+
+class _FakeWanVaeState(_FakeWanVaeTiling):
+    def __init__(self) -> None:
+        super().__init__()
+        self.training = True
+        self.clear_cache_count = 0
+        self._parameters = (
+            _FakeParameter(True),
+            _FakeParameter(False),
+        )
+
+    def parameters(self):
+        return iter(self._parameters)
+
+    def eval(self):
+        self.training = False
+        return self
+
+    def train(self, value: bool = True):
+        self.training = bool(value)
+        return self
+
+    def clear_cache(self) -> None:
+        self.clear_cache_count += 1
+
+
+class _FakeCuda:
+    def __init__(self) -> None:
+        self.synchronize_count = 0
+        self.empty_cache_count = 0
+
+    def synchronize(self) -> None:
+        self.synchronize_count += 1
+
+    def empty_cache(self) -> None:
+        self.empty_cache_count += 1
+
+
 @pytest.mark.quick
 def test_jacobian_decode_disables_and_restores_exact_vae_tiling() -> None:
     vae = _FakeWanVaeTiling()
@@ -75,6 +135,292 @@ def test_jacobian_decode_restores_tiling_after_exception() -> None:
             raise RuntimeError("synthetic")
 
     assert vars(vae) == expected
+
+
+@pytest.mark.quick
+def test_jacobian_tiling_restore_error_does_not_mask_primary() -> None:
+    class _FailingRestoreVae(_FakeWanVaeTiling):
+        restore_armed = False
+
+        def disable_tiling(self) -> None:
+            super().disable_tiling()
+            self.restore_armed = True
+
+        def enable_tiling(self, **kwargs: int) -> None:
+            if self.restore_armed:
+                raise LookupError("restore failed")
+            super().enable_tiling(**kwargs)
+
+    vae = _FailingRestoreVae()
+
+    with pytest.raises(RuntimeError, match="primary") as captured:
+        with _wan_jacobian_untiled_decode(vae):
+            raise RuntimeError("primary")
+
+    assert any(
+        "VAE tiling restore error_type=LookupError" in note
+        for note in captured.value.__notes__
+    )
+
+
+@pytest.mark.quick
+def test_jacobian_math_sdpa_restores_backend_after_exception() -> None:
+    state = {"backend": "flash", "enter": 0, "exit": 0}
+    math_backend = object()
+
+    class _Manager:
+        def __enter__(self):
+            state["enter"] += 1
+            state["backend"] = "math"
+
+        def __exit__(self, exc_type, exc, traceback):
+            state["exit"] += 1
+            state["backend"] = "flash"
+
+    attention = SimpleNamespace(
+        SDPBackend=SimpleNamespace(MATH=math_backend),
+        sdpa_kernel=lambda backend: (
+            _Manager()
+            if backend is math_backend
+            else pytest.fail("wrong backend")
+        ),
+    )
+    torch_module = SimpleNamespace(
+        nn=SimpleNamespace(attention=attention),
+    )
+
+    with pytest.raises(RuntimeError, match="synthetic"):
+        with _wan_jacobian_math_sdpa(torch_module):
+            assert state["backend"] == "math"
+            raise RuntimeError("synthetic")
+
+    assert state == {"backend": "flash", "enter": 1, "exit": 1}
+
+
+@pytest.mark.quick
+def test_jacobian_math_sdpa_restore_error_does_not_mask_primary() -> None:
+    class _Manager:
+        def __enter__(self):
+            return None
+
+        def __exit__(self, exc_type, exc, traceback):
+            raise LookupError("restore failed")
+
+    torch_module = SimpleNamespace(
+        nn=SimpleNamespace(
+            attention=SimpleNamespace(
+                SDPBackend=SimpleNamespace(MATH="math"),
+                sdpa_kernel=lambda backend: _Manager(),
+            )
+        )
+    )
+
+    with pytest.raises(RuntimeError, match="primary") as captured:
+        with _wan_jacobian_math_sdpa(torch_module):
+            raise RuntimeError("primary")
+
+    assert any(
+        "math SDPA restore error_type=LookupError" in note
+        for note in captured.value.__notes__
+    )
+
+
+@pytest.mark.quick
+def test_vae_eval_parameter_state_restores_after_exception() -> None:
+    vae = _FakeWanVaeState()
+    expected_requires_grad = tuple(
+        parameter.requires_grad for parameter in vae._parameters
+    )
+
+    with pytest.raises(RuntimeError, match="synthetic"):
+        with _wan_vae_eval_frozen_parameters(vae):
+            assert vae.training is False
+            assert all(
+                parameter.requires_grad is False
+                for parameter in vae._parameters
+            )
+            raise RuntimeError("synthetic")
+
+    assert vae.training is True
+    assert tuple(
+        parameter.requires_grad for parameter in vae._parameters
+    ) == expected_requires_grad
+    assert all(parameter.grad is None for parameter in vae._parameters)
+
+
+@pytest.mark.quick
+def test_pipeline_offload_hooks_restore_after_exception() -> None:
+    calls: list[str] = []
+    pipe = SimpleNamespace(
+        remove_all_hooks=lambda: calls.append("remove"),
+        enable_model_cpu_offload=lambda: calls.append("enable"),
+    )
+
+    with pytest.raises(RuntimeError, match="synthetic"):
+        with _wan_pipeline_public_atom_offload_state(pipe):
+            raise RuntimeError("synthetic")
+
+    assert calls == ["remove", "enable"]
+
+
+@pytest.mark.quick
+def test_pipeline_restore_error_does_not_mask_primary() -> None:
+    def fail_restore() -> None:
+        raise LookupError("restore failed")
+
+    pipe = SimpleNamespace(
+        remove_all_hooks=lambda: None,
+        enable_model_cpu_offload=fail_restore,
+    )
+
+    with pytest.raises(RuntimeError, match="primary") as captured:
+        with _wan_pipeline_public_atom_offload_state(pipe):
+            raise RuntimeError("primary")
+
+    assert any(
+        "pipeline offload restore error_type=LookupError" in note
+        for note in captured.value.__notes__
+    )
+
+
+@pytest.mark.quick
+def test_vae_phase_cleanup_clears_cache_and_releases_cuda() -> None:
+    vae = _FakeWanVaeState()
+    cuda = _FakeCuda()
+    torch_module = SimpleNamespace(cuda=cuda)
+
+    _clear_wan_vae_phase_and_release(
+        vae,
+        torch_module,
+        phase="test",
+    )
+
+    assert vae.clear_cache_count == 1
+    assert cuda.synchronize_count == 1
+    assert cuda.empty_cache_count == 1
+
+
+@pytest.mark.quick
+def test_vae_phase_cleanup_releases_cuda_after_cache_clear_failure() -> None:
+    class _FailingCacheVae:
+        @staticmethod
+        def clear_cache() -> None:
+            raise LookupError("cache failed")
+
+    cuda = _FakeCuda()
+    torch_module = SimpleNamespace(cuda=cuda)
+
+    with pytest.raises(RuntimeError, match="LookupError"):
+        _clear_wan_vae_phase_and_release(
+            _FailingCacheVae(),
+            torch_module,
+            phase="test",
+        )
+
+    assert cuda.synchronize_count == 1
+    assert cuda.empty_cache_count == 1
+
+
+@pytest.mark.quick
+def test_jacobian_runtime_has_no_double_backward_fallback() -> None:
+    source = inspect.getsource(torch_jacobian_gram_product)
+    construction_source = inspect.getsource(_construct_real_public_atom)
+    decode_source = inspect.getsource(_run_wan_decode_no_grad)
+
+    assert "torch_module.func.jvp" in source
+    assert "autograd.functional.jvp" not in source
+    assert "save_on_cpu(pin_memory=False)" in source
+    assert "_wan_jacobian_math_sdpa(torch)" in construction_source
+    assert "iteration_cleanup_cache_clear" in construction_source
+    assert "public_atom_outer_finally_cache_clear" in construction_source
+    assert "with torch_module.no_grad()" in decode_source
+    assert "pipe.maybe_free_model_hooks()" in decode_source
+
+
+@pytest.mark.quick
+def test_jvp_cleanup_error_does_not_mask_forward_ad_failure() -> None:
+    class _Tensor:
+        dtype = "float32"
+        shape = (2,)
+        device = "cpu"
+
+        def detach(self):
+            return self
+
+    class _Finite:
+        def all(self):
+            return self
+
+        @staticmethod
+        def item() -> bool:
+            return True
+
+    def fail_jvp(*args, **kwargs):
+        raise ValueError("forward AD unavailable")
+
+    def phase_cleanup(phase: str) -> None:
+        if phase == "jvp_post":
+            raise LookupError("cache cleanup failed")
+
+    torch_module = SimpleNamespace(
+        float32="float32",
+        func=SimpleNamespace(jvp=fail_jvp),
+        autograd=SimpleNamespace(
+            grad=lambda *args, **kwargs: (),
+            graph=SimpleNamespace(save_on_cpu=lambda **kwargs: nullcontext()),
+        ),
+        isfinite=lambda value: _Finite(),
+        no_grad=nullcontext,
+    )
+
+    with pytest.raises(
+        RuntimeError,
+        match="phase=true_forward_jvp error_type=ValueError",
+    ) as captured:
+        torch_jacobian_gram_product(
+            lambda value: value,
+            _Tensor(),
+            _Tensor(),
+            torch_module=torch_module,
+            phase_cleanup=phase_cleanup,
+        )
+
+    assert isinstance(captured.value.__cause__, ValueError)
+    assert any(
+        "jvp_post cleanup error_type=LookupError" in note
+        for note in captured.value.__notes__
+    )
+
+
+@pytest.mark.quick
+def test_missing_true_forward_ad_fails_closed_before_execution() -> None:
+    tensor = SimpleNamespace(
+        dtype="float32",
+        shape=(2,),
+        device="cpu",
+    )
+    torch_module = SimpleNamespace(
+        float32="float32",
+        func=SimpleNamespace(),
+    )
+
+    with pytest.raises(RuntimeError, match="UnsupportedForwardAD"):
+        torch_jacobian_gram_product(
+            lambda value: value,
+            tensor,
+            tensor,
+            torch_module=torch_module,
+        )
+
+
+@pytest.mark.quick
+def test_host_memory_progress_is_scalar_only_procfs_diagnostic() -> None:
+    fields = _host_memory_progress_fields()
+
+    assert (
+        "process_rss_gib=" in fields
+        and "host_available_gib=" in fields
+    ) or "host_memory_status=unavailable" in fields
 
 
 def _step_results(coefficient: int, atom: np.ndarray):

@@ -29,6 +29,15 @@ payload M
 state-space synchronization 的失败结果。generic public low-frequency carrier
 bank 仅是待审 baseline / fallback，不是当前主方法。
 
+当前主路线的首个本地合同位于
+`configs/protocol/sstw_patch_relation_gate0_construction.json`，配套
+`main/methods/state_space_watermark/patch_relation_carrier.py` 与
+`evaluation/protocol/patch_relation_gate0_contract.py`。它只实现公开 zero-sum
+Patch relation、Wan temporal RoPE phase tuple 的 NumPy 数学、保存视频逐帧
+Patch-pair DCT relation feature、C0 `T_rel` 与 identity A apply-only Gate 0
+统计。本目录尚无对应 experiment runner 或 server handler；不得把该本地合同
+解释为端到端实现、GPU 结果或执行授权。
+
 历史 paper-profile 的实施顺序与 Claim 闭合规则仍保存在
 `docs/builds/complete_paper_mechanism_implementation.md`，但该文档只用于历史
 参考，不是当前方法入口或 Patch-relation 执行计划。

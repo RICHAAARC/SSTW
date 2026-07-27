@@ -28,6 +28,15 @@ FAIL 只否定历史
 组合，不是 Patch-relation embedding、observer 或状态空间同步的结果。generic
 public low-frequency carrier bank 仅为待审 baseline / fallback，不属于当前主方法。
 
+`protocol/sstw_patch_relation_gate0_construction.json` 是当前主路线首个独立、
+design/local-primitives-only 合同：冻结 diffusers 0.35.2 Wan
+`transformer.rope` 输出后的单一 temporal 3D-RoPE phase-pair 写入点、一个公开
+zero-sum Patch pair、保存视频 RGB24 的逐帧 Patch-pair DCT relation feature，
+以及 C0 构造 `T_rel` / identity A apply-only 的最小 Gate 0 数学。它尚未实现
+runtime adapter、runner、GPU/Colab/Notebook/Drive，所有正式结果、stage、
+observer、攻击、fixed-FPR、baseline execution 与 paper claim 授权均为 false。
+本地 NumPy 测试不构成 Patch-relation 方法证据。
+
 下列配置说明保留历史实验和诊断边界；任何既有 execution flag 都不能授权或冒充
 当前 Patch-relation 路线已进入执行。
 

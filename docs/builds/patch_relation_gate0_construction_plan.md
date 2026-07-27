@@ -1,12 +1,12 @@
 # Patch-relation Gate 0 本地合同与算法原语
 
-状态：`local_patch_relation_gate0_primitives_only`
+状态：`local_patch_relation_gate0_runtime_adapter_only`
 
 本文件从属于两份现行权威文档，冲突时
 `frame_state_synchronized_generative_flow_video_watermark_algorithm_primitives.md`
-优先于 method design。本批只实现可由 CPU/NumPy 验证的首个 Patch-relation
-写入与 output feature 原语；没有 runner、GPU、Colab、Notebook、Drive 或模型
-执行授权。
+优先于 method design。本批在既有 CPU/NumPy 原语之上实现最薄、局部且
+异常安全的 Wan RoPE runtime adapter 与 CFG/state-update 测量边界；没有
+runner、GPU、Colab、Notebook、Drive 或模型执行授权。
 
 ## 1. 证据边界
 
@@ -47,10 +47,33 @@ tuple 作用于 query 与 key；cross-attention 不使用该 tuple。对 Wan2.1 
 scoped_transformer_rope_output_temporal_phase_pair
 ```
 
-未来 adapter 只能在 `self.rope(hidden_states)` 输出后、其 tuple 进入全部
-self-attention block 前，变换冻结 token 与 temporal RoPE pair。它不能改
-attention processor、不能注入完整 attention-bias 张量、不能回退 direct
-latent/velocity addition。当前 adapter 尚未实现。
+当前本地 adapter 只在 `self.rope(hidden_states)` 输出后、其 tuple 进入全部
+self-attention block 前，变换冻结 token 与 temporal RoPE pair。它不改
+attention processor、不注入完整 attention-bias 张量、不回退 direct
+latent/velocity addition。scope 精确包围一次 transformer branch forward：
+正常和异常退出都恢复原 `rope.forward` 与 scope state；禁止嵌套，禁止一支
+scope 内多次成功调用。
+
+branch record 只允许在 body 无异常、原始 `forward` 与 scope state 清理完成、
+且 attempt/success 均精确为 1 的 clean exit 后形成。RoPE 已成功但后续
+patch embedding/attention/transformer 失败，或 cleanup 自身失败，都永久拒绝
+该 scope 的 record，不能仅凭 RoPE 调用计数进入 CFG pair。
+
+v0.35.2 `WanPipeline` 在 guidance=5 时按：
+
+```text
+conditional transformer
+-> unconditional transformer
+-> uncond + 5*(cond-uncond)
+-> scheduler.step
+```
+
+执行。因此相同 probe/step 的 relation coefficient 必须同时、同值作用于
+conditional 与 unconditional 两支；base forward 的两支都使用 zero control。
+两支必须绑定同一输入 state/timestep/probe digest，禁止只控制一支而改变 CFG
+语义。真实 torch 路径要求 hidden state 为 contiguous BF16
+`[1,16,9,40,64]`，RoPE tuple 为同 device、contiguous float64
+`[1,5760,1,128]`，并且只允许官方 no-grad inference。
 
 ## 3. 唯一公开 relation
 
@@ -150,10 +173,45 @@ C0 精确四项：`clean_a, clean_b, positive, negative`。C0 只冻结：
 4. restricted end-to-end `T_rel`。
 
 whitening center 是 C0 clean A/B 的逐坐标均值；scale 是
-`max(abs(clean_a-clean_b)/sqrt(2),1e-6)`。实际 signed exposure 必须由未来
-governed runtime adapter 的 realized relation control 提供；当前本地原语只接受
-有限、正负方向正确的 caller scalar 做公式验证。它不是已冻结的 runtime exposure
-record，不能形成 execution evidence。定义：
+`max(abs(clean_a-clean_b)/sqrt(2),1e-6)`。本地 adapter 现在可以从同一输入绑定
+的 base/controlled conditional 与 unconditional transformer 输出重算：
+
+```text
+base_cfg = base_uncond + 5*(base_cond-base_uncond)
+controlled_cfg = controlled_uncond + 5*(controlled_cond-controlled_uncond)
+intended_delta = controlled_cfg-base_cfg
+constrained = base_cfg+intended_delta
+actual_delta = constrained-base_cfg
+actual_state_update_delta = delta_sigma*actual_delta
+```
+
+以上全部在 C-contiguous FP32 scheduler coordinate 内完成。`delta_sigma` 先
+按 scheduler contract canonicalize 为 float32，随后必须是未来 governed Flow
+scheduler 提供的有限负值；当前本地 adapter 不冻结或伪造完整 sigma schedule。
+norm budget 沿用
+`||base_cfg||*0.02*0.12`，Flow energy increment 为
+`delta_sigma^2*||actual_delta||^2`。本地边界从未来 governed adapter 提供的
+cumulative reference/control energy 与正 remaining-step count 重算 projected
+reference、总预算和 remaining energy，不接受任意 caller remaining-budget。
+direction guard 比较 actual state-update delta 与
+`delta_sigma*intended_delta`，阈值保持0.999，不放宽预算。clean 必须 exact
+zero actual delta；active 必须严格非零。
+
+用于 C0/A 的 signed state-update exposure 冻结为：
+
+\[
+e
+=
+\operatorname{sign}(c)\,
+|\Delta\sigma|\,
+\|\Delta v_{\mathrm{actual}}\|_2.
+\]
+
+它使用 actual FP32 delta 而不是名义 phase；但当前本地 adapter 无法证明
+`delta_sigma` 与累计能量/remaining-step 的完整 governed schedule provenance，
+因此所有 adapter record 仍为 `local_contract_only`、
+`execution_evidence_allowed=false`。当前本地 C0/Gate 原语继续只接受有限、
+正负方向正确的 caller scalar 做公式验证，不能形成 execution evidence。定义：
 
 \[
 T_{\mathrm{rel}}
@@ -219,7 +277,9 @@ diagnostic readiness。即使通过，也最多允许另行设计双窗口 Gate 
 local contract + NumPy primitives
 -> independent read-only audit
 -> possible commit/push authorization
--> separate future runtime-adapter design
+-> local scoped Wan runtime adapter + strict CFG/state-update boundary
+-> independent read-only audit
+-> separate future governed runner/schedule binding
 -> separate user-authorized GPU run
 ```
 
@@ -235,4 +295,6 @@ runner/notebook/Drive=false
 observer/attack/fixed-FPR/baseline/paper claim=false
 ```
 
-本地 pytest/harness 只证明合同与算法原语自洽，不是 Patch-relation 方法结果。
+本地 pytest/harness 只证明合同、算法原语与 adapter 边界自洽，不是
+Patch-relation 方法结果。fake/NumPy 测试也不能证明真实 Wan hook、CUDA device
+或 Flow schedule 已完成端到端运行。

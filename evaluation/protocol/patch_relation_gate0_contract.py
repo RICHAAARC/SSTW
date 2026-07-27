@@ -1,8 +1,9 @@
 """Fail-closed local contract for the first Patch-relation Gate 0 primitive.
 
-This module validates one exact design/local-primitives config and constructs
-the design-only C0/A probe plan.  It does not authorize or implement runtime,
-GPU, Colab, a runner, an observer, or stage progression.
+This module validates one exact design/local-primitives/runtime-adapter config
+and constructs the design-only C0/A probe plan.  It implements and validates
+only the local adapter contract; it does not authorize or execute a real model
+runtime, GPU, Colab, a runner, an observer, or stage progression.
 """
 
 from __future__ import annotations
@@ -21,14 +22,23 @@ from main.methods.state_space_watermark.patch_relation_carrier import (
     build_public_patch_relation_descriptor,
     frozen_method_boundary,
 )
+from main.methods.state_space_watermark.patch_relation_wan_runtime import (
+    CFG_GUIDANCE_SCALE,
+    DIFFUSERS_VERSION,
+    FLOW_ENERGY_BUDGET_RATIO,
+    LAMBDA_MAX,
+    MINIMUM_DIRECTION_COSINE,
+    RUNTIME_ADAPTER_PROTOCOL_DIGEST,
+    VELOCITY_NORM_RATIO_BUDGET,
+)
 
 
 DEFAULT_CONFIG_PATH = "configs/protocol/sstw_patch_relation_gate0_construction.json"
 PROFILE_ID = "sstw_patch_relation_gate0_construction"
 METHOD_ID = "frame_state_synchronized_generative_flow_video_watermark"
-CONTRACT_STATE = "local_patch_relation_gate0_primitives_only"
+CONTRACT_STATE = "local_patch_relation_gate0_runtime_adapter_only"
 FROZEN_PROTOCOL_DIGEST = (
-    "391ddfc95e14c3006b6785d7531ba19d8701a983142a5cccd0fe144ce9e6cd9b"
+    "be8574c59b2b2fa3479f841a685d61aa4a028a860e255188a9a1f8e4fe380cd6"
 )
 _LOWER_HEX_64 = re.compile(r"[0-9a-f]{64}\Z")
 
@@ -44,7 +54,8 @@ EXPECTED_AUTHORIZATION_BOUNDARY = {
     **frozen_method_boundary(),
     "construction_execution_allowed": False,
     "claim_support_status": (
-        "local_contract_and_numpy_primitives_only_not_method_evidence"
+        "local_contract_numpy_primitives_and_runtime_adapter_only_"
+        "not_method_evidence"
     ),
 }
 EXPECTED_PROTOCOL_SECTIONS = {
@@ -60,9 +71,141 @@ EXPECTED_PROTOCOL_SECTIONS = {
 }
 EXPECTED_PROBE_ROLES = ("clean_a", "clean_b", "positive", "negative")
 EXPECTED_ACTUAL_SIGNED_EXPOSURE_INPUT = (
-    "future_governed_runtime_adapter_realized_relation_control_input_"
-    "current_local_primitive_finite_sign_validation_only_not_execution_evidence"
+    "local_runtime_adapter_realized_cfg_velocity_state_update_measurement_"
+    "requires_future_governed_schedule_binding_not_execution_evidence"
 )
+EXPECTED_WAN_RUNTIME_ADAPTER_CONTRACT = {
+    "diffusers_version": DIFFUSERS_VERSION,
+    "model_class": (
+        "diffusers.models.transformers.transformer_wan.WanTransformer3DModel"
+    ),
+    "rotary_class": (
+        "diffusers.models.transformers.transformer_wan.WanRotaryPosEmbed"
+    ),
+    "attention_processor_class": (
+        "diffusers.models.transformers.transformer_wan.WanAttnProcessor"
+    ),
+    "write_primitive": "scoped_transformer_rope_output_temporal_phase_pair",
+    "write_boundary": (
+        "after_self_rope_hidden_states_before_patch_embedding_and_all_"
+        "self_attention_blocks"
+    ),
+    "official_rope_output": "tuple_freqs_cos_freqs_sin",
+    "official_rope_output_shape": [1, 5760, 1, 128],
+    "official_rope_output_dtype_non_mps": "float64",
+    "runtime_adapter_module": (
+        "main.methods.state_space_watermark.patch_relation_wan_runtime"
+    ),
+    "runtime_adapter_implemented": True,
+    "runtime_adapter_execution_allowed": False,
+    "scoped_rope_output_contract": {
+        "scope": "one_transformer_forward_branch_only",
+        "expected_rope_call_attempts": 1,
+        "expected_successful_rope_calls": 1,
+        "nested_scope_allowed": False,
+        "hidden_states_shape": [1, 16, 9, 40, 64],
+        "hidden_states_dtype": "bfloat16",
+        "hidden_states_layout": "torch_strided_contiguous",
+        "rope_tuple_layout": "torch_strided_contiguous_same_device",
+        "gradient_enabled_allowed": False,
+        "clean_zero_returns_original_tuple": True,
+        "active_returns_new_tuple_without_mutating_original": True,
+        "exception_or_exit_restores_original_forward_and_scope_state": True,
+        "record_requires_clean_body_and_completed_cleanup": True,
+        "body_or_cleanup_exception_permanently_rejects_record": True,
+    },
+    "cfg_branch_contract": {
+        "official_pipeline_order": ["conditional", "unconditional"],
+        "guidance_scale_decimal": format(CFG_GUIDANCE_SCALE, ".1f"),
+        "combination_formula": (
+            "cfg_velocity=unconditional+guidance_scale*"
+            "(conditional-unconditional)_all_float32"
+        ),
+        "same_relation_control_on_conditional_and_unconditional": True,
+        "base_control_coefficient": 0,
+        "input_state_timestep_and_probe_binding_must_match": True,
+        "single_branch_control_allowed": False,
+    },
+    "scheduler_state_update_measurement_contract": {
+        "scheduler_velocity_shape": [1, 16, 9, 40, 64],
+        "branch_velocity_dtype_after_transformer_cast": (
+            "little_endian_float32"
+        ),
+        "base_cfg_velocity": (
+            "float32_cfg_combine_base_conditional_and_unconditional"
+        ),
+        "controlled_cfg_velocity": (
+            "float32_cfg_combine_controlled_conditional_and_unconditional"
+        ),
+        "intended_delta_velocity": (
+            "controlled_cfg_velocity_minus_base_cfg_velocity_float32"
+        ),
+        "constrained_velocity": (
+            "base_cfg_velocity_plus_intended_delta_velocity_float32"
+        ),
+        "actual_delta_velocity": (
+            "constrained_velocity_minus_base_cfg_velocity_float32"
+        ),
+        "delta_sigma_requirement": (
+            "future_governed_flow_scheduler_input_canonicalized_to_float32_"
+            "must_be_finite_and_negative"
+        ),
+        "actual_state_update_delta": (
+            "float32_delta_sigma_times_actual_delta_velocity"
+        ),
+        "lambda_max_decimal": format(LAMBDA_MAX, ".2f"),
+        "velocity_norm_ratio_budget_decimal": format(
+            VELOCITY_NORM_RATIO_BUDGET,
+            ".2f",
+        ),
+        "flow_energy_budget_ratio_decimal": format(
+            FLOW_ENERGY_BUDGET_RATIO,
+            ".6f",
+        ),
+        "norm_budget": (
+            "float32_l2_base_cfg_velocity_times_velocity_norm_ratio_budget_"
+            "times_lambda_max"
+        ),
+        "schedule_energy_context": (
+            "future_governed_inputs_cumulative_reference_energy_cumulative_"
+            "control_energy_and_positive_remaining_step_count"
+        ),
+        "reference_energy_increment": (
+            "delta_sigma_squared_times_base_cfg_velocity_l2_squared"
+        ),
+        "projected_reference_energy": (
+            "cumulative_reference_energy_plus_reference_energy_increment_"
+            "times_remaining_step_count"
+        ),
+        "total_flow_energy_budget": (
+            "flow_energy_budget_ratio_times_projected_reference_energy"
+        ),
+        "remaining_flow_energy": (
+            "maximum_zero_total_flow_energy_budget_minus_cumulative_control_"
+            "energy"
+        ),
+        "energy_increment": (
+            "delta_sigma_squared_times_actual_delta_velocity_l2_squared"
+        ),
+        "direction_cosine": (
+            "safe_cosine_actual_state_update_delta_vs_delta_sigma_times_"
+            "intended_delta_velocity"
+        ),
+        "minimum_direction_cosine_decimal": format(
+            MINIMUM_DIRECTION_COSINE,
+            ".3f",
+        ),
+        "signed_state_update_exposure": (
+            "signed_coefficient_times_absolute_delta_sigma_times_"
+            "actual_delta_velocity_l2"
+        ),
+        "active_zero_actual_delta_allowed": False,
+        "clean_exact_noop_required": True,
+        "local_measurement_is_execution_evidence": False,
+    },
+    "attention_bias_fallback_allowed": False,
+    "direct_additive_velocity_or_latent_carrier_allowed": False,
+}
 EXPECTED_STATISTICS_AND_TRANSFER_FORMULA_CONTRACT = {
     "numeric_layout": (
         "arrays=float64_le_c_contiguous_shape_11x6;"
@@ -221,6 +364,8 @@ def load_patch_relation_gate0_config(
     _validate_contract_semantics(contract)
     if observed_digest != FROZEN_PROTOCOL_DIGEST:
         raise ValueError("protocol digest 与冻结合同常量不匹配")
+    if observed_digest != RUNTIME_ADAPTER_PROTOCOL_DIGEST:
+        raise ValueError("protocol digest 与 runtime adapter 常量不匹配")
     return config
 
 
@@ -239,16 +384,7 @@ def _validate_contract_semantics(contract: Mapping[str, Any]) -> None:
         raise ValueError("historical FAIL boundary 不匹配")
 
     runtime = contract["wan_runtime_adapter_contract"]
-    if (
-        runtime["diffusers_version"] != "0.35.2"
-        or runtime["write_primitive"]
-        != "scoped_transformer_rope_output_temporal_phase_pair"
-        or runtime["official_rope_output_shape"] != [1, 5760, 1, 128]
-        or runtime["official_rope_output_dtype_non_mps"] != "float64"
-        or runtime["runtime_adapter_implemented"] is not False
-        or runtime["attention_bias_fallback_allowed"] is not False
-        or runtime["direct_additive_velocity_or_latent_carrier_allowed"] is not False
-    ):
+    if runtime != EXPECTED_WAN_RUNTIME_ADAPTER_CONTRACT:
         raise ValueError("Wan RoPE adapter boundary 不匹配")
 
     relation = contract["token_relation_contract"]
@@ -346,8 +482,19 @@ def _validate_contract_semantics(contract: Mapping[str, Any]) -> None:
         raise ValueError("transfer gate thresholds 不匹配")
 
     method_scope = contract["method_scope"]
-    if any(value is not False for value in method_scope.values()):
-        raise ValueError("method scope 必须保持全部 runtime/observer 路径关闭")
+    if method_scope != {
+        "payload_prc_state_dynamics_implemented": False,
+        "local_wan_rope_runtime_adapter_implemented": True,
+        "local_cfg_state_update_measurement_adapter_implemented": True,
+        "flow_velocity_deflection_runtime_implemented": False,
+        "output_encoder_runtime_adapter_implemented": False,
+        "clock_path_implemented": False,
+        "state_observer_implemented": False,
+        "wrong_key_detection_implemented": False,
+        "attack_or_fixed_fpr_implemented": False,
+        "checked_in_outputs_allowed": False,
+    }:
+        raise ValueError("method scope 必须只开放本地 adapter 实现状态")
     build_public_patch_relation_descriptor()
 
 

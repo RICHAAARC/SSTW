@@ -1,7 +1,7 @@
 {
   "profile_id": "sstw_patch_relation_gate0_construction",
   "method_id": "frame_state_synchronized_generative_flow_video_watermark",
-  "contract_state": "local_patch_relation_gate0_primitives_only",
+  "contract_state": "local_patch_relation_gate0_runtime_adapter_only",
   "authorization_boundary": {
     "runtime_implementation_authorized": false,
     "construction_execution_allowed": false,
@@ -17,7 +17,7 @@
     "paper_claim_allowed": false,
     "formal_result": false,
     "stage_progression_allowed": false,
-    "claim_support_status": "local_contract_and_numpy_primitives_only_not_method_evidence"
+    "claim_support_status": "local_contract_numpy_primitives_and_runtime_adapter_only_not_method_evidence"
   },
   "protocol_contract": {
     "authority": {
@@ -42,7 +42,61 @@
       "official_rope_output": "tuple_freqs_cos_freqs_sin",
       "official_rope_output_shape": [1, 5760, 1, 128],
       "official_rope_output_dtype_non_mps": "float64",
-      "runtime_adapter_implemented": false,
+      "runtime_adapter_module": "main.methods.state_space_watermark.patch_relation_wan_runtime",
+      "runtime_adapter_implemented": true,
+      "runtime_adapter_execution_allowed": false,
+      "scoped_rope_output_contract": {
+        "scope": "one_transformer_forward_branch_only",
+        "expected_rope_call_attempts": 1,
+        "expected_successful_rope_calls": 1,
+        "nested_scope_allowed": false,
+        "hidden_states_shape": [1, 16, 9, 40, 64],
+        "hidden_states_dtype": "bfloat16",
+        "hidden_states_layout": "torch_strided_contiguous",
+        "rope_tuple_layout": "torch_strided_contiguous_same_device",
+        "gradient_enabled_allowed": false,
+        "clean_zero_returns_original_tuple": true,
+        "active_returns_new_tuple_without_mutating_original": true,
+        "exception_or_exit_restores_original_forward_and_scope_state": true,
+        "record_requires_clean_body_and_completed_cleanup": true,
+        "body_or_cleanup_exception_permanently_rejects_record": true
+      },
+      "cfg_branch_contract": {
+        "official_pipeline_order": ["conditional", "unconditional"],
+        "guidance_scale_decimal": "5.0",
+        "combination_formula": "cfg_velocity=unconditional+guidance_scale*(conditional-unconditional)_all_float32",
+        "same_relation_control_on_conditional_and_unconditional": true,
+        "base_control_coefficient": 0,
+        "input_state_timestep_and_probe_binding_must_match": true,
+        "single_branch_control_allowed": false
+      },
+      "scheduler_state_update_measurement_contract": {
+        "scheduler_velocity_shape": [1, 16, 9, 40, 64],
+        "branch_velocity_dtype_after_transformer_cast": "little_endian_float32",
+        "base_cfg_velocity": "float32_cfg_combine_base_conditional_and_unconditional",
+        "controlled_cfg_velocity": "float32_cfg_combine_controlled_conditional_and_unconditional",
+        "intended_delta_velocity": "controlled_cfg_velocity_minus_base_cfg_velocity_float32",
+        "constrained_velocity": "base_cfg_velocity_plus_intended_delta_velocity_float32",
+        "actual_delta_velocity": "constrained_velocity_minus_base_cfg_velocity_float32",
+        "delta_sigma_requirement": "future_governed_flow_scheduler_input_canonicalized_to_float32_must_be_finite_and_negative",
+        "actual_state_update_delta": "float32_delta_sigma_times_actual_delta_velocity",
+        "lambda_max_decimal": "0.12",
+        "velocity_norm_ratio_budget_decimal": "0.02",
+        "flow_energy_budget_ratio_decimal": "0.000015",
+        "norm_budget": "float32_l2_base_cfg_velocity_times_velocity_norm_ratio_budget_times_lambda_max",
+        "schedule_energy_context": "future_governed_inputs_cumulative_reference_energy_cumulative_control_energy_and_positive_remaining_step_count",
+        "reference_energy_increment": "delta_sigma_squared_times_base_cfg_velocity_l2_squared",
+        "projected_reference_energy": "cumulative_reference_energy_plus_reference_energy_increment_times_remaining_step_count",
+        "total_flow_energy_budget": "flow_energy_budget_ratio_times_projected_reference_energy",
+        "remaining_flow_energy": "maximum_zero_total_flow_energy_budget_minus_cumulative_control_energy",
+        "energy_increment": "delta_sigma_squared_times_actual_delta_velocity_l2_squared",
+        "direction_cosine": "safe_cosine_actual_state_update_delta_vs_delta_sigma_times_intended_delta_velocity",
+        "minimum_direction_cosine_decimal": "0.999",
+        "signed_state_update_exposure": "signed_coefficient_times_absolute_delta_sigma_times_actual_delta_velocity_l2",
+        "active_zero_actual_delta_allowed": false,
+        "clean_exact_noop_required": true,
+        "local_measurement_is_execution_evidence": false
+      },
       "attention_bias_fallback_allowed": false,
       "direct_additive_velocity_or_latent_carrier_allowed": false
     },
@@ -124,7 +178,7 @@
       "identity_intercept": "identity_clean_a_clean_b_arithmetic_mean_after_frozen_c0_whitening",
       "transfer_estimator": "whitened_positive_minus_negative_div_actual_signed_exposure_span",
       "transfer_object": "restricted_T_rel_not_separately_identified_H_e2e",
-      "actual_signed_exposure_input": "future_governed_runtime_adapter_realized_relation_control_input_current_local_primitive_finite_sign_validation_only_not_execution_evidence",
+      "actual_signed_exposure_input": "local_runtime_adapter_realized_cfg_velocity_state_update_measurement_requires_future_governed_schedule_binding_not_execution_evidence",
       "statistics_and_transfer_formula_contract": {
         "numeric_layout": "arrays=float64_le_c_contiguous_shape_11x6;vectors=reshape_order_C_before_norm_and_dot",
         "whitened_feature": "(raw_feature-frozen_c0_center)/frozen_c0_scale_elementwise",
@@ -160,6 +214,8 @@
     },
     "method_scope": {
       "payload_prc_state_dynamics_implemented": false,
+      "local_wan_rope_runtime_adapter_implemented": true,
+      "local_cfg_state_update_measurement_adapter_implemented": true,
       "flow_velocity_deflection_runtime_implemented": false,
       "output_encoder_runtime_adapter_implemented": false,
       "clock_path_implemented": false,
@@ -169,5 +225,5 @@
       "checked_in_outputs_allowed": false
     }
   },
-  "protocol_digest": "391ddfc95e14c3006b6785d7531ba19d8701a983142a5cccd0fe144ce9e6cd9b"
+  "protocol_digest": "be8574c59b2b2fa3479f841a685d61aa4a028a860e255188a9a1f8e4fe380cd6"
 }

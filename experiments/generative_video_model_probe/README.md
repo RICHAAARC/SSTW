@@ -56,6 +56,20 @@ base/control CFG repeat差、正负方向和既有 counterfactual state-update�
 随后在调用真实 scheduler 前终止。它不decode、不导出视频、不选择新phase，也不
 允许直接重跑8视频 Gate 0。
 
+`wan_model_load_cache_preflight.py` 是更早的基础设施入口：父进程监控独立
+model-load worker、Hugging Face 本地cache增长、worker RSS/CPU 与loader phase，
+在2700秒总时限或cache文件数/字节连续600秒无变化时执行有界TERM/KILL/reap。
+worker显式完成冻结commit的`snapshot_download`后，仅从冻结本地cache加载pipeline，
+并在scheduler/offload/tiling闭合后释放模型；不执行forward、step、decode、
+export或Gate。PASS必须重放精确8阶段start/finish有序ledger；phase/partial/lock/
+RSS/CPU只报告，不能延长cache无进展deadline。`colab_test` 在任何runner前以create-only方式写本地
+validation bootstrap；ZIP与manifest经同文件系统staging成对readback后才原子提升
+到Drive。已发布结果即使bootstrap最终清理失败也不得被recovery重复打包。该
+preflight不是方法结果。
+
+当前唯一活动入口是`wan_model_load_cache_preflight`；本目录其它历史runner均暂停，
+不会由request路由执行，也不会由阶段0自动触发。
+
 历史 paper-profile 的实施顺序与 Claim 闭合规则仍保存在
 `docs/builds/complete_paper_mechanism_implementation.md`，但该文档只用于历史
 参考，不是当前方法入口或 Patch-relation 执行计划。

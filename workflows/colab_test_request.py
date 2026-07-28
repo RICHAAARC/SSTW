@@ -7,6 +7,7 @@ Notebook 只读取仓库地址与 ref，并把请求路径交给服务器 CLI。
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from hashlib import sha256
 import json
 import os
 from pathlib import Path, PurePosixPath
@@ -14,6 +15,7 @@ import re
 import shutil
 import stat
 import subprocess
+import tempfile
 from typing import Any, Callable, Mapping
 from zipfile import ZIP_DEFLATED, ZipFile
 
@@ -59,6 +61,7 @@ PATCH_RELATION_GATE0_CONSTRUCTION_TEST_ID = (
 PATCH_RELATION_PHASE_RESPONSE_PREFLIGHT_TEST_ID = (
     "patch_relation_phase_response_preflight"
 )
+WAN_MODEL_LOAD_CACHE_PREFLIGHT_TEST_ID = "wan_model_load_cache_preflight"
 SUPPORTED_TEST_IDS = (
     TRAJECTORY_REPLAY_SOURCE_BUILD_TEST_ID,
     TRAJECTORY_SIGNAL_TEST_ID,
@@ -73,6 +76,13 @@ SUPPORTED_TEST_IDS = (
     FRAME_STATE_SIGNED_OBSERVABILITY_CONSTRUCTION_TEST_ID,
     PATCH_RELATION_GATE0_CONSTRUCTION_TEST_ID,
     PATCH_RELATION_PHASE_RESPONSE_PREFLIGHT_TEST_ID,
+    WAN_MODEL_LOAD_CACHE_PREFLIGHT_TEST_ID,
+)
+ACTIVE_COLAB_TEST_IDS = (WAN_MODEL_LOAD_CACHE_PREFLIGHT_TEST_ID,)
+PAUSED_HISTORICAL_TEST_IDS = tuple(
+    test_id
+    for test_id in SUPPORTED_TEST_IDS
+    if test_id not in ACTIVE_COLAB_TEST_IDS
 )
 TRAJECTORY_REPLAY_SOURCE_BUILD_PHASE = "source_build"
 SUPPORTED_TRAJECTORY_PHASES = (
@@ -97,12 +107,18 @@ SUPPORTED_PATCH_RELATION_GATE0_PHASES = ("gate0",)
 SUPPORTED_PATCH_RELATION_PHASE_RESPONSE_PREFLIGHT_PHASES = (
     "phase_response_preflight",
 )
+SUPPORTED_WAN_MODEL_LOAD_CACHE_PREFLIGHT_PHASES = (
+    "model_load_cache_preflight",
+)
 EXPECTED_REPOSITORY_URL = "https://github.com/RICHAAARC/SSTW.git"
 _SAFE_REPOSITORY_REF = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._/-]*$")
 _FULL_LOWERCASE_GIT_COMMIT = re.compile(r"^[0-9a-f]{40}$")
 _SAFE_RUN_SERIES_ID = re.compile(r"^[a-z0-9][a-z0-9_-]{2,63}$")
 PATCH_RELATION_PHASE_RESPONSE_SOURCE_FAILURE_COMMIT = (
     "56a211b96f4a571364675606d5c5fd5a4d689add"
+)
+WAN_MODEL_LOAD_CACHE_PREFLIGHT_SOURCE_HANG_COMMIT = (
+    "f2e2178fc368688b0499c6179a512551d18a16f4"
 )
 
 
@@ -177,7 +193,6 @@ def load_colab_test_request(
         raise ValueError(
             f"test_id 不在仓库白名单中: {test_id!r}; 允许值: {SUPPORTED_TEST_IDS}"
         )
-
     repository = _require_mapping(payload.get("repository"), "repository")
     _reject_unknown_fields(repository, {"url", "ref"}, "repository")
     repository_url = str(repository.get("url") or "").strip()
@@ -190,13 +205,24 @@ def load_colab_test_request(
         or repository_ref.endswith("/")
     ):
         raise ValueError("repository.ref 不是安全的 Git revision")
-    if test_id == PATCH_RELATION_PHASE_RESPONSE_PREFLIGHT_TEST_ID and (
+    if test_id in {
+        PATCH_RELATION_PHASE_RESPONSE_PREFLIGHT_TEST_ID,
+        WAN_MODEL_LOAD_CACHE_PREFLIGHT_TEST_ID,
+    } and (
         not _FULL_LOWERCASE_GIT_COMMIT.fullmatch(repository_ref)
-        or repository_ref
-        == PATCH_RELATION_PHASE_RESPONSE_SOURCE_FAILURE_COMMIT
+        or (
+            test_id == PATCH_RELATION_PHASE_RESPONSE_PREFLIGHT_TEST_ID
+            and repository_ref
+            == PATCH_RELATION_PHASE_RESPONSE_SOURCE_FAILURE_COMMIT
+        )
+        or (
+            test_id == WAN_MODEL_LOAD_CACHE_PREFLIGHT_TEST_ID
+            and repository_ref
+            == WAN_MODEL_LOAD_CACHE_PREFLIGHT_SOURCE_HANG_COMMIT
+        )
     ):
         raise ValueError(
-            "phase-response preflight repository.ref 必须替换为审核后"
+            "preflight repository.ref 必须替换为审核后"
             "包含完整runner/config/workflow的40位小写commit SHA"
         )
 
@@ -254,6 +280,8 @@ def load_colab_test_request(
         supported_phases = (
             SUPPORTED_PATCH_RELATION_PHASE_RESPONSE_PREFLIGHT_PHASES
         )
+    elif test_id == WAN_MODEL_LOAD_CACHE_PREFLIGHT_TEST_ID:
+        supported_phases = SUPPORTED_WAN_MODEL_LOAD_CACHE_PREFLIGHT_PHASES
     else:
         supported_phases = SUPPORTED_TRAJECTORY_PHASES
     if phase not in supported_phases:
@@ -266,6 +294,13 @@ def load_colab_test_request(
         raise ValueError(
             "run_series_id 必须是3到64位小写字母、数字、下划线或连字符"
         )
+    if (
+        test_id == WAN_MODEL_LOAD_CACHE_PREFLIGHT_TEST_ID
+        and run_series_id != "wan_model_load_cache_preflight"
+    ):
+        raise ValueError(
+            "Wan model-load/cache preflight run_series_id 必须精确冻结"
+        )
     source_package = _path_within_project_root(
         parameters.get("source_package_path"),
         root,
@@ -276,6 +311,7 @@ def load_colab_test_request(
                 FRAME_STATE_SIGNED_OBSERVABILITY_CONSTRUCTION_TEST_ID,
                 PATCH_RELATION_GATE0_CONSTRUCTION_TEST_ID,
                 PATCH_RELATION_PHASE_RESPONSE_PREFLIGHT_TEST_ID,
+                WAN_MODEL_LOAD_CACHE_PREFLIGHT_TEST_ID,
             }
         ),
     )
@@ -348,6 +384,14 @@ def load_colab_test_request(
     ):
         raise ValueError(
             "Patch-relation phase-response preflight 是自包含诊断，"
+            "不接受 source/resume package"
+        )
+    if (
+        test_id == WAN_MODEL_LOAD_CACHE_PREFLIGHT_TEST_ID
+        and (source_package or resume_package)
+    ):
+        raise ValueError(
+            "Wan model-load/cache preflight 是自包含基础设施诊断，"
             "不接受 source/resume package"
         )
     return {
@@ -491,7 +535,10 @@ def build_colab_test_runtime_preflight_decision(
     """只检查 GPU 可用性和 Drive/本地路径边界，不执行论文环境锁。"""
 
     drive_root = Path(project_root).expanduser().resolve()
-    workspace_root = Path(local_workspace_root).expanduser().resolve()
+    unresolved_workspace_root = Path(local_workspace_root).expanduser()
+    if unresolved_workspace_root.is_symlink():
+        raise ValueError("local_workspace_root 不得是symlink")
+    workspace_root = unresolved_workspace_root.resolve()
     package_cache_root = Path(local_package_cache_root).expanduser().resolve()
     resolved_hf_home = str(hf_home or os.environ.get("HF_HOME") or "").strip()
     resolved_hf_hub_cache = str(
@@ -545,6 +592,260 @@ def _write_zip(source_root: Path, package_path: Path) -> None:
                 archive.write(path, path.relative_to(source_root).as_posix())
 
 
+def _atomic_write_json(path: Path, payload: Mapping[str, Any]) -> None:
+    """同目录临时文件原子发布，供早期recovery bootstrap使用。"""
+
+    temporary = path.with_name(f".{path.name}.{os.getpid()}.tmp")
+    try:
+        with temporary.open("x", encoding="utf-8") as handle:
+            json.dump(
+                dict(payload),
+                handle,
+                ensure_ascii=False,
+                sort_keys=True,
+                indent=2,
+                allow_nan=False,
+            )
+            handle.write("\n")
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temporary, path)
+    finally:
+        temporary.unlink(missing_ok=True)
+
+
+def _path_lexists(path: Path) -> bool:
+    return os.path.lexists(path)
+
+
+def _require_real_directory_within(path: Path, root: Path, label: str) -> None:
+    try:
+        metadata = path.lstat()
+    except FileNotFoundError as exc:
+        raise FileNotFoundError(f"{label} 不存在: {path}") from exc
+    if stat.S_ISLNK(metadata.st_mode) or not stat.S_ISDIR(metadata.st_mode):
+        raise ValueError(f"{label} 必须是非symlink真实目录: {path}")
+    resolved = path.resolve()
+    resolved_root = root.resolve()
+    if resolved != resolved_root and not resolved.is_relative_to(resolved_root):
+        raise ValueError(f"{label} 越出本地workspace: {resolved}")
+
+
+def _prepare_runtime_initialization_bootstrap(
+    *,
+    workspace_root: Path,
+    run_series_id: str,
+    output_root: Path,
+    payload: Mapping[str, Any],
+) -> Path:
+    """Create one run bootstrap without following or overwriting prior state."""
+
+    if _path_lexists(output_root):
+        raise FileExistsError(
+            f"本地run output已存在，拒绝覆盖或跨run混包: {output_root}"
+        )
+    workspace_root.mkdir(parents=True, exist_ok=True)
+    _require_real_directory_within(
+        workspace_root, workspace_root, "local_workspace_root"
+    )
+    validation_parent = workspace_root / "validation"
+    if _path_lexists(validation_parent):
+        _require_real_directory_within(
+            validation_parent, workspace_root, "validation root"
+        )
+    else:
+        validation_parent.mkdir()
+        _require_real_directory_within(
+            validation_parent, workspace_root, "validation root"
+        )
+    validation_root = validation_parent / run_series_id
+    if _path_lexists(validation_root):
+        raise FileExistsError(
+            "已有未闭环validation/bootstrap，拒绝覆盖旧run事实: "
+            f"{validation_root}"
+        )
+    validation_root.mkdir()
+    _require_real_directory_within(
+        validation_root, workspace_root, "run validation root"
+    )
+    bootstrap_path = (
+        validation_root / "colab_test_runtime_initialization.json"
+    )
+    if _path_lexists(bootstrap_path):
+        raise FileExistsError(f"runtime bootstrap 已存在: {bootstrap_path}")
+    _atomic_write_json(bootstrap_path, payload)
+    return bootstrap_path
+
+
+def _update_runtime_initialization_bootstrap(
+    bootstrap_path: Path,
+    *,
+    expected_run_id: str,
+    updates: Mapping[str, Any],
+) -> dict[str, Any]:
+    if bootstrap_path.is_symlink() or not bootstrap_path.is_file():
+        raise ValueError("runtime bootstrap 必须是非symlink普通文件")
+    payload = json.loads(bootstrap_path.read_text(encoding="utf-8"))
+    if (
+        not isinstance(payload, dict)
+        or payload.get("colab_runtime_initialization_run_id")
+        != expected_run_id
+    ):
+        raise ValueError("runtime bootstrap run identity 不匹配")
+    payload.update(dict(updates))
+    _atomic_write_json(bootstrap_path, payload)
+    return payload
+
+
+def _sha256_file(path: Path) -> str:
+    digest = sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _published_bootstrap_matches_drive(payload: Mapping[str, Any]) -> bool:
+    state = payload.get("runtime_initialization_decision")
+    if state not in {
+        "PUBLISHING_VERIFIED_LOCAL_PACKAGE",
+        "PUBLISHED_RESULT_VERIFIED",
+    }:
+        return False
+    checks = (
+        (
+            "published_drive_result_zip",
+            "published_drive_result_zip_sha256",
+        ),
+        (
+            "published_drive_result_manifest",
+            "published_drive_result_manifest_sha256",
+        ),
+    )
+    try:
+        for path_field, digest_field in checks:
+            path = Path(str(payload[path_field]))
+            expected = str(payload[digest_field])
+            if (
+                path.is_symlink()
+                or not path.is_file()
+                or _sha256_file(path) != expected
+            ):
+                return False
+    except (KeyError, OSError, ValueError):
+        return False
+    return True
+
+
+def _best_effort_close_published_bootstrap(
+    bootstrap_path: Path,
+    *,
+    run_id: str,
+) -> None:
+    """Published output is success even if final bootstrap cleanup is delayed."""
+
+    try:
+        _update_runtime_initialization_bootstrap(
+            bootstrap_path,
+            expected_run_id=run_id,
+            updates={
+                "runtime_initialization_decision": (
+                    "PUBLISHED_RESULT_VERIFIED"
+                ),
+                "published_at_utc": datetime.now(timezone.utc).isoformat(),
+            },
+        )
+    except Exception:
+        pass
+    try:
+        bootstrap_path.unlink(missing_ok=True)
+    except OSError:
+        pass
+    else:
+        try:
+            bootstrap_path.parent.rmdir()
+        except OSError:
+            pass
+
+
+def _publish_result_pair_transactionally(
+    *,
+    local_package_path: Path,
+    local_manifest_path: Path,
+    drive_output_root: Path,
+    package_name: str,
+    bootstrap_path: Path,
+    run_id: str,
+) -> tuple[Path, Path]:
+    """Publish ZIP+manifest as one directory rename on the Drive filesystem."""
+
+    drive_parent = drive_output_root.parent
+    drive_parent.mkdir(parents=True, exist_ok=True)
+    if _path_lexists(drive_output_root):
+        raise FileExistsError(f"Drive final result 已存在: {drive_output_root}")
+    staging = Path(
+        tempfile.mkdtemp(
+            prefix=f".{drive_output_root.name}.staging.",
+            dir=drive_parent,
+        )
+    )
+    staging_owned = True
+    promoted = False
+    try:
+        staged_package = staging / package_name
+        staged_manifest = staging / "colab_test_package_manifest.json"
+        shutil.copy2(local_package_path, staged_package)
+        shutil.copy2(local_manifest_path, staged_manifest)
+        package_digest = _sha256_file(local_package_path)
+        manifest_digest = _sha256_file(local_manifest_path)
+        if _sha256_file(staged_package) != package_digest:
+            raise RuntimeError("Drive staging ZIP readback digest 不匹配")
+        if _sha256_file(staged_manifest) != manifest_digest:
+            raise RuntimeError("Drive staging manifest readback digest 不匹配")
+        staged_payload = json.loads(staged_manifest.read_text(encoding="utf-8"))
+        final_package = drive_output_root / package_name
+        final_manifest = (
+            drive_output_root / "colab_test_package_manifest.json"
+        )
+        if (
+            not isinstance(staged_payload, dict)
+            or staged_payload.get("run_id") != run_id
+            or staged_payload.get("drive_result_zip") != str(final_package)
+        ):
+            raise RuntimeError("Drive staging manifest 与run/final ZIP绑定不匹配")
+        _update_runtime_initialization_bootstrap(
+            bootstrap_path,
+            expected_run_id=run_id,
+            updates={
+                "runtime_initialization_decision": (
+                    "PUBLISHING_VERIFIED_LOCAL_PACKAGE"
+                ),
+                "published_drive_result_zip": str(final_package),
+                "published_drive_result_zip_sha256": package_digest,
+                "published_drive_result_manifest": str(final_manifest),
+                "published_drive_result_manifest_sha256": manifest_digest,
+            },
+        )
+        staging.replace(drive_output_root)
+        staging_owned = False
+        promoted = True
+        if (
+            final_package.is_symlink()
+            or final_manifest.is_symlink()
+            or _sha256_file(final_package) != package_digest
+            or _sha256_file(final_manifest) != manifest_digest
+        ):
+            raise RuntimeError("Drive final ZIP/manifest 原子发布readback失败")
+        return final_package, final_manifest
+    except BaseException:
+        if promoted and drive_output_root.is_dir() and not drive_output_root.is_symlink():
+            shutil.rmtree(drive_output_root)
+        raise
+    finally:
+        if staging_owned and staging.is_dir() and not staging.is_symlink():
+            shutil.rmtree(staging)
+
+
 def package_colab_test_recovery_bundle(
     request_path: str | Path,
     *,
@@ -587,6 +888,22 @@ def package_colab_test_recovery_bundle(
     validation_root = (
         workspace_root / "validation" / str(resolved["run_series_id"])
     )
+    bootstrap_path = (
+        validation_root / "colab_test_runtime_initialization.json"
+    )
+    if bootstrap_path.is_file() and not bootstrap_path.is_symlink():
+        try:
+            existing_bootstrap = json.loads(
+                bootstrap_path.read_text(encoding="utf-8")
+            )
+        except (OSError, UnicodeError, json.JSONDecodeError):
+            existing_bootstrap = {}
+        if isinstance(
+            existing_bootstrap, dict
+        ) and _published_bootstrap_matches_drive(existing_bootstrap):
+            raise FileNotFoundError(
+                "Colab recovery 拒绝打包已验证发布完成的run"
+            )
     decision_path: Path | None = None
     if run_decision_path is not None and str(run_decision_path).strip():
         unresolved_decision_path = Path(run_decision_path).expanduser()
@@ -641,11 +958,28 @@ def package_colab_test_recovery_bundle(
         (output_root, "partial_run"),
         (validation_root, "partial_validation"),
     ):
+        if source_root.is_symlink():
+            raise ValueError(
+                f"Colab recovery source root 不得是symlink: {source_root}"
+            )
         if not source_root.is_dir():
             continue
         for path in sorted(source_root.rglob("*")):
             if not path.is_file() or path.is_symlink():
                 continue
+            if (
+                path.name == "colab_test_runtime_initialization.json"
+            ):
+                try:
+                    bootstrap_payload = json.loads(
+                        path.read_text(encoding="utf-8")
+                    )
+                except (OSError, UnicodeError, json.JSONDecodeError):
+                    bootstrap_payload = {}
+                if isinstance(
+                    bootstrap_payload, dict
+                ) and _published_bootstrap_matches_drive(bootstrap_payload):
+                    continue
             archive_name = (
                 Path(archive_prefix) / path.relative_to(source_root)
             ).as_posix()
@@ -929,6 +1263,16 @@ def _default_patch_relation_phase_response_preflight_runner(
     return run_patch_relation_phase_response_preflight(output_root)
 
 
+def _default_wan_model_load_cache_preflight_runner(
+    output_root: Path,
+) -> dict[str, Any]:
+    from experiments.generative_video_model_probe.wan_model_load_cache_preflight import (
+        run_wan_model_load_cache_preflight,
+    )
+
+    return run_wan_model_load_cache_preflight(output_root)
+
+
 def _source_generation_model_ids(source_root: Path) -> list[str]:
     """读取模型地址列表；有效性校验仍由测试 handler 负责。"""
 
@@ -1037,11 +1381,21 @@ def build_colab_test_dry_run_plan(
     claim_support_status = (
         "trajectory_replay_source_build_only_not_paper_evidence"
         if resolved["test_id"] == TRAJECTORY_REPLAY_SOURCE_BUILD_TEST_ID
-        else "diagnostic_only_not_paper_evidence"
+        else (
+            "model_load_cache_preflight_only_not_method_evidence"
+            if resolved["test_id"] == WAN_MODEL_LOAD_CACHE_PREFLIGHT_TEST_ID
+            else "diagnostic_only_not_paper_evidence"
+        )
     )
     return {
         "notebook_role": "colab_test",
         "test_id": resolved["test_id"],
+        "current_stage_execution_allowed": (
+            resolved["test_id"] in ACTIVE_COLAB_TEST_IDS
+        ),
+        "paused_historical": (
+            resolved["test_id"] in PAUSED_HISTORICAL_TEST_IDS
+        ),
         "phase": resolved["phase"],
         "run_series_id": resolved["run_series_id"],
         "request_path": resolved["request_path"],
@@ -1218,20 +1572,106 @@ def run_colab_test_request(
     patch_relation_phase_response_preflight_runner: (
         Callable[..., dict[str, Any]] | None
     ) = None,
+    wan_model_load_cache_preflight_runner: (
+        Callable[..., dict[str, Any]] | None
+    ) = None,
 ) -> dict[str, Any]:
     """执行一个白名单测试，并把唯一结果 zip 与 manifest 回写 Drive。"""
 
     root = Path(project_root).expanduser().resolve()
     repository_root = Path(repo_root).expanduser().resolve()
-    workspace_root = Path(local_workspace_root).expanduser().resolve()
+    unresolved_workspace_root = Path(local_workspace_root).expanduser()
+    if unresolved_workspace_root.is_symlink():
+        raise ValueError("local_workspace_root 不得是symlink")
+    workspace_root = unresolved_workspace_root.resolve()
     cache_root = Path(local_package_cache_root).expanduser().resolve()
     resolved = load_colab_test_request(request_path, project_root=root)
+    explicit_test_double_by_test_id = {
+        TRAJECTORY_REPLAY_SOURCE_BUILD_TEST_ID: (
+            trajectory_source_builder is not None
+            or trajectory_source_validator is not None
+        ),
+        TRAJECTORY_SIGNAL_TEST_ID: trajectory_runner is not None,
+        CONTROLLED_EMBEDDING_STRENGTH_TEST_ID: (
+            controlled_embedding_runner is not None
+        ),
+        MINIMAL_SIGNED_TRAJECTORY_STATE_SPACE_SMOKE_TEST_ID: (
+            minimal_signed_trajectory_runner is not None
+        ),
+        PREDICTIVE_TRAJECTORY_SYNCHRONIZATION_SMOKE_TEST_ID: (
+            predictive_trajectory_runner is not None
+        ),
+        TEMPORAL_CODE_ISOLATION_REPLAY_SMOKE_TEST_ID: (
+            temporal_code_isolation_runner is not None
+        ),
+        PROMPT_ORTHOGONAL_STATE_TRAJECTORY_SMOKE_TEST_ID: (
+            prompt_orthogonal_state_trajectory_runner is not None
+        ),
+        OUTPUT_FEATURE_IMPULSE_OBSERVABILITY_CONSTRUCTION_TEST_ID: (
+            output_feature_impulse_observability_runner is not None
+        ),
+        GATE_A_ROOT_CAUSE_AMPLITUDE_FEEDBACK_DIAGNOSTIC_TEST_ID: (
+            gate_a_root_cause_diagnostic_runner is not None
+        ),
+        FROZEN_FEEDBACK_SIGNED_RESPONSE_DIAGNOSTIC_TEST_ID: (
+            frozen_feedback_signed_response_runner is not None
+        ),
+        FRAME_STATE_SIGNED_OBSERVABILITY_CONSTRUCTION_TEST_ID: (
+            frame_state_signed_observability_runner is not None
+        ),
+        PATCH_RELATION_GATE0_CONSTRUCTION_TEST_ID: (
+            patch_relation_gate0_runner is not None
+        ),
+        PATCH_RELATION_PHASE_RESPONSE_PREFLIGHT_TEST_ID: (
+            patch_relation_phase_response_preflight_runner is not None
+        ),
+    }
+    if (
+        resolved["test_id"] in PAUSED_HISTORICAL_TEST_IDS
+        and not explicit_test_double_by_test_id.get(
+            str(resolved["test_id"]), False
+        )
+    ):
+        raise ValueError(
+            "该Colab test_id已暂停为historical；真实server当前唯一可运行入口是 "
+            f"{WAN_MODEL_LOAD_CACHE_PREFLIGHT_TEST_ID}"
+        )
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S_%f")
     repository_commit = _repository_commit(repository_root)
     run_id = f"{timestamp}_{repository_commit[:8]}"
+    output_root = (
+        workspace_root
+        / "runs"
+        / resolved["test_id"]
+        / resolved["run_series_id"]
+    )
+    bootstrap_path = _prepare_runtime_initialization_bootstrap(
+        workspace_root=workspace_root,
+        run_series_id=str(resolved["run_series_id"]),
+        output_root=output_root,
+        payload={
+            "manifest_kind": "sstw_colab_test_runtime_initialization",
+            "runtime_initialization_decision": "INITIALIZED_PENDING_RUNNER",
+            "request_schema_version": REQUEST_SCHEMA_VERSION,
+            "test_id": resolved["test_id"],
+            "phase": resolved["phase"],
+            "run_series_id": resolved["run_series_id"],
+            "colab_runtime_initialization_run_id": run_id,
+            "repository_url": resolved["repository_url"],
+            "repository_ref": resolved["repository_ref"],
+            "repository_commit": repository_commit,
+            "colab_runtime_initialization_local_output_root": str(output_root),
+            "created_at_utc": datetime.now(timezone.utc).isoformat(),
+            "formal_result": False,
+            "stage_progression_allowed": False,
+            "claim_support_status": (
+                "runtime_initialization_only_not_claim_evidence"
+            ),
+        },
+    )
 
     if resolved["test_id"] == TRAJECTORY_REPLAY_SOURCE_BUILD_TEST_ID:
-        return _run_trajectory_replay_source_build(
+        result = _run_trajectory_replay_source_build(
             resolved,
             project_root=root,
             workspace_root=workspace_root,
@@ -1246,6 +1686,27 @@ def run_colab_test_request(
                 or _default_trajectory_source_validator
             ),
         )
+        result_zip = Path(str(result["drive_result_zip"]))
+        result_manifest = Path(str(result["drive_result_manifest"]))
+        _update_runtime_initialization_bootstrap(
+            bootstrap_path,
+            expected_run_id=run_id,
+            updates={
+                "runtime_initialization_decision": (
+                    "PUBLISHED_RESULT_VERIFIED"
+                ),
+                "published_drive_result_zip": str(result_zip),
+                "published_drive_result_zip_sha256": _sha256_file(result_zip),
+                "published_drive_result_manifest": str(result_manifest),
+                "published_drive_result_manifest_sha256": _sha256_file(
+                    result_manifest
+                ),
+            },
+        )
+        _best_effort_close_published_bootstrap(
+            bootstrap_path, run_id=run_id
+        )
+        return result
 
     self_contained_gate0 = (
         resolved["test_id"]
@@ -1253,6 +1714,7 @@ def run_colab_test_request(
             FRAME_STATE_SIGNED_OBSERVABILITY_CONSTRUCTION_TEST_ID,
             PATCH_RELATION_GATE0_CONSTRUCTION_TEST_ID,
             PATCH_RELATION_PHASE_RESPONSE_PREFLIGHT_TEST_ID,
+            WAN_MODEL_LOAD_CACHE_PREFLIGHT_TEST_ID,
         }
     )
     source_package: Path | None = None
@@ -1343,12 +1805,6 @@ def run_colab_test_request(
         source_root = _discover_stage0d_source_root(source_extract_root)
         generation_model_ids = _source_generation_model_ids(source_root)
 
-    output_root = (
-        workspace_root
-        / "runs"
-        / resolved["test_id"]
-        / resolved["run_series_id"]
-    )
     predictive_replay_source_root: Path | None = None
     temporal_code_isolation_source_root: Path | None = None
     if resolved["resume_package_path"]:
@@ -1427,6 +1883,12 @@ def run_colab_test_request(
         runner = (
             patch_relation_phase_response_preflight_runner
             or _default_patch_relation_phase_response_preflight_runner
+        )
+        diagnostic_decision = runner(output_root)
+    elif resolved["test_id"] == WAN_MODEL_LOAD_CACHE_PREFLIGHT_TEST_ID:
+        runner = (
+            wan_model_load_cache_preflight_runner
+            or _default_wan_model_load_cache_preflight_runner
         )
         diagnostic_decision = runner(output_root)
     elif (
@@ -1553,10 +2015,17 @@ def run_colab_test_request(
     local_manifest_path = local_result_root / "colab_test_package_manifest.json"
     write_json(local_manifest_path, manifest)
 
-    # Drive 上的最终目录只在本地 ZIP 和 manifest 都完成后才创建。
-    drive_output_root.mkdir(parents=True, exist_ok=False)
-    shutil.copy2(local_package_path, drive_package_path)
-    shutil.copy2(local_manifest_path, manifest_path)
+    drive_package_path, manifest_path = _publish_result_pair_transactionally(
+        local_package_path=local_package_path,
+        local_manifest_path=local_manifest_path,
+        drive_output_root=drive_output_root,
+        package_name=package_name,
+        bootstrap_path=bootstrap_path,
+        run_id=run_id,
+    )
+    _best_effort_close_published_bootstrap(
+        bootstrap_path, run_id=run_id
+    )
     return {
         "notebook_role": "colab_test",
         "test_id": resolved["test_id"],

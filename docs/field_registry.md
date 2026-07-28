@@ -3660,3 +3660,35 @@ Notebook 与 repository module 的跨边界数据
 | patch_relation_c0_construction_digest | provenance | none | true | false | false | C0 whitening/statistics/transfer construction的稳定摘要。 |
 | patch_relation_c0_artifact_sha256 | provenance | none | true | false | false | 完整C0 NPZ artifact文件SHA-256。 |
 | patch_relation_failure_reason | governance | none | true | false | false | runtime/contract fail-closed的安全标量错误说明。 |
+| colab_runtime_initialization_run_id | provenance | none | true | false | false | runner前写入本地validation bootstrap的当前run ID；仅用于同一存活Colab会话的failure recovery。 |
+| colab_runtime_initialization_local_output_root | provenance | none | true | false | false | 当前allowlisted request解析出的/content本地runner输出根；bootstrap不得写入runner空目录。 |
+| runtime_initialization_decision | governance | none | true | false | false | runner前create-only bootstrap从INITIALIZED_PENDING_RUNNER推进到PUBLISHING_VERIFIED_LOCAL_PACKAGE/PUBLISHED_RESULT_VERIFIED；已发布状态不得进入recovery。 |
+| published_drive_result_zip | provenance | none | true | false | false | bootstrap发布闭环绑定的最终Drive ZIP路径。 |
+| published_drive_result_zip_sha256 | provenance | none | true | false | false | bootstrap发布闭环绑定的最终Drive ZIP SHA-256。 |
+| published_drive_result_manifest | provenance | none | true | false | false | bootstrap发布闭环绑定的最终Drive manifest路径。 |
+| published_drive_result_manifest_sha256 | provenance | none | true | false | false | bootstrap发布闭环绑定的最终Drive manifest SHA-256。 |
+| model_load_cache_preflight_protocol_digest | provenance | none | true | false | false | Wan model-load/cache preflight冻结协议摘要。 |
+| model_load_cache_preflight_loader_phase | runtime | none | true | false | false | 独立worker最近完成或开始的模型加载phase；不含token、URL或文件内容。 |
+| model_load_cache_preflight_loader_phase_sequence | runtime | none | true | false | false | worker原子state中单调递增的loader phase事件序号。 |
+| model_load_cache_preflight_loader_phase_ledger | runtime | none | true | false | false | snapshot download加七个loader phase各start/finish的完整有序16事件ledger；缺失、重复或乱序不得PASS。 |
+| model_load_cache_preflight_snapshot_path_status | provenance | none | true | false | false | snapshot_download返回目录已验证位于冻结HF_HUB_CACHE且绑定冻结commit的安全状态。 |
+| model_load_cache_preflight_snapshot_path_digest | provenance | none | true | false | false | snapshot相对冻结Hub cache路径的SHA-256；不记录token或URL query。 |
+| model_load_cache_preflight_snapshot_commit | provenance | none | true | false | false | 受控下载与离线加载共同绑定的不可变模型commit。 |
+| model_load_cache_preflight_local_files_only | governance | none | true | false | false | snapshot完成后的immutable resolve、VAE与pipeline加载是否全部冻结为local-only。 |
+| model_load_cache_preflight_worker_pid | runtime | none | true | false | false | 同一/content会话内受监管worker的进程ID，仅用于进程监控。 |
+| model_load_cache_preflight_worker_status | governance | none | true | false | false | worker原子state中的success或failure状态。 |
+| model_load_cache_preflight_status | governance | none | true | false | false | 父runner启动worker前写入的本地preflight状态。 |
+| model_load_cache_preflight_failure_phase | runtime | none | true | false | false | worker失败前最后一个loader phase。 |
+| model_load_cache_preflight_failure_type | governance | none | true | false | false | 安全异常类型名，不包含token、URL、prompt或tensor。 |
+| model_load_cache_preflight_cache_regular_file_count | runtime | none | true | false | false | 本地HF Hub cache普通文件数，只作进展诊断。 |
+| model_load_cache_preflight_cache_regular_file_bytes | runtime | none | true | false | false | 本地HF Hub cache普通文件字节数，只作进展诊断。 |
+| model_load_cache_preflight_cache_incomplete_file_count | runtime | none | true | false | false | 本地HF Hub cache `.incomplete` 文件数，不解释为完整下载。 |
+| model_load_cache_preflight_cache_lock_file_count | runtime | none | true | false | false | 本地HF Hub cache `.lock` 文件数；preflight不得删除锁。 |
+| model_load_cache_preflight_cache_scan_warning_count | runtime | none | true | false | false | huggingface cache scan的warning数量；只保存标量。 |
+| model_load_cache_preflight_cache_free_gib | runtime | none | true | false | false | 本地cache文件系统可用GiB。 |
+| model_load_cache_preflight_worker_rss_bytes | runtime | none | true | false | false | model-load worker RSS标量。 |
+| model_load_cache_preflight_worker_cpu_seconds | runtime | none | true | false | false | model-load worker累计CPU秒。 |
+| model_load_cache_preflight_worker_outcome | governance | none | true | false | false | success、worker_error、overall_timeout或no_progress_timeout基础设施结果。 |
+| model_load_cache_preflight_worker_return_code | runtime | none | true | false | false | 已reap worker的进程退出码。 |
+| model_load_cache_preflight_cache_snapshot | runtime | none | true | false | false | 只包含已登记cache标量的嵌套快照。 |
+| model_load_cache_preflight_decision | governance | none | true | false | false | 仅表示固定模型/cache/load/offload/tiling闭合是否完成，不是方法或Gate结果。 |

@@ -54,6 +54,24 @@ BF16/attention平台、量化死区或可行非零区，不允许增加 backoff 
 request 才能显式替换为包含 runner/config/workflow 路由的完整 commit，禁止复用
 源失败 commit。
 
+`protocol/sstw_wan_model_load_cache_preflight.json` 是独立的模型获取/加载与
+本地 cache 预热基础设施合同。它冻结 Wan 不可变 revision、diffusers 0.35.2、
+FP32 VAE/BF16 transformer、FlowMatch Euler scheduler、CPU offload、VAE tiling，
+以及2700秒总时限、600秒cache文件数/字节无变化时限和TERM→KILL→reap顺序。该入口只在独立
+worker中加载后立即清理模型，不执行 transformer forward、scheduler step、decode、
+视频或任何 Gate；结果始终非正式且不得自动触发 phase-response 或 Gate 0。请求
+example 的 commit placeholder 必须在审核提交后替换。受控 `snapshot_download`
+下载与本地cache填充是该preflight的目标，允许发生；随后两个 `from_pretrained`
+均为local-only；手工删除cache/锁/partial或
+改写既有cache仍禁止。600秒deadline只由cache普通文件数或总字节数的实质变化
+刷新；phase ledger、partial/lock、RSS/CPU仅作诊断。worker先显式执行受控
+`snapshot_download`，验证冻结commit snapshot位于本地Hub cache后，才以
+`local_files_only=true`加载VAE与pipeline。
+
+当前阶段唯一可运行的 `colab_test` test_id 是
+`wan_model_load_cache_preflight`。所有既有方法、Gate和phase-response入口保留为
+paused/historical代码，必须等待阶段0明确PASS及新的独立授权，不能自动进入阶段1。
+
 下列配置说明保留历史实验和诊断边界；任何既有 execution flag 都不能授权或冒充
 当前 Patch-relation 路线已进入执行。
 

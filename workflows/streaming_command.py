@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import math
 import os
 from pathlib import Path
 import queue
+import signal
 import subprocess
 import sys
 import threading
@@ -73,6 +75,72 @@ def _command_stage_label(command: list[str]) -> str:
     return Path(command[0]).name or str(command[0])
 
 
+def _streaming_drain_grace_seconds_from_env() -> float:
+    try:
+        value = float(
+            os.environ.get("SSTW_STREAMING_DRAIN_GRACE_SECONDS", "5")
+        )
+    except ValueError as exc:
+        raise ValueError(
+            "SSTW_STREAMING_DRAIN_GRACE_SECONDS 必须是有限秒数"
+        ) from exc
+    if not math.isfinite(value) or not 0.0 <= value <= 60.0:
+        raise ValueError(
+            "SSTW_STREAMING_DRAIN_GRACE_SECONDS 必须位于[0,60]"
+        )
+    return value
+
+
+def _terminate_streaming_process(
+    process: subprocess.Popen[str],
+    *,
+    grace_seconds: float = 30.0,
+    posix_process_group: bool,
+) -> None:
+    """TERM/KILL并reap Notebook server子进程，不遮蔽调用方主异常。"""
+
+    if posix_process_group:
+        try:
+            os.killpg(process.pid, signal.SIGTERM)
+        except ProcessLookupError:
+            pass
+        deadline = time.monotonic() + grace_seconds
+        while time.monotonic() < deadline:
+            try:
+                os.killpg(process.pid, 0)
+            except ProcessLookupError:
+                break
+            time.sleep(min(0.1, max(0.0, deadline - time.monotonic())))
+        else:
+            try:
+                os.killpg(process.pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+        try:
+            process.wait(timeout=max(grace_seconds, 0.1))
+        except subprocess.TimeoutExpired:
+            try:
+                process.kill()
+            except (AttributeError, ProcessLookupError):
+                pass
+            process.wait()
+        return
+
+    if process.poll() is None:
+        try:
+            process.terminate()
+        except ProcessLookupError:
+            pass
+    try:
+        process.wait(timeout=grace_seconds)
+    except subprocess.TimeoutExpired:
+        try:
+            process.kill()
+        except ProcessLookupError:
+            pass
+        process.wait()
+
+
 def run_streaming_command(command: list[str]) -> subprocess.CompletedProcess[str]:
     """执行命令并实时转发 stdout / stderr。
 
@@ -94,6 +162,7 @@ def run_streaming_command(command: list[str]) -> subprocess.CompletedProcess[str
     env.setdefault("SSTW_ENABLE_PIPELINE_PROGRESS_BAR", "0")
     started_at = time.time()
     heartbeat_seconds = _heartbeat_seconds_from_env()
+    drain_grace_seconds = _streaming_drain_grace_seconds_from_env()
     emit_progress_event(
         "notebook_subprocess_command",
         f"start | command={command_label} | cwd={repo_root.as_posix()}",
@@ -106,6 +175,7 @@ def run_streaming_command(command: list[str]) -> subprocess.CompletedProcess[str
         bufsize=1,
         env=env,
         cwd=str(repo_root),
+        start_new_session=(os.name == "posix"),
     )
     output_queue: queue.Queue[str | None] = queue.Queue()
 
@@ -124,27 +194,63 @@ def run_streaming_command(command: list[str]) -> subprocess.CompletedProcess[str
     reader = threading.Thread(target=_forward_stdout, daemon=True)
     reader.start()
     stdout_closed = False
+    leader_exited_at: float | None = None
     last_heartbeat_at = started_at
     no_output_sentinel = object()
-    while True:
+    try:
+        while True:
+            try:
+                item = output_queue.get(timeout=0.5)
+            except queue.Empty:
+                item = no_output_sentinel
+            if item is None:
+                stdout_closed = True
+            elif item is not no_output_sentinel:
+                print(item, end="", file=sys.stdout, flush=True)
+            return_code = process.poll()
+            now = time.time()
+            if return_code is not None and leader_exited_at is None:
+                leader_exited_at = now
+            if (
+                return_code is None
+                and now - last_heartbeat_at >= heartbeat_seconds
+            ):
+                emit_progress_event(
+                    "notebook_subprocess_command",
+                    f"running | command={command_label} | elapsed={(now - started_at) / 60.0:.1f} min",
+                )
+                last_heartbeat_at = now
+            if return_code is not None and stdout_closed:
+                break
+            if (
+                return_code is not None
+                and leader_exited_at is not None
+                and now - leader_exited_at >= drain_grace_seconds
+            ):
+                _terminate_streaming_process(
+                    process,
+                    posix_process_group=(os.name == "posix"),
+                )
+                break
+    except BaseException as primary_error:
         try:
-            item = output_queue.get(timeout=0.5)
-        except queue.Empty:
-            item = no_output_sentinel
-        if item is None:
-            stdout_closed = True
-        elif item is not no_output_sentinel:
-            print(item, end="", file=sys.stdout, flush=True)
-        return_code = process.poll()
-        now = time.time()
-        if return_code is None and now - last_heartbeat_at >= heartbeat_seconds:
-            emit_progress_event(
-                "notebook_subprocess_command",
-                f"running | command={command_label} | elapsed={(now - started_at) / 60.0:.1f} min",
+            _terminate_streaming_process(
+                process,
+                posix_process_group=(os.name == "posix"),
             )
-            last_heartbeat_at = now
-        if return_code is not None and stdout_closed:
-            break
+        except BaseException as cleanup_error:
+            try:
+                primary_error.add_note(
+                    "streaming process cleanup error type="
+                    f"{type(cleanup_error).__name__}"
+                )
+            except Exception:
+                pass
+        try:
+            reader.join(timeout=1.0)
+        except Exception:
+            pass
+        raise
     reader.join(timeout=1.0)
     return_code = int(process.returncode or 0)
     emit_progress_event(

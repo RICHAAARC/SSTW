@@ -1,0 +1,137 @@
+{
+  "profile_id": "sstw_wan_model_load_cache_preflight",
+  "contract_state": "model_load_cache_preflight_runner_implemented_pending_user_colab_run",
+  "authorization_boundary": {
+    "runtime_implementation_authorized": true,
+    "model_load_cache_preflight_execution_allowed": true,
+    "gpu_execution_allowed": true,
+    "colab_execution_allowed": true,
+    "runner_implementation_allowed": true,
+    "notebook_handler_implementation_allowed": false,
+    "drive_update_allowed": false,
+    "gate0_execution_allowed": false,
+    "full_eight_video_rerun_allowed": false,
+    "transformer_forward_allowed": false,
+    "scheduler_step_allowed": false,
+    "decode_allowed": false,
+    "video_export_allowed": false,
+    "observer_implementation_allowed": false,
+    "attack_execution_allowed": false,
+    "fixed_fpr_execution_allowed": false,
+    "baseline_execution_allowed": false,
+    "paper_claim_allowed": false,
+    "formal_result": false,
+    "stage_progression_allowed": false,
+    "claim_support_status": "model_load_cache_preflight_only_not_method_evidence"
+  },
+  "protocol_contract": {
+    "execution_identity": {
+      "test_id": "wan_model_load_cache_preflight",
+      "phase": "model_load_cache_preflight",
+      "run_series_id": "wan_model_load_cache_preflight",
+      "self_contained": true,
+      "source_package_path": "",
+      "resume_package_path": ""
+    },
+    "model_contract": {
+      "model_id": "Wan-AI/Wan2.1-T2V-1.3B-Diffusers",
+      "model_revision": "0fad780a534b6463e45facd96134c9f345acfa5b",
+      "diffusers_version": "0.35.2",
+      "transformer_dtype": "bfloat16",
+      "vae_dtype": "float32",
+      "scheduler_class": "FlowMatchEulerDiscreteScheduler",
+      "scheduler_shift": "3.0",
+      "cpu_offload_required": true,
+      "vae_tiling_required": true
+    },
+    "cache_contract": {
+      "hf_home_environment_variable": "HF_HOME",
+      "hf_hub_cache_environment_variable": "HF_HUB_CACHE",
+      "expected_hf_home": "/content/SSTW_model_cache",
+      "expected_hf_hub_cache": "/content/SSTW_model_cache/hub",
+      "drive_mount_root": "/content/drive",
+      "both_paths_must_be_absolute_local_non_drive_directories": true,
+      "paths_must_exist_or_be_created_and_writable": true,
+      "statvfs_free_space_required": true,
+      "snapshot_fields": [
+        "regular_file_count",
+        "regular_file_bytes",
+        "incomplete_file_count",
+        "lock_file_count",
+        "cache_scan_warning_count",
+        "free_gib"
+      ],
+      "huggingface_cache_scan_warning_is_scalar_only": true,
+      "cache_presence_must_not_be_reported_as_complete": true,
+      "hf_snapshot_download_controlled_download_and_cache_fill_allowed": true,
+      "manual_cache_file_deletion_allowed": false,
+      "manual_lock_or_incomplete_deletion_allowed": false,
+      "manual_existing_cache_rewrite_allowed": false,
+      "hub_environment": {
+        "HF_HUB_ETAG_TIMEOUT": "60",
+        "HF_HUB_DOWNLOAD_TIMEOUT": "600"
+      },
+      "token_or_url_query_recording_allowed": false
+    },
+    "worker_contract": {
+      "worker_process_role": "isolated_model_load_and_cache_warmup",
+      "worker_start_new_session": false,
+      "model_object_cross_process_allowed": false,
+      "overall_timeout_seconds": 2700,
+      "no_progress_timeout_seconds": 600,
+      "poll_interval_seconds": 30,
+      "progress_emit_interval_seconds": 60,
+      "termination_grace_seconds": 30,
+      "progress_deadline_reset_fields": [
+        "cache_regular_file_count",
+        "cache_regular_file_bytes"
+      ],
+      "diagnostic_only_scalar_fields": [
+        "loader_phase_ledger",
+        "cache_incomplete_file_count",
+        "cache_lock_file_count",
+        "worker_rss_bytes",
+        "worker_cpu_seconds"
+      ],
+      "diagnostic_only_scalars_must_not_reset_progress_deadline": true,
+      "percentage_or_eta_without_trusted_denominator_allowed": false,
+      "timeout_termination_order": [
+        "term",
+        "grace_wait",
+        "kill_if_alive",
+        "reap"
+      ],
+      "parent_base_exception_requires_worker_termination_and_reap": true
+    },
+    "loader_phase_contract": {
+      "ordered_phases": [
+        "snapshot_download",
+        "immutable_revision_resolve",
+        "wan_import",
+        "vae_from_pretrained",
+        "pipeline_from_pretrained",
+        "scheduler_configuration",
+        "cpu_offload",
+        "vae_tiling"
+      ],
+      "each_phase_requires_start_and_finish": true,
+      "complete_ordered_phase_ledger_required_for_success": true,
+      "duplicate_missing_or_out_of_order_phase_event_allowed": false,
+      "snapshot_download_precedes_local_only_model_load": true,
+      "snapshot_path_must_resolve_within_frozen_hub_cache": true,
+      "snapshot_directory_name_must_equal_model_revision": true,
+      "all_from_pretrained_calls_require_local_files_only": true,
+      "sstw_events_must_not_be_suppressed_with_third_party_output": true,
+      "constructed_pipeline_and_vae_cleanup_on_exception": true
+    },
+    "result_boundary": {
+      "worker_success_means_cache_and_load_path_preflight_only": true,
+      "worker_failure_is_nonformal_runtime_diagnostic": true,
+      "automatic_phase_response_or_gate0_execution_allowed": false,
+      "formal_result": false,
+      "stage_progression_allowed": false,
+      "claim_support_status": "model_load_cache_preflight_only_not_method_evidence"
+    }
+  },
+  "protocol_digest": "b938f80e7c2bd12add7ebd96efa099c8c3843ccebf89e7103c4bd0695d949caa"
+}

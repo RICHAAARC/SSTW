@@ -5,7 +5,10 @@ from __future__ import annotations
 import io
 import os
 from pathlib import Path
+import signal
 import sys
+import subprocess
+import threading
 
 import pytest
 
@@ -17,7 +20,10 @@ from runtime.core.progress import (
     suppress_third_party_progress_output,
 )
 from external_baseline.official_runtime_progress import run_official_subprocess_with_heartbeat
-from workflows.streaming_command import run_streaming_command
+from workflows.streaming_command import (
+    _terminate_streaming_process,
+    run_streaming_command,
+)
 
 
 @pytest.mark.quick
@@ -70,6 +76,237 @@ def test_notebook_command_runner_exposes_repo_modules_to_script_subprocess(tmp_p
 
     assert result.returncode == 0
     assert (output_root / "prompt_seed_suite.json").exists()
+
+
+@pytest.mark.quick
+@pytest.mark.parametrize("value", ["nan", "inf", "-1", "61", "not-a-number"])
+def test_streaming_drain_grace_is_validated_before_subprocess_start(
+    monkeypatch: pytest.MonkeyPatch,
+    value: str,
+) -> None:
+    started = False
+
+    def forbidden_popen(*_args, **_kwargs):
+        nonlocal started
+        started = True
+        raise AssertionError
+
+    monkeypatch.setenv("SSTW_STREAMING_DRAIN_GRACE_SECONDS", value)
+    monkeypatch.setattr(
+        "workflows.streaming_command.subprocess.Popen", forbidden_popen
+    )
+    with pytest.raises(ValueError, match="DRAIN_GRACE"):
+        run_streaming_command([sys.executable, "-c", "pass"])
+    assert started is False
+
+
+@pytest.mark.quick
+def test_streaming_cleanup_terminates_posix_group_then_kills_and_reaps(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """中断清理必须覆盖server产生的整个POSIX进程组。"""
+
+    signals: list[tuple[int, int]] = []
+
+    class FakeProcess:
+        pid = 4321
+
+        def __init__(self) -> None:
+            self.wait_count = 0
+
+        def poll(self):
+            return None
+
+        def wait(self, timeout=None):
+            self.wait_count += 1
+            if timeout is not None:
+                raise subprocess.TimeoutExpired("fake", timeout)
+            return -9
+
+    process = FakeProcess()
+    def fake_killpg(pid: int, sig: int) -> None:
+        if sig == 0:
+            return
+        signals.append((pid, sig))
+
+    monkeypatch.setattr(
+        "workflows.streaming_command.os.killpg",
+        fake_killpg,
+    )
+    _terminate_streaming_process(
+        process,
+        grace_seconds=0.1,
+        posix_process_group=True,
+    )
+    assert signals == [
+        (4321, signal.SIGTERM),
+        (4321, signal.SIGKILL),
+    ]
+    assert process.wait_count == 2
+
+
+@pytest.mark.quick
+def test_streaming_cleanup_non_posix_uses_process_terminate_and_reap() -> None:
+    """非POSIX路径不得依赖killpg。"""
+
+    class FakeProcess:
+        def __init__(self) -> None:
+            self.returncode = None
+            self.terminate_count = 0
+            self.wait_count = 0
+
+        def poll(self):
+            return self.returncode
+
+        def terminate(self):
+            self.terminate_count += 1
+            self.returncode = -15
+
+        def wait(self, timeout=None):
+            del timeout
+            self.wait_count += 1
+            return self.returncode
+
+    process = FakeProcess()
+    _terminate_streaming_process(
+        process,
+        grace_seconds=0.1,
+        posix_process_group=False,
+    )
+    assert process.terminate_count == 1
+    assert process.wait_count == 1
+
+
+@pytest.mark.quick
+def test_streaming_cleanup_targets_group_when_leader_already_exited(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    signals: list[int] = []
+    class FakeProcess:
+        pid = 6543
+        returncode = 0
+
+        def poll(self):
+            return 0
+
+        def wait(self, timeout=None):
+            del timeout
+            return 0
+
+    def fake_killpg(_pid: int, sig: int) -> None:
+        if sig == 0:
+            raise ProcessLookupError
+        signals.append(sig)
+
+    monkeypatch.setattr(
+        "workflows.streaming_command.os.killpg", fake_killpg
+    )
+    _terminate_streaming_process(
+        FakeProcess(),
+        grace_seconds=0.1,
+        posix_process_group=True,
+    )
+    assert signals == [signal.SIGTERM]
+
+
+@pytest.mark.quick
+def test_streaming_success_with_dead_leader_and_inherited_stdout_cleans_group(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    released = threading.Event()
+    signals: list[int] = []
+
+    class BlockingStdout:
+        def __iter__(self):
+            released.wait(timeout=2)
+            return iter(())
+
+    class FakeProcess:
+        pid = 7654
+        stdout = BlockingStdout()
+        returncode = 0
+
+        def poll(self):
+            return 0
+
+        def wait(self, timeout=None):
+            del timeout
+            return 0
+
+    def fake_killpg(_pid: int, sig: int) -> None:
+        if sig == signal.SIGTERM:
+            signals.append(sig)
+            released.set()
+            return
+        if sig == 0:
+            raise ProcessLookupError
+
+    monkeypatch.setenv("SSTW_STREAMING_DRAIN_GRACE_SECONDS", "0")
+    monkeypatch.setattr(
+        "workflows.streaming_command.subprocess.Popen",
+        lambda *_a, **_k: FakeProcess(),
+    )
+    monkeypatch.setattr(
+        "workflows.streaming_command.os.killpg", fake_killpg
+    )
+    result = run_streaming_command([sys.executable, "-c", "pass"])
+    assert result.returncode == 0
+    assert signals == [signal.SIGTERM]
+
+
+@pytest.mark.quick
+def test_streaming_runner_keyboard_interrupt_terminates_group_and_preserves_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Notebook中断必须杀整个server组并原样传播KeyboardInterrupt。"""
+
+    observed: dict[str, object] = {}
+    sent_signals: list[int] = []
+
+    class FakeStdout:
+        def __iter__(self):
+            return iter(())
+
+    class FakeProcess:
+        pid = 9876
+        stdout = FakeStdout()
+        returncode = None
+
+        def __init__(self) -> None:
+            self.poll_count = 0
+
+        def poll(self):
+            self.poll_count += 1
+            if self.poll_count == 1:
+                raise KeyboardInterrupt("planned notebook interrupt")
+            return self.returncode
+
+        def wait(self, timeout=None):
+            del timeout
+            self.returncode = -15
+            return self.returncode
+
+    process = FakeProcess()
+
+    def fake_popen(*_args, **kwargs):
+        observed.update(kwargs)
+        return process
+
+    monkeypatch.setattr("workflows.streaming_command.subprocess.Popen", fake_popen)
+    def fake_killpg(_pid: int, sig: int) -> None:
+        if sig == 0:
+            raise ProcessLookupError
+        sent_signals.append(sig)
+
+    monkeypatch.setattr(
+        "workflows.streaming_command.os.killpg",
+        fake_killpg,
+    )
+    with pytest.raises(KeyboardInterrupt, match="planned notebook interrupt"):
+        run_streaming_command([sys.executable, "-c", "pass"])
+    assert observed["start_new_session"] is True
+    assert sent_signals == [signal.SIGTERM]
+    assert process.returncode == -15
 
 
 @pytest.mark.quick

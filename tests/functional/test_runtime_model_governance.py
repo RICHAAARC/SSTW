@@ -237,6 +237,7 @@ def test_wan_pipeline_loader_keeps_vae_float32_boundary() -> None:
     """Wan VAE 必须独立按 FP32 加载，Transformer 才使用 L4 的 BF16。"""
 
     observed: dict[str, object] = {}
+    phases: list[tuple[str, str]] = []
     vae = SimpleNamespace()
 
     class FakeVae:
@@ -259,6 +260,7 @@ def test_wan_pipeline_loader_keeps_vae_float32_boundary() -> None:
         pipeline_class=FakePipeline,
         vae_class=FakeVae,
         vae_dtype="float32",
+        phase_callback=lambda phase, status: phases.append((phase, status)),
     )
 
     assert observed["vae"] == {
@@ -267,6 +269,8 @@ def test_wan_pipeline_loader_keeps_vae_float32_boundary() -> None:
         "revision": "a" * 40,
         "torch_dtype": "float32",
         "token": "token",
+        "cache_dir": None,
+        "local_files_only": False,
     }
     assert observed["pipeline"] == {
         "model_id": WAN21_PRIMARY_MODEL_ID,
@@ -274,9 +278,49 @@ def test_wan_pipeline_loader_keeps_vae_float32_boundary() -> None:
         "revision": "a" * 40,
         "torch_dtype": "bfloat16",
         "token": "token",
+        "cache_dir": None,
+        "local_files_only": False,
     }
     assert vae._sstw_encode_memory_config.temporal_chunk_frame_count == 4
     assert vae._sstw_encode_memory_config.maximum_incremental_cuda_peak_gib == 16.0
+    assert phases == [
+        ("vae_from_pretrained", "start"),
+        ("vae_from_pretrained", "finish"),
+        ("pipeline_from_pretrained", "start"),
+        ("pipeline_from_pretrained", "finish"),
+    ]
+
+
+@pytest.mark.quick
+def test_wan_component_loader_cleans_constructed_vae_when_pipeline_load_fails() -> None:
+    """pipeline load异常不得让已构造VAE引用缺少hook cleanup。"""
+
+    calls: list[str] = []
+
+    class FakeVae:
+        def maybe_free_model_hooks(self) -> None:
+            calls.append("vae_cleanup")
+
+        @classmethod
+        def from_pretrained(cls, *_args: object, **_kwargs: object) -> object:
+            return cls()
+
+    class FailingPipeline:
+        @classmethod
+        def from_pretrained(cls, *_args: object, **_kwargs: object) -> object:
+            raise RuntimeError("planned pipeline load failure")
+
+    with pytest.raises(RuntimeError, match="planned pipeline"):
+        _load_wan_pipeline_components(
+            WAN21_PRIMARY_MODEL_ID,
+            resolved_commit="a" * 40,
+            transformer_dtype="bfloat16",
+            hf_token=None,
+            pipeline_class=FailingPipeline,
+            vae_class=FakeVae,
+            vae_dtype="float32",
+        )
+    assert calls == ["vae_cleanup"]
 
 
 @pytest.mark.quick
@@ -333,6 +377,71 @@ def test_offline_resolution_only_accepts_explicit_immutable_commit(
             requested_revision="main",
             hf_token=None,
         )
+
+
+@pytest.mark.quick
+def test_local_only_commit_resolution_never_calls_hub_metadata(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import huggingface_hub
+
+    monkeypatch.setattr(
+        huggingface_hub,
+        "model_info",
+        lambda *_a, **_k: (_ for _ in ()).throw(
+            AssertionError("model_info must not run in local-only mode")
+        ),
+    )
+    commit, source = _resolve_generation_model_commit(
+        WAN21_PRIMARY_MODEL_ID,
+        requested_revision="d" * 40,
+        hf_token=None,
+        local_files_only=True,
+    )
+    assert commit == "d" * 40
+    assert source == "configured_immutable_commit_local_only"
+    with pytest.raises(RuntimeError, match="40位不可变commit"):
+        _resolve_generation_model_commit(
+            WAN21_PRIMARY_MODEL_ID,
+            requested_revision="main",
+            hf_token=None,
+            local_files_only=True,
+        )
+
+
+@pytest.mark.quick
+def test_wan_component_loader_propagates_exact_local_only_cache_boundary(
+    tmp_path,
+) -> None:
+    observed: list[dict[str, object]] = []
+    vae = SimpleNamespace()
+
+    class FakeVae:
+        @classmethod
+        def from_pretrained(cls, _model_id: str, **kwargs: object):
+            observed.append(dict(kwargs))
+            return vae
+
+    class FakePipeline:
+        @classmethod
+        def from_pretrained(cls, _model_id: str, **kwargs: object):
+            observed.append(dict(kwargs))
+            return SimpleNamespace()
+
+    _load_wan_pipeline_components(
+        WAN21_PRIMARY_MODEL_ID,
+        resolved_commit="a" * 40,
+        transformer_dtype="bfloat16",
+        hf_token=None,
+        pipeline_class=FakePipeline,
+        vae_class=FakeVae,
+        vae_dtype="float32",
+        cache_dir=tmp_path,
+        local_files_only=True,
+    )
+    assert len(observed) == 2
+    assert all(item["local_files_only"] is True for item in observed)
+    assert all(item["cache_dir"] == str(tmp_path) for item in observed)
 
 
 @pytest.mark.quick

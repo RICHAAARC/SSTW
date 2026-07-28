@@ -12,12 +12,15 @@ from zipfile import ZipFile
 import pytest
 
 from workflows.colab_test_request import (
+    ACTIVE_COLAB_TEST_IDS,
     CONTROLLED_EMBEDDING_STRENGTH_TEST_ID,
     FRAME_STATE_SIGNED_OBSERVABILITY_CONSTRUCTION_TEST_ID,
     PATCH_RELATION_GATE0_CONSTRUCTION_TEST_ID,
     PATCH_RELATION_PHASE_RESPONSE_PREFLIGHT_TEST_ID,
+    PAUSED_HISTORICAL_TEST_IDS,
     REQUEST_SCHEMA_VERSION,
     TRAJECTORY_REPLAY_SOURCE_BUILD_TEST_ID,
+    WAN_MODEL_LOAD_CACHE_PREFLIGHT_TEST_ID,
     _safe_extract_zip,
     build_colab_test_dry_run_plan,
     build_colab_test_runtime_preflight_decision,
@@ -25,6 +28,17 @@ from workflows.colab_test_request import (
     package_colab_test_recovery_bundle,
     run_colab_test_request,
 )
+
+
+@pytest.mark.quick
+@pytest.mark.parametrize("test_id", PAUSED_HISTORICAL_TEST_IDS)
+def test_only_model_load_cache_preflight_is_runnable(
+    test_id: str,
+) -> None:
+    assert ACTIVE_COLAB_TEST_IDS == (
+        WAN_MODEL_LOAD_CACHE_PREFLIGHT_TEST_ID,
+    )
+    assert test_id not in ACTIVE_COLAB_TEST_IDS
 
 
 def _write_source_package(path: Path) -> None:
@@ -74,6 +88,23 @@ def _source_build_request_payload(
             "phase": "source_build",
             "run_series_id": "stage0d_source_build_001",
             "source_package_path": str(upstream_package),
+            "resume_package_path": "",
+        },
+    }
+
+
+def _wan_model_load_cache_preflight_request_payload() -> dict[str, object]:
+    return {
+        "request_schema_version": REQUEST_SCHEMA_VERSION,
+        "test_id": WAN_MODEL_LOAD_CACHE_PREFLIGHT_TEST_ID,
+        "repository": {
+            "url": "https://github.com/RICHAAARC/SSTW.git",
+            "ref": "a" * 40,
+        },
+        "parameters": {
+            "phase": "model_load_cache_preflight",
+            "run_series_id": "wan_model_load_cache_preflight",
+            "source_package_path": "",
             "resume_package_path": "",
         },
     }
@@ -167,6 +198,38 @@ def _patch_relation_phase_response_request_payload() -> dict[str, object]:
             "resume_package_path": "",
         },
     }
+
+
+@pytest.mark.quick
+def test_paused_method_request_is_readable_but_default_server_execution_rejected(
+    tmp_path: Path,
+) -> None:
+    project_root = tmp_path / "SSTW"
+    request_path = project_root / "requests" / "colab_test_request.json"
+    _write_request(
+        request_path,
+        _patch_relation_phase_response_request_payload(),
+    )
+    resolved = load_colab_test_request(
+        request_path,
+        project_root=project_root,
+    )
+    assert resolved["test_id"] == PATCH_RELATION_PHASE_RESPONSE_PREFLIGHT_TEST_ID
+    plan = build_colab_test_dry_run_plan(
+        request_path,
+        project_root=project_root,
+    )
+    assert plan["current_stage_execution_allowed"] is False
+    assert plan["paused_historical"] is True
+    with pytest.raises(ValueError, match="暂停为historical"):
+        run_colab_test_request(
+            request_path,
+            project_root=project_root,
+            repo_root=Path.cwd(),
+            local_workspace_root=tmp_path / "workspace",
+            local_package_cache_root=tmp_path / "packages",
+        )
+    assert not (tmp_path / "workspace").exists()
 
 
 def test_phase_response_request_example_requires_reviewed_commit_replacement(
@@ -828,6 +891,350 @@ def test_patch_relation_phase_response_preflight_rejects_inputs_and_wrong_phase(
 
 
 @pytest.mark.quick
+def test_wan_model_load_cache_preflight_request_is_exact_self_contained_allowlist(
+    tmp_path: Path,
+) -> None:
+    project_root = tmp_path / "SSTW"
+    request_path = project_root / "requests" / "colab_test_request.json"
+    payload = _wan_model_load_cache_preflight_request_payload()
+    _write_request(request_path, payload)
+    resolved = load_colab_test_request(
+        request_path,
+        project_root=project_root,
+    )
+    assert resolved["test_id"] == WAN_MODEL_LOAD_CACHE_PREFLIGHT_TEST_ID
+    assert resolved["phase"] == "model_load_cache_preflight"
+    assert resolved["source_package_path"] == ""
+    assert resolved["resume_package_path"] == ""
+    assert build_colab_test_dry_run_plan(
+        request_path,
+        project_root=project_root,
+    )["test_id"] == WAN_MODEL_LOAD_CACHE_PREFLIGHT_TEST_ID
+
+    payload["repository"]["ref"] = "reviewed_full_commit_placeholder"
+    _write_request(request_path, payload)
+    with pytest.raises(ValueError, match="审核后"):
+        load_colab_test_request(request_path, project_root=project_root)
+    payload["repository"]["ref"] = (
+        "f2e2178fc368688b0499c6179a512551d18a16f4"
+    )
+    _write_request(request_path, payload)
+    with pytest.raises(ValueError, match="审核后"):
+        load_colab_test_request(request_path, project_root=project_root)
+
+
+@pytest.mark.quick
+def test_wan_model_load_cache_preflight_example_requires_reviewed_commit(
+    tmp_path: Path,
+) -> None:
+    project_root = tmp_path / "SSTW"
+    request_path = project_root / "requests" / "colab_test_request.json"
+    payload = json.loads(
+        Path(
+            "configs/paper_workflow/"
+            "colab_test_wan_model_load_cache_preflight_request_example.json"
+        ).read_text(encoding="utf-8")
+    )
+    _write_request(request_path, payload)
+    with pytest.raises(ValueError, match="审核后"):
+        load_colab_test_request(request_path, project_root=project_root)
+    payload["repository"]["ref"] = "b" * 40
+    _write_request(request_path, payload)
+    assert load_colab_test_request(
+        request_path,
+        project_root=project_root,
+    )["repository_ref"] == "b" * 40
+
+
+@pytest.mark.quick
+def test_wan_model_load_cache_preflight_success_deletes_runtime_bootstrap(
+    tmp_path: Path,
+) -> None:
+    project_root = tmp_path / "SSTW"
+    request_path = project_root / "requests" / "colab_test_request.json"
+    _write_request(
+        request_path,
+        _wan_model_load_cache_preflight_request_payload(),
+    )
+    workspace = tmp_path / "content" / "workspace"
+
+    def fake_runner(output_root: Path) -> dict[str, object]:
+        (output_root / "preflight.json").write_text(
+            '{"formal_result":false}\n',
+            encoding="utf-8",
+        )
+        return {
+            "preflight_decision": "PASS",
+            "formal_result": False,
+            "stage_progression_allowed": False,
+        }
+
+    result = run_colab_test_request(
+        request_path,
+        project_root=project_root,
+        repo_root=Path.cwd(),
+        local_workspace_root=workspace,
+        local_package_cache_root=tmp_path / "content" / "packages",
+        wan_model_load_cache_preflight_runner=fake_runner,
+    )
+    bootstrap = (
+        workspace
+        / "validation"
+        / "wan_model_load_cache_preflight"
+        / "colab_test_runtime_initialization.json"
+    )
+    assert not bootstrap.exists()
+    with ZipFile(result["drive_result_zip"]) as archive:
+        assert archive.namelist() == ["preflight.json"]
+
+
+@pytest.mark.quick
+@pytest.mark.parametrize("error_type", [RuntimeError, KeyboardInterrupt])
+def test_preflight_runner_failure_or_interrupt_preserves_recovery_bootstrap(
+    tmp_path: Path,
+    error_type: type[BaseException],
+) -> None:
+    project_root = tmp_path / "SSTW"
+    request_path = project_root / "requests" / "colab_test_request.json"
+    _write_request(
+        request_path,
+        _wan_model_load_cache_preflight_request_payload(),
+    )
+    workspace = tmp_path / "content" / "workspace"
+    cache = tmp_path / "content" / "packages"
+
+    def failing_runner(_output_root: Path) -> dict[str, object]:
+        raise error_type("planned preflight interruption")
+
+    with pytest.raises(error_type, match="planned preflight"):
+        run_colab_test_request(
+            request_path,
+            project_root=project_root,
+            repo_root=Path.cwd(),
+            local_workspace_root=workspace,
+            local_package_cache_root=cache,
+            wan_model_load_cache_preflight_runner=failing_runner,
+        )
+    bootstrap = (
+        workspace
+        / "validation"
+        / "wan_model_load_cache_preflight"
+        / "colab_test_runtime_initialization.json"
+    )
+    payload = json.loads(bootstrap.read_text(encoding="utf-8"))
+    assert payload["test_id"] == WAN_MODEL_LOAD_CACHE_PREFLIGHT_TEST_ID
+    assert payload["runtime_initialization_decision"] == (
+        "INITIALIZED_PENDING_RUNNER"
+    )
+    assert payload["formal_result"] is False
+    assert payload["stage_progression_allowed"] is False
+    assert payload["claim_support_status"] == (
+        "runtime_initialization_only_not_claim_evidence"
+    )
+    recovery = package_colab_test_recovery_bundle(
+        request_path,
+        project_root=project_root,
+        repo_root=Path.cwd(),
+        local_runtime_root=tmp_path / "content",
+        local_workspace_root=workspace,
+        local_package_cache_root=cache,
+    )
+    with ZipFile(recovery["drive_result_zip"]) as archive:
+        assert (
+            "partial_validation/colab_test_runtime_initialization.json"
+            in archive.namelist()
+        )
+
+
+@pytest.mark.quick
+def test_runtime_bootstrap_rejects_symlink_parent_without_external_write(
+    tmp_path: Path,
+) -> None:
+    project_root = tmp_path / "SSTW"
+    request_path = project_root / "requests" / "colab_test_request.json"
+    _write_request(
+        request_path,
+        _wan_model_load_cache_preflight_request_payload(),
+    )
+    workspace = tmp_path / "content" / "workspace"
+    validation = workspace / "validation"
+    validation.mkdir(parents=True)
+    external = tmp_path / "external"
+    external.mkdir()
+    (validation / "wan_model_load_cache_preflight").symlink_to(
+        external, target_is_directory=True
+    )
+    runner_called = False
+
+    def fake_runner(_output_root: Path) -> dict[str, object]:
+        nonlocal runner_called
+        runner_called = True
+        return {}
+
+    with pytest.raises((FileExistsError, ValueError), match="validation"):
+        run_colab_test_request(
+            request_path,
+            project_root=project_root,
+            repo_root=Path.cwd(),
+            local_workspace_root=workspace,
+            local_package_cache_root=tmp_path / "content" / "packages",
+            wan_model_load_cache_preflight_runner=fake_runner,
+        )
+    assert runner_called is False
+    assert list(external.iterdir()) == []
+
+
+@pytest.mark.quick
+def test_rerun_preserves_old_partial_and_bootstrap_without_cross_run_mix(
+    tmp_path: Path,
+) -> None:
+    project_root = tmp_path / "SSTW"
+    request_path = project_root / "requests" / "colab_test_request.json"
+    _write_request(
+        request_path,
+        _wan_model_load_cache_preflight_request_payload(),
+    )
+    workspace = tmp_path / "content" / "workspace"
+    old_partial = (
+        workspace
+        / "runs"
+        / "wan_model_load_cache_preflight"
+        / "wan_model_load_cache_preflight"
+        / "records"
+        / "old.json"
+    )
+    old_partial.parent.mkdir(parents=True)
+    old_partial.write_text('{"old":true}\n', encoding="utf-8")
+    old_bootstrap = (
+        workspace
+        / "validation"
+        / "wan_model_load_cache_preflight"
+        / "colab_test_runtime_initialization.json"
+    )
+    old_bootstrap.parent.mkdir(parents=True)
+    old_bytes = b'{"old_run":true}\n'
+    old_bootstrap.write_bytes(old_bytes)
+    with pytest.raises(FileExistsError, match="output"):
+        run_colab_test_request(
+            request_path,
+            project_root=project_root,
+            repo_root=Path.cwd(),
+            local_workspace_root=workspace,
+            local_package_cache_root=tmp_path / "content" / "packages",
+            wan_model_load_cache_preflight_runner=lambda _root: {},
+        )
+    assert old_partial.read_text(encoding="utf-8") == '{"old":true}\n'
+    assert old_bootstrap.read_bytes() == old_bytes
+
+
+@pytest.mark.quick
+def test_drive_pair_publish_failure_leaves_no_partial_final_directory(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    project_root = tmp_path / "SSTW"
+    request_path = project_root / "requests" / "colab_test_request.json"
+    _write_request(
+        request_path,
+        _wan_model_load_cache_preflight_request_payload(),
+    )
+    real_copy2 = shutil.copy2
+    copy_count = 0
+
+    def failing_second_copy(source, destination, *args, **kwargs):
+        nonlocal copy_count
+        copy_count += 1
+        if copy_count == 2:
+            raise OSError("planned manifest copy failure")
+        return real_copy2(source, destination, *args, **kwargs)
+
+    monkeypatch.setattr(
+        "workflows.colab_test_request.shutil.copy2",
+        failing_second_copy,
+    )
+
+    def fake_runner(output_root: Path) -> dict[str, object]:
+        (output_root / "preflight.json").write_text(
+            '{"formal_result":false}\n', encoding="utf-8"
+        )
+        return {"formal_result": False, "stage_progression_allowed": False}
+
+    with pytest.raises(OSError, match="manifest copy"):
+        run_colab_test_request(
+            request_path,
+            project_root=project_root,
+            repo_root=Path.cwd(),
+            local_workspace_root=tmp_path / "content" / "workspace",
+            local_package_cache_root=tmp_path / "content" / "packages",
+            wan_model_load_cache_preflight_runner=fake_runner,
+        )
+    final_parent = (
+        project_root
+        / "diagnostic_tests"
+        / "wan_model_load_cache_preflight"
+    )
+    assert not final_parent.exists() or list(final_parent.iterdir()) == []
+
+
+@pytest.mark.quick
+def test_published_result_survives_bootstrap_unlink_failure_without_recovery_mix(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    project_root = tmp_path / "SSTW"
+    request_path = project_root / "requests" / "colab_test_request.json"
+    _write_request(
+        request_path,
+        _wan_model_load_cache_preflight_request_payload(),
+    )
+    workspace = tmp_path / "content" / "workspace"
+    cache = tmp_path / "content" / "packages"
+    original_unlink = Path.unlink
+
+    def fail_bootstrap_unlink(path: Path, *args, **kwargs):
+        if path.name == "colab_test_runtime_initialization.json":
+            raise OSError("planned bootstrap cleanup failure")
+        return original_unlink(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "unlink", fail_bootstrap_unlink)
+
+    def fake_runner(output_root: Path) -> dict[str, object]:
+        (output_root / "preflight.json").write_text(
+            '{"formal_result":false}\n', encoding="utf-8"
+        )
+        return {"formal_result": False, "stage_progression_allowed": False}
+
+    result = run_colab_test_request(
+        request_path,
+        project_root=project_root,
+        repo_root=Path.cwd(),
+        local_workspace_root=workspace,
+        local_package_cache_root=cache,
+        wan_model_load_cache_preflight_runner=fake_runner,
+    )
+    assert Path(result["drive_result_zip"]).is_file()
+    bootstrap = (
+        workspace
+        / "validation"
+        / "wan_model_load_cache_preflight"
+        / "colab_test_runtime_initialization.json"
+    )
+    payload = json.loads(bootstrap.read_text(encoding="utf-8"))
+    assert payload["runtime_initialization_decision"] == (
+        "PUBLISHED_RESULT_VERIFIED"
+    )
+    with pytest.raises(FileNotFoundError, match="发布完成"):
+        package_colab_test_recovery_bundle(
+            request_path,
+            project_root=project_root,
+            repo_root=Path.cwd(),
+            local_runtime_root=tmp_path / "content",
+            local_workspace_root=workspace,
+            local_package_cache_root=cache,
+        )
+
+
+@pytest.mark.quick
 def test_colab_test_failure_does_not_create_drive_result_directory(
     tmp_path: Path,
 ) -> None:
@@ -1272,10 +1679,11 @@ def test_colab_source_build_validation_failure_does_not_publish_to_drive(
 @pytest.mark.quick
 def test_colab_test_server_cli_dry_run_uses_request_without_gpu(tmp_path: Path) -> None:
     project_root = tmp_path / "SSTW"
-    source_package = project_root / "inputs" / "source.zip"
     request_path = project_root / "requests" / "colab_test_request.json"
-    _write_source_package(source_package)
-    _write_request(request_path, _request_payload(source_package))
+    _write_request(
+        request_path,
+        _wan_model_load_cache_preflight_request_payload(),
+    )
 
     completed = subprocess.run(
         [
@@ -1306,8 +1714,12 @@ def test_colab_test_server_cli_dry_run_uses_request_without_gpu(tmp_path: Path) 
     ] == "colab_test_lightweight"
     assert decision["resolved_main_generation_model_revision"] is None
     assert decision["resolved_cross_generation_model_revision"] is None
-    assert decision["claim_support_status"] == "diagnostic_only_not_paper_evidence"
-    assert decision["pipeline_results"][0]["phase"] == "no_attack"
+    assert decision["claim_support_status"] == (
+        "model_load_cache_preflight_only_not_method_evidence"
+    )
+    assert decision["pipeline_results"][0]["phase"] == (
+        "model_load_cache_preflight"
+    )
 
 
 @pytest.mark.quick
@@ -1315,10 +1727,8 @@ def test_colab_test_server_cli_recovery_bypasses_gpu_preflight(
     tmp_path: Path,
 ) -> None:
     project_root = tmp_path / "SSTW"
-    source_package = project_root / "inputs" / "source.zip"
     request_path = project_root / "requests" / "colab_test_request.json"
-    _write_source_package(source_package)
-    payload = _request_payload(source_package)
+    payload = _wan_model_load_cache_preflight_request_payload()
     _write_request(request_path, payload)
 
     workspace_root = tmp_path / "content" / "workspace"
@@ -1382,7 +1792,7 @@ def test_colab_test_server_cli_recovery_bypasses_gpu_preflight(
 
 
 @pytest.mark.quick
-def test_colab_source_build_server_cli_dry_run_uses_same_notebook_handler(
+def test_colab_source_build_dry_run_is_marked_paused_by_stage_zero_boundary(
     tmp_path: Path,
 ) -> None:
     project_root = tmp_path / "SSTW"
@@ -1408,19 +1818,15 @@ def test_colab_source_build_server_cli_dry_run_uses_same_notebook_handler(
             str(request_path),
             "--dry-run",
         ],
-        check=True,
+        check=False,
         text=True,
         capture_output=True,
     )
+    assert completed.returncode == 0
     decision = json.loads(completed.stdout)
-    assert decision["server_workflow_decision"] == "DRY_RUN"
-    assert decision["claim_support_status"] == (
-        "trajectory_replay_source_build_only_not_paper_evidence"
-    )
-    assert decision["pipeline_results"][0]["test_id"] == (
-        TRAJECTORY_REPLAY_SOURCE_BUILD_TEST_ID
-    )
-    assert decision["pipeline_results"][0]["phase"] == "source_build"
+    pipeline = decision["pipeline_results"][0]
+    assert pipeline["current_stage_execution_allowed"] is False
+    assert pipeline["paused_historical"] is True
 
 
 @pytest.mark.quick

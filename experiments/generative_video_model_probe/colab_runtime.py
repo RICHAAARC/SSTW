@@ -9,10 +9,11 @@ import math
 import os
 import re
 import secrets
+import sys
 import time
 from hashlib import sha256
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any, Callable, Mapping
 
 from external_baseline.baseline_registry import audit_external_baseline_records
 from experiments.generative_video_model_probe.external_baseline_runner import run_external_baseline_status
@@ -349,8 +350,21 @@ def _load_wan_pipeline_components(
     pipeline_class: type | None = None,
     vae_class: type | None = None,
     vae_dtype: Any | None = None,
+    cache_dir: str | Path | None = None,
+    local_files_only: bool = False,
+    phase_callback: Callable[[str, str], None] | None = None,
+    progress_stream: Any | None = None,
 ) -> Any:
     """按 Wan 官方精度边界加载 FP32 VAE 与低精度 Transformer。"""
+
+    def phase(stage: str, status: str) -> None:
+        emit_progress_event(
+            "video_generation_model_load_phase",
+            f"phase={stage} status={status} model={model_id}",
+            stream=progress_stream,
+        )
+        if phase_callback is not None:
+            phase_callback(stage, status)
 
     if pipeline_class is None or vae_class is None:
         from diffusers import AutoencoderKLWan, WanPipeline
@@ -361,25 +375,50 @@ def _load_wan_pipeline_components(
         import torch
 
         vae_dtype = torch.float32
-    vae = vae_class.from_pretrained(
-        model_id,
-        subfolder="vae",
-        revision=resolved_commit,
-        torch_dtype=vae_dtype,
-        token=hf_token,
-    )
-    from main.methods.state_space_watermark.endpoint_latent_detector import (
-        configure_wan_vae_encode_memory,
-    )
+    vae = None
+    pipe = None
+    try:
+        phase("vae_from_pretrained", "start")
+        vae = vae_class.from_pretrained(
+            model_id,
+            subfolder="vae",
+            revision=resolved_commit,
+            torch_dtype=vae_dtype,
+            token=hf_token,
+            cache_dir=None if cache_dir is None else str(cache_dir),
+            local_files_only=bool(local_files_only),
+        )
+        phase("vae_from_pretrained", "finish")
+        from main.methods.state_space_watermark.endpoint_latent_detector import (
+            configure_wan_vae_encode_memory,
+        )
 
-    configure_wan_vae_encode_memory(vae)
-    return pipeline_class.from_pretrained(
-        model_id,
-        vae=vae,
-        revision=resolved_commit,
-        torch_dtype=transformer_dtype,
-        token=hf_token,
-    )
+        configure_wan_vae_encode_memory(vae)
+        phase("pipeline_from_pretrained", "start")
+        pipe = pipeline_class.from_pretrained(
+            model_id,
+            vae=vae,
+            revision=resolved_commit,
+            torch_dtype=transformer_dtype,
+            token=hf_token,
+            cache_dir=None if cache_dir is None else str(cache_dir),
+            local_files_only=bool(local_files_only),
+        )
+        phase("pipeline_from_pretrained", "finish")
+        return pipe
+    except BaseException:
+        for candidate in (pipe, vae):
+            if candidate is None:
+                continue
+            try:
+                maybe_free = getattr(candidate, "maybe_free_model_hooks", None)
+                if callable(maybe_free):
+                    maybe_free()
+            except Exception:
+                pass
+        pipe = None
+        vae = None
+        raise
 
 
 def _resolve_generation_model_commit(
@@ -387,6 +426,7 @@ def _resolve_generation_model_commit(
     *,
     requested_revision: str | None,
     hf_token: str | None,
+    local_files_only: bool = False,
 ) -> tuple[str, str]:
     """把配置 revision 解析为 Hugging Face 不可变 commit。
 
@@ -397,6 +437,17 @@ def _resolve_generation_model_commit(
 
     _registered_generation_model(model_id)
     configured_revision = str(requested_revision or "").strip() or None
+    if local_files_only:
+        if configured_revision and _HUGGINGFACE_COMMIT_PATTERN.fullmatch(
+            configured_revision
+        ):
+            return (
+                configured_revision.lower(),
+                "configured_immutable_commit_local_only",
+            )
+        raise RuntimeError(
+            "local-only generation model load 必须显式绑定40位不可变commit"
+        )
     try:
         from huggingface_hub import model_info
 
@@ -463,6 +514,7 @@ def validate_generation_model_provenance(record: Mapping[str, Any]) -> str:
         "configured_revision_huggingface_resolved_commit",
         "huggingface_default_revision_resolved_commit",
         "configured_immutable_commit_offline",
+        "configured_immutable_commit_local_only",
     }
     if record.get("generation_model_revision_source") not in allowed_sources:
         raise ValueError(f"generation model revision 来源不受支持: {model_id}")
@@ -551,6 +603,9 @@ def _load_video_generation_pipeline(
     torch_dtype: Any,
     *,
     revision: str | None = None,
+    cache_dir: str | Path | None = None,
+    local_files_only: bool = False,
+    phase_callback: Callable[[str, str], None] | None = None,
 ) -> Any:
     """加载真实视频生成 pipeline。
 
@@ -558,6 +613,17 @@ def _load_video_generation_pipeline(
     小规模跨模型泛化模型; 两者都必须进入真实 Flow scheduler 约束和 replay 路径。
     """
     configure_noisy_library_progress()
+    progress_stream = sys.stdout
+
+    def phase(stage: str, status: str) -> None:
+        emit_progress_event(
+            "video_generation_model_load_phase",
+            f"phase={stage} status={status} model={model_id}",
+            stream=progress_stream,
+        )
+        if phase_callback is not None:
+            phase_callback(stage, status)
+
     hf_token = os.environ.get("HF_TOKEN") or None
     registration = _registered_generation_model(model_id)
     if registration["pipeline_class_name"] == "WanPipeline":
@@ -570,16 +636,21 @@ def _load_video_generation_pipeline(
                 f"video_encoder={software_contract['video_encoder_backend']}"
             ),
         )
+    phase("immutable_revision_resolve", "start")
     resolved_commit, revision_source = _resolve_generation_model_commit(
         model_id,
         requested_revision=revision,
         hf_token=hf_token,
+        local_files_only=local_files_only,
     )
+    phase("immutable_revision_resolve", "finish")
     emit_progress_event("video_generation_model_load", f"start | model={model_id}")
     if registration["pipeline_class_name"] == "WanPipeline":
+        phase("wan_import", "start")
         with suppress_third_party_progress_output("video_generation_model_import"):
             import torch
             from diffusers import AutoencoderKLWan, WanPipeline
+        phase("wan_import", "finish")
 
         with suppress_third_party_progress_output("video_generation_model_load"):
             pipe = _load_wan_pipeline_components(
@@ -590,8 +661,26 @@ def _load_video_generation_pipeline(
                 pipeline_class=WanPipeline,
                 vae_class=AutoencoderKLWan,
                 vae_dtype=torch.float32,
+                cache_dir=cache_dir,
+                local_files_only=local_files_only,
+                phase_callback=phase_callback,
+                progress_stream=progress_stream,
             )
-        scheduler_configuration = _configure_wan_flow_match_euler_scheduler(pipe)
+        phase("scheduler_configuration", "start")
+        try:
+            scheduler_configuration = _configure_wan_flow_match_euler_scheduler(
+                pipe
+            )
+            phase("scheduler_configuration", "finish")
+        except BaseException:
+            try:
+                maybe_free = getattr(pipe, "maybe_free_model_hooks", None)
+                if callable(maybe_free):
+                    maybe_free()
+            except Exception:
+                pass
+            pipe = None
+            raise
         emit_progress_event(
             "video_generation_scheduler_config",
             (
@@ -612,27 +701,43 @@ def _load_video_generation_pipeline(
                 revision=resolved_commit,
                 torch_dtype=torch_dtype,
                 token=hf_token,
+                cache_dir=None if cache_dir is None else str(cache_dir),
+                local_files_only=bool(local_files_only),
             )
     else:  # pragma: no cover - 注册表常量已限制所有分支
         raise RuntimeError("注册模型缺少受支持的 pipeline class")
-    setattr(
-        pipe,
-        "_sstw_generation_model_provenance",
-        {
-            "generation_model_id": model_id,
-            "generation_model_requested_revision": str(revision or "") or None,
-            "generation_model_commit_or_hash": resolved_commit,
-            "generation_model_revision_source": revision_source,
-            "generation_model_revision_resolution_status": "resolved_and_frozen",
-        },
-    )
-    progress_bar_status = configure_pipeline_progress_bar(pipe)
-    if hasattr(pipe, "enable_model_cpu_offload"):
-        pipe.enable_model_cpu_offload()
-    else:
-        pipe.to("cuda")
-    if hasattr(pipe, "vae") and hasattr(pipe.vae, "enable_tiling"):
-        pipe.vae.enable_tiling()
+    try:
+        setattr(
+            pipe,
+            "_sstw_generation_model_provenance",
+            {
+                "generation_model_id": model_id,
+                "generation_model_requested_revision": str(revision or "") or None,
+                "generation_model_commit_or_hash": resolved_commit,
+                "generation_model_revision_source": revision_source,
+                "generation_model_revision_resolution_status": "resolved_and_frozen",
+            },
+        )
+        progress_bar_status = configure_pipeline_progress_bar(pipe)
+        phase("cpu_offload", "start")
+        if hasattr(pipe, "enable_model_cpu_offload"):
+            pipe.enable_model_cpu_offload()
+        else:
+            pipe.to("cuda")
+        phase("cpu_offload", "finish")
+        phase("vae_tiling", "start")
+        if hasattr(pipe, "vae") and hasattr(pipe.vae, "enable_tiling"):
+            pipe.vae.enable_tiling()
+        phase("vae_tiling", "finish")
+    except BaseException:
+        try:
+            maybe_free = getattr(pipe, "maybe_free_model_hooks", None)
+            if callable(maybe_free):
+                maybe_free()
+        except Exception:
+            pass
+        pipe = None
+        raise
     emit_progress_event("video_generation_model_load", f"finish | model={model_id} | pipeline_progress_bar={progress_bar_status}")
     return pipe
 

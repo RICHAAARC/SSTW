@@ -30,6 +30,9 @@ from main.methods.state_space_watermark.patch_relation_wan_runtime import (
     FLOW_ENERGY_BUDGET_RATIO,
     LAMBDA_MAX,
     MINIMUM_DIRECTION_COSINE,
+    PHASE_PROJECTION_MAX_ATTEMPTS,
+    PHASE_PROJECTION_MINIMUM_NONZERO_SCALE,
+    PHASE_PROJECTION_SAFETY_FACTOR,
     RUNTIME_ADAPTER_PROTOCOL_DIGEST,
     VELOCITY_NORM_RATIO_BUDGET,
 )
@@ -42,7 +45,7 @@ CONTRACT_STATE = (
     "patch_relation_gate0_runner_implemented_pending_user_colab_run"
 )
 FROZEN_PROTOCOL_DIGEST = (
-    "94830cb12359b8edc745bef37cfb85e46d9bf5f0e0443298d6833632671f8f77"
+    "dfd9d80274f028316eab306c80cb0d2cebfdfe33abd571f0bdb3ecb450d589f1"
 )
 _LOWER_HEX_64 = re.compile(r"[0-9a-f]{64}\Z")
 
@@ -236,8 +239,64 @@ EXPECTED_WAN_RUNTIME_ADAPTER_CONTRACT = {
         "active_zero_actual_delta_allowed": False,
         "clean_exact_noop_required": True,
         "local_measurement_is_execution_evidence": False,
+        "measurement_issued_only_from_validated_raw_four_branches": True,
         "governed_step_record_requires_runner_schedule_and_scheduler_"
         "consumption_revalidation": True,
+    },
+    "phase_domain_bounded_projection_contract": {
+        "maximum_phase_budget_radians_decimal": format(
+            PHASE_BUDGET_RADIANS,
+            ".6f",
+        ),
+        "candidate_domain": (
+            "same_actual_float32_scheduler_sample_timestep_and_cfg_branch_"
+            "inputs"
+        ),
+        "base_conditional_and_unconditional_forward_count_per_step": 2,
+        "candidate_signs": [1, -1],
+        "candidate_evaluation": (
+            "after_scheduler_wrapper_receives_actual_float32_sample_real_"
+            "rope_controlled_wan_conditional_and_unconditional_reforward_"
+            "then_float32_cfg_and_counterfactual_euler_next_state"
+        ),
+        "transformer_bfloat16_hidden_as_scheduler_sample_allowed": False,
+        "candidate_velocity_linear_rescaling_allowed": False,
+        "direct_additive_velocity_projection_allowed": False,
+        "first_candidate_scale_decimal": "1.0",
+        "maximum_candidate_attempt_count": PHASE_PROJECTION_MAX_ATTEMPTS,
+        "backoff_safety_factor_decimal": format(
+            PHASE_PROJECTION_SAFETY_FACTOR,
+            ".1f",
+        ),
+        "minimum_nonzero_scale_decimal": format(
+            PHASE_PROJECTION_MINIMUM_NONZERO_SCALE,
+            ".6f",
+        ),
+        "backoff_formula": (
+            "next_scale=current_scale*min(norm_budget_over_worst_actual_"
+            "delta_norm,sqrt(remaining_energy_over_worst_energy_increment))"
+            "*safety_factor"
+        ),
+        "maximum_refinement_round_count": 0,
+        "common_scale_selected_from_worst_positive_and_negative_budget_"
+        "usage": True,
+        "direction_or_nonfinite_failure_stops_without_backoff": True,
+        "rejected_candidate_scheduler_call_allowed": False,
+        "selected_candidate_scheduler_call_count": 1,
+        "clean_exact_noop_skips_projection_search": True,
+        "state_dependent_scale_may_differ_between_separate_positive_and_"
+        "negative_trajectories": True,
+        "selection_issued_as_in_process_consistency_capability": True,
+        "sign_evaluation_issued_only_from_validated_raw_arrays": True,
+        "positive_negative_evaluations_require_exact_shared_context": True,
+        "all_candidate_attempts_require_exact_shared_context": True,
+        "selected_candidate_promotion_requires_exact_raw_four_branch_"
+        "binding": True,
+        "selected_sign_evaluation_requires_exact_scheduler_transition_match": (
+            True
+        ),
+        "no_feasible_diagnostic_reports_last_evaluated_scale": True,
+        "compact_governed_record_requires_validated_transition_seal": True,
     },
     "attention_bias_fallback_allowed": False,
     "direct_additive_velocity_or_latent_carrier_allowed": False,
@@ -414,7 +473,15 @@ EXPECTED_GATE0_RUNTIME_EXECUTION_CONTRACT = {
         "unconditional",
     ],
     "base_then_controlled_forward_per_branch": True,
-    "transformer_forward_count_per_step": 4,
+    "clean_transformer_forward_count_per_step": 4,
+    "active_initial_candidate_transformer_forward_count_per_step": 6,
+    "active_maximum_transformer_forward_count_per_step": 18,
+    "phase_projection_candidate_attempt_limit": (
+        PHASE_PROJECTION_MAX_ATTEMPTS
+    ),
+    "phase_projection_candidate_signs": [1, -1],
+    "phase_projection_rejected_candidate_advances_scheduler": False,
+    "phase_projection_selected_candidate_scheduler_call_count": 1,
     "transformer_cache_must_be_disabled": True,
     "base_and_controlled_share_exact_hidden_timestep_encoder_input_per_"
     "branch": True,
@@ -604,7 +671,7 @@ def _validate_contract_semantics(contract: Mapping[str, Any]) -> None:
         phase["attention_head_dim"] != 128
         or phase["temporal_rope_dimension"] != 44
         or phase["temporal_rope_pair_index"] != 0
-        or phase["phase_budget_radians_decimal"]
+        or phase["maximum_phase_budget_radians_decimal"]
         != format(PHASE_BUDGET_RADIANS, ".6f")
         or phase["phase_pair_entries"] != [0, 1]
         or phase["runtime_strength_sweep_allowed"] is not False

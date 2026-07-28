@@ -23,13 +23,18 @@ from main.methods.state_space_watermark.patch_relation_carrier import (
 )
 from main.methods.state_space_watermark.patch_relation_wan_runtime import (
     CfgRopeApplicationPair,
+    PhaseProjectionSignEvaluation,
+    PHASE_PROJECTION_MAX_ATTEMPTS,
     PatchRelationRuntimeGuardError,
     SCHEDULER_VELOCITY_SHAPE,
     ScopedWanRopeOutputAdapter,
     TRANSFORMER_HIDDEN_SHAPE,
     RUNTIME_ADAPTER_PROTOCOL_DIGEST,
+    SymmetricPhaseProjectionSelection,
     apply_wan_rotary_phase_runtime,
+    evaluate_phase_projection_sign_numpy,
     measure_cfg_state_update_numpy,
+    select_symmetric_phase_projection,
     validate_cfg_state_update_measurement_numpy,
     validate_cfg_rope_application_pair,
 )
@@ -107,6 +112,41 @@ def test_rehashed_official_rope_storage_dtype_mutation_fails_closed(
             "local_measurement_is_execution_evidence",
             True,
         ),
+        (
+            "scheduler_state_update_measurement_contract",
+            "measurement_issued_only_from_validated_raw_four_branches",
+            False,
+        ),
+        (
+            "phase_domain_bounded_projection_contract",
+            "transformer_bfloat16_hidden_as_scheduler_sample_allowed",
+            True,
+        ),
+        (
+            "phase_domain_bounded_projection_contract",
+            "sign_evaluation_issued_only_from_validated_raw_arrays",
+            False,
+        ),
+        (
+            "phase_domain_bounded_projection_contract",
+            "selected_sign_evaluation_requires_exact_scheduler_transition_match",
+            False,
+        ),
+        (
+            "phase_domain_bounded_projection_contract",
+            "all_candidate_attempts_require_exact_shared_context",
+            False,
+        ),
+        (
+            "phase_domain_bounded_projection_contract",
+            "selected_candidate_promotion_requires_exact_raw_four_branch_binding",
+            False,
+        ),
+        (
+            "phase_domain_bounded_projection_contract",
+            "no_feasible_diagnostic_reports_last_evaluated_scale",
+            False,
+        ),
     ],
 )
 def test_rehashed_runtime_contract_mutations_fail_closed(
@@ -175,6 +215,7 @@ def _run_branch(
     control_role: str,
     branch_role: str,
     coefficient: int,
+    phase_projection_scale: float = 1.0,
     probe_id: str = "patch_relation_probe",
     step_index: int = 3,
     binding_digest: str = _BINDING_DIGEST,
@@ -184,6 +225,7 @@ def _run_branch(
         transformer,
         descriptor=descriptor,
         signed_coefficient=coefficient,
+        phase_projection_scale=phase_projection_scale,
         probe_id=probe_id,
         step_index=step_index,
         control_role=control_role,
@@ -199,6 +241,7 @@ def _run_pair(
     *,
     control_role: str,
     coefficient: int,
+    phase_projection_scale: float = 1.0,
     probe_id: str = "patch_relation_probe",
     step_index: int = 3,
     binding_digest: str = _BINDING_DIGEST,
@@ -209,6 +252,7 @@ def _run_pair(
         control_role=control_role,
         branch_role="conditional",
         coefficient=coefficient,
+        phase_projection_scale=phase_projection_scale,
         probe_id=probe_id,
         step_index=step_index,
         binding_digest=binding_digest,
@@ -218,11 +262,82 @@ def _run_pair(
         control_role=control_role,
         branch_role="unconditional",
         coefficient=coefficient,
+        phase_projection_scale=phase_projection_scale,
         probe_id=probe_id,
         step_index=step_index,
         binding_digest=binding_digest,
     )
     return validate_cfg_rope_application_pair(conditional, unconditional)
+
+
+def _selection_from_measurement(
+    measurement,
+    *,
+    base_pair: CfgRopeApplicationPair,
+    controlled_pair: CfgRopeApplicationPair,
+    base_conditional_velocity: np.ndarray,
+    base_unconditional_velocity: np.ndarray,
+    controlled_conditional_velocity: np.ndarray,
+    controlled_unconditional_velocity: np.ndarray,
+) -> SymmetricPhaseProjectionSelection:
+    canonical_conditional_delta = np.multiply(
+        np.subtract(
+            controlled_conditional_velocity,
+            base_conditional_velocity,
+            dtype=np.float32,
+        ),
+        np.float32(measurement.signed_coefficient),
+        dtype=np.float32,
+    )
+    canonical_unconditional_delta = np.multiply(
+        np.subtract(
+            controlled_unconditional_velocity,
+            base_unconditional_velocity,
+            dtype=np.float32,
+        ),
+        np.float32(measurement.signed_coefficient),
+        dtype=np.float32,
+    )
+
+    def one(sign: int) -> PhaseProjectionSignEvaluation:
+        pair = controlled_pair
+        if sign != measurement.signed_coefficient:
+            pair = validate_cfg_rope_application_pair(
+                replace(controlled_pair.conditional, signed_coefficient=sign),
+                replace(controlled_pair.unconditional, signed_coefficient=sign),
+            )
+        controlled_conditional = np.ascontiguousarray(
+            base_conditional_velocity
+            + np.float32(sign) * canonical_conditional_delta,
+            dtype="<f4",
+        )
+        controlled_unconditional = np.ascontiguousarray(
+            base_unconditional_velocity
+            + np.float32(sign) * canonical_unconditional_delta,
+            dtype="<f4",
+        )
+        return evaluate_phase_projection_sign_numpy(
+            base_pair=base_pair,
+            controlled_pair=pair,
+            phase_projection_scale=1.0,
+            base_conditional_velocity=base_conditional_velocity,
+            base_unconditional_velocity=base_unconditional_velocity,
+            controlled_conditional_velocity=controlled_conditional,
+            controlled_unconditional_velocity=controlled_unconditional,
+            scheduler_sample=measurement.scheduler_sample,
+            delta_sigma=measurement.delta_sigma,
+            cumulative_reference_energy_before_step=(
+                measurement.cumulative_reference_energy_before_step
+            ),
+            cumulative_control_energy_before_step=(
+                measurement.cumulative_control_energy_before_step
+            ),
+            remaining_step_count=measurement.remaining_step_count,
+        )
+
+    return select_symmetric_phase_projection(
+        lambda scale: (one(1), one(-1))
+    )
 
 
 def _velocity(value: float) -> np.ndarray:
@@ -282,6 +397,29 @@ class _FakeProbeTransformer:
         self.is_cache_enabled = False
         self._cache_config = None
         self.original_forward_count = 0
+        self.hidden_state_values: list[np.ndarray] = []
+
+    def forward(
+        self,
+        *,
+        hidden_states: np.ndarray,
+        timestep: np.ndarray,
+        encoder_hidden_states: np.ndarray,
+        **kwargs,
+    ):
+        self.original_forward_count += 1
+        self.hidden_state_values.append(
+            np.ascontiguousarray(hidden_states, dtype="<f4")
+        )
+        _cosine, sine = self.rope(hidden_states)
+        relation_signal = float(sine[0, 2221, 0, 1])
+        branch_offset = float(encoder_hidden_states.reshape(-1)[0]) * 0.01
+        value = np.float32(1.0 + branch_offset + relation_signal * 1e-3)
+        return (np.full(self.velocity_shape, value, dtype="<f4"),)
+
+
+class _NonlinearProbeTransformer(_FakeProbeTransformer):
+    """A bounded nonlinear response that forces real phase re-forward."""
 
     def forward(
         self,
@@ -295,7 +433,8 @@ class _FakeProbeTransformer:
         _cosine, sine = self.rope(hidden_states)
         relation_signal = float(sine[0, 2221, 0, 1])
         branch_offset = float(encoder_hidden_states.reshape(-1)[0]) * 0.01
-        value = np.float32(1.0 + branch_offset + relation_signal * 1e-3)
+        nonlinear = 0.1 * np.tanh(100.0 * relation_signal)
+        value = np.float32(1.0 + branch_offset + nonlinear)
         return (np.full(self.velocity_shape, value, dtype="<f4"),)
 
 
@@ -407,6 +546,9 @@ def _run_fake_probe_pipeline(
     coefficient: int,
     timestep_values: tuple[float, ...] | None = None,
     scheduler_type: type[_FakeProbeScheduler] = _FakeProbeScheduler,
+    transformer_type: type[_FakeProbeTransformer] = _FakeProbeTransformer,
+    quantize_transformer_hidden_as_bfloat16: bool = False,
+    initial_sample_value: float = 0.0,
 ):
     small_shape = (1, 1, 1, 1, 2)
     monkeypatch.setattr(
@@ -430,7 +572,9 @@ def _run_fake_probe_pipeline(
     deltas = tuple(
         float(value) for value in schedule["delta_sigma_by_step_decimal"]
     )
-    transformer = _FakeProbeTransformer(small_shape)
+    transformer = transformer_type(small_shape)
+    if quantize_transformer_hidden_as_bfloat16:
+        transformer.dtype = "torch.bfloat16"
     scheduler = scheduler_type(sigmas)
     adapter = ScopedPatchRelationWanProbeAdapter(
         transformer,
@@ -446,7 +590,7 @@ def _run_fake_probe_pipeline(
             for value in schedule["timestep_by_step_decimal"]
         ),
     )
-    sample = np.zeros(small_shape, dtype="<f4")
+    sample = np.full(small_shape, initial_sample_value, dtype="<f4")
     conditional_encoder = np.asarray([2.0], dtype="<f4")
     unconditional_encoder = np.asarray([1.0], dtype="<f4")
     with adapter:
@@ -457,14 +601,19 @@ def _run_fake_probe_pipeline(
                 else timestep_values[step_index]
             )
             timestep = np.asarray([timestep_value], dtype="<f4")
+            transformer_hidden = sample
+            if quantize_transformer_hidden_as_bfloat16:
+                transformer_hidden = _round_float32_to_bfloat16_values(
+                    sample
+                )
             conditional = transformer.forward(
-                hidden_states=sample,
+                hidden_states=transformer_hidden,
                 timestep=timestep,
                 encoder_hidden_states=conditional_encoder,
                 return_dict=False,
             )[0]
             unconditional = transformer.forward(
-                hidden_states=sample,
+                hidden_states=transformer_hidden,
                 timestep=timestep,
                 encoder_hidden_states=unconditional_encoder,
                 return_dict=False,
@@ -489,14 +638,14 @@ def _run_fake_probe_pipeline(
 
 
 @pytest.mark.quick
-def test_governed_probe_adapter_runs_four_forwards_and_controlled_scheduler(
+def test_governed_probe_adapter_runs_symmetric_full_phase_and_scheduler_once(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     transformer, scheduler, records = _run_fake_probe_pipeline(
         monkeypatch,
         coefficient=1,
     )
-    assert transformer.original_forward_count == 32
+    assert transformer.original_forward_count == 48
     assert scheduler.original_step_count == 8
     assert len(records) == 8
     assert [record.step_index for record in records] == list(range(8))
@@ -507,6 +656,9 @@ def test_governed_probe_adapter_runs_four_forwards_and_controlled_scheduler(
     assert all(record.norm_guard_passed for record in records)
     assert all(record.energy_guard_passed for record in records)
     assert all(record.direction_guard_passed is True for record in records)
+    assert all(record.selected_phase_projection_scale == 1.0 for record in records)
+    assert all(record.phase_projection_attempt_count == 1 for record in records)
+    assert all(record.phase_projection_backoff_count == 0 for record in records)
     assert all(
         record.signed_state_update_exposure > 0.0 for record in records
     )
@@ -520,6 +672,240 @@ def test_governed_probe_adapter_runs_four_forwards_and_controlled_scheduler(
 
 
 @pytest.mark.quick
+def test_nonlinear_phase_projection_reforwards_before_single_scheduler_step(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    transformer, scheduler, records = _run_fake_probe_pipeline(
+        monkeypatch,
+        coefficient=1,
+        transformer_type=_NonlinearProbeTransformer,
+    )
+    assert scheduler.original_step_count == 8
+    assert transformer.original_forward_count > 48
+    assert transformer.original_forward_count <= 8 * (
+        2 + 4 * PHASE_PROJECTION_MAX_ATTEMPTS
+    )
+    assert all(0.0 < row.selected_phase_projection_scale < 1.0 for row in records)
+    assert all(row.phase_projection_attempt_count > 1 for row in records)
+    assert all(row.phase_projection_backoff_count > 0 for row in records)
+    assert all(row.norm_guard_passed for row in records)
+    assert all(row.energy_guard_passed for row in records)
+    assert all(row.direction_guard_passed is True for row in records)
+    assert all(
+        row.phase_projection_positive_norm_guard_passed is True
+        and row.phase_projection_negative_norm_guard_passed is True
+        and row.phase_projection_positive_energy_guard_passed is True
+        and row.phase_projection_negative_energy_guard_passed is True
+        for row in records
+    )
+
+
+def test_phase_projection_uses_true_fp32_scheduler_sample_not_bfloat16_hidden(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    observed_scheduler_samples: list[np.ndarray] = []
+    original = runner_module.evaluate_phase_projection_sign_numpy
+
+    def capture(**kwargs):
+        observed_scheduler_samples.append(
+            np.asarray(kwargs["scheduler_sample"], dtype="<f4").copy()
+        )
+        return original(**kwargs)
+
+    monkeypatch.setattr(
+        runner_module,
+        "evaluate_phase_projection_sign_numpy",
+        capture,
+    )
+    initial = 0.12345679
+    transformer, scheduler, _records = _run_fake_probe_pipeline(
+        monkeypatch,
+        coefficient=1,
+        quantize_transformer_hidden_as_bfloat16=True,
+        initial_sample_value=initial,
+    )
+    assert scheduler.original_step_count == 8
+    assert observed_scheduler_samples
+    expected_scheduler_sample = np.full(
+        (1, 1, 1, 1, 2),
+        initial,
+        dtype="<f4",
+    )
+    quantized_hidden = _round_float32_to_bfloat16_values(
+        expected_scheduler_sample
+    )
+    assert not np.array_equal(expected_scheduler_sample, quantized_hidden)
+    assert np.array_equal(
+        observed_scheduler_samples[0],
+        expected_scheduler_sample,
+    )
+    assert np.array_equal(
+        transformer.hidden_state_values[0],
+        quantized_hidden,
+    )
+
+
+def _raw_projection_evaluations(
+    scale: float,
+    *,
+    response_amplitude: float,
+    step_index: int = 0,
+) -> tuple[PhaseProjectionSignEvaluation, PhaseProjectionSignEvaluation]:
+    base_pair = _run_pair(
+        control_role="base",
+        coefficient=0,
+        step_index=step_index,
+    )
+    base = np.ones((1,), dtype="<f4")
+    sample = np.asarray([0.12345679], dtype="<f4")
+    rows = []
+    for sign in (1, -1):
+        controlled_pair = _run_pair(
+            control_role="controlled",
+            coefficient=sign,
+            phase_projection_scale=scale,
+            step_index=step_index,
+        )
+        controlled = np.asarray(
+            [1.0 + sign * response_amplitude],
+            dtype="<f4",
+        )
+        rows.append(
+            evaluate_phase_projection_sign_numpy(
+                base_pair=base_pair,
+                controlled_pair=controlled_pair,
+                phase_projection_scale=scale,
+                base_conditional_velocity=base,
+                base_unconditional_velocity=base,
+                controlled_conditional_velocity=controlled,
+                controlled_unconditional_velocity=controlled,
+                scheduler_sample=sample,
+                delta_sigma=-0.1,
+                cumulative_reference_energy_before_step=0.0,
+                cumulative_control_energy_before_step=0.0,
+                remaining_step_count=1,
+            )
+        )
+    return rows[0], rows[1]
+
+
+@pytest.mark.quick
+def test_symmetric_projection_selects_one_common_scale_for_both_signs(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(runtime_module, "SCHEDULER_VELOCITY_SHAPE", (1,))
+    observed_scales: list[float] = []
+
+    def evaluator(scale: float):
+        observed_scales.append(scale)
+        return _raw_projection_evaluations(
+            scale,
+            response_amplitude=0.0072 * scale,
+        )
+
+    selected = select_symmetric_phase_projection(evaluator)
+    assert observed_scales[0] == 1.0
+    assert len(observed_scales) == 2
+    assert selected.selected_scale == pytest.approx(0.3, rel=2e-4)
+    assert selected.final_positive.phase_projection_scale == selected.selected_scale
+    assert selected.final_negative.phase_projection_scale == selected.selected_scale
+    assert selected.realized_phase_magnitude_radians == pytest.approx(
+        0.015625 * selected.selected_scale
+    )
+
+
+@pytest.mark.quick
+def test_symmetric_projection_rejects_arbitrary_scalar_evaluator(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(runtime_module, "SCHEDULER_VELOCITY_SHAPE", (1,))
+    positive, negative = _raw_projection_evaluations(
+        1.0,
+        response_amplitude=0.001,
+    )
+    forged = replace(
+        positive,
+        actual_delta_norm=positive.actual_delta_norm / 10.0,
+        energy_increment=positive.energy_increment / 100.0,
+    )
+    with pytest.raises(ValueError, match="raw-array"):
+        select_symmetric_phase_projection(
+            lambda scale: (forged, negative)
+        )
+
+
+def test_symmetric_projection_rejects_cross_step_context(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(runtime_module, "SCHEDULER_VELOCITY_SHAPE", (1,))
+    positive, _ = _raw_projection_evaluations(
+        1.0,
+        response_amplitude=0.001,
+        step_index=0,
+    )
+    _, negative = _raw_projection_evaluations(
+        1.0,
+        response_amplitude=0.001,
+        step_index=1,
+    )
+    with pytest.raises(ValueError, match="context"):
+        select_symmetric_phase_projection(
+            lambda scale: (positive, negative)
+        )
+
+
+def test_symmetric_projection_rejects_context_change_between_attempts(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(runtime_module, "SCHEDULER_VELOCITY_SHAPE", (1,))
+    calls = 0
+
+    def evaluator(scale: float):
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            return _raw_projection_evaluations(
+                scale,
+                response_amplitude=0.0072,
+                step_index=0,
+            )
+        return _raw_projection_evaluations(
+            scale,
+            response_amplitude=0.0001,
+            step_index=1,
+        )
+
+    with pytest.raises(ValueError, match="backoff attempt shared context"):
+        select_symmetric_phase_projection(evaluator)
+    assert calls == 2
+
+
+def test_no_feasible_reports_last_evaluated_scale_and_statistics(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(runtime_module, "SCHEDULER_VELOCITY_SHAPE", (1,))
+    observed: dict[float, tuple[PhaseProjectionSignEvaluation, ...]] = {}
+
+    def evaluator(scale: float):
+        rows = _raw_projection_evaluations(
+            scale,
+            response_amplitude=0.5,
+        )
+        observed[scale] = rows
+        return rows
+
+    with pytest.raises(PatchRelationRuntimeGuardError) as captured:
+        select_symmetric_phase_projection(evaluator)
+    diagnostics = captured.value.diagnostics
+    last_scale = diagnostics["phase_projection_last_scale"]
+    assert last_scale in observed
+    assert diagnostics[
+        "phase_projection_final_worst_actual_delta_norm"
+    ] == max(row.actual_delta_norm for row in observed[last_scale])
+    assert len(observed) <= PHASE_PROJECTION_MAX_ATTEMPTS
+
+
+@pytest.mark.quick
 def test_governed_probe_adapter_clean_uses_same_full_path_and_exact_noop(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -530,6 +916,8 @@ def test_governed_probe_adapter_clean_uses_same_full_path_and_exact_noop(
     assert transformer.original_forward_count == 32
     assert scheduler.original_step_count == 8
     assert all(record.clean_exact_noop for record in records)
+    assert all(record.selected_phase_projection_scale == 0.0 for record in records)
+    assert all(record.phase_projection_attempt_count == 0 for record in records)
     assert all(record.actual_delta_norm == 0.0 for record in records)
     assert all(
         record.signed_state_update_exposure == 0.0 for record in records
@@ -1027,11 +1415,31 @@ def test_cfg_state_update_recomputes_actual_fp32_delta_and_exposure() -> None:
     assert not result.clean_exact_noop
     assert result.local_contract_only
     assert not result.execution_evidence_allowed
+    manual_measurement = type(result)(
+        **{
+            field_name: getattr(result, field_name)
+            for field_name in result.__dataclass_fields__
+        }
+    )
+    with pytest.raises(ValueError, match="raw-array factory"):
+        validate_cfg_state_update_measurement_numpy(
+            manual_measurement,
+            base_pair=base_pair,
+            controlled_pair=controlled_pair,
+            base_conditional_velocity=base_conditional,
+            base_unconditional_velocity=base_unconditional,
+            controlled_conditional_velocity=controlled_conditional,
+            controlled_unconditional_velocity=controlled_unconditional,
+        )
     assert (
         validate_cfg_state_update_measurement_numpy(
             result,
             base_pair=base_pair,
             controlled_pair=controlled_pair,
+            base_conditional_velocity=base_conditional,
+            base_unconditional_velocity=base_unconditional,
+            controlled_conditional_velocity=controlled_conditional,
+            controlled_unconditional_velocity=controlled_unconditional,
         )
         is result
     )
@@ -1049,9 +1457,48 @@ def test_cfg_state_update_recomputes_actual_fp32_delta_and_exposure() -> None:
         result,
         base_pair=base_pair,
         controlled_pair=controlled_pair,
+        base_conditional_velocity=base_conditional,
+        base_unconditional_velocity=base_unconditional,
+        controlled_conditional_velocity=controlled_conditional,
+        controlled_unconditional_velocity=controlled_unconditional,
         conditional_encoder_digest="2" * 64,
         unconditional_encoder_digest="3" * 64,
+        phase_projection=_selection_from_measurement(
+            result,
+            base_pair=base_pair,
+            controlled_pair=controlled_pair,
+            base_conditional_velocity=base_conditional,
+            base_unconditional_velocity=base_unconditional,
+            controlled_conditional_velocity=controlled_conditional,
+            controlled_unconditional_velocity=controlled_unconditional,
+        ),
     )
+    forged_selection = replace(
+        _selection_from_measurement(
+            result,
+            base_pair=base_pair,
+            controlled_pair=controlled_pair,
+            base_conditional_velocity=base_conditional,
+            base_unconditional_velocity=base_unconditional,
+            controlled_conditional_velocity=controlled_conditional,
+            controlled_unconditional_velocity=controlled_unconditional,
+        ),
+        selected_scale=0.5,
+        realized_phase_magnitude_radians=0.015625 * 0.5,
+    )
+    with pytest.raises(ValueError, match="candidate search"):
+        runner_module._governed_step_from_measurement(
+            result,
+            base_pair=base_pair,
+            controlled_pair=controlled_pair,
+            base_conditional_velocity=base_conditional,
+            base_unconditional_velocity=base_unconditional,
+            controlled_conditional_velocity=controlled_conditional,
+            controlled_unconditional_velocity=controlled_unconditional,
+            conditional_encoder_digest="2" * 64,
+            unconditional_encoder_digest="3" * 64,
+            phase_projection=forged_selection,
+        )
     assert governed.scheduler_consumed_velocity_digest == sha256(
         result.controlled_cfg_velocity.tobytes(order="C")
     ).hexdigest()
@@ -1067,6 +1514,47 @@ def test_cfg_state_update_recomputes_actual_fp32_delta_and_exposure() -> None:
     assert governed.actual_state_update_digest == sha256(
         result.actual_state_update_delta.tobytes(order="C")
     ).hexdigest()
+    valid_selection = _selection_from_measurement(
+        result,
+        base_pair=base_pair,
+        controlled_pair=controlled_pair,
+        base_conditional_velocity=base_conditional,
+        base_unconditional_velocity=base_unconditional,
+        controlled_conditional_velocity=controlled_conditional,
+        controlled_unconditional_velocity=controlled_unconditional,
+    )
+    sample_shift = np.full_like(result.scheduler_sample, np.float32(0.25))
+    different_transition = replace(
+        result,
+        scheduler_sample=np.ascontiguousarray(
+            result.scheduler_sample + sample_shift,
+            dtype="<f4",
+        ),
+        base_next_state=np.ascontiguousarray(
+            result.base_next_state + sample_shift,
+            dtype="<f4",
+        ),
+        controlled_next_state=np.ascontiguousarray(
+            result.controlled_next_state + sample_shift,
+            dtype="<f4",
+        ),
+    )
+    with pytest.raises(
+        ValueError,
+        match="raw-array factory|transition数组|raw branch",
+    ):
+        runner_module._governed_step_from_measurement(
+            different_transition,
+            base_pair=base_pair,
+            controlled_pair=controlled_pair,
+            base_conditional_velocity=base_conditional,
+            base_unconditional_velocity=base_unconditional,
+            controlled_conditional_velocity=controlled_conditional,
+            controlled_unconditional_velocity=controlled_unconditional,
+            conditional_encoder_digest="2" * 64,
+            unconditional_encoder_digest="3" * 64,
+            phase_projection=valid_selection,
+        )
     forged_measurement = replace(
         result,
         base_velocity_norm=1000.0,
@@ -1086,19 +1574,42 @@ def test_cfg_state_update_recomputes_actual_fp32_delta_and_exposure() -> None:
         energy_guard_passed=True,
         direction_guard_passed=True,
     )
-    with pytest.raises(ValueError, match="transition数组重建"):
+    with pytest.raises(
+        ValueError,
+        match="raw-array factory|transition数组重建",
+    ):
         validate_cfg_state_update_measurement_numpy(
             forged_measurement,
             base_pair=base_pair,
             controlled_pair=controlled_pair,
+            base_conditional_velocity=base_conditional,
+            base_unconditional_velocity=base_unconditional,
+            controlled_conditional_velocity=controlled_conditional,
+            controlled_unconditional_velocity=controlled_unconditional,
         )
-    with pytest.raises(ValueError, match="transition数组重建"):
+    with pytest.raises(
+        ValueError,
+        match="raw-array factory|transition数组重建",
+    ):
         runner_module._governed_step_from_measurement(
             forged_measurement,
             base_pair=base_pair,
             controlled_pair=controlled_pair,
+            base_conditional_velocity=base_conditional,
+            base_unconditional_velocity=base_unconditional,
+            controlled_conditional_velocity=controlled_conditional,
+            controlled_unconditional_velocity=controlled_unconditional,
             conditional_encoder_digest="2" * 64,
             unconditional_encoder_digest="3" * 64,
+            phase_projection=_selection_from_measurement(
+                result,
+                base_pair=base_pair,
+                controlled_pair=controlled_pair,
+                base_conditional_velocity=base_conditional,
+                base_unconditional_velocity=base_unconditional,
+                controlled_conditional_velocity=controlled_conditional,
+                controlled_unconditional_velocity=controlled_unconditional,
+            ),
         )
 
     negative_pair = _run_pair(control_role="controlled", coefficient=-1)
@@ -1129,6 +1640,133 @@ def test_cfg_state_update_recomputes_actual_fp32_delta_and_exposure() -> None:
     assert negative_result.signed_state_update_exposure == pytest.approx(
         -negative_result.state_update_delta_norm
     )
+
+
+def test_selected_projection_rejects_distinct_raw_branches_with_same_cfg() -> None:
+    base_pair = _run_pair(control_role="base", coefficient=0)
+    positive_pair = _run_pair(control_role="controlled", coefficient=1)
+    negative_pair = _run_pair(control_role="controlled", coefficient=-1)
+    raw_offset = np.float32(2.0**-14)
+    scheduler_sample = _velocity(1.0)
+
+    selection_base_conditional = _velocity(1.0)
+    selection_base_unconditional = _velocity(0.5)
+    selection_controlled_conditional = np.ascontiguousarray(
+        selection_base_conditional + raw_offset,
+        dtype="<f4",
+    )
+    selection_controlled_unconditional = np.ascontiguousarray(
+        selection_base_unconditional + raw_offset,
+        dtype="<f4",
+    )
+
+    def evaluation(sign: int) -> PhaseProjectionSignEvaluation:
+        controlled_pair = positive_pair if sign == 1 else negative_pair
+        controlled_conditional = (
+            selection_controlled_conditional
+            if sign == 1
+            else np.ascontiguousarray(
+                selection_base_conditional - raw_offset,
+                dtype="<f4",
+            )
+        )
+        controlled_unconditional = (
+            selection_controlled_unconditional
+            if sign == 1
+            else np.ascontiguousarray(
+                selection_base_unconditional - raw_offset,
+                dtype="<f4",
+            )
+        )
+        return evaluate_phase_projection_sign_numpy(
+            base_pair=base_pair,
+            controlled_pair=controlled_pair,
+            phase_projection_scale=1.0,
+            base_conditional_velocity=selection_base_conditional,
+            base_unconditional_velocity=selection_base_unconditional,
+            controlled_conditional_velocity=controlled_conditional,
+            controlled_unconditional_velocity=controlled_unconditional,
+            scheduler_sample=scheduler_sample,
+            delta_sigma=-0.1,
+            cumulative_reference_energy_before_step=0.0,
+            cumulative_control_energy_before_step=0.0,
+            remaining_step_count=8,
+        )
+
+    selection = select_symmetric_phase_projection(
+        lambda _scale: (evaluation(1), evaluation(-1))
+    )
+
+    # Both raw base pairs combine to exactly 3.0 at guidance=5.
+    measurement_base_conditional = _velocity(1.5)
+    measurement_base_unconditional = _velocity(1.125)
+    measurement_controlled_conditional = np.ascontiguousarray(
+        measurement_base_conditional + raw_offset,
+        dtype="<f4",
+    )
+    measurement_controlled_unconditional = np.ascontiguousarray(
+        measurement_base_unconditional + raw_offset,
+        dtype="<f4",
+    )
+    measurement = measure_cfg_state_update_numpy(
+        base_pair=base_pair,
+        controlled_pair=positive_pair,
+        base_conditional_velocity=measurement_base_conditional,
+        base_unconditional_velocity=measurement_base_unconditional,
+        controlled_conditional_velocity=measurement_controlled_conditional,
+        controlled_unconditional_velocity=measurement_controlled_unconditional,
+        **_scheduler_state_arguments(
+            measurement_base_conditional,
+            measurement_base_unconditional,
+            measurement_controlled_conditional,
+            measurement_controlled_unconditional,
+            delta_sigma=-0.1,
+        ),
+        delta_sigma=-0.1,
+        cumulative_reference_energy_before_step=0.0,
+        cumulative_control_energy_before_step=0.0,
+        remaining_step_count=8,
+    )
+    assert np.array_equal(
+        measurement.base_cfg_velocity,
+        _velocity(3.0),
+    )
+    assert selection.final_positive.base_cfg_velocity_digest == sha256(
+        measurement.base_cfg_velocity.tobytes(order="C")
+    ).hexdigest()
+    assert selection.final_positive.controlled_cfg_velocity_digest == sha256(
+        measurement.controlled_cfg_velocity.tobytes(order="C")
+    ).hexdigest()
+    with pytest.raises(ValueError, match="创建时raw branches"):
+        runner_module._governed_step_from_measurement(
+            measurement,
+            base_pair=base_pair,
+            controlled_pair=positive_pair,
+            base_conditional_velocity=selection_base_conditional,
+            base_unconditional_velocity=selection_base_unconditional,
+            controlled_conditional_velocity=selection_controlled_conditional,
+            controlled_unconditional_velocity=(
+                selection_controlled_unconditional
+            ),
+            conditional_encoder_digest="2" * 64,
+            unconditional_encoder_digest="3" * 64,
+            phase_projection=selection,
+        )
+    with pytest.raises(ValueError, match="raw branch"):
+        runner_module._governed_step_from_measurement(
+            measurement,
+            base_pair=base_pair,
+            controlled_pair=positive_pair,
+            base_conditional_velocity=measurement_base_conditional,
+            base_unconditional_velocity=measurement_base_unconditional,
+            controlled_conditional_velocity=measurement_controlled_conditional,
+            controlled_unconditional_velocity=(
+                measurement_controlled_unconditional
+            ),
+            conditional_encoder_digest="2" * 64,
+            unconditional_encoder_digest="3" * 64,
+            phase_projection=selection,
+        )
 
 
 def test_bfloat16_branch_rounding_requires_pre_cfg_float32_cast() -> None:

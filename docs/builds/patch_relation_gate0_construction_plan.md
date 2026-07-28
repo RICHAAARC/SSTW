@@ -226,9 +226,50 @@ norm budget 沿用
 否则不得形成记录。本地边界从未来 governed adapter 提供的
 cumulative reference/control energy 与正 remaining-step count 重算 projected
 reference、总预算和 remaining energy，不接受任意 caller remaining-budget。
+signed active step 在真实 scheduler 调用前执行 phase-domain bounded
+projection。maximum phase 仍为 `0.015625`，不是可调 strength。每个当前
+state/timestep/CFG branch 输入只计算一次 base conditional/unconditional；
+随后对同一 scale 的 `+phase/-phase` 都做真实 RoPE-controlled Wan
+conditional/unconditional re-forward，以两符号最坏 norm/energy usage 选共同
+scale。禁止把 full-phase velocity 线性缩放，禁止退回 direct-additive
+velocity projection。full scale先评估；失败后只按
+
+```text
+next_scale =
+  current_scale
+  * min(norm_budget / worst_actual_delta_norm,
+        sqrt(remaining_energy / worst_energy_increment))
+  * 0.9
+```
+
+候选搜索必须延后到scheduler wrapper已经取得官方pipeline保留的真实FP32
+`sample`之后；transformer收到的BF16 hidden state只用于同输入绑定，禁止
+BF16转回FP32后冒充scheduler sample。确定性 backoff，最多4次candidate、
+minimum nonzero scale为`0.000001`，无
+最大化细化轮。direction/nonfinite失败或无非零可行scale立即fail-closed。
+rejected candidate不得调用scheduler、推进内部index或形成governed record；
+选中后scheduler精确调用一次，且只消费当前probe sign的已验证CFG。scale选择
+不直接读取请求sign，但positive/negative属于不同历史trajectory时，当前state
+不同，允许得到不同scale；actual exposure仍逐step记录。
+每个sign evaluation只能由raw branch velocity、真实FP32 sample和冻结能量
+上下文重算后签发同进程一致性 capability；正负evaluation必须共享probe、
+step、input、sample、base与能量上下文。selection绑定这两个capability，最终
+measurement本身也只能由同一raw四分支factory签发，并将创建时base/control
+raw digest及全部字段纳入同进程identity capability；手工构造、replace或在
+promotion时把raw-A measurement与raw-B数组调包均必须先于统计重建被拒绝。
+首个candidate还会冻结完整shared-context tuple，所有后续backoff attempt
+必须与其逐项一致，只允许scale、controlled pair/output及派生响应变化。最终
+当前sign evaluation还必须在四个raw cond/uncond branch数组仍存活时现场重算
+base raw digest、controlled raw digest和candidate context；即使不同raw
+branches在guidance合成后得到完全相同CFG也必须fail-closed。随后再与真实
+scheduler返回transition的norm、energy、remaining、direction、guard和数组
+digest逐项一致，才可与既有transition seal共同进入compact record。无可行解
+诊断中的last scale必须是最后实际评估的scale。上述capability不是抵抗恶意
+同进程代码的密码学认证。
+
 direction guard 比较真实next-state差与
 `delta_sigma*intended_delta`，阈值保持0.999，不放宽预算。clean 必须 exact
-zero actual delta；active 必须严格非零。
+zero actual delta，并完全跳过projection search；active 必须严格非零。
 
 用于 C0/A 的 signed state-update exposure 冻结为：
 
@@ -325,11 +366,12 @@ local contract + NumPy/runtime adapter
 -> one result ZIP + one minimal manifest copied to Drive
 ```
 
-runner 对每个 denoising step 按官方 `conditional -> unconditional` 外部顺序，
-在每一支内执行 `base zero -> controlled 0/+/-`，共4次 transformer forward。
-cache 必须关闭，避免同一 outer cache context 污染 base/controlled。正式
-scheduler 只消费 controlled CFG；base 只用于同输入 counterfactual 测量。
-clean 也走完整4-forward路径并要求 exact no-op。
+runner 对每个 denoising step 按官方 `conditional -> unconditional` 外部顺序。
+clean 为每支`base zero -> controlled zero`，共4次 transformer forward并跳过
+search。active先做2次base forward，再对每个candidate做正负各两支共4次真实
+controlled forward：首candidate总计6次，冻结4-attempt上界为18次。cache必须
+关闭，避免同一outer cache context污染base/candidate。正式scheduler只消费
+selected/current-sign controlled CFG；base只用于同输入counterfactual测量。
 
 精确视频顺序为：
 

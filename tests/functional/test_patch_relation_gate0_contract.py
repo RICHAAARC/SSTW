@@ -45,8 +45,12 @@ from main.methods.state_space_watermark.patch_relation_wan_runtime import (
     LAMBDA_MAX,
     VELOCITY_NORM_RATIO_BUDGET,
     CfgRopeApplicationPair,
+    PhaseProjectionSignEvaluation,
+    SymmetricPhaseProjectionSelection,
     WanRopeBranchApplicationRecord,
+    evaluate_phase_projection_sign_numpy,
     measure_cfg_state_update_numpy,
+    select_symmetric_phase_projection,
     validate_cfg_rope_application_pair,
 )
 from main.methods.state_space_watermark import (
@@ -212,7 +216,7 @@ def test_native_bfloat16_preflight_rejects_legacy_torch_signature() -> None:
             "gpu_execution_allowed", False
         ),
         lambda value: value["protocol_contract"]["rope_phase_contract"].__setitem__(
-            "phase_budget_radians_decimal", "0.03125"
+            "maximum_phase_budget_radians_decimal", "0.03125"
         ),
         lambda value: value["protocol_contract"]["token_relation_contract"].__setitem__(
             "patch_b_token_coordinate_row_column", [9, 17]
@@ -293,6 +297,18 @@ def test_rehashed_mutation_still_rejected(tmp_path: Path) -> None:
             "selected_pipeline_dtype_exact_torch_bfloat16_required",
             False,
         ),
+        lambda contract: contract["wan_runtime_adapter_contract"][
+            "phase_domain_bounded_projection_contract"
+        ].__setitem__("maximum_candidate_attempt_count", 12),
+        lambda contract: contract["wan_runtime_adapter_contract"][
+            "phase_domain_bounded_projection_contract"
+        ].__setitem__("backoff_safety_factor_decimal", "1.0"),
+        lambda contract: contract["wan_runtime_adapter_contract"][
+            "phase_domain_bounded_projection_contract"
+        ].__setitem__("candidate_velocity_linear_rescaling_allowed", True),
+        lambda contract: contract["wan_runtime_adapter_contract"][
+            "phase_domain_bounded_projection_contract"
+        ].__setitem__("common_scale_selected_from_worst_positive_and_negative_budget_usage", False),
         lambda contract: contract["gate0_runtime_execution_contract"][
             "probe_order"
         ].reverse(),
@@ -419,8 +435,27 @@ def test_phase_delta_clean_noop_and_positive_negative_antisymmetry() -> None:
     assert float(np.max(np.abs(positive))) == PHASE_BUDGET_RADIANS
     assert np.count_nonzero(positive) == 12
     assert np.all(positive[..., 2:] == 0.0)
+    half_positive = build_relation_phase_delta(
+        descriptor,
+        signed_coefficient=1,
+        phase_projection_scale=0.5,
+    )
+    half_negative = build_relation_phase_delta(
+        descriptor,
+        signed_coefficient=-1,
+        phase_projection_scale=0.5,
+    )
+    assert np.array_equal(half_positive, -half_negative)
+    assert np.array_equal(half_positive, positive * 0.5)
     with pytest.raises(ValueError, match="signed_coefficient"):
         build_relation_phase_delta(descriptor, signed_coefficient=2)
+    for bad_scale in (0.0, -0.1, 1.1, float("nan")):
+        with pytest.raises(ValueError, match="phase_projection_scale"):
+            build_relation_phase_delta(
+                descriptor,
+                signed_coefficient=1,
+                phase_projection_scale=bad_scale,
+            )
 
 
 def test_wan_rope_rotation_and_input_rejection() -> None:
@@ -689,6 +724,11 @@ def _fake_rope_pair(
                 cfg_branch_role=branch_role,
                 cfg_branch_order_index=branch_index,
                 signed_coefficient=coefficient,
+                maximum_phase_budget_radians=PHASE_BUDGET_RADIANS,
+                phase_projection_scale=1.0,
+                realized_phase_magnitude_radians=(
+                    0.0 if coefficient == 0 else PHASE_BUDGET_RADIANS
+                ),
                 input_binding_digest="1" * 64,
                 descriptor_digest=descriptor_digest,
                 rope_call_attempt_count=1,
@@ -699,6 +739,76 @@ def _fake_rope_pair(
             )
         )
     return validate_cfg_rope_application_pair(rows[0], rows[1])
+
+
+def _fake_phase_projection(
+    measurement,
+    *,
+    base_pair: CfgRopeApplicationPair,
+    controlled_pair: CfgRopeApplicationPair,
+    base_conditional_velocity: np.ndarray,
+    base_unconditional_velocity: np.ndarray,
+    controlled_conditional_velocity: np.ndarray,
+    controlled_unconditional_velocity: np.ndarray,
+) -> SymmetricPhaseProjectionSelection:
+    canonical_conditional_delta = np.multiply(
+        np.subtract(
+            controlled_conditional_velocity,
+            base_conditional_velocity,
+            dtype=np.float32,
+        ),
+        np.float32(measurement.signed_coefficient),
+        dtype=np.float32,
+    )
+    canonical_unconditional_delta = np.multiply(
+        np.subtract(
+            controlled_unconditional_velocity,
+            base_unconditional_velocity,
+            dtype=np.float32,
+        ),
+        np.float32(measurement.signed_coefficient),
+        dtype=np.float32,
+    )
+
+    def one(sign: int) -> PhaseProjectionSignEvaluation:
+        pair = controlled_pair
+        if sign != measurement.signed_coefficient:
+            pair = validate_cfg_rope_application_pair(
+                replace(controlled_pair.conditional, signed_coefficient=sign),
+                replace(controlled_pair.unconditional, signed_coefficient=sign),
+            )
+        controlled_conditional = np.ascontiguousarray(
+            base_conditional_velocity
+            + np.float32(sign) * canonical_conditional_delta,
+            dtype="<f4",
+        )
+        controlled_unconditional = np.ascontiguousarray(
+            base_unconditional_velocity
+            + np.float32(sign) * canonical_unconditional_delta,
+            dtype="<f4",
+        )
+        return evaluate_phase_projection_sign_numpy(
+            base_pair=base_pair,
+            controlled_pair=pair,
+            phase_projection_scale=1.0,
+            base_conditional_velocity=base_conditional_velocity,
+            base_unconditional_velocity=base_unconditional_velocity,
+            controlled_conditional_velocity=controlled_conditional,
+            controlled_unconditional_velocity=controlled_unconditional,
+            scheduler_sample=measurement.scheduler_sample,
+            delta_sigma=measurement.delta_sigma,
+            cumulative_reference_energy_before_step=(
+                measurement.cumulative_reference_energy_before_step
+            ),
+            cumulative_control_energy_before_step=(
+                measurement.cumulative_control_energy_before_step
+            ),
+            remaining_step_count=measurement.remaining_step_count,
+        )
+
+    return select_symmetric_phase_projection(
+        lambda scale: (one(1), one(-1))
+    )
 
 
 def _fake_governed_steps(
@@ -787,8 +897,25 @@ def _fake_governed_steps(
                 measurement,
                 base_pair=base_pair,
                 controlled_pair=controlled_pair,
+                base_conditional_velocity=base_conditional,
+                base_unconditional_velocity=base_unconditional,
+                controlled_conditional_velocity=controlled_conditional,
+                controlled_unconditional_velocity=controlled_unconditional,
                 conditional_encoder_digest="2" * 64,
                 unconditional_encoder_digest="3" * 64,
+                phase_projection=(
+                    None
+                    if coefficient == 0
+                    else _fake_phase_projection(
+                        measurement,
+                        base_pair=base_pair,
+                        controlled_pair=controlled_pair,
+                        base_conditional_velocity=base_conditional,
+                        base_unconditional_velocity=base_unconditional,
+                        controlled_conditional_velocity=controlled_conditional,
+                        controlled_unconditional_velocity=controlled_unconditional,
+                    )
+                ),
             )
         )
         cumulative_reference += measurement.reference_energy_increment
@@ -964,6 +1091,12 @@ def test_fake_patch_relation_runner_writes_8_64_8_nonformal_gate(
     assert decision["generation_record_count"] == 8
     assert decision["trajectory_step_record_count"] == 64
     assert decision["feature_record_count"] == 8
+    assert decision["patch_relation_maximum_phase_budget_radians"] == 0.015625
+    assert len(decision["patch_relation_phase_projection_selected_scales"]) == 64
+    assert (
+        len(decision["patch_relation_phase_projection_step_records_digest"])
+        == 64
+    )
     assert decision["next_double_window_gate_a_design_allowed"] is True
     assert decision["next_double_window_gate_a_execution_allowed"] is False
     assert decision["formal_result"] is False
@@ -1008,6 +1141,37 @@ def test_runtime_batch_rejects_forged_exposure_and_step_schedule(
                 measurements=(forged_measurement, *batch.measurements[1:]),
             ),
             output_root=tmp_path / "source",
+        )
+
+
+def test_runtime_batch_rejects_phase_projection_record_forgery(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _install_fake_video_reader(monkeypatch)
+    config = load_patch_relation_gate0_config()
+    plan = build_patch_relation_gate0_plan(config)
+    output = tmp_path / "source"
+    batch = _fake_patch_relation_runtime(config, plan, output)
+    active_index = 2
+    original = batch.measurements[active_index]
+    forged_step = replace(
+        original.steps[0],
+        selected_phase_projection_scale=0.5,
+        realized_phase_magnitude_radians=PHASE_BUDGET_RADIANS * 0.5,
+    )
+    forged_measurement = replace(
+        original,
+        steps=(forged_step, *original.steps[1:]),
+    )
+    measurements = list(batch.measurements)
+    measurements[active_index] = forged_measurement
+    with pytest.raises(ValueError, match="seal"):
+        _validate_runtime_batch(
+            config,
+            plan,
+            replace(batch, measurements=tuple(measurements)),
+            output_root=output,
         )
 
 

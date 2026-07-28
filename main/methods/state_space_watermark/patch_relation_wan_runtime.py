@@ -14,15 +14,18 @@ or turns caller-provided scheduler provenance into a governed runtime record.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from hashlib import sha256
 import math
 import re
 from types import TracebackType
-from typing import Any
+from typing import Any, Callable
+import weakref
 
 import numpy as np
 
 from main.methods.state_space_watermark.patch_relation_carrier import (
     PublicPatchRelationDescriptor,
+    PHASE_BUDGET_RADIANS,
     ROPE_TUPLE_SHAPE,
     apply_wan_rotary_phase_numpy,
     build_relation_phase_delta,
@@ -42,10 +45,13 @@ LAMBDA_MAX = 0.12
 VELOCITY_NORM_RATIO_BUDGET = 0.02
 FLOW_ENERGY_BUDGET_RATIO = 0.000015
 MINIMUM_DIRECTION_COSINE = 0.999
+PHASE_PROJECTION_MAX_ATTEMPTS = 4
+PHASE_PROJECTION_SAFETY_FACTOR = 0.9
+PHASE_PROJECTION_MINIMUM_NONZERO_SCALE = 0.000001
 EXPECTED_ROPE_CALLS_PER_BRANCH = 1
 CFG_BRANCH_ORDER = ("conditional", "unconditional")
 RUNTIME_ADAPTER_PROTOCOL_DIGEST = (
-    "94830cb12359b8edc745bef37cfb85e46d9bf5f0e0443298d6833632671f8f77"
+    "dfd9d80274f028316eab306c80cb0d2cebfdfe33abd571f0bdb3ecb450d589f1"
 )
 
 _LOWER_HEX_64 = re.compile(r"[0-9a-f]{64}\Z")
@@ -63,6 +69,9 @@ class WanRopeBranchApplicationRecord:
     cfg_branch_role: str
     cfg_branch_order_index: int
     signed_coefficient: int
+    maximum_phase_budget_radians: float
+    phase_projection_scale: float
+    realized_phase_magnitude_radians: float
     input_binding_digest: str
     descriptor_digest: str
     rope_call_attempt_count: int
@@ -84,6 +93,9 @@ class CfgRopeApplicationPair:
     step_index: int
     control_role: str
     signed_coefficient: int
+    maximum_phase_budget_radians: float
+    phase_projection_scale: float
+    realized_phase_magnitude_radians: float
     input_binding_digest: str
     descriptor_digest: str
     conditional: WanRopeBranchApplicationRecord
@@ -92,7 +104,7 @@ class CfgRopeApplicationPair:
     execution_evidence_allowed: bool = False
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, eq=False)
 class CfgStateUpdateMeasurement:
     """Strict measurement bound to the scheduler's actual FP32 next state."""
 
@@ -100,6 +112,8 @@ class CfgStateUpdateMeasurement:
     step_index: int
     signed_coefficient: int
     input_binding_digest: str
+    base_raw_velocity_digest: str
+    controlled_raw_velocity_digest: str
     base_cfg_velocity: np.ndarray
     controlled_cfg_velocity: np.ndarray
     intended_delta_velocity: np.ndarray
@@ -142,6 +156,367 @@ class CfgStateUpdateMeasurement:
     stage_progression_allowed: bool = False
 
 
+@dataclass(frozen=True)
+class PhaseProjectionSignEvaluation:
+    """Validated scalar summary of one raw-array candidate evaluation."""
+
+    probe_id: str
+    step_index: int
+    signed_coefficient: int
+    input_binding_digest: str
+    descriptor_digest: str
+    candidate_context_digest: str
+    controlled_transition_digest: str
+    base_raw_velocity_digest: str
+    base_cfg_velocity_digest: str
+    controlled_cfg_velocity_digest: str
+    scheduler_sample_digest: str
+    actual_state_update_digest: str
+    base_pair: CfgRopeApplicationPair
+    controlled_pair: CfgRopeApplicationPair
+    phase_projection_scale: float
+    delta_sigma: float
+    cumulative_reference_energy_before_step: float
+    cumulative_control_energy_before_step: float
+    remaining_step_count: int
+    base_velocity_norm: float
+    actual_delta_norm: float
+    state_update_delta_norm: float
+    norm_budget: float
+    reference_energy_increment: float
+    projected_reference_energy: float
+    total_flow_energy_budget: float
+    energy_increment: float
+    remaining_flow_energy: float
+    direction_cosine: float | None
+    signed_state_update_exposure: float
+    norm_guard_passed: bool
+    energy_guard_passed: bool
+    direction_guard_passed: bool
+    feasible: bool
+
+
+@dataclass(frozen=True)
+class SymmetricPhaseProjectionSelection:
+    """One deterministic common scale selected from the worst ± response."""
+
+    selected_scale: float
+    realized_phase_magnitude_radians: float
+    attempt_count: int
+    backoff_count: int
+    initial_positive: PhaseProjectionSignEvaluation
+    initial_negative: PhaseProjectionSignEvaluation
+    final_positive: PhaseProjectionSignEvaluation
+    final_negative: PhaseProjectionSignEvaluation
+
+
+_ISSUED_PHASE_PROJECTION_SELECTIONS: weakref.WeakKeyDictionary[
+    SymmetricPhaseProjectionSelection,
+    tuple[Any, ...],
+] = weakref.WeakKeyDictionary()
+_ISSUED_PHASE_PROJECTION_EVALUATIONS: weakref.WeakKeyDictionary[
+    PhaseProjectionSignEvaluation,
+    tuple[Any, ...],
+] = weakref.WeakKeyDictionary()
+_ISSUED_CFG_STATE_UPDATE_MEASUREMENTS: weakref.WeakKeyDictionary[
+    CfgStateUpdateMeasurement,
+    tuple[Any, ...],
+] = weakref.WeakKeyDictionary()
+
+
+def _float32_array_digest(*items: tuple[str, np.ndarray]) -> str:
+    digest = sha256()
+    for label, value in items:
+        array = _require_velocity(value, label)
+        digest.update(label.encode("utf-8"))
+        digest.update(b"\0")
+        digest.update(str(tuple(array.shape)).encode("ascii"))
+        digest.update(b"\0")
+        digest.update(array.tobytes(order="C"))
+    return digest.hexdigest()
+
+
+def _phase_projection_candidate_context_digest(
+    *,
+    base_pair: CfgRopeApplicationPair,
+    base_conditional_velocity: np.ndarray,
+    base_unconditional_velocity: np.ndarray,
+    scheduler_sample: np.ndarray,
+    delta_sigma: float,
+    cumulative_reference_energy_before_step: float,
+    cumulative_control_energy_before_step: float,
+    remaining_step_count: int,
+) -> str:
+    return sha256(
+        (
+            f"{base_pair.probe_id}\0{base_pair.step_index}\0"
+            f"{base_pair.input_binding_digest}\0{base_pair.descriptor_digest}\0"
+            f"{float(np.float32(delta_sigma))!r}\0"
+            f"{float(cumulative_reference_energy_before_step)!r}\0"
+            f"{float(cumulative_control_energy_before_step)!r}\0"
+            f"{remaining_step_count}\0"
+            + _float32_array_digest(
+                (
+                    "projection base conditional velocity",
+                    base_conditional_velocity,
+                ),
+                (
+                    "projection base unconditional velocity",
+                    base_unconditional_velocity,
+                ),
+                ("projection scheduler sample", scheduler_sample),
+            )
+        ).encode("utf-8")
+    ).hexdigest()
+
+
+def _cfg_state_update_measurement_payload(
+    measurement: CfgStateUpdateMeasurement,
+) -> tuple[Any, ...]:
+    payload: list[Any] = []
+    for field_name in measurement.__dataclass_fields__:
+        value = getattr(measurement, field_name)
+        if isinstance(value, np.ndarray):
+            payload.append(
+                (
+                    field_name,
+                    value.dtype.str,
+                    tuple(value.shape),
+                    sha256(value.tobytes(order="C")).hexdigest(),
+                )
+            )
+        else:
+            payload.append((field_name, value))
+    return tuple(payload)
+
+
+def _issue_cfg_state_update_measurement(
+    measurement: CfgStateUpdateMeasurement,
+) -> CfgStateUpdateMeasurement:
+    _ISSUED_CFG_STATE_UPDATE_MEASUREMENTS[
+        measurement
+    ] = _cfg_state_update_measurement_payload(measurement)
+    return measurement
+
+
+def _require_issued_cfg_state_update_measurement(
+    measurement: CfgStateUpdateMeasurement,
+) -> CfgStateUpdateMeasurement:
+    if not isinstance(measurement, CfgStateUpdateMeasurement):
+        raise TypeError("CFG state-update measurement 类型不匹配")
+    payload = _ISSUED_CFG_STATE_UPDATE_MEASUREMENTS.get(measurement)
+    if (
+        payload is None
+        or payload != _cfg_state_update_measurement_payload(measurement)
+    ):
+        raise ValueError("CFG state-update measurement 未经raw-array factory签发")
+    return measurement
+
+
+def _phase_projection_evaluation_payload(
+    evaluation: PhaseProjectionSignEvaluation,
+) -> tuple[Any, ...]:
+    return tuple(
+        getattr(evaluation, field_name)
+        for field_name in evaluation.__dataclass_fields__
+    )
+
+
+def require_validated_phase_projection_sign_evaluation(
+    evaluation: PhaseProjectionSignEvaluation,
+) -> PhaseProjectionSignEvaluation:
+    """Require a capability issued only after raw transition validation."""
+
+    if not isinstance(evaluation, PhaseProjectionSignEvaluation):
+        raise TypeError("phase projection sign evaluation 类型不匹配")
+    payload = _ISSUED_PHASE_PROJECTION_EVALUATIONS.get(evaluation)
+    if (
+        payload is None
+        or payload != _phase_projection_evaluation_payload(evaluation)
+    ):
+        raise ValueError("phase projection sign evaluation 未经raw-array验证")
+    return evaluation
+
+
+def _phase_projection_selection_payload(
+    selection: SymmetricPhaseProjectionSelection,
+) -> tuple[Any, ...]:
+    return (
+        selection.selected_scale,
+        selection.realized_phase_magnitude_radians,
+        selection.attempt_count,
+        selection.backoff_count,
+        selection.initial_positive,
+        selection.initial_negative,
+        selection.final_positive,
+        selection.final_negative,
+    )
+
+
+def require_validated_symmetric_phase_projection(
+    selection: SymmetricPhaseProjectionSelection,
+) -> SymmetricPhaseProjectionSelection:
+    """Require the in-process capability issued by the bounded search."""
+
+    if not isinstance(selection, SymmetricPhaseProjectionSelection):
+        raise TypeError("phase projection selection 类型不匹配")
+    payload = _ISSUED_PHASE_PROJECTION_SELECTIONS.get(selection)
+    if (
+        payload is None
+        or payload != _phase_projection_selection_payload(selection)
+    ):
+        raise ValueError("phase projection selection 未经真实candidate search验证")
+    return selection
+
+
+def validate_selected_phase_projection_transition(
+    selection: SymmetricPhaseProjectionSelection,
+    measurement: CfgStateUpdateMeasurement,
+    *,
+    base_pair: CfgRopeApplicationPair,
+    controlled_pair: CfgRopeApplicationPair,
+    base_conditional_velocity: np.ndarray,
+    base_unconditional_velocity: np.ndarray,
+    controlled_conditional_velocity: np.ndarray,
+    controlled_unconditional_velocity: np.ndarray,
+) -> PhaseProjectionSignEvaluation:
+    """Bind the selected raw four-branch evaluation to the real transition."""
+
+    require_validated_symmetric_phase_projection(selection)
+    if measurement.signed_coefficient == 1:
+        evaluation = selection.final_positive
+    elif measurement.signed_coefficient == -1:
+        evaluation = selection.final_negative
+    else:
+        raise ValueError("phase projection transition 只允许active正负符号")
+    require_validated_phase_projection_sign_evaluation(evaluation)
+    base_cond = _require_velocity(
+        base_conditional_velocity,
+        "selected base conditional velocity",
+    )
+    base_uncond = _require_velocity(
+        base_unconditional_velocity,
+        "selected base unconditional velocity",
+    )
+    controlled_cond = _require_velocity(
+        controlled_conditional_velocity,
+        "selected controlled conditional velocity",
+    )
+    controlled_uncond = _require_velocity(
+        controlled_unconditional_velocity,
+        "selected controlled unconditional velocity",
+    )
+    if (
+        evaluation.base_pair != base_pair
+        or evaluation.controlled_pair != controlled_pair
+        or evaluation.probe_id != measurement.probe_id
+        or evaluation.step_index != measurement.step_index
+        or evaluation.signed_coefficient != measurement.signed_coefficient
+        or evaluation.input_binding_digest
+        != measurement.input_binding_digest
+        or evaluation.phase_projection_scale != selection.selected_scale
+        or evaluation.feasible is not True
+    ):
+        raise ValueError("selected phase candidate 与scheduler transition身份不一致")
+    raw_digest_fields = (
+        (
+            "base_raw_velocity_digest",
+            _float32_array_digest(
+                ("projection base conditional velocity", base_cond),
+                ("projection base unconditional velocity", base_uncond),
+            ),
+        ),
+        (
+            "controlled_transition_digest",
+            _float32_array_digest(
+                (
+                    "projection controlled conditional velocity",
+                    controlled_cond,
+                ),
+                (
+                    "projection controlled unconditional velocity",
+                    controlled_uncond,
+                ),
+            ),
+        ),
+        (
+            "candidate_context_digest",
+            _phase_projection_candidate_context_digest(
+                base_pair=base_pair,
+                base_conditional_velocity=base_cond,
+                base_unconditional_velocity=base_uncond,
+                scheduler_sample=measurement.scheduler_sample,
+                delta_sigma=measurement.delta_sigma,
+                cumulative_reference_energy_before_step=(
+                    measurement.cumulative_reference_energy_before_step
+                ),
+                cumulative_control_energy_before_step=(
+                    measurement.cumulative_control_energy_before_step
+                ),
+                remaining_step_count=measurement.remaining_step_count,
+            ),
+        ),
+    )
+    for field_name, observed in raw_digest_fields:
+        if getattr(evaluation, field_name) != observed:
+            raise ValueError(
+                "selected phase candidate 与scheduler raw branch不一致: "
+                f"{field_name}"
+            )
+    exact_fields = (
+        "delta_sigma",
+        "cumulative_reference_energy_before_step",
+        "cumulative_control_energy_before_step",
+        "remaining_step_count",
+        "base_velocity_norm",
+        "actual_delta_norm",
+        "state_update_delta_norm",
+        "norm_budget",
+        "reference_energy_increment",
+        "projected_reference_energy",
+        "total_flow_energy_budget",
+        "energy_increment",
+        "remaining_flow_energy",
+        "direction_cosine",
+        "signed_state_update_exposure",
+        "norm_guard_passed",
+        "energy_guard_passed",
+        "direction_guard_passed",
+    )
+    for field_name in exact_fields:
+        expected = getattr(measurement, field_name)
+        if field_name == "direction_guard_passed":
+            expected = expected is True
+        if getattr(evaluation, field_name) != expected:
+            raise ValueError(
+                "selected phase candidate 与scheduler transition统计不一致: "
+                f"{field_name}"
+            )
+    digest_fields = (
+        (
+            "base_cfg_velocity_digest",
+            measurement.base_cfg_velocity,
+        ),
+        (
+            "controlled_cfg_velocity_digest",
+            measurement.controlled_cfg_velocity,
+        ),
+        ("scheduler_sample_digest", measurement.scheduler_sample),
+        (
+            "actual_state_update_digest",
+            measurement.actual_state_update_delta,
+        ),
+    )
+    for field_name, array in digest_fields:
+        observed = sha256(array.tobytes(order="C")).hexdigest()
+        if getattr(evaluation, field_name) != observed:
+            raise ValueError(
+                "selected phase candidate 与scheduler transition数组不一致: "
+                f"{field_name}"
+            )
+    return evaluation
+
+
 class PatchRelationRuntimeGuardError(RuntimeError):
     """Fail closed with scalar-only diagnostics."""
 
@@ -172,6 +547,25 @@ def _require_signed_coefficient(value: int) -> int:
     if type(value) is not int or value not in (-1, 0, 1):
         raise ValueError("signed_coefficient 只允许 -1/0/+1")
     return value
+
+
+def _require_phase_projection_scale(
+    value: float,
+    *,
+    signed_coefficient: int,
+) -> float:
+    scale = float(value)
+    if (
+        not math.isfinite(scale)
+        or scale < 0.0
+        or scale > 1.0
+        or (
+            signed_coefficient != 0
+            and scale < PHASE_PROJECTION_MINIMUM_NONZERO_SCALE
+        )
+    ):
+        raise ValueError("phase projection scale 越界或低于冻结非零下限")
+    return scale
 
 
 def _import_torch() -> Any:
@@ -269,6 +663,7 @@ def apply_wan_rotary_phase_runtime(
     *,
     descriptor: PublicPatchRelationDescriptor,
     signed_coefficient: int,
+    phase_projection_scale: float = 1.0,
 ) -> tuple[Any, Any]:
     """Apply the frozen core phase on NumPy fakes or real torch tensors.
 
@@ -281,6 +676,10 @@ def apply_wan_rotary_phase_runtime(
 
     validate_public_patch_relation_descriptor(descriptor)
     coefficient = _require_signed_coefficient(signed_coefficient)
+    scale = _require_phase_projection_scale(
+        phase_projection_scale,
+        signed_coefficient=coefficient,
+    )
     if isinstance(freqs_cos, np.ndarray) or isinstance(freqs_sin, np.ndarray):
         if not isinstance(freqs_cos, np.ndarray) or not isinstance(
             freqs_sin, np.ndarray
@@ -304,6 +703,7 @@ def apply_wan_rotary_phase_runtime(
             np.ascontiguousarray(sine, dtype="<f8"),
             descriptor=descriptor,
             signed_coefficient=coefficient,
+            phase_projection_scale=scale,
         )
         return (
             np.ascontiguousarray(shifted[0], dtype="<f4"),
@@ -330,6 +730,7 @@ def apply_wan_rotary_phase_runtime(
     phase_delta = build_relation_phase_delta(
         descriptor,
         signed_coefficient=coefficient,
+        phase_projection_scale=scale,
     )
     active_token_indices = np.flatnonzero(phase_delta[0, :, 0, 0])
     if active_token_indices.size != 6:
@@ -387,6 +788,7 @@ class ScopedWanRopeOutputAdapter:
         *,
         descriptor: PublicPatchRelationDescriptor,
         signed_coefficient: int,
+        phase_projection_scale: float = 1.0,
         probe_id: str,
         step_index: int,
         control_role: str,
@@ -398,6 +800,10 @@ class ScopedWanRopeOutputAdapter:
         self._descriptor = descriptor
         self._signed_coefficient = _require_signed_coefficient(
             signed_coefficient
+        )
+        self._phase_projection_scale = _require_phase_projection_scale(
+            phase_projection_scale,
+            signed_coefficient=self._signed_coefficient,
         )
         self._probe_id = _require_probe_id(probe_id)
         if type(step_index) is not int or not 0 <= step_index < 8:
@@ -465,6 +871,7 @@ class ScopedWanRopeOutputAdapter:
                 result[1],
                 descriptor=self._descriptor,
                 signed_coefficient=self._signed_coefficient,
+                phase_projection_scale=self._phase_projection_scale,
             )
             self._successful_call_count += 1
             if self._signed_coefficient == 0:
@@ -561,6 +968,13 @@ class ScopedWanRopeOutputAdapter:
                 self._cfg_branch_role
             ),
             signed_coefficient=self._signed_coefficient,
+            maximum_phase_budget_radians=PHASE_BUDGET_RADIANS,
+            phase_projection_scale=self._phase_projection_scale,
+            realized_phase_magnitude_radians=(
+                0.0
+                if self._signed_coefficient == 0
+                else PHASE_BUDGET_RADIANS * self._phase_projection_scale
+            ),
             input_binding_digest=self._input_binding_digest,
             descriptor_digest=self._descriptor.descriptor_digest,
             rope_call_attempt_count=self._attempted_call_count,
@@ -607,6 +1021,22 @@ def validate_cfg_rope_application_pair(
             or record.clean_exact_noop
             is not (record.signed_coefficient == 0)
             or record.descriptor_digest != expected_descriptor_digest
+            or record.maximum_phase_budget_radians != PHASE_BUDGET_RADIANS
+            or (
+                record.signed_coefficient == 0
+                and record.phase_projection_scale != 1.0
+            )
+            or record.phase_projection_scale
+            != _require_phase_projection_scale(
+                record.phase_projection_scale,
+                signed_coefficient=record.signed_coefficient,
+            )
+            or record.realized_phase_magnitude_radians
+            != (
+                0.0
+                if record.signed_coefficient == 0
+                else PHASE_BUDGET_RADIANS * record.phase_projection_scale
+            )
         ):
             raise ValueError("CFG RoPE branch record identity/layout 不匹配")
     if (
@@ -621,6 +1051,9 @@ def validate_cfg_rope_application_pair(
         "step_index",
         "control_role",
         "signed_coefficient",
+        "maximum_phase_budget_radians",
+        "phase_projection_scale",
+        "realized_phase_magnitude_radians",
         "input_binding_digest",
         "descriptor_digest",
         "clean_exact_noop",
@@ -640,6 +1073,11 @@ def validate_cfg_rope_application_pair(
         step_index=conditional.step_index,
         control_role=conditional.control_role,
         signed_coefficient=conditional.signed_coefficient,
+        maximum_phase_budget_radians=conditional.maximum_phase_budget_radians,
+        phase_projection_scale=conditional.phase_projection_scale,
+        realized_phase_magnitude_radians=(
+            conditional.realized_phase_magnitude_radians
+        ),
         input_binding_digest=conditional.input_binding_digest,
         descriptor_digest=conditional.descriptor_digest,
         conditional=conditional,
@@ -780,6 +1218,14 @@ def measure_cfg_state_update_numpy(
         controlled_unconditional_velocity,
         "controlled unconditional velocity",
     )
+    base_raw_velocity_digest = _float32_array_digest(
+        ("measurement base conditional velocity", base_cond),
+        ("measurement base unconditional velocity", base_uncond),
+    )
+    controlled_raw_velocity_digest = _float32_array_digest(
+        ("measurement controlled conditional velocity", controlled_cond),
+        ("measurement controlled unconditional velocity", controlled_uncond),
+    )
     base_cfg = _cfg_combine(base_cond, base_uncond)
     controlled_cfg = _cfg_combine(controlled_cond, controlled_uncond)
     consumed_cfg = _require_velocity(
@@ -905,11 +1351,13 @@ def measure_cfg_state_update_numpy(
                     "step_index": base_pair.step_index,
                 }
             )
-        return CfgStateUpdateMeasurement(
+        return _issue_cfg_state_update_measurement(CfgStateUpdateMeasurement(
             probe_id=base_pair.probe_id,
             step_index=base_pair.step_index,
             signed_coefficient=0,
             input_binding_digest=base_pair.input_binding_digest,
+            base_raw_velocity_digest=base_raw_velocity_digest,
+            controlled_raw_velocity_digest=controlled_raw_velocity_digest,
             base_cfg_velocity=base_cfg,
             controlled_cfg_velocity=controlled_cfg,
             intended_delta_velocity=intended_delta,
@@ -946,7 +1394,7 @@ def measure_cfg_state_update_numpy(
             energy_guard_passed=True,
             direction_guard_passed=None,
             clean_exact_noop=True,
-        )
+        ))
 
     if base_norm <= 0.0 or intended_norm <= 0.0 or actual_norm <= 0.0:
         raise PatchRelationRuntimeGuardError(
@@ -980,24 +1428,37 @@ def measure_cfg_state_update_numpy(
         raise PatchRelationRuntimeGuardError(
             {
                 "actual_delta_norm": actual_norm,
+                "base_velocity_norm": base_norm,
+                "cumulative_control_energy_before_step": cumulative_control,
+                "cumulative_reference_energy_before_step": cumulative_reference,
                 "delta_sigma": interval,
                 "direction_cosine": direction_cosine,
                 "direction_guard_passed": direction_guard,
                 "energy_guard_passed": energy_guard,
                 "energy_increment": energy_increment,
+                "projected_reference_energy": projected_reference,
+                "reference_energy_increment": reference_increment,
+                "remaining_step_count": remaining_step_count,
                 "norm_budget": norm_budget,
                 "norm_guard_passed": norm_guard,
                 "probe_id": base_pair.probe_id,
                 "remaining_flow_energy": remaining,
+                "signed_state_update_exposure": (
+                    float(coefficient) * state_update_norm
+                ),
+                "state_update_delta_norm": state_update_norm,
                 "step_index": base_pair.step_index,
+                "total_flow_energy_budget": total_flow_energy_budget,
             }
         )
     signed_exposure = float(coefficient) * state_update_norm
-    return CfgStateUpdateMeasurement(
+    return _issue_cfg_state_update_measurement(CfgStateUpdateMeasurement(
         probe_id=base_pair.probe_id,
         step_index=base_pair.step_index,
         signed_coefficient=coefficient,
         input_binding_digest=base_pair.input_binding_digest,
+        base_raw_velocity_digest=base_raw_velocity_digest,
+        controlled_raw_velocity_digest=controlled_raw_velocity_digest,
         base_cfg_velocity=base_cfg,
         controlled_cfg_velocity=controlled_cfg,
         intended_delta_velocity=intended_delta,
@@ -1034,6 +1495,455 @@ def measure_cfg_state_update_numpy(
         energy_guard_passed=energy_guard,
         direction_guard_passed=direction_guard,
         clean_exact_noop=False,
+    ))
+
+
+def evaluate_phase_projection_sign_numpy(
+    *,
+    base_pair: CfgRopeApplicationPair,
+    controlled_pair: CfgRopeApplicationPair,
+    phase_projection_scale: float,
+    base_conditional_velocity: np.ndarray,
+    base_unconditional_velocity: np.ndarray,
+    controlled_conditional_velocity: np.ndarray,
+    controlled_unconditional_velocity: np.ndarray,
+    scheduler_sample: np.ndarray,
+    delta_sigma: float,
+    cumulative_reference_energy_before_step: float,
+    cumulative_control_energy_before_step: float,
+    remaining_step_count: int,
+) -> PhaseProjectionSignEvaluation:
+    """Validate one raw-array re-forward without advancing a scheduler.
+
+    The returned object is an in-process consistency capability.  It is not a
+    cryptographic authentication primitive, but callers cannot construct or
+    replace it from scalar summaries alone.
+    """
+
+    coefficient = _require_signed_coefficient(
+        controlled_pair.signed_coefficient
+    )
+    if coefficient == 0:
+        raise ValueError("phase projection candidate 只允许active正负符号")
+    scale = _require_phase_projection_scale(
+        phase_projection_scale,
+        signed_coefficient=coefficient,
+    )
+    if (
+        controlled_pair.phase_projection_scale != scale
+        or base_pair.phase_projection_scale != 1.0
+    ):
+        raise ValueError("phase projection candidate pair scale 不匹配")
+    base_cond = _require_velocity(
+        base_conditional_velocity,
+        "projection base conditional velocity",
+    )
+    base_uncond = _require_velocity(
+        base_unconditional_velocity,
+        "projection base unconditional velocity",
+    )
+    controlled_cond = _require_velocity(
+        controlled_conditional_velocity,
+        "projection controlled conditional velocity",
+    )
+    controlled_uncond = _require_velocity(
+        controlled_unconditional_velocity,
+        "projection controlled unconditional velocity",
+    )
+    sample = _require_velocity(scheduler_sample, "projection scheduler sample")
+    interval = float(np.float32(delta_sigma))
+    context_digest = _phase_projection_candidate_context_digest(
+        base_pair=base_pair,
+        base_conditional_velocity=base_cond,
+        base_unconditional_velocity=base_uncond,
+        scheduler_sample=sample,
+        delta_sigma=interval,
+        cumulative_reference_energy_before_step=(
+            cumulative_reference_energy_before_step
+        ),
+        cumulative_control_energy_before_step=(
+            cumulative_control_energy_before_step
+        ),
+        remaining_step_count=remaining_step_count,
+    )
+    controlled_transition_digest = _float32_array_digest(
+        ("projection controlled conditional velocity", controlled_cond),
+        ("projection controlled unconditional velocity", controlled_uncond),
+    )
+    base_raw_velocity_digest = _float32_array_digest(
+        ("projection base conditional velocity", base_cond),
+        ("projection base unconditional velocity", base_uncond),
+    )
+    base_cfg = _cfg_combine(base_cond, base_uncond)
+    controlled_cfg = _cfg_combine(controlled_cond, controlled_uncond)
+    base_next = np.ascontiguousarray(
+        np.add(
+            sample,
+            np.multiply(base_cfg, np.float32(interval), dtype=np.float32),
+            dtype=np.float32,
+        ),
+        dtype="<f4",
+    )
+    controlled_next = np.ascontiguousarray(
+        np.add(
+            sample,
+            np.multiply(
+                controlled_cfg,
+                np.float32(interval),
+                dtype=np.float32,
+            ),
+            dtype=np.float32,
+        ),
+        dtype="<f4",
+    )
+    actual_state_update = np.ascontiguousarray(
+        np.subtract(controlled_next, base_next, dtype=np.float32),
+        dtype="<f4",
+    )
+    base_cfg_digest = sha256(base_cfg.tobytes(order="C")).hexdigest()
+    controlled_cfg_digest = sha256(
+        controlled_cfg.tobytes(order="C")
+    ).hexdigest()
+    scheduler_sample_digest = sha256(sample.tobytes(order="C")).hexdigest()
+    actual_state_update_digest = sha256(
+        actual_state_update.tobytes(order="C")
+    ).hexdigest()
+    try:
+        measurement = measure_cfg_state_update_numpy(
+            base_pair=base_pair,
+            controlled_pair=controlled_pair,
+            base_conditional_velocity=base_cond,
+            base_unconditional_velocity=base_uncond,
+            controlled_conditional_velocity=controlled_cond,
+            controlled_unconditional_velocity=controlled_uncond,
+            scheduler_consumed_velocity=controlled_cfg,
+            scheduler_sample=sample,
+            scheduler_base_next_state=base_next,
+            scheduler_controlled_next_state=controlled_next,
+            delta_sigma=interval,
+            cumulative_reference_energy_before_step=(
+                cumulative_reference_energy_before_step
+            ),
+            cumulative_control_energy_before_step=(
+                cumulative_control_energy_before_step
+            ),
+            remaining_step_count=remaining_step_count,
+        )
+    except PatchRelationRuntimeGuardError as error:
+        diagnostics = error.diagnostics
+        actual_delta_norm = float(diagnostics.get("actual_delta_norm", 0.0))
+        norm_budget = float(diagnostics.get("norm_budget", 0.0))
+        energy_increment = float(diagnostics.get("energy_increment", math.inf))
+        remaining = float(diagnostics.get("remaining_flow_energy", 0.0))
+        direction = diagnostics.get("direction_cosine")
+        direction_cosine = None if direction is None else float(direction)
+        scalars = (
+            actual_delta_norm,
+            norm_budget,
+            energy_increment,
+            remaining,
+        )
+        if not all(math.isfinite(value) for value in scalars):
+            raise PatchRelationRuntimeGuardError(
+                {
+                    "phase_projection_candidate_nonfinite": True,
+                    "phase_projection_scale": scale,
+                    "signed_coefficient": coefficient,
+                }
+            ) from error
+        evaluation = PhaseProjectionSignEvaluation(
+            probe_id=base_pair.probe_id,
+            step_index=base_pair.step_index,
+            signed_coefficient=coefficient,
+            input_binding_digest=base_pair.input_binding_digest,
+            descriptor_digest=base_pair.descriptor_digest,
+            candidate_context_digest=context_digest,
+            controlled_transition_digest=controlled_transition_digest,
+            base_raw_velocity_digest=base_raw_velocity_digest,
+            base_cfg_velocity_digest=base_cfg_digest,
+            controlled_cfg_velocity_digest=controlled_cfg_digest,
+            scheduler_sample_digest=scheduler_sample_digest,
+            actual_state_update_digest=actual_state_update_digest,
+            base_pair=base_pair,
+            controlled_pair=controlled_pair,
+            phase_projection_scale=scale,
+            delta_sigma=float(diagnostics["delta_sigma"]),
+            cumulative_reference_energy_before_step=float(
+                diagnostics["cumulative_reference_energy_before_step"]
+            ),
+            cumulative_control_energy_before_step=float(
+                diagnostics["cumulative_control_energy_before_step"]
+            ),
+            remaining_step_count=int(diagnostics["remaining_step_count"]),
+            base_velocity_norm=float(diagnostics["base_velocity_norm"]),
+            actual_delta_norm=actual_delta_norm,
+            state_update_delta_norm=float(
+                diagnostics["state_update_delta_norm"]
+            ),
+            norm_budget=norm_budget,
+            reference_energy_increment=float(
+                diagnostics["reference_energy_increment"]
+            ),
+            projected_reference_energy=float(
+                diagnostics["projected_reference_energy"]
+            ),
+            total_flow_energy_budget=float(
+                diagnostics["total_flow_energy_budget"]
+            ),
+            energy_increment=energy_increment,
+            remaining_flow_energy=remaining,
+            direction_cosine=direction_cosine,
+            signed_state_update_exposure=float(
+                diagnostics["signed_state_update_exposure"]
+            ),
+            norm_guard_passed=bool(
+                diagnostics.get("norm_guard_passed", False)
+            ),
+            energy_guard_passed=bool(
+                diagnostics.get("energy_guard_passed", False)
+            ),
+            direction_guard_passed=bool(
+                diagnostics.get("direction_guard_passed", False)
+            ),
+            feasible=False,
+        )
+        _ISSUED_PHASE_PROJECTION_EVALUATIONS[
+            evaluation
+        ] = _phase_projection_evaluation_payload(evaluation)
+        return evaluation
+    evaluation = PhaseProjectionSignEvaluation(
+        probe_id=measurement.probe_id,
+        step_index=measurement.step_index,
+        signed_coefficient=coefficient,
+        input_binding_digest=measurement.input_binding_digest,
+        descriptor_digest=controlled_pair.descriptor_digest,
+        candidate_context_digest=context_digest,
+        controlled_transition_digest=controlled_transition_digest,
+        base_raw_velocity_digest=base_raw_velocity_digest,
+        base_cfg_velocity_digest=base_cfg_digest,
+        controlled_cfg_velocity_digest=controlled_cfg_digest,
+        scheduler_sample_digest=scheduler_sample_digest,
+        actual_state_update_digest=actual_state_update_digest,
+        base_pair=base_pair,
+        controlled_pair=controlled_pair,
+        phase_projection_scale=scale,
+        delta_sigma=measurement.delta_sigma,
+        cumulative_reference_energy_before_step=(
+            measurement.cumulative_reference_energy_before_step
+        ),
+        cumulative_control_energy_before_step=(
+            measurement.cumulative_control_energy_before_step
+        ),
+        remaining_step_count=measurement.remaining_step_count,
+        base_velocity_norm=measurement.base_velocity_norm,
+        actual_delta_norm=measurement.actual_delta_norm,
+        state_update_delta_norm=measurement.state_update_delta_norm,
+        norm_budget=measurement.norm_budget,
+        reference_energy_increment=measurement.reference_energy_increment,
+        projected_reference_energy=measurement.projected_reference_energy,
+        total_flow_energy_budget=measurement.total_flow_energy_budget,
+        energy_increment=measurement.energy_increment,
+        remaining_flow_energy=measurement.remaining_flow_energy,
+        direction_cosine=measurement.direction_cosine,
+        signed_state_update_exposure=(
+            measurement.signed_state_update_exposure
+        ),
+        norm_guard_passed=measurement.norm_guard_passed,
+        energy_guard_passed=measurement.energy_guard_passed,
+        direction_guard_passed=measurement.direction_guard_passed is True,
+        feasible=True,
+    )
+    _ISSUED_PHASE_PROJECTION_EVALUATIONS[
+        evaluation
+    ] = _phase_projection_evaluation_payload(evaluation)
+    return evaluation
+
+
+def select_symmetric_phase_projection(
+    evaluator: Callable[
+        [float],
+        tuple[PhaseProjectionSignEvaluation, PhaseProjectionSignEvaluation],
+    ],
+) -> SymmetricPhaseProjectionSelection:
+    """Select one common scale from real positive/negative re-forwards.
+
+    There is no refinement or result-dependent sweep.  The first candidate is
+    the frozen maximum phase.  A failed norm/energy candidate deterministically
+    proposes one smaller scale from its worst observed ratios and the frozen
+    safety factor.  Direction or non-finite failure stops immediately.
+    """
+
+    if not callable(evaluator):
+        raise TypeError("phase projection evaluator 必须可调用")
+    shared_context_fields = (
+        "probe_id",
+        "step_index",
+        "input_binding_digest",
+        "descriptor_digest",
+        "candidate_context_digest",
+        "base_pair",
+        "delta_sigma",
+        "cumulative_reference_energy_before_step",
+        "cumulative_control_energy_before_step",
+        "remaining_step_count",
+        "base_velocity_norm",
+        "norm_budget",
+        "reference_energy_increment",
+        "projected_reference_energy",
+        "total_flow_energy_budget",
+        "remaining_flow_energy",
+        "base_raw_velocity_digest",
+        "base_cfg_velocity_digest",
+        "scheduler_sample_digest",
+    )
+    scale = 1.0
+    initial: tuple[
+        PhaseProjectionSignEvaluation,
+        PhaseProjectionSignEvaluation,
+    ] | None = None
+    final: tuple[
+        PhaseProjectionSignEvaluation,
+        PhaseProjectionSignEvaluation,
+    ] | None = None
+    attempt_count = 0
+    last_evaluated_scale: float | None = None
+    frozen_attempt_context: tuple[Any, ...] | None = None
+    for attempt_index in range(PHASE_PROJECTION_MAX_ATTEMPTS):
+        attempt_count = attempt_index + 1
+        positive, negative = evaluator(scale)
+        require_validated_phase_projection_sign_evaluation(positive)
+        require_validated_phase_projection_sign_evaluation(negative)
+        last_evaluated_scale = scale
+        if (
+            positive.signed_coefficient != 1
+            or negative.signed_coefficient != -1
+            or positive.phase_projection_scale != scale
+            or negative.phase_projection_scale != scale
+        ):
+            raise ValueError("phase projection evaluator sign/scale 不匹配")
+        if any(
+            getattr(positive, field_name) != getattr(negative, field_name)
+            for field_name in shared_context_fields
+        ):
+            raise ValueError("phase projection ±candidate context 不一致")
+        attempt_context = tuple(
+            getattr(positive, field_name)
+            for field_name in shared_context_fields
+        )
+        if frozen_attempt_context is None:
+            frozen_attempt_context = attempt_context
+        elif attempt_context != frozen_attempt_context:
+            raise ValueError(
+                "phase projection backoff attempt shared context 漂移"
+            )
+        if (
+            positive.controlled_pair.signed_coefficient != 1
+            or negative.controlled_pair.signed_coefficient != -1
+            or positive.controlled_pair.phase_projection_scale != scale
+            or negative.controlled_pair.phase_projection_scale != scale
+        ):
+            raise ValueError("phase projection controlled pair 绑定不一致")
+        evaluations = (positive, negative)
+        for evaluation in evaluations:
+            scalar_values = (
+                evaluation.actual_delta_norm,
+                evaluation.norm_budget,
+                evaluation.energy_increment,
+                evaluation.remaining_flow_energy,
+            )
+            if (
+                not all(math.isfinite(value) for value in scalar_values)
+                or evaluation.actual_delta_norm <= 0.0
+                or evaluation.norm_budget <= 0.0
+                or evaluation.energy_increment <= 0.0
+                or evaluation.remaining_flow_energy < 0.0
+                or evaluation.direction_cosine is None
+                or not math.isfinite(evaluation.direction_cosine)
+                or evaluation.direction_guard_passed is not True
+                or evaluation.feasible
+                is not (
+                    evaluation.norm_guard_passed
+                    and evaluation.energy_guard_passed
+                    and evaluation.direction_guard_passed
+                )
+            ):
+                raise PatchRelationRuntimeGuardError(
+                    {
+                        "phase_projection_attempt": attempt_index + 1,
+                        "phase_projection_direction_or_nonfinite_failure": True,
+                        "phase_projection_scale": scale,
+                        "signed_coefficient": evaluation.signed_coefficient,
+                    }
+                )
+        if initial is None:
+            initial = evaluations
+        final = evaluations
+        if all(evaluation.feasible for evaluation in evaluations):
+            selection = SymmetricPhaseProjectionSelection(
+                selected_scale=scale,
+                realized_phase_magnitude_radians=(
+                    PHASE_BUDGET_RADIANS * scale
+                ),
+                attempt_count=attempt_index + 1,
+                backoff_count=attempt_index,
+                initial_positive=initial[0],
+                initial_negative=initial[1],
+                final_positive=positive,
+                final_negative=negative,
+            )
+            _ISSUED_PHASE_PROJECTION_SELECTIONS[
+                selection
+            ] = _phase_projection_selection_payload(selection)
+            return selection
+        worst_norm_ratio = max(
+            evaluation.actual_delta_norm / evaluation.norm_budget
+            for evaluation in evaluations
+        )
+        worst_energy_ratio = max(
+            (
+                math.inf
+                if evaluation.remaining_flow_energy <= 0.0
+                else evaluation.energy_increment
+                / evaluation.remaining_flow_energy
+            )
+            for evaluation in evaluations
+        )
+        limiting_factor = min(
+            1.0 / worst_norm_ratio,
+            1.0 / math.sqrt(worst_energy_ratio),
+        )
+        next_scale = float(
+            scale * limiting_factor * PHASE_PROJECTION_SAFETY_FACTOR
+        )
+        if (
+            not math.isfinite(next_scale)
+            or next_scale >= scale
+            or next_scale < PHASE_PROJECTION_MINIMUM_NONZERO_SCALE
+        ):
+            break
+        scale = next_scale
+    raise PatchRelationRuntimeGuardError(
+        {
+            "phase_projection_attempt_count": (
+                attempt_count
+            ),
+            "phase_projection_maximum_phase_radians": PHASE_BUDGET_RADIANS,
+            "phase_projection_minimum_nonzero_scale": (
+                PHASE_PROJECTION_MINIMUM_NONZERO_SCALE
+            ),
+            "phase_projection_no_feasible_nonzero_scale": True,
+            "phase_projection_last_scale": last_evaluated_scale,
+            "phase_projection_final_worst_actual_delta_norm": (
+                None
+                if final is None
+                else max(item.actual_delta_norm for item in final)
+            ),
+            "phase_projection_final_worst_energy_increment": (
+                None
+                if final is None
+                else max(item.energy_increment for item in final)
+            ),
+        }
     )
 
 
@@ -1042,26 +1952,58 @@ def validate_cfg_state_update_measurement_numpy(
     *,
     base_pair: CfgRopeApplicationPair,
     controlled_pair: CfgRopeApplicationPair,
+    base_conditional_velocity: np.ndarray,
+    base_unconditional_velocity: np.ndarray,
+    controlled_conditional_velocity: np.ndarray,
+    controlled_unconditional_velocity: np.ndarray,
 ) -> CfgStateUpdateMeasurement:
     """Rebuild every transition statistic from the retained raw FP32 arrays.
 
-    This validator intentionally routes the already-combined base/controlled
-    CFG arrays through the same measurement function as identical cond/uncond
-    branches.  That preserves the exact combined values while independently
-    rebuilding scheduler next states, velocity/state-update norms, direction,
-    energy, exposure, and guards.  A caller cannot make coordinated scalar
-    edits pass without also presenting the original transition arrays.
+    This validator consumes the still-live raw conditional/unconditional
+    branch arrays and independently rebuilds their FP32 CFG values, scheduler
+    next states, norms, direction, energy, exposure, and guards.
     """
 
-    if not isinstance(measurement, CfgStateUpdateMeasurement):
-        raise TypeError("CFG state-update measurement 类型不匹配")
+    _require_issued_cfg_state_update_measurement(measurement)
+    base_cond = _require_velocity(
+        base_conditional_velocity,
+        "measurement validation base conditional velocity",
+    )
+    base_uncond = _require_velocity(
+        base_unconditional_velocity,
+        "measurement validation base unconditional velocity",
+    )
+    controlled_cond = _require_velocity(
+        controlled_conditional_velocity,
+        "measurement validation controlled conditional velocity",
+    )
+    controlled_uncond = _require_velocity(
+        controlled_unconditional_velocity,
+        "measurement validation controlled unconditional velocity",
+    )
+    observed_base_raw_digest = _float32_array_digest(
+        ("measurement base conditional velocity", base_cond),
+        ("measurement base unconditional velocity", base_uncond),
+    )
+    observed_controlled_raw_digest = _float32_array_digest(
+        ("measurement controlled conditional velocity", controlled_cond),
+        ("measurement controlled unconditional velocity", controlled_uncond),
+    )
+    if (
+        measurement.base_raw_velocity_digest != observed_base_raw_digest
+        or measurement.controlled_raw_velocity_digest
+        != observed_controlled_raw_digest
+    ):
+        raise ValueError(
+            "CFG state-update measurement 与创建时raw branches不一致"
+        )
     rebuilt = measure_cfg_state_update_numpy(
         base_pair=base_pair,
         controlled_pair=controlled_pair,
-        base_conditional_velocity=measurement.base_cfg_velocity,
-        base_unconditional_velocity=measurement.base_cfg_velocity,
-        controlled_conditional_velocity=measurement.controlled_cfg_velocity,
-        controlled_unconditional_velocity=measurement.controlled_cfg_velocity,
+        base_conditional_velocity=base_cond,
+        base_unconditional_velocity=base_uncond,
+        controlled_conditional_velocity=controlled_cond,
+        controlled_unconditional_velocity=controlled_uncond,
         scheduler_consumed_velocity=measurement.constrained_velocity,
         scheduler_sample=measurement.scheduler_sample,
         scheduler_base_next_state=measurement.base_next_state,
@@ -1093,6 +2035,8 @@ def validate_cfg_state_update_measurement_numpy(
         "step_index",
         "signed_coefficient",
         "input_binding_digest",
+        "base_raw_velocity_digest",
+        "controlled_raw_velocity_digest",
         "delta_sigma",
         "base_velocity_norm",
         "intended_delta_norm",

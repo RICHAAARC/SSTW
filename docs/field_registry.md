@@ -3589,6 +3589,26 @@ Notebook 与 repository module 的跨边界数据
 | patch_relation_unconditional_encoder_digest | provenance | none | true | false | false | unconditional encoder input 与公共输入绑定后的摘要。 |
 | patch_relation_base_rope_pair_digest | provenance | none | true | false | false | 同step zero-relation cond/uncond 两支完整scope records摘要。 |
 | patch_relation_controlled_rope_pair_digest | provenance | none | true | false | false | 同step controlled-relation cond/uncond 两支完整scope records摘要。 |
+| patch_relation_maximum_phase_budget_radians | protocol | none | true | false | false | 冻结maximum RoPE phase budget，始终为0.015625。 |
+| patch_relation_selected_phase_projection_scale | metric | none | true | false | false | scheduler前由同state正负真实re-forward最坏预算选择的共同scale；clean为0。 |
+| patch_relation_realized_phase_magnitude_radians | metric | none | true | false | false | maximum phase与selected scale的乘积；clean为0。 |
+| patch_relation_phase_projection_attempt_count | metric | none | true | false | false | 当前step实际评估的正负candidate scale数量；clean为0。 |
+| patch_relation_phase_projection_backoff_count | metric | none | true | false | false | 当前step从full scale确定性backoff次数；clean为0。 |
+| patch_relation_phase_projection_initial_worst_actual_delta_norm | metric | none | true | false | false | 首个正负candidate中较大的actual velocity delta norm。 |
+| patch_relation_phase_projection_initial_worst_energy_increment | metric | none | true | false | false | 首个正负candidate中较大的actual state-update energy。 |
+| patch_relation_phase_projection_final_worst_actual_delta_norm | metric | none | true | false | false | 选中正负candidate中较大的actual velocity delta norm。 |
+| patch_relation_phase_projection_final_worst_energy_increment | metric | none | true | false | false | 选中正负candidate中较大的actual state-update energy。 |
+| patch_relation_phase_projection_positive_norm_guard_passed | governance | none | true | false | false | 选中scale的positive candidate是否通过norm guard；clean为null。 |
+| patch_relation_phase_projection_positive_energy_guard_passed | governance | none | true | false | false | 选中scale的positive candidate是否通过energy guard；clean为null。 |
+| patch_relation_phase_projection_positive_direction_guard_passed | governance | none | true | false | false | 选中scale的positive candidate是否通过direction guard；clean为null。 |
+| patch_relation_phase_projection_negative_norm_guard_passed | governance | none | true | false | false | 选中scale的negative candidate是否通过norm guard；clean为null。 |
+| patch_relation_phase_projection_negative_energy_guard_passed | governance | none | true | false | false | 选中scale的negative candidate是否通过energy guard；clean为null。 |
+| patch_relation_phase_projection_negative_direction_guard_passed | governance | none | true | false | false | 选中scale的negative candidate是否通过direction guard；clean为null。 |
+| patch_relation_phase_projection_max_attempts | protocol | none | true | false | false | 每个active step冻结的candidate attempt上限4。 |
+| patch_relation_phase_projection_safety_factor | protocol | none | true | false | false | 确定性budget-ratio backoff安全因子0.9。 |
+| patch_relation_phase_projection_minimum_nonzero_scale | protocol | none | true | false | false | active phase projection允许的最小非零scale。 |
+| patch_relation_phase_projection_selected_scales | metric | none | true | false | false | manifest按8视频×8step顺序汇总的64项selected scale。 |
+| patch_relation_phase_projection_step_records_digest | provenance | none | true | false | false | manifest对64条phase projection、guard与actual exposure step records的稳定绑定摘要。 |
 | patch_relation_delta_sigma | metric | none | true | false | false | 当前真实 scheduler 的 `next_sigma-current_sigma`。 |
 | patch_relation_base_velocity_norm | metric | none | true | false | false | zero-relation FP32 CFG-combined velocity norm。 |
 | patch_relation_intended_delta_norm | metric | none | true | false | false | 同输入 base/controlled CFG 差得到的 intended delta norm。 |

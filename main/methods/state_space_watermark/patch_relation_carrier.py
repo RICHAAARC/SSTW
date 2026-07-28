@@ -247,6 +247,7 @@ def build_relation_phase_delta(
     descriptor: PublicPatchRelationDescriptor,
     *,
     signed_coefficient: int,
+    phase_projection_scale: float = 1.0,
 ) -> np.ndarray:
     """Build the compact full-token/head-dimension phase delta.
 
@@ -257,6 +258,16 @@ def build_relation_phase_delta(
     validate_public_patch_relation_descriptor(descriptor)
     if type(signed_coefficient) is not int or signed_coefficient not in (-1, 0, 1):
         raise ValueError("signed_coefficient 只允许 -1/0/+1")
+    scale = float(phase_projection_scale)
+    if (
+        not math.isfinite(scale)
+        or scale < 0.0
+        or scale > 1.0
+        or (signed_coefficient != 0 and scale <= 0.0)
+    ):
+        raise ValueError(
+            "phase_projection_scale 对active必须位于(0,1]，clean允许[0,1]"
+        )
     phase_delta = np.zeros(ROPE_TUPLE_SHAPE, dtype="<f8", order="C")
     if signed_coefficient == 0:
         return phase_delta
@@ -265,6 +276,7 @@ def build_relation_phase_delta(
         flattened.astype(np.float64)
         * float(signed_coefficient)
         * PHASE_BUDGET_RADIANS
+        * scale
     )
     pair_start = 2 * TEMPORAL_ROPE_PAIR_INDEX
     phase_delta[0, :, 0, pair_start] = signed_phase
@@ -278,6 +290,7 @@ def apply_wan_rotary_phase_numpy(
     *,
     descriptor: PublicPatchRelationDescriptor,
     signed_coefficient: int,
+    phase_projection_scale: float = 1.0,
 ) -> tuple[np.ndarray, np.ndarray]:
     """Apply the frozen phase shift to Wan's real `(cos, sin)` RoPE tuple."""
 
@@ -296,6 +309,7 @@ def apply_wan_rotary_phase_numpy(
     delta = build_relation_phase_delta(
         descriptor,
         signed_coefficient=signed_coefficient,
+        phase_projection_scale=phase_projection_scale,
     )
     if signed_coefficient == 0:
         return cosine.copy(order="C"), sine.copy(order="C")

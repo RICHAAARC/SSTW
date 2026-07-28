@@ -22,8 +22,10 @@ payload M
 -> key-conditioned trajectory evidence
 ```
 
-该 Patch-relation 主机制的首个 Gate 0 construction runner 已实现，但尚未由用户
-执行真实 GPU 运行，后续 clock/state observer 仍未实现。
+该 Patch-relation 主机制的首个 Gate 0 construction runner 已实现；真实 Colab
+运行已在 Gate 统计前暴露并关闭 RoPE dtype 问题，随后又在首个 active step 的
+phase projection 处 fail-closed，因此尚无 Gate 0 方法结果。后续 clock/state
+observer 仍未实现。
 真实 Gate 0 FAIL 只否定历史
 `decoder-Jacobian additive atom + local RGB mean feature + held-out transfer`
 组合；它不是 Patch-relation embedding、clock path、state observer 或
@@ -46,6 +48,13 @@ feature与输出绑定。
 完整生成后才写单 ZIP+manifest 到 Drive，runtime失败保持 recovery-only。
 当前状态只是 runner implemented / pending user Colab run，不得解释为端到端
 方法结果或 Gate 0 已执行。
+
+`patch_relation_phase_response_preflight.py` 是独立的非 Gate 单步入口。它固定
+C0 clean-A 的真实 step 0 input/sample/timestep，执行两次 zero-phase base，并在
+下一确定性低相位上对正负 control 各执行两次；记录实际 RoPE tuple delta、
+base/control CFG repeat差、正负方向和既有 counterfactual state-update预算统计，
+随后在调用真实 scheduler 前终止。它不decode、不导出视频、不选择新phase，也不
+允许直接重跑8视频 Gate 0。
 
 历史 paper-profile 的实施顺序与 Claim 闭合规则仍保存在
 `docs/builds/complete_paper_mechanism_implementation.md`，但该文档只用于历史

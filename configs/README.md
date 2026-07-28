@@ -22,8 +22,9 @@ payload M
 -> key-conditioned trajectory evidence
 ```
 
-这条 Patch-relation 路线已有首个精确 Gate 0 execution config 和薄 runner，
-但尚未由用户执行真实 Colab/GPU 运行，也没有方法结果。真实历史 Gate 0 FAIL 只否定
+这条 Patch-relation 路线已有首个精确 Gate 0 execution config 和薄 runner。
+真实 Colab 已两次在方法 Gate 前因 runtime construction 失败停止，因此仍没有
+Patch-relation Gate 0 方法结果。真实历史 Gate 0 FAIL 只否定
 历史
 `decoder-Jacobian additive atom + local RGB mean feature + held-out transfer`
 组合，不是 Patch-relation embedding、observer 或状态空间同步的结果。generic
@@ -40,6 +41,18 @@ zero-sum Patch pair、保存视频 RGB24 的逐帧 Patch-pair DCT relation featu
 recovery-only。所有 formal result、stage、observer、攻击、fixed-FPR、
 baseline execution 与 paper claim 授权均为 false。本地 NumPy/fake 测试不构成
 Patch-relation 方法或 GPU 证据。
+
+`protocol/sstw_patch_relation_phase_response_preflight.json` 是最新
+phase projection failure 后的独立单步 runtime preflight。它只复现 C0 clean-A
+step 0，冻结两次 zero-phase base 与一个由失败记录确定性重算出的低相位 scale，
+对正负 control 各重复一次；总计12次 transformer forward，真实 scheduler 调用、
+decode、视频导出和 Gate 0 均为0。它只区分 scale 写入、重复forward数值地板、
+BF16/attention平台、量化死区或可行非零区，不允许增加 backoff attempt、选择强度
+或授权完整8视频重跑。
+对应 request example 的 `repository.ref` 固定为
+`reviewed_full_commit_placeholder`；只有本批完成独立审核并提交后，Drive 的实际
+request 才能显式替换为包含 runner/config/workflow 路由的完整 commit，禁止复用
+源失败 commit。
 
 下列配置说明保留历史实验和诊断边界；任何既有 execution flag 都不能授权或冒充
 当前 Patch-relation 路线已进入执行。

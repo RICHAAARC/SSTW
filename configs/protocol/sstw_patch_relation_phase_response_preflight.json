@@ -1,0 +1,143 @@
+{
+  "profile_id": "sstw_patch_relation_phase_response_preflight",
+  "method_id": "frame_state_synchronized_generative_flow_video_watermark",
+  "contract_state": "single_step_phase_response_preflight_implemented_pending_user_colab_run",
+  "authorization_boundary": {
+    "runtime_implementation_authorized": true,
+    "diagnostic_execution_allowed": true,
+    "gpu_execution_allowed": true,
+    "colab_execution_allowed": true,
+    "runner_implementation_allowed": true,
+    "notebook_handler_implementation_allowed": false,
+    "drive_update_allowed": false,
+    "gate0_execution_allowed": false,
+    "observer_implementation_allowed": false,
+    "attack_execution_allowed": false,
+    "fixed_fpr_execution_allowed": false,
+    "baseline_execution_allowed": false,
+    "paper_claim_allowed": false,
+    "formal_result": false,
+    "stage_progression_allowed": false,
+    "claim_support_status": "single_step_runtime_preflight_only_not_gate_or_method_evidence"
+  },
+  "protocol_contract": {
+    "source_failure_boundary": {
+      "repository_commit": "56a211b96f4a571364675606d5c5fd5a4d689add",
+      "run_id": "20260728_073419_359210_56a211b9",
+      "gate0_protocol_digest": "dfd9d80274f028316eab306c80cb0d2cebfdfe33abd571f0bdb3ecb450d589f1",
+      "failure_kind": "runtime_construction_phase_projection_no_feasible_nonzero_scale",
+      "clean_generation_record_count": 2,
+      "clean_step_record_count": 16,
+      "clean_outputs_exactly_equal": true,
+      "failed_probe_id": "construction_c0_positive",
+      "failed_step_index": 0,
+      "attempted_scales": [
+        "1.0",
+        "0.126689013",
+        "0.0162625561",
+        "0.0021226604990923492"
+      ],
+      "worst_actual_delta_norms": [
+        "20.866167068481445",
+        "20.593576431274414",
+        "20.25302505493164",
+        "20.022518157958984"
+      ],
+      "worst_energy_increments": [
+        "1.198118278388977",
+        "1.1670179007288504",
+        "1.1287378298013193",
+        "1.1031894426205326"
+      ],
+      "norm_budget": "2.937237890625",
+      "remaining_flow_energy": "0.4945954598886031",
+      "backoff_safety_factor": "0.9",
+      "next_deterministic_scale": "0.00028024861398114531",
+      "next_realized_phase_radians": "4.3788845934553954e-06",
+      "source_is_gate_or_method_evidence": false
+    },
+    "execution_binding": {
+      "gate0_config_path": "configs/protocol/sstw_patch_relation_gate0_construction.json",
+      "gate0_profile_id": "sstw_patch_relation_gate0_construction",
+      "identity_role": "construction_c0",
+      "identity_id": "patch_relation_construction_identity_c0",
+      "probe_id": "patch_relation_phase_response_preflight",
+      "step_index": 0,
+      "same_real_fp32_scheduler_sample_timestep_and_transformer_inputs": true,
+      "model_scheduler_prompt_seed_and_relation_descriptor_inherited_exactly_from_gate0_contract": true,
+      "transformer_cache_allowed": false
+    },
+    "forward_plan": {
+      "zero_phase_base_repeat_count": 2,
+      "candidate_signs": [1, -1],
+      "candidate_scale": "0.00028024861398114531",
+      "candidate_repeat_count_per_sign": 2,
+      "additional_scale_points": [],
+      "cfg_branch_order": ["conditional", "unconditional"],
+      "expected_transformer_forward_count": 12,
+      "real_scheduler_step_call_count": 0,
+      "decode_allowed": false,
+      "video_export_allowed": false,
+      "phase_selection_allowed": false,
+      "strength_sweep_allowed": false
+    },
+    "measurement_contract": {
+      "rope_tuple_delta": "float64_l2_over_actual_float32_shifted_minus_original_cos_and_sin_tuple_storage",
+      "rope_tuple_expected_delta": "same_original_tuple_recomputed_with_frozen_core_phase_function_and_predeclared_scale_outside_scope_plumbing",
+      "rope_tuple_actual_expected_binding": "actual_and_expected_float32_cos_and_sin_deltas_must_be_elementwise_byte_exact_with_exact_active_support_and_signed_coefficient_semantics",
+      "base_repeatability": "float64_l2_second_zero_phase_cfg_minus_first_zero_phase_cfg",
+      "control_response": "float64_l2_control_cfg_minus_first_zero_phase_cfg",
+      "control_repeatability": "float64_l2_second_control_cfg_minus_first_control_cfg_per_sign",
+      "repeatability_floor_ratio": "base_repeat_delta_or_per_sign_control_repeat_delta_divided_by_max_minimum_control_response_norm_for_the_corresponding_comparison_and_1e-12",
+      "positive_negative_direction_cosine": "float64_cosine_positive_cfg_delta_vs_exact_negative_negative_cfg_delta_with_1e-12_cauchy_clamp",
+      "counterfactual_state_update": "existing_evaluate_phase_projection_sign_numpy_on_actual_fp32_scheduler_sample_without_scheduler_call",
+      "all_raw_branch_outputs_are_explicit_float32_before_cfg": true,
+      "zero_phase_requires_original_rope_tuple_identity": true,
+      "active_rope_tuple_delta_must_be_nonzero_and_finite": true,
+      "candidate_repeat_inputs_must_recompute_exact_common_hidden_timestep_branch_encoder_and_all_public_forward_kwargs_bindings": true,
+      "conditional_unconditional_encoder_distinctness": "compare_unsalted_raw_encoder_value_digests_while_preserving_role_salted_branch_context_digests",
+      "scheduler_fp32_sample_cast_to_transformer_dtype_must_match_captured_hidden_and_scheduler_timestep_must_match_every_captured_transformer_timestep": true,
+      "candidate_runtime_issuance_binding": "all_four_candidate_evaluations_must_retain_in_process_capabilities_issued_by_evaluate_phase_projection_sign_numpy_and_each_serialized_payload_must_match_its_issued_object_exactly",
+      "candidate_shared_step0_context_binding": "all_four_issued_evaluations_require_exact_probe_step_input_descriptor_base_pair_candidate_context_base_raw_base_cfg_scheduler_sample_delta_sigma_and_energy_context_with_delta_sigma_equal_to_the_frozen_gate0_step0_value",
+      "candidate_scalar_revalidation": "norm_budget_equals_base_velocity_norm_times_0.02_times_0.12_energy_increment_equals_state_update_delta_norm_squared_remaining_energy_rebuilt_from_reference_projection_direction_guard_uses_cosine_plus_1e-12_at_least_0.999_and_signed_exposure_equals_sign_times_state_update_delta_norm",
+      "cfg_digest_boolean_binding": "byte_exact_booleans_are_recomputed_from_raw_cfg_sha256_digest_equality_digest_equality_requires_zero_delta_norm_but_zero_delta_norm_does_not_require_digest_equality_because_ieee_signed_zero_bytes_may_differ",
+      "scope_success_binding": "batch_success_is_issued_only_when_scope_exit_observes_the_same_internal_completion_sentinel_and_all_runtime_bindings_cleanup_successfully",
+      "scheduler_progression_allowed": false
+    },
+    "classification_contract": {
+      "classification_order": [
+        "scale_application_failure",
+        "forward_repeatability_floor_candidate",
+        "feasible_nonzero_phase_region_candidate",
+        "quantization_dead_zone_candidate",
+        "bf16_or_attention_piecewise_plateau_candidate",
+        "indeterminate",
+        "multiple_candidates"
+      ],
+      "scale_application_failure": "any_zero_phase_tuple_delta_nonzero_or_any_active_tuple_delta_nonfinite_or_zero_or_actual_expected_elementwise_binding_failure_or_positive_negative_tuple_delta_relative_difference_above_0.00001",
+      "forward_repeatability_floor_candidate": "maximum_base_or_per_sign_control_repeatability_floor_ratio_strictly_above_0.1",
+      "feasible_nonzero_phase_region_candidate": "all_four_candidate_evaluations_feasible_and_repeatability_floor_not_detected",
+      "quantization_dead_zone_candidate": "all_control_cfg_arrays_byte_equal_to_first_zero_phase_base_cfg_while_active_rope_tuple_delta_is_nonzero_and_repeatability_floor_not_detected",
+      "bf16_or_attention_piecewise_plateau_candidate": "repeatability_floor_not_detected_and_not_dead_zone_and_minimum_candidate_actual_delta_norm_divided_by_historical_last_worst_actual_delta_norm_at_least_0.8",
+      "repeatability_floor_ratio_threshold": "0.1",
+      "plateau_ratio_threshold": "0.8",
+      "tuple_delta_relative_tolerance": "0.00001",
+      "unique_root_cause_claim_allowed": false
+    },
+    "result_boundary": {
+      "gate0_pass": false,
+      "gate0_execution_allowed": false,
+      "full_eight_video_rerun_allowed": false,
+      "formal_result": false,
+      "stage_progression_allowed": false,
+      "observer_implementation_allowed": false,
+      "paper_claim_allowed": false,
+      "success_artifact_write_contract": "record_decision_and_manifest_are_created_exclusively_written_as_canonical_json_bytes_coverage_checked_and_exactly_read_back_only_by_fixed_filenames_relative_to_an_open_o_directory_o_nofollow_fd_for_a_unique_unpredictable_same_filesystem_sibling_directory_owned_by_this_call_and_bound_by_lstat_parent_device_inode_then_atomically_promoted_as_one_directory_after_which_the_output_directory_device_inode_non_symlink_status_and_exact_three_artifact_fd_readback_are_revalidated_before_the_directory_fd_is_closed_and_success_returns",
+      "staging_collision_contract": "any_preexisting_directory_symlink_concurrent_name_collision_or_path_replacement_before_first_artifact_write_is_never_traversed_or_written_and_fails_closed_to_a_nonformal_recovery_decision_and_any_post_validation_promoted_symlink_drift_is_unlinked_as_a_path_only_without_traversing_its_target_while_the_owned_inode_is_cleaned_through_its_held_directory_fd",
+      "failure_recovery_contract": "config_contract_source_binding_runtime_validation_and_success_writer_failures_remove_all_success_record_decision_and_manifest_content_from_the_held_owned_inode_through_directory_fd_and_leave_only_one_nonformal_recovery_decision_at_the_output_path_and_an_attacker_renamed_empty_owned_inode_directory_may_remain_when_no_safe_path_to_that_inode_is_available",
+      "runtime_reference_release_contract": "adapter_release_pipeline_hook_cleanup_gc_collect_and_cuda_empty_cache_are_each_attempted_independently_on_success_or_failure_after_gpu_heavy_references_are_released_and_cleanup_errors_never_replace_an_active_primary_runtime_error",
+      "claim_support_status": "single_step_runtime_preflight_only_not_gate_or_method_evidence"
+    }
+  },
+  "protocol_digest": "09a8643b6a7a763bef57dcf834dc4a1fe0fb98a50490c982e94f3aa1046c6d83"
+}

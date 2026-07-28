@@ -56,6 +56,9 @@ FRAME_STATE_SIGNED_OBSERVABILITY_CONSTRUCTION_TEST_ID = (
 PATCH_RELATION_GATE0_CONSTRUCTION_TEST_ID = (
     "patch_relation_gate0_construction"
 )
+PATCH_RELATION_PHASE_RESPONSE_PREFLIGHT_TEST_ID = (
+    "patch_relation_phase_response_preflight"
+)
 SUPPORTED_TEST_IDS = (
     TRAJECTORY_REPLAY_SOURCE_BUILD_TEST_ID,
     TRAJECTORY_SIGNAL_TEST_ID,
@@ -69,6 +72,7 @@ SUPPORTED_TEST_IDS = (
     FROZEN_FEEDBACK_SIGNED_RESPONSE_DIAGNOSTIC_TEST_ID,
     FRAME_STATE_SIGNED_OBSERVABILITY_CONSTRUCTION_TEST_ID,
     PATCH_RELATION_GATE0_CONSTRUCTION_TEST_ID,
+    PATCH_RELATION_PHASE_RESPONSE_PREFLIGHT_TEST_ID,
 )
 TRAJECTORY_REPLAY_SOURCE_BUILD_PHASE = "source_build"
 SUPPORTED_TRAJECTORY_PHASES = (
@@ -90,9 +94,16 @@ SUPPORTED_FROZEN_FEEDBACK_SIGNED_RESPONSE_PHASES = (
 )
 SUPPORTED_FRAME_STATE_SIGNED_OBSERVABILITY_PHASES = ("gate0",)
 SUPPORTED_PATCH_RELATION_GATE0_PHASES = ("gate0",)
+SUPPORTED_PATCH_RELATION_PHASE_RESPONSE_PREFLIGHT_PHASES = (
+    "phase_response_preflight",
+)
 EXPECTED_REPOSITORY_URL = "https://github.com/RICHAAARC/SSTW.git"
 _SAFE_REPOSITORY_REF = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._/-]*$")
+_FULL_LOWERCASE_GIT_COMMIT = re.compile(r"^[0-9a-f]{40}$")
 _SAFE_RUN_SERIES_ID = re.compile(r"^[a-z0-9][a-z0-9_-]{2,63}$")
+PATCH_RELATION_PHASE_RESPONSE_SOURCE_FAILURE_COMMIT = (
+    "56a211b96f4a571364675606d5c5fd5a4d689add"
+)
 
 
 def _require_mapping(value: object, label: str) -> dict[str, Any]:
@@ -179,6 +190,15 @@ def load_colab_test_request(
         or repository_ref.endswith("/")
     ):
         raise ValueError("repository.ref 不是安全的 Git revision")
+    if test_id == PATCH_RELATION_PHASE_RESPONSE_PREFLIGHT_TEST_ID and (
+        not _FULL_LOWERCASE_GIT_COMMIT.fullmatch(repository_ref)
+        or repository_ref
+        == PATCH_RELATION_PHASE_RESPONSE_SOURCE_FAILURE_COMMIT
+    ):
+        raise ValueError(
+            "phase-response preflight repository.ref 必须替换为审核后"
+            "包含完整runner/config/workflow的40位小写commit SHA"
+        )
 
     parameters = _require_mapping(payload.get("parameters"), "parameters")
     _reject_unknown_fields(
@@ -230,6 +250,10 @@ def load_colab_test_request(
         supported_phases = SUPPORTED_FRAME_STATE_SIGNED_OBSERVABILITY_PHASES
     elif test_id == PATCH_RELATION_GATE0_CONSTRUCTION_TEST_ID:
         supported_phases = SUPPORTED_PATCH_RELATION_GATE0_PHASES
+    elif test_id == PATCH_RELATION_PHASE_RESPONSE_PREFLIGHT_TEST_ID:
+        supported_phases = (
+            SUPPORTED_PATCH_RELATION_PHASE_RESPONSE_PREFLIGHT_PHASES
+        )
     else:
         supported_phases = SUPPORTED_TRAJECTORY_PHASES
     if phase not in supported_phases:
@@ -251,6 +275,7 @@ def load_colab_test_request(
             not in {
                 FRAME_STATE_SIGNED_OBSERVABILITY_CONSTRUCTION_TEST_ID,
                 PATCH_RELATION_GATE0_CONSTRUCTION_TEST_ID,
+                PATCH_RELATION_PHASE_RESPONSE_PREFLIGHT_TEST_ID,
             }
         ),
     )
@@ -316,6 +341,14 @@ def load_colab_test_request(
     ):
         raise ValueError(
             "Patch-relation Gate 0 是自包含 construction，不接受 source/resume package"
+        )
+    if (
+        test_id == PATCH_RELATION_PHASE_RESPONSE_PREFLIGHT_TEST_ID
+        and (source_package or resume_package)
+    ):
+        raise ValueError(
+            "Patch-relation phase-response preflight 是自包含诊断，"
+            "不接受 source/resume package"
         )
     return {
         "request_path": str(path),
@@ -886,6 +919,16 @@ def _default_patch_relation_gate0_runner(
     return run_patch_relation_gate0_construction(output_root)
 
 
+def _default_patch_relation_phase_response_preflight_runner(
+    output_root: Path,
+) -> dict[str, Any]:
+    from experiments.generative_video_model_probe.patch_relation_phase_response_preflight import (
+        run_patch_relation_phase_response_preflight,
+    )
+
+    return run_patch_relation_phase_response_preflight(output_root)
+
+
 def _source_generation_model_ids(source_root: Path) -> list[str]:
     """读取模型地址列表；有效性校验仍由测试 handler 负责。"""
 
@@ -1172,6 +1215,9 @@ def run_colab_test_request(
     patch_relation_gate0_runner: (
         Callable[..., dict[str, Any]] | None
     ) = None,
+    patch_relation_phase_response_preflight_runner: (
+        Callable[..., dict[str, Any]] | None
+    ) = None,
 ) -> dict[str, Any]:
     """执行一个白名单测试，并把唯一结果 zip 与 manifest 回写 Drive。"""
 
@@ -1206,6 +1252,7 @@ def run_colab_test_request(
         in {
             FRAME_STATE_SIGNED_OBSERVABILITY_CONSTRUCTION_TEST_ID,
             PATCH_RELATION_GATE0_CONSTRUCTION_TEST_ID,
+            PATCH_RELATION_PHASE_RESPONSE_PREFLIGHT_TEST_ID,
         }
     )
     source_package: Path | None = None
@@ -1371,6 +1418,15 @@ def run_colab_test_request(
         runner = (
             patch_relation_gate0_runner
             or _default_patch_relation_gate0_runner
+        )
+        diagnostic_decision = runner(output_root)
+    elif (
+        resolved["test_id"]
+        == PATCH_RELATION_PHASE_RESPONSE_PREFLIGHT_TEST_ID
+    ):
+        runner = (
+            patch_relation_phase_response_preflight_runner
+            or _default_patch_relation_phase_response_preflight_runner
         )
         diagnostic_decision = runner(output_root)
     elif (

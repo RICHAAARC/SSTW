@@ -15,6 +15,7 @@ from workflows.colab_test_request import (
     CONTROLLED_EMBEDDING_STRENGTH_TEST_ID,
     FRAME_STATE_SIGNED_OBSERVABILITY_CONSTRUCTION_TEST_ID,
     PATCH_RELATION_GATE0_CONSTRUCTION_TEST_ID,
+    PATCH_RELATION_PHASE_RESPONSE_PREFLIGHT_TEST_ID,
     REQUEST_SCHEMA_VERSION,
     TRAJECTORY_REPLAY_SOURCE_BUILD_TEST_ID,
     _safe_extract_zip,
@@ -149,6 +150,76 @@ def _patch_relation_request_payload() -> dict[str, object]:
             "resume_package_path": "",
         },
     }
+
+
+def _patch_relation_phase_response_request_payload() -> dict[str, object]:
+    return {
+        "request_schema_version": REQUEST_SCHEMA_VERSION,
+        "test_id": PATCH_RELATION_PHASE_RESPONSE_PREFLIGHT_TEST_ID,
+        "repository": {
+            "url": "https://github.com/RICHAAARC/SSTW.git",
+            "ref": "a" * 40,
+        },
+        "parameters": {
+            "phase": "phase_response_preflight",
+            "run_series_id": "patch_relation_phase_response_preflight",
+            "source_package_path": "",
+            "resume_package_path": "",
+        },
+    }
+
+
+def test_phase_response_request_example_requires_reviewed_commit_replacement(
+    tmp_path: Path,
+) -> None:
+    example_path = Path(
+        "configs/paper_workflow/"
+        "colab_test_patch_relation_phase_response_preflight_request_example.json"
+    )
+    payload = json.loads(example_path.read_text(encoding="utf-8"))
+    assert payload["repository"]["ref"] == "reviewed_full_commit_placeholder"
+    assert payload["repository"]["ref"] != (
+        "56a211b96f4a571364675606d5c5fd5a4d689add"
+    )
+    assert payload["test_id"] == PATCH_RELATION_PHASE_RESPONSE_PREFLIGHT_TEST_ID
+    assert payload["parameters"]["phase"] == "phase_response_preflight"
+    assert payload["parameters"]["source_package_path"] == ""
+    assert payload["parameters"]["resume_package_path"] == ""
+    project_root = tmp_path / "SSTW"
+    request_path = project_root / "requests" / "colab_test_request.json"
+    _write_request(request_path, payload)
+    with pytest.raises(ValueError, match="审核后"):
+        load_colab_test_request(request_path, project_root=project_root)
+    with pytest.raises(ValueError, match="审核后"):
+        build_colab_test_dry_run_plan(
+            request_path,
+            project_root=project_root,
+        )
+    payload["repository"]["ref"] = "a" * 40
+    _write_request(request_path, payload)
+    resolved = load_colab_test_request(
+        request_path,
+        project_root=project_root,
+    )
+    assert resolved["repository_ref"] == "a" * 40
+    assert build_colab_test_dry_run_plan(
+        request_path,
+        project_root=project_root,
+    )["test_id"] == PATCH_RELATION_PHASE_RESPONSE_PREFLIGHT_TEST_ID
+
+
+def test_phase_response_request_rejects_source_failure_commit(
+    tmp_path: Path,
+) -> None:
+    project_root = tmp_path / "SSTW"
+    request_path = project_root / "requests" / "colab_test_request.json"
+    payload = _patch_relation_phase_response_request_payload()
+    payload["repository"]["ref"] = (
+        "56a211b96f4a571364675606d5c5fd5a4d689add"
+    )
+    _write_request(request_path, payload)
+    with pytest.raises(ValueError, match="审核后"):
+        load_colab_test_request(request_path, project_root=project_root)
 
 
 def _colab_test_failure_decision(
@@ -663,6 +734,94 @@ def test_patch_relation_gate0_rejects_source_resume_and_wrong_phase(
 
     payload = _patch_relation_request_payload()
     payload["parameters"]["phase"] = "no_attack"
+    _write_request(request_path, payload)
+    with pytest.raises(ValueError, match="phase"):
+        load_colab_test_request(request_path, project_root=project_root)
+
+
+@pytest.mark.quick
+def test_patch_relation_phase_response_preflight_is_self_contained_and_packaged(
+    tmp_path: Path,
+) -> None:
+    project_root = tmp_path / "SSTW"
+    request_path = project_root / "requests" / "colab_test_request.json"
+    _write_request(
+        request_path,
+        _patch_relation_phase_response_request_payload(),
+    )
+    resolved = load_colab_test_request(
+        request_path,
+        project_root=project_root,
+    )
+    assert resolved["source_package_path"] == ""
+    assert resolved["resume_package_path"] == ""
+    assert build_colab_test_dry_run_plan(
+        request_path,
+        project_root=project_root,
+    )["phase"] == "phase_response_preflight"
+
+    def fake_runner(output_root: Path) -> dict[str, object]:
+        artifact = (
+            output_root
+            / "patch_relation_phase_response_preflight_decision.json"
+        )
+        artifact.write_text(
+            json.dumps(
+                {
+                    "phase_response_preflight_decision": (
+                        "single_step_diagnostic_completed_no_gate_decision"
+                    ),
+                    "gate0_pass": False,
+                    "formal_result": False,
+                    "stage_progression_allowed": False,
+                }
+            ),
+            encoding="utf-8",
+        )
+        return {
+            "phase_response_preflight_decision": (
+                "single_step_diagnostic_completed_no_gate_decision"
+            ),
+            "gate0_pass": False,
+            "formal_result": False,
+            "stage_progression_allowed": False,
+        }
+
+    result = run_colab_test_request(
+        request_path,
+        project_root=project_root,
+        repo_root=Path.cwd(),
+        local_workspace_root=tmp_path / "content" / "workspace",
+        local_package_cache_root=tmp_path / "content" / "packages",
+        patch_relation_phase_response_preflight_runner=fake_runner,
+    )
+    manifest = json.loads(
+        Path(result["drive_result_manifest"]).read_text(encoding="utf-8")
+    )
+    assert manifest["source_package_path"] == ""
+    assert manifest["resume_package_path"] == ""
+    assert manifest["diagnostic_decision"]["gate0_pass"] is False
+    with ZipFile(result["drive_result_zip"]) as archive:
+        assert archive.namelist() == [
+            "patch_relation_phase_response_preflight_decision.json"
+        ]
+
+
+def test_patch_relation_phase_response_preflight_rejects_inputs_and_wrong_phase(
+    tmp_path: Path,
+) -> None:
+    project_root = tmp_path / "SSTW"
+    request_path = project_root / "requests" / "colab_test_request.json"
+    source = project_root / "inputs" / "unexpected.zip"
+    _write_source_package(source)
+    for field in ("source_package_path", "resume_package_path"):
+        payload = _patch_relation_phase_response_request_payload()
+        payload["parameters"][field] = str(source)
+        _write_request(request_path, payload)
+        with pytest.raises(ValueError, match="自包含"):
+            load_colab_test_request(request_path, project_root=project_root)
+    payload = _patch_relation_phase_response_request_payload()
+    payload["parameters"]["phase"] = "gate0"
     _write_request(request_path, payload)
     with pytest.raises(ValueError, match="phase"):
         load_colab_test_request(request_path, project_root=project_root)

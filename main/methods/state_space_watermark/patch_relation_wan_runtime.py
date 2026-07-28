@@ -156,7 +156,7 @@ class CfgStateUpdateMeasurement:
     stage_progression_allowed: bool = False
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, eq=False)
 class PhaseProjectionSignEvaluation:
     """Validated scalar summary of one raw-array candidate evaluation."""
 
@@ -196,7 +196,7 @@ class PhaseProjectionSignEvaluation:
     feasible: bool
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, eq=False)
 class SymmetricPhaseProjectionSelection:
     """One deterministic common scale selected from the worst ± response."""
 
@@ -794,6 +794,9 @@ class ScopedWanRopeOutputAdapter:
         control_role: str,
         cfg_branch_role: str,
         input_binding_digest: str,
+        diagnostic_tuple_observer: (
+            Callable[[Any, Any, Any, Any], None] | None
+        ) = None,
     ) -> None:
         validate_public_patch_relation_descriptor(descriptor)
         self._transformer = transformer
@@ -821,6 +824,11 @@ class ScopedWanRopeOutputAdapter:
             input_binding_digest,
             "input_binding_digest",
         )
+        if diagnostic_tuple_observer is not None and not callable(
+            diagnostic_tuple_observer
+        ):
+            raise TypeError("diagnostic_tuple_observer 必须可调用")
+        self._diagnostic_tuple_observer = diagnostic_tuple_observer
         self._attempted_call_count = 0
         self._successful_call_count = 0
         self._entered = False
@@ -873,6 +881,13 @@ class ScopedWanRopeOutputAdapter:
                 signed_coefficient=self._signed_coefficient,
                 phase_projection_scale=self._phase_projection_scale,
             )
+            if self._diagnostic_tuple_observer is not None:
+                self._diagnostic_tuple_observer(
+                    result[0],
+                    result[1],
+                    shifted[0],
+                    shifted[1],
+                )
             self._successful_call_count += 1
             if self._signed_coefficient == 0:
                 return result

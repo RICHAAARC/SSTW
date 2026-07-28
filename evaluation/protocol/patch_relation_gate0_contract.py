@@ -42,7 +42,7 @@ CONTRACT_STATE = (
     "patch_relation_gate0_runner_implemented_pending_user_colab_run"
 )
 FROZEN_PROTOCOL_DIGEST = (
-    "454e380c2900b9bd989ff8f95c3c0563545037650331f941b33eee650c0a0ddc"
+    "94830cb12359b8edc745bef37cfb85e46d9bf5f0e0443298d6833632671f8f77"
 )
 _LOWER_HEX_64 = re.compile(r"[0-9a-f]{64}\Z")
 
@@ -109,7 +109,7 @@ EXPECTED_WAN_RUNTIME_ADAPTER_CONTRACT = {
     ),
     "official_rope_output": "tuple_freqs_cos_freqs_sin",
     "official_rope_output_shape": [1, 5760, 1, 128],
-    "official_rope_output_dtype_non_mps": "float64",
+    "official_rope_output_dtype_non_mps": "float32",
     "runtime_adapter_module": (
         "main.methods.state_space_watermark.patch_relation_wan_runtime"
     ),

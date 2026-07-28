@@ -38,8 +38,10 @@ for block:
 `[1,T*H*W,1,attention_head_dim]`。`WanAttnProcessor` 在 self-attention 内把同一
 tuple 作用于 query 与 key；cross-attention 不使用该 tuple。对 Wan2.1 1.3B 的
 冻结输入，patch size 为 `[1,2,2]`，latent `[1,16,9,40,64]` 映射为
-`[T,H,W]=[9,20,32]`、5760 tokens、head dim 128。非 MPS 路径的 RoPE buffer
-是 float64。
+`[T,H,W]=[9,20,32]`、5760 tokens、head dim 128。非 MPS 路径虽然以
+float64 构造 frequency grid，但 v0.35.2 `get_1d_rotary_pos_embed` 在 real
+cos/sin 返回前显式 `.float()`；因此 `WanRotaryPosEmbed.forward` 的 tuple
+storage dtype 精确为 float32。
 
 所以首个且唯一主写入原语冻结为：
 
@@ -72,8 +74,10 @@ conditional transformer
 conditional 与 unconditional 两支；base forward 的两支都使用 zero control。
 两支必须绑定同一输入 state/timestep/probe digest，禁止只控制一支而改变 CFG
 语义。真实 torch 路径要求 hidden state 为 contiguous BF16
-`[1,16,9,40,64]`，RoPE tuple 为同 device、contiguous float64
-`[1,5760,1,128]`，并且只允许官方 no-grad inference。
+`[1,16,9,40,64]`，RoPE tuple 为同 device、contiguous float32
+`[1,5760,1,128]`，并且只允许官方 no-grad inference。公开 phase delta
+继续使用 float64 数学 schema；实际旋转稳定计算后必须 cast 回原 float32
+tuple storage，不能把 tuple 升格为新的运行时 dtype。
 
 ## 3. 唯一公开 relation
 

@@ -69,6 +69,20 @@ def test_runtime_adapter_config_is_exact_and_execution_stays_closed() -> None:
     assert not config["authorization_boundary"]["stage_progression_allowed"]
 
 
+def test_rehashed_official_rope_storage_dtype_mutation_fails_closed(
+    tmp_path: Path,
+) -> None:
+    config = json.loads(Path(DEFAULT_CONFIG_PATH).read_text(encoding="utf-8"))
+    config["protocol_contract"]["wan_runtime_adapter_contract"][
+        "official_rope_output_dtype_non_mps"
+    ] = "float64"
+    config["protocol_digest"] = protocol_digest(config["protocol_contract"])
+    path = tmp_path / "runtime_dtype_mutation.json"
+    path.write_text(json.dumps(config), encoding="utf-8")
+    with pytest.raises(ValueError, match="adapter boundary"):
+        load_patch_relation_gate0_config(path)
+
+
 @pytest.mark.parametrize(
     ("section", "field", "mutated"),
     [
@@ -114,8 +128,8 @@ def test_rehashed_runtime_contract_mutations_fail_closed(
 
 class _FakeRope:
     def __init__(self) -> None:
-        self.cosine = np.ones(ROPE_TUPLE_SHAPE, dtype="<f8")
-        self.sine = np.zeros(ROPE_TUPLE_SHAPE, dtype="<f8")
+        self.cosine = np.ones(ROPE_TUPLE_SHAPE, dtype="<f4")
+        self.sine = np.zeros(ROPE_TUPLE_SHAPE, dtype="<f4")
         self.call_count = 0
 
     def forward(self, hidden_states: np.ndarray):
@@ -723,17 +737,13 @@ def test_scoped_numpy_adapter_changes_only_active_pair_and_restores() -> None:
         np.count_nonzero(cosine_changed) + np.count_nonzero(sine_changed)
         == 24
     )
-    assert np.allclose(
+    assert np.array_equal(
         result[0][0, active_tokens, 0, 0],
-        np.cos(phase_delta[0, active_tokens, 0, 0]),
-        rtol=0.0,
-        atol=1e-15,
+        np.cos(phase_delta[0, active_tokens, 0, 0]).astype("<f4"),
     )
-    assert np.allclose(
+    assert np.array_equal(
         result[1][0, active_tokens, 0, 1],
-        np.sin(phase_delta[0, active_tokens, 0, 1]),
-        rtol=0.0,
-        atol=1e-15,
+        np.sin(phase_delta[0, active_tokens, 0, 1]).astype("<f4"),
     )
     assert record.cfg_branch_role == "conditional"
     assert record.cfg_branch_order_index == 0
@@ -755,8 +765,26 @@ def test_clean_scope_returns_original_tuple_and_exact_noop() -> None:
     )
     assert result[0] is transformer.rope.cosine
     assert result[1] is transformer.rope.sine
+    assert result[0].dtype == np.dtype("<f4")
+    assert result[1].dtype == np.dtype("<f4")
     assert record.clean_exact_noop
     assert record.cfg_branch_order_index == 1
+
+
+def test_numpy_runtime_rejects_nonofficial_float64_tuple_with_dtype_details() -> None:
+    descriptor = build_public_patch_relation_descriptor()
+    cosine = np.ones(ROPE_TUPLE_SHAPE, dtype="<f8")
+    sine = np.zeros(ROPE_TUPLE_SHAPE, dtype="<f8")
+    with pytest.raises(
+        ValueError,
+        match=r"expected=float32, observed=float64",
+    ):
+        apply_wan_rotary_phase_runtime(
+            cosine,
+            sine,
+            descriptor=descriptor,
+            signed_coefficient=0,
+        )
 
 
 def test_positive_negative_runtime_phase_is_exactly_opposite() -> None:
@@ -766,8 +794,8 @@ def test_positive_negative_runtime_phase_is_exactly_opposite() -> None:
         signed_coefficient=1,
     )
     active_tokens = np.flatnonzero(phase_delta[0, :, 0, 0])
-    cosine = np.ones(ROPE_TUPLE_SHAPE, dtype="<f8")
-    sine = np.zeros(ROPE_TUPLE_SHAPE, dtype="<f8")
+    cosine = np.ones(ROPE_TUPLE_SHAPE, dtype="<f4")
+    sine = np.zeros(ROPE_TUPLE_SHAPE, dtype="<f4")
     positive = apply_wan_rotary_phase_runtime(
         cosine,
         sine,
@@ -780,19 +808,19 @@ def test_positive_negative_runtime_phase_is_exactly_opposite() -> None:
         descriptor=descriptor,
         signed_coefficient=-1,
     )
+    assert positive[0].dtype == np.dtype("<f4")
+    assert positive[1].dtype == np.dtype("<f4")
+    assert negative[0].dtype == np.dtype("<f4")
+    assert negative[1].dtype == np.dtype("<f4")
     assert np.array_equal(positive[0], negative[0])
-    assert np.allclose(positive[1], -negative[1], rtol=0.0, atol=1e-18)
-    assert np.allclose(
+    assert np.array_equal(positive[1], -negative[1])
+    assert np.array_equal(
         positive[0][0, active_tokens, 0, 0],
         negative[0][0, active_tokens, 0, 0],
-        rtol=0.0,
-        atol=1e-18,
     )
-    assert np.allclose(
+    assert np.array_equal(
         positive[1][0, active_tokens, 0, 1],
         -negative[1][0, active_tokens, 0, 1],
-        rtol=0.0,
-        atol=1e-18,
     )
 
 

@@ -41,7 +41,7 @@
       "write_boundary": "after_self_rope_hidden_states_before_patch_embedding_and_all_self_attention_blocks",
       "official_rope_output": "tuple_freqs_cos_freqs_sin",
       "official_rope_output_shape": [1, 5760, 1, 128],
-      "official_rope_output_dtype_non_mps": "float64",
+      "official_rope_output_dtype_non_mps": "float32",
       "runtime_adapter_module": "main.methods.state_space_watermark.patch_relation_wan_runtime",
       "runtime_adapter_implemented": true,
       "runtime_adapter_execution_allowed": true,
@@ -371,5 +371,5 @@
       "checked_in_outputs_allowed": false
     }
   },
-  "protocol_digest": "454e380c2900b9bd989ff8f95c3c0563545037650331f941b33eee650c0a0ddc"
+  "protocol_digest": "94830cb12359b8edc745bef37cfb85e46d9bf5f0e0443298d6833632671f8f77"
 }

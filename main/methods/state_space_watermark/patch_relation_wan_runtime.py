@@ -45,7 +45,7 @@ MINIMUM_DIRECTION_COSINE = 0.999
 EXPECTED_ROPE_CALLS_PER_BRANCH = 1
 CFG_BRANCH_ORDER = ("conditional", "unconditional")
 RUNTIME_ADAPTER_PROTOCOL_DIGEST = (
-    "454e380c2900b9bd989ff8f95c3c0563545037650331f941b33eee650c0a0ddc"
+    "94830cb12359b8edc745bef37cfb85e46d9bf5f0e0443298d6833632671f8f77"
 )
 
 _LOWER_HEX_64 = re.compile(r"[0-9a-f]{64}\Z")
@@ -215,6 +215,27 @@ def _validate_numpy_hidden_states(hidden_states: np.ndarray) -> None:
         raise ValueError("fake Wan hidden_states 必须全部有限")
 
 
+def _validate_numpy_rope_tensor(
+    value: np.ndarray,
+    *,
+    label: str,
+) -> np.ndarray:
+    array = np.asarray(value)
+    if array.shape != ROPE_TUPLE_SHAPE:
+        raise ValueError(f"{label} shape 不匹配")
+    expected_dtype = np.dtype("<f4")
+    if array.dtype != expected_dtype:
+        raise ValueError(
+            f"{label} dtype 不匹配: "
+            f"expected={expected_dtype.name}, observed={array.dtype.name}"
+        )
+    if not array.flags.c_contiguous:
+        raise ValueError(f"{label} 必须为 contiguous")
+    if not np.all(np.isfinite(array)):
+        raise ValueError(f"{label} 必须全部有限")
+    return array
+
+
 def _validate_torch_rope_tensor(
     torch: Any,
     value: Any,
@@ -226,8 +247,11 @@ def _validate_torch_rope_tensor(
         raise TypeError(f"{label} 必须为 torch.Tensor")
     if tuple(value.shape) != ROPE_TUPLE_SHAPE:
         raise ValueError(f"{label} shape 不匹配")
-    if value.dtype != torch.float64:
-        raise ValueError(f"{label} dtype 必须精确为 float64")
+    if value.dtype != torch.float32:
+        raise ValueError(
+            f"{label} dtype 不匹配: "
+            f"expected={torch.float32}, observed={value.dtype}"
+        )
     if getattr(value, "layout", None) != torch.strided:
         raise ValueError(f"{label} 必须为 strided layout")
     if not value.is_contiguous():
@@ -262,15 +286,29 @@ def apply_wan_rotary_phase_runtime(
             freqs_sin, np.ndarray
         ):
             raise TypeError("fake Wan RoPE tuple backend 必须一致")
-        shifted = apply_wan_rotary_phase_numpy(
+        cosine = _validate_numpy_rope_tensor(
             freqs_cos,
+            label="fake Wan freqs_cos",
+        )
+        sine = _validate_numpy_rope_tensor(
             freqs_sin,
+            label="fake Wan freqs_sin",
+        )
+        if coefficient == 0:
+            return cosine, sine
+        # The governed phase delta remains float64.  Compute the tiny rotation
+        # stably in that schema, then restore the official float32 tuple
+        # storage before the result reaches Wan attention.
+        shifted = apply_wan_rotary_phase_numpy(
+            np.ascontiguousarray(cosine, dtype="<f8"),
+            np.ascontiguousarray(sine, dtype="<f8"),
             descriptor=descriptor,
             signed_coefficient=coefficient,
         )
-        if coefficient == 0:
-            return freqs_cos, freqs_sin
-        return shifted
+        return (
+            np.ascontiguousarray(shifted[0], dtype="<f4"),
+            np.ascontiguousarray(shifted[1], dtype="<f4"),
+        )
 
     torch = _import_torch()
     if torch.is_grad_enabled():
@@ -321,10 +359,10 @@ def apply_wan_rotary_phase_runtime(
         original_sine = sine[0, token_indices, 0, entry]
         shifted_cosine[0, token_indices, 0, entry] = (
             original_cosine * angle_cosine - original_sine * angle_sine
-        )
+        ).to(dtype=cosine.dtype)
         shifted_sine[0, token_indices, 0, entry] = (
             original_sine * angle_cosine + original_cosine * angle_sine
-        )
+        ).to(dtype=sine.dtype)
     _validate_torch_rope_tensor(
         torch,
         shifted_cosine,

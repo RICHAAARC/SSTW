@@ -3692,9 +3692,9 @@ Notebook 与 repository module 的跨边界数据
 | model_load_cache_preflight_worker_return_code | runtime | none | true | false | false | 已reap worker的进程退出码。 |
 | model_load_cache_preflight_cache_snapshot | runtime | none | true | false | false | 只包含已登记cache标量的嵌套快照。 |
 | model_load_cache_preflight_decision | governance | none | true | false | false | 仅表示固定模型/cache/load/offload/tiling闭合是否完成，不是方法或Gate结果。 |
-| block_attention_response_preflight_protocol_digest | provenance | none | true | false | false | block-local Patch-relation attention response preflight本地合同摘要；不授权runtime或GPU。 |
+| block_attention_response_preflight_protocol_digest | provenance | none | true | false | false | block-local Patch-relation attention response preflight合同摘要；只授权当前单步runtime/GPU preflight，不授权Gate或方法claim。 |
 | block_attention_target_block_index | protocol | none | true | false | false | 预声明Wan DiT block-local attention控制的目标block索引。 |
 | block_attention_head_group_indices | protocol | none | true | false | false | 预声明block-local relation bias使用的head group。 |
 | block_attention_sparse_entry_count | protocol | none | true | false | false | 固定Patch pair、active time与head group展开后的稀疏QK relation bias条目数。 |
 | block_attention_descriptor_digest | provenance | none | true | false | false | candidate-key-independent block-local relation descriptor的稳定摘要。 |
-| block_attention_response_preflight_decision | governance | none | true | false | false | 未来单步block-local attention response preflight的非正式诊断结论；当前仅合同冻结。 |
+| block_attention_response_preflight_decision | governance | none | true | false | false | 单步block-local attention response preflight的非正式诊断结论；不是Gate或方法证据。 |

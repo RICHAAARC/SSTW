@@ -32,6 +32,11 @@ from workflows.colab_test_request import (
     build_colab_test_dry_run_plan,
     load_colab_test_request,
 )
+from experiments.generative_video_model_probe.patch_relation_block_attention_response_preflight import (
+    DECISION_FILENAME,
+    RECORD_FILENAME,
+    run_patch_relation_block_attention_response_preflight,
+)
 
 
 @pytest.mark.quick
@@ -39,12 +44,24 @@ def test_block_attention_config_loads_with_frozen_digest() -> None:
     config = load_patch_relation_block_attention_response_preflight_config()
     assert config["protocol_digest"] == FROZEN_PROTOCOL_DIGEST
     assert protocol_digest(config["protocol_contract"]) == FROZEN_PROTOCOL_DIGEST
-    assert config["authorization_boundary"]["colab_execution_allowed"] is False
+    assert config["authorization_boundary"]["colab_execution_allowed"] is True
+    assert config["authorization_boundary"]["gpu_execution_allowed"] is True
+    assert (
+        config["authorization_boundary"]["runtime_implementation_authorized"]
+        is True
+    )
+    assert (
+        config["protocol_contract"]["block_local_attention_control_contract"][
+            "target_num_attention_heads"
+        ]
+        == 12
+    )
+    assert config["authorization_boundary"]["gate0_execution_allowed"] is False
     assert (
         config["protocol_contract"]["result_boundary"][
             "claim_support_status"
         ]
-        == "block_attention_local_contract_only_not_runtime_gate_or_method_evidence"
+        == "block_attention_single_step_runtime_preflight_only_not_gate_or_method_evidence"
     )
 
 
@@ -61,7 +78,7 @@ def test_block_attention_config_mutations_are_rejected(tmp_path: Path) -> None:
         load_patch_relation_block_attention_response_preflight_config(mutated)
 
     payload = json.loads(Path(DEFAULT_CONFIG_PATH).read_text(encoding="utf-8"))
-    payload["authorization_boundary"]["colab_execution_allowed"] = True
+    payload["authorization_boundary"]["colab_execution_allowed"] = False
     mutated.write_text(json.dumps(payload), encoding="utf-8")
     with pytest.raises(ValueError, match="authorization boundary"):
         load_patch_relation_block_attention_response_preflight_config(mutated)
@@ -152,7 +169,7 @@ def _write_request(path: Path, payload: dict[str, object]) -> None:
 
 
 @pytest.mark.quick
-def test_block_attention_request_is_parseable_but_not_executable(
+def test_block_attention_request_is_parseable_and_active_after_runtime_adapter(
     tmp_path: Path,
 ) -> None:
     project_root = tmp_path / "SSTW"
@@ -183,9 +200,36 @@ def test_block_attention_request_is_parseable_but_not_executable(
         request_path,
         project_root=project_root,
     )
-    assert plan["current_stage_execution_allowed"] is False
-    assert plan["paused_historical"] is True
+    assert plan["current_stage_execution_allowed"] is True
+    assert plan["paused_historical"] is False
     assert plan["claim_support_status"] == (
-        "block_attention_response_preflight_contract_only_not_runtime_or_"
-        "method_evidence"
+        "block_attention_response_preflight_only_not_gate_or_method_evidence"
     )
+
+
+@pytest.mark.quick
+def test_real_runner_accepts_workflow_precreated_output_root(
+    tmp_path: Path,
+) -> None:
+    output_root = tmp_path / "already_created_by_colab_test_workflow"
+    output_root.mkdir()
+
+    def fake_executor(
+        config: dict[str, object],
+        gate0_config: dict[str, object],
+    ) -> dict[str, object]:
+        assert config["authorization_boundary"]["gate0_execution_allowed"] is False
+        assert gate0_config["profile_id"] == "sstw_patch_relation_gate0_construction"
+        return {
+            "diagnostic_classification": "indeterminate",
+            "scheduler_step_call_count": 0,
+        }
+
+    decision = run_patch_relation_block_attention_response_preflight(
+        output_root,
+        executor=fake_executor,
+    )
+    assert decision["formal_result"] is False
+    assert decision["stage_progression_allowed"] is False
+    assert (output_root / DECISION_FILENAME).is_file()
+    assert (output_root / RECORD_FILENAME).is_file()

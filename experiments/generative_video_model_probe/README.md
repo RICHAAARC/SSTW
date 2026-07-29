@@ -72,16 +72,15 @@ preflight不是方法结果。
 global shared-RoPE phase carrier 已停止。该入口现在只作为已完成/paused
 historical 证据保留，不得继续调scale、strength、backoff或进入C0/Gate0。
 
-`patch_relation_block_attention_response_preflight` 是下一步block-local
-attention carrier的本地合同入口名称：它只冻结固定block、Patch pair、head group
-和pre-softmax QK relation bias descriptor，并允许request parser/dry-run识别。
-当前尚无真实Wan attention adapter或runner；真实server执行、GPU、Colab、decode、
-视频、Gate0、observer和paper claim均未授权。
+`patch_relation_block_attention_response_preflight` 是当前唯一 active 的真实Wan
+单步block-local attention carrier preflight：它固定block、Patch pair、head
+group和pre-softmax QK relation bias descriptor，只运行step0 zero-repeat与预声明
+±candidate响应测量。该入口不调用真实`scheduler.step`、不decode、不导出视频、不执行
+Gate0、observer或paper claim。
 
-当前没有真实可运行的 `colab_test` 方法入口。更早的
-`wan_model_load_cache_preflight` 已作为阶段0已完成/paused historical 入口保留，
-只维持解析、dry-run 与旧测试 double 兼容；不会作为真实 server 当前入口，也不会
-自动触发完整 Gate 0。
+更早的 `wan_model_load_cache_preflight` 已作为阶段0已完成/paused historical 入口
+保留，只维持解析、dry-run 与旧测试 double 兼容；不会作为真实 server 当前入口，也
+不会自动触发完整 Gate 0。
 
 历史 paper-profile 的实施顺序与 Claim 闭合规则仍保存在
 `docs/builds/complete_paper_mechanism_implementation.md`，但该文档只用于历史

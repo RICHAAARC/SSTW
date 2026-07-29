@@ -1,24 +1,24 @@
 {
   "authorization_boundary": {
-    "claim_support_status": "block_attention_local_contract_only_not_runtime_gate_or_method_evidence",
-    "colab_execution_allowed": false,
+    "claim_support_status": "block_attention_single_step_runtime_preflight_only_not_gate_or_method_evidence",
+    "colab_execution_allowed": true,
     "fixed_fpr_execution_allowed": false,
     "formal_result": false,
     "gate0_execution_allowed": false,
-    "gpu_execution_allowed": false,
+    "gpu_execution_allowed": true,
     "observer_implementation_allowed": false,
     "paper_claim_allowed": false,
-    "runtime_implementation_authorized": false,
+    "runtime_implementation_authorized": true,
     "stage_progression_allowed": false
   },
-  "contract_state": "block_local_attention_response_contract_implemented_pending_runtime_adapter",
+  "contract_state": "block_local_attention_response_runtime_adapter_contract_implemented_pending_real_wan_gpu_preflight",
   "method_id": "frame_state_synchronized_generative_flow_video_watermark",
   "profile_id": "sstw_patch_relation_block_attention_response_preflight",
   "protocol_contract": {
     "block_local_attention_control_contract": {
       "candidate_key_independent_descriptor": true,
       "carrier_family": "block_local_patch_relation_attention_control",
-      "colab_runner_implemented": false,
+      "colab_runner_implemented": true,
       "diffusers_version": "0.35.2",
       "direct_velocity_additive_projection_forbidden": true,
       "directed_pair_order": [
@@ -45,6 +45,7 @@
         4,
         5
       ],
+      "local_runtime_primitives_implemented": true,
       "master_key_may_only_select_signed_coefficient": true,
       "patch_token_a": {
         "column": 13,
@@ -54,13 +55,20 @@
         "column": 18,
         "row": 9
       },
-      "runtime_adapter_implemented": false,
+      "real_wan_runtime_adapter_implemented": true,
+      "runtime_adapter_forbids_dense_attention_mask_allocation": true,
+      "scope_failure_must_restore_original_binding": true,
+      "scope_record_requires_complete_clean_exit": true,
+      "scope_record_requires_exact_callback_coverage": true,
       "sparse_entry_order": [
         "time_index_ascending",
         "head_index_ascending",
         "directed_pair_order"
       ],
+      "scoped_runtime_adapter_contract_implemented": true,
+      "sparse_qk_bias_runtime_method": "official_no_mask_attention_plus_exact_selected_query_head_row_recompute",
       "target_block_index": 18,
+      "target_num_attention_heads": 12,
       "target_model": "Wan-AI/Wan2.1-T2V-1.3B-Diffusers",
       "target_module_boundary": "one_predeclared_transformer_block_self_attention_pre_softmax_qk_logits",
       "token_grid_shape": [
@@ -74,8 +82,8 @@
       ],
       "zero_sum_per_active_time_and_head": true
     },
-    "future_single_step_response_plan": {
-      "authorized_now": false,
+    "local_single_step_response_contract": {
+      "authorized_now": "real_wan_single_step_preflight_only",
       "candidate_bias_magnitudes": [
         "0.015625",
         "0.00390625",
@@ -85,28 +93,46 @@
         1,
         -1
       ],
+      "candidate_feasible_requires": [
+        "nonzero_response",
+        "repeatability_floor_ratio_at_most_0.1",
+        "response_l2_norm_at_most_step0_norm_budget",
+        "positive_negative_pair_cosine_at_most_minus_0.9"
+      ],
       "decode_allowed": false,
       "fail_condition": "no_budgeted_nonzero_repeatable_response_stops_this_carrier_or_block_location",
       "gate0_allowed": false,
+      "near_antisymmetry_cosine_threshold": "-0.9",
+      "nonzero_response_floor": "1e-12",
       "observer_allowed": false,
       "pass_condition": "budget_with_nonzero_repeatable_near_antisymmetric_cfg_response_only_allows_c0_design",
-      "requires_separate_runtime_adapter_review": true,
+      "repeatability_floor_ratio_threshold": "0.1",
+      "requires_separate_real_wan_adapter_review": false,
+      "real_wan_single_step_runner_implemented": true,
+      "transformer_forward_count": 16,
+      "record_validator_recomputes_candidate_guards": true,
+      "record_validator_recomputes_candidate_vectors": true,
+      "runtime_rejects_unfrozen_candidate_magnitude": true,
       "scheduler_step_call_count": 0,
+      "step0_norm_budget": "2.937237890625",
       "strength_sweep_allowed": false,
       "video_export_allowed": false,
       "zero_control_repeat_count": 2
     },
     "result_boundary": {
-      "claim_support_status": "block_attention_local_contract_only_not_runtime_gate_or_method_evidence",
-      "colab_execution_allowed": false,
+      "claim_support_status": "block_attention_single_step_runtime_preflight_only_not_gate_or_method_evidence",
+      "colab_execution_allowed": true,
       "fixed_fpr_execution_allowed": false,
       "formal_result": false,
       "gate0_execution_allowed": false,
-      "gpu_execution_allowed": false,
+      "gpu_execution_allowed": true,
       "observer_implementation_allowed": false,
       "paper_claim_allowed": false,
-      "runtime_implementation_authorized": false,
+      "runtime_implementation_authorized": true,
       "stage_progression_allowed": false
+    },
+    "runtime_execution_binding": {
+      "probe_id": "block_attention_c0_clean_a_step0_runtime_preflight"
     },
     "source_failure_boundary": {
       "candidate_to_historical_plateau_ratio": "0.880489058130237",
@@ -122,5 +148,5 @@
       "source_zip_sha256": "4c50e53ea33bc0ba6d25a3d12496d4b2a23171a3da48cff789f8c91efa27fa7d"
     }
   },
-  "protocol_digest": "feda6c5e9356abbb12a4c7ab017faf6bcd13b245ba0082f419f4cf642f257e1e"
+  "protocol_digest": "a75115bd55f04952e6ee464711407c766827f191e50e0230ecc6e7ab0bdeb3c7"
 }

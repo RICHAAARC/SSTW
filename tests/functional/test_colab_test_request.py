@@ -36,7 +36,9 @@ from workflows.colab_test_request import (
 def test_no_colab_test_id_is_runnable_until_block_attention_runtime(
     test_id: str,
 ) -> None:
-    assert ACTIVE_COLAB_TEST_IDS == ()
+    assert ACTIVE_COLAB_TEST_IDS == (
+        PATCH_RELATION_BLOCK_ATTENTION_RESPONSE_PREFLIGHT_TEST_ID,
+    )
     assert test_id not in ACTIVE_COLAB_TEST_IDS
 
 
@@ -305,7 +307,7 @@ def test_phase_response_request_rejects_source_failure_commit(
         load_colab_test_request(request_path, project_root=project_root)
 
 
-def test_block_attention_response_request_is_paused_contract_only(
+def test_block_attention_response_request_is_active_self_contained_packaged(
     tmp_path: Path,
 ) -> None:
     project_root = tmp_path / "SSTW"
@@ -323,20 +325,56 @@ def test_block_attention_response_request_is_paused_contract_only(
         request_path,
         project_root=project_root,
     )
-    assert plan["current_stage_execution_allowed"] is False
-    assert plan["paused_historical"] is True
+    assert plan["current_stage_execution_allowed"] is True
+    assert plan["paused_historical"] is False
     assert plan["claim_support_status"] == (
-        "block_attention_response_preflight_contract_only_not_runtime_or_"
-        "method_evidence"
+        "block_attention_response_preflight_only_not_gate_or_method_evidence"
     )
-    with pytest.raises(ValueError, match="none_pending_block_attention"):
-        run_colab_test_request(
-            request_path,
-            project_root=project_root,
-            repo_root=Path.cwd(),
-            local_workspace_root=tmp_path / "workspace",
-            local_package_cache_root=tmp_path / "packages",
+
+    def fake_runner(output_root: Path) -> dict[str, object]:
+        output_root.mkdir(parents=True, exist_ok=True)
+        (output_root / "patch_relation_block_attention_response_preflight_decision.json").write_text(
+            json.dumps(
+                {
+                    "decision_kind": (
+                        "patch_relation_block_attention_response_preflight"
+                    ),
+                    "formal_result": False,
+                    "stage_progression_allowed": False,
+                    "scheduler_step_call_count": 0,
+                    "decode_executed": False,
+                    "video_export_executed": False,
+                    "gate0_executed": False,
+                    "claim_support_status": (
+                        "block_attention_single_step_runtime_preflight_only_"
+                        "not_gate_or_method_evidence"
+                    ),
+                }
+            ),
+            encoding="utf-8",
         )
+        return {
+            "decision_kind": "patch_relation_block_attention_response_preflight",
+            "formal_result": False,
+            "stage_progression_allowed": False,
+            "claim_support_status": (
+                "block_attention_single_step_runtime_preflight_only_not_gate_"
+                "or_method_evidence"
+            ),
+        }
+
+    result = run_colab_test_request(
+        request_path,
+        project_root=project_root,
+        repo_root=Path.cwd(),
+        local_workspace_root=tmp_path / "workspace",
+        local_package_cache_root=tmp_path / "packages",
+        patch_relation_block_attention_response_preflight_runner=fake_runner,
+    )
+    assert result["test_id"] == (
+        PATCH_RELATION_BLOCK_ATTENTION_RESPONSE_PREFLIGHT_TEST_ID
+    )
+    assert Path(str(result["drive_result_zip"])).is_file()
 
     payload["parameters"]["run_series_id"] = "wrong_series"
     _write_request(request_path, payload)

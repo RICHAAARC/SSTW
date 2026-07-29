@@ -82,7 +82,9 @@ SUPPORTED_TEST_IDS = (
     PATCH_RELATION_BLOCK_ATTENTION_RESPONSE_PREFLIGHT_TEST_ID,
     WAN_MODEL_LOAD_CACHE_PREFLIGHT_TEST_ID,
 )
-ACTIVE_COLAB_TEST_IDS: tuple[str, ...] = ()
+ACTIVE_COLAB_TEST_IDS: tuple[str, ...] = (
+    PATCH_RELATION_BLOCK_ATTENTION_RESPONSE_PREFLIGHT_TEST_ID,
+)
 PAUSED_HISTORICAL_TEST_IDS = tuple(
     test_id
     for test_id in SUPPORTED_TEST_IDS
@@ -423,7 +425,7 @@ def load_colab_test_request(
         and (source_package or resume_package)
     ):
         raise ValueError(
-            "Patch-relation block-attention response preflight 是本地合同，"
+            "Patch-relation block-attention response preflight 是自包含真实Wan单步诊断，"
             "不接受 source/resume package"
         )
     if (
@@ -1303,6 +1305,16 @@ def _default_patch_relation_phase_response_preflight_runner(
     return run_patch_relation_phase_response_preflight(output_root)
 
 
+def _default_patch_relation_block_attention_response_preflight_runner(
+    output_root: Path,
+) -> dict[str, Any]:
+    from experiments.generative_video_model_probe.patch_relation_block_attention_response_preflight import (
+        run_patch_relation_block_attention_response_preflight,
+    )
+
+    return run_patch_relation_block_attention_response_preflight(output_root)
+
+
 def _default_wan_model_load_cache_preflight_runner(
     output_root: Path,
 ) -> dict[str, Any]:
@@ -1426,7 +1438,7 @@ def build_colab_test_dry_run_plan(
             if resolved["test_id"]
             == PATCH_RELATION_PHASE_RESPONSE_PREFLIGHT_TEST_ID
             else (
-                "block_attention_response_preflight_contract_only_not_runtime_or_method_evidence"
+                "block_attention_response_preflight_only_not_gate_or_method_evidence"
                 if resolved["test_id"]
                 == PATCH_RELATION_BLOCK_ATTENTION_RESPONSE_PREFLIGHT_TEST_ID
                 else (
@@ -1623,6 +1635,9 @@ def run_colab_test_request(
     patch_relation_phase_response_preflight_runner: (
         Callable[..., dict[str, Any]] | None
     ) = None,
+    patch_relation_block_attention_response_preflight_runner: (
+        Callable[..., dict[str, Any]] | None
+    ) = None,
     wan_model_load_cache_preflight_runner: (
         Callable[..., dict[str, Any]] | None
     ) = None,
@@ -1676,7 +1691,10 @@ def run_colab_test_request(
         PATCH_RELATION_PHASE_RESPONSE_PREFLIGHT_TEST_ID: (
             patch_relation_phase_response_preflight_runner is not None
         ),
-        PATCH_RELATION_BLOCK_ATTENTION_RESPONSE_PREFLIGHT_TEST_ID: False,
+        PATCH_RELATION_BLOCK_ATTENTION_RESPONSE_PREFLIGHT_TEST_ID: (
+            patch_relation_block_attention_response_preflight_runner
+            is not None
+        ),
         WAN_MODEL_LOAD_CACHE_PREFLIGHT_TEST_ID: (
             wan_model_load_cache_preflight_runner is not None
         ),
@@ -1774,6 +1792,7 @@ def run_colab_test_request(
             FRAME_STATE_SIGNED_OBSERVABILITY_CONSTRUCTION_TEST_ID,
             PATCH_RELATION_GATE0_CONSTRUCTION_TEST_ID,
             PATCH_RELATION_PHASE_RESPONSE_PREFLIGHT_TEST_ID,
+            PATCH_RELATION_BLOCK_ATTENTION_RESPONSE_PREFLIGHT_TEST_ID,
             WAN_MODEL_LOAD_CACHE_PREFLIGHT_TEST_ID,
         }
     )
@@ -1943,6 +1962,15 @@ def run_colab_test_request(
         runner = (
             patch_relation_phase_response_preflight_runner
             or _default_patch_relation_phase_response_preflight_runner
+        )
+        diagnostic_decision = runner(output_root)
+    elif (
+        resolved["test_id"]
+        == PATCH_RELATION_BLOCK_ATTENTION_RESPONSE_PREFLIGHT_TEST_ID
+    ):
+        runner = (
+            patch_relation_block_attention_response_preflight_runner
+            or _default_patch_relation_block_attention_response_preflight_runner
         )
         diagnostic_decision = runner(output_root)
     elif resolved["test_id"] == WAN_MODEL_LOAD_CACHE_PREFLIGHT_TEST_ID:

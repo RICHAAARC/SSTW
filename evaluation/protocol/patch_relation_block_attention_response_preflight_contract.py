@@ -1,8 +1,8 @@
-"""Exact local contract for the block-local Patch-relation attention preflight.
+"""Exact contract for the block-local Patch-relation attention preflight.
 
-This module validates the next carrier-contract batch only. It does not
-authorize a real Wan adapter, Colab execution, Gate 0, observer work, or a
-method claim.
+This module validates the single-step real Wan block-attention preflight
+contract only. It does not authorize Gate 0, observer work, stage progression,
+or a method claim.
 """
 
 from __future__ import annotations
@@ -20,16 +20,16 @@ DEFAULT_CONFIG_PATH = (
 PROFILE_ID = "sstw_patch_relation_block_attention_response_preflight"
 METHOD_ID = "frame_state_synchronized_generative_flow_video_watermark"
 CONTRACT_STATE = (
-    "block_local_attention_response_contract_implemented_pending_"
-    "runtime_adapter"
+    "block_local_attention_response_runtime_adapter_contract_implemented_"
+    "pending_real_wan_gpu_preflight"
 )
 FROZEN_PROTOCOL_DIGEST = (
-    "feda6c5e9356abbb12a4c7ab017faf6bcd13b245ba0082f419f4cf642f257e1e"
+    "a75115bd55f04952e6ee464711407c766827f191e50e0230ecc6e7ab0bdeb3c7"
 )
 EXPECTED_AUTHORIZATION_BOUNDARY = {
-    "runtime_implementation_authorized": False,
-    "colab_execution_allowed": False,
-    "gpu_execution_allowed": False,
+    "runtime_implementation_authorized": True,
+    "colab_execution_allowed": True,
+    "gpu_execution_allowed": True,
     "gate0_execution_allowed": False,
     "observer_implementation_allowed": False,
     "fixed_fpr_execution_allowed": False,
@@ -37,14 +37,15 @@ EXPECTED_AUTHORIZATION_BOUNDARY = {
     "formal_result": False,
     "stage_progression_allowed": False,
     "claim_support_status": (
-        "block_attention_local_contract_only_not_runtime_gate_or_method_"
+        "block_attention_single_step_runtime_preflight_only_not_gate_or_method_"
         "evidence"
     ),
 }
 EXPECTED_BLOCK_LOCAL_ATTENTION_CONTROL_CONTRACT = {
     "carrier_family": "block_local_patch_relation_attention_control",
-    "runtime_adapter_implemented": False,
-    "colab_runner_implemented": False,
+    "local_runtime_primitives_implemented": True,
+    "real_wan_runtime_adapter_implemented": True,
+    "colab_runner_implemented": True,
     "target_model": "Wan-AI/Wan2.1-T2V-1.3B-Diffusers",
     "diffusers_version": "0.35.2",
     "target_module_boundary": (
@@ -52,6 +53,7 @@ EXPECTED_BLOCK_LOCAL_ATTENTION_CONTROL_CONTRACT = {
         "qk_logits"
     ),
     "target_block_index": 18,
+    "target_num_attention_heads": 12,
     "token_grid_shape": [9, 20, 32],
     "video_frame_window": [11, 22],
     "active_token_time_indices": [3, 4, 5],
@@ -72,10 +74,20 @@ EXPECTED_BLOCK_LOCAL_ATTENTION_CONTROL_CONTRACT = {
     "master_key_may_only_select_signed_coefficient": True,
     "global_shared_rope_phase_forbidden": True,
     "direct_velocity_additive_projection_forbidden": True,
+    "scoped_runtime_adapter_contract_implemented": True,
+    "sparse_qk_bias_runtime_method": (
+        "official_no_mask_attention_plus_exact_selected_query_head_row_recompute"
+    ),
+    "runtime_adapter_forbids_dense_attention_mask_allocation": True,
+    "scope_record_requires_complete_clean_exit": True,
+    "scope_record_requires_exact_callback_coverage": True,
+    "scope_failure_must_restore_original_binding": True,
 }
-EXPECTED_FUTURE_SINGLE_STEP_RESPONSE_PLAN = {
-    "authorized_now": False,
-    "requires_separate_runtime_adapter_review": True,
+EXPECTED_LOCAL_SINGLE_STEP_RESPONSE_CONTRACT = {
+    "authorized_now": "real_wan_single_step_preflight_only",
+    "requires_separate_real_wan_adapter_review": False,
+    "real_wan_single_step_runner_implemented": True,
+    "transformer_forward_count": 16,
     "zero_control_repeat_count": 2,
     "candidate_bias_magnitudes": [
         "0.015625",
@@ -89,6 +101,19 @@ EXPECTED_FUTURE_SINGLE_STEP_RESPONSE_PLAN = {
     "gate0_allowed": False,
     "observer_allowed": False,
     "strength_sweep_allowed": False,
+    "repeatability_floor_ratio_threshold": "0.1",
+    "near_antisymmetry_cosine_threshold": "-0.9",
+    "nonzero_response_floor": "1e-12",
+    "step0_norm_budget": "2.937237890625",
+    "record_validator_recomputes_candidate_guards": True,
+    "record_validator_recomputes_candidate_vectors": True,
+    "runtime_rejects_unfrozen_candidate_magnitude": True,
+    "candidate_feasible_requires": [
+        "nonzero_response",
+        "repeatability_floor_ratio_at_most_0.1",
+        "response_l2_norm_at_most_step0_norm_budget",
+        "positive_negative_pair_cosine_at_most_minus_0.9",
+    ],
     "pass_condition": (
         "budget_with_nonzero_repeatable_near_antisymmetric_cfg_response_"
         "only_allows_c0_design"
@@ -184,7 +209,8 @@ def load_patch_relation_block_attention_response_preflight_config(
         {
             "source_failure_boundary",
             "block_local_attention_control_contract",
-            "future_single_step_response_plan",
+            "local_single_step_response_contract",
+            "runtime_execution_binding",
             "result_boundary",
         },
         "block-attention protocol contract",
@@ -200,10 +226,14 @@ def load_patch_relation_block_attention_response_preflight_config(
     ):
         raise ValueError("block-local attention control contract 漂移")
     if (
-        contract["future_single_step_response_plan"]
-        != EXPECTED_FUTURE_SINGLE_STEP_RESPONSE_PLAN
+        contract["local_single_step_response_contract"]
+        != EXPECTED_LOCAL_SINGLE_STEP_RESPONSE_CONTRACT
     ):
-        raise ValueError("future single-step response plan 漂移")
+        raise ValueError("local single-step response contract 漂移")
+    if contract["runtime_execution_binding"] != {
+        "probe_id": "block_attention_c0_clean_a_step0_runtime_preflight"
+    }:
+        raise ValueError("block-attention runtime execution binding 漂移")
     if contract["result_boundary"] != EXPECTED_AUTHORIZATION_BOUNDARY:
         raise ValueError("block-attention result boundary 漂移")
     return payload

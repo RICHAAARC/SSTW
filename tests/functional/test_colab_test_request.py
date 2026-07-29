@@ -32,11 +32,11 @@ from workflows.colab_test_request import (
 
 @pytest.mark.quick
 @pytest.mark.parametrize("test_id", PAUSED_HISTORICAL_TEST_IDS)
-def test_only_model_load_cache_preflight_is_runnable(
+def test_only_patch_relation_phase_response_preflight_is_runnable(
     test_id: str,
 ) -> None:
     assert ACTIVE_COLAB_TEST_IDS == (
-        WAN_MODEL_LOAD_CACHE_PREFLIGHT_TEST_ID,
+        PATCH_RELATION_PHASE_RESPONSE_PREFLIGHT_TEST_ID,
     )
     assert test_id not in ACTIVE_COLAB_TEST_IDS
 
@@ -201,20 +201,20 @@ def _patch_relation_phase_response_request_payload() -> dict[str, object]:
 
 
 @pytest.mark.quick
-def test_paused_method_request_is_readable_but_default_server_execution_rejected(
+def test_historical_wan_preflight_is_readable_but_default_server_execution_rejected(
     tmp_path: Path,
 ) -> None:
     project_root = tmp_path / "SSTW"
     request_path = project_root / "requests" / "colab_test_request.json"
     _write_request(
         request_path,
-        _patch_relation_phase_response_request_payload(),
+        _wan_model_load_cache_preflight_request_payload(),
     )
     resolved = load_colab_test_request(
         request_path,
         project_root=project_root,
     )
-    assert resolved["test_id"] == PATCH_RELATION_PHASE_RESPONSE_PREFLIGHT_TEST_ID
+    assert resolved["test_id"] == WAN_MODEL_LOAD_CACHE_PREFLIGHT_TEST_ID
     plan = build_colab_test_dry_run_plan(
         request_path,
         project_root=project_root,
@@ -1682,7 +1682,7 @@ def test_colab_test_server_cli_dry_run_uses_request_without_gpu(tmp_path: Path) 
     request_path = project_root / "requests" / "colab_test_request.json"
     _write_request(
         request_path,
-        _wan_model_load_cache_preflight_request_payload(),
+        _patch_relation_phase_response_request_payload(),
     )
 
     completed = subprocess.run(
@@ -1715,10 +1715,10 @@ def test_colab_test_server_cli_dry_run_uses_request_without_gpu(tmp_path: Path) 
     assert decision["resolved_main_generation_model_revision"] is None
     assert decision["resolved_cross_generation_model_revision"] is None
     assert decision["claim_support_status"] == (
-        "model_load_cache_preflight_only_not_method_evidence"
+        "phase_response_preflight_only_not_gate_or_method_evidence"
     )
     assert decision["pipeline_results"][0]["phase"] == (
-        "model_load_cache_preflight"
+        "phase_response_preflight"
     )
 
 

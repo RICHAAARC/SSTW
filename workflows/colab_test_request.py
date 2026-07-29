@@ -78,7 +78,7 @@ SUPPORTED_TEST_IDS = (
     PATCH_RELATION_PHASE_RESPONSE_PREFLIGHT_TEST_ID,
     WAN_MODEL_LOAD_CACHE_PREFLIGHT_TEST_ID,
 )
-ACTIVE_COLAB_TEST_IDS = (WAN_MODEL_LOAD_CACHE_PREFLIGHT_TEST_ID,)
+ACTIVE_COLAB_TEST_IDS = (PATCH_RELATION_PHASE_RESPONSE_PREFLIGHT_TEST_ID,)
 PAUSED_HISTORICAL_TEST_IDS = tuple(
     test_id
     for test_id in SUPPORTED_TEST_IDS
@@ -300,6 +300,13 @@ def load_colab_test_request(
     ):
         raise ValueError(
             "Wan model-load/cache preflight run_series_id 必须精确冻结"
+        )
+    if (
+        test_id == PATCH_RELATION_PHASE_RESPONSE_PREFLIGHT_TEST_ID
+        and run_series_id != "patch_relation_phase_response_preflight"
+    ):
+        raise ValueError(
+            "Patch-relation phase-response preflight run_series_id 必须精确冻结"
         )
     source_package = _path_within_project_root(
         parameters.get("source_package_path"),
@@ -1382,9 +1389,14 @@ def build_colab_test_dry_run_plan(
         "trajectory_replay_source_build_only_not_paper_evidence"
         if resolved["test_id"] == TRAJECTORY_REPLAY_SOURCE_BUILD_TEST_ID
         else (
-            "model_load_cache_preflight_only_not_method_evidence"
-            if resolved["test_id"] == WAN_MODEL_LOAD_CACHE_PREFLIGHT_TEST_ID
-            else "diagnostic_only_not_paper_evidence"
+            "phase_response_preflight_only_not_gate_or_method_evidence"
+            if resolved["test_id"]
+            == PATCH_RELATION_PHASE_RESPONSE_PREFLIGHT_TEST_ID
+            else (
+                "model_load_cache_preflight_only_not_method_evidence"
+                if resolved["test_id"] == WAN_MODEL_LOAD_CACHE_PREFLIGHT_TEST_ID
+                else "diagnostic_only_not_paper_evidence"
+            )
         )
     )
     return {
@@ -1625,6 +1637,9 @@ def run_colab_test_request(
         PATCH_RELATION_PHASE_RESPONSE_PREFLIGHT_TEST_ID: (
             patch_relation_phase_response_preflight_runner is not None
         ),
+        WAN_MODEL_LOAD_CACHE_PREFLIGHT_TEST_ID: (
+            wan_model_load_cache_preflight_runner is not None
+        ),
     }
     if (
         resolved["test_id"] in PAUSED_HISTORICAL_TEST_IDS
@@ -1634,7 +1649,7 @@ def run_colab_test_request(
     ):
         raise ValueError(
             "该Colab test_id已暂停为historical；真实server当前唯一可运行入口是 "
-            f"{WAN_MODEL_LOAD_CACHE_PREFLIGHT_TEST_ID}"
+            f"{PATCH_RELATION_PHASE_RESPONSE_PREFLIGHT_TEST_ID}"
         )
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S_%f")
     repository_commit = _repository_commit(repository_root)

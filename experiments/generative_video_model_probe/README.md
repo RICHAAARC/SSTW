@@ -67,8 +67,11 @@ validation bootstrap；ZIP与manifest经同文件系统staging成对readback后�
 到Drive。已发布结果即使bootstrap最终清理失败也不得被recovery重复打包。该
 preflight不是方法结果。
 
-当前唯一活动入口是`wan_model_load_cache_preflight`；本目录其它历史runner均暂停，
-不会由request路由执行，也不会由阶段0自动触发。
+当前唯一活动入口是`patch_relation_phase_response_preflight`：它是阶段1最小单步
+phase-response preflight，不decode、不导出视频、不进入Gate。更早的
+`wan_model_load_cache_preflight` 已作为阶段0已完成/paused historical 入口保留，
+只维持解析、dry-run 与旧测试 double 兼容；不会作为真实 server 当前入口，也不会
+自动触发完整 Gate 0。
 
 历史 paper-profile 的实施顺序与 Claim 闭合规则仍保存在
 `docs/builds/complete_paper_mechanism_implementation.md`，但该文档只用于历史

@@ -69,8 +69,10 @@ example 的 commit placeholder 必须在审核提交后替换。受控 `snapshot
 `local_files_only=true`加载VAE与pipeline。
 
 当前阶段唯一可运行的 `colab_test` test_id 是
-`wan_model_load_cache_preflight`。所有既有方法、Gate和phase-response入口保留为
-paused/historical代码，必须等待阶段0明确PASS及新的独立授权，不能自动进入阶段1。
+`patch_relation_phase_response_preflight`。`wan_model_load_cache_preflight` 已转为
+阶段0已完成/paused historical 入口，仅保留解析、dry-run 与旧测试 double 兼容；
+所有既有完整方法、Gate 和其它历史入口仍保持 paused/historical，不能自动进入完整
+8-video Gate 0、decode、视频导出、攻击、fixed-FPR 或 paper claim。
 
 下列配置说明保留历史实验和诊断边界；任何既有 execution flag 都不能授权或冒充
 当前 Patch-relation 路线已进入执行。

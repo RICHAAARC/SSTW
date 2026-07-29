@@ -61,6 +61,9 @@ PATCH_RELATION_GATE0_CONSTRUCTION_TEST_ID = (
 PATCH_RELATION_PHASE_RESPONSE_PREFLIGHT_TEST_ID = (
     "patch_relation_phase_response_preflight"
 )
+PATCH_RELATION_BLOCK_ATTENTION_RESPONSE_PREFLIGHT_TEST_ID = (
+    "patch_relation_block_attention_response_preflight"
+)
 WAN_MODEL_LOAD_CACHE_PREFLIGHT_TEST_ID = "wan_model_load_cache_preflight"
 SUPPORTED_TEST_IDS = (
     TRAJECTORY_REPLAY_SOURCE_BUILD_TEST_ID,
@@ -76,9 +79,10 @@ SUPPORTED_TEST_IDS = (
     FRAME_STATE_SIGNED_OBSERVABILITY_CONSTRUCTION_TEST_ID,
     PATCH_RELATION_GATE0_CONSTRUCTION_TEST_ID,
     PATCH_RELATION_PHASE_RESPONSE_PREFLIGHT_TEST_ID,
+    PATCH_RELATION_BLOCK_ATTENTION_RESPONSE_PREFLIGHT_TEST_ID,
     WAN_MODEL_LOAD_CACHE_PREFLIGHT_TEST_ID,
 )
-ACTIVE_COLAB_TEST_IDS = (PATCH_RELATION_PHASE_RESPONSE_PREFLIGHT_TEST_ID,)
+ACTIVE_COLAB_TEST_IDS: tuple[str, ...] = ()
 PAUSED_HISTORICAL_TEST_IDS = tuple(
     test_id
     for test_id in SUPPORTED_TEST_IDS
@@ -106,6 +110,9 @@ SUPPORTED_FRAME_STATE_SIGNED_OBSERVABILITY_PHASES = ("gate0",)
 SUPPORTED_PATCH_RELATION_GATE0_PHASES = ("gate0",)
 SUPPORTED_PATCH_RELATION_PHASE_RESPONSE_PREFLIGHT_PHASES = (
     "phase_response_preflight",
+)
+SUPPORTED_PATCH_RELATION_BLOCK_ATTENTION_RESPONSE_PREFLIGHT_PHASES = (
+    "block_attention_response_preflight",
 )
 SUPPORTED_WAN_MODEL_LOAD_CACHE_PREFLIGHT_PHASES = (
     "model_load_cache_preflight",
@@ -207,6 +214,7 @@ def load_colab_test_request(
         raise ValueError("repository.ref 不是安全的 Git revision")
     if test_id in {
         PATCH_RELATION_PHASE_RESPONSE_PREFLIGHT_TEST_ID,
+        PATCH_RELATION_BLOCK_ATTENTION_RESPONSE_PREFLIGHT_TEST_ID,
         WAN_MODEL_LOAD_CACHE_PREFLIGHT_TEST_ID,
     } and (
         not _FULL_LOWERCASE_GIT_COMMIT.fullmatch(repository_ref)
@@ -280,6 +288,13 @@ def load_colab_test_request(
         supported_phases = (
             SUPPORTED_PATCH_RELATION_PHASE_RESPONSE_PREFLIGHT_PHASES
         )
+    elif (
+        test_id
+        == PATCH_RELATION_BLOCK_ATTENTION_RESPONSE_PREFLIGHT_TEST_ID
+    ):
+        supported_phases = (
+            SUPPORTED_PATCH_RELATION_BLOCK_ATTENTION_RESPONSE_PREFLIGHT_PHASES
+        )
     elif test_id == WAN_MODEL_LOAD_CACHE_PREFLIGHT_TEST_ID:
         supported_phases = SUPPORTED_WAN_MODEL_LOAD_CACHE_PREFLIGHT_PHASES
     else:
@@ -308,6 +323,15 @@ def load_colab_test_request(
         raise ValueError(
             "Patch-relation phase-response preflight run_series_id 必须精确冻结"
         )
+    if (
+        test_id == PATCH_RELATION_BLOCK_ATTENTION_RESPONSE_PREFLIGHT_TEST_ID
+        and run_series_id
+        != "patch_relation_block_attention_response_preflight"
+    ):
+        raise ValueError(
+            "Patch-relation block-attention response preflight "
+            "run_series_id 必须精确冻结"
+        )
     source_package = _path_within_project_root(
         parameters.get("source_package_path"),
         root,
@@ -318,6 +342,7 @@ def load_colab_test_request(
                 FRAME_STATE_SIGNED_OBSERVABILITY_CONSTRUCTION_TEST_ID,
                 PATCH_RELATION_GATE0_CONSTRUCTION_TEST_ID,
                 PATCH_RELATION_PHASE_RESPONSE_PREFLIGHT_TEST_ID,
+                PATCH_RELATION_BLOCK_ATTENTION_RESPONSE_PREFLIGHT_TEST_ID,
                 WAN_MODEL_LOAD_CACHE_PREFLIGHT_TEST_ID,
             }
         ),
@@ -391,6 +416,14 @@ def load_colab_test_request(
     ):
         raise ValueError(
             "Patch-relation phase-response preflight 是自包含诊断，"
+            "不接受 source/resume package"
+        )
+    if (
+        test_id == PATCH_RELATION_BLOCK_ATTENTION_RESPONSE_PREFLIGHT_TEST_ID
+        and (source_package or resume_package)
+    ):
+        raise ValueError(
+            "Patch-relation block-attention response preflight 是本地合同，"
             "不接受 source/resume package"
         )
     if (
@@ -1393,9 +1426,15 @@ def build_colab_test_dry_run_plan(
             if resolved["test_id"]
             == PATCH_RELATION_PHASE_RESPONSE_PREFLIGHT_TEST_ID
             else (
-                "model_load_cache_preflight_only_not_method_evidence"
-                if resolved["test_id"] == WAN_MODEL_LOAD_CACHE_PREFLIGHT_TEST_ID
-                else "diagnostic_only_not_paper_evidence"
+                "block_attention_response_preflight_contract_only_not_runtime_or_method_evidence"
+                if resolved["test_id"]
+                == PATCH_RELATION_BLOCK_ATTENTION_RESPONSE_PREFLIGHT_TEST_ID
+                else (
+                    "model_load_cache_preflight_only_not_method_evidence"
+                    if resolved["test_id"]
+                    == WAN_MODEL_LOAD_CACHE_PREFLIGHT_TEST_ID
+                    else "diagnostic_only_not_paper_evidence"
+                )
             )
         )
     )
@@ -1637,6 +1676,7 @@ def run_colab_test_request(
         PATCH_RELATION_PHASE_RESPONSE_PREFLIGHT_TEST_ID: (
             patch_relation_phase_response_preflight_runner is not None
         ),
+        PATCH_RELATION_BLOCK_ATTENTION_RESPONSE_PREFLIGHT_TEST_ID: False,
         WAN_MODEL_LOAD_CACHE_PREFLIGHT_TEST_ID: (
             wan_model_load_cache_preflight_runner is not None
         ),
@@ -1647,9 +1687,14 @@ def run_colab_test_request(
             str(resolved["test_id"]), False
         )
     ):
+        active_message = (
+            ", ".join(ACTIVE_COLAB_TEST_IDS)
+            if ACTIVE_COLAB_TEST_IDS
+            else "none_pending_block_attention_runtime_adapter"
+        )
         raise ValueError(
             "该Colab test_id已暂停为historical；真实server当前唯一可运行入口是 "
-            f"{PATCH_RELATION_PHASE_RESPONSE_PREFLIGHT_TEST_ID}"
+            f"{active_message}"
         )
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S_%f")
     repository_commit = _repository_commit(repository_root)

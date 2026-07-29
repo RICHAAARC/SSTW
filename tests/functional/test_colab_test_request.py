@@ -15,6 +15,7 @@ from workflows.colab_test_request import (
     ACTIVE_COLAB_TEST_IDS,
     CONTROLLED_EMBEDDING_STRENGTH_TEST_ID,
     FRAME_STATE_SIGNED_OBSERVABILITY_CONSTRUCTION_TEST_ID,
+    PATCH_RELATION_BLOCK_ATTENTION_RESPONSE_PREFLIGHT_TEST_ID,
     PATCH_RELATION_GATE0_CONSTRUCTION_TEST_ID,
     PATCH_RELATION_PHASE_RESPONSE_PREFLIGHT_TEST_ID,
     PAUSED_HISTORICAL_TEST_IDS,
@@ -32,12 +33,10 @@ from workflows.colab_test_request import (
 
 @pytest.mark.quick
 @pytest.mark.parametrize("test_id", PAUSED_HISTORICAL_TEST_IDS)
-def test_only_patch_relation_phase_response_preflight_is_runnable(
+def test_no_colab_test_id_is_runnable_until_block_attention_runtime(
     test_id: str,
 ) -> None:
-    assert ACTIVE_COLAB_TEST_IDS == (
-        PATCH_RELATION_PHASE_RESPONSE_PREFLIGHT_TEST_ID,
-    )
+    assert ACTIVE_COLAB_TEST_IDS == ()
     assert test_id not in ACTIVE_COLAB_TEST_IDS
 
 
@@ -200,6 +199,27 @@ def _patch_relation_phase_response_request_payload() -> dict[str, object]:
     }
 
 
+def _patch_relation_block_attention_response_request_payload() -> (
+    dict[str, object]
+):
+    return {
+        "request_schema_version": REQUEST_SCHEMA_VERSION,
+        "test_id": PATCH_RELATION_BLOCK_ATTENTION_RESPONSE_PREFLIGHT_TEST_ID,
+        "repository": {
+            "url": "https://github.com/RICHAAARC/SSTW.git",
+            "ref": "a" * 40,
+        },
+        "parameters": {
+            "phase": "block_attention_response_preflight",
+            "run_series_id": (
+                "patch_relation_block_attention_response_preflight"
+            ),
+            "source_package_path": "",
+            "resume_package_path": "",
+        },
+    }
+
+
 @pytest.mark.quick
 def test_historical_wan_preflight_is_readable_but_default_server_execution_rejected(
     tmp_path: Path,
@@ -282,6 +302,45 @@ def test_phase_response_request_rejects_source_failure_commit(
     )
     _write_request(request_path, payload)
     with pytest.raises(ValueError, match="审核后"):
+        load_colab_test_request(request_path, project_root=project_root)
+
+
+def test_block_attention_response_request_is_paused_contract_only(
+    tmp_path: Path,
+) -> None:
+    project_root = tmp_path / "SSTW"
+    request_path = project_root / "requests" / "colab_test_request.json"
+    payload = _patch_relation_block_attention_response_request_payload()
+    _write_request(request_path, payload)
+    resolved = load_colab_test_request(
+        request_path,
+        project_root=project_root,
+    )
+    assert resolved["test_id"] == (
+        PATCH_RELATION_BLOCK_ATTENTION_RESPONSE_PREFLIGHT_TEST_ID
+    )
+    plan = build_colab_test_dry_run_plan(
+        request_path,
+        project_root=project_root,
+    )
+    assert plan["current_stage_execution_allowed"] is False
+    assert plan["paused_historical"] is True
+    assert plan["claim_support_status"] == (
+        "block_attention_response_preflight_contract_only_not_runtime_or_"
+        "method_evidence"
+    )
+    with pytest.raises(ValueError, match="none_pending_block_attention"):
+        run_colab_test_request(
+            request_path,
+            project_root=project_root,
+            repo_root=Path.cwd(),
+            local_workspace_root=tmp_path / "workspace",
+            local_package_cache_root=tmp_path / "packages",
+        )
+
+    payload["parameters"]["run_series_id"] = "wrong_series"
+    _write_request(request_path, payload)
+    with pytest.raises(ValueError, match="run_series_id"):
         load_colab_test_request(request_path, project_root=project_root)
 
 

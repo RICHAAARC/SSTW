@@ -68,11 +68,21 @@ example 的 commit placeholder 必须在审核提交后替换。受控 `snapshot
 `snapshot_download`，验证冻结commit snapshot位于本地Hub cache后，才以
 `local_files_only=true`加载VAE与pipeline。
 
-当前阶段唯一可运行的 `colab_test` test_id 是
-`patch_relation_phase_response_preflight`。`wan_model_load_cache_preflight` 已转为
-阶段0已完成/paused historical 入口，仅保留解析、dry-run 与旧测试 double 兼容；
-所有既有完整方法、Gate 和其它历史入口仍保持 paused/historical，不能自动进入完整
-8-video Gate 0、decode、视频导出、攻击、fixed-FPR 或 paper claim。
+`patch_relation_phase_response_preflight` 已完成单步真实 preflight：RoPE tuple
+随scale正确变化，但CFG velocity response 仍呈平台化且全部超出预算，因此当前
+global shared-RoPE phase carrier 停止，不再调strength、scale或进入C0/Gate0。
+
+`protocol/sstw_patch_relation_block_attention_response_preflight.json` 是下一
+carrier 的本地合同：冻结一个中后段DiT block、固定Patch pair与head group，并把
+控制边界转为block-local pre-softmax QK relation bias。该批只实现合同、稀疏
+descriptor和request解析边界；真实Wan attention adapter、runner、GPU、Colab、
+decode、视频、Gate0、observer和paper claim均未授权。
+
+当前没有可运行的 `colab_test` 方法入口。`patch_relation_phase_response_preflight`
+与`wan_model_load_cache_preflight` 均已转为已完成/paused historical 入口，仅保留
+解析、dry-run 与旧测试 double 兼容；所有既有完整方法、Gate 和其它历史入口仍保持
+paused/historical，不能自动进入完整8-video Gate 0、decode、视频导出、攻击、
+fixed-FPR 或 paper claim。
 
 下列配置说明保留历史实验和诊断边界；任何既有 execution flag 都不能授权或冒充
 当前 Patch-relation 路线已进入执行。

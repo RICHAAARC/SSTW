@@ -67,8 +67,18 @@ validation bootstrap；ZIP与manifest经同文件系统staging成对readback后�
 到Drive。已发布结果即使bootstrap最终清理失败也不得被recovery重复打包。该
 preflight不是方法结果。
 
-当前唯一活动入口是`patch_relation_phase_response_preflight`：它是阶段1最小单步
-phase-response preflight，不decode、不导出视频、不进入Gate。更早的
+`patch_relation_phase_response_preflight` 已完成真实单步 preflight：RoPE tuple
+随scale正确缩小，但CFG velocity response没有进入预算内可用窗口，因此
+global shared-RoPE phase carrier 已停止。该入口现在只作为已完成/paused
+historical 证据保留，不得继续调scale、strength、backoff或进入C0/Gate0。
+
+`patch_relation_block_attention_response_preflight` 是下一步block-local
+attention carrier的本地合同入口名称：它只冻结固定block、Patch pair、head group
+和pre-softmax QK relation bias descriptor，并允许request parser/dry-run识别。
+当前尚无真实Wan attention adapter或runner；真实server执行、GPU、Colab、decode、
+视频、Gate0、observer和paper claim均未授权。
+
+当前没有真实可运行的 `colab_test` 方法入口。更早的
 `wan_model_load_cache_preflight` 已作为阶段0已完成/paused historical 入口保留，
 只维持解析、dry-run 与旧测试 double 兼容；不会作为真实 server 当前入口，也不会
 自动触发完整 Gate 0。

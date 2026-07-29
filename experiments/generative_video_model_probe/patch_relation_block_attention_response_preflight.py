@@ -7,7 +7,7 @@ zero repeat, predeclared ± candidates, no decode, no video, no Gate 0.
 
 from __future__ import annotations
 
-from dataclasses import asdict
+from dataclasses import asdict, replace
 from hashlib import sha256
 from pathlib import Path
 from typing import Any
@@ -132,31 +132,81 @@ def _input_binding(probe_id: str, hidden: Any, timestep: Any) -> str:
     )
 
 
-def _sample_descriptor_response_vector(
+def _patch_aligned_descriptor_response_vector(
     delta_velocity: np.ndarray,
 ) -> np.ndarray:
     descriptor = build_block_attention_relation_descriptor()
     values: list[float] = []
-    _, channels, _, rows, columns = delta_velocity.shape
+    _, channels, time_count, rows, columns = delta_velocity.shape
+    if (time_count, rows, columns) != (9, 40, 64):
+        raise ValueError("block-attention CFG readout 必须是冻结latent grid [9,40,64]")
     for entry in descriptor.entries:
-        token_in_frame = entry.query_token_index % (rows * columns)
-        row = token_in_frame // columns
-        column = token_in_frame % columns
         channel = int(entry.head_index) % channels
+        token_in_frame = entry.query_token_index % (
+            descriptor.token_grid_shape[1] * descriptor.token_grid_shape[2]
+        )
+        query_token_row = token_in_frame // descriptor.token_grid_shape[2]
+        query_token_column = token_in_frame % descriptor.token_grid_shape[2]
+        key_token_in_frame = entry.key_token_index % (
+            descriptor.token_grid_shape[1] * descriptor.token_grid_shape[2]
+        )
+        key_token_row = key_token_in_frame // descriptor.token_grid_shape[2]
+        key_token_column = key_token_in_frame % descriptor.token_grid_shape[2]
+        query_patch = delta_velocity[
+            0,
+            channel,
+            entry.time_index,
+            query_token_row * 2 : query_token_row * 2 + 2,
+            query_token_column * 2 : query_token_column * 2 + 2,
+        ]
+        key_patch = delta_velocity[
+            0,
+            channel,
+            entry.time_index,
+            key_token_row * 2 : key_token_row * 2 + 2,
+            key_token_column * 2 : key_token_column * 2 + 2,
+        ]
         values.append(
             float(
                 np.float64(entry.coefficient)
-                * np.float64(
-                    delta_velocity[
-                        0,
-                        channel,
-                        entry.time_index,
-                        row,
-                        column,
-                    ]
+                * (
+                    np.float64(np.mean(query_patch, dtype=np.float64))
+                    - np.float64(np.mean(key_patch, dtype=np.float64))
                 )
             )
         )
+    return np.asarray(values, dtype="<f8")
+
+
+def _attention_local_descriptor_response_vector(
+    branch_records: tuple[WanBlockAttentionBranchApplicationRecord, ...],
+) -> np.ndarray:
+    descriptor = build_block_attention_relation_descriptor()
+    if len(branch_records) != 2:
+        raise ValueError("block-attention CFG attention-local readout 需要cond/uncond两支")
+    by_branch = {record.cfg_branch_role: record for record in branch_records}
+    if set(by_branch) != {"conditional", "unconditional"}:
+        raise ValueError("block-attention branch role coverage 漂移")
+    guidance_scale = np.float64(5.0)
+    values: list[float] = []
+    for entry in descriptor.entries:
+        branch_deltas: dict[str, float] = {}
+        for role, record in by_branch.items():
+            matches = [
+                observation
+                for observation in record.selected_row_attention_observations
+                if observation.time_index == entry.time_index
+                and observation.head_index == entry.head_index
+                and observation.query_token_index == entry.query_token_index
+                and observation.key_token_index == entry.key_token_index
+            ]
+            if len(matches) != 1:
+                raise RuntimeError("block-attention selected-row observation coverage 漂移")
+            branch_deltas[role] = float(matches[0].selected_probability_delta)
+        cfg_delta = branch_deltas["unconditional"] + float(guidance_scale) * (
+            branch_deltas["conditional"] - branch_deltas["unconditional"]
+        )
+        values.append(float(np.float64(entry.coefficient) * np.float64(cfg_delta)))
     return np.asarray(values, dtype="<f8")
 
 
@@ -383,7 +433,8 @@ class ScopedWanBlockAttentionResponsePreflight:
         if not np.array_equal(pipeline_cfg, base_cfg_rows[0]):
             raise RuntimeError("block-attention pipeline CFG 与zero base不一致")
         candidate_records = []
-        pair_cosines: list[float] = []
+        propagated_pair_cosines: list[float] = []
+        local_pair_cosines: list[float] = []
         scheduler_sample = _to_float32_numpy(
             _runtime_float32_velocity(sample, label="block-attention sample"),
             label="block-attention sample",
@@ -391,8 +442,12 @@ class ScopedWanBlockAttentionResponsePreflight:
         del scheduler_sample
         candidate_index = 0
         for magnitude in CANDIDATE_BIAS_MAGNITUDES:
-            vectors: dict[int, np.ndarray] = {}
-            app_records: dict[int, WanBlockAttentionBranchApplicationRecord] = {}
+            propagated_vectors: dict[int, np.ndarray] = {}
+            local_vectors: dict[int, np.ndarray] = {}
+            app_records: dict[
+                int,
+                tuple[WanBlockAttentionBranchApplicationRecord, ...],
+            ] = {}
             for sign in CANDIDATE_SIGNS:
                 cfg, branch_records = self._forward_pair(
                     sign=sign,
@@ -400,13 +455,20 @@ class ScopedWanBlockAttentionResponsePreflight:
                     binding=binding,
                 )
                 delta = np.subtract(cfg, base_cfg_rows[0], dtype=np.float32)
-                response_vector = _sample_descriptor_response_vector(delta)
-                repeat_vector = _sample_descriptor_response_vector(
+                response_vector = _patch_aligned_descriptor_response_vector(delta)
+                repeat_vector = _patch_aligned_descriptor_response_vector(
                     np.subtract(
                         base_cfg_rows[1],
                         base_cfg_rows[0],
                         dtype=np.float32,
                     )
+                )
+                attention_local_response_vector = (
+                    _attention_local_descriptor_response_vector(branch_records)
+                )
+                attention_local_repeat_vector = np.zeros(
+                    attention_local_response_vector.shape,
+                    dtype="<f8",
                 )
                 candidate = evaluate_block_attention_candidate_response(
                     self.descriptor,
@@ -415,15 +477,27 @@ class ScopedWanBlockAttentionResponsePreflight:
                     magnitude=magnitude,
                     response_vector=response_vector,
                     repeat_delta_vector=repeat_vector,
+                    attention_local_response_vector=(
+                        attention_local_response_vector
+                    ),
+                    attention_local_repeat_delta_vector=(
+                        attention_local_repeat_vector
+                    ),
                 )
                 candidate_records.append(candidate)
-                vectors[sign] = response_vector
-                app_records[sign] = branch_records[0]
+                propagated_vectors[sign] = response_vector
+                local_vectors[sign] = attention_local_response_vector
+                app_records[sign] = branch_records
                 candidate_index += 1
             from main.methods.state_space_watermark.patch_relation_attention_runtime import _safe_cosine
 
-            pair_cosines.append(_safe_cosine(vectors[1], vectors[-1]))
-            if app_records[1].descriptor_digest != app_records[-1].descriptor_digest:
+            propagated_pair_cosines.append(
+                _safe_cosine(propagated_vectors[1], propagated_vectors[-1])
+            )
+            local_pair_cosines.append(
+                _safe_cosine(local_vectors[1], local_vectors[-1])
+            )
+            if app_records[1][0].descriptor_digest != app_records[-1][0].descriptor_digest:
                 raise RuntimeError("block-attention branch descriptor digest 漂移")
         from main.methods.state_space_watermark.patch_relation_attention_runtime import (
             BlockAttentionCandidateResponse,
@@ -434,28 +508,35 @@ class ScopedWanBlockAttentionResponsePreflight:
         updated_candidates: list[BlockAttentionCandidateResponse] = []
         for candidate in candidate_records:
             pair_index = CANDIDATE_BIAS_MAGNITUDES.index(candidate.magnitude)
-            near_pair = pair_cosines[pair_index] <= -0.9
+            local_near_pair = local_pair_cosines[pair_index] <= -0.9
+            propagated_near_pair = propagated_pair_cosines[pair_index] <= -0.9
+            local_signed = (
+                local_near_pair
+                and candidate.attention_local_repeatable_above_floor
+            )
+            propagated_signed = (
+                propagated_near_pair
+                and candidate.propagated_cfg_patch_relation_repeatable_above_floor
+            )
             updated_candidates.append(
-                BlockAttentionCandidateResponse(
-                    candidate_index=candidate.candidate_index,
-                    signed_coefficient=candidate.signed_coefficient,
-                    magnitude=candidate.magnitude,
-                    response_vector=candidate.response_vector,
-                    repeat_delta_vector=candidate.repeat_delta_vector,
-                    response_l2_norm=candidate.response_l2_norm,
-                    norm_budget=candidate.norm_budget,
-                    norm_guard_passed=candidate.norm_guard_passed,
-                    repeat_l2_norm=candidate.repeat_l2_norm,
-                    repeat_floor_ratio=candidate.repeat_floor_ratio,
-                    nonzero_response=candidate.nonzero_response,
-                    repeatable_above_floor=candidate.repeatable_above_floor,
-                    near_antisymmetric_pair=bool(near_pair),
-                    feasible_candidate=bool(
-                        near_pair
-                        and candidate.norm_guard_passed
-                        and candidate.repeatable_above_floor
+                replace(
+                    candidate,
+                    attention_local_near_antisymmetric_pair=bool(
+                        local_near_pair
                     ),
-                    application_record=candidate.application_record,
+                    attention_local_signed_response=bool(local_signed),
+                    propagated_cfg_patch_relation_near_antisymmetric_pair=bool(
+                        propagated_near_pair
+                    ),
+                    propagated_cfg_patch_relation_response=bool(
+                        propagated_signed
+                    ),
+                    near_antisymmetric_pair=bool(propagated_near_pair),
+                    feasible_candidate=bool(
+                        local_signed
+                        and propagated_signed
+                        and candidate.norm_guard_passed
+                    ),
                 )
             )
         record_obj = BlockAttentionPrimitiveResponseRecord(
@@ -467,10 +548,27 @@ class ScopedWanBlockAttentionResponsePreflight:
             video_export_executed=False,
             gate0_executed=False,
             candidate_responses=tuple(updated_candidates),
-            positive_negative_response_cosine_by_magnitude=tuple(pair_cosines),
+            attention_local_positive_negative_response_cosine_by_magnitude=tuple(
+                local_pair_cosines
+            ),
+            propagated_cfg_patch_relation_positive_negative_response_cosine_by_magnitude=tuple(
+                propagated_pair_cosines
+            ),
+            positive_negative_response_cosine_by_magnitude=tuple(
+                propagated_pair_cosines
+            ),
+            attention_local_signed_response=any(
+                candidate.attention_local_signed_response
+                for candidate in updated_candidates
+            ),
+            propagated_cfg_patch_relation_response=any(
+                candidate.propagated_cfg_patch_relation_response
+                for candidate in updated_candidates
+            ),
             diagnostic_classification=classify_block_attention_primitive_response(
                 tuple(updated_candidates),
-                tuple(pair_cosines),
+                tuple(local_pair_cosines),
+                tuple(propagated_pair_cosines),
             ),
             formal_result=False,
             stage_progression_allowed=False,

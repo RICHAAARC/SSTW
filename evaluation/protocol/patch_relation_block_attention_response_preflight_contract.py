@@ -24,7 +24,7 @@ CONTRACT_STATE = (
     "pending_real_wan_gpu_preflight"
 )
 FROZEN_PROTOCOL_DIGEST = (
-    "a75115bd55f04952e6ee464711407c766827f191e50e0230ecc6e7ab0bdeb3c7"
+    "4cc1959aa9a73223e0327f50ae75757a199825e0299595fb7f0572669d7cee72"
 )
 EXPECTED_AUTHORIZATION_BOUNDARY = {
     "runtime_implementation_authorized": True,
@@ -106,17 +106,28 @@ EXPECTED_LOCAL_SINGLE_STEP_RESPONSE_CONTRACT = {
     "nonzero_response_floor": "1e-12",
     "step0_norm_budget": "2.937237890625",
     "record_validator_recomputes_candidate_guards": True,
-    "record_validator_recomputes_candidate_vectors": True,
+    "record_validator_recomputes_attention_local_and_propagated_vectors": True,
     "runtime_rejects_unfrozen_candidate_magnitude": True,
+    "attention_local_readout_contract": (
+        "selected_query_head_row_pre_bias_post_bias_probability_delta_from_actual_"
+        "processor_observations"
+    ),
+    "propagated_cfg_readout_contract": (
+        "token_grid_9x20x32_to_latent_grid_9x40x64_patch_aligned_2x2_patch_a_"
+        "minus_patch_b_mean_relation"
+    ),
     "candidate_feasible_requires": [
-        "nonzero_response",
-        "repeatability_floor_ratio_at_most_0.1",
-        "response_l2_norm_at_most_step0_norm_budget",
-        "positive_negative_pair_cosine_at_most_minus_0.9",
+        "attention_local_nonzero_response",
+        "attention_local_repeatability_floor_ratio_at_most_0.1",
+        "attention_local_positive_negative_pair_cosine_at_most_minus_0.9",
+        "propagated_cfg_patch_relation_nonzero_response",
+        "propagated_cfg_patch_relation_repeatability_floor_ratio_at_most_0.1",
+        "propagated_cfg_patch_relation_response_l2_norm_at_most_step0_norm_budget",
+        "propagated_cfg_patch_relation_positive_negative_pair_cosine_at_most_minus_0.9",
     ],
     "pass_condition": (
-        "budget_with_nonzero_repeatable_near_antisymmetric_cfg_response_"
-        "only_allows_c0_design"
+        "attention_local_and_propagated_cfg_patch_relation_both_nonzero_"
+        "repeatable_budgeted_near_antisymmetric_only_allows_c0_design"
     ),
     "fail_condition": (
         "no_budgeted_nonzero_repeatable_response_stops_this_carrier_or_"

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from pathlib import Path
 import inspect
 
@@ -137,11 +138,17 @@ def test_local_primitive_response_record_has_no_execution_side_effects() -> None
         len(CANDIDATE_BIAS_MAGNITUDES) * len(CANDIDATE_SIGNS)
     )
     assert record.diagnostic_classification == (
-        "feasible_nonzero_near_antisymmetric_response_candidate"
+        "primitive_candidate_attention_local_and_propagated_cfg"
     )
+    assert record.attention_local_signed_response is True
+    assert record.propagated_cfg_patch_relation_response is True
     assert all(
         cosine == -1.0
         for cosine in record.positive_negative_response_cosine_by_magnitude
+    )
+    assert all(
+        cosine == -1.0
+        for cosine in record.attention_local_positive_negative_response_cosine_by_magnitude
     )
 
 
@@ -157,23 +164,7 @@ def test_repeatability_floor_classification_is_fail_closed() -> None:
 @pytest.mark.quick
 def test_record_forged_classification_rejected() -> None:
     record = build_local_block_attention_primitive_response_record()
-    forged = record.__class__(
-        record_kind=record.record_kind,
-        descriptor_digest=record.descriptor_digest,
-        zero_repeat_count=record.zero_repeat_count,
-        scheduler_step_call_count=record.scheduler_step_call_count,
-        decode_executed=record.decode_executed,
-        video_export_executed=record.video_export_executed,
-        gate0_executed=record.gate0_executed,
-        candidate_responses=record.candidate_responses,
-        positive_negative_response_cosine_by_magnitude=(
-            record.positive_negative_response_cosine_by_magnitude
-        ),
-        diagnostic_classification="indeterminate",
-        formal_result=record.formal_result,
-        stage_progression_allowed=record.stage_progression_allowed,
-        claim_support_status=record.claim_support_status,
-    )
+    forged = replace(record, diagnostic_classification="indeterminate")
     with pytest.raises(ValueError, match="classification"):
         validate_block_attention_primitive_response_record(forged)
 
@@ -182,39 +173,14 @@ def test_record_forged_classification_rejected() -> None:
 def test_record_forged_candidate_guard_rejected() -> None:
     record = build_local_block_attention_primitive_response_record()
     first = record.candidate_responses[0]
-    forged_first = first.__class__(
-        candidate_index=first.candidate_index,
-        signed_coefficient=first.signed_coefficient,
-        magnitude=first.magnitude,
-        response_vector=first.response_vector,
-        repeat_delta_vector=first.repeat_delta_vector,
+    forged_first = replace(
+        first,
         response_l2_norm=first.norm_budget * 10.0,
-        norm_budget=first.norm_budget,
-        norm_guard_passed=True,
-        repeat_l2_norm=first.repeat_l2_norm,
-        repeat_floor_ratio=first.repeat_floor_ratio,
-        nonzero_response=first.nonzero_response,
-        repeatable_above_floor=first.repeatable_above_floor,
-        near_antisymmetric_pair=first.near_antisymmetric_pair,
-        feasible_candidate=first.feasible_candidate,
-        application_record=first.application_record,
+        propagated_cfg_patch_relation_response_l2_norm=first.norm_budget * 10.0,
     )
-    forged = record.__class__(
-        record_kind=record.record_kind,
-        descriptor_digest=record.descriptor_digest,
-        zero_repeat_count=record.zero_repeat_count,
-        scheduler_step_call_count=record.scheduler_step_call_count,
-        decode_executed=record.decode_executed,
-        video_export_executed=record.video_export_executed,
-        gate0_executed=record.gate0_executed,
+    forged = replace(
+        record,
         candidate_responses=(forged_first,) + record.candidate_responses[1:],
-        positive_negative_response_cosine_by_magnitude=(
-            record.positive_negative_response_cosine_by_magnitude
-        ),
-        diagnostic_classification=record.diagnostic_classification,
-        formal_result=record.formal_result,
-        stage_progression_allowed=record.stage_progression_allowed,
-        claim_support_status=record.claim_support_status,
     )
     with pytest.raises(ValueError, match="norm|feasible"):
         validate_block_attention_primitive_response_record(forged)
@@ -225,45 +191,25 @@ def test_record_forged_antipodal_cosine_and_feasible_rejected() -> None:
     record = build_local_block_attention_primitive_response_record()
     positive = record.candidate_responses[0]
     negative = record.candidate_responses[1]
-    forged_negative = negative.__class__(
-        candidate_index=negative.candidate_index,
-        signed_coefficient=negative.signed_coefficient,
-        magnitude=negative.magnitude,
+    forged_negative = replace(
+        negative,
         response_vector=positive.response_vector,
-        repeat_delta_vector=negative.repeat_delta_vector,
-        response_l2_norm=negative.response_l2_norm,
-        norm_budget=negative.norm_budget,
-        norm_guard_passed=negative.norm_guard_passed,
-        repeat_l2_norm=negative.repeat_l2_norm,
-        repeat_floor_ratio=negative.repeat_floor_ratio,
-        nonzero_response=negative.nonzero_response,
-        repeatable_above_floor=negative.repeatable_above_floor,
+        propagated_cfg_patch_relation_response_vector=positive.response_vector,
         near_antisymmetric_pair=True,
+        propagated_cfg_patch_relation_near_antisymmetric_pair=True,
+        propagated_cfg_patch_relation_response=True,
         feasible_candidate=True,
-        application_record=negative.application_record,
     )
-    forged = record.__class__(
-        record_kind=record.record_kind,
-        descriptor_digest=record.descriptor_digest,
-        zero_repeat_count=record.zero_repeat_count,
-        scheduler_step_call_count=record.scheduler_step_call_count,
-        decode_executed=record.decode_executed,
-        video_export_executed=record.video_export_executed,
-        gate0_executed=record.gate0_executed,
+    forged = replace(
+        record,
         candidate_responses=(
             positive,
             forged_negative,
         )
         + record.candidate_responses[2:],
-        positive_negative_response_cosine_by_magnitude=(
-            record.positive_negative_response_cosine_by_magnitude
-        ),
         diagnostic_classification=(
-            "feasible_nonzero_near_antisymmetric_response_candidate"
+            "primitive_candidate_attention_local_and_propagated_cfg"
         ),
-        formal_result=record.formal_result,
-        stage_progression_allowed=record.stage_progression_allowed,
-        claim_support_status=record.claim_support_status,
     )
     with pytest.raises(ValueError, match="antisymmetry cosine"):
         validate_block_attention_primitive_response_record(forged)

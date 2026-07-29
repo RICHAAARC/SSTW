@@ -85,6 +85,24 @@ class BlockAttentionScopeRecord:
 
 
 @dataclass(frozen=True)
+class SelectedRowAttentionObservation:
+    """Low-dimensional observation for one selected query/head/key row."""
+
+    time_index: int
+    head_index: int
+    query_token_index: int
+    key_token_index: int
+    descriptor_coefficient: float
+    selected_logit_before_bias: float
+    selected_logit_after_bias: float
+    selected_probability_before_bias: float
+    selected_probability_after_bias: float
+    selected_probability_delta: float
+    selected_row_output_delta_l2_norm: float
+    selected_row_output_delta_first_four: tuple[float, ...]
+
+
+@dataclass(frozen=True)
 class WanBlockAttentionBranchApplicationRecord:
     """Successful real Wan block-local attention application."""
 
@@ -102,6 +120,7 @@ class WanBlockAttentionBranchApplicationRecord:
     bias_l2_norm: float
     bias_digest: str
     clean_exact_no_op: bool
+    selected_row_attention_observations: tuple[SelectedRowAttentionObservation, ...]
     local_single_step_preflight_only: bool = True
     scheduler_step_call_count: int = 0
     decode_executed: bool = False
@@ -118,6 +137,24 @@ class BlockAttentionCandidateResponse:
     candidate_index: int
     signed_coefficient: int
     magnitude: float
+    attention_local_signed_response_vector: tuple[float, ...]
+    attention_local_repeat_delta_vector: tuple[float, ...]
+    attention_local_response_l2_norm: float
+    attention_local_repeat_l2_norm: float
+    attention_local_repeat_floor_ratio: float
+    attention_local_nonzero_response: bool
+    attention_local_repeatable_above_floor: bool
+    attention_local_near_antisymmetric_pair: bool
+    attention_local_signed_response: bool
+    propagated_cfg_patch_relation_response_vector: tuple[float, ...]
+    propagated_cfg_patch_relation_repeat_delta_vector: tuple[float, ...]
+    propagated_cfg_patch_relation_response_l2_norm: float
+    propagated_cfg_patch_relation_repeat_l2_norm: float
+    propagated_cfg_patch_relation_repeat_floor_ratio: float
+    propagated_cfg_patch_relation_nonzero_response: bool
+    propagated_cfg_patch_relation_repeatable_above_floor: bool
+    propagated_cfg_patch_relation_near_antisymmetric_pair: bool
+    propagated_cfg_patch_relation_response: bool
     response_vector: tuple[float, ...]
     repeat_delta_vector: tuple[float, ...]
     response_l2_norm: float
@@ -144,7 +181,11 @@ class BlockAttentionPrimitiveResponseRecord:
     video_export_executed: bool
     gate0_executed: bool
     candidate_responses: tuple[BlockAttentionCandidateResponse, ...]
+    attention_local_positive_negative_response_cosine_by_magnitude: tuple[float, ...]
+    propagated_cfg_patch_relation_positive_negative_response_cosine_by_magnitude: tuple[float, ...]
     positive_negative_response_cosine_by_magnitude: tuple[float, ...]
+    attention_local_signed_response: bool
+    propagated_cfg_patch_relation_response: bool
     diagnostic_classification: str
     formal_result: bool
     stage_progression_allowed: bool
@@ -358,25 +399,82 @@ class _WanBlockLocalAttentionBiasProcessor:
         key: Any,
         value: Any,
         bias_by_query_head: dict[tuple[int, int], dict[int, float]],
-    ) -> Any:
+    ) -> tuple[Any, tuple[SelectedRowAttentionObservation, ...]]:
         if not bias_by_query_head:
-            return attention_rows
+            return attention_rows, ()
         torch = _torch_module_from_tensor(query)
         patched = attention_rows.clone()
         scale = 1.0 / math.sqrt(float(query.shape[-1]))
+        observations: list[SelectedRowAttentionObservation] = []
         for (query_index, head_index), key_biases in bias_by_query_head.items():
             query_row = query[0, query_index, head_index, :].float()
             key_rows = key[0, :, head_index, :].float()
             logits = torch.matmul(key_rows, query_row) * scale
-            for key_index, bias in key_biases.items():
-                logits[key_index] = logits[key_index] + float(bias)
-            weights = torch.softmax(logits, dim=-1)
+            weights_before = torch.softmax(logits, dim=-1)
             value_rows = value[0, :, head_index, :].float()
+            output_before = torch.matmul(weights_before, value_rows)
+            logits_after = logits.clone()
+            for key_index, bias in key_biases.items():
+                logits_after[key_index] = logits_after[key_index] + float(bias)
+            weights_after = torch.softmax(logits_after, dim=-1)
+            output_after = torch.matmul(weights_after, value_rows)
+            patched[0, query_index, head_index, :] = output_after.to(
+                dtype=patched.dtype
+            )
+            output_delta = (output_after - output_before).detach().float()
+            for key_index, bias in key_biases.items():
+                entry = next(
+                    item
+                    for item in self.descriptor.entries
+                    if int(item.query_token_index) == int(query_index)
+                    and int(item.key_token_index) == int(key_index)
+                    and int(item.head_index) == int(head_index)
+                )
+                observations.append(
+                    SelectedRowAttentionObservation(
+                        time_index=int(entry.time_index),
+                        head_index=int(entry.head_index),
+                        query_token_index=int(entry.query_token_index),
+                        key_token_index=int(entry.key_token_index),
+                        descriptor_coefficient=float(entry.coefficient),
+                        selected_logit_before_bias=float(
+                            logits[key_index].detach().cpu().item()
+                        ),
+                        selected_logit_after_bias=float(
+                            logits_after[key_index].detach().cpu().item()
+                        ),
+                        selected_probability_before_bias=float(
+                            weights_before[key_index].detach().cpu().item()
+                        ),
+                        selected_probability_after_bias=float(
+                            weights_after[key_index].detach().cpu().item()
+                        ),
+                        selected_probability_delta=float(
+                            (
+                                weights_after[key_index]
+                                - weights_before[key_index]
+                            )
+                            .detach()
+                            .cpu()
+                            .item()
+                        ),
+                        selected_row_output_delta_l2_norm=float(
+                            torch.linalg.vector_norm(output_delta)
+                            .detach()
+                            .cpu()
+                            .item()
+                        ),
+                        selected_row_output_delta_first_four=tuple(
+                            float(item)
+                            for item in output_delta[:4].detach().cpu().tolist()
+                        ),
+                    )
+                )
             patched[0, query_index, head_index, :] = torch.matmul(
-                weights,
+                weights_after,
                 value_rows,
             ).to(dtype=patched.dtype)
-        return patched
+        return patched, tuple(observations)
 
     def __call__(
         self,
@@ -420,7 +518,7 @@ class _WanBlockLocalAttentionBiasProcessor:
             is_causal=False,
             backend=getattr(self.original_processor, "_attention_backend", None),
         )
-        attention_rows = self._apply_sparse_row_bias(
+        attention_rows, observations = self._apply_sparse_row_bias(
             attention_rows=attention_rows,
             query=query,
             key=key,
@@ -443,6 +541,7 @@ class _WanBlockLocalAttentionBiasProcessor:
                 + str(query.dtype)
             ),
             application_record=record,
+            selected_row_attention_observations=observations,
         )
         return hidden_states
 
@@ -476,6 +575,9 @@ class ScopedWanBlockLocalAttentionBiasAdapter:
         self._attention_mask_shape: tuple[int, int, int, int] | None = None
         self._attention_mask_dtype = ""
         self._application_record: BlockAttentionBiasApplicationRecord | None = None
+        self._selected_row_attention_observations: tuple[
+            SelectedRowAttentionObservation, ...
+        ] = ()
 
     def __enter__(self) -> "ScopedWanBlockLocalAttentionBiasAdapter":
         if self._entered:
@@ -531,11 +633,17 @@ class ScopedWanBlockLocalAttentionBiasAdapter:
         attention_mask_shape: tuple[int, int, int, int],
         attention_mask_dtype: str,
         application_record: BlockAttentionBiasApplicationRecord,
+        selected_row_attention_observations: tuple[
+            SelectedRowAttentionObservation, ...
+        ],
     ) -> None:
         self._processor_call_count += 1
         self._attention_mask_shape = attention_mask_shape
         self._attention_mask_dtype = attention_mask_dtype
         self._application_record = application_record
+        self._selected_row_attention_observations = (
+            selected_row_attention_observations
+        )
 
     def __exit__(self, exc_type, exc, traceback) -> bool:
         if self._exit_attempted:
@@ -582,6 +690,8 @@ class ScopedWanBlockLocalAttentionBiasAdapter:
                 WAN_SELF_ATTENTION_SEQUENCE_LENGTH,
                 WAN_SELF_ATTENTION_SEQUENCE_LENGTH,
             )
+            and len(self._selected_row_attention_observations)
+            == self._application_record.changed_entry_count
         )
         if not self._completed_successfully:
             raise RuntimeError("Wan block-attention processor coverage 不完整")
@@ -609,6 +719,9 @@ class ScopedWanBlockLocalAttentionBiasAdapter:
             bias_l2_norm=self._application_record.bias_l2_norm,
             bias_digest=self._application_record.bias_digest,
             clean_exact_no_op=self._application_record.clean_exact_no_op,
+            selected_row_attention_observations=(
+                self._selected_row_attention_observations
+            ),
         )
 
 
@@ -715,6 +828,27 @@ def _safe_cosine(a: np.ndarray, b: np.ndarray) -> float:
     return max(-1.0, min(1.0, observed))
 
 
+def _response_layer_stats(
+    *,
+    response: np.ndarray,
+    repeat_delta: np.ndarray,
+) -> dict[str, float | bool]:
+    response_norm = float(np.linalg.norm(response.astype(np.float64)))
+    repeat_norm = float(np.linalg.norm(repeat_delta.astype(np.float64)))
+    repeat_ratio = repeat_norm / max(response_norm, NONZERO_RESPONSE_FLOOR)
+    nonzero = bool(response_norm > NONZERO_RESPONSE_FLOOR)
+    repeatable = bool(
+        nonzero and repeat_ratio <= REPEATABILITY_FLOOR_RATIO_THRESHOLD
+    )
+    return {
+        "response_l2_norm": response_norm,
+        "repeat_l2_norm": repeat_norm,
+        "repeat_floor_ratio": float(repeat_ratio),
+        "nonzero_response": nonzero,
+        "repeatable_above_floor": repeatable,
+    }
+
+
 def evaluate_block_attention_candidate_response(
     descriptor: BlockAttentionRelationDescriptor,
     *,
@@ -723,46 +857,120 @@ def evaluate_block_attention_candidate_response(
     magnitude: float,
     response_vector: np.ndarray,
     repeat_delta_vector: np.ndarray,
+    attention_local_response_vector: np.ndarray | None = None,
+    attention_local_repeat_delta_vector: np.ndarray | None = None,
 ) -> BlockAttentionCandidateResponse:
     """Evaluate one local candidate without trusting caller statistics."""
 
     frozen_magnitude = _require_frozen_candidate_magnitude(magnitude)
-    response = _require_float64_vector(response_vector, "response_vector")
-    repeat_delta = _require_float64_vector(
+    propagated_response = _require_float64_vector(
+        response_vector,
+        "response_vector",
+    )
+    propagated_repeat_delta = _require_float64_vector(
         repeat_delta_vector,
         "repeat_delta_vector",
     )
-    if response.shape != (len(descriptor.entries),):
+    if attention_local_response_vector is None:
+        attention_local_response_vector = response_vector
+    if attention_local_repeat_delta_vector is None:
+        attention_local_repeat_delta_vector = repeat_delta_vector
+    local_response = _require_float64_vector(
+        attention_local_response_vector,
+        "attention_local_response_vector",
+    )
+    local_repeat_delta = _require_float64_vector(
+        attention_local_repeat_delta_vector,
+        "attention_local_repeat_delta_vector",
+    )
+    if propagated_response.shape != (len(descriptor.entries),):
         raise ValueError("response_vector shape 与 descriptor entry count 不一致")
-    if repeat_delta.shape != response.shape:
+    for label, array in (
+        ("repeat_delta_vector", propagated_repeat_delta),
+        ("attention_local_response_vector", local_response),
+        ("attention_local_repeat_delta_vector", local_repeat_delta),
+    ):
+        if array.shape != propagated_response.shape:
+            raise ValueError(f"{label} shape 与 response_vector 不一致")
+    if propagated_repeat_delta.shape != propagated_response.shape:
         raise ValueError("repeat_delta_vector shape 与 response_vector 不一致")
     _, application = apply_block_attention_sparse_bias_runtime(
         descriptor,
         signed_coefficient=signed_coefficient,
         magnitude=frozen_magnitude,
     )
-    response_norm = float(np.linalg.norm(response.astype(np.float64)))
-    repeat_norm = float(np.linalg.norm(repeat_delta.astype(np.float64)))
-    denominator = max(response_norm, NONZERO_RESPONSE_FLOOR)
-    repeat_ratio = repeat_norm / denominator
-    norm_guard = response_norm <= STEP0_NORM_BUDGET
-    repeatable = bool(
-        response_norm > NONZERO_RESPONSE_FLOOR
-        and repeat_ratio <= REPEATABILITY_FLOOR_RATIO_THRESHOLD
+    local_stats = _response_layer_stats(
+        response=local_response,
+        repeat_delta=local_repeat_delta,
+    )
+    propagated_stats = _response_layer_stats(
+        response=propagated_response,
+        repeat_delta=propagated_repeat_delta,
+    )
+    norm_guard = (
+        propagated_stats["response_l2_norm"] <= STEP0_NORM_BUDGET
     )
     return BlockAttentionCandidateResponse(
         candidate_index=int(candidate_index),
         signed_coefficient=int(signed_coefficient),
         magnitude=frozen_magnitude,
-        response_vector=tuple(float(item) for item in response.tolist()),
-        repeat_delta_vector=tuple(float(item) for item in repeat_delta.tolist()),
-        response_l2_norm=response_norm,
+        attention_local_signed_response_vector=tuple(
+            float(item) for item in local_response.tolist()
+        ),
+        attention_local_repeat_delta_vector=tuple(
+            float(item) for item in local_repeat_delta.tolist()
+        ),
+        attention_local_response_l2_norm=float(
+            local_stats["response_l2_norm"]
+        ),
+        attention_local_repeat_l2_norm=float(local_stats["repeat_l2_norm"]),
+        attention_local_repeat_floor_ratio=float(
+            local_stats["repeat_floor_ratio"]
+        ),
+        attention_local_nonzero_response=bool(
+            local_stats["nonzero_response"]
+        ),
+        attention_local_repeatable_above_floor=bool(
+            local_stats["repeatable_above_floor"]
+        ),
+        attention_local_near_antisymmetric_pair=False,
+        attention_local_signed_response=False,
+        propagated_cfg_patch_relation_response_vector=tuple(
+            float(item) for item in propagated_response.tolist()
+        ),
+        propagated_cfg_patch_relation_repeat_delta_vector=tuple(
+            float(item) for item in propagated_repeat_delta.tolist()
+        ),
+        propagated_cfg_patch_relation_response_l2_norm=float(
+            propagated_stats["response_l2_norm"]
+        ),
+        propagated_cfg_patch_relation_repeat_l2_norm=float(
+            propagated_stats["repeat_l2_norm"]
+        ),
+        propagated_cfg_patch_relation_repeat_floor_ratio=float(
+            propagated_stats["repeat_floor_ratio"]
+        ),
+        propagated_cfg_patch_relation_nonzero_response=bool(
+            propagated_stats["nonzero_response"]
+        ),
+        propagated_cfg_patch_relation_repeatable_above_floor=bool(
+            propagated_stats["repeatable_above_floor"]
+        ),
+        propagated_cfg_patch_relation_near_antisymmetric_pair=False,
+        propagated_cfg_patch_relation_response=False,
+        response_vector=tuple(float(item) for item in propagated_response.tolist()),
+        repeat_delta_vector=tuple(
+            float(item) for item in propagated_repeat_delta.tolist()
+        ),
+        response_l2_norm=float(propagated_stats["response_l2_norm"]),
         norm_budget=STEP0_NORM_BUDGET,
         norm_guard_passed=bool(norm_guard),
-        repeat_l2_norm=repeat_norm,
-        repeat_floor_ratio=float(repeat_ratio),
-        nonzero_response=bool(response_norm > NONZERO_RESPONSE_FLOOR),
-        repeatable_above_floor=repeatable,
+        repeat_l2_norm=float(propagated_stats["repeat_l2_norm"]),
+        repeat_floor_ratio=float(propagated_stats["repeat_floor_ratio"]),
+        nonzero_response=bool(propagated_stats["nonzero_response"]),
+        repeatable_above_floor=bool(
+            propagated_stats["repeatable_above_floor"]
+        ),
         near_antisymmetric_pair=False,
         feasible_candidate=False,
         application_record=application,
@@ -801,6 +1009,7 @@ def build_local_block_attention_primitive_response_record(
                 magnitude=magnitude,
             )
             response = (response_gain * sparse_bias).astype("<f8", copy=True)
+            local_response = response.copy()
             repeat_delta = np.full(
                 response.shape,
                 repeat_floor,
@@ -813,25 +1022,89 @@ def build_local_block_attention_primitive_response_record(
                 magnitude=magnitude,
                 response_vector=response,
                 repeat_delta_vector=repeat_delta,
+                attention_local_response_vector=local_response,
+                attention_local_repeat_delta_vector=repeat_delta,
             )
             candidate_records.append(candidate)
             response_vectors[(magnitude, sign)] = response
             candidate_index += 1
 
-    antipodal_cosines: list[float] = []
+    local_antipodal_cosines: list[float] = []
+    propagated_antipodal_cosines: list[float] = []
     for magnitude in CANDIDATE_BIAS_MAGNITUDES:
-        cosine = _safe_cosine(
+        propagated_cosine = _safe_cosine(
             response_vectors[(magnitude, 1)],
             response_vectors[(magnitude, -1)],
         )
-        antipodal_cosines.append(cosine)
-        near_pair = cosine <= NEAR_ANTISYMMETRY_COSINE_THRESHOLD
+        local_cosine = propagated_cosine
+        local_antipodal_cosines.append(local_cosine)
+        propagated_antipodal_cosines.append(propagated_cosine)
+        local_near_pair = local_cosine <= NEAR_ANTISYMMETRY_COSINE_THRESHOLD
+        propagated_near_pair = (
+            propagated_cosine <= NEAR_ANTISYMMETRY_COSINE_THRESHOLD
+        )
         for index, candidate in enumerate(candidate_records):
             if candidate.magnitude == magnitude:
                 candidate_records[index] = BlockAttentionCandidateResponse(
                     candidate_index=candidate.candidate_index,
                     signed_coefficient=candidate.signed_coefficient,
                     magnitude=candidate.magnitude,
+                    attention_local_signed_response_vector=(
+                        candidate.attention_local_signed_response_vector
+                    ),
+                    attention_local_repeat_delta_vector=(
+                        candidate.attention_local_repeat_delta_vector
+                    ),
+                    attention_local_response_l2_norm=(
+                        candidate.attention_local_response_l2_norm
+                    ),
+                    attention_local_repeat_l2_norm=(
+                        candidate.attention_local_repeat_l2_norm
+                    ),
+                    attention_local_repeat_floor_ratio=(
+                        candidate.attention_local_repeat_floor_ratio
+                    ),
+                    attention_local_nonzero_response=(
+                        candidate.attention_local_nonzero_response
+                    ),
+                    attention_local_repeatable_above_floor=(
+                        candidate.attention_local_repeatable_above_floor
+                    ),
+                    attention_local_near_antisymmetric_pair=bool(
+                        local_near_pair
+                    ),
+                    attention_local_signed_response=bool(
+                        local_near_pair
+                        and candidate.attention_local_repeatable_above_floor
+                    ),
+                    propagated_cfg_patch_relation_response_vector=(
+                        candidate.propagated_cfg_patch_relation_response_vector
+                    ),
+                    propagated_cfg_patch_relation_repeat_delta_vector=(
+                        candidate.propagated_cfg_patch_relation_repeat_delta_vector
+                    ),
+                    propagated_cfg_patch_relation_response_l2_norm=(
+                        candidate.propagated_cfg_patch_relation_response_l2_norm
+                    ),
+                    propagated_cfg_patch_relation_repeat_l2_norm=(
+                        candidate.propagated_cfg_patch_relation_repeat_l2_norm
+                    ),
+                    propagated_cfg_patch_relation_repeat_floor_ratio=(
+                        candidate.propagated_cfg_patch_relation_repeat_floor_ratio
+                    ),
+                    propagated_cfg_patch_relation_nonzero_response=(
+                        candidate.propagated_cfg_patch_relation_nonzero_response
+                    ),
+                    propagated_cfg_patch_relation_repeatable_above_floor=(
+                        candidate.propagated_cfg_patch_relation_repeatable_above_floor
+                    ),
+                    propagated_cfg_patch_relation_near_antisymmetric_pair=bool(
+                        propagated_near_pair
+                    ),
+                    propagated_cfg_patch_relation_response=bool(
+                        propagated_near_pair
+                        and candidate.propagated_cfg_patch_relation_repeatable_above_floor
+                    ),
                     response_vector=candidate.response_vector,
                     repeat_delta_vector=candidate.repeat_delta_vector,
                     response_l2_norm=candidate.response_l2_norm,
@@ -841,17 +1114,20 @@ def build_local_block_attention_primitive_response_record(
                     repeat_floor_ratio=candidate.repeat_floor_ratio,
                     nonzero_response=candidate.nonzero_response,
                     repeatable_above_floor=candidate.repeatable_above_floor,
-                    near_antisymmetric_pair=bool(near_pair),
+                    near_antisymmetric_pair=bool(propagated_near_pair),
                     feasible_candidate=bool(
-                        near_pair
+                        local_near_pair
+                        and propagated_near_pair
                         and candidate.norm_guard_passed
-                        and candidate.repeatable_above_floor
+                        and candidate.attention_local_repeatable_above_floor
+                        and candidate.propagated_cfg_patch_relation_repeatable_above_floor
                     ),
                     application_record=candidate.application_record,
                 )
     classification = classify_block_attention_primitive_response(
         tuple(candidate_records),
-        tuple(antipodal_cosines),
+        tuple(local_antipodal_cosines),
+        tuple(propagated_antipodal_cosines),
     )
     return BlockAttentionPrimitiveResponseRecord(
         record_kind="patch_relation_block_attention_primitive_response_preflight",
@@ -862,8 +1138,22 @@ def build_local_block_attention_primitive_response_record(
         video_export_executed=False,
         gate0_executed=False,
         candidate_responses=tuple(candidate_records),
+        attention_local_positive_negative_response_cosine_by_magnitude=tuple(
+            local_antipodal_cosines
+        ),
+        propagated_cfg_patch_relation_positive_negative_response_cosine_by_magnitude=tuple(
+            propagated_antipodal_cosines
+        ),
         positive_negative_response_cosine_by_magnitude=tuple(
-            antipodal_cosines
+            propagated_antipodal_cosines
+        ),
+        attention_local_signed_response=any(
+            candidate.attention_local_signed_response
+            for candidate in candidate_records
+        ),
+        propagated_cfg_patch_relation_response=any(
+            candidate.propagated_cfg_patch_relation_response
+            for candidate in candidate_records
         ),
         diagnostic_classification=classification,
         formal_result=False,
@@ -877,23 +1167,61 @@ def build_local_block_attention_primitive_response_record(
 
 def classify_block_attention_primitive_response(
     candidates: tuple[BlockAttentionCandidateResponse, ...],
-    antipodal_cosines: tuple[float, ...],
+    attention_local_antipodal_cosines: tuple[float, ...],
+    propagated_cfg_antipodal_cosines: tuple[float, ...] | None = None,
 ) -> str:
+    if propagated_cfg_antipodal_cosines is None:
+        propagated_cfg_antipodal_cosines = attention_local_antipodal_cosines
     if len(candidates) != len(CANDIDATE_BIAS_MAGNITUDES) * len(CANDIDATE_SIGNS):
         raise ValueError("candidate coverage 与冻结合同不一致")
-    if len(antipodal_cosines) != len(CANDIDATE_BIAS_MAGNITUDES):
-        raise ValueError("antipodal cosine coverage 与冻结合同不一致")
-    if any(candidate.repeat_floor_ratio > REPEATABILITY_FLOOR_RATIO_THRESHOLD for candidate in candidates if candidate.nonzero_response):
-        return "repeatability_floor_candidate"
-    if not any(candidate.nonzero_response for candidate in candidates):
-        return "no_budgeted_response_candidate"
-    if any(candidate.feasible_candidate for candidate in candidates) and all(
-        cos <= NEAR_ANTISYMMETRY_COSINE_THRESHOLD
-        for cos in antipodal_cosines
+    if (
+        len(attention_local_antipodal_cosines) != len(CANDIDATE_BIAS_MAGNITUDES)
+        or len(propagated_cfg_antipodal_cosines)
+        != len(CANDIDATE_BIAS_MAGNITUDES)
     ):
-        return "feasible_nonzero_near_antisymmetric_response_candidate"
+        raise ValueError("antipodal cosine coverage 与冻结合同不一致")
+    if any(
+        candidate.attention_local_repeat_floor_ratio
+        > REPEATABILITY_FLOOR_RATIO_THRESHOLD
+        for candidate in candidates
+        if candidate.attention_local_nonzero_response
+    ) or any(
+        candidate.propagated_cfg_patch_relation_repeat_floor_ratio
+        > REPEATABILITY_FLOOR_RATIO_THRESHOLD
+        for candidate in candidates
+        if candidate.propagated_cfg_patch_relation_nonzero_response
+    ):
+        return "repeatability_floor_candidate"
+    local_signed = any(
+        candidate.attention_local_signed_response for candidate in candidates
+    ) and all(
+        cos <= NEAR_ANTISYMMETRY_COSINE_THRESHOLD
+        for cos in attention_local_antipodal_cosines
+    )
+    propagated_signed = any(
+        candidate.propagated_cfg_patch_relation_response
+        for candidate in candidates
+    ) and all(
+        cos <= NEAR_ANTISYMMETRY_COSINE_THRESHOLD
+        for cos in propagated_cfg_antipodal_cosines
+    )
+    if not any(candidate.attention_local_nonzero_response for candidate in candidates):
+        return "attention_local_fail_no_signed_response"
+    if not local_signed:
+        return "attention_local_fail_not_antipodal"
+    if not any(
+        candidate.propagated_cfg_patch_relation_nonzero_response
+        for candidate in candidates
+    ):
+        return "propagation_fail_no_patch_relation_response"
     if not any(candidate.norm_guard_passed for candidate in candidates):
         return "no_budgeted_response_candidate"
+    if local_signed and propagated_signed and any(
+        candidate.feasible_candidate for candidate in candidates
+    ):
+        return "primitive_candidate_attention_local_and_propagated_cfg"
+    if local_signed and not propagated_signed:
+        return "propagation_fail_not_antipodal"
     return "indeterminate"
 
 
@@ -915,7 +1243,8 @@ def validate_block_attention_primitive_response_record(
         raise ValueError("primitive response execution boundary 漂移")
     expected = classify_block_attention_primitive_response(
         record.candidate_responses,
-        record.positive_negative_response_cosine_by_magnitude,
+        record.attention_local_positive_negative_response_cosine_by_magnitude,
+        record.propagated_cfg_patch_relation_positive_negative_response_cosine_by_magnitude,
     )
     if record.diagnostic_classification != expected:
         raise ValueError("primitive response classification 自报值不一致")
@@ -927,8 +1256,15 @@ def validate_block_attention_primitive_response_record(
     expected_candidate_count = len(CANDIDATE_BIAS_MAGNITUDES) * len(CANDIDATE_SIGNS)
     if len(record.candidate_responses) != expected_candidate_count:
         raise ValueError("primitive response candidate coverage 漂移")
-    recomputed_cosines_by_magnitude: list[float] = []
-    response_by_magnitude_and_sign: dict[tuple[float, int], np.ndarray] = {}
+    if (
+        record.positive_negative_response_cosine_by_magnitude
+        != record.propagated_cfg_patch_relation_positive_negative_response_cosine_by_magnitude
+    ):
+        raise ValueError("legacy response cosine 必须等于propagated CFG cosine")
+    recomputed_local_cosines_by_magnitude: list[float] = []
+    recomputed_propagated_cosines_by_magnitude: list[float] = []
+    local_by_magnitude_and_sign: dict[tuple[float, int], np.ndarray] = {}
+    propagated_by_magnitude_and_sign: dict[tuple[float, int], np.ndarray] = {}
     expected_index = 0
     for magnitude in CANDIDATE_BIAS_MAGNITUDES:
         magnitude_candidates = [
@@ -963,7 +1299,33 @@ def validate_block_attention_primitive_response_record(
                 expected_length=len(descriptor.entries),
                 label="candidate repeat_delta_vector",
             )
-            response_by_magnitude_and_sign[(magnitude, sign)] = response
+            local_response = _tuple_to_float64_vector(
+                candidate.attention_local_signed_response_vector,
+                expected_length=len(descriptor.entries),
+                label="candidate attention_local_signed_response_vector",
+            )
+            local_repeat_delta = _tuple_to_float64_vector(
+                candidate.attention_local_repeat_delta_vector,
+                expected_length=len(descriptor.entries),
+                label="candidate attention_local_repeat_delta_vector",
+            )
+            propagated_response = _tuple_to_float64_vector(
+                candidate.propagated_cfg_patch_relation_response_vector,
+                expected_length=len(descriptor.entries),
+                label="candidate propagated_cfg_patch_relation_response_vector",
+            )
+            propagated_repeat_delta = _tuple_to_float64_vector(
+                candidate.propagated_cfg_patch_relation_repeat_delta_vector,
+                expected_length=len(descriptor.entries),
+                label="candidate propagated_cfg_patch_relation_repeat_delta_vector",
+            )
+            if not np.array_equal(response, propagated_response) or not np.array_equal(
+                repeat_delta,
+                propagated_repeat_delta,
+            ):
+                raise ValueError("legacy response vector 必须等于propagated CFG vector")
+            local_by_magnitude_and_sign[(magnitude, sign)] = local_response
+            propagated_by_magnitude_and_sign[(magnitude, sign)] = propagated_response
             recomputed_response_norm = float(
                 np.linalg.norm(response.astype(np.float64))
             )
@@ -1012,27 +1374,90 @@ def validate_block_attention_primitive_response_record(
             if candidate.repeatable_above_floor is not expected_repeatable:
                 raise ValueError("primitive response repeatability 自报值不一致")
             pair_index = CANDIDATE_BIAS_MAGNITUDES.index(magnitude)
-            expected_near_pair = (
-                record.positive_negative_response_cosine_by_magnitude[pair_index]
+            expected_local_near_pair = (
+                record.attention_local_positive_negative_response_cosine_by_magnitude[pair_index]
                 <= NEAR_ANTISYMMETRY_COSINE_THRESHOLD
             )
-            if candidate.near_antisymmetric_pair is not expected_near_pair:
+            expected_propagated_near_pair = (
+                record.propagated_cfg_patch_relation_positive_negative_response_cosine_by_magnitude[pair_index]
+                <= NEAR_ANTISYMMETRY_COSINE_THRESHOLD
+            )
+            if (
+                candidate.attention_local_near_antisymmetric_pair
+                is not expected_local_near_pair
+                or candidate.propagated_cfg_patch_relation_near_antisymmetric_pair
+                is not expected_propagated_near_pair
+                or candidate.near_antisymmetric_pair
+                is not expected_propagated_near_pair
+            ):
                 raise ValueError("primitive response antisymmetry 自报值不一致")
+            local_stats = _response_layer_stats(
+                response=local_response,
+                repeat_delta=local_repeat_delta,
+            )
+            propagated_stats = _response_layer_stats(
+                response=propagated_response,
+                repeat_delta=propagated_repeat_delta,
+            )
+            if (
+                not math.isclose(candidate.attention_local_response_l2_norm, float(local_stats["response_l2_norm"]), rel_tol=0.0, abs_tol=1.0e-15)
+                or not math.isclose(candidate.attention_local_repeat_l2_norm, float(local_stats["repeat_l2_norm"]), rel_tol=0.0, abs_tol=1.0e-15)
+                or not math.isclose(candidate.attention_local_repeat_floor_ratio, float(local_stats["repeat_floor_ratio"]), rel_tol=0.0, abs_tol=1.0e-15)
+                or candidate.attention_local_nonzero_response is not bool(local_stats["nonzero_response"])
+                or candidate.attention_local_repeatable_above_floor is not bool(local_stats["repeatable_above_floor"])
+                or not math.isclose(candidate.propagated_cfg_patch_relation_response_l2_norm, float(propagated_stats["response_l2_norm"]), rel_tol=0.0, abs_tol=1.0e-15)
+                or not math.isclose(candidate.propagated_cfg_patch_relation_repeat_l2_norm, float(propagated_stats["repeat_l2_norm"]), rel_tol=0.0, abs_tol=1.0e-15)
+                or not math.isclose(candidate.propagated_cfg_patch_relation_repeat_floor_ratio, float(propagated_stats["repeat_floor_ratio"]), rel_tol=0.0, abs_tol=1.0e-15)
+                or candidate.propagated_cfg_patch_relation_nonzero_response is not bool(propagated_stats["nonzero_response"])
+                or candidate.propagated_cfg_patch_relation_repeatable_above_floor is not bool(propagated_stats["repeatable_above_floor"])
+            ):
+                raise ValueError("layered primitive response 自报值不一致")
+            expected_local_signed = (
+                expected_local_near_pair
+                and candidate.attention_local_repeatable_above_floor
+            )
+            expected_propagated_signed = (
+                expected_propagated_near_pair
+                and candidate.propagated_cfg_patch_relation_repeatable_above_floor
+            )
+            if (
+                candidate.attention_local_signed_response
+                is not expected_local_signed
+                or candidate.propagated_cfg_patch_relation_response
+                is not expected_propagated_signed
+            ):
+                raise ValueError("layered primitive response flag 自报值不一致")
             expected_feasible = (
-                expected_near_pair
+                expected_local_signed
+                and expected_propagated_signed
                 and expected_norm_guard
-                and expected_repeatable
             )
             if candidate.feasible_candidate is not expected_feasible:
                 raise ValueError("primitive response feasible 自报值不一致")
             expected_index += 1
-        recomputed_cosines_by_magnitude.append(
+        recomputed_local_cosines_by_magnitude.append(
             _safe_cosine(
-                response_by_magnitude_and_sign[(magnitude, 1)],
-                response_by_magnitude_and_sign[(magnitude, -1)],
+                local_by_magnitude_and_sign[(magnitude, 1)],
+                local_by_magnitude_and_sign[(magnitude, -1)],
             )
         )
-    if tuple(recomputed_cosines_by_magnitude) != (
-        record.positive_negative_response_cosine_by_magnitude
+        recomputed_propagated_cosines_by_magnitude.append(
+            _safe_cosine(
+                propagated_by_magnitude_and_sign[(magnitude, 1)],
+                propagated_by_magnitude_and_sign[(magnitude, -1)],
+            )
+        )
+    if tuple(recomputed_local_cosines_by_magnitude) != (
+        record.attention_local_positive_negative_response_cosine_by_magnitude
+    ) or tuple(recomputed_propagated_cosines_by_magnitude) != (
+        record.propagated_cfg_patch_relation_positive_negative_response_cosine_by_magnitude
     ):
         raise ValueError("primitive response antisymmetry cosine 自报值不一致")
+    if record.attention_local_signed_response is not any(
+        candidate.attention_local_signed_response
+        for candidate in record.candidate_responses
+    ) or record.propagated_cfg_patch_relation_response is not any(
+        candidate.propagated_cfg_patch_relation_response
+        for candidate in record.candidate_responses
+    ):
+        raise ValueError("layered primitive response summary 自报值不一致")

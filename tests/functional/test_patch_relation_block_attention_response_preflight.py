@@ -35,7 +35,13 @@ from workflows.colab_test_request import (
 from experiments.generative_video_model_probe.patch_relation_block_attention_response_preflight import (
     DECISION_FILENAME,
     RECORD_FILENAME,
+    _attention_local_descriptor_response_vector,
+    _patch_aligned_descriptor_response_vector,
     run_patch_relation_block_attention_response_preflight,
+)
+from main.methods.state_space_watermark.patch_relation_attention_runtime import (
+    SelectedRowAttentionObservation,
+    WanBlockAttentionBranchApplicationRecord,
 )
 
 
@@ -114,6 +120,91 @@ def test_descriptor_freezes_sparse_zero_sum_entry_order() -> None:
         assert negative.coefficient == -1.0
         assert positive.query_token_index == negative.key_token_index
         assert positive.key_token_index == negative.query_token_index
+
+
+@pytest.mark.quick
+def test_patch_aligned_cfg_readout_uses_token_to_latent_2x2_patch_mapping() -> None:
+    descriptor = build_block_attention_relation_descriptor()
+    delta = np.zeros((1, 16, 9, 40, 64), dtype="<f4")
+    for entry in descriptor.entries:
+        channel = int(entry.head_index) % 16
+        token_plane = TOKEN_GRID_SHAPE[1] * TOKEN_GRID_SHAPE[2]
+        query_token = entry.query_token_index % token_plane
+        key_token = entry.key_token_index % token_plane
+        query_row = query_token // TOKEN_GRID_SHAPE[2]
+        query_col = query_token % TOKEN_GRID_SHAPE[2]
+        key_row = key_token // TOKEN_GRID_SHAPE[2]
+        key_col = key_token % TOKEN_GRID_SHAPE[2]
+        delta[
+            0,
+            channel,
+            entry.time_index,
+            query_row * 2 : query_row * 2 + 2,
+            query_col * 2 : query_col * 2 + 2,
+        ] = np.float32(10.0)
+        delta[
+            0,
+            channel,
+            entry.time_index,
+            key_row * 2 : key_row * 2 + 2,
+            key_col * 2 : key_col * 2 + 2,
+        ] = np.float32(2.0)
+
+    response = _patch_aligned_descriptor_response_vector(delta)
+
+    assert response.dtype == np.dtype("<f8")
+    assert response.shape == (len(descriptor.entries),)
+    assert np.all(response == -8.0)
+
+
+@pytest.mark.quick
+def test_attention_local_readout_requires_selected_row_processor_observations() -> None:
+    descriptor = build_block_attention_relation_descriptor()
+
+    def branch(role: str, multiplier: float) -> WanBlockAttentionBranchApplicationRecord:
+        return WanBlockAttentionBranchApplicationRecord(
+            descriptor_digest=descriptor.descriptor_digest,
+            target_block_index=descriptor.target_block_index,
+            signed_coefficient=1,
+            magnitude=MAXIMUM_LOGIT_BIAS_MAGNITUDE,
+            input_binding_digest="0" * 64,
+            cfg_branch_role=role,
+            processor_call_count=1,
+            scope_completed_successfully=True,
+            attention_mask_shape=(1, 12, 5760, 5760),
+            attention_mask_dtype="sparse_row_bias_no_dense_attention_mask_allocated:torch.bfloat16",
+            changed_entry_count=len(descriptor.entries),
+            bias_l2_norm=1.0,
+            bias_digest="1" * 64,
+            clean_exact_no_op=False,
+            selected_row_attention_observations=tuple(
+                SelectedRowAttentionObservation(
+                    time_index=entry.time_index,
+                    head_index=entry.head_index,
+                    query_token_index=entry.query_token_index,
+                    key_token_index=entry.key_token_index,
+                    descriptor_coefficient=entry.coefficient,
+                    selected_logit_before_bias=0.0,
+                    selected_logit_after_bias=entry.coefficient,
+                    selected_probability_before_bias=0.25,
+                    selected_probability_after_bias=0.25
+                    + multiplier * entry.coefficient,
+                    selected_probability_delta=multiplier * entry.coefficient,
+                    selected_row_output_delta_l2_norm=abs(multiplier),
+                    selected_row_output_delta_first_four=(multiplier, 0.0, 0.0, 0.0),
+                )
+                for entry in descriptor.entries
+            ),
+        )
+
+    response = _attention_local_descriptor_response_vector(
+        (branch("conditional", 2.0), branch("unconditional", 0.5))
+    )
+
+    assert response.shape == (len(descriptor.entries),)
+    assert np.all(response == 8.0)
+    with pytest.raises(ValueError, match="cond/uncond"):
+        _attention_local_descriptor_response_vector((branch("conditional", 1.0),))
 
 
 @pytest.mark.quick

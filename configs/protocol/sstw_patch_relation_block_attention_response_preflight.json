@@ -94,24 +94,29 @@
         -1
       ],
       "candidate_feasible_requires": [
-        "nonzero_response",
-        "repeatability_floor_ratio_at_most_0.1",
-        "response_l2_norm_at_most_step0_norm_budget",
-        "positive_negative_pair_cosine_at_most_minus_0.9"
+        "attention_local_nonzero_response",
+        "attention_local_repeatability_floor_ratio_at_most_0.1",
+        "attention_local_positive_negative_pair_cosine_at_most_minus_0.9",
+        "propagated_cfg_patch_relation_nonzero_response",
+        "propagated_cfg_patch_relation_repeatability_floor_ratio_at_most_0.1",
+        "propagated_cfg_patch_relation_response_l2_norm_at_most_step0_norm_budget",
+        "propagated_cfg_patch_relation_positive_negative_pair_cosine_at_most_minus_0.9"
       ],
+      "attention_local_readout_contract": "selected_query_head_row_pre_bias_post_bias_probability_delta_from_actual_processor_observations",
       "decode_allowed": false,
       "fail_condition": "no_budgeted_nonzero_repeatable_response_stops_this_carrier_or_block_location",
       "gate0_allowed": false,
       "near_antisymmetry_cosine_threshold": "-0.9",
       "nonzero_response_floor": "1e-12",
       "observer_allowed": false,
-      "pass_condition": "budget_with_nonzero_repeatable_near_antisymmetric_cfg_response_only_allows_c0_design",
+      "pass_condition": "attention_local_and_propagated_cfg_patch_relation_both_nonzero_repeatable_budgeted_near_antisymmetric_only_allows_c0_design",
+      "propagated_cfg_readout_contract": "token_grid_9x20x32_to_latent_grid_9x40x64_patch_aligned_2x2_patch_a_minus_patch_b_mean_relation",
       "repeatability_floor_ratio_threshold": "0.1",
       "requires_separate_real_wan_adapter_review": false,
       "real_wan_single_step_runner_implemented": true,
       "transformer_forward_count": 16,
       "record_validator_recomputes_candidate_guards": true,
-      "record_validator_recomputes_candidate_vectors": true,
+      "record_validator_recomputes_attention_local_and_propagated_vectors": true,
       "runtime_rejects_unfrozen_candidate_magnitude": true,
       "scheduler_step_call_count": 0,
       "step0_norm_budget": "2.937237890625",
@@ -148,5 +153,5 @@
       "source_zip_sha256": "4c50e53ea33bc0ba6d25a3d12496d4b2a23171a3da48cff789f8c91efa27fa7d"
     }
   },
-  "protocol_digest": "a75115bd55f04952e6ee464711407c766827f191e50e0230ecc6e7ab0bdeb3c7"
+  "protocol_digest": "4cc1959aa9a73223e0327f50ae75757a199825e0299595fb7f0572669d7cee72"
 }
